@@ -27,8 +27,10 @@ pub enum CertificationError {
     )]
     TrustedSequencerNotFound(NetworkId),
 
-    #[error("Failed to retrieve the last pessimistic root for network {0}")]
-    LastPessimisticRootNotFound(NetworkId),
+    #[error(
+        "Failed to retrieve the last pessimistic root for network {0} for settlement tx hash {1:?}"
+    )]
+    LastPessimisticRootNotFound(NetworkId, Option<Digest>),
 
     #[error("Failed to retrieve the l1 info root for the l1 leaf count: {1} for certificate {0}")]
     L1InfoRootNotFound(CertificateId, u32),
@@ -141,8 +143,8 @@ impl From<CertificationError> for CertificateStatusError {
             CertificationError::TrustedSequencerNotFound(network) => {
                 CertificateStatusError::TrustedSequencerNotFound(network)
             }
-            CertificationError::LastPessimisticRootNotFound(network_id) => {
-                CertificateStatusError::LastPessimisticRootNotFound(network_id)
+            CertificationError::LastPessimisticRootNotFound(network_id, tx_hash) => {
+                CertificateStatusError::LastPessimisticRootNotFound(network_id, tx_hash)
             }
             CertificationError::ProofVerificationFailed { source } => {
                 CertificateStatusError::ProofVerificationFailed(source)

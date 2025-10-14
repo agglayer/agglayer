@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -195,9 +195,31 @@ where
 
         // Execute the witness generation to retrieve the new local network state
         debug!("Recomputing new state for already-proven certificate");
+
+        let settlement_tx_hash: Option<Digest> =
+            if let Some(previos_tx_hash) = self.header.settlement_tx_hash {
+                // Check if cert `settlement_tx_hash` exist on the l1. If not,
+                // remove it and recalculate.
+                let (request_tx_mined, response_tx_mined) = oneshot::channel();
+                self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
+                    settlement_tx_hash: previos_tx_hash,
+                    certificate_id,
+                    tx_mined_notifier: request_tx_mined,
+                })
+                .await?;
+                let result_tx_mined = response_tx_mined.await.map_err(recv_err)?;
+                match result_tx_mined {
+                    Ok(true) => self.header.settlement_tx_hash.map(Into::into),
+                    Ok(false) => None,
+                    Err(error) => None,
+                }
+            } else {
+                None
+            };
+
         let (_, _, output) = self
                 .certifier_client
-                .witness_generation(&self.certificate, &mut state, self.header.settlement_tx_hash.map(|h| h.into()))
+                .witness_generation(&self.certificate, &mut state, settlement_tx_hash)
                 .await
                 .map_err(|error| {
                     error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven certificate");
@@ -339,6 +361,11 @@ where
             settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
             "Submitted certificate for settlement"
         );
+
+        // if height.as_u64() >= 1 && self.previous_tx_hashes.len() >= 3 {
+        //     println!(">>>>>>>>>>>>>>> Turn me off now <<<<<<<<<<<<<<<");
+        //     tokio::time::sleep(Duration::from_secs(300)).await;
+        // }
 
         self.process_from_candidate().await
     }

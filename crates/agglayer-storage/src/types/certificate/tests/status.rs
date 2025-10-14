@@ -41,7 +41,7 @@ fn ver_err(error: ProofVerificationError) -> CertificateStatus {
 #[case("err-ver-gr", ver_err(Pve::Groth16("groth16".into())))]
 #[case("err-ver-pv", ver_err(Pve::InvalidPublicValues))]
 #[case("err-ts", err(Cse::TrustedSequencerNotFound(NetworkId::new(6))))]
-#[case("err-pr", err(Cse::LastPessimisticRootNotFound(NetworkId::new(5))))]
+#[case("err-pr", err(Cse::LastPessimisticRootNotFound(NetworkId::new(5), None)))]
 #[case("err-ie", err(Cse::InternalError("internal".into())))]
 #[case("err-se", err(Cse::SettlementError("settlement".into())))]
 #[case("err-pce", err(Cse::PreCertificationError("precert".into())))]

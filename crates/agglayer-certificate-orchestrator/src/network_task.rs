@@ -98,6 +98,13 @@ pub enum NetworkTaskMessage {
         certificate_id: CertificateId,
         error: CertificateStatusError,
     },
+
+    /// Check if settlement tx has been mined.
+    CheckSettlementTx {
+        certificate_id: CertificateId,
+        settlement_tx_hash: SettlementTxHash,
+        tx_mined_notifier: oneshot::Sender<Result<bool, Error>>,
+    },
 }
 
 #[derive(Debug)]
@@ -563,6 +570,31 @@ where
                     Some(NetworkTaskMessage::CertificateErrored { .. }) => {
                         // The certificate task already logged everything that should be logged.
                         self.at_capacity_for_epoch = false;
+                        break;
+                    }
+                    Some(NetworkTaskMessage::CheckSettlementTx { certificate_id,settlement_tx_hash, tx_mined_notifier }) => {
+                        let mined = match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {
+                            Ok(true) => {
+                                info!(%certificate_id,
+                                    "Settlement tx {settlement_tx_hash} has been mined");
+                                Ok(true)
+                            }
+                            Ok(false) => {
+                                debug!(%certificate_id,
+                                    "Settlement tx {settlement_tx_hash} is still pending");
+                                Ok(false)
+
+                            }
+                            Err(err) => {
+                                debug!(%certificate_id,
+                                    "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
+                                Err(err)
+                            }
+                        };
+
+                        tx_mined_notifier
+                            .send(mined)
+                            .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
                         break;
                     }
                 }
