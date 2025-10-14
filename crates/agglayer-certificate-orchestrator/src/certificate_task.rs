@@ -291,7 +291,7 @@ where
 
             if recomputed_from_contract.is_none() {
                 // Tx not found on L1, and pp root from contract not matching,
-                // clean tx from cert header and move back to Proven
+                // clean tx from cert header and move back to Pending
                 let previos_tx_hash = self.header.settlement_tx_hash;
                 error!(
                     "Settlement tx {previos_tx_hash:?} not found on L1, moving certificate back \
@@ -314,7 +314,7 @@ where
 
                 return Err(CertificateStatusError::SettlementError(format!(
                     "Settlement tx {previos_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
+                     to Pending"
                 )));
             }
         };
