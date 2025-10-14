@@ -194,7 +194,7 @@ where
         let mut state = state.await.map_err(recv_err)??;
 
         debug!("Recomputing new state for already-proven certificate");
-        // settlement_tx_hash_missing_on_l1 is true if the settlement tx hash in
+        // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
         // certificate header is not found on L1.
         let settlement_tx_hash_missing_on_l1: bool =
             if let Some(previous_tx_hash) = self.header.settlement_tx_hash {
