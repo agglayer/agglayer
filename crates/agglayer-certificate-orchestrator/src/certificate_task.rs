@@ -261,6 +261,8 @@ where
                         if let Err(error) = self.state_store.update_settlement_tx_hash(&certificate_id, contract_settlement_tx_hash, true) {
                             error!(?error, "Failed to update certificate settlement tx hash in database");
                         };
+                        // TODO refactor this function to not calculate  witness_generation twice.
+                        // As this would be very rare scenario, we can leave it like this for now.
                         Some(contract_settlement_tx_hash.into())
                     } else {
                         warn!(
