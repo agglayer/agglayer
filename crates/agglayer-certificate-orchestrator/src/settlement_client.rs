@@ -53,7 +53,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn fetch_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,
-    ) -> Result<bool, Error>;
+    ) -> Result<Option<bool>, Error>;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

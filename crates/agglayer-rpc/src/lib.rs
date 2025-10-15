@@ -724,6 +724,23 @@ where
                                     replacement_certificate_id: new_certificate_id,
                                     source: Some(error),
                                 }
+                            })?
+                            .ok_or_else(|| {
+                                let error = agglayer_contracts::L1RpcError::TransactionNotYetMined(
+                                    tx_hash.to_string(),
+                                );
+                                warn!(
+                                    "Failed to fetch transaction receipt for certificate \
+                                     {pre_existing_certificate_id}: {error}"
+                                );
+                                CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                    reason: error.to_string(),
+                                    height: certificate.height,
+                                    network_id: certificate.network_id,
+                                    stored_certificate_id: pre_existing_certificate_id,
+                                    replacement_certificate_id: new_certificate_id,
+                                    source: Some(error),
+                                }
                             })?;
 
                         if !l1_transaction.status() {

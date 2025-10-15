@@ -49,7 +49,7 @@ pub trait L1TransactionFetcher {
     async fn fetch_transaction_receipt(
         &self,
         tx_hash: B256,
-    ) -> Result<TransactionReceipt, L1RpcError>;
+    ) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
     /// Returns the provider for direct access to watch transactions
     fn get_provider(&self) -> &Self::Provider;
@@ -238,15 +238,14 @@ where
     async fn fetch_transaction_receipt(
         &self,
         tx_hash: B256,
-    ) -> Result<TransactionReceipt, L1RpcError> {
+    ) -> Result<Option<TransactionReceipt>, L1RpcError> {
         self.rpc
             .get_transaction_receipt(tx_hash)
             .await
             .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
                 tx_hash: tx_hash.to_string(),
                 source: err.into(),
-            })?
-            .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))
+            })
     }
 
     fn get_provider(&self) -> &Self::Provider {
