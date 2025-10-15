@@ -75,11 +75,24 @@ async fn from_pending_to_settle() {
                 .apply_certificate(&certificate, ctx_from_l1)
                 .expect("Failed to apply certificate");
 
+            let state_commitment = new_state.get_roots();
+            let pp_commitment_values =
+                pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                    height: height.as_u64(),
+                    origin_network: network_id,
+                    ler_leaf_count: state_commitment.ler_leaf_count,
+                    balance_root: state_commitment.balance_root.into(),
+                    nullifier_root: state_commitment.nullifier_root.into(),
+                };
+            let pp_root =
+                pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
+
             Ok(CertifierOutput {
                 certificate,
                 height,
                 new_state,
                 network,
+                new_pp_root: pp_root,
             })
         });
 
@@ -87,8 +100,19 @@ async fn from_pending_to_settle() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -184,12 +208,24 @@ async fn from_proven_to_settled() {
             let _ = new_state
                 .apply_certificate(&certificate, ctx_from_l1)
                 .expect("Failed to apply certificate");
+            let state_commitment = new_state.get_roots();
+            let pp_commitment_values =
+                pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                    height: height.as_u64(),
+                    origin_network: network_id,
+                    ler_leaf_count: state_commitment.ler_leaf_count,
+                    balance_root: state_commitment.balance_root.into(),
+                    nullifier_root: state_commitment.nullifier_root.into(),
+                };
+            let pp_root =
+                pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
 
             Ok(CertifierOutput {
                 certificate,
                 height,
                 new_state,
                 network,
+                new_pp_root: pp_root,
             })
         });
 
@@ -197,8 +233,19 @@ async fn from_proven_to_settled() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -271,7 +318,7 @@ async fn from_candidate_to_settle() {
 
     storage
         .state
-        .update_settlement_tx_hash(&certificate_id, SettlementTxHash::for_tests())
+        .update_settlement_tx_hash(&certificate_id, SettlementTxHash::for_tests(), false)
         .unwrap();
 
     certifier.expect_certify().never();
@@ -304,6 +351,11 @@ async fn from_candidate_to_settle() {
     settlement_client
         .expect_submit_certificate_settlement()
         .never();
+    settlement_client
+        .expect_fetch_settlement_receipt_status()
+        .with(eq(SettlementTxHash::for_tests()))
+        .times(1)
+        .returning(|_| Ok(true));
     settlement_client
         .expect_wait_for_settlement()
         .with(eq(SettlementTxHash::for_tests()), eq(certificate_id))

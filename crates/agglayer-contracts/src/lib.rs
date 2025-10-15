@@ -20,6 +20,27 @@ pub use aggchain::AggchainContract;
 pub use rollup::RollupContract;
 pub use settler::Settler;
 
+/// Gas price parameters for L1 transactions.
+#[derive(Debug, Clone)]
+pub struct GasPriceParams {
+    /// Gas price multiplier for transactions (scaled by 1000).
+    pub multiplier_per_1000: u64,
+    /// Minimum gas price floor (in wei) for transactions.
+    pub floor: u128,
+    /// Maximum gas price ceiling (in wei) for transactions.
+    pub ceiling: u128,
+}
+
+impl Default for GasPriceParams {
+    fn default() -> Self {
+        GasPriceParams {
+            multiplier_per_1000: 1000, // 1.0 scaled by 1000
+            floor: 0,
+            ceiling: u128::MAX,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 pub trait L1TransactionFetcher {
     type Provider: Provider;
@@ -45,6 +66,8 @@ pub struct L1RpcClient<RpcProvider> {
     default_l1_info_tree_entry: (u32, [u8; 32]),
     /// Gas multiplier factor for transactions.
     gas_multiplier_factor: u32,
+    /// Gas price parameters for transactions.
+    gas_price_params: GasPriceParams,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -69,10 +92,16 @@ pub enum L1RpcError {
     ReorgDetected(u64),
     #[error("Cannot get the block hash for the block number {0}")]
     BlockHashNotFound(u64),
-    #[error("Unable to fetch transaction receipt for {0}")]
-    UnableToFetchTransactionReceipt(String),
-    #[error("No transaction receipt found for {0}")]
-    TransactionReceiptNotFound(String),
+    #[error("Unable to fetch transaction receipt for {tx_hash}: {source}")]
+    UnableToFetchTransactionReceipt {
+        tx_hash: String,
+        #[source]
+        source: eyre::Error,
+    },
+    // WARNING: following error message is used in checks, do not change without updating the
+    // checks
+    #[error("No transaction receipt found for tx {0}, not yet mined")]
+    TransactionNotYetMined(String),
     #[error("Failed to fetch aggchain vkey")]
     AggchainVkeyFetchFailed,
     #[error("Failed to retrieve trusted sequencer")]
@@ -81,6 +110,7 @@ pub enum L1RpcError {
     RollupDataRetrievalFailed,
     #[error("Unable to get transaction")]
     UnableToGetTransaction {
+        tx_hash: String,
         #[source]
         source: eyre::Error,
     },
@@ -100,6 +130,8 @@ pub enum L1RpcError {
     ThresholdTypeOverflow { fetched: U256 },
     #[error("Transaction receipt for tx {0} failed on L1")]
     TransactionReceiptFailedOnL1(TxHash),
+    #[error("Failed to get the events: {0}")]
+    FailedToQueryEvents(String),
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -112,6 +144,7 @@ where
         l1_info_tree: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
         gas_multiplier_factor: u32,
+        gas_price_params: GasPriceParams,
     ) -> Self {
         Self {
             rpc,
@@ -119,6 +152,7 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
+            gas_price_params,
         }
     }
 
@@ -127,6 +161,7 @@ where
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         l1_info_tree: Address,
         gas_multiplier_factor: u32,
+        gas_price_params: GasPriceParams,
     ) -> Result<Self, L1RpcInitializationError>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -188,6 +223,7 @@ where
             l1_info_tree,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
+            gas_price_params,
         ))
     }
 }
@@ -206,8 +242,11 @@ where
         self.rpc
             .get_transaction_receipt(tx_hash)
             .await
-            .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
-            .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))
+            .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
+                tx_hash: tx_hash.to_string(),
+                source: err.into(),
+            })?
+            .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))
     }
 
     fn get_provider(&self) -> &Self::Provider {
@@ -265,6 +304,7 @@ mod tests {
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
                 100,
+                GasPriceParams::default(),
             )
             .await
             .unwrap(),
@@ -309,6 +349,7 @@ mod tests {
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
                 100,
+                GasPriceParams::default(),
             )
             .await
             .unwrap(),

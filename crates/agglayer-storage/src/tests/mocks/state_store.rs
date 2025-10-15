@@ -35,7 +35,14 @@ mock! {
             &self,
             certificate_id: &CertificateId,
             tx_hash: SettlementTxHash,
+            force: bool,
         ) -> Result<(), Error>;
+
+        fn remove_settlement_tx_hash(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<(), Error>;
+
         fn assign_certificate_to_epoch(
             &self,
             certificate_id: &CertificateId,
