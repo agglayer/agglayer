@@ -1,6 +1,7 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/get_latest_known_certificate_header.rs
+source: crates/agglayer-jsonrpc-api/src/tests/get_latest_known_certificate_header.rs
 expression: json
+snapshot_kind: text
 ---
 {
   "id": 0,
@@ -15,6 +16,7 @@ expression: json
     "new_local_exit_root": "0x27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757",
     "prev_local_exit_root": "0x27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757",
     "settlement_tx_hash": null,
+    "settlement_tx_hashes": [],
     "status": "Proven"
   }
 }

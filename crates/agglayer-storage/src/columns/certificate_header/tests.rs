@@ -73,6 +73,7 @@ fn can_parse_value() {
     );
     // certificate status
     assert_eq!(encoded[158..162], [0, 0, 0, 0]);
+    // settlement tx hashes
     assert_eq!(encoded[162..163], [0]);
     // end
     assert!(encoded[163..].is_empty());
