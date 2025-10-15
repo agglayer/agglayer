@@ -157,6 +157,7 @@ async fn pending_certificate_in_error_force_push() {
         .update_settlement_tx_hash(
             &certificate_id,
             SettlementTxHash::from(Digest::from([1; 32])),
+            false,
         )
         .expect("unable to update settlement tx hash");
 
@@ -238,6 +239,7 @@ async fn pending_certificate_in_error_force_set_status() {
         .update_settlement_tx_hash(
             &certificate_id,
             SettlementTxHash::from(Digest::from([1; 32])),
+            false,
         )
         .expect("unable to update settlement tx hash");
 
@@ -349,7 +351,7 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
     let fake_settlement_tx_hash = SettlementTxHash::from(Digest::from([1; 32]));
     context
         .state_store
-        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash)
+        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash, false)
         .expect("unable to update settlement tx hash");
 
     let res: CertificateHeader = context

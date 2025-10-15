@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer-config/tests/backup.rs
 expression: config
-snapshot_kind: text
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
 
@@ -30,10 +29,13 @@ send-tx = "unlimited"
 [rate-limiting.network]
 
 [outbound.rpc.settle]
-max-retries = 3
-retry-interval = "7s"
+max-retries = 30
+retry-interval = "10s"
 confirmations = 1
 settlement-timeout = "20m"
+
+[outbound.rpc.settle.gas-price]
+ceiling = "100gwei"
 
 [l1]
 chain-id = 1337

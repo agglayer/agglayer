@@ -1,0 +1,12 @@
+---
+source: crates/agglayer-config/tests/outbound.rs
+expression: config
+---
+[rpc.settle]
+max-retries = 30
+retry-interval = "10s"
+confirmations = 1
+settlement-timeout = "20m"
+
+[rpc.settle.gas-price]
+ceiling = "100gwei"
