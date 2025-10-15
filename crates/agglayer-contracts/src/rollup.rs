@@ -10,11 +10,11 @@ use alloy::{
 };
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 use crate::{
     contracts::{PolygonRollupManager::RollupDataReturnV2, PolygonZkEvm},
-    L1RpcClient, L1RpcError,
+    L1RpcClient, L1RpcError, EVENT_FILTER_BLOCK_RANGE,
 };
 
 #[derive(Debug, FromPrimitive)]
@@ -64,22 +64,53 @@ where
     }
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
+        // Check if we already have this l1_info_root cached
+        {
+            let cache = self.l1_info_roots.lock().await;
+            if let Some(&cached_root) = cache.get(&l1_leaf_count) {
+                trace!(
+                    "Retrieved cached L1 info root for leaf count {}: {}",
+                    l1_leaf_count,
+                    alloy::primitives::B256::from(cached_root)
+                );
+                return Ok(cached_root);
+            }
+        }
+
         use alloy::sol_types::SolEvent;
 
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
 
         // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
-        let filter = Filter::new()
-            .address(self.l1_info_tree)
-            .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
-            .topic1(U256::from(l1_leaf_count))
-            .from_block(BlockNumberOrTag::Earliest);
-
-        let events = self
+        // To not hit the provider limit, we start from genesis and restrict search
+        // to the EVENT_FILTER_BLOCK_RANGE blocks range.
+        let mut events = Vec::new();
+        let mut start_block = 0u64;
+        let latest_network_block = self
             .rpc
-            .get_logs(&filter)
+            .get_block_number()
             .await
-            .map_err(|e| L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string()))?;
+            .map_err(|e| {
+                error!("Failed to fetch latest block number: {}", e);
+                L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string())
+            })?
+            .as_u64();
+        while events.is_empty() && start_block <= latest_network_block {
+            let end_block = (start_block + EVENT_FILTER_BLOCK_RANGE - 1).min(latest_network_block);
+            let filter = Filter::new()
+                .address(self.l1_info_tree)
+                .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
+                .topic1(U256::from(l1_leaf_count))
+                .from_block(BlockNumberOrTag::Number(start_block))
+                .to_block(BlockNumberOrTag::Number(end_block));
+
+            events = self.rpc.get_logs(&filter).await.map_err(|e| {
+                error!("Failed to fetch UpdateL1InfoTreeV2EventFailure logs: {}", e);
+                L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string())
+            })?;
+
+            start_block += EVENT_FILTER_BLOCK_RANGE;
+        }
 
         // Extract event details using alloy's event decoding
         let (l1_info_root, event_block_number, event_block_hash) = events
@@ -168,6 +199,12 @@ where
                 );
                 L1RpcError::FinalizationTimeoutExceeded(event_block_number.as_u64())
             })??;
+        }
+
+        // Cache the retrieved l1_info_root for future use
+        {
+            let mut cache = self.l1_info_roots.lock().await;
+            cache.insert(l1_leaf_count, l1_info_root);
         }
 
         Ok(l1_info_root)
