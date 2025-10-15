@@ -72,7 +72,8 @@ pub struct L1RpcClient<RpcProvider> {
     gas_multiplier_factor: u32,
     /// Gas price parameters for transactions.
     gas_price_params: GasPriceParams,
-    /// UpdateL1InfoTreeV2 first l1_info_root
+    /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
+    /// Map<leaf_count, l1_info_root>
     l1_info_roots: Arc<Mutex<HashMap<u32, [u8; 32]>>>,
 }
 
