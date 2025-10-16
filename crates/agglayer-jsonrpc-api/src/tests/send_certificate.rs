@@ -290,7 +290,7 @@ async fn pending_certificate_in_error_force_set_status() {
         )
         .await;
 
-    assert!(res.is_ok());
+    assert!(res.is_ok(), "Force set status failed with {res:?}");
     assert!(context.certificate_receiver.try_recv().is_err());
 
     let res: CertificateHeader = context
@@ -371,7 +371,7 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
                 pending_certificate.hash(),
                 CertificateStatus::Proven,
                 false,
-                Some(fake_settlement_tx_hash)
+                [fake_settlement_tx_hash]
             ],
         )
         .await;

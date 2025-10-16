@@ -38,7 +38,7 @@ pub(crate) trait AdminAgglayer {
         certificate_id: CertificateId,
         status: CertificateStatus,
         process_now: bool,
-        remove_settlement_tx_hashes: Vec<SettlementTxHash>,
+        remove_settlement_tx_hashes: Option<Vec<SettlementTxHash>>,
     ) -> RpcResult<()>;
 
     #[method(name = "setLatestPendingCertificate")]
@@ -252,7 +252,7 @@ where
         certificate_id: CertificateId,
         status: CertificateStatus,
         process_now: bool,
-        settlement_tx_hashes_to_remove: Vec<SettlementTxHash>,
+        settlement_tx_hashes_to_remove: Option<Vec<SettlementTxHash>>,
     ) -> RpcResult<()> {
         warn!(
             ?certificate_id,
@@ -276,6 +276,7 @@ where
             ));
         }
 
+        let settlement_tx_hashes_to_remove = settlement_tx_hashes_to_remove.unwrap_or_default();
         let (settlement_tx_hashes_to_remove, missing): (HashSet<_>, _) =
             settlement_tx_hashes_to_remove
                 .into_iter()
