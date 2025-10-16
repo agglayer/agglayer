@@ -73,7 +73,7 @@ pub struct L1RpcClient<RpcProvider> {
     /// Inner client for interacting with the Polygon Rollup Manager contract.
     inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
     /// Address of the PolygonZkEVMGlobalExitRootV2 contract
-    l1_info_tree: Address,
+    polygon_zkevm_global_exit_root_v2_contract: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
     /// Gas multiplier factor for transactions.
@@ -280,7 +280,7 @@ where
         Self {
             rpc,
             inner,
-            l1_info_tree: polygon_zkevm_global_exit_root_v2_contract,
+            polygon_zkevm_global_exit_root_v2_contract,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
@@ -348,9 +348,9 @@ where
                     .to_block(BlockNumberOrTag::Number(end_block));
 
                 // Get logs from the contract
-                events = rpc.get_logs(&filter).await.map_err(|err| {
-                    error!("Failed to get InitL1InfoRootMap events: {err:?}");
-                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(err.to_string())
+                events = rpc.get_logs(&filter).await.map_err(|error| {
+                    error!(?error, "Failed to get InitL1InfoRootMap events");
+                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(error.to_string())
                 })?;
                 start_block += event_filter_block_range;
             }

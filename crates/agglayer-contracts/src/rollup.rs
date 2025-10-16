@@ -108,7 +108,7 @@ where
             let end_block =
                 (start_block + self.event_filter_block_range - 1).min(latest_network_block);
             let filter = Filter::new()
-                .address(self.l1_info_tree)
+                .address(self.polygon_zkevm_global_exit_root_v2_contract)
                 .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
                 .topic1(U256::from(l1_leaf_count))
                 .from_block(BlockNumberOrTag::Number(start_block))

@@ -551,10 +551,10 @@ where
             .get_provider()
             .get_block_number()
             .await
-            .map_err(|e| {
-                error!("Failed to get the latest block number: {e:?}");
+            .map_err(|error| {
+                error!(?error, "Failed to get the latest block number");
                 Error::L1CommunicationError(Box::new(
-                    agglayer_contracts::L1RpcError::FailedToQueryEvents(e.to_string()),
+                    agglayer_contracts::L1RpcError::FailedToQueryEvents(error.to_string()),
                 ))
             })?
             .as_u64();
@@ -575,10 +575,13 @@ where
                 .get_provider()
                 .get_logs(&filter)
                 .await
-                .map_err(|e| {
-                    error!("Failed to fetch VerifyPessimisticStateTransition logs: {e:?}");
+                .map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to fetch VerifyPessimisticStateTransition logs"
+                    );
                     Error::L1CommunicationError(Box::new(
-                        agglayer_contracts::L1RpcError::FailedToQueryEvents(e.to_string()),
+                        agglayer_contracts::L1RpcError::FailedToQueryEvents(error.to_string()),
                     ))
                 })?;
 
