@@ -10,7 +10,7 @@ use alloy::{
     rpc::types::{Filter, TransactionReceipt},
     signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tracing::{debug, error};
 
 pub mod aggchain;
@@ -74,7 +74,7 @@ pub struct L1RpcClient<RpcProvider> {
     gas_price_params: GasPriceParams,
     /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
     /// Map<leaf_count, l1_info_root>
-    l1_info_roots: Arc<Mutex<HashMap<u32, [u8; 32]>>>,
+    l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -160,7 +160,7 @@ where
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
-            l1_info_roots: Arc::new(Mutex::new(HashMap::new())),
+            l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
