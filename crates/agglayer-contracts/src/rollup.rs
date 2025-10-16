@@ -90,14 +90,18 @@ where
         // To not hit the provider limit, we start from genesis and restrict search
         // to the self.event_filter_block_range blocks range.
         let mut events = Vec::new();
-        let mut start_block = 0u64;
+        let mut start_block = self.rollup_manager_deployment_block.unwrap_or(0u64);
+        debug!(
+            "Searching for UpdateL1InfoTreeV2 event with leaf count {} starting from block {}",
+            l1_leaf_count, start_block
+        );
         let latest_network_block = self
             .rpc
             .get_block_number()
             .await
-            .map_err(|e| {
-                error!("Failed to fetch latest block number: {}", e);
-                L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string())
+            .map_err(|error| {
+                error!(?error, "Failed to fetch latest block number");
+                L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
             })?
             .as_u64();
         while events.is_empty() && start_block <= latest_network_block {
@@ -110,9 +114,12 @@ where
                 .from_block(BlockNumberOrTag::Number(start_block))
                 .to_block(BlockNumberOrTag::Number(end_block));
 
-            events = self.rpc.get_logs(&filter).await.map_err(|e| {
-                error!("Failed to fetch UpdateL1InfoTreeV2EventFailure logs: {}", e);
-                L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string())
+            events = self.rpc.get_logs(&filter).await.map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to fetch UpdateL1InfoTreeV2EventFailure logs"
+                );
+                L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
             })?;
 
             start_block += self.event_filter_block_range;

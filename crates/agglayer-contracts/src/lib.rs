@@ -57,6 +57,14 @@ pub trait L1TransactionFetcher {
 
     /// Returns the provider for direct access to watch transactions
     fn get_provider(&self) -> &Self::Provider;
+
+    /// Finds the block number where a contract was deployed.
+    /// This is used to optimize event queries by starting from the deployment
+    /// block.
+    async fn find_contract_deployment_block_number(
+        &self,
+        address: Address,
+    ) -> Result<Option<u64>, L1RpcError>;
 }
 
 pub struct L1RpcClient<RpcProvider> {
@@ -79,6 +87,8 @@ pub struct L1RpcClient<RpcProvider> {
     /// This is to avoid hitting provider limits when querying large block
     /// ranges or errors like "query returned more than 10000 results".
     event_filter_block_range: u64,
+    /// Rollup manager contract deployment block number
+    rollup_manager_deployment_block: Option<u64>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -147,10 +157,118 @@ pub enum L1RpcError {
     CacheLockPoisoned,
 }
 
+/// Finds the block number where a contract was deployed using binary search.
+/// This is used to optimize event queries by starting from the deployment
+/// block.
+async fn find_contract_deployment_block_number<RpcProvider>(
+    rpc: &RpcProvider,
+    address: Address,
+) -> Result<Option<u64>, L1RpcError>
+where
+    RpcProvider: alloy::providers::Provider,
+{
+    use alloy::eips::{BlockId, BlockNumberOrTag};
+
+    debug!("Finding contract deployment block for address: {}", address);
+
+    // Get the latest block number as the upper bound for search
+    let latest_block = rpc.get_block_number().await.map_err(|e| {
+        L1RpcError::FailedToQueryEvents(format!("Failed to get latest block number: {}", e))
+    })?;
+
+    debug!("Latest block number: {}", latest_block);
+
+    let mut hi = latest_block;
+    let mut lo = 0u64;
+
+    // Quick exit: if no code at latest block, contract was never deployed
+    // (Note: this will treat self-destructed contracts as "not found")
+    let latest_code = rpc
+        .get_code_at(address)
+        .block_id(BlockId::Number(BlockNumberOrTag::Number(hi)))
+        .await
+        .map_err(|e| {
+            L1RpcError::FailedToQueryEvents(format!("Failed to get code at latest block: {}", e))
+        })?;
+
+    if latest_code.is_empty() {
+        debug!("No code found at latest block for address: {}", address);
+        return Ok(None);
+    }
+
+    debug!(
+        "Contract has code at latest block, starting binary search from block 0 to {}",
+        hi
+    );
+
+    // Binary search for the first block where code is present
+    let mut answer: Option<u64> = None;
+    let mut iterations = 0;
+    const MAX_ITERATIONS: u32 = 256; // Safety limit to prevent infinite loops
+
+    while lo <= hi && iterations < MAX_ITERATIONS {
+        iterations += 1;
+        let mid = lo + ((hi - lo) / 2);
+
+        debug!(
+            "Binary search iteration {}: checking block {} (range: {} to {})",
+            iterations, mid, lo, hi
+        );
+
+        // Query bytecode at specific block height
+        let code_at_mid = rpc
+            .get_code_at(address)
+            .block_id(BlockId::Number(BlockNumberOrTag::Number(mid)))
+            .await
+            .map_err(|e| {
+                L1RpcError::FailedToQueryEvents(format!(
+                    "Failed to get code at block {}: {}",
+                    mid, e
+                ))
+            })?;
+
+        if code_at_mid.is_empty() {
+            // Not deployed yet at `mid` -> search higher
+            debug!("No code at block {}, searching higher", mid);
+            lo = mid.saturating_add(1);
+        } else {
+            // Code exists at `mid` -> remember and search lower
+            debug!("Code found at block {}, searching lower", mid);
+            answer = Some(mid);
+            if mid == 0 {
+                break;
+            }
+            hi = mid - 1;
+        }
+    }
+
+    if iterations >= MAX_ITERATIONS {
+        error!(
+            "Binary search exceeded maximum iterations ({}), returning partial result",
+            MAX_ITERATIONS
+        );
+    }
+
+    match answer {
+        Some(block) => {
+            debug!("Contract deployment found at block: {}", block);
+            Ok(Some(block))
+        }
+        None => {
+            debug!(
+                "Contract deployment block not found for address: {}",
+                address
+            );
+            Ok(None)
+        }
+    }
+}
+
 impl<RpcProvider> L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
@@ -159,6 +277,7 @@ where
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
+        rollup_manager_deployment_block: Option<u64>,
     ) -> Self {
         Self {
             rpc,
@@ -169,6 +288,7 @@ where
             gas_price_params,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
             event_filter_block_range,
+            rollup_manager_deployment_block,
         }
     }
 
@@ -187,11 +307,30 @@ where
 
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
+        // Find the deployment block of the l1_info_tree contract to optimize event
+        // search
+        let rollup_manager_deployment_block =
+            find_contract_deployment_block_number(&*rpc, *inner.address())
+                .await
+                .inspect_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to find contract {} deployment block",
+                        inner.address()
+                    );
+                })
+                .unwrap_or(None);
+
         let default_l1_info_tree_entry = {
-            // To not hit the provider limit, we start from genesis and restrict search
-            // to the self. blocks range.
+            // Start search from deployment block or genesis if not found
+            let mut start_block = rollup_manager_deployment_block.unwrap_or(0);
+            debug!(
+                "Starting InitL1InfoRootMap event search from block: {start_block}, contract \
+                 address: {}",
+                inner.address()
+            );
+
             let mut events = Vec::new();
-            let mut start_block = 0u64;
             let latest_network_block = rpc
                 .get_block_number()
                 .await
@@ -200,6 +339,7 @@ where
                     L1RpcInitializationError::InitL1InfoRootMapEventNotFound(e.to_string())
                 })?
                 .as_u64();
+
             while events.is_empty() && start_block <= latest_network_block {
                 let end_block =
                     (start_block + event_filter_block_range - 1).min(latest_network_block);
@@ -261,6 +401,7 @@ where
             gas_multiplier_factor,
             gas_price_params,
             event_filter_block_range,
+            rollup_manager_deployment_block,
         ))
     }
 }
@@ -288,6 +429,13 @@ where
 
     fn get_provider(&self) -> &Self::Provider {
         self.rpc.as_ref()
+    }
+
+    async fn find_contract_deployment_block_number(
+        &self,
+        address: Address,
+    ) -> Result<Option<u64>, L1RpcError> {
+        find_contract_deployment_block_number(&*self.rpc, address).await
     }
 }
 
@@ -363,6 +511,109 @@ mod tests {
             "L1 info root for leaf count {latest_l1_leaf} is: {}",
             FixedBytes::<32>::from(_l1_info_root)
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "reaches external endpoint"]
+    async fn test_find_contract_deployment_block_number_sepolia() {
+        use url::Url;
+
+        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
+        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
+            .expect("L1_RPC_ENDPOINT must be defined")
+            .parse::<Url>()
+            .expect("Invalid URL format");
+
+        let rpc = build_alloy_fill_provider(
+            &rpc_url,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
+        )
+        .expect("valid alloy provider");
+
+        // Create a minimal L1RpcClient for testing
+        let dummy_rollup_manager: Address = "0x0000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        let dummy_ger_contract: Address = "0x0000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+
+        let l1_rpc = L1RpcClient::new(
+            Arc::new(rpc.clone()),
+            contracts::PolygonRollupManager::new(dummy_rollup_manager, rpc),
+            dummy_ger_contract,
+            (0, [0u8; 32]),
+            100,
+            GasPriceParams::default(),
+            10000,
+            None, // rollup_manager_deployment_block
+        );
+
+        // Test with the specific contract address on Sepolia
+        let contract_address: Address = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
+            .parse()
+            .expect("Invalid contract address");
+
+        println!(
+            "Searching for contract deployment block for address: {}",
+            contract_address
+        );
+
+        let deployment_block = l1_rpc
+            .find_contract_deployment_block_number(contract_address)
+            .await;
+
+        match deployment_block {
+            Ok(Some(block)) => {
+                println!("Contract {} deployed at block: {}", contract_address, block);
+                assert_eq!(
+                    block, 4794475,
+                    "Contract should be deployed at block 4794475"
+                );
+            }
+            Ok(None) => {
+                panic!(
+                    "Contract {} should be found on Sepolia at block 4794475",
+                    contract_address
+                );
+            }
+            Err(e) => {
+                panic!("Error searching for contract {}: {}", contract_address, e);
+            }
+        }
+
+        // Test with a known non-existent contract address
+        let non_existent_address: Address = "0x0000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
+
+        let no_deployment = l1_rpc
+            .find_contract_deployment_block_number(non_existent_address)
+            .await
+            .expect("Failed to check non-existent contract");
+
+        assert!(
+            no_deployment.is_none(),
+            "Non-existent contract should return None"
+        );
+        println!("Non-existent contract correctly returned None");
+
+        // Test with Vitalik's EOA (Externally Owned Account) - should return None
+        let vitalik_address: Address = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+            .parse()
+            .unwrap();
+
+        let eoa_deployment = l1_rpc
+            .find_contract_deployment_block_number(vitalik_address)
+            .await
+            .expect("Failed to check Vitalik's EOA");
+
+        assert!(
+            eoa_deployment.is_none(),
+            "EOA address should return None (no contract code)"
+        );
+        println!("Vitalik's EOA {} correctly returned None", vitalik_address);
     }
 
     #[tokio::test]
