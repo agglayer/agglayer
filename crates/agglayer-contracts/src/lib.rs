@@ -24,8 +24,6 @@ pub use aggchain::AggchainContract;
 pub use rollup::RollupContract;
 pub use settler::Settler;
 
-pub const EVENT_FILTER_BLOCK_RANGE: u64 = 100_000;
-
 /// Gas price parameters for L1 transactions.
 #[derive(Debug, Clone)]
 pub struct GasPriceParams {
@@ -77,6 +75,10 @@ pub struct L1RpcClient<RpcProvider> {
     /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
     /// Map<leaf_count, l1_info_root>
     l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
+    /// Number of blocks to query when filtering for events.
+    /// This is to avoid hitting provider limits when querying large block
+    /// ranges or errors like "query returned more than 10000 results".
+    event_filter_block_range: u64,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -156,6 +158,7 @@ where
         default_l1_info_tree_entry: (u32, [u8; 32]),
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
+        event_filter_block_range: u64,
     ) -> Self {
         Self {
             rpc,
@@ -165,6 +168,7 @@ where
             gas_multiplier_factor,
             gas_price_params,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
+            event_filter_block_range,
         }
     }
 
@@ -174,6 +178,7 @@ where
         l1_info_tree: Address,
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
+        event_filter_block_range: u64,
     ) -> Result<Self, L1RpcInitializationError>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -184,7 +189,7 @@ where
 
         let default_l1_info_tree_entry = {
             // To not hit the provider limit, we start from genesis and restrict search
-            // to the EVENT_FILTER_BLOCK_RANGE blocks range.
+            // to the self. blocks range.
             let mut events = Vec::new();
             let mut start_block = 0u64;
             let latest_network_block = rpc
@@ -197,7 +202,7 @@ where
                 .as_u64();
             while events.is_empty() && start_block <= latest_network_block {
                 let end_block =
-                    (start_block + EVENT_FILTER_BLOCK_RANGE - 1).min(latest_network_block);
+                    (start_block + event_filter_block_range - 1).min(latest_network_block);
                 let filter = Filter::new()
                     .address(l1_info_tree)
                     .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
@@ -209,7 +214,7 @@ where
                     error!("Failed to get InitL1InfoRootMap events: {err:?}");
                     L1RpcInitializationError::InitL1InfoRootMapEventNotFound(err.to_string())
                 })?;
-                start_block += EVENT_FILTER_BLOCK_RANGE;
+                start_block += event_filter_block_range;
             }
 
             // Get the first log and decode it
@@ -255,6 +260,7 @@ where
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
+            event_filter_block_range,
         ))
     }
 }
@@ -336,6 +342,7 @@ mod tests {
                 contracts.ger_contract,
                 100,
                 GasPriceParams::default(),
+                10000,
             )
             .await
             .unwrap(),
@@ -381,6 +388,7 @@ mod tests {
                 contracts.ger_contract,
                 100,
                 GasPriceParams::default(),
+                10000,
             )
             .await
             .unwrap(),

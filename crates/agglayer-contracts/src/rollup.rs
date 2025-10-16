@@ -14,7 +14,7 @@ use tracing::{debug, error, trace};
 
 use crate::{
     contracts::{PolygonRollupManager::RollupDataReturnV2, PolygonZkEvm},
-    L1RpcClient, L1RpcError, EVENT_FILTER_BLOCK_RANGE,
+    L1RpcClient, L1RpcError,
 };
 
 #[derive(Debug, FromPrimitive)]
@@ -51,6 +51,8 @@ pub trait RollupContract {
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
 
     fn get_rollup_manager_address(&self) -> Address;
+
+    fn get_event_filter_block_range(&self) -> u64;
 }
 
 #[async_trait::async_trait]
@@ -86,7 +88,7 @@ where
 
         // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
         // To not hit the provider limit, we start from genesis and restrict search
-        // to the EVENT_FILTER_BLOCK_RANGE blocks range.
+        // to the self.event_filter_block_range blocks range.
         let mut events = Vec::new();
         let mut start_block = 0u64;
         let latest_network_block = self
@@ -99,7 +101,8 @@ where
             })?
             .as_u64();
         while events.is_empty() && start_block <= latest_network_block {
-            let end_block = (start_block + EVENT_FILTER_BLOCK_RANGE - 1).min(latest_network_block);
+            let end_block =
+                (start_block + self.event_filter_block_range - 1).min(latest_network_block);
             let filter = Filter::new()
                 .address(self.l1_info_tree)
                 .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
@@ -112,7 +115,7 @@ where
                 L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string())
             })?;
 
-            start_block += EVENT_FILTER_BLOCK_RANGE;
+            start_block += self.event_filter_block_range;
         }
 
         // Extract event details using alloy's event decoding
@@ -314,5 +317,9 @@ where
 
     fn get_rollup_manager_address(&self) -> Address {
         (*self.inner.address()).into()
+    }
+
+    fn get_event_filter_block_range(&self) -> u64 {
+        self.event_filter_block_range
     }
 }

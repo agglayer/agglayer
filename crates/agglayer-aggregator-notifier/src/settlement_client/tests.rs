@@ -40,6 +40,7 @@ mockall::mock! {
         async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
 
         fn get_rollup_manager_address(&self) -> Address;
+        fn get_event_filter_block_range(&self) -> u64;
     }
 
     #[async_trait::async_trait]

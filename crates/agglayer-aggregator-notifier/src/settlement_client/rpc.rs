@@ -19,7 +19,6 @@ use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
 use tracing::{debug, error, info, instrument, warn};
 
 const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
-const EVENT_FILTER_BLOCK_RANGE: u64 = 10_000;
 
 /// Rpc-based settlement client for L1 certificate settlement.
 /// Using alloy client to interact with the L1 rollup manager contract.
@@ -562,7 +561,7 @@ where
         let mut events = Vec::new();
         let mut end_block = latest_network_block;
         while events.is_empty() && end_block > 0 {
-            let start_block = end_block.saturating_sub(EVENT_FILTER_BLOCK_RANGE);
+            let start_block = end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range());
             let filter = alloy::rpc::types::Filter::new()
                 .address(rollup_address.into_alloy())
                 .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
@@ -583,7 +582,7 @@ where
                     ))
                 })?;
 
-            end_block = end_block.saturating_sub(EVENT_FILTER_BLOCK_RANGE);
+            end_block = end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range());
         }
 
         // Get the most recent event (last in the list) and extract its new pessimistic
