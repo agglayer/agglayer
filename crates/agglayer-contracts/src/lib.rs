@@ -73,7 +73,7 @@ pub struct L1RpcClient<RpcProvider> {
     /// Inner client for interacting with the Polygon Rollup Manager contract.
     inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
     /// Address of the PolygonZkEVMGlobalExitRootV2 contract
-    polygon_zkevm_global_exit_root_v2_contract: Address,
+    global_exit_root_manager_contract: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
     /// Gas multiplier factor for transactions.
@@ -88,7 +88,7 @@ pub struct L1RpcClient<RpcProvider> {
     /// ranges or errors like "query returned more than 10000 results".
     event_filter_block_range: u64,
     /// PolygonZkEVMGlobalExitRootV2 contract deployment block number.
-    polygon_zkevm_global_exit_root_v2_contract_block: u64,
+    global_exit_root_manager_contract_block: u64,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -256,30 +256,30 @@ where
     pub fn new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
-        polygon_zkevm_global_exit_root_v2_contract: Address,
+        global_exit_root_manager_contract: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
-        polygon_zkevm_global_exit_root_v2_contract_block: u64,
+        global_exit_root_manager_contract_block: u64,
     ) -> Self {
         Self {
             rpc,
             inner,
-            polygon_zkevm_global_exit_root_v2_contract,
+            global_exit_root_manager_contract,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
             event_filter_block_range,
-            polygon_zkevm_global_exit_root_v2_contract_block,
+            global_exit_root_manager_contract_block,
         }
     }
 
     pub async fn try_new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
-        polygon_zkevm_global_exit_root_v2_contract: Address,
+        global_exit_root_manager_contract: Address,
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
@@ -291,29 +291,27 @@ where
 
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
-        // Find the deployment block of the rollup manager contract to optimize
+        // Find the deployment block of the global exit root manager to optimize
         // InitL1InfoRootMap event search.
-        let rollup_manager_deployment_block = find_contract_deployment_block_number(
-            &*rpc,
-            polygon_zkevm_global_exit_root_v2_contract,
-        )
-        .await
-        .map_err(|error| {
-            error!(
-                ?error,
-                "Failed to find contract {} deployment block",
-                polygon_zkevm_global_exit_root_v2_contract
-            );
-            L1RpcInitializationError::InitL1InfoRootMapEventNotFound(error.to_string())
-        })?
-        .unwrap_or_default();
+        let global_exit_root_manager_contract_block =
+            find_contract_deployment_block_number(&*rpc, global_exit_root_manager_contract)
+                .await
+                .map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to find contract {} deployment block",
+                        global_exit_root_manager_contract
+                    );
+                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(error.to_string())
+                })?
+                .unwrap_or_default();
 
         let default_l1_info_tree_entry = {
             // Start search from deployment block or genesis if not found
-            let mut start_block = rollup_manager_deployment_block;
+            let mut start_block = global_exit_root_manager_contract_block;
             debug!(
                 "Starting InitL1InfoRootMap event search from block: {start_block}, contract \
-                 address: {polygon_zkevm_global_exit_root_v2_contract}"
+                 address: {global_exit_root_manager_contract}"
             );
 
             let mut events = Vec::new();
@@ -330,7 +328,7 @@ where
                 let end_block =
                     (start_block + event_filter_block_range - 1).min(latest_network_block);
                 let filter = Filter::new()
-                    .address(polygon_zkevm_global_exit_root_v2_contract)
+                    .address(global_exit_root_manager_contract)
                     .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
                     .from_block(BlockNumberOrTag::Number(start_block))
                     .to_block(BlockNumberOrTag::Number(end_block));
@@ -387,12 +385,12 @@ where
         Ok(Self::new(
             rpc,
             inner,
-            polygon_zkevm_global_exit_root_v2_contract,
+            global_exit_root_manager_contract,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
             event_filter_block_range,
-            rollup_manager_deployment_block,
+            global_exit_root_manager_contract_block,
         ))
     }
 }
@@ -668,7 +666,7 @@ mod tests {
         let rollup_manager_address: Address = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
             .parse()
             .expect("Invalid rollup manager address");
-        let polygon_zkevm_global_exit_root_v2_address: Address =
+        let global_exit_root_manager_address: Address =
             "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
                 .parse()
                 .expect("Invalid PolygonZkEVMGlobalExitRootV2 address");
@@ -678,7 +676,7 @@ mod tests {
         let l1_rpc = L1RpcClient::try_new(
             Arc::new(rpc.clone()),
             contracts::PolygonRollupManager::new(rollup_manager_address, rpc),
-            polygon_zkevm_global_exit_root_v2_address,
+            global_exit_root_manager_address,
             100, // default gas_multiplier_factor
             GasPriceParams::default(),
             10000, // default event_filter_block_range

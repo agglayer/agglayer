@@ -90,7 +90,7 @@ where
         // To not hit the provider limit, we start from genesis and restrict search
         // to the self.event_filter_block_range blocks range.
         let mut events = Vec::new();
-        let mut start_block = self.polygon_zkevm_global_exit_root_v2_contract_block;
+        let mut start_block = self.global_exit_root_manager_contract_block;
         debug!(
             "Searching for UpdateL1InfoTreeV2 event with leaf count {} starting from block {}",
             l1_leaf_count, start_block
@@ -108,7 +108,7 @@ where
             let end_block =
                 (start_block + self.event_filter_block_range - 1).min(latest_network_block);
             let filter = Filter::new()
-                .address(self.polygon_zkevm_global_exit_root_v2_contract)
+                .address(self.global_exit_root_manager_contract)
                 .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
                 .topic1(U256::from(l1_leaf_count))
                 .from_block(BlockNumberOrTag::Number(start_block))
