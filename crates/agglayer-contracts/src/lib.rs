@@ -326,8 +326,7 @@ where
             let mut start_block = rollup_manager_deployment_block.unwrap_or(0);
             debug!(
                 "Starting InitL1InfoRootMap event search from block: {start_block}, contract \
-                 address: {}",
-                polygon_zkevm_global_exit_root_v2_contract
+                 address: {polygon_zkevm_global_exit_root_v2_contract}"
             );
 
             let mut events = Vec::new();
