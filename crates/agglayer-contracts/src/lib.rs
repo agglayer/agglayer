@@ -87,7 +87,7 @@ pub struct L1RpcClient<RpcProvider> {
     /// This is to avoid hitting provider limits when querying large block
     /// ranges or errors like "query returned more than 10000 results".
     event_filter_block_range: u64,
-    /// PolygonZkEVMGlobalExitRootV2 contract deployment block number
+    /// PolygonZkEVMGlobalExitRootV2 contract deployment block number.
     polygon_zkevm_global_exit_root_v2_contract_block: Option<u64>,
 }
 
@@ -549,8 +549,9 @@ mod tests {
             None, // rollup_manager_deployment_block
         );
 
-        // Test with the specific contract address on Sepolia
-        let contract_address: Address = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
+        // Test with the specific contract address on Sepolia, contract 0x2968D6d736178f8FE7393CC33C87f29D9C287e78
+        // created with tx https://sepolia.etherscan.io/tx/0x6bc6454693776698a5ec38744042f2bc970966ba9106d903a7cfc5acc6c89410
+        let contract_address: Address = "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
             .parse()
             .expect("Invalid contract address");
 
@@ -567,8 +568,8 @@ mod tests {
             Ok(Some(block)) => {
                 println!("Contract {} deployed at block: {}", contract_address, block);
                 assert_eq!(
-                    block, 4794475,
-                    "Contract should be deployed at block 4794475"
+                    block, 4794473,
+                    "Contract should be deployed at block 4794473"
                 );
             }
             Ok(None) => {
