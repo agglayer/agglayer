@@ -90,7 +90,9 @@ where
         // To not hit the provider limit, we start from genesis and restrict search
         // to the self.event_filter_block_range blocks range.
         let mut events = Vec::new();
-        let mut start_block = self.rollup_manager_deployment_block.unwrap_or(0u64);
+        let mut start_block = self
+            .polygon_zkevm_global_exit_root_v2_contract_block
+            .unwrap_or(0u64);
         debug!(
             "Searching for UpdateL1InfoTreeV2 event with leaf count {} starting from block {}",
             l1_leaf_count, start_block
@@ -115,10 +117,7 @@ where
                 .to_block(BlockNumberOrTag::Number(end_block));
 
             events = self.rpc.get_logs(&filter).await.map_err(|error| {
-                error!(
-                    ?error,
-                    "Failed to fetch UpdateL1InfoTreeV2 logs"
-                );
+                error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
                 L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
             })?;
 

@@ -87,8 +87,8 @@ pub struct L1RpcClient<RpcProvider> {
     /// This is to avoid hitting provider limits when querying large block
     /// ranges or errors like "query returned more than 10000 results".
     event_filter_block_range: u64,
-    /// Rollup manager contract deployment block number
-    rollup_manager_deployment_block: Option<u64>,
+    /// PolygonZkEVMGlobalExitRootV2 contract deployment block number
+    polygon_zkevm_global_exit_root_v2_contract_block: Option<u64>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -286,7 +286,7 @@ where
             gas_price_params,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
             event_filter_block_range,
-            rollup_manager_deployment_block,
+            polygon_zkevm_global_exit_root_v2_contract_block: rollup_manager_deployment_block,
         }
     }
 
@@ -307,17 +307,19 @@ where
 
         // Find the deployment block of the rollup manager contract to optimize
         // InitL1InfoRootMap event search.
-        let rollup_manager_deployment_block =
-            find_contract_deployment_block_number(&*rpc, *inner.address())
-                .await
-                .inspect_err(|error| {
-                    error!(
-                        ?error,
-                        "Failed to find contract {} deployment block",
-                        inner.address()
-                    );
-                })
-                .unwrap_or(None);
+        let rollup_manager_deployment_block = find_contract_deployment_block_number(
+            &*rpc,
+            polygon_zkevm_global_exit_root_v2_contract,
+        )
+        .await
+        .inspect_err(|error| {
+            error!(
+                ?error,
+                "Failed to find contract {} deployment block",
+                polygon_zkevm_global_exit_root_v2_contract
+            );
+        })
+        .unwrap_or(None);
 
         let default_l1_info_tree_entry = {
             // Start search from deployment block or genesis if not found
@@ -325,7 +327,7 @@ where
             debug!(
                 "Starting InitL1InfoRootMap event search from block: {start_block}, contract \
                  address: {}",
-                inner.address()
+                polygon_zkevm_global_exit_root_v2_contract
             );
 
             let mut events = Vec::new();
