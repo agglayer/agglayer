@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use agglayer_config::Config;
 use agglayer_storage::stores::{
@@ -38,7 +38,7 @@ pub(crate) trait AdminAgglayer {
         certificate_id: CertificateId,
         status: CertificateStatus,
         process_now: bool,
-        remove_settlement_tx_hash: Option<SettlementTxHash>,
+        remove_settlement_tx_hashes: Vec<SettlementTxHash>,
     ) -> RpcResult<()>;
 
     #[method(name = "setLatestPendingCertificate")]
@@ -252,7 +252,7 @@ where
         certificate_id: CertificateId,
         status: CertificateStatus,
         process_now: bool,
-        remove_settlement_tx_hash: Option<SettlementTxHash>,
+        settlement_tx_hashes_to_remove: Vec<SettlementTxHash>,
     ) -> RpcResult<()> {
         warn!(
             ?certificate_id,
@@ -275,27 +275,35 @@ where
                 "Cannot change status of a settled certificate".to_string(),
             ));
         }
-        if let Some(remove_settlement_tx_hash) = remove_settlement_tx_hash {
-            if header.settlement_tx_hashes.last() != Some(&remove_settlement_tx_hash) {
-                return Err(Error::InvalidArgument(format!(
-                    "Provided settlement_tx_hash to remove ({remove_settlement_tx_hash:?}) does \
-                     not match the existing one ({:?})",
-                    header.settlement_tx_hashes.last()
-                )));
-            }
+
+        let (settlement_tx_hashes_to_remove, missing): (HashSet<_>, _) =
+            settlement_tx_hashes_to_remove
+                .into_iter()
+                .partition(|hash| header.settlement_tx_hashes.contains(hash));
+        if !missing.is_empty() {
+            return Err(Error::InvalidArgument(format!(
+                "Settlement tx hashes {missing:?} cannot be removed, already not present. Aborting."
+            )));
+        }
+        if !settlement_tx_hashes_to_remove.is_empty() {
             self.state
-                .remove_settlement_tx_hash(&certificate_id)
+                .try_update_settlement_tx_hashes(&certificate_id, move |mut hashes| {
+                    hashes.retain(|hash| !settlement_tx_hashes_to_remove.contains(hash));
+                    Ok(hashes)
+                })
                 .map_err(|error| {
                     error!(?error, "Failed to remove settlement_tx_hash");
                     Error::internal("Unable to remove settlement_tx_hash")
                 })?;
         }
+
         self.state
             .update_certificate_header_status(&certificate_id, &status)
             .map_err(|error| {
                 error!(?error, "Failed to update certificate status");
                 Error::internal("Unable to update certificate status")
             })?;
+
         if process_now {
             self.certificate_sender
                 .send((header.network_id, header.height, certificate_id))

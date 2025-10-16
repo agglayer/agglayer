@@ -38,10 +38,13 @@ mock! {
             force: bool,
         ) -> Result<(), Error>;
 
-        fn remove_settlement_tx_hash(
+        fn try_update_settlement_tx_hashes<F>(
             &self,
             certificate_id: &CertificateId,
-        ) -> Result<(), Error>;
+            update_fn: F,
+        ) -> Result<(), Error>
+        where
+            F: FnOnce(Vec<SettlementTxHash>) -> Result<Vec<SettlementTxHash>, String> + 'static;
 
         fn assign_certificate_to_epoch(
             &self,

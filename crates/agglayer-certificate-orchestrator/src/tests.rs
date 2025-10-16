@@ -292,10 +292,14 @@ impl StateWriter for DummyPendingStore {
         todo!()
     }
 
-    fn remove_settlement_tx_hash(
+    fn try_update_settlement_tx_hashes<F>(
         &self,
         _certificate_id: &CertificateId,
-    ) -> Result<(), agglayer_storage::error::Error> {
+        _update_fn: F,
+    ) -> Result<(), agglayer_storage::error::Error>
+    where
+        F: FnOnce(Vec<SettlementTxHash>) -> Result<Vec<SettlementTxHash>, String> + 'static,
+    {
         todo!()
     }
 

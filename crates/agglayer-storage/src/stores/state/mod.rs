@@ -72,76 +72,49 @@ impl StateWriter for StateStore {
         tx_hash: SettlementTxHash,
         force: bool,
     ) -> Result<(), Error> {
-        // TODO: make lockguard for certificate_id
-        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
-
-        if let Some(mut certificate_header) = certificate_header {
-            if !certificate_header.settlement_tx_hashes.is_empty() && !force {
-                return Err(Error::UnprocessedAction(
+        self.try_update_settlement_tx_hashes(certificate_id, move |hashes| {
+            if !hashes.is_empty() && !force {
+                return Err(
                     "Tried to update settlement tx hash for a certificate that already has a \
                      settlement tx hash"
                         .to_string(),
-                ));
-            }
-
-            if certificate_header.status == CertificateStatus::Settled {
-                return Err(Error::UnprocessedAction(
-                    "Tried to update settlement tx hash for a certificate that is already settled"
-                        .to_string(),
-                ));
-            }
-
-            certificate_header.settlement_tx_hashes = vec![tx_hash];
-            certificate_header.status = CertificateStatus::Candidate;
-
-            self.db
-                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
-
-            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-                warn!(
-                    hash = certificate_id.to_string(),
-                    "Unable to trigger backup for the state database: {}", error
                 );
             }
-        } else {
-            info!(
-                hash = %certificate_id,
-                "Certificate header not found for certificate_id: {}",
-                certificate_id
-            )
-        }
 
-        Ok(())
+            Ok(vec![tx_hash])
+        })
     }
 
-    fn remove_settlement_tx_hash(
+    fn try_update_settlement_tx_hashes<F>(
         &self,
         certificate_id: &CertificateId,
-    ) -> Result<(), Error> {
+        update_fn: F,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce(Vec<SettlementTxHash>) -> Result<Vec<SettlementTxHash>, String>,
+    {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
-        if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hashes.is_empty() {
+        if let Some(mut header) = certificate_header {
+            if header.status == CertificateStatus::Settled {
                 return Err(Error::UnprocessedAction(
-                    "Tried to remove settlement tx hash for a certificate that does not have a \
-                     settlement tx hash"
+                    "Tried to change settlement tx hashes for a certificate that is already settled"
                         .to_string(),
                 ));
             }
 
-            if certificate_header.status == CertificateStatus::Settled {
-                return Err(Error::UnprocessedAction(
-                    "Tried to remove settlement tx hash for a certificate that is already settled"
-                        .to_string(),
-                ));
-            }
+            header.settlement_tx_hashes =
+                update_fn(header.settlement_tx_hashes).map_err(Error::UnprocessedAction)?;
 
-            certificate_header.settlement_tx_hashes = Vec::new();
-            certificate_header.status = CertificateStatus::Proven;
+            header.status = if header.settlement_tx_hashes.is_empty() {
+                CertificateStatus::Proven
+            } else {
+                CertificateStatus::Candidate
+            };
 
             self.db
-                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+                .put::<CertificateHeaderColumn>(certificate_id, &header)?;
 
             if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
                 warn!(
