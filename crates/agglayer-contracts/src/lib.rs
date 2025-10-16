@@ -466,9 +466,9 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     #[ignore = "reaches external endpoint"]
-    async fn test_fetch_proper_default_l1_leaf_count() {
+    async fn test_fetch_proper_default_l1_global_exit_root_manager_sepolia() {
         let rpc_url = std::env::var("L1_RPC_ENDPOINT")
             .expect("L1_RPC_ENDPOINT must be defined")
             .parse::<Url>()
@@ -506,13 +506,9 @@ mod tests {
         // check that the awaiting finalization is done as expected
         let latest_l1_leaf = 73587;
         let _l1_info_root = l1_rpc.get_l1_info_root(latest_l1_leaf).await.unwrap();
-        println!(
-            "L1 info root for leaf count {latest_l1_leaf} is: {}",
-            FixedBytes::<32>::from(_l1_info_root)
-        );
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     #[ignore = "reaches external endpoint"]
     async fn test_find_contract_deployment_block_number_sepolia() {
         use url::Url;
@@ -549,16 +545,11 @@ mod tests {
             None, // rollup_manager_deployment_block
         );
 
-        // Test with the specific contract address on Sepolia, contract 0x2968D6d736178f8FE7393CC33C87f29D9C287e78
-        // created with tx https://sepolia.etherscan.io/tx/0x6bc6454693776698a5ec38744042f2bc970966ba9106d903a7cfc5acc6c89410
+        // Test with the specific contract address on Sepolia, contract
+        // 0x2968D6d736178f8FE7393CC33C87f29D9C287e78 created with tx https://sepolia.etherscan.io/tx/0x6bc6454693776698a5ec38744042f2bc970966ba9106d903a7cfc5acc6c89410
         let contract_address: Address = "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
             .parse()
             .expect("Invalid contract address");
-
-        println!(
-            "Searching for contract deployment block for address: {}",
-            contract_address
-        );
 
         let deployment_block = l1_rpc
             .find_contract_deployment_block_number(contract_address)
@@ -566,7 +557,6 @@ mod tests {
 
         match deployment_block {
             Ok(Some(block)) => {
-                println!("Contract {} deployed at block: {}", contract_address, block);
                 assert_eq!(
                     block, 4794473,
                     "Contract should be deployed at block 4794473"
@@ -597,7 +587,6 @@ mod tests {
             no_deployment.is_none(),
             "Non-existent contract should return None"
         );
-        println!("Non-existent contract correctly returned None");
 
         // Test with Vitalik's EOA (Externally Owned Account) - should return None
         let vitalik_address: Address = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
@@ -613,10 +602,9 @@ mod tests {
             eoa_deployment.is_none(),
             "EOA address should return None (no contract code)"
         );
-        println!("Vitalik's EOA {} correctly returned None", vitalik_address);
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     #[ignore = "reaches external endpoint"]
     async fn test_fetch_multisig_context() {
         let rpc_url = std::env::var("L1_RPC_ENDPOINT")
@@ -663,5 +651,92 @@ mod tests {
 
         assert_eq!(signers, expected_signers);
         assert_eq!(threshold, expected_threshold);
+    }
+
+    #[test_log::test(tokio::test)]
+    #[ignore = "reaches external endpoint"]
+    async fn test_get_l1_info_root_for_leaf_counts() {
+        use url::Url;
+
+        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
+        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
+            .expect("L1_RPC_ENDPOINT must be defined")
+            .parse::<Url>()
+            .expect("Invalid URL format");
+
+        let rpc = build_alloy_fill_provider(
+            &rpc_url,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
+        )
+        .expect("valid alloy provider");
+
+        tracing::info!("Testing get_l1_info_root for leaf counts for Bali testnet");
+
+        // Use the specified contract addresses for Bali testnet
+        let rollup_manager_address: Address = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
+            .parse()
+            .expect("Invalid rollup manager address");
+        let polygon_zkevm_global_exit_root_v2_address: Address =
+            "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
+                .parse()
+                .expect("Invalid PolygonZkEVMGlobalExitRootV2 address");
+
+        // Create L1RpcClient with default config for other parameters for Bali testnet
+        let l1_rpc = L1RpcClient::try_new(
+            Arc::new(rpc.clone()),
+            contracts::PolygonRollupManager::new(rollup_manager_address, rpc),
+            polygon_zkevm_global_exit_root_v2_address,
+            100, // default gas_multiplier_factor
+            GasPriceParams::default(),
+            10000, // default event_filter_block_range
+        )
+        .await
+        .expect("Failed to create L1RpcClient");
+
+        // Test get_l1_info_root for specific leaf counts from log output
+        let leaf_counts = vec![
+            68, 71, 74, 79, 82, 85, 88, 90, 95, 98, 101, 104, 107, 112, 115, 118, 121, 123, 128,
+            131, 134, 137,
+        ];
+
+        tracing::info!(
+            "Testing {} leaf counts: {:?}",
+            leaf_counts.len(),
+            leaf_counts
+        );
+
+        for leaf_count in leaf_counts {
+            tracing::debug!("Testing leaf count: {}", leaf_count);
+
+            match l1_rpc.get_l1_info_root(leaf_count).await {
+                Ok(l1_info_root) => {
+                    tracing::info!(
+                        "Leaf count found {}: L1 info root = {}",
+                        leaf_count,
+                        FixedBytes::<32>::from(l1_info_root)
+                    );
+                    // Verify that the root is not all zeros (which would indicate an invalid
+                    // result)
+                    assert_ne!(
+                        l1_info_root, [0u8; 32],
+                        "L1 info root should not be all zeros for leaf count {}",
+                        leaf_count
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to get L1 info root for leaf count {}: {}",
+                        leaf_count,
+                        e
+                    );
+                    // For this test, we expect some leaf counts might not exist
+                    // yet, so we don't fail the test but
+                    // just continue
+                }
+            }
+        }
+
+        tracing::info!("Completed testing get_l1_info_root for all leaf counts");
     }
 }
