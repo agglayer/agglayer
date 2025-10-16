@@ -90,9 +90,7 @@ where
         // To not hit the provider limit, we start from genesis and restrict search
         // to the self.event_filter_block_range blocks range.
         let mut events = Vec::new();
-        let mut start_block = self
-            .polygon_zkevm_global_exit_root_v2_contract_block
-            .unwrap_or(0u64);
+        let mut start_block = self.polygon_zkevm_global_exit_root_v2_contract_block;
         debug!(
             "Searching for UpdateL1InfoTreeV2 event with leaf count {} starting from block {}",
             l1_leaf_count, start_block

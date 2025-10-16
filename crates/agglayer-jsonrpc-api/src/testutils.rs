@@ -225,7 +225,7 @@ impl TestContext {
             100,                  // Default gas multiplier factor
             agglayer_contracts::GasPriceParams::default(), // Default gas price parameters
             10000,
-            None, // rollup_manager_deployment_block - use None for test environments
+            0, // rollup_manager_deployment_block - use None for test environments
         )
     }
 

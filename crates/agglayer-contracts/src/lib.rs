@@ -88,7 +88,7 @@ pub struct L1RpcClient<RpcProvider> {
     /// ranges or errors like "query returned more than 10000 results".
     event_filter_block_range: u64,
     /// PolygonZkEVMGlobalExitRootV2 contract deployment block number.
-    polygon_zkevm_global_exit_root_v2_contract_block: Option<u64>,
+    polygon_zkevm_global_exit_root_v2_contract_block: u64,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -167,11 +167,10 @@ async fn find_contract_deployment_block_number<RpcProvider>(
 where
     RpcProvider: alloy::providers::Provider,
 {
-    use alloy::eips::{BlockId, BlockNumberOrTag};
-
     // Get the latest block number as the upper bound for search
-    let latest_block = rpc.get_block_number().await.map_err(|e| {
-        L1RpcError::FailedToQueryEvents(format!("Failed to get latest block number: {}", e))
+    let latest_block = rpc.get_block_number().await.map_err(|error| {
+        error!(?error, "Failed to get the latest block number");
+        L1RpcError::FailedToQueryEvents(format!("Failed to get latest block number: {error}"))
     })?;
 
     debug!("Finding contract deployment block for address: {address}, latest_block {latest_block}");
@@ -181,13 +180,10 @@ where
 
     // Quick exit: if no code at latest block, contract was never deployed
     // (Note: this will treat self-destructed contracts as "not found")
-    let latest_code = rpc
-        .get_code_at(address)
-        .block_id(BlockId::Number(BlockNumberOrTag::Number(hi)))
-        .await
-        .map_err(|e| {
-            L1RpcError::FailedToQueryEvents(format!("Failed to get code at latest block: {}", e))
-        })?;
+    let latest_code = rpc.get_code_at(address).number(hi).await.map_err(|error| {
+        error!(?error, "Failed to get code at latest block");
+        L1RpcError::FailedToQueryEvents(format!("Failed to get code at latest block: {error}"))
+    })?;
 
     if latest_code.is_empty() {
         debug!("No code found at latest block for address: {}", address);
@@ -216,22 +212,20 @@ where
         // Query bytecode at specific block height
         let code_at_mid = rpc
             .get_code_at(address)
-            .block_id(BlockId::Number(BlockNumberOrTag::Number(mid)))
+            .number(mid)
             .await
-            .map_err(|e| {
+            .map_err(|error| {
+                error!(?error, "Failed to get code at block {mid}");
                 L1RpcError::FailedToQueryEvents(format!(
-                    "Failed to get code at block {}: {}",
-                    mid, e
+                    "Failed to get code at block {mid}: {error}"
                 ))
             })?;
 
         if code_at_mid.is_empty() {
             // Not deployed yet at `mid` -> search higher
-            debug!("No code at block {}, searching higher", mid);
             lo = mid.saturating_add(1);
         } else {
             // Code exists at `mid` -> remember and search lower
-            debug!("Code found at block {}, searching lower", mid);
             answer = Some(mid);
             if mid == 0 {
                 break;
@@ -247,19 +241,11 @@ where
         );
     }
 
-    match answer {
-        Some(block) => {
-            debug!("Contract deployment found at block: {}", block);
-            Ok(Some(block))
-        }
-        None => {
-            debug!(
-                "Contract deployment block not found for address: {}",
-                address
-            );
-            Ok(None)
-        }
-    }
+    answer.as_ref().map_or_else(
+        || debug!(?address, "Contract deployment block not found"),
+        |block| debug!("Contract deployment found at block: {block}"),
+    );
+    Ok(answer)
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -275,7 +261,7 @@ where
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
-        rollup_manager_deployment_block: Option<u64>,
+        polygon_zkevm_global_exit_root_v2_contract_block: u64,
     ) -> Self {
         Self {
             rpc,
@@ -286,7 +272,7 @@ where
             gas_price_params,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
             event_filter_block_range,
-            polygon_zkevm_global_exit_root_v2_contract_block: rollup_manager_deployment_block,
+            polygon_zkevm_global_exit_root_v2_contract_block,
         }
     }
 
@@ -312,18 +298,19 @@ where
             polygon_zkevm_global_exit_root_v2_contract,
         )
         .await
-        .inspect_err(|error| {
+        .map_err(|error| {
             error!(
                 ?error,
                 "Failed to find contract {} deployment block",
                 polygon_zkevm_global_exit_root_v2_contract
             );
-        })
-        .unwrap_or(None);
+            L1RpcInitializationError::InitL1InfoRootMapEventNotFound(error.to_string())
+        })?
+        .unwrap_or_default();
 
         let default_l1_info_tree_entry = {
             // Start search from deployment block or genesis if not found
-            let mut start_block = rollup_manager_deployment_block.unwrap_or(0);
+            let mut start_block = rollup_manager_deployment_block;
             debug!(
                 "Starting InitL1InfoRootMap event search from block: {start_block}, contract \
                  address: {polygon_zkevm_global_exit_root_v2_contract}"
@@ -547,7 +534,7 @@ mod tests {
             100,
             GasPriceParams::default(),
             10000,
-            None, // rollup_manager_deployment_block
+            0,
         );
 
         // Test with the specific contract address on Sepolia, contract
@@ -568,13 +555,10 @@ mod tests {
                 );
             }
             Ok(None) => {
-                panic!(
-                    "Contract {} should be found on Sepolia at block 4794475",
-                    contract_address
-                );
+                panic!("Contract {contract_address} should be found on Sepolia at block 4794475");
             }
             Err(e) => {
-                panic!("Error searching for contract {}: {}", contract_address, e);
+                panic!("Error searching for contract {contract_address}: {e}");
             }
         }
 
@@ -726,15 +710,12 @@ mod tests {
                     // result)
                     assert_ne!(
                         l1_info_root, [0u8; 32],
-                        "L1 info root should not be all zeros for leaf count {}",
-                        leaf_count
+                        "L1 info root should not be all zeros for leaf count {leaf_count}",
                     );
                 }
-                Err(e) => {
+                Err(error) => {
                     tracing::warn!(
-                        "Failed to get L1 info root for leaf count {}: {}",
-                        leaf_count,
-                        e
+                        "Failed to get L1 info root for leaf count {leaf_count}: {error}",
                     );
                     // For this test, we expect some leaf counts might not exist
                     // yet, so we don't fail the test but
