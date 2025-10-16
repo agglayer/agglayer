@@ -100,7 +100,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tokio-util",
- "tonic 0.12.3",
+ "tonic 0.13.1",
  "tracing",
 ]
 
@@ -275,9 +275,10 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tonic 0.12.3",
+ "tokio-stream",
+ "tonic 0.13.1",
  "tonic-reflection",
- "tonic-types 0.12.3",
+ "tonic-types",
  "tower 0.4.13",
  "tracing",
  "uuid 1.18.0",
@@ -288,7 +289,7 @@ name = "agglayer-grpc-client"
 version = "0.1.0"
 dependencies = [
  "agglayer-grpc-types",
- "tonic 0.12.3",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -296,7 +297,7 @@ name = "agglayer-grpc-server"
 version = "0.1.0"
 dependencies = [
  "agglayer-grpc-types",
- "tonic 0.12.3",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -338,7 +339,7 @@ dependencies = [
  "prost 0.13.5",
  "serde",
  "thiserror 2.0.16",
- "tonic-types 0.13.1",
+ "tonic-types",
 ]
 
 [[package]]
@@ -402,7 +403,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "toml",
- "tonic 0.12.3",
+ "tonic 0.13.1",
  "tower 0.4.13",
  "tower-http",
  "tracing",
@@ -457,7 +458,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "toml",
- "tonic 0.12.3",
+ "tonic 0.13.1",
  "tower 0.4.13",
  "tower-http",
  "tracing",
@@ -484,7 +485,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
@@ -499,7 +500,7 @@ dependencies = [
  "sp1-sdk",
  "tokio",
  "tokio-util",
- "tonic 0.12.3",
+ "tonic 0.13.1",
  "tonic-health",
  "tonic-reflection",
  "tower 0.4.13",
@@ -509,7 +510,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "prover-config",
  "prover-logger",
@@ -522,7 +523,7 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "agglayer-interop",
  "pbjson 0.7.0",
@@ -531,8 +532,7 @@ dependencies = [
  "serde",
  "sp1-sdk",
  "thiserror 2.0.16",
- "tonic 0.12.3",
- "tonic-build",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -3663,12 +3663,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fixedbitset"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
-
-[[package]]
 name = "flate2"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5253,12 +5247,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "multimap"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
-
-[[package]]
 name = "native-tls"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6246,16 +6234,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "petgraph"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
-dependencies = [
- "fixedbitset",
- "indexmap 2.11.0",
-]
-
-[[package]]
 name = "pharos"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6615,26 +6593,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-build"
-version = "0.13.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
-dependencies = [
- "heck 0.5.0",
- "itertools 0.14.0",
- "log",
- "multimap",
- "once_cell",
- "petgraph",
- "prettyplease",
- "prost 0.13.5",
- "prost-types 0.13.5",
- "regex",
- "syn 2.0.106",
- "tempfile",
-]
-
-[[package]]
 name = "prost-derive"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6707,7 +6665,7 @@ dependencies = [
 [[package]]
 name = "prover-alloy"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "agglayer-evm-client",
  "alloy",
@@ -6723,7 +6681,7 @@ dependencies = [
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "prover-utils",
  "serde",
@@ -6734,17 +6692,18 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
  "axum 0.8.4",
+ "bytes",
  "eyre",
  "http",
  "http-body-util",
  "tokio",
  "tokio-util",
- "tonic 0.12.3",
+ "tonic 0.13.1",
  "tonic-health",
  "tonic-reflection",
  "tower 0.4.13",
@@ -6754,7 +6713,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "anyhow",
  "buildstructor",
@@ -6770,7 +6729,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml",
- "tonic 0.12.3",
+ "tonic 0.13.1",
  "tonic-health",
  "tonic-reflection",
  "tower 0.4.13",
@@ -6781,7 +6740,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "serde",
  "tracing",
@@ -6792,7 +6751,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "humantime-serde",
  "serde",
@@ -9009,7 +8968,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
- "zstd",
 ]
 
 [[package]]
@@ -9018,68 +8976,53 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e581ba15a835f4d9ea06c55ab1bd4dce26fc53752c69a04aac00703bfb49ba9"
 dependencies = [
+ "async-trait",
+ "axum 0.8.4",
  "base64 0.22.1",
  "bytes",
+ "h2",
  "http",
  "http-body",
  "http-body-util",
+ "hyper",
+ "hyper-timeout",
+ "hyper-util",
  "percent-encoding",
  "pin-project 1.1.10",
+ "prost 0.13.5",
+ "socket2 0.5.10",
+ "tokio",
  "tokio-stream",
+ "tower 0.5.2",
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "tonic-build"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
-dependencies = [
- "prettyplease",
- "proc-macro2",
- "prost-build",
- "prost-types 0.13.5",
- "quote",
- "syn 2.0.106",
+ "zstd",
 ]
 
 [[package]]
 name = "tonic-health"
-version = "0.12.3"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1eaf34ddb812120f5c601162d5429933c9b527d901ab0e7f930d3147e33a09b2"
+checksum = "cb87334d340313fefa513b6e60794d44a86d5f039b523229c99c323e4e19ca4b"
 dependencies = [
- "async-stream",
  "prost 0.13.5",
  "tokio",
  "tokio-stream",
- "tonic 0.12.3",
+ "tonic 0.13.1",
 ]
 
 [[package]]
 name = "tonic-reflection"
-version = "0.12.3"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "878d81f52e7fcfd80026b7fdb6a9b578b3c3653ba987f87f0dce4b64043cba27"
+checksum = "f9687bd5bfeafebdded2356950f278bba8226f0b32109537c4253406e09aafe1"
 dependencies = [
  "prost 0.13.5",
  "prost-types 0.13.5",
  "tokio",
  "tokio-stream",
- "tonic 0.12.3",
-]
-
-[[package]]
-name = "tonic-types"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0081d8ee0847d01271392a5aebe960a4600f5d4da6c67648a6382a0940f8b367"
-dependencies = [
- "prost 0.13.5",
- "prost-types 0.13.5",
- "tonic 0.12.3",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -9121,9 +9064,12 @@ checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
+ "indexmap 2.11.0",
  "pin-project-lite",
+ "slab",
  "sync_wrapper",
  "tokio",
+ "tokio-util",
  "tower-layer",
  "tower-service",
  "tracing",
