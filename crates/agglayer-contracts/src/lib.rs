@@ -1,6 +1,9 @@
 //! Agglayer smart-contract bindings.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use agglayer_primitives::U256;
 use alloy::{
@@ -10,7 +13,6 @@ use alloy::{
     rpc::types::{Filter, TransactionReceipt},
     signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
-use tokio::sync::RwLock;
 use tracing::{debug, error};
 
 pub mod aggchain;
@@ -139,6 +141,8 @@ pub enum L1RpcError {
     TransactionReceiptFailedOnL1(TxHash),
     #[error("Failed to get the events: {0}")]
     FailedToQueryEvents(String),
+    #[error("L1 info roots cache lock poisoned")]
+    CacheLockPoisoned,
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>

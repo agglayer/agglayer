@@ -66,7 +66,10 @@ where
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
         // Check if we already have this l1_info_root cached
         {
-            let cache = self.l1_info_roots.read().await;
+            let cache = self
+                .l1_info_roots
+                .read()
+                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
             if let Some(&cached_root) = cache.get(&l1_leaf_count) {
                 trace!(
                     "Retrieved cached L1 info root for leaf count {}: {}",
@@ -203,7 +206,10 @@ where
 
         // Cache the retrieved l1_info_root for future use
         {
-            let mut cache = self.l1_info_roots.write().await;
+            let mut cache = self
+                .l1_info_roots
+                .write()
+                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
             cache.insert(l1_leaf_count, l1_info_root);
         }
 
