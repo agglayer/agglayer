@@ -198,7 +198,7 @@ where
     // Binary search for the first block where code is present
     let mut answer: Option<u64> = None;
     let mut iterations = 0;
-    const MAX_ITERATIONS: u32 = 256; // Safety limit to prevent infinite loops
+    const MAX_ITERATIONS: u32 = 32; // Safety limit to prevent infinite loops
 
     while lo <= hi && iterations < MAX_ITERATIONS {
         iterations += 1;
