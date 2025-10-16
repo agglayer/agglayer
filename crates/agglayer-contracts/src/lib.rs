@@ -473,7 +473,7 @@ mod tests {
         )
         .expect("valid alloy provider");
 
-        let contracts = ContractSetup::new();
+        let contracts = crate::tests::ContractSetup::new();
         let l1_rpc = Arc::new(
             L1RpcClient::try_new(
                 Arc::new(rpc.clone()),
@@ -498,99 +498,6 @@ mod tests {
         // check that the awaiting finalization is done as expected
         let latest_l1_leaf = 73587;
         let _l1_info_root = l1_rpc.get_l1_info_root(latest_l1_leaf).await.unwrap();
-    }
-
-    #[test_log::test(tokio::test)]
-    #[ignore = "reaches external endpoint"]
-    async fn test_find_contract_deployment_block_number_sepolia() {
-        use url::Url;
-
-        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
-        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
-            .expect("L1_RPC_ENDPOINT must be defined")
-            .parse::<Url>()
-            .expect("Invalid URL format");
-
-        let rpc = build_alloy_fill_provider(
-            &rpc_url,
-            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
-            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
-        )
-        .expect("valid alloy provider");
-
-        // Create a minimal L1RpcClient for testing
-        let dummy_rollup_manager: Address = "0x0000000000000000000000000000000000000000"
-            .parse()
-            .unwrap();
-        let dummy_ger_contract: Address = "0x0000000000000000000000000000000000000000"
-            .parse()
-            .unwrap();
-
-        let l1_rpc = L1RpcClient::new(
-            Arc::new(rpc.clone()),
-            contracts::PolygonRollupManager::new(dummy_rollup_manager, rpc),
-            dummy_ger_contract,
-            (0, [0u8; 32]),
-            100,
-            GasPriceParams::default(),
-            10000,
-            0,
-        );
-
-        // Test with the specific contract address on Sepolia, contract
-        // 0x2968D6d736178f8FE7393CC33C87f29D9C287e78 created with tx https://sepolia.etherscan.io/tx/0x6bc6454693776698a5ec38744042f2bc970966ba9106d903a7cfc5acc6c89410
-        let contract_address: Address = "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
-            .parse()
-            .expect("Invalid contract address");
-
-        let deployment_block = l1_rpc
-            .find_contract_deployment_block_number(contract_address)
-            .await;
-
-        match deployment_block {
-            Ok(Some(block)) => {
-                assert_eq!(
-                    block, 4794473,
-                    "Contract should be deployed at block 4794473"
-                );
-            }
-            Ok(None) => {
-                panic!("Contract {contract_address} should be found on Sepolia at block 4794475");
-            }
-            Err(e) => {
-                panic!("Error searching for contract {contract_address}: {e}");
-            }
-        }
-
-        // Test with a known non-existent contract address
-        let non_existent_address: Address = "0x0000000000000000000000000000000000000001"
-            .parse()
-            .unwrap();
-
-        let no_deployment = l1_rpc
-            .find_contract_deployment_block_number(non_existent_address)
-            .await
-            .expect("Failed to check non-existent contract");
-
-        assert!(
-            no_deployment.is_none(),
-            "Non-existent contract should return None"
-        );
-
-        // Test with Vitalik's EOA (Externally Owned Account) - should return None
-        let vitalik_address: Address = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
-            .parse()
-            .unwrap();
-
-        let eoa_deployment = l1_rpc
-            .find_contract_deployment_block_number(vitalik_address)
-            .await
-            .expect("Failed to check Vitalik's EOA");
-
-        assert!(
-            eoa_deployment.is_none(),
-            "EOA address should return None (no contract code)"
-        );
     }
 
     #[test_log::test(tokio::test)]
@@ -640,6 +547,101 @@ mod tests {
 
         assert_eq!(signers, expected_signers);
         assert_eq!(threshold, expected_threshold);
+    }
+
+    #[rstest::rstest]
+    #[case(
+        "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764",
+        Some(4794475),
+        "Contract 1"
+    )]
+    #[case(
+        "0x1348947e282138d8f377b467F7D9c2EB0F335d1f",
+        Some(4794471),
+        "Contract 2"
+    )]
+    #[case(
+        "0x2968D6d736178f8FE7393CC33C87f29D9C287e78",
+        Some(4794473),
+        "Contract 3"
+    )]
+    #[case(
+        "0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582",
+        Some(4789186),
+        "Contract 4"
+    )]
+    #[case(
+        "0xfd8ACe213595faC05d45714e8e2a63Df267E3545",
+        Some(4789191),
+        "Contract 5"
+    )]
+    #[case("0x0000000000000000000000000000000000000001", None, "Non existing")]
+    #[case("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", None, "Vitalik")]
+    #[case("0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6", Some(3218325), "DAI")]
+    #[case(
+        "0xB26B2De65D07eBB5E54C7F6282424D3be670E1f0",
+        Some(3279404),
+        "Uniswap V2"
+    )]
+    #[case("0x9A05509488486D2DC25BFb875304ff378d76Fab3", Some(4599573), "CreateX")]
+    #[case("0xEB590e5A96CD0E943A0899412E4fB06e0B362a7f", Some(4898155), "Weth")]
+    #[case(
+        "0x18Ea3C01215880a282D50eB398ddfDB3937E5A5b",
+        Some(9304458),
+        "DailyCheckin"
+    )]
+    #[test_log::test(tokio::test)]
+    #[ignore = "reaches external endpoint"]
+    async fn test_find_contract_deployment_block_number_sepolia(
+        #[case] address: &str,
+        #[case] expected_block: Option<u64>,
+        #[case] name: &str,
+    ) {
+        use url::Url;
+
+        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
+        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
+            .expect("L1_RPC_ENDPOINT must be defined")
+            .parse::<Url>()
+            .expect("Invalid URL format");
+
+        let rpc = build_alloy_fill_provider(
+            &rpc_url,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
+        )
+        .expect("valid alloy provider");
+
+        // Create a minimal L1RpcClient for testing
+        let dummy_rollup_manager: Address = "0x0000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        let dummy_ger_contract: Address = "0x0000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+
+        let l1_rpc = L1RpcClient::new(
+            Arc::new(rpc.clone()),
+            contracts::PolygonRollupManager::new(dummy_rollup_manager, rpc),
+            dummy_ger_contract,
+            (0, [0u8; 32]),
+            100,
+            GasPriceParams::default(),
+            10000,
+            0,
+        );
+
+        let contract_address: Address = address.parse().expect("Invalid contract address");
+
+        let deployment_block = l1_rpc
+            .find_contract_deployment_block_number(contract_address)
+            .await
+            .unwrap_or_else(|_| panic!("Failed to check contract {name} at {address}"));
+
+        assert_eq!(
+            deployment_block, expected_block,
+            "Contract {name} at {address} should have deployment block {expected_block:?}"
+        );
     }
 
     #[test_log::test(tokio::test)]
