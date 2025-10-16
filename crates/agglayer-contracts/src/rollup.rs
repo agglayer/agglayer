@@ -117,7 +117,7 @@ where
             events = self.rpc.get_logs(&filter).await.map_err(|error| {
                 error!(
                     ?error,
-                    "Failed to fetch UpdateL1InfoTreeV2EventFailure logs"
+                    "Failed to fetch UpdateL1InfoTreeV2 logs"
                 );
                 L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
             })?;
