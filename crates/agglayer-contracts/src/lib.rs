@@ -13,7 +13,7 @@ use alloy::{
     rpc::types::{Filter, TransactionReceipt},
     signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 pub mod aggchain;
 pub mod contracts;
@@ -364,6 +364,11 @@ where
                         String::from("Event InitL1InfoRootMap not found"),
                     ))?;
 
+            info!(
+                "Found InitL1InfoRootMap event on block {:?}",
+                first_log.block_number
+            );
+
             // Decode the log using alloy's generated event type
             let decoded_event =
                 InitL1InfoRootMap::decode_log(&first_log.clone().into()).map_err(|_| {
@@ -683,6 +688,7 @@ mod tests {
                 .expect("Invalid PolygonZkEVMGlobalExitRootV2 address");
 
         // Create L1RpcClient with default config for other parameters for Bali testnet
+        // InitL1InfoRootMap event is on block 6487027
         let l1_rpc = L1RpcClient::try_new(
             Arc::new(rpc.clone()),
             contracts::PolygonRollupManager::new(rollup_manager_address, rpc),
