@@ -264,7 +264,7 @@ mockall::mock! {
 
         fn get_provider(&self) -> &<Self as agglayer_contracts::L1TransactionFetcher>::Provider;
 
-        async fn find_contract_deployment_block_number(&self, address: agglayer_primitives::alloy_primitives::Address) -> Result<Option<u64>, agglayer_contracts::L1RpcError>;
+        async fn find_contract_deployment_block_number(&self, address: alloy::primitives::Address) -> Result<Option<u64>, agglayer_contracts::L1RpcError>;
     }
 
     #[async_trait::async_trait]

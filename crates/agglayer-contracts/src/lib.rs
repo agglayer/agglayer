@@ -169,14 +169,12 @@ where
 {
     use alloy::eips::{BlockId, BlockNumberOrTag};
 
-    debug!("Finding contract deployment block for address: {}", address);
-
     // Get the latest block number as the upper bound for search
     let latest_block = rpc.get_block_number().await.map_err(|e| {
         L1RpcError::FailedToQueryEvents(format!("Failed to get latest block number: {}", e))
     })?;
 
-    debug!("Latest block number: {}", latest_block);
+    debug!("Finding contract deployment block for address: {address}, latest_block {latest_block}");
 
     let mut hi = latest_block;
     let mut lo = 0u64;
@@ -272,7 +270,7 @@ where
     pub fn new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
-        l1_info_tree: Address,
+        polygon_zkevm_global_exit_root_v2_contract: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
@@ -282,7 +280,7 @@ where
         Self {
             rpc,
             inner,
-            l1_info_tree,
+            l1_info_tree: polygon_zkevm_global_exit_root_v2_contract,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
@@ -295,7 +293,7 @@ where
     pub async fn try_new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
-        l1_info_tree: Address,
+        polygon_zkevm_global_exit_root_v2_contract: Address,
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
@@ -307,8 +305,8 @@ where
 
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
-        // Find the deployment block of the l1_info_tree contract to optimize event
-        // search
+        // Find the deployment block of the rollup manager contract to optimize
+        // InitL1InfoRootMap event search.
         let rollup_manager_deployment_block =
             find_contract_deployment_block_number(&*rpc, *inner.address())
                 .await
@@ -344,7 +342,7 @@ where
                 let end_block =
                     (start_block + event_filter_block_range - 1).min(latest_network_block);
                 let filter = Filter::new()
-                    .address(l1_info_tree)
+                    .address(polygon_zkevm_global_exit_root_v2_contract)
                     .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
                     .from_block(BlockNumberOrTag::Number(start_block))
                     .to_block(BlockNumberOrTag::Number(end_block));
@@ -396,7 +394,7 @@ where
         Ok(Self::new(
             rpc,
             inner,
-            l1_info_tree,
+            polygon_zkevm_global_exit_root_v2_contract,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
