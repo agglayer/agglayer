@@ -692,20 +692,19 @@ where
             );
             if let Some(CertificateHeader {
                 status: CertificateStatus::InError { .. },
-                settlement_tx_hash,
+                settlement_tx_hashes,
                 ..
             }) = self
                 .state
                 .get_certificate_header(&pre_existing_certificate_id)?
             {
-                match settlement_tx_hash {
-                    None => {
+                match settlement_tx_hashes.as_slice() {
+                    &[] => {
                         info!(
-                            "Replacing certificate {} that is in error",
-                            pre_existing_certificate_id
+                            "Replacing certificate {pre_existing_certificate_id} that is in error",
                         );
                     }
-                    Some(tx_hash) => {
+                    &[.., tx_hash] => {
                         let l1_transaction = self
                             .l1_rpc_provider
                             .fetch_transaction_receipt(tx_hash.into())

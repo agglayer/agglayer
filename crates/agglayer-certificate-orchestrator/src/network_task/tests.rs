@@ -73,7 +73,7 @@ async fn start_from_zero() {
                 new_local_exit_root: [0; 32].into(),
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             }))
         });
 
@@ -253,7 +253,7 @@ async fn one_per_epoch() {
                 new_local_exit_root: [0; 32].into(),
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             }))
         });
 
@@ -272,7 +272,7 @@ async fn one_per_epoch() {
                 new_local_exit_root: [0; 32].into(),
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             }))
         });
     certifier
@@ -494,7 +494,7 @@ async fn retries() {
                 new_local_exit_root: [0; 32].into(),
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             }))
         });
 
@@ -513,7 +513,7 @@ async fn retries() {
                 new_local_exit_root: [2; 32].into(),
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             }))
         });
 
@@ -777,7 +777,7 @@ async fn changing_epoch_triggers_certify() {
                 prev_local_exit_root: [1; 32].into(),
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             }))
         });
 
@@ -796,7 +796,7 @@ async fn changing_epoch_triggers_certify() {
                 new_local_exit_root: [0; 32].into(),
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             }))
         });
 
@@ -1061,7 +1061,7 @@ async fn timeout_certifier() {
                 new_local_exit_root: [0; 32].into(),
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
+                settlement_tx_hashes: Vec::new(),
             }))
         });
 

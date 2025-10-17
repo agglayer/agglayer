@@ -32,6 +32,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::columns::{bincode_codec, CodecError};
 
+mod header;
+
 /// A unit type serializing to a constant byte representing the storage version.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(try_from = "u8", into = "u8")]

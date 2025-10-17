@@ -15,7 +15,7 @@ fn bench_parse_certificate_header(c: &mut Criterion) {
             new_local_exit_root: LocalExitRoot::default(),
             metadata: Metadata::default(),
             status: CertificateStatus::Pending,
-            settlement_tx_hash: None,
+            settlement_tx_hashes: Vec::new(),
         })
         .unwrap();
     c.bench_function("default cert header", |b| {
