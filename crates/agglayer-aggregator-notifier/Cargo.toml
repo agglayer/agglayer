@@ -44,11 +44,14 @@ pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
 async-trait.workspace = true
 alloy.workspace = true
+arc-swap.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
 mockall.workspace = true
+prover-alloy.workspace = true
 rstest.workspace = true
 test-log.workspace = true
 tokio-util.workspace = true
+url.workspace = true
 
 [features]
 coverage = []

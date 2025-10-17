@@ -88,6 +88,7 @@ dependencies = [
  "mockall",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
+ "prover-alloy",
  "prover-config",
  "prover-executor",
  "reqwest",
@@ -102,6 +103,7 @@ dependencies = [
  "tokio-util",
  "tonic 0.12.3",
  "tracing",
+ "url",
 ]
 
 [[package]]
