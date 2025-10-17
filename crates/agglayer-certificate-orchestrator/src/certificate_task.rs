@@ -324,10 +324,13 @@ where
                 let previous_tx_hashes =
                     std::mem::replace(&mut self.header.settlement_tx_hashes, Vec::new());
                 error!(
-                    "Settlement tx {previous_tx_hashes:?} not found on L1, moving certificate back \
-                     to Proven"
+                    "Settlement tx {previous_tx_hashes:?} not found on L1, moving certificate \
+                     back to Proven"
                 );
-                if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
+                let update_result = self
+                    .state_store
+                    .try_update_settlement_tx_hashes(&certificate_id, |_| Ok(vec![]));
+                if let Err(error) = update_result {
                     error!(
                         ?error,
                         "Failed to remove tx_hash {previous_tx_hashes:?} from database"
@@ -343,8 +346,8 @@ where
                 };
 
                 return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx {previous_tx_hashes:?} not found on L1, moving certificate back \
-                     to Proven"
+                    "Settlement tx {previous_tx_hashes:?} not found on L1, moving certificate \
+                     back to Proven"
                 )));
             }
         };
