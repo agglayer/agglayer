@@ -94,8 +94,7 @@ where
             .address(self.global_exit_root_manager_contract)
             .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
             .topic1(U256::from(l1_leaf_count))
-            .from_block(BlockNumberOrTag::Earliest)
-            .to_block(BlockNumberOrTag::Latest);
+            .from_block(BlockNumberOrTag::Earliest);
         let events = self.rpc.get_logs(&filter).await.map_err(|error| {
             error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
             L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())

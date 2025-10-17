@@ -198,8 +198,7 @@ where
             let filter = Filter::new()
                 .address(global_exit_root_manager_contract)
                 .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
-                .from_block(BlockNumberOrTag::Earliest)
-                .to_block(BlockNumberOrTag::Latest);
+                .from_block(BlockNumberOrTag::Earliest);
 
             // Get logs from the contract
             let events = rpc.get_logs(&filter).await.map_err(|error| {
