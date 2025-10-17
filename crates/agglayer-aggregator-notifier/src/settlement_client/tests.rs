@@ -8,7 +8,7 @@ use agglayer_types::{
     Height, L1WitnessCtx, Metadata, PessimisticRootInput, Proof,
 };
 use alloy::{
-    primitives::{Address as AlloyAddress, Bytes, FixedBytes, TxHash},
+    primitives::{Bytes, FixedBytes, TxHash},
     providers::PendingTransactionBuilder,
     rpc::types::TransactionReceipt,
 };
@@ -50,8 +50,6 @@ mockall::mock! {
         async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<TransactionReceipt, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as L1TransactionFetcher>::Provider;
-
-        async fn find_contract_deployment_block_number(&self, address: AlloyAddress) -> Result<Option<u64>, L1RpcError>;
     }
 
     #[async_trait::async_trait]

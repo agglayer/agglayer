@@ -87,18 +87,12 @@ where
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
 
         // Get first `UpdateL1InfoTreeV2` event for the given leaf count
-        debug!(
-            "Searching for UpdateL1InfoTreeV2 event with leaf count {l1_leaf_count} starting from \
-             block {}",
-            self.global_exit_root_manager_contract_block
-        );
+        debug!("Searching for UpdateL1InfoTreeV2 event with leaf count {l1_leaf_count}");
         let filter = Filter::new()
             .address(self.global_exit_root_manager_contract)
             .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
             .topic1(U256::from(l1_leaf_count))
-            .from_block(BlockNumberOrTag::Number(
-                self.global_exit_root_manager_contract_block,
-            ))
+            .from_block(BlockNumberOrTag::Earliest)
             .to_block(BlockNumberOrTag::Latest);
         let events = self.rpc.get_logs(&filter).await.map_err(|error| {
             error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
