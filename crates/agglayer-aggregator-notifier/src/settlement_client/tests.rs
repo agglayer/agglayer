@@ -270,7 +270,7 @@ async fn test_fetch_last_settled_pp_root() {
                         tracing::warn!(
                             "Network {} has inconsistent state: pp_root={:?}, tx_hash={:?}",
                             network_id,
-                            pp_root_opt.map(|r| FixedBytes::<32>::from(r)),
+                            pp_root_opt.map(FixedBytes::<32>::from),
                             tx_hash_opt
                         );
                     }
