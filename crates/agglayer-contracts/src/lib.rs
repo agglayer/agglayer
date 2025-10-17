@@ -333,21 +333,13 @@ mod tests {
 
         tracing::info!("Testing get_l1_info_root for leaf counts for Bali testnet");
 
-        // Use the specified contract addresses for Bali testnet
-        let rollup_manager_address: Address = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
-            .parse()
-            .expect("Invalid rollup manager address");
-        let global_exit_root_manager_address: Address =
-            "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
-                .parse()
-                .expect("Invalid PolygonZkEVMGlobalExitRootV2 address");
-
         // Create L1RpcClient with default config for other parameters for Bali testnet
         // InitL1InfoRootMap event is on block 6487027
+        let contracts = ContractSetup::new();
         let l1_rpc = L1RpcClient::try_new(
             Arc::new(rpc.clone()),
-            contracts::PolygonRollupManager::new(rollup_manager_address, rpc),
-            global_exit_root_manager_address,
+            contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
+            contracts.ger_contract,
             100, // default gas_multiplier_factor
             GasPriceParams::default(),
             10000, // default event_filter_block_range
@@ -464,21 +456,13 @@ mod tests {
 
         tracing::info!("Test fetching of the InitL1InfoRootMap for Bali testnet");
 
-        // Use the specified contract addresses for Bali testnet
-        let rollup_manager_address: Address = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
-            .parse()
-            .expect("Invalid rollup manager address");
-        let global_exit_root_manager_address: Address =
-            "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
-                .parse()
-                .expect("Invalid PolygonZkEVMGlobalExitRootV2 address");
-
         // Create L1RpcClient with default config for other parameters for Bali testnet
         // InitL1InfoRootMap event is on block 6487027
+        let contracts = ContractSetup::new();
         let _l1_rpc = L1RpcClient::try_new(
             Arc::new(rpc.clone()),
-            contracts::PolygonRollupManager::new(rollup_manager_address, rpc),
-            global_exit_root_manager_address,
+            contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
+            contracts.ger_contract,
             100, // default gas_multiplier_factor
             GasPriceParams::default(),
             10000, // default event_filter_block_range
