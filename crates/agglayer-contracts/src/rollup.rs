@@ -86,7 +86,9 @@ where
 
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
 
-        // Get first `UpdateL1InfoTreeV2` event for the given leaf count
+        // Get first `UpdateL1InfoTreeV2` event for the given leaf count.
+        // l1 leaf count increases over time for a network, when we filter by
+        // `l1_leaf_count` we would not get provider limit.
         debug!("Searching for UpdateL1InfoTreeV2 event with leaf count {l1_leaf_count}");
         let filter = Filter::new()
             .address(self.global_exit_root_manager_contract)

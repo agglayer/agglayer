@@ -304,10 +304,10 @@ mod tests {
     impl ContractSetup {
         pub fn new() -> Self {
             Self {
-                rollup_manager: "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff"
+                rollup_manager: "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764" // Bali
                     .parse()
                     .unwrap(),
-                ger_contract: "0xAd1490c248c5d3CbAE399Fd529b79B42984277DF"
+                ger_contract: "0x2968D6d736178f8FE7393CC33C87f29D9C287e78" // Bali
                     .parse()
                     .unwrap(),
             }
@@ -491,7 +491,7 @@ mod tests {
         .expect("Failed to create L1RpcClient");
 
         // Test get_l1_info_root for specific leaf counts from log output
-        let leaf_counts = vec![32131, 50000, 62322, 84213, 10000, 200000];
+        let leaf_counts = vec![10000, 32131, 50000, 62322, 84213, 200000];
 
         tracing::info!(
             "Testing {} leaf counts: {:?}",
