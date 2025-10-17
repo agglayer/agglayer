@@ -188,8 +188,8 @@ where
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
         let default_l1_info_tree_entry = {
-            // Start search from genesis. Contracts have very few `InitL1InfoRootMap` events,
-            // so should not hit the provider limits.
+            // Start search from genesis. Contracts have very few `InitL1InfoRootMap`
+            // events, so should not hit the provider limits.
             debug!(
                 "Querying InitL1InfoRootMap event search contract address: \
                  {global_exit_root_manager_contract}"
@@ -330,7 +330,7 @@ mod tests {
             prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
             prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
         )
-            .expect("valid alloy provider");
+        .expect("valid alloy provider");
 
         tracing::info!("Testing get_l1_info_root for leaf counts for Bali testnet");
 
@@ -353,8 +353,8 @@ mod tests {
             GasPriceParams::default(),
             10000, // default event_filter_block_range
         )
-            .await
-            .expect("Failed to create L1RpcClient");
+        .await
+        .expect("Failed to create L1RpcClient");
 
         // Test get_l1_info_root for specific leaf counts from log output
         let leaf_counts = vec![10000, 32131, 50000, 62322, 84213, 200000];

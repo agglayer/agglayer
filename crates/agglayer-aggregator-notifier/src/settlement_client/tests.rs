@@ -232,11 +232,7 @@ async fn test_fetch_last_settled_pp_root() {
     );
 
     // Test fetch_last_settled_pp_root for different network IDs
-    let test_network_ids = vec![
-        NetworkId::new(48),
-        NetworkId::new(52),
-        NetworkId::new(57),
-    ];
+    let test_network_ids = vec![NetworkId::new(48), NetworkId::new(52), NetworkId::new(57)];
 
     tracing::info!(
         "Testing {} network IDs: {:?}",
