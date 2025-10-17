@@ -235,7 +235,7 @@ async fn test_fetch_last_settled_pp_root() {
     let test_network_ids = vec![
         NetworkId::new(48),
         NetworkId::new(52),
-        NetworkId::new(57), 
+        NetworkId::new(57),
     ];
 
     tracing::info!(

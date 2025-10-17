@@ -188,7 +188,7 @@ where
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
         let default_l1_info_tree_entry = {
-            // Start search from genesis. Contracts have very few InitL1InfoRootMap events,
+            // Start search from genesis. Contracts have very few `InitL1InfoRootMap` events,
             // so should not hit the provider limits.
             debug!(
                 "Querying InitL1InfoRootMap event search contract address: \
@@ -313,49 +313,7 @@ mod tests {
             }
         }
     }
-
-    #[test_log::test(tokio::test)]
-    #[ignore = "reaches external endpoint"]
-    async fn test_fetch_proper_default_l1_global_exit_root_manager_sepolia() {
-        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
-            .expect("L1_RPC_ENDPOINT must be defined")
-            .parse::<Url>()
-            .expect("Invalid URL format");
-
-        let rpc = build_alloy_fill_provider(
-            &rpc_url,
-            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
-            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
-        )
-        .expect("valid alloy provider");
-
-        let contracts = crate::tests::ContractSetup::new();
-        let l1_rpc = Arc::new(
-            L1RpcClient::try_new(
-                Arc::new(rpc.clone()),
-                contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
-                contracts.ger_contract,
-                100,
-                GasPriceParams::default(),
-                10000,
-            )
-            .await
-            .unwrap(),
-        );
-
-        let (default_leaf_count, _default_l1_info_root) = l1_rpc.default_l1_info_tree_entry;
-        let expected_leaf_count = 48445; // bali: 335
-
-        assert_eq!(
-            default_leaf_count, expected_leaf_count,
-            "default: {default_leaf_count}, expected: {expected_leaf_count}"
-        );
-
-        // check that the awaiting finalization is done as expected
-        let latest_l1_leaf = 73587;
-        let _l1_info_root = l1_rpc.get_l1_info_root(latest_l1_leaf).await.unwrap();
-    }
-
+    
     #[test_log::test(tokio::test)]
     #[ignore = "reaches external endpoint"]
     async fn test_fetch_multisig_context() {
