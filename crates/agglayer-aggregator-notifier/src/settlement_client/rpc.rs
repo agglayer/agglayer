@@ -542,8 +542,8 @@ where
         use alloy::{providers::Provider, sol_types::SolEvent};
 
         // Create a filter for the latest VerifyPessimisticStateTransition event for
-        // this network_id Using from_block Latest ensures we only get recent
-        // events
+        // this `network_id`. Using from_block Latest ensures we only get recent
+        // events.
         let rollup_address = self.l1_rpc.get_rollup_manager_address();
 
         let latest_network_block = self
@@ -561,7 +561,9 @@ where
         let mut events = Vec::new();
         let mut end_block = latest_network_block;
         while events.is_empty() && end_block > 0 {
-            let start_block = end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range());
+            // start_block, end_block are inclusive
+            let start_block =
+                end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range() - 1);
             let filter = alloy::rpc::types::Filter::new()
                 .address(rollup_address.into_alloy())
                 .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
