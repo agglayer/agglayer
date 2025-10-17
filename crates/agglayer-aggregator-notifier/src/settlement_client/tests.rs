@@ -196,9 +196,10 @@ async fn test_fetch_last_settled_pp_root() {
     tracing::info!("Testing fetch_last_settled_pp_root for Bali testnet");
 
     // Use the specified contract addresses for Bali testnet
-    let rollup_manager_address: alloy::primitives::Address = "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
-        .parse()
-        .expect("Invalid rollup manager address");
+    let rollup_manager_address: alloy::primitives::Address =
+        "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
+            .parse()
+            .expect("Invalid rollup manager address");
     let global_exit_root_manager_address: alloy::primitives::Address =
         "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
             .parse()
@@ -232,8 +233,8 @@ async fn test_fetch_last_settled_pp_root() {
 
     // Test fetch_last_settled_pp_root for different network IDs
     let test_network_ids = vec![
-        NetworkId::new(48),    // Ethereum mainnet rollup
-        NetworkId::new(52),    // Another potential rollup
+        NetworkId::new(48), // Ethereum mainnet rollup
+        NetworkId::new(52), // Another potential rollup
         NetworkId::new(57), // Polygon zkEVM testnet
     ];
 
@@ -246,7 +247,10 @@ async fn test_fetch_last_settled_pp_root() {
     for network_id in test_network_ids {
         tracing::debug!("Testing network ID: {}", network_id);
 
-        match settlement_client.fetch_last_settled_pp_root(network_id).await {
+        match settlement_client
+            .fetch_last_settled_pp_root(network_id)
+            .await
+        {
             Ok((pp_root_opt, tx_hash_opt)) => {
                 match (pp_root_opt, tx_hash_opt) {
                     (Some(pp_root), Some(tx_hash)) => {
@@ -256,17 +260,15 @@ async fn test_fetch_last_settled_pp_root() {
                             FixedBytes::<32>::from(pp_root),
                             tx_hash
                         );
-                        // Verify that the root is not all zeros (which would indicate an invalid result)
+                        // Verify that the root is not all zeros (which would indicate an invalid
+                        // result)
                         assert_ne!(
                             pp_root, [0u8; 32],
                             "PP root should not be all zeros for network {network_id}",
                         );
                     }
                     (None, None) => {
-                        tracing::info!(
-                            "Network {} has no settled PP root yet",
-                            network_id
-                        );
+                        tracing::info!("Network {} has no settled PP root yet", network_id);
                     }
                     _ => {
                         tracing::warn!(
@@ -282,12 +284,12 @@ async fn test_fetch_last_settled_pp_root() {
                 tracing::warn!(
                     "Failed to fetch last settled PP root for network {network_id}: {error}",
                 );
-                // For this test, we expect some networks might not have any settled roots
-                // yet, so we don't fail the test but just continue
+                // For this test, we expect some networks might not have any
+                // settled roots yet, so we don't fail the test
+                // but just continue
             }
         }
     }
 
     tracing::info!("Completed testing fetch_last_settled_pp_root for all network IDs");
 }
-
