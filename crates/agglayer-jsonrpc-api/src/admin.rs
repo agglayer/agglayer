@@ -283,7 +283,7 @@ where
                 .partition(|hash| header.settlement_tx_hashes.contains(hash));
         if !missing.is_empty() {
             return Err(Error::InvalidArgument(format!(
-                "Settlement tx hashes {missing:?} cannot be removed, already not present. Aborting."
+                "Settlement tx hashes {missing:?} cannot be removed, already absent. Aborting."
             )));
         }
         if !settlement_tx_hashes_to_remove.is_empty() {
