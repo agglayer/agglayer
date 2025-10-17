@@ -86,41 +86,24 @@ where
 
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
 
-        // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
-        // To not hit the provider limit, we start from genesis and restrict search
-        // to the self.event_filter_block_range blocks range.
-        let mut events = Vec::new();
-        let mut start_block = self.global_exit_root_manager_contract_block;
+        // Get first `UpdateL1InfoTreeV2` event for the given leaf count
         debug!(
-            "Searching for UpdateL1InfoTreeV2 event with leaf count {} starting from block {}",
-            l1_leaf_count, start_block
+            "Searching for UpdateL1InfoTreeV2 event with leaf count {l1_leaf_count} starting from \
+             block {}",
+            self.global_exit_root_manager_contract_block
         );
-        let latest_network_block = self
-            .rpc
-            .get_block_number()
-            .await
-            .map_err(|error| {
-                error!(?error, "Failed to fetch latest block number");
-                L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
-            })?
-            .as_u64();
-        while events.is_empty() && start_block <= latest_network_block {
-            let end_block =
-                (start_block + self.event_filter_block_range - 1).min(latest_network_block);
-            let filter = Filter::new()
-                .address(self.global_exit_root_manager_contract)
-                .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
-                .topic1(U256::from(l1_leaf_count))
-                .from_block(BlockNumberOrTag::Number(start_block))
-                .to_block(BlockNumberOrTag::Number(end_block));
-
-            events = self.rpc.get_logs(&filter).await.map_err(|error| {
-                error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
-                L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
-            })?;
-
-            start_block += self.event_filter_block_range;
-        }
+        let filter = Filter::new()
+            .address(self.global_exit_root_manager_contract)
+            .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
+            .topic1(U256::from(l1_leaf_count))
+            .from_block(BlockNumberOrTag::Number(
+                self.global_exit_root_manager_contract_block,
+            ))
+            .to_block(BlockNumberOrTag::Latest);
+        let events = self.rpc.get_logs(&filter).await.map_err(|error| {
+            error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
+            L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
+        })?;
 
         // Extract event details using alloy's event decoding
         let (l1_info_root, event_block_number, event_block_hash) = events

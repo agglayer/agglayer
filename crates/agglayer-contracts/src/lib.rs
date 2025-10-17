@@ -716,10 +716,7 @@ mod tests {
         .expect("Failed to create L1RpcClient");
 
         // Test get_l1_info_root for specific leaf counts from log output
-        let leaf_counts = vec![
-            68, 71, 74, 79, 82, 85, 88, 90, 95, 98, 101, 104, 107, 112, 115, 118, 121, 123, 128,
-            131, 134, 137,
-        ];
+        let leaf_counts = vec![32131, 50000, 62322, 84213, 10000, 200000];
 
         tracing::info!(
             "Testing {} leaf counts: {:?}",
@@ -758,103 +755,4 @@ mod tests {
         tracing::info!("Completed testing get_l1_info_root for all leaf counts");
     }
 
-    #[test_log::test(tokio::test)]
-    #[ignore = "reaches external endpoint"]
-    async fn test_fetch_update_l1_info_tree_v2_event_sepolia_limits() {
-        use alloy::sol_types::SolEvent;
-        use url::Url;
-
-        use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
-
-        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
-        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
-            .expect("L1_RPC_ENDPOINT must be defined")
-            .parse::<Url>()
-            .expect("Invalid URL format");
-
-        let rpc = build_alloy_fill_provider(
-            &rpc_url,
-            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
-            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
-        )
-        .expect("valid alloy provider");
-
-        // GER contract address on Sepolia
-        let ger_contract: Address = "0xAd1490c248c5d3CbAE399Fd529b79B42984277DF"
-            .parse()
-            .expect("Invalid GER contract address");
-
-        // Leaf count to search for (0x25 = 37)
-        let target_leaf_count: u32 = 32;
-
-        tracing::info!(
-            "Searching for UpdateL1InfoTreeV2 event with leaf count {} on contract {}",
-            target_leaf_count,
-            ger_contract
-        );
-
-        // Create filter for the UpdateL1InfoTreeV2 event with leaf count 37
-        let filter = Filter::new()
-            .address(ger_contract)
-            .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
-            // .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
-            // .topic1(U256::from(target_leaf_count))
-            .from_block(BlockNumberOrTag::Earliest)
-            .to_block(BlockNumberOrTag::Number(0x690000));
-
-        // Query the logs
-        let logs = rpc
-            .get_logs(&filter)
-            .await
-            .inspect_err(|error| {
-                tracing::error!("Failed to fetch UpdateL1InfoTreeV2 logs: {error:?}");
-            })
-            .unwrap();
-
-        tracing::info!(
-            "Found {} log(s) for leaf count {}",
-            logs.len(),
-            target_leaf_count
-        );
-
-        // Verify we found at least one event
-        assert!(
-            !logs.is_empty(),
-            "Expected to find at least one UpdateL1InfoTreeV2 event for leaf count {target_leaf_count}",
-        );
-
-        // Decode and validate the first event
-        let first_log = logs.first().expect("Should have at least one log");
-
-        tracing::info!(
-            "First event found at block: {:?}, transaction: {:?}",
-            first_log.block_number,
-            first_log.transaction_hash
-        );
-
-        let decoded_event = UpdateL1InfoTreeV2::decode_log(&first_log.clone().into())
-            .expect("Failed to decode UpdateL1InfoTreeV2 event");
-
-        // Verify the leaf count matches what we searched for
-        assert_eq!(
-            decoded_event.leafCount, target_leaf_count,
-            "Decoded leaf count should match the target"
-        );
-
-        // Verify the l1 info root is not zero
-        let l1_info_root: [u8; 32] = decoded_event.currentL1InfoRoot.into();
-        assert_ne!(
-            l1_info_root, [0u8; 32],
-            "L1 info root should not be all zeros"
-        );
-
-        tracing::info!(
-            "Successfully decoded event: leaf_count={}, l1_info_root={}, blockhash={}, \
-             min_timestamp={}",
-            decoded_event.leafCount,
-            FixedBytes::<32>::from(l1_info_root),
-            decoded_event.blockhash,
-            decoded_event.minTimestamp
-        );
-    }
 }
