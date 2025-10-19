@@ -1,6 +1,9 @@
 //! Agglayer smart-contract bindings.
 
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use agglayer_primitives::U256;
 use alloy::{
@@ -8,6 +11,7 @@ use alloy::{
     primitives::{Address, FixedBytes, TxHash, B256},
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
+    signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
 use tracing::{debug, error};
 
@@ -19,6 +23,8 @@ pub mod settler;
 pub use aggchain::AggchainContract;
 pub use rollup::RollupContract;
 pub use settler::Settler;
+
+pub const EVENT_FILTER_BLOCK_RANGE: u64 = 100_000;
 
 /// Gas price parameters for L1 transactions.
 #[derive(Debug, Clone)]
@@ -95,6 +101,9 @@ pub struct L1RpcClient<RpcProvider> {
     gas_multiplier_factor: u32,
     /// Gas price parameters for transactions.
     gas_price_params: GasPriceParams,
+    /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
+    /// Map<leaf_count, l1_info_root>
+    l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -159,6 +168,8 @@ pub enum L1RpcError {
     TransactionReceiptFailedOnL1(TxHash),
     #[error("Failed to get the events: {0}")]
     FailedToQueryEvents(String),
+    #[error("L1 info roots cache lock poisoned")]
+    CacheLockPoisoned,
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
@@ -180,6 +191,7 @@ where
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
+            l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -198,20 +210,39 @@ where
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
         let default_l1_info_tree_entry = {
-            // Create filter for InitL1InfoRootMap events
-            let filter = Filter::new()
-                .address(l1_info_tree)
-                .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
-                .from_block(BlockNumberOrTag::Earliest);
+            // To not hit the provider limit, we start from genesis and restrict search
+            // to the EVENT_FILTER_BLOCK_RANGE blocks range.
+            let mut events = Vec::new();
+            let mut start_block = 0u64;
+            let latest_network_block = rpc
+                .get_block_number()
+                .await
+                .map_err(|e| {
+                    error!("Failed to get the latest block number: {e:?}");
+                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(e.to_string())
+                })?
+                .as_u64();
+            while events.is_empty() && start_block <= latest_network_block {
+                let end_block =
+                    (start_block + EVENT_FILTER_BLOCK_RANGE - 1).min(latest_network_block);
+                let filter = Filter::new()
+                    .address(l1_info_tree)
+                    .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
+                    .from_block(BlockNumberOrTag::Number(start_block))
+                    .to_block(BlockNumberOrTag::Number(end_block));
 
-            // Get logs from the contract
-            let logs = rpc.get_logs(&filter).await.map_err(|e| {
-                L1RpcInitializationError::InitL1InfoRootMapEventNotFound(e.to_string())
-            })?;
+                // Get logs from the contract
+                events = rpc.get_logs(&filter).await.map_err(|err| {
+                    error!("Failed to get InitL1InfoRootMap events: {err:?}");
+                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(err.to_string())
+                })?;
+                start_block += EVENT_FILTER_BLOCK_RANGE;
+            }
 
             // Get the first log and decode it
             let first_log =
-                logs.first()
+                events
+                    .first()
                     .ok_or(L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
                         String::from("Event InitL1InfoRootMap not found"),
                     ))?;
