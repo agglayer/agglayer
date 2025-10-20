@@ -31,26 +31,7 @@ use pessimistic_proof::unified_bridge::{
 use serde::{Deserialize, Serialize};
 
 use crate::columns::{bincode_codec, CodecError};
-
-/// A unit type serializing to a constant byte representing the storage version.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq)]
-#[serde(try_from = "u8", into = "u8")]
-struct VersionTag<const VERSION: u8>;
-
-impl<const VERSION: u8> TryFrom<u8> for VersionTag<VERSION> {
-    type Error = CodecError;
-    fn try_from(byte: u8) -> Result<Self, Self::Error> {
-        (byte == VERSION)
-            .then_some(Self)
-            .ok_or(CodecError::BadCertificateVersion { version: byte })
-    }
-}
-
-impl<const VERSION: u8> From<VersionTag<VERSION>> for u8 {
-    fn from(VersionTag: VersionTag<VERSION>) -> Self {
-        VERSION
-    }
-}
+use super::VersionTag;
 
 /// A three-byte network ID used in v0.
 ///
@@ -353,7 +334,7 @@ impl crate::columns::Codec for Certificate {
             None => Err(CodecError::CertificateEmpty),
             Some(0) => decode::<CertificateV0>(bytes),
             Some(1) => decode::<CertificateV1>(bytes),
-            Some(version) => Err(CodecError::BadCertificateVersion { version }),
+            Some(version) => Err(CodecError::BadVersion { version }),
         }
     }
 }

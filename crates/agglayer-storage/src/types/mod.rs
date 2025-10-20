@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 mod certificate;
 mod generated;
 pub(crate) mod network_info;
+mod settlement_tx_hash_record;
+
+pub use settlement_tx_hash_record::SettlementTxHashRecord;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
@@ -64,7 +67,28 @@ crate::columns::impl_codec_using_bincode_for!(
     PerEpochMetadataKey,
     PerEpochMetadataValue,
     Proof,
+    SettlementTxHashRecord,
     SmtKey,
     SmtValue,
-    network_info::Key
+    network_info::Key,
 );
+
+/// A unit type serializing to a constant byte representing the storage version.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(try_from = "u8", into = "u8")]
+pub struct VersionTag<const VERSION: u8>;
+
+impl<const VERSION: u8> TryFrom<u8> for VersionTag<VERSION> {
+    type Error = crate::columns::CodecError;
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
+        (byte == VERSION)
+            .then_some(Self)
+            .ok_or(Self::Error::BadVersion { version: byte })
+    }
+}
+
+impl<const VERSION: u8> From<VersionTag<VERSION>> for u8 {
+    fn from(VersionTag: VersionTag<VERSION>) -> Self {
+        VERSION
+    }
+}

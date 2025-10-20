@@ -12,9 +12,9 @@ pub enum CodecError {
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     CertificateEmpty,
 
-    #[error(r#"Unrecognized certificate storage format version {version}.
+    #[error(r#"Unrecognized storage format version {version}.
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    BadCertificateVersion { version: u8 },
+    BadVersion { version: u8 },
 
     #[error(r#"Serialization error: {0}
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
@@ -23,9 +23,6 @@ pub enum CodecError {
     #[error(r#"Deserialization error: {0}
            This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     ProtobufDeserialization(#[from] prost::DecodeError),
-
-    #[error(r#"Invalid enum variant {0}"#)]
-    InvalidEnumVariant(String),
 
     #[error(r#"Unable to write encoded bytes: {0}"#)]
     UnableToWriteEncodedBytes(#[from] std::io::Error),
@@ -41,6 +38,8 @@ pub const NULLIFIER_TREE_PER_NETWORK_CF: &str = "nullifier_tree_per_network_cf";
 pub const BALANCE_TREE_PER_NETWORK_CF: &str = "balance_tree_per_network_cf";
 pub const LOCAL_EXIT_TREE_PER_NETWORK_CF: &str = "local_exit_tree_per_network_cf";
 pub const NETWORK_INFO_CF: &str = "network_info_cf";
+pub const SETTLEMENT_TX_HASHSES_PER_CERTIFICATE_CF: &str =
+    "settlement_tx_hashes_per_certificate_cf";
 
 // Metadata CFs
 pub const CERTIFICATE_HEADER_CF: &str = "certificate_header_cf";
@@ -113,6 +112,7 @@ pub(crate) mod certificate_per_network;
 pub(crate) mod local_exit_tree_per_network;
 pub(crate) mod network_info;
 pub(crate) mod nullifier_tree_per_network;
+pub(crate) mod settlement_tx_hashes_per_certificate;
 
 // Pending
 pub(crate) mod pending_queue;

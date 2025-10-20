@@ -5,7 +5,7 @@ use agglayer_types::{
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 
-use crate::{error::Error, stores::PerEpochReader};
+use crate::{error::Error, stores::PerEpochReader, types::SettlementTxHashRecord};
 
 pub trait DebugWriter: Send + Sync {
     fn add_certificate(&self, certificate: &Certificate) -> Result<(), Error>;
@@ -44,10 +44,7 @@ pub trait StateWriter: Send + Sync {
         force: bool,
     ) -> Result<(), Error>;
 
-    fn remove_settlement_tx_hash(
-        &self,
-        certificate_id: &CertificateId,
-    ) -> Result<(), Error>;
+    fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error>;
 
     fn insert_certificate_header(
         &self,
@@ -120,4 +117,18 @@ pub trait PendingCertificateWriter: Send + Sync {
         height: &Height,
         certificate_id: &CertificateId,
     ) -> Result<(), Error>;
+
+    fn insert_settlement_tx_hash_for_certificate(
+        &self,
+        certificate_id: &CertificateId,
+        tx_hash: SettlementTxHash,
+    ) -> Result<(), Error>;
+
+    fn update_settlement_tx_hashes_for_certificate<'a, F>(
+        &'a self,
+        certificate_id: &CertificateId,
+        f: F,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce(SettlementTxHashRecord) -> Result<SettlementTxHashRecord, String> + 'a;
 }
