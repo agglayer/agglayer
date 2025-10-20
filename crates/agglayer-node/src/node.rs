@@ -209,7 +209,7 @@ impl Node {
                         ceiling: gas_config.ceiling,
                     }
                 },
-                config.l1.event_filter_block_range,
+                config.l1.event_filter_block_range.get(),
             )
             .await?,
         );
