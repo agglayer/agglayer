@@ -119,12 +119,12 @@ const fn same_as_default_gas_multiplier_factor(v: &u32) -> bool {
 
 /// Default number of retries for the transaction.
 const fn default_rpc_retries() -> usize {
-    3
+    30
 }
 
 /// Default interval for the polling of the transaction.
 const fn default_rpc_retry_interval() -> Duration {
-    Duration::from_secs(7)
+    Duration::from_secs(10)
 }
 
 /// Default number of confirmations required for the transaction to resolve a
@@ -181,8 +181,8 @@ mod tests {
 
                     let config = toml::from_str::<OutboundRpcSettleConfig>(toml).unwrap();
 
-                    assert_eq!(config.max_retries, 3);
-                    assert_eq!(config.retry_interval, Duration::from_secs(7));
+                    assert_eq!(config.max_retries, 30);
+                    assert_eq!(config.retry_interval, Duration::from_secs(10));
                     assert_eq!(config.confirmations, 1);
                 }
 

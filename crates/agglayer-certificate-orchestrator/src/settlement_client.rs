@@ -1,4 +1,4 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, SettlementTxHash};
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, NetworkId, SettlementTxHash};
 
 use crate::Error;
 
@@ -22,6 +22,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
+        nonce: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error>;
 
     /// Watch for the transaction to be mined and update the certificate
@@ -31,4 +32,33 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error>;
+
+    /// Returns a reference to the provider for direct L1 queries.
+    fn get_provider(&self) -> &Self::Provider;
+
+    /// Returns the latest PP settlement root from the settlement logs if any.
+    /// It queries the `VerifyPessimisticStateTransition` events from the l1.
+    async fn fetch_last_settled_pp_root(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error>;
+
+    /// Returns the nonce for a settlement tx.
+    async fn fetch_settlement_nonce(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<Option<NonceInfo>, Error>;
+
+    /// Returns the receipt status for a settlement tx.
+    async fn fetch_settlement_receipt_status(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<bool, Error>;
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NonceInfo {
+    pub nonce: u64,
+    pub previous_max_fee_per_gas: u128,
+    pub previous_max_priority_fee_per_gas: Option<u128>,
 }

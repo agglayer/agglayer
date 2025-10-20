@@ -41,6 +41,7 @@ pub trait StateWriter: Send + Sync {
         &self,
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
+        force: bool,
     ) -> Result<(), Error>;
 
     fn remove_settlement_tx_hash(
