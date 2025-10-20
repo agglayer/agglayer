@@ -14,7 +14,7 @@ use tracing::{debug, error, trace};
 
 use crate::{
     contracts::{PolygonRollupManager::RollupDataReturnV2, PolygonZkEvm},
-    L1RpcClient, L1RpcError, EVENT_FILTER_BLOCK_RANGE,
+    L1RpcClient, L1RpcError,
 };
 
 #[derive(Debug, FromPrimitive)]
@@ -51,6 +51,8 @@ pub trait RollupContract {
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
 
     fn get_rollup_manager_address(&self) -> Address;
+
+    fn get_event_filter_block_range(&self) -> u64;
 }
 
 #[async_trait::async_trait]
@@ -84,36 +86,19 @@ where
 
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
 
-        // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
-        // To not hit the provider limit, we start from genesis and restrict search
-        // to the EVENT_FILTER_BLOCK_RANGE blocks range.
-        let mut events = Vec::new();
-        let mut start_block = 0u64;
-        let latest_network_block = self
-            .rpc
-            .get_block_number()
-            .await
-            .map_err(|e| {
-                error!("Failed to fetch latest block number: {}", e);
-                L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string())
-            })?
-            .as_u64();
-        while events.is_empty() && start_block <= latest_network_block {
-            let end_block = (start_block + EVENT_FILTER_BLOCK_RANGE - 1).min(latest_network_block);
-            let filter = Filter::new()
-                .address(self.l1_info_tree)
-                .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
-                .topic1(U256::from(l1_leaf_count))
-                .from_block(BlockNumberOrTag::Number(start_block))
-                .to_block(BlockNumberOrTag::Number(end_block));
-
-            events = self.rpc.get_logs(&filter).await.map_err(|e| {
-                error!("Failed to fetch UpdateL1InfoTreeV2EventFailure logs: {}", e);
-                L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string())
-            })?;
-
-            start_block += EVENT_FILTER_BLOCK_RANGE;
-        }
+        // Get first `UpdateL1InfoTreeV2` event for the given leaf count.
+        // l1 leaf count increases over time for a network, when we filter by
+        // `l1_leaf_count` we would not get provider limit.
+        debug!("Searching for UpdateL1InfoTreeV2 event with leaf count {l1_leaf_count}");
+        let filter = Filter::new()
+            .address(self.global_exit_root_manager_contract)
+            .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
+            .topic1(U256::from(l1_leaf_count))
+            .from_block(BlockNumberOrTag::Earliest);
+        let events = self.rpc.get_logs(&filter).await.map_err(|error| {
+            error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
+            L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
+        })?;
 
         // Extract event details using alloy's event decoding
         let (l1_info_root, event_block_number, event_block_hash) = events
@@ -314,5 +299,9 @@ where
 
     fn get_rollup_manager_address(&self) -> Address {
         (*self.inner.address()).into()
+    }
+
+    fn get_event_filter_block_range(&self) -> u64 {
+        self.event_filter_block_range
     }
 }
