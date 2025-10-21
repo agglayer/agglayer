@@ -344,8 +344,9 @@ where
                     error!(?error, "Failed to update certificate status in database");
                 };
 
-                // Do not directly run process_from_proven, because we have not completed the recompute_state.
-                // Also, if we just fall through, then we would end up trying to run process_from_candidate afterwards, which is also wrong.
+                // Do not directly run process_from_proven, because we have not completed the
+                // recompute_state. Also, if we just fall through, then we would
+                // end up trying to run process_from_candidate afterwards, which is also wrong.
                 // So, just restart the whole process from the beginning.
                 return Box::pin(self.process_impl()).await;
             }
