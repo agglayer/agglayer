@@ -19,7 +19,6 @@ use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
 use tracing::{debug, error, info, instrument, warn};
 
 const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
-const EVENT_FILTER_BLOCK_RANGE: u64 = 10_000;
 
 /// Rpc-based settlement client for L1 certificate settlement.
 /// Using alloy client to interact with the L1 rollup manager contract.
@@ -543,8 +542,8 @@ where
         use alloy::{providers::Provider, sol_types::SolEvent};
 
         // Create a filter for the latest VerifyPessimisticStateTransition event for
-        // this network_id Using from_block Latest ensures we only get recent
-        // events
+        // this `network_id`. Using from_block Latest ensures we only get recent
+        // events.
         let rollup_address = self.l1_rpc.get_rollup_manager_address();
 
         let latest_network_block = self
@@ -552,17 +551,19 @@ where
             .get_provider()
             .get_block_number()
             .await
-            .map_err(|e| {
-                error!("Failed to get the latest block number: {e:?}");
+            .map_err(|error| {
+                error!(?error, "Failed to get the latest block number");
                 Error::L1CommunicationError(Box::new(
-                    agglayer_contracts::L1RpcError::FailedToQueryEvents(e.to_string()),
+                    agglayer_contracts::L1RpcError::FailedToQueryEvents(error.to_string()),
                 ))
             })?
             .as_u64();
         let mut events = Vec::new();
         let mut end_block = latest_network_block;
         while events.is_empty() && end_block > 0 {
-            let start_block = end_block.saturating_sub(EVENT_FILTER_BLOCK_RANGE);
+            // start_block, end_block are inclusive
+            let start_block =
+                end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range() - 1);
             let filter = alloy::rpc::types::Filter::new()
                 .address(rollup_address.into_alloy())
                 .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
@@ -576,14 +577,17 @@ where
                 .get_provider()
                 .get_logs(&filter)
                 .await
-                .map_err(|e| {
-                    error!("Failed to fetch VerifyPessimisticStateTransition logs: {e:?}");
+                .map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to fetch VerifyPessimisticStateTransition logs"
+                    );
                     Error::L1CommunicationError(Box::new(
-                        agglayer_contracts::L1RpcError::FailedToQueryEvents(e.to_string()),
+                        agglayer_contracts::L1RpcError::FailedToQueryEvents(error.to_string()),
                     ))
                 })?;
 
-            end_block = end_block.saturating_sub(EVENT_FILTER_BLOCK_RANGE);
+            end_block = end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range());
         }
 
         // Get the most recent event (last in the list) and extract its new pessimistic

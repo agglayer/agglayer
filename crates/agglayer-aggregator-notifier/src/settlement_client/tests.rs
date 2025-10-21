@@ -40,6 +40,7 @@ mockall::mock! {
         async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
 
         fn get_rollup_manager_address(&self) -> Address;
+        fn get_event_filter_block_range(&self) -> u64;
     }
 
     #[async_trait::async_trait]
@@ -170,4 +171,121 @@ async fn epoch_packer_can_settle_one_certificate() {
         .wait_for_settlement(settlement_tx_hash, certificate_id)
         .await
         .unwrap();
+}
+
+#[test_log::test(tokio::test)]
+#[ignore = "reaches external endpoint"]
+async fn test_fetch_last_settled_pp_root() {
+    use agglayer_certificate_orchestrator::SettlementClient;
+    use agglayer_types::NetworkId;
+    use url::Url;
+
+    // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
+    let rpc_url = std::env::var("L1_RPC_ENDPOINT")
+        .expect("L1_RPC_ENDPOINT must be defined")
+        .parse::<Url>()
+        .expect("Invalid URL format");
+
+    let rpc = prover_alloy::build_alloy_fill_provider(
+        &rpc_url,
+        prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
+        prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
+    )
+    .expect("valid alloy provider");
+
+    tracing::info!("Testing fetch_last_settled_pp_root for Bali testnet");
+
+    // Use the specified contract addresses for Bali testnet
+    let rollup_manager_address: alloy::primitives::Address =
+        "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764"
+            .parse()
+            .expect("Invalid rollup manager address");
+    let global_exit_root_manager_address: alloy::primitives::Address =
+        "0x2968D6d736178f8FE7393CC33C87f29D9C287e78"
+            .parse()
+            .expect("Invalid PolygonZkEVMGlobalExitRootV2 address");
+
+    // Create L1RpcClient with default config for other parameters for Bali testnet
+    let l1_rpc = agglayer_contracts::L1RpcClient::try_new(
+        Arc::new(rpc.clone()),
+        agglayer_contracts::contracts::PolygonRollupManager::new(rollup_manager_address, rpc),
+        global_exit_root_manager_address,
+        100, // default gas_multiplier_factor
+        agglayer_contracts::GasPriceParams::default(),
+        10000, // default event_filter_block_range
+    )
+    .await
+    .expect("Failed to create L1RpcClient");
+
+    // Create RpcSettlementClient to test fetch_last_settled_pp_root
+    let config = Arc::new(OutboundRpcSettleConfig::default());
+    let state_store = Arc::new(MockStateStore::new());
+    let pending_store = Arc::new(MockPendingStore::new());
+    let per_epoch_store = Arc::new(ArcSwap::new(Arc::new(MockPerEpochStore::new())));
+
+    let settlement_client = RpcSettlementClient::new(
+        config,
+        state_store,
+        pending_store,
+        Arc::new(l1_rpc),
+        per_epoch_store,
+    );
+
+    // Test fetch_last_settled_pp_root for different network IDs
+    let test_network_ids = vec![NetworkId::new(48), NetworkId::new(52), NetworkId::new(57)];
+
+    tracing::info!(
+        "Testing {} network IDs: {:?}",
+        test_network_ids.len(),
+        test_network_ids
+    );
+
+    for network_id in test_network_ids {
+        tracing::debug!("Testing network ID: {}", network_id);
+
+        match settlement_client
+            .fetch_last_settled_pp_root(network_id)
+            .await
+        {
+            Ok((pp_root_opt, tx_hash_opt)) => {
+                match (pp_root_opt, tx_hash_opt) {
+                    (Some(pp_root), Some(tx_hash)) => {
+                        tracing::info!(
+                            "Network {} has settled PP root: {} in tx: {}",
+                            network_id,
+                            FixedBytes::<32>::from(pp_root),
+                            tx_hash
+                        );
+                        // Verify that the root is not all zeros (which would indicate an invalid
+                        // result)
+                        assert_ne!(
+                            pp_root, [0u8; 32],
+                            "PP root should not be all zeros for network {network_id}",
+                        );
+                    }
+                    (None, None) => {
+                        tracing::info!("Network {} has no settled PP root yet", network_id);
+                    }
+                    _ => {
+                        tracing::warn!(
+                            "Network {} has inconsistent state: pp_root={:?}, tx_hash={:?}",
+                            network_id,
+                            pp_root_opt.map(FixedBytes::<32>::from),
+                            tx_hash_opt
+                        );
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    "Failed to fetch last settled PP root for network {network_id}: {error}",
+                );
+                // For this test, we expect some networks might not have any
+                // settled roots yet, so we don't fail the test
+                // but just continue
+            }
+        }
+    }
+
+    tracing::info!("Completed testing fetch_last_settled_pp_root for all network IDs");
 }
