@@ -221,7 +221,7 @@ Finally, `--no-fail-fast` is useful to start the integration tests and then come
 
 ## Development
 
-Contributions are very welcomed, the guidelines are currently not available (WIP)
+Contributions are very welcome, the guidelines are currently not available (WIP)
 
 ## Support
 
