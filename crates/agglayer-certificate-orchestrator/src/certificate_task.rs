@@ -549,6 +549,10 @@ where
                     "Retrying the settlement transaction after a timeout for certificate \
                      {certificate_id}"
                 );
+                self.header.settlement_tx_hash = None;
+                if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
+                    error!(?error, "Failed to remove settlement tx hash from database after a timeout");
+                };
                 self.set_status(CertificateStatus::Proven)?;
                 return Box::pin(self.process_from_proven()).await;
             }
