@@ -140,8 +140,8 @@ where
         // TODO: Hack to deal with Proven certificates in case the PP changed.
         // See https://github.com/agglayer/agglayer/pull/819#discussion_r2152193517 for the details
         // Note that we still have the problem, this is here only to mitigate a bit the
-        // issue When we finally make the storage refactoring, we should remove
-        // this
+        // issue. When we finally do the storage refactoring, we should remove
+        // this.
         if self.header.status == CertificateStatus::Proven {
             warn!(%certificate_id,
                 "Certificate is already proven but we do not have the new_state anymore... \
@@ -344,10 +344,10 @@ where
                     error!(?error, "Failed to update certificate status in database");
                 };
 
-                return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
-                )));
+                // Do not directly run process_from_proven, because we have not completed the recompute_state.
+                // Also, if we just fall through, then we would end up trying to run process_from_candidate afterwards, which is also wrong.
+                // So, just restart the whole process from the beginning.
+                return Box::pin(self.process_impl()).await;
             }
         };
 
