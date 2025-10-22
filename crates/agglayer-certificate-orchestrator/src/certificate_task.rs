@@ -328,13 +328,6 @@ where
                     "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
                      to Proven"
                 );
-                self.header.settlement_tx_hash = None;
-                if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
-                    error!(
-                        ?error,
-                        "Failed to remove tx_hash {previous_tx_hash:?} from database"
-                    );
-                };
 
                 self.header.status = CertificateStatus::Proven;
                 if let Err(error) = self.state_store.update_certificate_header_status(
