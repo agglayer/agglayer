@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -6,7 +6,6 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
-    SettlementTxHash,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -37,7 +36,6 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     cancellation_token: CancellationToken,
     new_pp_root: Option<Digest>,
     nonce_info: Option<NonceInfo>,
-    previous_tx_hashes: HashSet<SettlementTxHash>,
 }
 
 impl<StateStore, PendingStore, CertifierClient>
@@ -74,7 +72,6 @@ where
             cancellation_token,
             new_pp_root: None,
             nonce_info: None,
-            previous_tx_hashes: HashSet::new(),
         })
     }
 
@@ -196,7 +193,7 @@ where
         debug!("Recomputing new state for already-proven certificate");
         // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
         // certificate header is not found on L1.
-        let settlement_tx_hash_missing_on_l1: bool =
+        let settlement_tx_hash_missing_on_l1: bool = {
             if let Some(previous_tx_hash) = self.header.settlement_tx_hash {
                 let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
                     oneshot::channel();
@@ -231,7 +228,8 @@ where
             } else {
                 // No settlement tx hash in the cert header, nothing to check
                 false
-            };
+            }
+        };
 
         if settlement_tx_hash_missing_on_l1 {
             warn!(
@@ -434,19 +432,22 @@ where
             )));
         }
 
-        if self.previous_tx_hashes.len() > MAX_TX_RETRY {
-            error!(previous_tx_hashes=?self.previous_tx_hashes,
+        let height = self.header.height;
+        let certificate_id = self.header.certificate_id;
+
+        let mut previous_tx_hashes = self
+            .pending_store
+            .get_settlement_tx_hashes_for_certificate(certificate_id)?;
+
+        if previous_tx_hashes.len() > MAX_TX_RETRY {
+            error!(?previous_tx_hashes,
                 "More than 5 different settlement transactions submitted for the same certificate, something is wrong"
             );
             return Err(CertificateStatusError::SettlementError(format!(
                 "Too many different settlement transactions submitted for the same certificate: \
-                 {:?}",
-                self.previous_tx_hashes
+                 {previous_tx_hashes:?}",
             )));
         }
-
-        let height = self.header.height;
-        let certificate_id = self.header.certificate_id;
 
         debug!(
             "Submitting certificate for settlement, previous nonce is {:?}",
@@ -457,7 +458,7 @@ where
             height,
             certificate_id,
             nonce_info: self.nonce_info.clone(),
-            previous_tx_hashes: self.previous_tx_hashes.clone(),
+            previous_tx_hashes: previous_tx_hashes.iter().copied().collect(),
             new_pp_root: self
                 .new_pp_root
                 .ok_or(CertificateStatusError::InternalError(
@@ -469,14 +470,17 @@ where
 
         let (settlement_tx_hash, nonce_info) = settlement_submitted.await.map_err(recv_err)??;
 
-        if self.previous_tx_hashes.insert(settlement_tx_hash) {
-            debug!(
-                "Certificate settlement transactions list: {:?}",
-                self.previous_tx_hashes
-            );
+        if !previous_tx_hashes.contains(&settlement_tx_hash) {
+            let _ = self
+                .pending_store
+                .insert_settlement_tx_hash_for_certificate(&certificate_id, settlement_tx_hash)
+                .inspect_err(|error| error!(?error, "Failed to insert settlement tx hash"));
+            previous_tx_hashes.push(settlement_tx_hash);
         } else {
             warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
         }
+
+        debug!("Certificate settlement transactions list: {previous_tx_hashes:?}");
 
         // Keep the nonce and previous fees for future use (e.g., retries)
         if let Some(nonce_info) = nonce_info {
