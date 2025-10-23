@@ -22,6 +22,7 @@ prover-alloy.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+test-log.workspace = true
 
 [features]
 testutils = []
