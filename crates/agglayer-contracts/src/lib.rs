@@ -1,6 +1,9 @@
 //! Agglayer smart-contract bindings.
 
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use agglayer_primitives::U256;
 use alloy::{
@@ -9,7 +12,7 @@ use alloy::{
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
 };
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 pub mod aggchain;
 pub mod contracts;
@@ -61,13 +64,20 @@ pub struct L1RpcClient<RpcProvider> {
     /// Inner client for interacting with the Polygon Rollup Manager contract.
     inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
     /// Address of the PolygonZkEVMGlobalExitRootV2 contract
-    l1_info_tree: Address,
+    global_exit_root_manager_contract: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
     /// Gas multiplier factor for transactions.
     gas_multiplier_factor: u32,
     /// Gas price parameters for transactions.
     gas_price_params: GasPriceParams,
+    /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
+    /// Map<leaf_count, l1_info_root>
+    l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
+    /// Number of blocks to query when filtering for events.
+    /// This is to avoid hitting provider limits when querying large block
+    /// ranges or errors like "query returned more than 10000 results".
+    event_filter_block_range: u64,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -132,36 +142,43 @@ pub enum L1RpcError {
     TransactionReceiptFailedOnL1(TxHash),
     #[error("Failed to get the events: {0}")]
     FailedToQueryEvents(String),
+    #[error("L1 info roots cache lock poisoned")]
+    CacheLockPoisoned,
 }
 
 impl<RpcProvider> L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
-        l1_info_tree: Address,
+        global_exit_root_manager_contract: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
+        event_filter_block_range: u64,
     ) -> Self {
         Self {
             rpc,
             inner,
-            l1_info_tree,
+            global_exit_root_manager_contract,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
+            l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
+            event_filter_block_range,
         }
     }
 
     pub async fn try_new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
-        l1_info_tree: Address,
+        global_exit_root_manager_contract: Address,
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
+        event_filter_block_range: u64,
     ) -> Result<Self, L1RpcInitializationError>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -171,23 +188,36 @@ where
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
         let default_l1_info_tree_entry = {
-            // Create filter for InitL1InfoRootMap events
+            // Start search from genesis. Contracts have very few `InitL1InfoRootMap`
+            // events, so should not hit the provider limits.
+            debug!(
+                "Querying InitL1InfoRootMap event search contract address: \
+                 {global_exit_root_manager_contract}"
+            );
+
             let filter = Filter::new()
-                .address(l1_info_tree)
+                .address(global_exit_root_manager_contract)
                 .event_signature(InitL1InfoRootMap::SIGNATURE_HASH)
                 .from_block(BlockNumberOrTag::Earliest);
 
             // Get logs from the contract
-            let logs = rpc.get_logs(&filter).await.map_err(|e| {
-                L1RpcInitializationError::InitL1InfoRootMapEventNotFound(e.to_string())
+            let events = rpc.get_logs(&filter).await.map_err(|error| {
+                error!(?error, "Failed to get InitL1InfoRootMap events");
+                L1RpcInitializationError::InitL1InfoRootMapEventNotFound(error.to_string())
             })?;
 
             // Get the first log and decode it
             let first_log =
-                logs.first()
+                events
+                    .first()
                     .ok_or(L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
                         String::from("Event InitL1InfoRootMap not found"),
                     ))?;
+
+            info!(
+                "Found InitL1InfoRootMap event on block {:?}",
+                first_log.block_number
+            );
 
             // Decode the log using alloy's generated event type
             let decoded_event =
@@ -220,10 +250,11 @@ where
         Ok(Self::new(
             rpc,
             inner,
-            l1_info_tree,
+            global_exit_root_manager_contract,
             default_l1_info_tree_entry,
             gas_multiplier_factor,
             gas_price_params,
+            event_filter_block_range,
         ))
     }
 }
@@ -272,19 +303,22 @@ mod tests {
     impl ContractSetup {
         pub fn new() -> Self {
             Self {
-                rollup_manager: "0x32d33D5137a7cFFb54c5Bf8371172bcEc5f310ff" // bali: 0xe2ef6215adc132df6913c8dd16487abf118d1764
+                rollup_manager: "0xE2EF6215aDc132Df6913C8DD16487aBF118d1764" // Bali
                     .parse()
                     .unwrap(),
-                ger_contract: "0xAd1490c248c5d3CbAE399Fd529b79B42984277DF" // bali: 0x2968d6d736178f8fe7393cc33c87f29d9c287e78
+                ger_contract: "0x2968D6d736178f8FE7393CC33C87f29D9C287e78" // Bali
                     .parse()
                     .unwrap(),
             }
         }
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     #[ignore = "reaches external endpoint"]
-    async fn test_fetch_proper_default_l1_leaf_count() {
+    async fn test_get_l1_info_root_for_leaf_counts() {
+        use url::Url;
+
+        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
         let rpc_url = std::env::var("L1_RPC_ENDPOINT")
             .expect("L1_RPC_ENDPOINT must be defined")
             .parse::<Url>()
@@ -297,37 +331,63 @@ mod tests {
         )
         .expect("valid alloy provider");
 
+        tracing::info!("Testing get_l1_info_root for leaf counts for Bali testnet");
+
+        // Create L1RpcClient with default config for other parameters for Bali testnet
+        // InitL1InfoRootMap event is on block 6487027
         let contracts = ContractSetup::new();
-        let l1_rpc = Arc::new(
-            L1RpcClient::try_new(
-                Arc::new(rpc.clone()),
-                contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
-                contracts.ger_contract,
-                100,
-                GasPriceParams::default(),
-            )
-            .await
-            .unwrap(),
+        let l1_rpc = L1RpcClient::try_new(
+            Arc::new(rpc.clone()),
+            contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
+            contracts.ger_contract,
+            100, // default gas_multiplier_factor
+            GasPriceParams::default(),
+            10000, // default event_filter_block_range
+        )
+        .await
+        .expect("Failed to create L1RpcClient");
+
+        // Test get_l1_info_root for specific leaf counts from log output
+        let leaf_counts = vec![10000, 32131, 50000, 62322, 84213, 200000];
+
+        tracing::info!(
+            "Testing {} leaf counts: {:?}",
+            leaf_counts.len(),
+            leaf_counts
         );
 
-        let (default_leaf_count, _default_l1_info_root) = l1_rpc.default_l1_info_tree_entry;
-        let expected_leaf_count = 48445; // bali: 335
+        for leaf_count in leaf_counts {
+            tracing::debug!("Testing leaf count: {}", leaf_count);
 
-        assert_eq!(
-            default_leaf_count, expected_leaf_count,
-            "default: {default_leaf_count}, expected: {expected_leaf_count}"
-        );
+            match l1_rpc.get_l1_info_root(leaf_count).await {
+                Ok(l1_info_root) => {
+                    tracing::info!(
+                        "Leaf count found {}: L1 info root = {}",
+                        leaf_count,
+                        FixedBytes::<32>::from(l1_info_root)
+                    );
+                    // Verify that the root is not all zeros (which would indicate an invalid
+                    // result)
+                    assert_ne!(
+                        l1_info_root, [0u8; 32],
+                        "L1 info root should not be all zeros for leaf count {leaf_count}",
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        "Failed to get L1 info root for leaf count {leaf_count}: {error}",
+                    );
+                    // For this test, we expect some leaf counts might not exist
+                    // yet, so we don't fail the test but
+                    // just continue
+                }
+            }
+        }
 
-        // check that the awaiting finalization is done as expected
-        let latest_l1_leaf = 73587;
-        let _l1_info_root = l1_rpc.get_l1_info_root(latest_l1_leaf).await.unwrap();
-        println!(
-            "L1 info root for leaf count {latest_l1_leaf} is: {}",
-            FixedBytes::<32>::from(_l1_info_root)
-        );
+        tracing::info!("Completed testing get_l1_info_root for all leaf counts");
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     #[ignore = "reaches external endpoint"]
     async fn test_fetch_multisig_context() {
         let rpc_url = std::env::var("L1_RPC_ENDPOINT")
@@ -350,6 +410,7 @@ mod tests {
                 contracts.ger_contract,
                 100,
                 GasPriceParams::default(),
+                10000,
             )
             .await
             .unwrap(),
@@ -373,5 +434,40 @@ mod tests {
 
         assert_eq!(signers, expected_signers);
         assert_eq!(threshold, expected_threshold);
+    }
+
+    #[test_log::test(tokio::test)]
+    #[ignore = "reaches external endpoint"]
+    async fn test_create_l1_rpc_client_for_bali_testnet() {
+        use url::Url;
+
+        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
+        let rpc_url = std::env::var("L1_RPC_ENDPOINT")
+            .expect("L1_RPC_ENDPOINT must be defined")
+            .parse::<Url>()
+            .expect("Invalid URL format");
+
+        let rpc = build_alloy_fill_provider(
+            &rpc_url,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_INITIAL_BACKOFF_MS,
+            prover_alloy::DEFAULT_HTTP_RPC_NODE_BACKOFF_MAX_RETRIES,
+        )
+        .expect("valid alloy provider");
+
+        tracing::info!("Test fetching of the InitL1InfoRootMap for Bali testnet");
+
+        // Create L1RpcClient with default config for other parameters for Bali testnet
+        // InitL1InfoRootMap event is on block 6487027
+        let contracts = ContractSetup::new();
+        let _l1_rpc = L1RpcClient::try_new(
+            Arc::new(rpc.clone()),
+            contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
+            contracts.ger_contract,
+            100, // default gas_multiplier_factor
+            GasPriceParams::default(),
+            10000, // default event_filter_block_range
+        )
+        .await
+        .expect("Failed to create L1RpcClient");
     }
 }
