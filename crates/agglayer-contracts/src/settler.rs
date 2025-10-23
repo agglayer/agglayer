@@ -1,16 +1,20 @@
 use alloy::{
     contract::Error as ContractError,
+    eips::eip1559::Eip1559Estimation,
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
 };
 use tracing::debug;
 
-use crate::L1RpcClient;
+use crate::{GasPriceParams, L1RpcClient};
+
+const DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR: u128 = 150; //1.5X
 
 #[async_trait::async_trait]
 pub trait Settler {
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
@@ -19,6 +23,8 @@ pub trait Settler {
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
+        nonce_info: Option<(u64, u128, Option<u128>)>, /* nonce, previous_max_fee_per_gas,
+                                                        * optional previous_max_priority_fee_per_gas */
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
@@ -44,6 +50,7 @@ where
         Some(format!("{error:?}"))
     }
 
+    #[tracing::instrument(skip(self, proof))]
     async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
@@ -52,6 +59,8 @@ where
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
+        nonce_info: Option<(u64, u128, Option<u128>)>, /* nonce, previous_max_fee_per_gas,
+                                                        * optional previous_max_priority_fee_per_gas */
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
         // Build the transaction call
         let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
@@ -67,6 +76,7 @@ where
             "Building the L1 settlement tx with calldata: {:?}",
             tx_call.calldata()
         );
+
         // This is a fail point for testing purposes, it simulates low gas conditions.
         // Check if the low gas fail point is active and set the low gas if it is.
         #[cfg(feature = "testutils")]
@@ -85,6 +95,7 @@ where
 
         // Check if a gas multiplier factor is provided
         if self.gas_multiplier_factor != 100 {
+            // Adjust the gas limit based on the configuration.
             // Apply gas multiplier if it's not the default (100).
             // First estimate gas, then multiply by the factor.
             let gas_estimate = tx_call.estimate_gas().await?;
@@ -98,6 +109,161 @@ where
             tx_call = tx_call.gas(adjusted_gas);
         }
 
+        let tx_call = {
+            let estimate = self.rpc.estimate_eip1559_fees().await?;
+
+            let adjusted_fees =
+                if let Some((nonce, previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) =
+                    nonce_info
+                {
+                    // This is repeated transaction, increase the previous max_fee_per_gas and
+                    // max_priority_fee_per_gas by a factor
+                    // If previous_max_priority_fee_per_gas is None, set it to estimated.
+                    let adjust: Eip1559Estimation = Eip1559Estimation {
+                        max_fee_per_gas: {
+                            let mut new_max_fee_per_gas = previous_max_fee_per_gas
+                                .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
+                                .div_ceil(100)
+                                .max(self.gas_price_params.floor)
+                                .min(self.gas_price_params.ceiling);
+                            // In the corner case that the previous fee is the same as the new fee
+                            // due to rounding, multiply it by 2 to
+                            // ensure progress
+                            if new_max_fee_per_gas == previous_max_fee_per_gas {
+                                new_max_fee_per_gas =
+                                    (new_max_fee_per_gas * 2).min(self.gas_price_params.ceiling);
+                            }
+                            new_max_fee_per_gas
+                        },
+                        max_priority_fee_per_gas: previous_max_priority_fee_per_gas
+                            .map(|previous| {
+                                let mut new_max_priority_fee_per_gas = previous
+                                    .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
+                                    .div_ceil(100);
+                                // In the corner case that the previous priority fee is the same as
+                                // the new fee due to rounding,
+                                // multiply it by 2 to ensure progress
+                                if new_max_priority_fee_per_gas == previous {
+                                    new_max_priority_fee_per_gas *= 2;
+                                }
+                                new_max_priority_fee_per_gas
+                            })
+                            .unwrap_or(estimate.max_priority_fee_per_gas)
+                            .max(self.gas_price_params.floor)
+                            .min(self.gas_price_params.ceiling),
+                    };
+                    debug!(
+                        "Nonce provided: {nonce_info:?}, increasing  previous max_fee_per_gas and \
+                         max_priority_fee_per_gas to {adjust:?} for rollup_id: {rollup_id}"
+                    );
+                    // Set the nonce for the transaction
+                    tx_call = tx_call.nonce(nonce);
+                    adjust
+                } else {
+                    // Adjust the gas fees based on the configuration.
+                    adjust_gas_estimate(&estimate, &self.gas_price_params)
+                };
+
+            tx_call
+                .max_priority_fee_per_gas(adjusted_fees.max_priority_fee_per_gas)
+                .max_fee_per_gas(adjusted_fees.max_fee_per_gas)
+        };
+
         tx_call.send().await
+    }
+}
+
+fn adjust_gas_estimate(estimate: &Eip1559Estimation, params: &GasPriceParams) -> Eip1559Estimation {
+    let GasPriceParams {
+        floor,
+        ceiling,
+        multiplier_per_1000,
+    } = params;
+
+    // Apply gas price multiplier and floor/ceiling constraints
+    let adjust = |fee: u128| -> u128 {
+        // Multiply by multiplier_per_1000 and divide by 1000
+        fee.saturating_mul(*multiplier_per_1000 as u128) / 1000
+    };
+
+    let mut max_fee_per_gas = adjust(estimate.max_fee_per_gas).max(*floor);
+    if max_fee_per_gas > *ceiling {
+        tracing::warn!(
+            max_fee_per_gas_estimated = estimate.max_fee_per_gas,
+            max_fee_per_gas_adjusted = max_fee_per_gas,
+            max_fee_per_gas_ceiling = ceiling,
+            "Exceeded configured gas ceiling, clamping",
+        );
+        max_fee_per_gas = *ceiling;
+    }
+
+    let max_priority_fee_per_gas = adjust(estimate.max_priority_fee_per_gas).min(*ceiling);
+
+    let adjusted = Eip1559Estimation {
+        max_fee_per_gas,
+        max_priority_fee_per_gas,
+    };
+
+    if &adjusted != estimate {
+        debug!(
+            "Applied gas price adjustment. Estimated {}, {} priority. Adjusted to {}, {} priority.",
+            estimate.max_fee_per_gas,
+            estimate.max_priority_fee_per_gas,
+            max_fee_per_gas,
+            max_priority_fee_per_gas
+        );
+    }
+
+    adjusted
+}
+
+#[cfg(test)]
+mod test {
+    use alloy::eips::eip1559::Eip1559Estimation;
+
+    use super::{adjust_gas_estimate, GasPriceParams};
+
+    #[rstest::rstest]
+    fn test_adjust_gas_estimate_respects_floor_and_ceiling(
+        #[values(500, 1000, 1500, 2000)] multiplier_per_1000: u64,
+        #[values(10_000_000, 50_000_000)] floor: u128,
+        #[values(100_000_000, 200_000_000)] ceiling: u128,
+        #[values(10_000_000, 100_000_000, 200_000_000)] max_fee_per_gas: u128,
+        #[values(5_000_000, 50_000_000, 100_000_000)] max_priority_fee_per_gas: u128,
+    ) {
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+        };
+        let params = GasPriceParams {
+            multiplier_per_1000,
+            floor,
+            ceiling,
+        };
+
+        let adjusted = adjust_gas_estimate(&estimate, &params);
+
+        let acceptable_fee = floor..=ceiling;
+        assert!(
+            acceptable_fee.contains(&adjusted.max_fee_per_gas),
+            "max_fee_per_gas {} is out of range {acceptable_fee:?}",
+            adjusted.max_fee_per_gas,
+        );
+
+        let acceptable_priority_fee = 0..=ceiling;
+        assert!(
+            acceptable_priority_fee.contains(&adjusted.max_priority_fee_per_gas),
+            "max_priority_fee_per_gas {} out of range {acceptable_priority_fee:?}",
+            adjusted.max_priority_fee_per_gas,
+        );
+
+        // Some extra tests for scaling factor = 1.0
+        if multiplier_per_1000 == 1000 {
+            let acceptable_fee = [floor, max_fee_per_gas, ceiling];
+            assert!(acceptable_fee.contains(&adjusted.max_fee_per_gas));
+
+            let acceptable_priority_fee = [max_priority_fee_per_gas, ceiling];
+            assert!(acceptable_priority_fee.contains(&adjusted.max_priority_fee_per_gas));
+        }
     }
 }
