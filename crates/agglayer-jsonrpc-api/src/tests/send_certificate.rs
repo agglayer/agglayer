@@ -410,7 +410,7 @@ async fn pending_certificate_settled_force_set_status() {
     let fake_settlement_tx_hash = SettlementTxHash::from(Digest::from([1; 32]));
     context
         .state_store
-        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash)
+        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash, false)
         .expect("unable to update settlement tx hash");
     context
         .state_store
