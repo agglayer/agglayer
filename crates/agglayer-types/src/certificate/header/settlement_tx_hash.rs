@@ -14,6 +14,7 @@ use crate::{Digest, B256};
     serde::Serialize,
 )]
 #[serde(transparent)]
+#[derive(Hash)]
 pub struct SettlementTxHash(Digest);
 
 impl SettlementTxHash {

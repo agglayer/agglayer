@@ -232,6 +232,8 @@ mockall::mock! {
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
         async fn get_prev_pessimistic_root(&self, rollup_id: u32, before_tx: Option<TxHash>) -> Result<[u8; 32], L1RpcError>;
         async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
+        fn get_rollup_manager_address(&self) -> agglayer_types::Address;
+        fn get_event_filter_block_range(&self) -> u64;
     }
 
     #[async_trait::async_trait]
@@ -275,6 +277,7 @@ mockall::mock! {
             new_pessimistic_root: [u8; 32],
             proof: Bytes,
             custom_chain_data: Bytes,
+            nonce: Option<(u64, u128, Option<u128>)>
         ) -> Result<alloy::providers::PendingTransactionBuilder<Ethereum>, ContractError>;
     }
 }
