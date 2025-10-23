@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use agglayer_clock::ClockRef;
 use agglayer_storage::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
+    types::BasicSettledCertificateInfo,
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
@@ -83,7 +83,7 @@ pub enum NetworkTaskMessage {
     CertificateSettled {
         height: Height,
         certificate_id: CertificateId,
-        settled_certificate: SettledCertificate,
+        settled_certificate: BasicSettledCertificateInfo,
     },
 
     /// Notify the network task that a certificate has encountered an error.
@@ -117,7 +117,7 @@ pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, S
     /// Flag to indicate if the network is at capacity for the current epoch.
     at_capacity_for_epoch: bool,
     /// latest certificate settled
-    latest_settled: Option<SettledCertificate>,
+    latest_settled: Option<BasicSettledCertificateInfo>,
 }
 
 impl<CertifierClient, Sc, PendingStore, StateStore>
@@ -193,19 +193,18 @@ where
             .get_latest_settled_certificate_per_network(&self.network_id)?
             .map(|(_network_id, settled)| settled);
 
-        let mut next_expected_height =
-            if let Some(SettledCertificate(_, current_height, epoch, _)) = latest_settled {
-                debug!("Current network height is {}", current_height);
-                if epoch == current_epoch {
-                    debug!("Already settled for the epoch {current_epoch}");
-                    self.at_capacity_for_epoch = true;
-                }
+        let mut next_expected_height = if let Some(c) = latest_settled {
+            debug!("Current network height is {}", c.height);
+            if c.epoch_number == current_epoch {
+                debug!("Already settled for the epoch {current_epoch}");
+                self.at_capacity_for_epoch = true;
+            }
 
-                current_height.next()
-            } else {
-                debug!("Network never settled any certificate");
-                Height::ZERO
-            };
+            c.height.next()
+        } else {
+            debug!("Network never settled any certificate");
+            Height::ZERO
+        };
 
         let mut first_run = true;
 
@@ -255,7 +254,7 @@ where
                                 return Ok(());
                             }
                             match self.latest_settled {
-                                Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
+                                Some(c) if c.epoch_number == current_epoch => {
                                     warn!("Network {network_id} is at capacity for the epoch {current_epoch}");
                                     return Ok(());
                                 },
@@ -282,7 +281,7 @@ where
 
                     if matches!(
                         self.latest_settled,
-                        Some(SettledCertificate(settled_id, _, _, _)) if settled_id == certificate_id)
+                        Some(c) if c.certificate_id == certificate_id)
                     {
                         return Ok(());
                     }
@@ -402,8 +401,8 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateSettled { settled_certificate, height, .. }) => {
                         self.at_capacity_for_epoch = true;
-                        let epoch_number = settled_certificate.2;
-                        let certificate_index = settled_certificate.3;
+                        let epoch_number = settled_certificate.epoch_number;
+                        let certificate_index = settled_certificate.certificate_index;
                         self.latest_settled = Some(settled_certificate);
                         next_expected_height.increment();
                         debug!(%certificate_id, "Certification process completed");
@@ -431,10 +430,12 @@ where
                         self.state_store
                             .set_latest_settled_certificate_for_network(
                                 &self.network_id,
-                                &height,
-                                &certificate_id,
-                                &epoch_number,
-                                &certificate_index,
+                                &BasicSettledCertificateInfo {
+                                    certificate_id,
+                                    height,
+                                    epoch_number,
+                                    certificate_index,
+                                }
                             )
                             .map_err(|e| Error::PersistenceError { certificate_id, error: e.to_string() })?;
 

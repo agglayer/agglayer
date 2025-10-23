@@ -97,10 +97,11 @@ async fn start_server_with_configuration_service(
     JoinHandle<()>,
 ) {
     let (sender, _receiver) = tokio::sync::mpsc::channel(10);
-    let pending_store =
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone()).unwrap(),
     );
     let service = Arc::new(AgglayerService::new(
         sender,

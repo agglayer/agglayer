@@ -312,8 +312,10 @@ mod tests {
         let state_store = Arc::new(
             StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
         );
-        let pending_store =
-            Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+        let pending_store = Arc::new(
+            PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone())
+                .unwrap(),
+        );
 
         let epochs_store = Arc::new(
             EpochsStore::new(
@@ -444,8 +446,10 @@ mod tests {
         let state_store = Arc::new(
             StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
         );
-        let pending_store =
-            Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+        let pending_store = Arc::new(
+            PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone())
+                .unwrap(),
+        );
 
         let epochs_store = Arc::new(
             EpochsStore::new(

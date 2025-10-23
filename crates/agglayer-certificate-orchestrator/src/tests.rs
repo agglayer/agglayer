@@ -10,10 +10,6 @@ use std::{
 use agglayer_clock::ClockRef;
 use agglayer_config::Config;
 use agglayer_storage::{
-    columns::{
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
     storage::backup::BackupClient,
     stores::{
         epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
@@ -24,6 +20,7 @@ use agglayer_storage::{
         mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
         TempDBDir,
     },
+    types::{BasicPendingCertificateInfo, BasicProvenCertificateInfo, BasicSettledCertificateInfo},
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
@@ -57,7 +54,7 @@ pub(crate) struct DummyPendingStore {
     pub(crate) certificate_per_network: RwLock<BTreeMap<(NetworkId, Height), CertificateId>>,
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
     pub(crate) latest_proven_certificate_per_network:
-        RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
+        RwLock<BTreeMap<NetworkId, BasicProvenCertificateInfo>>,
     pub(crate) is_packed: bool,
 }
 
@@ -118,7 +115,8 @@ impl StateReader for DummyPendingStore {
     fn get_latest_settled_certificate_per_network(
         &self,
         _network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
+    ) -> Result<Option<(NetworkId, BasicSettledCertificateInfo)>, agglayer_storage::error::Error>
+    {
         todo!()
     }
 
@@ -133,19 +131,15 @@ impl StateReader for DummyPendingStore {
             .get(certificate_id)
             .cloned())
     }
+
     fn get_current_settled_height(
         &self,
-    ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
+    ) -> Result<Vec<(NetworkId, Height)>, agglayer_storage::error::Error> {
         self.settled
             .read()
             .unwrap()
             .iter()
-            .map(|(network_id, (height, id))| {
-                Ok((
-                    *network_id,
-                    SettledCertificate(*id, *height, EpochNumber::ZERO, CertificateIndex::ZERO),
-                ))
-            })
+            .map(|(network_id, (height, _id))| Ok((*network_id, *height)))
             .collect()
     }
 
@@ -266,17 +260,19 @@ impl PendingCertificateWriter for DummyPendingStore {
             .unwrap()
             .insert(
                 *network_id,
-                ProvenCertificate(*certificate_id, *network_id, *height),
+                BasicProvenCertificateInfo {
+                    certificate_id: *certificate_id,
+                    height: *height,
+                },
             );
 
         Ok(())
     }
 
-    fn set_latest_pending_certificate_per_network(
+    fn set_latest_pending_certificate_info(
         &self,
-        _network_id: &NetworkId,
-        _height: &Height,
-        _certificate_id: &CertificateId,
+        _network_id: NetworkId,
+        _info: &BasicPendingCertificateInfo,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -349,10 +345,7 @@ impl StateWriter for DummyPendingStore {
     fn set_latest_settled_certificate_for_network(
         &self,
         _network_id: &NetworkId,
-        _height: &Height,
-        _certificate_id: &CertificateId,
-        _epoch_number: &EpochNumber,
-        _certificate_index: &CertificateIndex,
+        _height: &BasicSettledCertificateInfo,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -374,22 +367,16 @@ impl PendingCertificateReader for DummyPendingStore {
     ) -> Result<Option<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
         todo!()
     }
-    fn get_latest_pending_certificate_for_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
-        todo!()
-    }
 
     fn get_current_proven_height(
         &self,
-    ) -> Result<Vec<ProvenCertificate>, agglayer_storage::error::Error> {
+    ) -> Result<Vec<(NetworkId, BasicProvenCertificateInfo)>, agglayer_storage::error::Error> {
         Ok(self
             .latest_proven_certificate_per_network
             .read()
             .unwrap()
-            .values()
-            .cloned()
+            .iter()
+            .map(|(network_id, info)| (*network_id, info.clone()))
             .collect())
     }
     fn get_current_proven_height_for_network(
@@ -401,7 +388,7 @@ impl PendingCertificateReader for DummyPendingStore {
             .read()
             .unwrap()
             .get(network_id)
-            .map(|x| x.2))
+            .map(|x| x.height))
     }
 
     fn get_certificate(
@@ -448,12 +435,12 @@ impl PendingCertificateReader for DummyPendingStore {
 async fn test_certificate_orchestrator_can_stop() {
     let path = TempDBDir::new();
     let config = Config::new(&path.path);
-    let pending_store = Arc::new(
-        PendingStore::new_with_path(&config.storage.pending_db_path)
-            .expect("Unable to create store"),
-    );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
+    );
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone())
             .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
@@ -515,12 +502,12 @@ async fn test_certificate_orchestrator_can_stop() {
 async fn test_collect_certificates() {
     let path = TempDBDir::new();
     let config = Config::new(&path.path);
-    let pending_store = Arc::new(
-        PendingStore::new_with_path(&config.storage.pending_db_path)
-            .expect("Unable to create store"),
-    );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
+    );
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone())
             .expect("Unable to create store"),
     );
 
@@ -586,12 +573,12 @@ async fn test_collect_certificates() {
 async fn test_collect_certificates_after_epoch() {
     let path = TempDBDir::new();
     let config = Config::new(&path.path);
-    let pending_store = Arc::new(
-        PendingStore::new_with_path(&config.storage.pending_db_path)
-            .expect("Unable to create store"),
-    );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
+    );
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone())
             .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
@@ -658,12 +645,12 @@ async fn test_collect_certificates_after_epoch() {
 async fn test_collect_certificates_when_empty() {
     let path = TempDBDir::new();
     let config = Config::new(&path.path);
-    let pending_store = Arc::new(
-        PendingStore::new_with_path(&config.storage.pending_db_path)
-            .expect("Unable to create store"),
-    );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
+    );
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone())
             .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(
@@ -739,12 +726,12 @@ fn check() -> (
     let (check_sender, check_receiver) = mpsc::channel(1);
     let path = TempDBDir::new();
     let config = Config::new(&path.path);
-    let pending_store = Arc::new(
-        PendingStore::new_with_path(&config.storage.pending_db_path)
-            .expect("Unable to create store"),
-    );
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
+    );
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone())
             .expect("Unable to create store"),
     );
     let epochs_store = Arc::new(

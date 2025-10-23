@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use agglayer_storage::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
+    types::BasicSettledCertificateInfo,
 };
 use agglayer_types::{Certificate, CertificateHeader, CertificateStatus, CertificateStatusError};
 use tokio::sync::{mpsc, oneshot};
@@ -314,8 +314,12 @@ where
         .await?;
 
         let (epoch_number, certificate_index) = settlement_complete.await.map_err(recv_err)??;
-        let settled_certificate =
-            SettledCertificate(certificate_id, height, epoch_number, certificate_index);
+        let settled_certificate = BasicSettledCertificateInfo {
+            certificate_id,
+            height,
+            epoch_number,
+            certificate_index,
+        };
         self.set_status(CertificateStatus::Settled)?;
         debug!(
             ?settlement_tx_hash,

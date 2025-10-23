@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_storage::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
     tests::mocks::{MockDebugStore, MockEpochsStore, MockPendingStore, MockStateStore},
+    types::{BasicPendingCertificateInfo, BasicSettledCertificateInfo},
 };
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateHeader, CertificateIndex,
@@ -71,10 +71,15 @@ fn transient_network_info() {
         .once()
         .return_once(move |_, _| Ok(Some(pending_certificate.clone())));
 
-    pending_store
-        .expect_get_latest_pending_certificate_for_network()
+    state_store
+        .expect_get_latest_pending_certificate_info()
         .with(eq(NETWORK_1))
-        .returning(move |_| Ok(Some((pending_certificate_id, 0.into()))));
+        .returning(move |_| {
+            Ok(Some(BasicPendingCertificateInfo {
+                certificate_id: pending_certificate_id,
+                height: 0.into(),
+            }))
+        });
 
     pending_store
         .expect_get_latest_proven_certificate_per_network()
@@ -181,10 +186,15 @@ fn pending_certificate_defined() {
         .expect_read_local_network_state()
         .returning(move |_| Ok(Some(network_state.state_b.clone())));
 
-    pending_store
-        .expect_get_latest_pending_certificate_for_network()
+    state_store
+        .expect_get_latest_pending_certificate_info()
         .with(eq(NETWORK_1))
-        .returning(move |_| Ok(Some((pending_certificate_id, 1.into()))));
+        .returning(move |_| {
+            Ok(Some(BasicPendingCertificateInfo {
+                certificate_id: pending_certificate_id,
+                height: 1.into(),
+            }))
+        });
 
     pending_store
         .expect_get_latest_proven_certificate_per_network()
@@ -221,12 +231,12 @@ fn pending_certificate_defined() {
         .returning(move |_| {
             Ok(Some((
                 NETWORK_1,
-                SettledCertificate(
-                    settled_certificate_id,
-                    0.into(),
-                    0.into(),
-                    CertificateIndex::new(0),
-                ),
+                BasicSettledCertificateInfo {
+                    certificate_id: settled_certificate_id,
+                    height: 0.into(),
+                    epoch_number: 0.into(),
+                    certificate_index: CertificateIndex::new(0),
+                },
             )))
         });
 

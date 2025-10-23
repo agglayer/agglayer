@@ -22,7 +22,7 @@ impl StorageContext {
         );
 
         let state = Arc::new(StateStore::new(state_db, BackupClient::noop()));
-        let pending = Arc::new(PendingStore::new(pending_db));
+        let pending = Arc::new(PendingStore::new(pending_db, state.clone()));
         let debug = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap())
         } else {

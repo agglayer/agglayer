@@ -4,6 +4,7 @@ use agglayer_config::Config;
 use agglayer_storage::{
     stores::{PendingCertificateWriter, StateWriter},
     tests::TempDBDir,
+    types::BasicSettledCertificateInfo,
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateIndex, CertificateStatus, EpochNumber, Height,
@@ -43,10 +44,12 @@ async fn returns_the_pending_certificate_header() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height::ZERO,
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
+            &BasicSettledCertificateInfo {
+                certificate_id: settled_certificate.hash(),
+                height: Height::ZERO,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            },
         )
         .expect("unable to set latest settled certificate");
 
@@ -125,10 +128,12 @@ async fn returns_the_proven_certificate_header() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &settled_certificate.height,
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
+            &BasicSettledCertificateInfo {
+                certificate_id: settled_certificate.hash(),
+                height: settled_certificate.height,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            },
         )
         .expect("unable to set latest settled certificate");
     context
@@ -204,10 +209,12 @@ async fn returns_the_settled_certificate_header() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &settled_certificate.height,
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
+            &BasicSettledCertificateInfo {
+                certificate_id: settled_certificate.hash(),
+                height: settled_certificate.height,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            },
         )
         .expect("unable to set latest settled certificate");
 
@@ -328,10 +335,12 @@ async fn returns_the_highest_height() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height::new(10),
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
+            &BasicSettledCertificateInfo {
+                certificate_id: settled_certificate.hash(),
+                height: Height::new(10),
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            },
         )
         .expect("unable to set latest settled certificate");
 
@@ -419,10 +428,12 @@ async fn returns_the_settled_one_at_same_height() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height::new(10),
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
+            &BasicSettledCertificateInfo {
+                certificate_id: settled_certificate.hash(),
+                height: Height::new(10),
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            },
         )
         .expect("unable to set latest settled certificate");
 

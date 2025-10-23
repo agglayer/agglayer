@@ -6,11 +6,7 @@ use agglayer_types::{
 };
 
 use crate::{
-    columns::{
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
-    error::Error,
+    error::Error, types::network_info::{BasicProvenCertificateInfo, BasicSettledCertificateInfo},
 };
 
 pub mod network_info_reader;
@@ -37,11 +33,6 @@ pub trait EpochStoreReader: Send + Sync {
 }
 
 pub trait PendingCertificateReader: Send + Sync {
-    fn get_latest_pending_certificate_for_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, Error>;
-
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -56,7 +47,7 @@ pub trait PendingCertificateReader: Send + Sync {
     ) -> Result<Vec<Option<Certificate>>, Error>;
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error>;
-    fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error>;
+    fn get_current_proven_height(&self) -> Result<Vec<(NetworkId, BasicProvenCertificateInfo)>, Error>;
     fn get_current_proven_height_for_network(
         &self,
         network_id: &NetworkId,
@@ -88,11 +79,12 @@ pub trait StateReader: Send + Sync {
         height: Height,
     ) -> Result<Option<CertificateHeader>, Error>;
 
-    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
+    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height)>, Error>;
+
     fn get_latest_settled_certificate_per_network(
         &self,
         network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, SettledCertificate)>, Error>;
+    ) -> Result<Option<(NetworkId, BasicSettledCertificateInfo)>, Error>;
 
     /// Get the local network state.
     fn read_local_network_state(

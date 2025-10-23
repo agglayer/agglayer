@@ -24,11 +24,11 @@ use crate::{storage::backup::BackupClient, stores::interfaces::writer::StateWrit
 fn store() -> PerEpochStore<PendingStore, StateStore> {
     let tmp = TempDBDir::new();
     let config = Arc::new(Config::new(&tmp.path));
-    let pending_store =
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
     );
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone()).unwrap());
 
     let backup_client = BackupClient::noop();
     PerEpochStore::try_open(config, EpochNumber::ZERO, pending_store, state_store, None, backup_client).unwrap()
@@ -234,11 +234,11 @@ fn adding_multiple_certificates(
 fn adding_certificate_and_restart() {
     let tmp = TempDBDir::new();
     let config = Arc::new(Config::new(&tmp.path));
-    let pending_store =
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
     );
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone()).unwrap());
 
     let backup_client = BackupClient::noop();
     let store = PerEpochStore::try_open(
@@ -329,11 +329,11 @@ fn adding_certificate_and_restart() {
 fn can_retrieve_proof_at_index() {
     let tmp = TempDBDir::new();
     let config = Arc::new(Config::new(&tmp.path));
-    let pending_store =
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
     );
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone()).unwrap());
 
     let backup_client = BackupClient::noop();
     let store = PerEpochStore::try_open(

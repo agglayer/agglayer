@@ -6,36 +6,28 @@ use rocksdb::{Direction, ReadOptions};
 use super::{PendingCertificateReader, PendingCertificateWriter};
 use crate::{
     columns::{
-        latest_pending_certificate_per_network::{
-            LatestPendingCertificatePerNetworkColumn, PendingCertificate,
-        },
-        latest_proven_certificate_per_network::{
-            LatestProvenCertificatePerNetworkColumn, ProvenCertificate,
-        },
-        pending_queue::{PendingQueueColumn, PendingQueueKey},
-        proof_per_certificate::ProofPerCertificateColumn,
-    },
-    error::Error,
-    storage::DB,
+        network_info::NetworkInfoColumn, pending_queue::{PendingQueueColumn, PendingQueueKey}, proof_per_certificate::ProofPerCertificateColumn
+    }, error::Error, storage::DB, stores::{state::StateStore, NetworkInfoReader as _}, types::{network_info::{self, v0, BasicProvenCertificateInfo}, BasicPendingCertificateInfo}
 };
 
 /// A logical store for pending.
 #[derive(Clone)]
 pub struct PendingStore {
     db: Arc<DB>,
+    state: Arc<StateStore>,
 }
 
 impl PendingStore {
-    pub fn new(db: Arc<DB>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<DB>, state: Arc<StateStore>) -> Self {
+        Self { db, state }
     }
-    pub fn new_with_path(path: &Path) -> Result<Self, Error> {
+    pub fn new_with_path(path: &Path, state: Arc<StateStore>) -> Result<Self, Error> {
         let db = Arc::new(DB::open_cf(
             path,
             crate::storage::pending_db_cf_definitions(),
         )?);
 
-        Ok(Self::new(db))
+        Ok(Self::new(db, state))
     }
 }
 
@@ -49,16 +41,25 @@ impl PendingCertificateWriter for PendingStore {
             .db
             .delete::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?)
     }
-    fn set_latest_pending_certificate_per_network(
+
+    fn set_latest_pending_certificate_info(
         &self,
-        network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
+        network_id: NetworkId,
+        info: &BasicPendingCertificateInfo,
     ) -> Result<(), Error> {
-        Ok(self.db.put::<LatestPendingCertificatePerNetworkColumn>(
-            network_id,
-            &PendingCertificate(*certificate_id, *height),
-        )?)
+        self.state.db.put::<NetworkInfoColumn>(
+            &network_info::Key {
+                network_id: network_id.into(),
+                kind: v0::network_info_value::ValueDiscriminants::LatestPendingCertificateInfo
+            },
+            &network_info::Value {
+                value: Some(v0::network_info_value::Value::LatestPendingCertificateInfo(v0::PendingCertificateInfo {
+                    id: Some(info.certificate_id.into()),
+                    height: Some(info.height.into()),
+                })),
+            },
+        )?;
+        Ok(())
     }
 
     fn insert_pending_certificate(
@@ -67,23 +68,23 @@ impl PendingCertificateWriter for PendingStore {
         height: Height,
         certificate: &Certificate,
     ) -> Result<(), Error> {
-        if let Some((_id, latest_height)) =
-            self.get_latest_pending_certificate_for_network(&network_id)?
+        if let Some(i) =
+            self.state.get_latest_pending_certificate_info(network_id)?
         {
-            if latest_height > height {
+            if i.height > height {
                 // TODO: This is technically not Candidate error,
                 return Err(Error::CertificateCandidateError(
                     crate::error::CertificateCandidateError::UnexpectedHeight(
                         network_id,
                         height,
-                        latest_height,
+                        i.height,
                     ),
                 ));
             }
         }
 
         // TODO: make it batch
-        self.set_latest_pending_certificate_per_network(&network_id, &height, &certificate.hash())?;
+        self.set_latest_pending_certificate_info(network_id, &BasicPendingCertificateInfo { certificate_id: certificate.hash(), height })?;
         Ok(self
             .db
             .put::<PendingQueueColumn>(&PendingQueueKey(network_id, height), certificate)?)
@@ -110,28 +111,15 @@ impl PendingCertificateWriter for PendingStore {
 
     fn set_latest_proven_certificate_per_network(
         &self,
-        network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
+        _network_id: &NetworkId,
+        _height: &Height,
+        _certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        Ok(self.db.put::<LatestProvenCertificatePerNetworkColumn>(
-            network_id,
-            &ProvenCertificate(*certificate_id, *network_id, *height),
-        )?)
+        todo!() // TODO
     }
 }
 
 impl PendingCertificateReader for PendingStore {
-    fn get_latest_pending_certificate_for_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, Error> {
-        Ok(self
-            .db
-            .get::<LatestPendingCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|PendingCertificate(id, height)| (id, height)))?)
-    }
-
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -146,15 +134,9 @@ impl PendingCertificateReader for PendingStore {
         Ok(self.db.get::<ProofPerCertificateColumn>(&certificate_id)?)
     }
 
-    fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error> {
-        Ok(self
-            .db
-            .iter_with_direction::<LatestProvenCertificatePerNetworkColumn>(
-                ReadOptions::default(),
-                Direction::Forward,
-            )?
-            .filter_map(|v| v.map(|(_, certificate)| certificate).ok())
-            .collect())
+    fn get_current_proven_height(&self) -> Result<Vec<(NetworkId, BasicProvenCertificateInfo)>, Error> {
+        let _: (Direction, ReadOptions);
+        todo!() // TODO
     }
 
     fn get_current_proven_height_for_network(
@@ -167,12 +149,9 @@ impl PendingCertificateReader for PendingStore {
 
     fn get_latest_proven_certificate_per_network(
         &self,
-        network_id: &NetworkId,
+        _network_id: &NetworkId,
     ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error> {
-        Ok(self
-            .db
-            .get::<LatestProvenCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|ProvenCertificate(id, network, height)| (network, height, id)))?)
+        todo!() // TODO
     }
 
     fn multi_get_certificate(

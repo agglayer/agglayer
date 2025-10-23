@@ -5,7 +5,7 @@ use agglayer_types::{
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 
-use crate::{error::Error, stores::PerEpochReader};
+use crate::{error::Error, stores::PerEpochReader, types::{network_info::BasicSettledCertificateInfo, BasicPendingCertificateInfo}};
 
 pub trait DebugWriter: Send + Sync {
     fn add_certificate(&self, certificate: &Certificate) -> Result<(), Error>;
@@ -42,6 +42,7 @@ pub trait StateWriter: Send + Sync {
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
     ) -> Result<(), Error>;
+
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,
@@ -64,10 +65,7 @@ pub trait StateWriter: Send + Sync {
     fn set_latest_settled_certificate_for_network(
         &self,
         network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
-        epoch_number: &EpochNumber,
-        certificate_index: &CertificateIndex,
+        info: &BasicSettledCertificateInfo,
     ) -> Result<(), Error>;
 
     fn write_local_network_state(
@@ -107,10 +105,9 @@ pub trait PendingCertificateWriter: Send + Sync {
         certificate_id: &CertificateId,
     ) -> Result<(), Error>;
 
-    fn set_latest_pending_certificate_per_network(
+    fn set_latest_pending_certificate_info(
         &self,
-        network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
+        network_id: NetworkId,
+        info: &BasicPendingCertificateInfo
     ) -> Result<(), Error>;
 }

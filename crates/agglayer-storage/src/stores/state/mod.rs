@@ -23,9 +23,6 @@ use crate::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
-        latest_settled_certificate_per_network::{
-            LatestSettledCertificatePerNetworkColumn, SettledCertificate,
-        },
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
@@ -36,7 +33,7 @@ use crate::{
         backup::{BackupClient, BackupRequest},
         DB,
     },
-    types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
+    types::{network_info::BasicSettledCertificateInfo, MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
 };
 
 #[cfg(test)]
@@ -44,7 +41,7 @@ mod tests;
 
 /// A logical store for the state.
 pub struct StateStore {
-    db: Arc<DB>,
+    pub(crate) db: Arc<DB>,
     backup_client: BackupClient,
 }
 
@@ -208,16 +205,10 @@ impl StateWriter for StateStore {
 
     fn set_latest_settled_certificate_for_network(
         &self,
-        network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
-        epoch_number: &EpochNumber,
-        certificate_index: &CertificateIndex,
+        _network_id: &NetworkId,
+        _info: &BasicSettledCertificateInfo,
     ) -> Result<(), Error> {
-        Ok(self.db.put::<LatestSettledCertificatePerNetworkColumn>(
-            network_id,
-            &SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index),
-        )?)
+        todo!() // TODO
     }
 
     fn write_local_network_state(
@@ -468,11 +459,7 @@ impl StateReader for StateStore {
     /// small. This function is only called once when the node starts.
     /// Benchmark: `last_certificate_bench.rs`
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error> {
-        Ok(self
-            .db
-            .keys::<LatestSettledCertificatePerNetworkColumn>()?
-            .filter_map(|v| v.ok())
-            .collect())
+        todo!() // TODO
     }
 
     fn get_certificate_header(
@@ -507,25 +494,16 @@ impl StateReader for StateStore {
             })
     }
 
-    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error> {
-        Ok(self
-            .db
-            .iter_with_direction::<LatestSettledCertificatePerNetworkColumn>(
-                ReadOptions::default(),
-                Direction::Forward,
-            )?
-            .filter_map(|v| v.ok())
-            .collect())
+    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height)>, Error> {
+        let _: (Direction, ReadOptions);
+        todo!() // TODO
     }
 
     fn get_latest_settled_certificate_per_network(
         &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, SettledCertificate)>, Error> {
-        Ok(self
-            .db
-            .get::<LatestSettledCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|v| (*network_id, v)))?)
+        _network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, BasicSettledCertificateInfo)>, Error> {
+        todo!() // TODO
     }
 
     fn read_local_network_state(

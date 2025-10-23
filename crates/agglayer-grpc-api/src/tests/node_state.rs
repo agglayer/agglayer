@@ -28,10 +28,11 @@ async fn get_certificate_header() {
     let tmp = TempDBDir::new();
     let config = Arc::new(Config::new(&tmp.path));
 
-    let pending_store =
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
     let state_store = Arc::new(
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path, state_store.clone()).unwrap(),
     );
     let debug_store = Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap());
 

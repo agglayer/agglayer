@@ -4,12 +4,9 @@ use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_primitives::Hashable;
 use agglayer_rate_limiting as rate_limiting;
-use agglayer_storage::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{
-        DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
-        PendingCertificateWriter, StateReader, StateWriter,
-    },
+use agglayer_storage::stores::{
+    DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
+    PendingCertificateWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Address, Certificate,
@@ -114,7 +111,7 @@ where
             .state
             .get_latest_settled_certificate_per_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
-            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+            .map(|(_, c)| (c.certificate_id, c.height));
 
         let proven_certificate_id_and_height = self
             .pending_store
@@ -122,13 +119,13 @@ where
             .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
             .map(|(_, height, id)| (id, height));
 
-        let pending_certificate_id_and_height = self
-            .pending_store
-            .get_latest_pending_certificate_for_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
+        let pending_certificate_info =
+            self.state
+                .get_latest_pending_certificate_info(network_id)
+                .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
 
         let certificate_id = [
-            pending_certificate_id_and_height,
+            pending_certificate_info.map(|i| (i.certificate_id, i.height)),
             proven_certificate_id_and_height,
             settled_certificate_id_and_height,
         ]
@@ -162,7 +159,7 @@ where
             .state
             .get_latest_settled_certificate_per_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
-            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+            .map(|(_, c)| (c.certificate_id, c.height));
 
         let certificate_id = std::cmp::max_by_key(
             proven_certificate_id_and_height,
@@ -250,7 +247,7 @@ where
             .get_latest_settled_certificate_per_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate id: {e}"))?
         {
-            Some((_, SettledCertificate(id, _, _, _))) => id,
+            Some((_, c)) => c.certificate_id,
             None => return Ok(None),
         };
 
@@ -261,16 +258,15 @@ where
         &self,
         network_id: NetworkId,
     ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let id = match self
-            .pending_store
-            .get_latest_pending_certificate_for_network(&network_id)
+        let Some(info) = self
+            .state
+            .get_latest_pending_certificate_info(network_id)
             .inspect_err(|e| error!("Failed to get latest pending certificate id: {e}"))?
-        {
-            Some((id, _height)) => id,
-            None => return Ok(None),
+        else {
+            return Ok(None);
         };
 
-        self.fetch_certificate_header(id)
+        self.fetch_certificate_header(info.certificate_id)
             .map(|header| match header.status {
                 CertificateStatus::Pending
                 | CertificateStatus::Proven

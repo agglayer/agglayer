@@ -13,6 +13,26 @@ use crate::{
     },
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BasicSettledCertificateInfo {
+    pub certificate_id: agglayer_types::CertificateId,
+    pub height: agglayer_types::Height,
+    pub epoch_number: agglayer_types::EpochNumber,
+    pub certificate_index: agglayer_types::CertificateIndex,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BasicProvenCertificateInfo {
+    pub certificate_id: agglayer_types::CertificateId,
+    pub height: agglayer_types::Height,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BasicPendingCertificateInfo {
+    pub certificate_id: agglayer_types::CertificateId,
+    pub height: agglayer_types::Height,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Key {
     pub(crate) network_id: u32,
@@ -74,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_discriminant_from_u32() {
-        assert_eq!(ValueDiscriminants::COUNT, 5, "Expected 5 discriminants");
+        assert_eq!(ValueDiscriminants::COUNT, 4, "Expected 4 discriminants");
         for i in 0..ValueDiscriminants::COUNT {
             let discriminant = ValueDiscriminants::from_repr(i);
             assert!(discriminant.is_some());
@@ -93,7 +113,7 @@ mod tests {
                     assert_eq!(i, 3, "LatestPendingCertificateInfo should be at index 3")
                 }
                 ValueDiscriminants::LatestProvenCertificateInfo => {
-                    assert_eq!(i, 4, "LatestProvenCertificateInfo should be at index 4")
+                    assert_eq!(i, 3, "LatestProvenCertificateInfo should be at index 4")
                 }
             }
         }

@@ -8,14 +8,11 @@ use std::{
 
 use agglayer_clock::{ClockRef, Event};
 use agglayer_storage::{
-    columns::{
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
     stores::{
         EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
+    types::BasicSettledCertificateInfo,
 };
 use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
 use arc_swap::ArcSwap;
@@ -58,7 +55,7 @@ pub type SettlementTasks = FuturesUnordered<
             dyn Future<
                     Output = (
                         SettlementContext,
-                        Result<(NetworkId, SettledCertificate), Error>,
+                        Result<(NetworkId, BasicSettledCertificateInfo), Error>,
                     ),
                 > + Send
                 + 'static,
@@ -223,9 +220,7 @@ where
         )?;
 
         // Try to spawn the certifier tasks for the next height of each network
-        for ProvenCertificate(_, network_id, _height) in
-            pending_store.get_current_proven_height()?
-        {
+        for (network_id, _) in pending_store.get_current_proven_height()? {
             orchestrator.spawn_network_task(network_id)?;
         }
 

@@ -8,6 +8,8 @@ mod certificate;
 mod generated;
 pub(crate) mod network_info;
 
+pub use network_info::{BasicSettledCertificateInfo, BasicProvenCertificateInfo, BasicPendingCertificateInfo};
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
     LatestSettledEpoch,

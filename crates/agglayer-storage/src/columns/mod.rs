@@ -120,9 +120,9 @@ pub(crate) mod proof_per_certificate;
 
 // Metadata
 pub(crate) mod certificate_header;
-pub mod latest_pending_certificate_per_network;
-pub mod latest_proven_certificate_per_network;
-pub mod latest_settled_certificate_per_network;
+pub mod old_latest_pending_certificate_per_network;
+pub mod old_latest_proven_certificate_per_network;
+pub mod old_latest_settled_certificate_per_network;
 pub(crate) mod metadata;
 
 // Debug

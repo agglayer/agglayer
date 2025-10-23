@@ -311,13 +311,13 @@ where
             )));
         };
 
-        match self
-            .pending_store
-            .set_latest_pending_certificate_per_network(
-                &certificate.network_id,
-                &certificate.height,
-                &certificate.certificate_id,
-            ) {
+        match self.pending_store.set_latest_pending_certificate_info(
+            certificate.network_id,
+            &BasicCertificateInfo {
+                height: certificate.height,
+                certificate_id: certificate.certificate_id,
+            },
+        ) {
             Ok(_) => Ok(()),
             Err(error) => {
                 error!("Failed to update latest pending certificate: {}", error);

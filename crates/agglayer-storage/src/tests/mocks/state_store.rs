@@ -5,9 +5,9 @@ use agglayer_types::{
 use mockall::mock;
 
 use crate::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
     stores::{MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter},
+    types::network_info::{BasicPendingCertificateInfo, BasicSettledCertificateInfo},
 };
 mock! {
     pub StateStore {}
@@ -16,10 +16,10 @@ mock! {
 
         fn get_latest_pending_height(&self, network_id: NetworkId) -> Result<Option<Height>, Error>;
 
-        fn get_latest_settled_certificate_id(
+        fn get_latest_pending_certificate_info(
             &self,
             network_id: NetworkId,
-        ) -> Result<Option<CertificateId>, Error>;
+        ) -> Result<Option<BasicPendingCertificateInfo>, Error>;
     }
 
     impl MetadataReader for StateStore {
@@ -36,6 +36,7 @@ mock! {
             certificate_id: &CertificateId,
             tx_hash: SettlementTxHash,
         ) -> Result<(), Error>;
+
         fn assign_certificate_to_epoch(
             &self,
             certificate_id: &CertificateId,
@@ -58,10 +59,7 @@ mock! {
         fn set_latest_settled_certificate_for_network(
             &self,
             network_id: &NetworkId,
-            height: &Height,
-            certificate_id: &CertificateId,
-            epoch_number: &EpochNumber,
-            certificate_index: &agglayer_types::CertificateIndex
+            info: &BasicSettledCertificateInfo,
         ) -> Result<(), Error>;
 
         fn write_local_network_state(
@@ -78,7 +76,7 @@ mock! {
         fn get_latest_settled_certificate_per_network(
             &self,
             network_id: &NetworkId,
-        ) -> Result<Option<(NetworkId, SettledCertificate)>, Error>;
+        ) -> Result<Option<(NetworkId, BasicSettledCertificateInfo)>, Error>;
 
         fn get_certificate_header(
             &self,
@@ -90,7 +88,8 @@ mock! {
             network_id: NetworkId,
             height: Height,
         ) -> Result<Option<CertificateHeader>, Error>;
-        fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
+
+        fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, Height)>, Error>;
 
         fn read_local_network_state(
             &self,

@@ -111,7 +111,7 @@ impl TestContext {
 
         // Create stores using the provided databases
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
-        let pending_store = Arc::new(PendingStore::new(pending_db));
+        let pending_store = Arc::new(PendingStore::new(pending_db, state_store.clone()));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new(debug_db))
         } else {
@@ -259,7 +259,7 @@ impl TestContext {
         );
 
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
-        let pending_store = Arc::new(PendingStore::new(pending_db));
+        let pending_store = Arc::new(PendingStore::new(pending_db, state_store.clone()));
         let debug_store = Arc::new(DebugStore::new(debug_db));
 
         // Create mock transport with an asserter

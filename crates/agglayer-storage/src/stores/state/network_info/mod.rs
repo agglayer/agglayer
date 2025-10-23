@@ -3,19 +3,18 @@
 //! This module implements the `NetworkInfoReader` trait for `StateStore`,
 //! providing functionality to read and retrieve network-related information
 //! from the database.
-use agglayer_types::{CertificateId, Height, NetworkId, NetworkInfo};
+use agglayer_types::{Height, NetworkId, NetworkInfo};
 
 use crate::{
     columns::network_info::NetworkInfoColumn,
     error::Error,
     stores::{expected_type_or_fail, state::StateStore, try_digest, StateReader as _},
-    types::network_info::{
+    types::{network_info::{
         self,
         v0::{
-            network_info_value, PendingCertificateInfo,
-            SettledClaim, LocalExitTreeLeafCount, PessimisticProofRoot,
+            network_info_value, LocalExitTreeLeafCount, PendingCertificateInfo, PessimisticProofRoot, SettledClaim
         },
-    },
+    }, BasicPendingCertificateInfo},
 };
 
 impl crate::stores::NetworkInfoReader for StateStore {
@@ -129,7 +128,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                     }
 
                     network_info_value::ValueDiscriminants::LatestProvenCertificateInfo => {
-                        // TODO: Currently not used, will be used in future PRs.
+                        // Currently not exposed as part of NetworkInfo.
                     }
                 }
 
@@ -162,28 +161,31 @@ impl crate::stores::NetworkInfoReader for StateStore {
             })
     }
 
-    fn get_latest_settled_certificate_id(
+    fn get_latest_pending_certificate_info(
         &self,
         network_id: NetworkId,
-    ) -> Result<Option<CertificateId>, Error> {
+    ) -> Result<Option<BasicPendingCertificateInfo>, Error> {
         self.db
             .get::<NetworkInfoColumn>(&network_info::Key {
                 network_id: network_id.to_u32(),
-                kind: network_info_value::ValueDiscriminants::LatestSettledCertificate,
+                kind: network_info_value::ValueDiscriminants::LatestPendingCertificateInfo,
             })
             .map_err(Into::into)
             .and_then(|value| {
                 expected_type_or_fail!(
                     value,
-                    network_info::v0::network_info_value::Value::LatestSettledCertificate(
-                        network_info::v0::SettledCertificateInfo {
-                            certificate_id: Some(network_info::v0::CertificateId { id }),
-                            ..
+                    network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
+                        network_info::v0::PendingCertificateInfo {
+                            id: Some(network_info::v0::CertificateId { id }),
+                            height: Some(network_info::v0::Height { height }),
                         }
                     ),
-                    try_digest!(&*id, "CertificateId")?.into(),
+                    BasicPendingCertificateInfo {
+                        certificate_id: try_digest!(&*id, "CertificateId")?.into(),
+                        height: Height::new(height),
+                    },
                     "Wrong value type decoded, was expecting CertificateId, decoded \
-                     another type"
+                    another type"
                 )
             })
     }

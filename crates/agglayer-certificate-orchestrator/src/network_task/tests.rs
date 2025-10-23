@@ -141,12 +141,14 @@ async fn start_from_zero() {
         .once()
         .with(
             eq(network_id),
-            eq(Height::ZERO),
-            eq(certificate_id),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
+            eq(BasicSettledCertificateInfo {
+                certificate_id,
+                height: Height::ZERO,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            }),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _| Ok(()));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -341,12 +343,14 @@ async fn one_per_epoch() {
         .once()
         .with(
             eq(network_id),
-            eq(Height::ZERO),
-            eq(certificate_id),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
+            eq(BasicSettledCertificateInfo {
+                certificate_id,
+                height: Height::ZERO,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            }),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _| Ok(()));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -609,12 +613,14 @@ async fn retries() {
         .once()
         .with(
             eq(network_id),
-            eq(Height::ZERO),
-            eq(certificate_id2),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
+            eq(BasicSettledCertificateInfo {
+                certificate_id: certificate_id2,
+                height: Height::ZERO,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            }),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _| Ok(()));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -846,12 +852,14 @@ async fn changing_epoch_triggers_certify() {
         .once()
         .with(
             eq(network_id),
-            eq(Height::ZERO),
-            eq(certificate_id),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
+            eq(BasicSettledCertificateInfo {
+                certificate_id,
+                height: Height::ZERO,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+            }),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -870,12 +878,14 @@ async fn changing_epoch_triggers_certify() {
         .once()
         .with(
             eq(network_id),
-            eq(Height::new(1)),
-            eq(certificate_id2),
-            eq(EpochNumber::new(1)),
-            eq(CertificateIndex::ZERO),
+            eq(BasicSettledCertificateInfo {
+                certificate_id: certificate_id2,
+                height: Height::new(1),
+                epoch_number: EpochNumber::new(1),
+                certificate_index: CertificateIndex::ZERO,
+            }),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _| Ok(()));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
