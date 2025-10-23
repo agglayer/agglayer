@@ -6,6 +6,7 @@ use agglayer_storage::{
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx};
+use eyre::bail;
 use mockall::predicate::{always, eq};
 use pessimistic_proof::{
     core::{commitment::PessimisticRootCommitmentVersion, generate_pessimistic_proof},
@@ -97,21 +98,23 @@ async fn from_pending_to_settle() {
         });
 
     let mut settlement_client = MockSettlementClient::new();
+
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+        .withf(move |i| *i == certificate_id)
+        .returning(move |_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+            sender
+                .try_send(SettlementTxHash::for_tests())
+                .expect("Unable to send tx hash");
+
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
     settlement_client
         .expect_wait_for_settlement()
@@ -233,19 +236,21 @@ async fn from_proven_to_settled() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+        .withf(move |i| *i == certificate_id)
+        .returning(move |_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+            sender
+                .try_send(SettlementTxHash::for_tests())
+                .expect("Unable to send tx hash");
+
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
+
     settlement_client
         .expect_wait_for_settlement()
         .once()

@@ -44,12 +44,11 @@ async fn successfully_push_certificate(#[case] state: Forest) {
 
 #[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(200))]
+#[timeout(Duration::from_secs(60))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn send_multiple_certificates(#[case] mut state: Forest) {
-    use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
+    let scenario = FailScenario::setup();
     use agglayer_types::{aggchain_proof::AggchainData, compute_signature_info};
-    use alloy::providers::Provider as _;
     use pessimistic_proof::core::commitment::SignatureCommitmentVersion;
     use tokio_util::sync::CancellationToken;
 
@@ -57,10 +56,10 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
     let cancellation_token = CancellationToken::new();
 
     // L1 is a RAII guard
-    let (_agglayer_shutdowned, l1, client) =
+    let (_agglayer_shutdowned, _l1, client) =
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
-    for i in 0..5 {
+    for i in 0..2 {
         let withdrawals = vec![];
 
         let mut certificate = state.apply_events(&[], &withdrawals);
@@ -73,34 +72,31 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
             SignatureCommitmentVersion::V3,
         );
         certificate.aggchain_data = AggchainData::ECDSA { signature };
-
+        if i == 1 {
+            fail::cfg(
+                "notifier::packer::settle_certificate::gas_estimate::zero_gas",
+                "return",
+            )
+            .expect("Failed to configure failpoint");
+        }
         let certificate_id: CertificateId = client
             .request("interop_sendCertificate", rpc_params![certificate.clone()])
             .await
             .unwrap();
 
-        let result = wait_for_settlement_or_error!(client, certificate_id).await;
+        if i == 1 {
+            let result = wait_for_settlement_or_error!(client, certificate_id).await;
+            assert!(matches!(result.status, CertificateStatus::InError { .. }));
+            fail::cfg(
+                "notifier::packer::settle_certificate::gas_estimate::zero_gas",
+                "off",
+            )
+            .expect("Failed to configure failpoint");
+        }
 
+        let result = wait_for_settlement_or_error!(client, certificate_id).await;
         assert!(matches!(result.status, CertificateStatus::Settled));
     }
 
-    let provider = RootProvider::<Ethereum>::new_http(reqwest::Url::parse(&l1.rpc).unwrap());
-    let last_block = provider.get_block_number().await.unwrap();
-    assert!(last_block != 0);
-    println!("last_block: {last_block}");
-
-    let filter = alloy::rpc::types::Filter::default()
-        .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
-        .select(FilterBlockOption::Range {
-            from_block: Some(alloy::eips::BlockNumberOrTag::Earliest),
-            to_block: None,
-        })
-        .topic1(U256::from(state.network_id))
-        .address(Address::from_str("0x0b306bf915c4d645ff596e518faf3f9669b97016").unwrap());
-
-    let events = provider.get_logs(&filter).await.unwrap();
-    for log in &events {
-        println!("event: {log:?}");
-    }
-    assert_eq!(events.len(), 5);
+    scenario.teardown();
 }

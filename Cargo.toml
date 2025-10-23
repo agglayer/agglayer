@@ -37,6 +37,7 @@ agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-storage-types = { path = "crates/agglayer-storage-types" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
+agglayer-transaction-monitor = { path = "crates/agglayer-transaction-monitor" }
 agglayer-types = { path = "crates/agglayer-types" }
 agglayer-utils = { path = "crates/agglayer-utils" }
 agglayer-test-suite = { path = "crates/agglayer-test-suite" }
