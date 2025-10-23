@@ -27,12 +27,12 @@ impl SettlementTxHashRecord {
         self.hashes.contains(hash)
     }
 
-    pub fn insert(&mut self, hash: SettlementTxHash) -> bool {
-        let do_insert = !self.contains(&hash);
-        if do_insert {
-            self.hashes.push(hash);
+    pub fn insert(&mut self, hash: SettlementTxHash) {
+        // If we already have this hash, put it last.
+        if let Some(orig_idx) = self.hashes.iter().position(|h| h == &hash) {
+            self.hashes.remove(orig_idx);
         }
-        do_insert
+        self.hashes.push(hash);
     }
 
     pub fn retain(&mut self, f: impl FnMut(&SettlementTxHash) -> bool) {

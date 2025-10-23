@@ -132,11 +132,7 @@ impl PendingCertificateWriter for PendingStore {
             .get::<SettlementTxHashesPerCertificateColumn>(certificate_id)?
             .unwrap_or_default();
 
-        if !record.insert(tx_hash) {
-            return Err(Error::UnprocessedAction(format!(
-                "Settlement tx hash already exists for certificate {certificate_id}"
-            )));
-        }
+        record.insert(tx_hash);
 
         Ok(self
             .db
