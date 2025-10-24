@@ -16,11 +16,6 @@ use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
 #[rstest]
-// TODO: re-enable this test, once we handle in-flight in-error certificates properly.
-// #[case::settlement_type_0_ecdsa(
-//     &["notifier::packer::settle_certificate::transaction_sent::kill_node"],
-//     crate::common::type_0_ecdsa_forest()
-// )]
 #[case::cert_task_type_0_ecdsa(
     &["certificate_task::process_impl::about_to_record_candidate", "network_task::make_progress::settlement_submitted"],
     crate::common::type_0_ecdsa_forest()
