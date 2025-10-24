@@ -199,7 +199,7 @@ where
             let prev_hashes = self
                 .pending_store
                 .get_settlement_tx_hashes_for_certificate(certificate_id)?;
-            for previous_tx_hash in &prev_hashes {
+            for previous_tx_hash in prev_hashes.iter().rev() {
                 let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
                     oneshot::channel();
                 self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
@@ -273,16 +273,16 @@ where
                                      on L1, updating certificate settlement tx hash to \
                                      {contract_settlement_tx_hash:?}"
                                 );
-                                self.header.settlement_tx_hash = Some(contract_settlement_tx_hash);
-                                if let Err(error) = self.state_store.update_settlement_tx_hash(
-                                    &certificate_id,
-                                    contract_settlement_tx_hash,
-                                    true,
-                                ) {
+                                let insert_result = self
+                                    .pending_store
+                                    .insert_settlement_tx_hash_for_certificate(
+                                        &certificate_id,
+                                        contract_settlement_tx_hash,
+                                    );
+                                if let Err(error) = insert_result {
                                     error!(
                                         ?error,
-                                        "Failed to update certificate settlement tx hash in \
-                                         database"
+                                        "Failed to insert certificate settlement tx hash to DB",
                                     );
                                 };
                                 // TODO refactor this function to not calculate witness_generation
@@ -292,11 +292,10 @@ where
                                 Some(contract_settlement_tx_hash.into())
                             } else {
                                 warn!(
-                                    "Certificate pp root with cert settlement tx {:?} does not \
-                                     match the latest settled pp root on L1 contract tx \
-                                     {contract_settlement_tx_hash}, moving certificate back to \
-                                     Proven",
-                                    self.header.settlement_tx_hash
+                                    ?certificate_id,
+                                    ?contract_settlement_tx_hash,
+                                    "Certificate pp root does not match the latest settled pp root \
+                                     on L1, moving certificate back to Proven",
                                 );
                                 None
                             }
@@ -325,32 +324,10 @@ where
             };
 
             if recomputed_from_contract.is_none() {
-                // Tx not found on L1, and pp root from contract not matching,
-                // clean tx from cert header and move back to Proven
-                let previous_tx_hash = self.header.settlement_tx_hash;
-                error!(
-                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
-                );
-                self.header.settlement_tx_hash = None;
-                if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
-                    error!(
-                        ?error,
-                        "Failed to remove tx_hash {previous_tx_hash:?} from database"
-                    );
-                };
-
-                self.header.status = CertificateStatus::Proven;
-                if let Err(error) = self.state_store.update_certificate_header_status(
-                    &self.header.certificate_id,
-                    &CertificateStatus::Proven,
-                ) {
-                    error!(?error, "Failed to update certificate status in database");
-                };
-
+                // Failed to recompute the state, moving back to proven.
+                self.set_status(CertificateStatus::Proven)?;
                 return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
+                    "Settlement tx not found on L1, moving certificate back to Proven"
                 )));
             }
         };
