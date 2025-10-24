@@ -199,11 +199,11 @@ where
             let prev_hashes = self
                 .pending_store
                 .get_settlement_tx_hashes_for_certificate(certificate_id)?;
-            for previous_tx_hash in prev_hashes {
+            for previous_tx_hash in &prev_hashes {
                 let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
                     oneshot::channel();
                 self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
-                    settlement_tx_hash: previous_tx_hash,
+                    settlement_tx_hash: *previous_tx_hash,
                     certificate_id,
                     tx_mined_notifier: request_is_settlement_tx_mined,
                 })
@@ -231,19 +231,18 @@ where
                     }
                 };
                 if !missing {
-                    previous_settlement_tx_hash = Some(previous_tx_hash);
+                    previous_settlement_tx_hash = Some(*previous_tx_hash);
                     break;
                 }
+            }
+
+            if previous_settlement_tx_hash.is_none() {
+                warn!(?prev_hashes, "No previous settlement tx hash found L1");
             }
             previous_settlement_tx_hash
         };
 
         if previous_settlement_tx_hash.is_none() {
-            warn!(
-                "Previous settlement tx hash is missing on L1, tx {:?}",
-                self.header.settlement_tx_hash
-            );
-
             // If the settlement tx is not found on L1, we need to recover.
             // With the latest pp root from the contract, check maybe if this
             // certificate new pp root is the same as the latest pp root on the chain.
