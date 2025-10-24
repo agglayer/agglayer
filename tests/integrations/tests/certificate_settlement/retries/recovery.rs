@@ -91,38 +91,42 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     cancellation_token.cancel();
     _ = agglayer_shutdowned.await;
 
+    println!("Node killed for the first time, recovering...");
+
     let cancellation_token = CancellationToken::new();
     let (agglayer_shutdowned, client, _) =
         start_agglayer(&tmp_dir.path, &l1, None, Some(cancellation_token.clone())).await;
     let withdrawals = vec![];
     fail::cfg_callback(
-        "notifier::packer::settle_certificate::receipt_future_ended",
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
         move || cancellation_token.cancel(),
     )
     .expect("Failed to configure failpoint");
 
     let mut certificate2 = state.apply_events(&imported_bridge_events, &withdrawals);
     certificate2.height = 1.into();
-    let (_, signature, _) = compute_signature_info(
+    let (_, signature2, _) = compute_signature_info(
         certificate2.new_local_exit_root,
         &certificate2.imported_bridge_exits,
         &state.wallet,
         certificate2.height,
         SignatureCommitmentVersion::V3,
     );
-    certificate2.aggchain_data = AggchainData::ECDSA { signature };
+    certificate2.aggchain_data = AggchainData::ECDSA {
+        signature: signature2,
+    };
 
     let certificate2_id: CertificateId = client
-        .request("interop_sendCertificate", rpc_params![certificate.clone()])
+        .request("interop_sendCertificate", rpc_params![certificate2.clone()])
         .await
         .unwrap();
 
     _ = agglayer_shutdowned.await;
 
-    println!("Node killed, recovering...");
+    println!("Node killed for the second time, recovering...");
 
     fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended",
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
         "off",
     )
     .expect("Failed to configure failpoint");
