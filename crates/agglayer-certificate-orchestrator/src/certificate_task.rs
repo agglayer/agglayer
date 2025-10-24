@@ -490,12 +490,16 @@ where
 
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
+        /*
         self.header.settlement_tx_hash = Some(settlement_tx_hash);
         self.state_store
             .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)?;
         // No set_status: update_settlement_tx_hash already updates the status in the
         // database
+        */
         self.header.status = CertificateStatus::Candidate;
+        self.set_status(CertificateStatus::Candidate)?;
+
         debug!(
             settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
             "Submitted certificate for settlement"
@@ -520,61 +524,77 @@ where
                 "CertificateTask::process_from_candidate called without a pp_root".into(),
             ))?;
 
-        let settlement_tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
-            CertificateStatusError::SettlementError(
-                "Candidate certificate header has no settlement tx hash".into(),
-            )
-        })?;
-        debug!(
-            %settlement_tx_hash,
-            "Waiting for certificate settlement to complete"
-        );
-        let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
-        self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
-            height,
-            certificate_id,
-            settlement_tx_hash,
-            settlement_complete_notifier,
-            new_pp_root,
-        })
-        .await?;
+        let mut prev_tx_hashes = self
+            .pending_store
+            .get_settlement_tx_hashes_for_certificate(certificate_id)
+            .inspect_err(|error| error!(?error, "Failed to query prev tx hashes"))?;
+        let mut processed_tx_hashes = Vec::new();
 
-        let settlement_complete_result = settlement_complete.await.map_err(recv_err)?;
-        let (epoch_number, certificate_index) = match settlement_complete_result {
-            CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
-                (epoch_number, certificate_index)
+        let (epoch_number, certificate_index, settlement_tx_hash) = loop {
+            let settlement_tx_hash = prev_tx_hashes.pop().ok_or_else(|| {
+                let err_message = String::from("No previous settlement tx matches");
+                error!(?processed_tx_hashes, ?certificate_id, "{err_message}");
+                CertificateStatusError::SettlementError(err_message)
+            })?;
+
+            if processed_tx_hashes.contains(&settlement_tx_hash) {
+                continue;
             }
-            CertificateSettlementResult::Error(error) => {
-                return Err(error);
-            }
-            CertificateSettlementResult::TimeoutError => {
-                // Retry the settlement transaction
-                info!(
-                    "Retrying the settlement transaction after a timeout for certificate \
-                     {certificate_id}"
-                );
-                self.set_status(CertificateStatus::Proven)?;
-                return Box::pin(self.process_from_proven()).await;
-            }
-            CertificateSettlementResult::SettledThroughOtherTx(alternative_settlement_tx_hash) => {
-                info!(
-                    "Process alternative settlement transaction {alternative_settlement_tx_hash}"
-                );
-                self.header.settlement_tx_hash = Some(alternative_settlement_tx_hash);
-                self.state_store.update_settlement_tx_hash(
-                    &certificate_id,
+            processed_tx_hashes.push(settlement_tx_hash);
+
+            debug!(
+                %settlement_tx_hash,
+                "Waiting for certificate settlement to complete"
+            );
+
+            let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
+            self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
+                height,
+                certificate_id,
+                settlement_tx_hash,
+                settlement_complete_notifier,
+                new_pp_root,
+            })
+            .await?;
+
+            match settlement_complete.await.map_err(recv_err)? {
+                CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
+                    break (epoch_number, certificate_index, settlement_tx_hash);
+                }
+                CertificateSettlementResult::Error(error) => {
+                    return Err(error);
+                }
+                CertificateSettlementResult::TimeoutError => {
+                    // Retry the settlement transaction
+                    info!(
+                        "Retrying the settlement transaction after a timeout for certificate \
+                         {certificate_id}"
+                    );
+                    self.set_status(CertificateStatus::Proven)?;
+                    return Box::pin(self.process_from_proven()).await;
+                }
+                CertificateSettlementResult::SettledThroughOtherTx(
                     alternative_settlement_tx_hash,
-                    true,
-                )?;
-                // No set_status: update_settlement_tx_hash already updates the status in the
-                // database
-                self.header.status = CertificateStatus::Candidate;
-                return Box::pin(self.process_from_candidate()).await;
-            }
+                ) => {
+                    info!(
+                        "Process alternative settlement transaction \
+                         {alternative_settlement_tx_hash}"
+                    );
+                    self.pending_store
+                        .insert_settlement_tx_hash_for_certificate(
+                            &certificate_id,
+                            settlement_tx_hash,
+                        )?;
+                    prev_tx_hashes.push(alternative_settlement_tx_hash);
+                }
+            };
         };
 
         let settled_certificate =
             SettledCertificate(certificate_id, height, epoch_number, certificate_index);
+        self.state_store
+            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)
+            .inspect_err(|error| error!(?error, "Failed to write the settlement tx hash"))?;
         self.set_status(CertificateStatus::Settled)?;
         debug!(
             ?settlement_tx_hash,
