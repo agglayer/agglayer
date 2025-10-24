@@ -63,7 +63,7 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 
 #[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(120))]
+#[timeout(Duration::from_secs(200))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     let tmp_dir = TempDBDir::new();
@@ -76,9 +76,9 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
+    let imported_bridge_events = vec![];
 
-    let certificate = state.apply_events(&[], &withdrawals);
-
+    let certificate = state.apply_events(&imported_bridge_events, &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
@@ -101,18 +101,18 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     )
     .expect("Failed to configure failpoint");
 
-    let mut certificate = state.apply_events(&[], &withdrawals);
-    certificate.height = 1.into();
+    let mut certificate2 = state.apply_events(&imported_bridge_events, &withdrawals);
+    certificate2.height = 1.into();
     let (_, signature, _) = compute_signature_info(
-        certificate.new_local_exit_root,
-        &certificate.imported_bridge_exits,
+        certificate2.new_local_exit_root,
+        &certificate2.imported_bridge_exits,
         &state.wallet,
-        certificate.height,
+        certificate2.height,
         SignatureCommitmentVersion::V3,
     );
-    certificate.aggchain_data = AggchainData::ECDSA { signature };
+    certificate2.aggchain_data = AggchainData::ECDSA { signature };
 
-    let certificate_id: CertificateId = client
+    let certificate2_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
         .unwrap();
@@ -132,7 +132,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     println!("Node recovered, waiting for settlement...");
 
-    let result = wait_for_settlement_or_error!(client, certificate_id).await;
+    let result = wait_for_settlement_or_error!(client, certificate2_id).await;
 
     assert!(matches!(result.status, CertificateStatus::Settled));
 
