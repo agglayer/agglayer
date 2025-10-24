@@ -193,8 +193,13 @@ where
         debug!("Recomputing new state for already-proven certificate");
         // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
         // certificate header is not found on L1.
-        let settlement_tx_hash_missing_on_l1: bool = {
-            if let Some(previous_tx_hash) = self.header.settlement_tx_hash {
+        let previous_settlement_tx_hash = {
+            // TODO: collect ALL hashes present on L1?
+            let mut previous_settlement_tx_hash = None;
+            let prev_hashes = self
+                .pending_store
+                .get_settlement_tx_hashes_for_certificate(certificate_id)?;
+            for previous_tx_hash in prev_hashes {
                 let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
                     oneshot::channel();
                 self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
@@ -209,7 +214,7 @@ where
                     "Settlement tx {previous_tx_hash} existence on L1: \
                      {result_is_settlement_tx_mined:?}"
                 );
-                match result_is_settlement_tx_mined {
+                let missing = match result_is_settlement_tx_mined {
                     Ok(true) => false,  // We have fetched the receipt, tx status 1, tx exist on L1
                     Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
                     Err(error) => {
@@ -224,14 +229,16 @@ where
                             false
                         }
                     }
+                };
+                if !missing {
+                    previous_settlement_tx_hash = Some(previous_tx_hash);
+                    break;
                 }
-            } else {
-                // No settlement tx hash in the cert header, nothing to check
-                false
             }
+            previous_settlement_tx_hash
         };
 
-        if settlement_tx_hash_missing_on_l1 {
+        if previous_settlement_tx_hash.is_none() {
             warn!(
                 "Previous settlement tx hash is missing on L1, tx {:?}",
                 self.header.settlement_tx_hash
@@ -351,13 +358,20 @@ where
 
         // Execute the witness generation to retrieve the new local network state
         let (_, _, output) = self
-                .certifier_client
-                .witness_generation(&self.certificate, &mut state,  self.header.settlement_tx_hash.map(Into::into))
-                .await
-                .map_err(|error| {
-                    error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven certificate");
-                    error
-                })?;
+            .certifier_client
+            .witness_generation(
+                &self.certificate,
+                &mut state,
+                self.header.settlement_tx_hash.map(Into::into),
+            )
+            .await
+            .inspect_err(|error| {
+                error!(
+                    %certificate_id,
+                    ?error,
+                        "Failed recomputing the new state for already-proven certificate"
+                );
+            })?;
         debug!("Recomputing new state completed");
 
         self.new_pp_root = Some(output.new_pessimistic_root);
@@ -490,20 +504,10 @@ where
 
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
-        /*
-        self.header.settlement_tx_hash = Some(settlement_tx_hash);
-        self.state_store
-            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)?;
-        // No set_status: update_settlement_tx_hash already updates the status in the
-        // database
-        */
         self.header.status = CertificateStatus::Candidate;
         self.set_status(CertificateStatus::Candidate)?;
 
-        debug!(
-            settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
-            "Submitted certificate for settlement"
-        );
+        debug!(?settlement_tx_hash, "Submitted certificate for settlement");
 
         self.process_from_candidate().await
     }
@@ -547,17 +551,10 @@ where
                 "Waiting for certificate settlement to complete"
             );
 
-            let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
-            self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
-                height,
-                certificate_id,
-                settlement_tx_hash,
-                settlement_complete_notifier,
-                new_pp_root,
-            })
-            .await?;
-
-            match settlement_complete.await.map_err(recv_err)? {
+            match self
+                .wait_for_settlement_of(settlement_tx_hash, new_pp_root)
+                .await?
+            {
                 CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
                     break (epoch_number, certificate_index, settlement_tx_hash);
                 }
@@ -585,7 +582,7 @@ where
                             &certificate_id,
                             settlement_tx_hash,
                         )?;
-                    prev_tx_hashes.push(alternative_settlement_tx_hash);
+                    return Box::pin(self.process_from_candidate()).await;
                 }
             };
         };
@@ -615,6 +612,24 @@ where
         }
 
         Ok(())
+    }
+
+    async fn wait_for_settlement_of(
+        &self,
+        settlement_tx_hash: agglayer_types::SettlementTxHash,
+        new_pp_root: Digest,
+    ) -> Result<CertificateSettlementResult, CertificateStatusError> {
+        let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
+        self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
+            height: self.header.height,
+            certificate_id: self.header.certificate_id,
+            settlement_tx_hash,
+            settlement_complete_notifier,
+            new_pp_root,
+        })
+        .await?;
+
+        settlement_complete.await.map_err(recv_err)
     }
 
     fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
