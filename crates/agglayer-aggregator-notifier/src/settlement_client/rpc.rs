@@ -766,6 +766,22 @@ mod testutils {
             });
         }
 
+        // If the failpoint is active with "return", we return an error
+        if fail::eval(
+            "notifier::packer::settle_certificate::receipt_future_ended::timeout2",
+            |_| true,
+        )
+        .unwrap_or(false)
+        {
+            warn!("FAIL POINT ACTIVE: Simulating pending transaction timeout (timeout2)");
+            return Err(Error::PendingTransactionTimeout {
+                certificate_id,
+                settlement_tx_hash,
+                error: "Pending transaction timeout (simulated via fail point timeout2)"
+                    .to_string(),
+            });
+        }
+
         Ok(())
     }
 }

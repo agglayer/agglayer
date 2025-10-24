@@ -23,6 +23,9 @@ use tokio_util::sync::CancellationToken;
 #[tokio::test]
 #[timeout(Duration::from_secs(90))]
 async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Forest) {
+    // Shutdown node immediately after sending the settlement transaction, without
+    // updating database. Try to recover by sending same certifciate after
+    // startup.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -32,16 +35,15 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) = setup_network(&tmp_dir.path, None, None).await;
-
     let withdrawals = vec![];
-
-    let certificate = state.clone().apply_events(&[], &withdrawals);
-
+    let imported_bridge_events = vec![];
+    let certificate = state
+        .clone()
+        .apply_events(&imported_bridge_events, &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
         .unwrap();
-
     _ = agglayer_shutdowned.await;
 
     println!("Node killed, recovering...");
@@ -49,13 +51,10 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
     for f in failpoints {
         fail::cfg(*f, "off").expect("Failed to configure failpoint");
     }
-
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
     println!("Node recovered, waiting for settlement...");
-
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
-
     assert!(matches!(result.status, CertificateStatus::Settled));
 
     scenario.teardown();
@@ -63,27 +62,27 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 
 #[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(200))]
+#[timeout(Duration::from_secs(180))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
+    // Settle one certificate, shutdown node.
+    // Send other certificate settlement tx and on timeout (but tx has settled in
+    // the background), shutdown node. Try to recover after starting up agglayer
+    // for the second time.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
-
     let cancellation_token = CancellationToken::new();
-
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
     let imported_bridge_events = vec![];
-
     let certificate = state.apply_events(&imported_bridge_events, &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
         .unwrap();
-
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
     assert!(matches!(result.status, CertificateStatus::Settled));
@@ -96,7 +95,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     let cancellation_token = CancellationToken::new();
     let (agglayer_shutdowned, client, _) =
         start_agglayer(&tmp_dir.path, &l1, None, Some(cancellation_token.clone())).await;
-    let withdrawals = vec![];
+
     fail::cfg_callback(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
         move || cancellation_token.cancel(),
@@ -137,7 +136,84 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     println!("Node recovered, waiting for settlement...");
 
     let result = wait_for_settlement_or_error!(client, certificate2_id).await;
+    assert!(matches!(result.status, CertificateStatus::Settled));
 
+    scenario.teardown();
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(120))]
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn recover_after_multiple_replacement_transactions(#[case] state: Forest) {
+    // Retry the settlement transaction 3 times, then shutdown node on timeout 4th
+    // time. Recover on startup.
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
+
+    // Configure timeout failpoint to trigger exactly 3 times (3 timeout errors)
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+        "3*return",
+    )
+    .expect("Failed to configure timeout failpoint");
+
+    // Clone token for callback before moving it
+    let cancellation_token_for_callback = cancellation_token.clone();
+
+    // Configure timeout2 failpoint with callback to cancel token (for 4th attempt)
+    fail::cfg_callback(
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout2",
+        move || cancellation_token_for_callback.cancel(),
+    )
+    .expect("Failed to configure failpoint");
+
+    let mut config = agglayer_config::Config::new(&tmp_dir.path);
+    config.outbound.rpc.settle.confirmations = 10;
+    config.outbound.rpc.settle.settlement_timeout = Duration::from_secs(10);
+
+    // L1 is a RAII guard
+    let (agglayer_shutdowned, l1, client) = setup_network(
+        &tmp_dir.path,
+        Some(config),
+        Some(cancellation_token.clone()),
+    )
+    .await;
+
+    let withdrawals = vec![];
+    let imported_bridge_events = vec![];
+    let certificate = state
+        .clone()
+        .apply_events(&imported_bridge_events, &withdrawals);
+    let certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate.clone()])
+        .await
+        .unwrap();
+
+    _ = agglayer_shutdowned.await;
+
+    println!("Node killed after timeouts, recovering...");
+
+    // Turn off both failpoints
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+        "off",
+    )
+    .expect("Failed to turn off timeout failpoint");
+
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout2",
+        "off",
+    )
+    .expect("Failed to turn off timeout2 failpoint");
+
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
+
+    println!("Node recovered, waiting for settlement...");
+
+    let result = wait_for_settlement_or_error!(client, certificate_id).await;
     assert!(matches!(result.status, CertificateStatus::Settled));
 
     scenario.teardown();
