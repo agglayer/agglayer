@@ -388,3 +388,66 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
     assert!(res.settlement_tx_hash.is_none());
     assert_eq!(res.status, CertificateStatus::Proven);
 }
+
+#[test_log::test(tokio::test)]
+async fn pending_certificate_settled_force_set_status() {
+    let path = TempDBDir::new();
+
+    let mut config = Config::new(&path.path);
+    config.debug_mode = true;
+
+    let mut context = TestContext::new_with_config(config).await;
+    let network_id = 1.into();
+
+    let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let certificate_id = pending_certificate.hash();
+
+    context
+        .state_store
+        .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
+        .expect("unable to insert pending certificate header");
+
+    let fake_settlement_tx_hash = SettlementTxHash::from(Digest::from([1; 32]));
+    context
+        .state_store
+        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash, false)
+        .expect("unable to update settlement tx hash");
+    context
+        .state_store
+        .update_certificate_header_status(&certificate_id, &CertificateStatus::Settled)
+        .expect("unable to update certificate status to settled");
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert!(res.settlement_tx_hash.is_some());
+    assert_eq!(res.status, CertificateStatus::Settled);
+
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceSetCertificateStatus",
+            rpc_params![
+                pending_certificate.hash(),
+                CertificateStatus::Proven,
+                false,
+                Some(fake_settlement_tx_hash)
+            ],
+        )
+        .await;
+
+    assert!(res.is_err());
+    assert!(context.certificate_receiver.try_recv().is_err());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert!(res.settlement_tx_hash.is_some());
+    assert_eq!(res.status, CertificateStatus::Settled);
+}
