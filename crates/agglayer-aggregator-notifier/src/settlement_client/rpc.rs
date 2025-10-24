@@ -249,6 +249,13 @@ where
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         info!(%settlement_tx_hash, "Waiting for settlement of tx {settlement_tx_hash}");
 
+        // Apply timeout fail point if they are active for integration testing
+        #[cfg(feature = "testutils")]
+        testutils::inject_settle_certificate_timeout_fail_points(
+            certificate_id,
+            settlement_tx_hash,
+        )?;
+
         // Step 1: Wait for transaction receipt with retries
         let receipt = self
             .wait_for_transaction_receipt(settlement_tx_hash, certificate_id)
@@ -697,7 +704,7 @@ where
 
 #[cfg(feature = "testutils")]
 mod testutils {
-    use agglayer_types::CertificateId;
+    use agglayer_types::{CertificateId, SettlementTxHash};
     use tracing::warn;
 
     use super::Error;
@@ -736,6 +743,28 @@ mod testutils {
         }
 
         fail::fail_point!("notifier::packer::settle_certificate::receipt_future_ended");
+
+        Ok(())
+    }
+
+    pub(crate) fn inject_settle_certificate_timeout_fail_points(
+        certificate_id: CertificateId,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<(), Error> {
+        // Check if fail points are active and log warnings
+        if fail::eval(
+            "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+            |_| true,
+        )
+        .unwrap_or(false)
+        {
+            warn!("FAIL POINT ACTIVE: Simulating pending transaction timeout");
+            return Err(Error::PendingTransactionTimeout {
+                certificate_id,
+                settlement_tx_hash,
+                error: "Pending transaction timeout (simulated via fail point)".to_string(),
+            });
+        }
 
         Ok(())
     }
