@@ -172,11 +172,11 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
                 error_message.contains(
                     "Too many different settlement transactions submitted for the same certificate"
                 ),
-                "Expected error message about too many settlement transactions, but got: {}",
-                error_message
+                "Expected error message about too many settlement transactions, but got: \
+                 {error_message}"
             );
         }
-        status => panic!("Expected InError status, but got: {:?}", status),
+        status => panic!("Expected InError status, but got: {status:?}"),
     }
 
     scenario.teardown();

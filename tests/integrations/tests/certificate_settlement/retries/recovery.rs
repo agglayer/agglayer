@@ -145,29 +145,34 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 #[tokio::test]
 #[timeout(Duration::from_secs(120))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
-async fn recover_after_multiple_replacement_transactions(#[case] state: Forest) {
-    // Retry the settlement transaction 3 times, then shutdown node on timeout 4th
-    // time. Recover on startup.
+async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
+    // Submit a certificate, inject an invalid tx hash in the header, then shutdown
+    // node. Recover on startup and verify the node can detect and recover from
+    // the invalid hash.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
     let cancellation_token = CancellationToken::new();
 
-    // Configure timeout failpoint to trigger exactly 3 times (3 timeout errors)
-    fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
-        "3*return",
-    )
-    .expect("Failed to configure timeout failpoint");
-
     // Clone token for callback before moving it
     let cancellation_token_for_callback = cancellation_token.clone();
 
-    // Configure timeout2 failpoint with callback to cancel token (for 4th attempt)
-    fail::cfg_callback(
-        "notifier::packer::settle_certificate::receipt_future_ended::timeout2",
-        move || cancellation_token_for_callback.cancel(),
+    // Configure invalid_settlement_tx_hash to inject invalid hash on first call
+    fail::cfg(
+        "certificate_task::process_impl::invalid_settlement_tx_hash",
+        "return",
     )
-    .expect("Failed to configure failpoint");
+    .expect("Failed to configure invalid_settlement_tx_hash failpoint");
+
+    // Configure candidate_recorded to shutdown the node after invalid hash is
+    // written
+    fail::cfg_callback(
+        "certificate_task::process_impl::candidate_recorded",
+        move || {
+            cancellation_token_for_callback.cancel();
+            panic!("killing node after invalid hash injection");
+        },
+    )
+    .expect("Failed to configure candidate_recorded failpoint");
 
     let mut config = agglayer_config::Config::new(&tmp_dir.path);
     config.outbound.rpc.settle.confirmations = 10;
@@ -193,20 +198,17 @@ async fn recover_after_multiple_replacement_transactions(#[case] state: Forest) 
 
     _ = agglayer_shutdowned.await;
 
-    println!("Node killed after timeouts, recovering...");
+    println!("Node killed after invalid hash injection, recovering...");
 
-    // Turn off both failpoints
+    // Turn off all failpoints
     fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+        "certificate_task::process_impl::invalid_settlement_tx_hash",
         "off",
     )
-    .expect("Failed to turn off timeout failpoint");
+    .expect("Failed to turn off invalid_settlement_tx_hash failpoint");
 
-    fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::timeout2",
-        "off",
-    )
-    .expect("Failed to turn off timeout2 failpoint");
+    fail::cfg("certificate_task::process_impl::candidate_recorded", "off")
+        .expect("Failed to turn off candidate_recorded failpoint");
 
     tokio::time::sleep(Duration::from_secs(30)).await;
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;

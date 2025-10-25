@@ -486,6 +486,7 @@ where
 
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
+
         self.header.settlement_tx_hash = Some(settlement_tx_hash);
         self.state_store
             .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)?;
@@ -496,6 +497,9 @@ where
             settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
             "Submitted certificate for settlement"
         );
+
+        #[cfg(feature = "testutils")]
+        testutils::inject_fail_points(&certificate_id, &mut self.header, &self.state_store);
 
         self.process_from_candidate().await
     }
@@ -617,4 +621,33 @@ fn recv_err(_: oneshot::error::RecvError) -> CertificateStatusError {
     CertificateStatusError::InternalError(
         "Failed to receive network task answer: sender dropped".into(),
     )
+}
+
+#[cfg(feature = "testutils")]
+mod testutils {
+    use super::*;
+
+    pub(crate) fn inject_fail_points<StateStore: StateWriter>(
+        certificate_id: &agglayer_types::CertificateId,
+        header: &mut CertificateHeader,
+        state_store: &Arc<StateStore>,
+    ) {
+        // Fail point to inject invalid settlement tx hash
+        fail::eval(
+            "certificate_task::process_impl::invalid_settlement_tx_hash",
+            |_| {
+                // Write an unexistent tx hash to simulate the settlement tx not being found on
+                // L1
+                warn!("FAIL POINT ACTIVE: Injecting invalid settlement tx hash");
+                let unexistent_tx_hash = SettlementTxHash::new(Digest::from([21u8; 32]));
+                header.settlement_tx_hash = Some(unexistent_tx_hash);
+                let _ =
+                    state_store.update_settlement_tx_hash(certificate_id, unexistent_tx_hash, true);
+                Some(())
+            },
+        );
+
+        // Fail point to record candidate and potentially shutdown
+        fail::fail_point!("certificate_task::process_impl::candidate_recorded");
+    }
 }
