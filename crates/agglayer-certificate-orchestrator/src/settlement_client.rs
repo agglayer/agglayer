@@ -6,6 +6,17 @@ use crate::Error;
 #[allow(unused)]
 pub type MockProvider = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
+/// Status of a transaction receipt.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum TxReceiptStatus {
+    /// Transaction was successful (status 1).
+    TxSuccessful,
+    /// Transaction failed (status 0).
+    TxFailed,
+    /// Transaction receipt not found.
+    NotFound,
+}
+
 /// Settlement client used to gather all the proofs generated on-the-go
 /// and to submit them in a settlement tx to the L1.
 #[cfg_attr(
@@ -53,7 +64,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
     async fn fetch_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,
-    ) -> Result<Option<bool>, Error>;
+    ) -> Result<TxReceiptStatus, Error>;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -207,22 +207,23 @@ where
                 tx_mined_notifier: request_is_settlement_tx_mined,
             })
             .await?;
-            let result_is_settlement_tx_mined =
-                response_is_settlement_tx_mined.await.map_err(recv_err)?;
-            debug!(
-                "Settlement tx {previous_tx_hash} existence on L1: \
-                 {result_is_settlement_tx_mined:?}"
-            );
-            match result_is_settlement_tx_mined {
-                Ok(Some(_)) => false, // We have fetched the receipt, tx status 1, tx exist
-                Ok(None) => true,     // Tx not found on L1
-                Err(error) => {
+
+            let result_is_settlement_tx_mined = response_is_settlement_tx_mined
+                .await
+                .map_err(recv_err)?
+                .inspect_err(|error| {
                     // Some error happened while checking the tx receipt on L1
                     warn!(
-                        "Failed to check settlement tx {previous_tx_hash} existence on L1: {error}"
+                        ?error,
+                        "Failed to check settlement tx {previous_tx_hash} existence on L1"
                     );
-                    false
+                });
+            match result_is_settlement_tx_mined {
+                Ok(crate::TxReceiptStatus::TxSuccessful) | Ok(crate::TxReceiptStatus::TxFailed) => {
+                    false // We have fetched the receipt, tx exists on L1
                 }
+                Ok(crate::TxReceiptStatus::NotFound) => true, // Tx not found on L1
+                Err(_error) => false,                         // If error happened we do nothing
             }
         } else {
             // No settlement tx hash in the cert header, nothing to check

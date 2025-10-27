@@ -104,7 +104,7 @@ pub enum NetworkTaskMessage {
         certificate_id: CertificateId,
         settlement_tx_hash: SettlementTxHash,
         // Notifier to send back the result of whether the tx has been mined or not.
-        tx_mined_notifier: oneshot::Sender<Result<Option<bool>, Error>>,
+        tx_mined_notifier: oneshot::Sender<Result<crate::TxReceiptStatus, Error>>,
     },
 
     /// Check if settlement tx has been mined.
@@ -434,21 +434,21 @@ where
                             error!(%certificate_id, "Error submitting settlement transaction for certificate at height {height}: {err:?}");
                             for previous_tx_hash in previous_tx_hashes {
                                 match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
-                                    Ok(Some(true)) => {
+                                    Ok(crate::TxReceiptStatus::TxSuccessful) => {
                                         // Transaction is mined, but we haven't known that, return it for further processing.
                                         info!(%certificate_id,
                                             "Certificate for new height: {height} has been settled on L1 through previous transaction {previous_tx_hash}");
                                         result = Ok((previous_tx_hash, None));
                                         break;
                                     }
-                                    Ok(Some(false)) => {
+                                    Ok(crate::TxReceiptStatus::TxFailed) => {
                                         // Transaction is mined with status 0 (reverted). Return it for further processing.
                                         warn!(%certificate_id,
                                             "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
                                         result = Ok((previous_tx_hash, None));
                                         break;
                                     }
-                                    Ok(None) => {
+                                    Ok(crate::TxReceiptStatus::NotFound) => {
                                         debug!(%certificate_id,
                                             "Certificate for new height: {height} previous transaction {previous_tx_hash} not mined");
                                     }
@@ -497,18 +497,18 @@ where
                             }
                             Err(Error::PendingTransactionTimeout { settlement_tx_hash, .. }) => {
                                 match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {
-                                    Ok(Some(true)) => {
+                                    Ok(crate::TxReceiptStatus::TxSuccessful) => {
                                         // Transaction is mined, but we did not get the event, consider it settled.
                                         info!(%certificate_id,
                                             "Certificate for new height: {} has been settled on L1 through transaction {settlement_tx_hash} \
                                              (timeout but tx mined)", height);
                                     }
-                                    Ok(Some(false)) => {
+                                    Ok(crate::TxReceiptStatus::TxFailed) => {
                                          // Transaction is mined with status 0 (reverted).
                                         warn!(%certificate_id,
                                             "Certificate for new height: {height} settlement transaction {settlement_tx_hash} has status 0 (reverted)");
                                     }
-                                    Ok(None) => {
+                                    Ok(crate::TxReceiptStatus::NotFound) => {
                                         warn!(%certificate_id,
                                             "Certificate for new height: {height} settlement transaction {settlement_tx_hash} not yet mined");
                                     }
@@ -592,15 +592,15 @@ where
                     Some(NetworkTaskMessage::CheckSettlementTx { certificate_id,settlement_tx_hash, tx_mined_notifier }) => {
                         let mined = self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await;
                         match &mined {
-                            Ok(Some(true)) => {
+                            Ok(crate::TxReceiptStatus::TxSuccessful) => {
                                 info!(%certificate_id,
                                     "Settlement tx {settlement_tx_hash} has been mined");
                             }
-                            Ok(Some(false)) => {
+                            Ok(crate::TxReceiptStatus::TxFailed) => {
                                 warn!(%certificate_id,
                                     "Settlement tx {settlement_tx_hash} is mined with the status 0 (failed)");
                             }
-                            Ok(None) => {
+                            Ok(crate::TxReceiptStatus::NotFound) => {
                                 debug!(%certificate_id, "Settlement tx {settlement_tx_hash} is not mined");
                             }
                             Err(err) => {

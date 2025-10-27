@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use agglayer_certificate_orchestrator::{Error, NonceInfo, SettlementClient};
+use agglayer_certificate_orchestrator::{Error, NonceInfo, SettlementClient, TxReceiptStatus};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
@@ -624,7 +624,7 @@ where
     async fn fetch_settlement_receipt_status(
         &self,
         settlement_tx_hash: SettlementTxHash,
-    ) -> Result<Option<bool>, Error> {
+    ) -> Result<TxReceiptStatus, Error> {
         let tx_hash = settlement_tx_hash.into();
 
         match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
@@ -633,11 +633,15 @@ where
                     "Fetched receipt for settlement tx {}: {:?}",
                     tx_hash, receipt
                 );
-                Ok(Some(receipt.status()))
+                if receipt.status() {
+                    Ok(TxReceiptStatus::TxSuccessful)
+                } else {
+                    Ok(TxReceiptStatus::TxFailed)
+                }
             }
             Ok(None) => {
                 warn!("No receipt found for settlement tx {}", tx_hash);
-                Ok(None)
+                Ok(TxReceiptStatus::NotFound)
             }
             Err(error) => Err(Error::SettlementTransactionFetchReceiptError {
                 tx_hash: settlement_tx_hash,

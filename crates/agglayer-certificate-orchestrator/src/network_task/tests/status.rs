@@ -355,7 +355,7 @@ async fn from_candidate_to_settle() {
         .expect_fetch_settlement_receipt_status()
         .with(eq(SettlementTxHash::for_tests()))
         .times(1)
-        .returning(|_| Ok(Some(true)));
+        .returning(|_| Ok(crate::TxReceiptStatus::TxSuccessful));
     settlement_client
         .expect_wait_for_settlement()
         .with(eq(SettlementTxHash::for_tests()), eq(certificate_id))
