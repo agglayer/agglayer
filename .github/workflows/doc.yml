@@ -38,7 +38,7 @@ jobs:
           cp -r target/doc/* ./host-docs
 
       - name: Upload documentation artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rust-docs
           path: "host-docs/"

@@ -77,7 +77,7 @@ jobs:
 
       - name: Upload artifact
         if: inputs.push == false
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ inputs.local-artifact-name }}
           path: ${{ inputs.local-artifact-dir }}/${{ inputs.local-artifact-name }}.tar
