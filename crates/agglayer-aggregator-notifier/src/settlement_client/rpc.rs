@@ -11,8 +11,8 @@ use agglayer_types::{
     ExecutionMode, Proof, SettlementTxHash, U256,
 };
 use alloy::{
-    providers::Provider,
-    rpc::types::{FilterBlockOption, TransactionReceipt},
+    eips::BlockNumberOrTag, providers::Provider, rpc::types::TransactionReceipt,
+    signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
 use arc_swap::ArcSwap;
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
@@ -536,30 +536,53 @@ where
         use alloy::{providers::Provider, sol_types::SolEvent};
 
         // Create a filter for the latest VerifyPessimisticStateTransition event for
-        // this network_id Using from_block Latest ensures we only get recent
-        // events
+        // this `network_id`. Using from_block Latest ensures we only get recent
+        // events.
         let rollup_address = self.l1_rpc.get_rollup_manager_address();
-        // TODO: Set Latest instead of Earliest after testing
-        let filter = alloy::rpc::types::Filter::new()
-            .address(rollup_address.into_alloy())
-            .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
-            .topic1(U256::from(network_id.to_u32()))
-            .select(FilterBlockOption::Range {
-                from_block: Some(alloy::eips::BlockNumberOrTag::Earliest),
-                to_block: None,
-            });
 
-        // Fetch the logs through from the network.
-        let events = self
+        let latest_network_block = self
             .l1_rpc
             .get_provider()
-            .get_logs(&filter)
+            .get_block_number()
             .await
-            .map_err(|e| {
+            .map_err(|error| {
+                error!(?error, "Failed to get the latest block number");
                 Error::L1CommunicationError(Box::new(
-                    agglayer_contracts::L1RpcError::FailedToQueryEvents(e.to_string()),
+                    agglayer_contracts::L1RpcError::FailedToQueryEvents(error.to_string()),
                 ))
-            })?;
+            })?
+            .as_u64();
+        let mut events = Vec::new();
+        let mut end_block = latest_network_block;
+        while events.is_empty() && end_block > 0 {
+            // start_block, end_block are inclusive
+            let start_block =
+                end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range() - 1);
+            let filter = alloy::rpc::types::Filter::new()
+                .address(rollup_address.into_alloy())
+                .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
+                .topic1(U256::from(network_id.to_u32()))
+                .from_block(BlockNumberOrTag::Number(start_block))
+                .to_block(BlockNumberOrTag::Number(end_block));
+
+            // Fetch the logs through from the network.
+            events = self
+                .l1_rpc
+                .get_provider()
+                .get_logs(&filter)
+                .await
+                .map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to fetch VerifyPessimisticStateTransition logs"
+                    );
+                    Error::L1CommunicationError(Box::new(
+                        agglayer_contracts::L1RpcError::FailedToQueryEvents(error.to_string()),
+                    ))
+                })?;
+
+            end_block = end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range());
+        }
 
         // Get the most recent event (last in the list) and extract its new pessimistic
         // root.
