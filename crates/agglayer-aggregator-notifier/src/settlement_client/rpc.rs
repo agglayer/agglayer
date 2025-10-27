@@ -428,20 +428,13 @@ where
                 Ok(None) => {
                     // Transaction not yet included in a block, continue retrying
                     if attempt <= self.config.max_retries {
-                        const N: usize = 4; // Split progress into 4 equal stages.
-                        let max_attempts = self.config.max_retries.max(1);
-                        let curr_stage = N * attempt / max_attempts;
-                        let next_stage = N * (attempt + 1) / max_attempts;
-                        // Report if we cross from one stage to the next.
-                        if curr_stage != next_stage {
-                            debug!(
-                                %settlement_tx_hash,
-                                next_attempt = attempt + 1,
-                                max_retries = self.config.max_retries,
-                                "Transaction receipt not found yet, retrying after {:?}",
-                                self.config.retry_interval
-                            );
-                        }
+                        debug!(
+                            %settlement_tx_hash,
+                            next_attempt = attempt + 1,
+                            max_retries = self.config.max_retries,
+                            "Transaction receipt not found yet, retrying after {:?}",
+                            self.config.retry_interval
+                        );
                         tokio::time::sleep(self.config.retry_interval).await;
                         continue;
                     } else {
