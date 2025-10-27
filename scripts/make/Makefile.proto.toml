@@ -38,6 +38,8 @@ script = '''
 brew install bufbuild/buf/buf
 '''
 
+# Upstream https://github.com/neoeinstein/protoc-gen-prost hasn't any new release since 08/2024,
+# so we have forked it to update dependencies (tonic)
 [tasks.install-protoc-gen-prost]
 script = '''
 cargo install --git https://github.com/agglayer/protoc-gen-prost.git --tag protoc-gen-prost-v0.4.1 protoc-gen-prost
