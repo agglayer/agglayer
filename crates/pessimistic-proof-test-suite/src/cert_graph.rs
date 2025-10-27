@@ -192,7 +192,7 @@ impl TryFrom<&CertGraphBuilder> for CertGraph {
 
         let mut nets: HashMap<NetworkId, NetworkCtx> = HashMap::new();
 
-        // tracker of which bridge exit corresponds to whcich claim
+        // tracker of which bridge exit corresponds to which claim
         let mut claim_tracker: HashMap<(NodeIndex, NodeIndex), (u32, BridgeExit)> = HashMap::new();
 
         let mut graph = DiGraph::<CertificateRecord, EdgeKind>::new();
@@ -370,12 +370,12 @@ impl CertGraph {
             .unwrap();
 
         // print out the PP public values
-        // println!(
-        //     "\n===== [{}{}] ({} gas) =====\n{pv_sp1_execute:?}\n",
-        //     network_label(record.network.into()),
-        //     record.multi_batch_header.height,
-        //     report.gas.unwrap(),
-        // );
+        println!(
+            "\n===== [{}{}] ({} gas) =====\n{pv_sp1_execute:?}\n",
+            network_label(record.network.into()),
+            record.multi_batch_header.height,
+            report.gas.unwrap(),
+        );
 
         ((), pv_sp1_execute)
     }

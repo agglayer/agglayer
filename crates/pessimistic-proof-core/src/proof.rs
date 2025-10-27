@@ -169,7 +169,10 @@ pub struct PessimisticProofOutput {
     /// The new pessimistic root.
     pub new_pessimistic_root: Digest,
     /// The list of pre-confirmed LERs per origin network.
-    pub preconfirmed_lers: BTreeMap<NetworkId, BTreeSet<LocalExitRoot>>, // todo: hash
+    pub preconfirmed_lers: BTreeMap<NetworkId, BTreeSet<LocalExitRoot>>, /* todo: hash */
+
+                                                                         /* pub prev_aggchain_params: Digest,
+                                                                          * pub new_aggchain_params: Digest, */
 }
 
 impl PessimisticProofOutput {
@@ -254,6 +257,11 @@ pub fn generate_pessimistic_proof(
     }
     .compute_pp_root(target_pp_root_version);
 
+    // NOTE from Carlos: discuss allowing inserted LER that aren't involved among
+    // the imported bridge exits
+    //
+    // approach A) prove only the used imported LER, imported bridge exits
+    // approach B) proving all the inserted imported LER on the chain side
     let preconfirmed_lers = {
         let ilers: Vec<_> = batch_header
             .imported_bridge_exits

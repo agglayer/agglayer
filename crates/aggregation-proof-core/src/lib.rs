@@ -123,7 +123,10 @@ impl RangePP {
 
         // already checked that they are all equal in `verify_pp_validity`
         let origin_network = first_pp.origin_network;
-        let aggchain_hash = first_pp.aggchain_hash;
+
+        // NOTE: not enough? should probably commit to all of them and give all the
+        // sequence as calldata because of the l2_pre_root for the FEP chains.
+        let aggchain_hash = last_pp.aggchain_hash;
 
         HashChainLeafPubValues {
             origin_network,
@@ -216,7 +219,8 @@ impl RangePP {
 #[derive(Deserialize, Serialize, Default, Debug)]
 pub struct AggregationWitness {
     /// PP vkey hash considered for this aggregation
-    pub pp_vkey_hash: [u32; 8],
+    /// NOTE: must be hardcoded in the circuit
+    pub pp_vkey_hash: [u32; 8], // hardcoded in ELF
 
     /// One contiguous range of PP per origin network
     pub pp_per_network: Vec<RangePP>,
@@ -276,6 +280,9 @@ impl AggregationWitness {
     /// Execute all the aggregation proving statement and returns the public
     /// values upon success.
     pub fn verify(&self) -> Result<AggregationPublicValues, Error> {
+        // Verify the agglayer rollup exit tree transition
+        self.verify_agglayer_rer_transition()?;
+
         // Per network, verify all the PPs (validity and contiguity per network)
         for pp_range in &self.pp_per_network {
             // all the PPs from the current network must be contiguous
@@ -284,9 +291,6 @@ impl AggregationWitness {
             // all the PPs must be successfully verified starks
             pp_range.verify_pp_validity(&self.pp_vkey_hash)?;
         }
-
-        // Verify the agglayer rollup exit tree transition
-        self.verify_agglayer_rer_transition()?;
 
         // Verify all the imported LER against the agglayer rollup exit tree
         //
