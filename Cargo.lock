@@ -487,11 +487,10 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
- "agglayer-telemetry 0.2.1",
+ "agglayer-telemetry 0.1.0",
  "anyhow",
  "buildstructor",
  "eyre",
@@ -512,8 +511,9 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
 dependencies = [
+ "insta",
+ "pretty_assertions",
  "prover-config",
  "prover-logger",
  "prover-utils",
@@ -525,17 +525,15 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
 dependencies = [
  "agglayer-interop",
- "pbjson 0.7.0",
+ "pbjson 0.8.0",
  "prost 0.13.5",
  "prover-executor",
  "serde",
  "sp1-sdk",
  "thiserror 2.0.16",
  "tonic 0.12.3",
- "tonic-build",
 ]
 
 [[package]]
@@ -3523,7 +3521,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3664,12 +3662,6 @@ dependencies = [
  "rustc-hex",
  "static_assertions",
 ]
-
-[[package]]
-name = "fixedbitset"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "flate2"
@@ -5044,7 +5036,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.53.3",
 ]
 
 [[package]]
@@ -5269,12 +5261,6 @@ dependencies = [
  "quote",
  "syn 2.0.106",
 ]
-
-[[package]]
-name = "multimap"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
 
 [[package]]
 name = "native-tls"
@@ -6264,16 +6250,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "petgraph"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
-dependencies = [
- "fixedbitset",
- "indexmap 2.11.0",
-]
-
-[[package]]
 name = "pharos"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6633,26 +6609,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-build"
-version = "0.13.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
-dependencies = [
- "heck 0.4.1",
- "itertools 0.14.0",
- "log",
- "multimap",
- "once_cell",
- "petgraph",
- "prettyplease",
- "prost 0.13.5",
- "prost-types 0.13.5",
- "regex",
- "syn 2.0.106",
- "tempfile",
-]
-
-[[package]]
 name = "prost-derive"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6725,7 +6681,7 @@ dependencies = [
 [[package]]
 name = "prover-alloy"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.2#c0105a8fde7fb923b4cb872b1334be35d36e9c91"
 dependencies = [
  "agglayer-evm-client",
  "alloy",
@@ -6741,7 +6697,7 @@ dependencies = [
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.2#c0105a8fde7fb923b4cb872b1334be35d36e9c91"
 dependencies = [
  "prover-utils",
  "serde",
@@ -6752,7 +6708,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.2#c0105a8fde7fb923b4cb872b1334be35d36e9c91"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -6772,7 +6728,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.2#c0105a8fde7fb923b4cb872b1334be35d36e9c91"
 dependencies = [
  "anyhow",
  "buildstructor",
@@ -6799,7 +6755,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.2#c0105a8fde7fb923b4cb872b1334be35d36e9c91"
 dependencies = [
  "serde",
  "tracing",
@@ -6810,7 +6766,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.4.1#166c6de6a28a262d36568db08535f6c1663d4467"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.4.2#c0105a8fde7fb923b4cb872b1334be35d36e9c91"
 dependencies = [
  "humantime-serde",
  "serde",
@@ -6876,7 +6832,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.0",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7362,7 +7318,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -8666,7 +8622,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9047,20 +9003,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "tonic-build"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
-dependencies = [
- "prettyplease",
- "proc-macro2",
- "prost-build",
- "prost-types 0.13.5",
- "quote",
- "syn 2.0.106",
 ]
 
 [[package]]
@@ -9845,7 +9787,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0978bf7171b3d90bac376700cb56d606feb40f251a475a5d6634613564460b22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
