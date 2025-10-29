@@ -214,11 +214,7 @@ where
                     .unwrap_or_else(|| error.to_string());
                 let error_message = error.to_string();
 
-                error!(
-                    error_message,
-                    error_decoded = error_decoded,
-                    "Failed to settle certificate"
-                );
+                error!(error_message, error_decoded, "Failed to settle certificate");
 
                 return Err(Error::SettlementError {
                     certificate_id,
@@ -333,9 +329,10 @@ where
             .mul_f64(self.config.max_retries as f64);
 
         debug!(
-            "Waiting for transaction receipt with timeout of {timeout:?}, max_retries: {} and \
-             retry_interval: {:?}",
-            self.config.max_retries, self.config.retry_interval
+            ?timeout,
+            max_retries = self.config.max_retries,
+            retry_interval = ?self.config.retry_interval,
+            "Waiting for transaction receipt",
         );
 
         for attempt in 0..=self.config.max_retries {
@@ -455,7 +452,7 @@ where
                                 %settlement_tx_hash,
                                 ?error,
                                 ?timeout,
-                                "Timeout while waiting the pending settlement transaction"
+                                "Timeout while waiting for the pending settlement transaction"
                             );
                             return Err(Error::PendingTransactionTimeout {
                                 certificate_id,
@@ -608,17 +605,17 @@ where
         let (pp_root, tx_hash) = match result {
             Some((pp_root, tx_hash)) => {
                 debug!(
-                    "Retrieved latest VerifyPessimisticStateTransition event for network {} \
-                     latest pp_root: {}, tx_hash: {tx_hash}",
-                    network_id,
-                    Digest(pp_root)
+                    %network_id,
+                    latest_pp_root = %Digest(pp_root),
+                    %tx_hash,
+                    "Retrieved latest VerifyPessimisticStateTransition event",
                 );
                 (Some(pp_root), Some(tx_hash))
             }
             None => {
                 debug!(
-                    "No VerifyPessimisticStateTransition events found for network {}",
-                    network_id
+                    %network_id,
+                    "No VerifyPessimisticStateTransition events found for network",
                 );
                 (None, None)
             }
@@ -636,8 +633,9 @@ where
         match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
             Ok(receipt) => {
                 debug!(
-                    "Fetched receipt for settlement tx {}: {:?}",
-                    tx_hash, receipt
+                    %tx_hash,
+                    ?receipt,
+                    "Fetched receipt for settlement tx",
                 );
                 Ok(receipt.status())
             }
@@ -681,7 +679,7 @@ where
                 }
             }
             None => {
-                warn!("Settlement tx not found on L1 for tx: {}", tx_hash);
+                warn!(%tx_hash, "Settlement tx not found on L1");
                 return Err(Error::L1CommunicationError(Box::new(
                     agglayer_contracts::L1RpcError::UnableToGetTransaction {
                         tx_hash: settlement_tx_hash.to_string(),
