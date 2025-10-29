@@ -11,6 +11,7 @@ use agglayer_types::{
 use eyre::Context as _;
 use prover_executor::sp1_fast;
 use sp1_sdk::HashableKey;
+use tracing::debug;
 
 use crate::CertifierClient;
 
@@ -22,14 +23,26 @@ where
     pub async fn fetch_l1_context(
         &self,
         certificate: &Certificate,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<L1WitnessCtx, CertificationError> {
         let network_id = certificate.network_id;
 
         let prev_pessimistic_root = self
             .l1_rpc
-            .get_prev_pessimistic_root(network_id.to_u32())
+            .get_prev_pessimistic_root(
+                network_id.to_u32(),
+                certificate_tx_hash.map(|digest| digest.0.into()),
+            )
             .await
-            .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
+            .map_err(|_| {
+                CertificationError::LastPessimisticRootNotFound(network_id, certificate_tx_hash)
+            })?;
+
+        debug!(
+            certificate_tx_hash = certificate_tx_hash.map(tracing::field::display),
+            prev_pessimistic_root = tracing::field::display(Digest(prev_pessimistic_root)),
+            "Prev PP root from L1",
+        );
 
         let l1_info_root = self.fetch_l1_info_root(certificate).await?;
 
@@ -110,12 +123,14 @@ where
             .context("Failed to hash SP1 vkey")
             .map_err(CertificationError::Other)?;
 
-        let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(vkey_hash_bytes);
+        let vkey_digest = Digest::from(vkey_hash_bytes);
+
+        let proof_vk_hash = agglayer_contracts::aggchain::VKeyHash::from(vkey_digest);
 
         if aggchain_vkey != proof_vk_hash {
             return Err(CertificationError::AggchainProofVkeyMismatch {
-                expected: aggchain_vkey.to_hex(),
-                actual: proof_vk_hash.to_hex(),
+                expected: aggchain_vkey.to_bytes().to_string(),
+                actual: proof_vk_hash.to_bytes().to_string(),
             });
         }
 

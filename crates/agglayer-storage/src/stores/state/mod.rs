@@ -70,12 +70,13 @@ impl StateWriter for StateStore {
         &self,
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
+        force: bool,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hash.is_some() {
+            if certificate_header.settlement_tx_hash.is_some() && !force  {
                 return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that already has a \
                      settlement tx hash"
@@ -92,6 +93,51 @@ impl StateWriter for StateStore {
 
             certificate_header.settlement_tx_hash = Some(tx_hash);
             certificate_header.status = CertificateStatus::Candidate;
+
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+
+            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+                warn!(
+                    hash = certificate_id.to_string(),
+                    "Unable to trigger backup for the state database: {}", error
+                );
+            }
+        } else {
+            info!(
+                hash = %certificate_id,
+                "Certificate header not found for certificate_id: {}",
+                certificate_id
+            )
+        }
+
+        Ok(())
+    }
+
+    fn remove_settlement_tx_hash(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            if certificate_header.settlement_tx_hash.is_none() {
+                return Err(Error::UnprocessedAction(
+                    "Tried to remove settlement tx hash for a certificate that does not have a \
+                     settlement tx hash"
+                        .to_string(),
+                ));
+            }
+
+            if certificate_header.status == CertificateStatus::Settled {
+                return Err(Error::UnprocessedAction(
+                    "Tried to remove settlement tx hash for a certificate that is already settled"
+                        .to_string(),
+                ));
+            }
+
+            certificate_header.settlement_tx_hash = None;
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;

@@ -3,7 +3,7 @@
 //! This module implements the `NetworkInfoReader` trait for `StateStore`,
 //! providing functionality to read and retrieve network-related information
 //! from the database.
-use agglayer_types::{CertificateId, Height, NetworkId, NetworkInfo};
+use agglayer_types::{CertificateId, Height, NetworkId, NetworkInfo, NetworkType};
 
 use crate::{
     columns::network_info::NetworkInfoColumn,
@@ -108,9 +108,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                             "Wrong value type decode, was expecting NetworkType, decoded another \
                              type"
                         )?
-                        .ok_or(Error::Unexpected(
-                            "Unable to decode NetworkType".to_string(),
-                        ))?;
+                        .unwrap_or(NetworkType::Unspecified);
                     }
 
                     network_info_value::ValueDiscriminants::LatestPendingCertificateInfo => {
@@ -186,5 +184,51 @@ impl crate::stores::NetworkInfoReader for StateStore {
                      another type"
                 )
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+    use crate::{
+        stores::{
+            state::tests::{network_id, store},
+            NetworkInfoReader,
+        },
+        types::network_info::{
+            v0::{NetworkInfoValue, NetworkType},
+            Key,
+        },
+    };
+
+    #[rstest]
+    fn fetching_an_unexisting_network(network_id: NetworkId, store: StateStore) {
+        store.get_network_info(network_id).unwrap();
+    }
+
+    #[rstest]
+    fn fetching_an_existing_network(network_id: NetworkId, store: StateStore) {
+        store
+            .db
+            .put::<NetworkInfoColumn>(
+                &Key {
+                    network_id: network_id.to_u32(),
+                    kind: network_info_value::ValueDiscriminants::NetworkType,
+                },
+                &NetworkInfoValue {
+                    value: Some(network_info_value::Value::NetworkType(
+                        NetworkType::MultisigOnly as i32,
+                    )),
+                },
+            )
+            .unwrap();
+        let network_info = store.get_network_info(network_id).unwrap();
+
+        assert_eq!(
+            network_info.network_type,
+            agglayer_types::NetworkType::MultisigOnly
+        );
     }
 }

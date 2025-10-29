@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{num::NonZeroU64, time::Duration};
 
 use agglayer_primitives::Address;
 use serde::{Deserialize, Serialize};
@@ -17,19 +17,28 @@ pub struct L1 {
         with = "crate::with::HumanDuration"
     )]
     pub connect_attempt_timeout: Duration,
+
     #[serde(alias = "RollupManagerContract")]
     pub rollup_manager_contract: Address,
+
     #[serde(alias = "PolygonZkEVMGlobalExitRootV2Contract")]
     pub polygon_zkevm_global_exit_root_v2_contract: Address,
 
     #[serde(default = "L1::default_rpc_timeout")]
     #[serde(with = "crate::with::HumanDuration")]
     pub rpc_timeout: Duration,
+
+    #[serde(default = "L1::default_event_filter_block_range")]
+    pub event_filter_block_range: NonZeroU64,
 }
 
 impl L1 {
     const fn default_rpc_timeout() -> Duration {
         Duration::from_secs(45)
+    }
+
+    const fn default_event_filter_block_range() -> NonZeroU64 {
+        NonZeroU64::new(10000).unwrap()
     }
 }
 
@@ -49,6 +58,7 @@ impl Default for L1 {
                     .parse()
                     .unwrap(),
             rpc_timeout: Self::default_rpc_timeout(),
+            event_filter_block_range: Self::default_event_filter_block_range(),
         }
     }
 }

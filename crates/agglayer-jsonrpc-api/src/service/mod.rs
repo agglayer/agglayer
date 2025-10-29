@@ -1,6 +1,6 @@
 use agglayer_telemetry::KeyValue;
 use alloy::{primitives::B256, providers::Provider};
-use futures::future::try_join;
+use futures::{future::try_join, TryFutureExt};
 use tracing::{debug, error, info, instrument};
 
 pub use self::error::{CertificateRetrievalError, SendTxError, TxStatusError};
@@ -73,6 +73,7 @@ where
             async {
                 self.kernel
                     .verify_batches_trusted_aggregator(&tx)
+                    .and_then(|call| async move { call.call().await })
                     .await
                     .map_err(|e| {
                         error!(

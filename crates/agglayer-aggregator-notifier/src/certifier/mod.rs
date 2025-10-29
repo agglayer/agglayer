@@ -147,10 +147,17 @@ where
         let verifying_key = self.verifying_key.clone();
 
         let mut state = state.clone();
-        let (multi_batch_header, initial_state, pv_native) =
-            self.witness_generation(&certificate, &mut state).await?;
+        let (multi_batch_header, initial_state, pv_native) = self
+            .witness_generation(&certificate, &mut state, None)
+            .await?;
 
-        info!("Successfully generated the witness for the PP for the Certificate {certificate_id}");
+        let prev_pp_root = pv_native.prev_pessimistic_root;
+        let new_pp_root = pv_native.new_pessimistic_root;
+        info!(
+            %prev_pp_root,
+            %new_pp_root,
+            "Successfully generated the witness for the PP for the Certificate {certificate_id}"
+        );
 
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
         let mut stdin = sp1_fast(|| {
@@ -348,6 +355,7 @@ where
                 height,
                 new_state: state,
                 network: multi_batch_header.origin_network,
+                new_pp_root,
             })
         }
     }
@@ -356,10 +364,13 @@ where
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>
     {
         // Fetch all the necessary context from the L1
-        let ctx_from_l1 = self.fetch_l1_context(certificate).await?;
+        let ctx_from_l1 = self
+            .fetch_l1_context(certificate, certificate_tx_hash)
+            .await?;
 
         debug!("Context fetched from the L1: {ctx_from_l1:?}");
 

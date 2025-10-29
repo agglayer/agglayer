@@ -1,4 +1,4 @@
-use agglayer_types::{Certificate, Height, LocalNetworkStateData, NetworkId};
+use agglayer_types::{Certificate, Digest, Height, LocalNetworkStateData, NetworkId};
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
 };
@@ -21,6 +21,7 @@ pub struct CertifierOutput {
     pub height: Height,
     pub new_state: LocalNetworkStateData,
     pub network: NetworkId,
+    pub new_pp_root: Digest,
 }
 
 pub type CertifierResult = Result<CertifierOutput, CertificationError>;
@@ -39,5 +40,6 @@ pub trait Certifier: Unpin + Send + Sync + 'static {
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
+        certificate_tx_hash: Option<Digest>,
     ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>;
 }

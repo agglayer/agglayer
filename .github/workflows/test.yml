@@ -40,7 +40,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: protoc,cargo-hack
-      - run: cargo hack --each-feature --all check --all-targets
+      - run: cargo hack --each-feature --all check --all-targets --locked
 
   build_contracts_image:
     runs-on: ubuntu-latest-16-cores
@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
       - name: Checkout code
