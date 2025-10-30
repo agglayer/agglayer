@@ -57,8 +57,8 @@ where
         self.kernel
             .verify_tx_signature(&tx)
             .await
-            .inspect_err(|err| {
-                error!(error = %err, "Failed to verify the signature of transaction: {err:?}");
+            .inspect_err(|error| {
+                error!(?error, "Failed to verify the signature of transaction");
             })?;
 
         agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs_tx);
@@ -80,9 +80,9 @@ where
                     .await
                     .map_err(|error| {
                         error!(
-                            error_code = %error,
+                            ?error,
                             "Failed to dry-run the verify_batches_trusted_aggregator for \
-                             transaction: {error:?}"
+                             transaction"
                         );
                         SendTxError::dry_run(error)
                     })
@@ -94,9 +94,9 @@ where
                     .await
                     .map_err(|error| {
                         error!(
-                            error = %error,
+                            ?error,
                             "Failed to verify the batch local_exit_root and state_root of \
-                             transaction: {error:?}"
+                             transaction"
                         );
                         SendTxError::RootVerification(error)
                     })
