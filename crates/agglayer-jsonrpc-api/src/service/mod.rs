@@ -36,6 +36,7 @@ where
         tracing::Span::current().record("signed_tx_hash", &signed_tx_hash);
 
         info!(
+            signed_tx = ?tx,
             "Received signed transaction {signed_tx_hash} for rollup {}",
             tx.tx.rollup_id
         );

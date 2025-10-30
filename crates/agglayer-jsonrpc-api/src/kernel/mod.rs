@@ -323,7 +323,7 @@ where
     }
 
     /// Settle the given [`SignedTx`] to the rollup manager.
-    #[instrument(skip(self, rate_guard), level = "debug")]
+    #[instrument(skip(self, signed_tx, rate_guard), level = "debug")]
     pub(crate) async fn settle(
         &self,
         signed_tx: &SignedTx,
