@@ -30,7 +30,7 @@ impl<Rpc> AgglayerService<Rpc>
 where
     Rpc: Provider + Clone + 'static,
 {
-    #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
+    #[instrument(skip(self, tx), fields(signed_tx_hash, rollup_id = tx.tx.rollup_id), level = "info")]
     pub async fn send_tx(&self, tx: SignedTx) -> Result<B256, SendTxError> {
         let signed_tx_hash = format!("{:?}", tx.hash());
         tracing::Span::current().record("signed_tx_hash", &signed_tx_hash);
