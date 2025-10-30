@@ -4,6 +4,7 @@ use agglayer_config::storage::backup::BackupConfig;
 use agglayer_storage::{storage::backup::BackupEngine, tests::TempDBDir};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
+use futures::FutureExt;
 use integrations::{
     agglayer_setup::{setup_network, start_agglayer},
     wait_for_settlement_or_error,
@@ -308,6 +309,8 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
     let certificate_id2: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2])
         .await
@@ -318,7 +321,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
     assert_eq!(result.status, CertificateStatus::Settled);
 
     // Awaiting for the backup to be created in the background
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -350,8 +353,11 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(certificate.status, CertificateStatus::Settled);
 
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
     let error: Result<CertificateHeader, jsonrpsee::core::ClientError> = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id2])
+        .inspect(|result| println!("final get certificate header: {result:?}"))
         .await;
 
     let expected_message = format!("Resource not found: Certificate({certificate_id2:#})");
