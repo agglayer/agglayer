@@ -309,7 +309,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     let certificate_id2: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2])
@@ -353,7 +353,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(certificate.status, CertificateStatus::Settled);
 
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     let error: Result<CertificateHeader, jsonrpsee::core::ClientError> = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id2])

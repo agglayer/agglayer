@@ -143,7 +143,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
         .unwrap();
     assert!(matches!(first_header.status, CertificateStatus::Settled));
 
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Send the second certificate, identical to the first and check the error.
     let second_submission_err = client
@@ -160,7 +160,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
     }
 
     // Optional await sufficient time for cert to be processed.
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Verify status is Settled. The two submissions have the same ID.
     // This checks the first submission still succeeds.
