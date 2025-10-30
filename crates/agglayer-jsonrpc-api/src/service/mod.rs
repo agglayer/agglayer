@@ -35,7 +35,10 @@ where
         let signed_tx_hash = format!("{:?}", tx.hash());
         tracing::Span::current().record("signed_tx_hash", &signed_tx_hash);
 
-        info!("Received signed transaction for rollup {}", tx.tx.rollup_id);
+        info!(
+            "Received signed transaction {signed_tx_hash} for rollup {}",
+            tx.tx.rollup_id
+        );
         let rollup_id_str = tx.tx.rollup_id.to_string();
         let metrics_attrs_tx = &[
             KeyValue::new("rollup_id", rollup_id_str),
