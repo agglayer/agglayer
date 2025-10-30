@@ -499,7 +499,11 @@ where
         );
 
         #[cfg(feature = "testutils")]
-        testutils::inject_fail_points(&certificate_id, &mut self.header, &self.state_store);
+        testutils::inject_fail_points_after_proving(
+            &certificate_id,
+            &mut self.header,
+            &self.state_store,
+        );
 
         self.process_from_candidate().await
     }
@@ -627,7 +631,7 @@ fn recv_err(_: oneshot::error::RecvError) -> CertificateStatusError {
 mod testutils {
     use super::*;
 
-    pub(crate) fn inject_fail_points<StateStore: StateWriter>(
+    pub(crate) fn inject_fail_points_after_proving<StateStore: StateWriter>(
         certificate_id: &agglayer_types::CertificateId,
         header: &mut CertificateHeader,
         state_store: &Arc<StateStore>,
