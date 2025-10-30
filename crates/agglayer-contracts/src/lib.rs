@@ -7,7 +7,7 @@ use std::{
 
 use agglayer_primitives::U256;
 use alloy::{
-    eips::BlockNumberOrTag,
+    eips::{eip1559::Eip1559Estimation, BlockNumberOrTag},
     primitives::{Address, FixedBytes, TxHash, B256},
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
@@ -285,10 +285,58 @@ where
     }
 }
 
+pub fn adjust_gas_estimate(
+    estimate: &Eip1559Estimation,
+    params: &GasPriceParams,
+) -> Eip1559Estimation {
+    let GasPriceParams {
+        floor,
+        ceiling,
+        multiplier_per_1000,
+    } = params;
+
+    // Apply gas price multiplier and floor/ceiling constraints
+    let adjust = |fee: u128| -> u128 {
+        // Multiply by multiplier_per_1000 and divide by 1000
+        fee.saturating_mul(*multiplier_per_1000 as u128) / 1000
+    };
+
+    let mut max_fee_per_gas = adjust(estimate.max_fee_per_gas).max(*floor);
+    if max_fee_per_gas > *ceiling {
+        tracing::warn!(
+            max_fee_per_gas_estimated = estimate.max_fee_per_gas,
+            max_fee_per_gas_adjusted = max_fee_per_gas,
+            max_fee_per_gas_ceiling = ceiling,
+            "Exceeded configured gas ceiling, clamping",
+        );
+        max_fee_per_gas = *ceiling;
+    }
+
+    let max_priority_fee_per_gas = adjust(estimate.max_priority_fee_per_gas).min(*ceiling);
+
+    let adjusted = Eip1559Estimation {
+        max_fee_per_gas,
+        max_priority_fee_per_gas,
+    };
+
+    if &adjusted != estimate {
+        debug!(
+            "Applied gas price adjustment. Estimated {}, {} priority. Adjusted to {}, {} priority.",
+            estimate.max_fee_per_gas,
+            estimate.max_priority_fee_per_gas,
+            max_fee_per_gas,
+            max_priority_fee_per_gas
+        );
+    }
+
+    adjusted
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
+    use alloy::eips::eip1559::Eip1559Estimation;
     use prover_alloy::build_alloy_fill_provider;
     use url::Url;
 
@@ -469,5 +517,49 @@ mod tests {
         )
         .await
         .expect("Failed to create L1RpcClient");
+    }
+
+    #[rstest::rstest]
+    fn test_adjust_gas_estimate_respects_floor_and_ceiling(
+        #[values(500, 1000, 1500, 2000)] multiplier_per_1000: u64,
+        #[values(10_000_000, 50_000_000)] floor: u128,
+        #[values(100_000_000, 200_000_000)] ceiling: u128,
+        #[values(10_000_000, 100_000_000, 200_000_000)] max_fee_per_gas: u128,
+        #[values(5_000_000, 50_000_000, 100_000_000)] max_priority_fee_per_gas: u128,
+    ) {
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+        };
+        let params = GasPriceParams {
+            multiplier_per_1000,
+            floor,
+            ceiling,
+        };
+
+        let adjusted = adjust_gas_estimate(&estimate, &params);
+
+        let acceptable_fee = floor..=ceiling;
+        assert!(
+            acceptable_fee.contains(&adjusted.max_fee_per_gas),
+            "max_fee_per_gas {} is out of range {acceptable_fee:?}",
+            adjusted.max_fee_per_gas,
+        );
+
+        let acceptable_priority_fee = 0..=ceiling;
+        assert!(
+            acceptable_priority_fee.contains(&adjusted.max_priority_fee_per_gas),
+            "max_priority_fee_per_gas {} out of range {acceptable_priority_fee:?}",
+            adjusted.max_priority_fee_per_gas,
+        );
+
+        // Some extra tests for scaling factor = 1.0
+        if multiplier_per_1000 == 1000 {
+            let acceptable_fee = [floor, max_fee_per_gas, ceiling];
+            assert!(acceptable_fee.contains(&adjusted.max_fee_per_gas));
+
+            let acceptable_priority_fee = [max_priority_fee_per_gas, ceiling];
+            assert!(acceptable_priority_fee.contains(&adjusted.max_priority_fee_per_gas));
+        }
     }
 }

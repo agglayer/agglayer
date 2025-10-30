@@ -2,11 +2,15 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
-use agglayer_contracts::contracts::{
-    PolygonRollupManager::{
-        verifyBatchesTrustedAggregatorCall, PolygonRollupManagerInstance, RollupDataReturnV2,
+use agglayer_contracts::{
+    adjust_gas_estimate,
+    contracts::{
+        PolygonRollupManager::{
+            verifyBatchesTrustedAggregatorCall, PolygonRollupManagerInstance, RollupDataReturnV2,
+        },
+        PolygonZkEvm::PolygonZkEvmInstance,
     },
-    PolygonZkEvm::PolygonZkEvmInstance,
+    GasPriceParams,
 };
 use agglayer_rate_limiting::RateLimiter;
 use agglayer_rpc::error::SignatureVerificationError;
@@ -39,6 +43,7 @@ pub struct Kernel<RpcProvider> {
     rpc: Arc<RpcProvider>,
     rate_limiter: RateLimiter,
     config: Arc<Config>,
+    gas_price_params: GasPriceParams,
 }
 
 /// Errors related to the ZkEVM node proof verification process.
@@ -71,6 +76,14 @@ impl<RpcProvider> Kernel<RpcProvider> {
         Self {
             rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
+            gas_price_params: {
+                let gas_config = &config.outbound.rpc.settle.gas_price;
+                agglayer_contracts::GasPriceParams {
+                    multiplier_per_1000: gas_config.multiplier.as_u64_per_1000(),
+                    floor: gas_config.floor,
+                    ceiling: gas_config.ceiling,
+                }
+            },
             config,
         }
     }
@@ -321,7 +334,15 @@ where
 
         let pending_tx = self
             .verify_batches_trusted_aggregator(signed_tx)
-            .and_then(|call| async move { call.send().await })
+            .and_then(|call| async move {
+                let estimate = self.rpc.estimate_eip1559_fees().await?;
+                let adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
+
+                call.max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)
+                    .max_fee_per_gas(adjusted.max_fee_per_gas)
+                    .send()
+                    .await
+            })
             .await
             .map_err(SettlementError::ContractError)?;
 
