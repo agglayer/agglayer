@@ -329,9 +329,6 @@ where
         signed_tx: &SignedTx,
         rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError> {
-        let hex_hash = signed_tx.hash();
-        let hash = format!("{hex_hash:?}");
-
         let pending_tx = self
             .verify_batches_trusted_aggregator(signed_tx)
             .and_then(|call| async move {
@@ -352,8 +349,11 @@ where
             .await
             .map_err(SettlementError::ContractError)?;
 
-        if let Ok(Some(tx)) = self.check_tx_status(*pending_tx.tx_hash()).await {
-            warn!(hash, "Transaction already settled: {tx:?}");
+        if let Ok(Some(tx_receipt)) = self.check_tx_status(*pending_tx.tx_hash()).await {
+            warn!(
+                l1_tx_hash = %tx_receipt.transaction_hash,
+                "L1 transaction already settled: {tx_receipt:?}"
+            );
         }
 
         pending_tx
@@ -364,7 +364,8 @@ where
                 info!(
                     block_hash = ?tx_receipt.block_hash,
                     block_number = ?tx_receipt.block_number,
-                    "Inspect settle transaction: {}", tx_receipt.transaction_hash
+                    l1_tx_hash = %tx_receipt.transaction_hash,
+                    "Inspect settle l1 transaction"
                 )
             })
             .map_err(SettlementError::PendingTransactionError)

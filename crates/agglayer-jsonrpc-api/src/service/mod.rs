@@ -32,13 +32,10 @@ where
 {
     #[instrument(skip(self, tx), fields(hash, rollup_id = tx.tx.rollup_id), level = "info")]
     pub async fn send_tx(&self, tx: SignedTx) -> Result<B256, SendTxError> {
-        let hash = format!("{:?}", tx.hash());
-        tracing::Span::current().record("hash", &hash);
+        let signed_tx_hash = format!("{:?}", tx.hash());
+        tracing::Span::current().record("signed_tx_hash", &signed_tx_hash);
 
-        info!(
-            hash,
-            "Received transaction {hash} for rollup {}", tx.tx.rollup_id
-        );
+        info!("Received signed transaction for rollup {}", tx.tx.rollup_id);
         let rollup_id_str = tx.tx.rollup_id.to_string();
         let metrics_attrs_tx = &[
             KeyValue::new("rollup_id", rollup_id_str),
@@ -54,9 +51,12 @@ where
             return Err(SendTxError::RollupNotRegistered { rollup_id });
         }
 
-        self.kernel.verify_tx_signature(&tx).await.inspect_err(|e| {
-            error!(error = %e, hash, "Failed to verify the signature of transaction {hash}: {e}");
-        })?;
+        self.kernel
+            .verify_tx_signature(&tx)
+            .await
+            .inspect_err(|err| {
+                error!(error = %err, "Failed to verify the signature of transaction: {err:?}");
+            })?;
 
         agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs_tx);
 
@@ -75,14 +75,13 @@ where
                     .verify_batches_trusted_aggregator(&tx)
                     .and_then(|call| async move { call.call().await })
                     .await
-                    .map_err(|e| {
+                    .map_err(|error| {
                         error!(
-                            error_code = %e,
-                            hash,
+                            error_code = %error,
                             "Failed to dry-run the verify_batches_trusted_aggregator for \
-                             transaction {hash}: {e}"
+                             transaction: {error:?}"
                         );
-                        SendTxError::dry_run(e)
+                        SendTxError::dry_run(error)
                     })
                     .inspect(|_| agglayer_telemetry::EXECUTE.add(1, metrics_attrs))
             },
@@ -90,14 +89,13 @@ where
                 self.kernel
                     .verify_proof_zkevm_node(&tx)
                     .await
-                    .map_err(|e| {
+                    .map_err(|error| {
                         error!(
-                            error = %e,
-                            hash,
+                            error = %error,
                             "Failed to verify the batch local_exit_root and state_root of \
-                             transaction {hash}: {e}"
+                             transaction: {error:?}"
                         );
-                        SendTxError::RootVerification(e)
+                        SendTxError::RootVerification(error)
                     })
                     .inspect(|_| agglayer_telemetry::VERIFY_ZKP.add(1, metrics_attrs))
             },
@@ -105,34 +103,41 @@ where
         .await?;
 
         // Settle the proof on-chain and return the transaction hash.
-        let receipt = self.kernel.settle(&tx, guard).await.inspect_err(|e| {
-            error!(
-                error = %e,
-                hash,
-                "Failed to settle transaction {hash} on L1: {e}"
-            )
-        })?;
+        let receipt = self
+            .kernel
+            .settle(&tx, guard)
+            .await
+            .inspect_err(|error| error!(?error, "Failed to settle transaction on L1"))?;
 
         agglayer_telemetry::SETTLE.add(1, metrics_attrs);
 
-        info!(hash, "Successfully settled transaction {hash}");
+        info!(
+            l1_tx_hash = %receipt.transaction_hash,
+            "Signed transaction {signed_tx_hash}, block number {:?}, gas_used: {}",
+            receipt.block_number,
+            receipt.gas_used
+        );
 
         Ok(receipt.transaction_hash)
     }
 
     #[instrument(skip(self), fields(hash = hash.to_string()), level = "info")]
     pub async fn get_tx_status(&self, hash: B256) -> Result<TxStatus, TxStatusError> {
-        debug!("Received request to get transaction status for hash {hash}");
+        debug!("Received request to get transaction status for l1 tx hash {hash}");
 
-        let receipt = self.kernel.check_tx_status(hash).await.map_err(|e| {
-            error!("Failed to get transaction status for hash {hash}: {e}");
-            TxStatusError::StatusCheck(e)
+        let receipt = self.kernel.check_tx_status(hash).await.map_err(|error| {
+            error!("Failed to get transaction status for l1 tx hash {hash}: {error:?}");
+            TxStatusError::StatusCheck(error)
         })?;
 
-        let current_block = self.kernel.current_l1_block_height().await.map_err(|e| {
-            error!("Failed to get current L1 block: {e}");
-            TxStatusError::L1BlockRetrieval(e)
-        })?;
+        let current_block = self
+            .kernel
+            .current_l1_block_height()
+            .await
+            .map_err(|error| {
+                error!("Failed to get current L1 block: {error:?}");
+                TxStatusError::L1BlockRetrieval(error)
+            })?;
 
         let receipt = receipt.ok_or_else(|| TxStatusError::TxNotFound { hash })?;
 
