@@ -24,7 +24,7 @@ use alloy::{
 };
 use futures::TryFutureExt;
 use thiserror::Error;
-use tracing::{info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::{signed_tx::SignedTx, zkevm_node_client::ZkevmNodeClient};
 
@@ -337,6 +337,12 @@ where
             .and_then(|call| async move {
                 let estimate = self.rpc.estimate_eip1559_fees().await?;
                 let adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
+
+                debug!(
+                    "Applying fee adjustments with gas price params: {:?}. Estimated fees: {:?}, \
+                     Adjusted fees: {:?}",
+                    &self.gas_price_params, estimate, adjusted
+                );
 
                 call.max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)
                     .max_fee_per_gas(adjusted.max_fee_per_gas)
