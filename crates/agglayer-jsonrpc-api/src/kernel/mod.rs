@@ -370,7 +370,7 @@ where
     }
 
     /// Wait for transaction receipt with configurable retries and intervals
-    #[allow(dead_code)]
+    #[instrument(skip(self), level = "debug")]
     async fn wait_for_transaction_receipt(
         &self,
         tx_hash: &TxHash,
