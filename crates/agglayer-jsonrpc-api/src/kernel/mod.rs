@@ -385,6 +385,9 @@ where
         let required_confirmations = self.settlement_config.confirmations;
 
         debug!(
+            max_retries,
+            timeout=?timeout,
+            retry_interval=?retry_interval,
             "Waiting for signed transaction receipt with timeout of {timeout:?}, max_retries: \
              {max_retries} and retry_interval: {retry_interval:?}",
         );
@@ -471,18 +474,11 @@ where
                             %tx_hash,
                             next_attempt = attempt + 1,
                             max_retries,
-                            "L1 transaction receipt not found yet, retrying after {retry_interval:?}",
+                            retry_interval = ?retry_interval,
+                            "L1 transaction receipt not found yet, retrying",
                         );
                         tokio::time::sleep(retry_interval).await;
                         continue;
-                    } else {
-                        // Max retries reached
-                        error!(
-                            %tx_hash,
-                            ?timeout,
-                            "Timeout while waiting the pending signed transaction settlement"
-                        );
-                        return Err(SettlementError::Timeout(timeout));
                     }
                 }
                 Err(error) => {
@@ -496,10 +492,9 @@ where
             }
         }
 
-        // This should not be reached, but added for completeness
         error!(
             ?timeout,
-            "Unexpected timeout while watching the pending signed transaction settlement"
+            "Timeout while watching the pending signed transaction settlement"
         );
         Err(SettlementError::Timeout(timeout))
     }
