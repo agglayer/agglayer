@@ -321,11 +321,9 @@ pub fn adjust_gas_estimate(
 
     if &adjusted != estimate {
         debug!(
-            "Applied gas price adjustment. Estimated {}, {} priority. Adjusted to {}, {} priority.",
-            estimate.max_fee_per_gas,
-            estimate.max_priority_fee_per_gas,
-            max_fee_per_gas,
-            max_priority_fee_per_gas
+            estimate=?estimate,
+            adjusted=?adjusted,
+            "Applied gas price adjustment."
         );
     }
 

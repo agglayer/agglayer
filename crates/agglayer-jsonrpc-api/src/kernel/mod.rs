@@ -341,9 +341,10 @@ where
                 let adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
 
                 debug!(
-                    "Applying fee adjustments with gas price params: {:?}. Estimated fees: {:?}, \
-                     Adjusted fees: {:?}",
-                    &self.gas_price_params, estimate, adjusted
+                    gas_price_params=?self.gas_price_params,
+                    estimate=?estimate,
+                    adjusted=?adjusted,
+                    "Applying fee adjustments with gas price params"
                 );
 
                 call.max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)

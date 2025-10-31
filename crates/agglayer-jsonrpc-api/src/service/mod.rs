@@ -37,6 +37,7 @@ where
 
         info!(
             signed_tx = ?tx,
+            rollup_id = %tx.tx.rollup_id,
             "Received signed transaction {signed_tx_hash} for rollup {}",
             tx.tx.rollup_id
         );
@@ -118,9 +119,10 @@ where
 
         info!(
             l1_tx_hash = %receipt.transaction_hash,
-            "Signed transaction {signed_tx_hash}, block number {:?}, gas_used: {}",
-            receipt.block_number,
-            receipt.gas_used
+            block_number = ?receipt.block_number,
+            gas_used = %receipt.gas_used,
+            "Signed transaction",
+
         );
 
         Ok(receipt.transaction_hash)
