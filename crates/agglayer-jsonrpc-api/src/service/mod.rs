@@ -130,7 +130,10 @@ where
         debug!("Received request to get transaction status for l1 tx hash {hash}");
 
         let receipt = self.kernel.check_tx_status(hash).await.map_err(|error| {
-            error!("Failed to get transaction status for l1 tx hash {hash}: {error:?}");
+            error!(
+                ?error,
+                "Failed to get transaction status for l1 tx hash {hash}"
+            );
             TxStatusError::StatusCheck(error)
         })?;
 
@@ -139,7 +142,7 @@ where
             .current_l1_block_height()
             .await
             .map_err(|error| {
-                error!("Failed to get current L1 block: {error:?}");
+                error!(?error, "Failed to get current L1 block");
                 TxStatusError::L1BlockRetrieval(error)
             })?;
 
