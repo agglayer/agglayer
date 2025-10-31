@@ -436,7 +436,7 @@ where
                                     }
                                 }
                                 Err(error) => {
-                                    if confirmation_attempt <= max_retries {
+                                    if confirmation_attempt < max_retries {
                                         warn!(
                                             ?error,
                                             "Failed to get current block number, retrying"
@@ -468,8 +468,7 @@ where
                 }
                 Ok(None) => {
                     // Transaction not yet included in a block, continue retrying
-                    if attempt <= max_retries {
-                        // Report if we cross from one stage to the next.
+                    if attempt < max_retries {
                         debug!(
                             %tx_hash,
                             next_attempt = attempt + 1,
