@@ -1,8 +1,11 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    primitives::{
+        alloy_primitives::BlockNumber, Digest,
+    },
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, ExecutionMode,
+    Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -34,6 +37,8 @@ pub trait EpochStoreWriter: Send + Sync {
 pub trait MetadataWriter: Send + Sync {
     /// Set the latest settled epoch.
     fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
+    /// Set the latest certificate settling block.
+    fn set_latest_certificate_settling_block(&self, value: BlockNumber) -> Result<(), Error>;
 }
 
 pub trait StateWriter: Send + Sync {
