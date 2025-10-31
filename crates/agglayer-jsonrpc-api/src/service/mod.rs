@@ -121,7 +121,7 @@ where
             l1_tx_hash = %receipt.transaction_hash,
             block_number = ?receipt.block_number,
             gas_used = %receipt.gas_used,
-            "Signed transaction",
+            "Signed transaction completed",
 
         );
 
