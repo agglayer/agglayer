@@ -51,6 +51,7 @@ where
 
         let rollup_id = tx.tx.rollup_id;
         if !self.kernel.check_rollup_registered(rollup_id) {
+            error!("Rollup {rollup_id} is not registered");
             // Return an invalid params error if the rollup is not registered.
             return Err(SendTxError::RollupNotRegistered { rollup_id });
         }
