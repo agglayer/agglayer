@@ -379,7 +379,7 @@ where
         let timeout = self
             .settlement_config
             .retry_interval
-            .mul_f64(self.settlement_config.max_retries as f64);
+            .mul_f64(self.settlement_config.max_retries as f64); // only used for logs
         let max_retries = self.settlement_config.max_retries;
         let retry_interval = self.settlement_config.retry_interval;
         let required_confirmations = self.settlement_config.confirmations;
