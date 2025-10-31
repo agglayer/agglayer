@@ -1,0 +1,21 @@
+[package]
+name = "agglayer-transaction-monitor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+alloy.workspace = true
+eyre.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+agglayer-types.workspace = true
+
+[dev-dependencies]
+alloy = { workspace = true, features = ["node-bindings"] }
+test-log.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

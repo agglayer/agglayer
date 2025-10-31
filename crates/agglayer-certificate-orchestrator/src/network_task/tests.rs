@@ -12,6 +12,7 @@ use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateStatus, L1WitnessCtx,
     Metadata, PessimisticRootInput,
 };
+use eyre::bail;
 use mockall::predicate::{always, eq, in_iter};
 use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
 use rstest::rstest;
@@ -116,19 +117,19 @@ async fn start_from_zero() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i| *i == certificate_id)
+        .returning(move |_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+            sender
+                .try_send(SettlementTxHash::for_tests())
+                .expect("Unable to send tx hash");
 
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
 
     state
@@ -330,19 +331,19 @@ async fn one_per_epoch() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i| *i == certificate_id)
+        .returning(move |_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+            sender
+                .try_send(SettlementTxHash::for_tests())
+                .expect("Unable to send tx hash");
 
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
 
     state
@@ -606,8 +607,8 @@ async fn retries() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Err(Error::InternalError(String::new())));
+        .withf(move |i| *i == certificate_id)
+        .returning(move |_| Err(Error::InternalError(String::new())));
 
     // Mock fetch_last_settled_pp_root for the first certificate (retry scenario)
     settlement_client
@@ -620,19 +621,20 @@ async fn retries() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id2)
-        .returning(|_, _| Ok(SettlementTxHash::for_tests()));
-
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SettlementTxHash::for_tests()))
+        .withf(move |i| *i == certificate_id2)
         .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+
+            sender
+                .try_send(SettlementTxHash::for_tests())
+                .expect("Unable to send tx hash");
+
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
 
     state
@@ -859,19 +861,19 @@ async fn changing_epoch_triggers_certify() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
+        .withf(move |i| *i == certificate_id)
+        .returning(move |_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+            sender
+                .try_send(SETTLEMENT_TX_HASH_1)
+                .expect("Unable to send tx hash");
 
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SETTLEMENT_TX_HASH_1))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
 
     state
@@ -883,19 +885,19 @@ async fn changing_epoch_triggers_certify() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id2)
-        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
+        .withf(move |i| *i == certificate_id2)
+        .returning(move |_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+            sender
+                .try_send(SETTLEMENT_TX_HASH_2)
+                .expect("Unable to send tx hash");
 
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SETTLEMENT_TX_HASH_2))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 2,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
 
     state
@@ -1223,37 +1225,37 @@ async fn process_next_certificate() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
+        .withf(move |i| *i == certificate_id)
+        .returning(move |_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+            sender
+                .try_send(SETTLEMENT_TX_HASH_1)
+                .expect("Unable to send tx hash");
 
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SETTLEMENT_TX_HASH_1))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
 
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i, _| *i == certificate_id2)
-        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
+        .withf(move |i| *i == certificate_id2)
+        .returning(move |_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+            sender
+                .try_send(SETTLEMENT_TX_HASH_2)
+                .expect("Unable to send tx hash");
 
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SETTLEMENT_TX_HASH_2))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 2,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
         });
 
     settlement_client
@@ -1385,4 +1387,277 @@ async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
     .await
     .unwrap();
     assert!(!task.at_capacity_for_epoch);
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(2))]
+async fn settlement_tx_hash_after_retry() {
+    // This test verifies that:
+    // 1. First certificate fails to settle
+    // 2. A retry certificate is sent
+    // 3. The retry certificate gets a NEW settlement tx hash
+    // 4. The settlement tx hash is properly tracked and updated
+    // 5. The certificate eventually settles with the correct tx hash
+
+    let mut pending = MockPendingStore::new();
+    let mut state = MockStateStore::new();
+    let mut certifier = MockCertifier::new();
+    let mut settlement_client = MockSettlementClient::new();
+    let clock_ref = clock();
+    let network_id = 1.into();
+    let (sender, certificate_stream) = mpsc::channel(100);
+
+    let certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let mut certificate2 = Certificate::new_for_test(network_id, Height::ZERO);
+    certificate2.new_local_exit_root = [2u8; 32].into();
+
+    let certificate_id = certificate.hash();
+    let certificate_id2 = certificate2.hash();
+
+    // Setup certificate queue for retries
+    let mut certs = VecDeque::new();
+    certs.push_back(certificate.clone());
+    certs.push_back(certificate2.clone());
+    let certs = Arc::new(Mutex::new(certs));
+
+    pending
+        .expect_get_certificate()
+        .times(2)
+        .with(eq(network_id), eq(Height::ZERO))
+        .returning(move |_network_id, _height| {
+            let cert = certs.lock().unwrap().pop_front().unwrap();
+            Ok(Some(cert))
+        });
+
+    state
+        .expect_get_latest_settled_certificate_per_network()
+        .once()
+        .with(eq(network_id))
+        .returning(|_| Ok(None));
+
+    state
+        .expect_get_certificate_header()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|certificate_id| {
+            Ok(Some(agglayer_types::CertificateHeader {
+                network_id: 1.into(),
+                height: Height::ZERO,
+                epoch_number: None,
+                certificate_index: None,
+                certificate_id: *certificate_id,
+                prev_local_exit_root: [1; 32].into(),
+                new_local_exit_root: [0; 32].into(),
+                metadata: Metadata::ZERO,
+                status: CertificateStatus::Pending,
+                settlement_tx_hash: None,
+            }))
+        });
+
+    state
+        .expect_get_certificate_header()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|certificate_id| {
+            Ok(Some(agglayer_types::CertificateHeader {
+                network_id: 1.into(),
+                height: Height::ZERO,
+                epoch_number: None,
+                certificate_index: None,
+                certificate_id: *certificate_id,
+                prev_local_exit_root: [1; 32].into(),
+                new_local_exit_root: [2; 32].into(),
+                metadata: Metadata::ZERO,
+                status: CertificateStatus::Pending,
+                settlement_tx_hash: None,
+            }))
+        });
+
+    let mut responses = VecDeque::new();
+    responses.push_back(crate::CertifierOutput {
+        certificate: certificate.clone(),
+        height: Height::ZERO,
+        new_state: LocalNetworkStateData::default(),
+        network: network_id,
+        new_pp_root: Digest::ZERO,
+    });
+    responses.push_back(crate::CertifierOutput {
+        certificate: certificate2.clone(),
+        height: Height::ZERO,
+        new_state: LocalNetworkStateData::default(),
+        network: network_id,
+        new_pp_root: Digest::ZERO,
+    });
+    let response_certifier = Arc::new(Mutex::new(responses));
+
+    certifier
+        .expect_certify()
+        .times(2)
+        .with(always(), eq(network_id), eq(Height::ZERO))
+        .returning(move |_new_state, _network_id, _height| {
+            let res = response_certifier.lock().unwrap().pop_front().unwrap();
+            Ok(res)
+        });
+
+    state
+        .expect_read_local_network_state()
+        .returning(|_| Ok(Default::default()));
+
+    state
+        .expect_write_local_network_state()
+        .returning(|_, _, _| Ok(()));
+
+    pending
+        .expect_set_latest_proven_certificate_per_network()
+        .once()
+        .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
+        .returning(|_, _, _| Ok(()));
+
+    pending
+        .expect_set_latest_proven_certificate_per_network()
+        .once()
+        .with(eq(network_id), eq(Height::ZERO), eq(certificate_id2))
+        .returning(|_, _, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id2), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(
+            eq(certificate_id),
+            eq(CertificateStatus::error(
+                CertificateStatusError::InternalError(String::new()),
+            )),
+        )
+        .returning(|_, _| Ok(()));
+
+    // First certificate fails to settle - no settlement tx hash recorded
+    settlement_client
+        .expect_submit_certificate_settlement()
+        .once()
+        .withf(move |i| *i == certificate_id)
+        .returning(move |_| Err(Error::InternalError(String::new())));
+
+    // Second certificate (retry) succeeds with SETTLEMENT_TX_HASH_1
+    settlement_client
+        .expect_submit_certificate_settlement()
+        .once()
+        .withf(move |i| *i == certificate_id2)
+        .returning(|_| {
+            let (sender, tx_hash_receiver) = mpsc::channel(1);
+
+            // Send SETTLEMENT_TX_HASH_1 for the retry
+            sender
+                .try_send(SETTLEMENT_TX_HASH_1)
+                .expect("Unable to send tx hash");
+
+            let task_handle = tokio::spawn(async { bail!("Not implemented") });
+            let handle = TransactionMonitorTaskHandle {
+                tx_hash_receiver,
+                task_handle,
+            };
+            Ok(handle)
+        });
+
+    // Verify that the settlement tx hash is updated for the RETRY certificate
+    state
+        .expect_update_settlement_tx_hash()
+        .once()
+        .withf(move |i, t, _| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_1)
+        .returning(|_, _, _| Ok(()));
+
+    // Verify wait_for_settlement is called with the correct tx hash
+    settlement_client
+        .expect_wait_for_settlement()
+        .once()
+        .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id2)
+        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id2), eq(CertificateStatus::Settled))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_set_latest_settled_certificate_for_network()
+        .once()
+        .with(
+            eq(network_id),
+            eq(Height::ZERO),
+            eq(certificate_id2),
+            eq(EpochNumber::ZERO),
+            eq(CertificateIndex::ZERO),
+        )
+        .returning(|_, _, _, _, _| Ok(()));
+
+    let mut task = NetworkTask::new(
+        Arc::new(pending),
+        Arc::new(state),
+        Arc::new(certifier),
+        Arc::new(settlement_client),
+        clock_ref,
+        network_id,
+        certificate_stream,
+    )
+    .expect("Failed to create a new network task");
+
+    let mut epochs = task.clock_ref.subscribe().unwrap();
+    let mut next_expected_height = Height::ZERO;
+
+    // Send the first certificate
+    sender
+        .send(NewCertificate {
+            certificate_id,
+            height: Height::ZERO,
+        })
+        .await
+        .expect("Failed to send the certificate");
+
+    // Send the retry certificate
+    sender
+        .send(NewCertificate {
+            certificate_id: certificate_id2,
+            height: Height::ZERO,
+        })
+        .await
+        .expect("Failed to send the certificate");
+
+    let mut first_run = true;
+
+    // First progress: original certificate fails
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(next_expected_height, Height::ZERO);
+
+    // Second progress: retry certificate succeeds with settlement tx hash
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(next_expected_height, Height::new(1));
 }

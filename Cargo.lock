@@ -77,6 +77,7 @@ dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
  "agglayer-storage",
+ "agglayer-transaction-monitor",
  "agglayer-types",
  "alloy",
  "arc-swap",
@@ -126,6 +127,7 @@ dependencies = [
  "agglayer-contracts",
  "agglayer-storage",
  "agglayer-test-suite",
+ "agglayer-transaction-monitor",
  "agglayer-types",
  "alloy",
  "arc-swap",
@@ -671,6 +673,18 @@ dependencies = [
  "agglayer-storage",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
+]
+
+[[package]]
+name = "agglayer-transaction-monitor"
+version = "0.1.0"
+dependencies = [
+ "agglayer-types",
+ "alloy",
+ "eyre",
+ "test-log",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

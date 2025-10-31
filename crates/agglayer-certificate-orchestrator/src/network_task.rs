@@ -5,6 +5,7 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
 };
+use agglayer_transaction_monitor::TransactionMonitorTaskHandle;
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
     CertificateId, CertificateIndex, CertificateStatusError, EpochNumber, Height,
@@ -64,11 +65,10 @@ pub enum NetworkTaskMessage {
     CertificateReadyForSettlement {
         height: Height,
         certificate_id: CertificateId,
-        nonce_info: Option<NonceInfo>,
         previous_tx_hashes: HashSet<SettlementTxHash>,
         new_pp_root: Digest,
         settlement_submitted_notifier:
-            oneshot::Sender<Result<(SettlementTxHash, Option<NonceInfo>), CertificateStatusError>>,
+            oneshot::Sender<Result<TransactionMonitorTaskHandle, CertificateStatusError>>,
     },
 
     /// Notify the network task that a certificate is waiting for settlement to
@@ -402,72 +402,55 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier,
-                        nonce_info, previous_tx_hashes, height, new_pp_root, .. }) => {
+                         previous_tx_hashes, height, new_pp_root, .. }) => {
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
                         let result = self
                             .settlement_client
-                            .submit_certificate_settlement(certificate_id, nonce_info)
+                            .submit_certificate_settlement(certificate_id)
                             .await;
 
-                        // Get the nonce of the tx.
-                        let mut result: Result<(SettlementTxHash, Option<NonceInfo>), Error> = match result {
-                            Ok(settlement_tx_hash) => {
-                                match self.settlement_client.fetch_settlement_nonce(settlement_tx_hash).await {
-                                    Ok(nonce) => {
-                                        Ok((settlement_tx_hash, nonce))
-                                    }
-                                    Err(err) => {
-                                        error!(%certificate_id,
-                                            "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
-                                         Ok((settlement_tx_hash, None))
-                                    }
-                                }
-                            }
-                            Err(err) => Err(err),
-                        };
+                        // // If the error in the sending transaction happened for whatever reason,
+                        // // check if maybe the certificate has been settled through some other previous transaction.
+                        // if let Err(err) = &result {
+                        //     error!(%certificate_id, "Error submitting settlement transaction for certificate at height {height}: {err:?}");
+                        //     for previous_tx_hash in previous_tx_hashes {
+                        //         match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
+                        //             Ok(true) => {
+                        //                 // Transaction is mined, but we haven't known that, return it for further processing.
+                        //                 info!(%certificate_id,
+                        //                     "Certificate for new height: {height} has been settled on L1 through previous transaction {previous_tx_hash}");
+                        //                 result = Ok(previous_tx_hash);
+                        //                 break;
+                        //             }
+                        //             Ok(false) => {
+                        //                 // Transaction is mined with status 0 (reverted). Return it for further processing.
+                        //                 warn!(%certificate_id,
+                        //                     "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
+                        //                 result = Ok(previous_tx_hash);
+                        //                 break;
+                        //             }
+                        //             Err(err) => {
+                        //                 debug!(%certificate_id,
+                        //                     "Error checking receipt status for previous settlement tx {previous_tx_hash}: {err}");
+                        //             }
+                        //         }
+                        //     }
 
-                        // If the error in the sending transaction happened for whatever reason,
-                        // check if maybe the certificate has been settled through some other previous transaction.
-                        if let Err(err) = &result {
-                            error!(%certificate_id, "Error submitting settlement transaction for certificate at height {height}: {err:?}");
-                            for previous_tx_hash in previous_tx_hashes {
-                                match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
-                                    Ok(true) => {
-                                        // Transaction is mined, but we haven't known that, return it for further processing.
-                                        info!(%certificate_id,
-                                            "Certificate for new height: {height} has been settled on L1 through previous transaction {previous_tx_hash}");
-                                        result = Ok((previous_tx_hash, None));
-                                        break;
-                                    }
-                                    Ok(false) => {
-                                        // Transaction is mined with status 0 (reverted). Return it for further processing.
-                                        warn!(%certificate_id,
-                                            "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
-                                        result = Ok((previous_tx_hash, None));
-                                        break;
-                                    }
-                                    Err(err) => {
-                                        debug!(%certificate_id,
-                                            "Error checking receipt status for previous settlement tx {previous_tx_hash}: {err}");
-                                    }
-                                }
-                            }
-
-                            // In the case we have lost the previous tx hashes (e.g. agglayer crashed),
-                            // we can still check the latest pp root on L1.
-                            if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
-                               if latest_pp_root == new_pp_root {
-                                   // Certificate has been settled through some other previous transaction.
-                                   info!(%certificate_id,
-                                       "Certificate for new height: {height} has been previously settled on \
-                                       L1 through other transaction {latest_pp_root_tx_hash}, \
-                                       hence unable to send settlement transaction");
-                                   result = Ok((latest_pp_root_tx_hash, None));
-                               }
-                            }
-                        }
+                        //     // In the case we have lost the previous tx hashes (e.g. agglayer crashed),
+                        //     // we can still check the latest pp root on L1.
+                        //     if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
+                        //        if latest_pp_root == new_pp_root {
+                        //            // Certificate has been settled through some other previous transaction.
+                        //            info!(%certificate_id,
+                        //                "Certificate for new height: {height} has been previously settled on \
+                        //                L1 through other transaction {latest_pp_root_tx_hash}, \
+                        //                hence unable to send settlement transaction");
+                        //            result = Ok(latest_pp_root_tx_hash);
+                        //        }
+                        //     }
+                        // }
 
                         settlement_submitted_notifier
                             .send(result.map_err(Into::into))
