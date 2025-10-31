@@ -1,6 +1,8 @@
 use agglayer_types::{
-    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    NetworkId, Proof,
+    primitives::{
+        alloy_primitives::BlockNumber, Digest,
+    },
+    CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};
 
@@ -13,12 +15,14 @@ pub(crate) mod network_info;
 pub enum MetadataKey {
     LatestSettledEpoch,
     EpochSynchronization, // Actually unused, kept for storage backward compatibility
+    LatestCertificateSettlingBlock,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataValue {
     LatestSettledEpoch(EpochNumber),
     EpochSynchronization(u64), // Actually unused, kept for storage backward compatibility
+    LatestCertificateSettlingBlock(BlockNumber),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

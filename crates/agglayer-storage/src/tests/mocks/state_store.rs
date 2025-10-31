@@ -1,6 +1,7 @@
 use agglayer_types::{
-    primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    primitives::{alloy_primitives::BlockNumber, Digest},
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
+    LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use mockall::mock;
 
@@ -24,10 +25,12 @@ mock! {
 
     impl MetadataReader for StateStore {
         fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error>;
+        fn get_latest_certificate_settling_block(&self) -> Result<Option<BlockNumber>, Error>;
     }
 
     impl MetadataWriter for StateStore {
         fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
+        fn set_latest_certificate_settling_block(&self, value: BlockNumber) -> Result<(), Error>;
     }
 
     impl StateWriter for StateStore {

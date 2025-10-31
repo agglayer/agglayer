@@ -49,6 +49,7 @@ mockall = { workspace = true, optional = true }
 agglayer-certificate-orchestrator = { workspace = true, features = [
     "testutils",
 ] }
+agglayer-primitives.workspace = true
 
 async-trait.workspace = true
 alloy.workspace = true

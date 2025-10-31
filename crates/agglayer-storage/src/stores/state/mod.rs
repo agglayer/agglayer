@@ -7,8 +7,11 @@ use std::{
 
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
-    primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    primitives::{
+        alloy_primitives::BlockNumber, Digest,
+    },
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -657,6 +660,23 @@ impl MetadataWriter for StateStore {
             &MetadataValue::LatestSettledEpoch(value),
         )?)
     }
+
+    fn set_latest_certificate_settling_block(&self, value: BlockNumber) -> Result<(), Error> {
+        if let Some(current_latest_certificate_settling_block) = self.get_latest_certificate_settling_block()? {
+            if current_latest_certificate_settling_block >= value {
+                return Err(Error::UnprocessedAction(
+                    "Tried to set a lower value for latest certificate settling block".to_string(),
+                ));
+            }
+        }
+
+        self.db.put::<MetadataColumn>(
+            &MetadataKey::LatestCertificateSettlingBlock,
+            &MetadataValue::LatestCertificateSettlingBlock(value),
+        )?;
+
+        Ok(())
+    }
 }
 
 impl MetadataReader for StateStore {
@@ -669,6 +689,22 @@ impl MetadataReader for StateStore {
                     MetadataValue::LatestSettledEpoch(value) => Ok(Some(value)),
                     _ => Err(Error::Unexpected(
                         "Wrong value type decoded, was expecting LastSettledEpoch, decoded \
+                         another type"
+                            .to_string(),
+                    )),
+                })
+            })
+    }
+
+    fn get_latest_certificate_settling_block(&self) -> Result<Option<BlockNumber>, Error> {
+        self.db
+            .get::<MetadataColumn>(&MetadataKey::LatestCertificateSettlingBlock)
+            .map_err(Into::into)
+            .and_then(|v| {
+                v.map_or(Ok(None), |v| match v {
+                    MetadataValue::LatestCertificateSettlingBlock(value) => Ok(Some(value)),
+                    _ => Err(Error::Unexpected(
+                        "Wrong value type decoded, was expecting LastCertificateSettlingBlock, decoded \
                          another type"
                             .to_string(),
                     )),
