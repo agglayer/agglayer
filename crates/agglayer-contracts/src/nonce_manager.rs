@@ -204,11 +204,12 @@ impl<P> std::fmt::Debug for NonceManager<P> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloy::{
         providers::{mock::Asserter, ProviderBuilder},
         transports::mock::MockTransport,
     };
+
+    use super::*;
 
     #[tokio::test]
     async fn test_nonce_manager_basic() {
@@ -245,7 +246,8 @@ mod tests {
         let assignment = manager.get_next_nonce(address, false).await.unwrap();
         assert_eq!(assignment.nonce, 100);
 
-        // Force refresh - mock response 105 (simulating 5 txs were submitted externally)
+        // Force refresh - mock response 105 (simulating 5 txs were submitted
+        // externally)
         asserter.push_success(&"0x69");
         let assignment = manager.get_next_nonce(address, true).await.unwrap();
         assert_eq!(assignment.nonce, 105);

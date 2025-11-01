@@ -93,6 +93,8 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     assert!(matches!(result.status, CertificateStatus::Settled));
 
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
     cancellation_token.cancel();
     _ = agglayer_shutdowned.await;
 
