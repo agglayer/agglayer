@@ -214,6 +214,7 @@ async fn test_fetch_last_settled_pp_root() {
     let signer = PrivateKeySigner::random();
     let signer_address = signer.address();
     let wallet = alloy::network::EthereumWallet::from(signer);
+    let tx_signer = agglayer_contracts::TxSigner::new(wallet, signer_address);
 
     // Create L1RpcClient with default config for other parameters for Bali testnet
     let l1_rpc = agglayer_contracts::L1RpcClient::try_new(
@@ -224,8 +225,7 @@ async fn test_fetch_last_settled_pp_root() {
         agglayer_contracts::GasPriceParams::default(),
         10000, // default event_filter_block_range
         nonce_manager,
-        wallet,
-        signer_address,
+        tx_signer,
     )
     .await
     .expect("Failed to create L1RpcClient");

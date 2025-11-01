@@ -1,7 +1,7 @@
 use std::{future::IntoFuture as _, net::SocketAddr, sync::Arc};
 
 use agglayer_config::Config;
-use agglayer_contracts::{L1RpcClient, NonceManager};
+use agglayer_contracts::{L1RpcClient, NonceManager, TxSigner};
 use agglayer_storage::{
     storage::{
         backup::BackupClient, debug_db_cf_definitions, pending_db_cf_definitions,
@@ -41,21 +41,21 @@ fn create_test_wallet_and_nonce_manager<P>(
     provider: Arc<P>,
 ) -> (
     Arc<NonceManager<P>>,
-    alloy::network::EthereumWallet,
-    alloy::primitives::Address,
+    TxSigner,
 )
 where
     P: alloy::providers::Provider + 'static,
 {
-        use alloy::signers::local::PrivateKeySigner;
+    use alloy::signers::local::PrivateKeySigner;
 
     // Create a test signer with a random private key (for testing only!)
     let signer = PrivateKeySigner::random();
     let address = signer.address();
     let wallet = alloy::network::EthereumWallet::from(signer);
     let nonce_manager = Arc::new(NonceManager::new(provider));
+    let tx_signer = TxSigner::new(wallet, address);
 
-    (nonce_manager, wallet, address)
+    (nonce_manager, tx_signer)
 }
 
 pub type RawRpcClient = crate::AgglayerImpl<
@@ -150,7 +150,7 @@ impl TestContext {
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
         // Create test wallet and nonce manager for the provider
-        let (nonce_manager, _wallet, signer_address) =
+        let (nonce_manager, tx_signer) =
             create_test_wallet_and_nonce_manager(real_provider.clone());
 
         // Create AgglayerService (V0Rpc service) with the provider
@@ -159,7 +159,7 @@ impl TestContext {
                 real_provider.clone(),
                 config.clone(),
                 nonce_manager,
-                signer_address,
+                tx_signer.signer_address(),
             ),
         ));
 
@@ -249,7 +249,7 @@ impl TestContext {
         );
 
         // Create test wallet and nonce manager
-        let (nonce_manager, wallet, signer_address) =
+        let (nonce_manager, tx_signer) =
             create_test_wallet_and_nonce_manager(provider.clone());
 
         L1RpcClient::new(
@@ -261,8 +261,7 @@ impl TestContext {
             agglayer_contracts::GasPriceParams::default(), // Default gas price parameters
             10000,
             nonce_manager,
-            wallet,
-            signer_address,
+            tx_signer,
         )
     }
 
@@ -317,7 +316,7 @@ impl TestContext {
 
         // Create test wallet and nonce manager
         let mock_provider_arc = Arc::new(mock_provider.clone());
-        let (nonce_manager, _wallet, signer_address) =
+        let (nonce_manager, tx_signer) =
             create_test_wallet_and_nonce_manager(mock_provider_arc.clone());
 
         // Create AgglayerService (V0Rpc service)
@@ -326,7 +325,7 @@ impl TestContext {
                 mock_provider_arc,
                 config.clone(),
                 nonce_manager,
-                signer_address,
+                tx_signer.signer_address(),
             ),
         ));
 

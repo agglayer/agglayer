@@ -25,6 +25,38 @@ pub use nonce_manager::NonceManager;
 pub use rollup::RollupContract;
 pub use settler::Settler;
 
+/// Transaction signer wrapper containing wallet and signer address
+#[derive(Debug, Clone)]
+pub struct TxSigner {
+    /// Wallet for signing transactions
+    wallet: alloy::network::EthereumWallet,
+    /// Signer address (using alloy's Address)
+    signer_address: alloy::primitives::Address,
+}
+
+impl TxSigner {
+    /// Create a new TxSigner
+    pub fn new(
+        wallet: alloy::network::EthereumWallet,
+        signer_address: alloy::primitives::Address,
+    ) -> Self {
+        Self {
+            wallet,
+            signer_address,
+        }
+    }
+
+    /// Get a reference to the wallet
+    pub fn wallet(&self) -> &alloy::network::EthereumWallet {
+        &self.wallet
+    }
+
+    /// Get the signer address
+    pub fn signer_address(&self) -> alloy::primitives::Address {
+        self.signer_address
+    }
+}
+
 /// Gas price parameters for L1 transactions.
 #[derive(Debug, Clone)]
 pub struct GasPriceParams {
@@ -82,10 +114,8 @@ pub struct L1RpcClient<RpcProvider> {
     event_filter_block_range: u64,
     /// Thread-safe nonce manager for transaction submissions
     nonce_manager: Arc<NonceManager<RpcProvider>>,
-    /// Wallet for signing transactions
-    wallet: alloy::network::EthereumWallet,
-    /// Signer address (using alloy's Address)
-    signer_address: alloy::primitives::Address,
+    /// Transaction signer containing wallet and address
+    tx_signer: TxSigner,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -164,7 +194,6 @@ impl<RpcProvider> L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
@@ -174,8 +203,7 @@ where
         gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
         nonce_manager: Arc<NonceManager<RpcProvider>>,
-        wallet: alloy::network::EthereumWallet,
-        signer_address: alloy::primitives::Address,
+        tx_signer: TxSigner,
     ) -> Self {
         Self {
             rpc,
@@ -187,12 +215,10 @@ where
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
             event_filter_block_range,
             nonce_manager,
-            wallet,
-            signer_address,
+            tx_signer,
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn try_new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
@@ -201,8 +227,7 @@ where
         gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
         nonce_manager: Arc<NonceManager<RpcProvider>>,
-        wallet: alloy::network::EthereumWallet,
-        signer_address: alloy::primitives::Address,
+        tx_signer: TxSigner,
     ) -> Result<Self, L1RpcInitializationError>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -280,8 +305,7 @@ where
             gas_price_params,
             event_filter_block_range,
             nonce_manager,
-            wallet,
-            signer_address,
+            tx_signer,
         ))
     }
 
@@ -290,14 +314,19 @@ where
         &self.nonce_manager
     }
 
+    /// Get a reference to the transaction signer
+    pub fn tx_signer(&self) -> &TxSigner {
+        &self.tx_signer
+    }
+
     /// Get a reference to the wallet
     pub fn wallet(&self) -> &alloy::network::EthereumWallet {
-        &self.wallet
+        self.tx_signer.wallet()
     }
 
     /// Get the signer address
     pub fn signer_address(&self) -> alloy::primitives::Address {
-        self.signer_address
+        self.tx_signer.signer_address()
     }
 }
 
@@ -406,8 +435,7 @@ mod tests {
         provider: Arc<P>,
     ) -> (
         Arc<NonceManager<P>>,
-        alloy::network::EthereumWallet,
-        alloy::primitives::Address,
+        TxSigner,
     )
     where
         P: alloy::providers::Provider + 'static,
@@ -419,8 +447,9 @@ mod tests {
         let address = signer.address();
         let wallet = alloy::network::EthereumWallet::from(signer);
         let nonce_manager = Arc::new(NonceManager::new(provider));
+        let tx_signer = TxSigner::new(wallet, address);
 
-        (nonce_manager, wallet, address)
+        (nonce_manager, tx_signer)
     }
 
     #[test_log::test(tokio::test)]
@@ -447,7 +476,7 @@ mod tests {
         // InitL1InfoRootMap event is on block 6487027
         let contracts = ContractSetup::new();
         let rpc_arc = Arc::new(rpc.clone());
-        let (nonce_manager, wallet, signer_address) =
+        let (nonce_manager, tx_signer) =
             create_test_wallet_and_nonce_manager(rpc_arc.clone());
 
         let l1_rpc = L1RpcClient::try_new(
@@ -458,8 +487,7 @@ mod tests {
             GasPriceParams::default(),
             10000, // default event_filter_block_range
             nonce_manager,
-            wallet,
-            signer_address,
+            tx_signer,
         )
         .await
         .expect("Failed to create L1RpcClient");
@@ -521,7 +549,7 @@ mod tests {
 
         let contracts = ContractSetup::new();
         let rpc_arc = Arc::new(rpc.clone());
-        let (nonce_manager, wallet, signer_address) =
+        let (nonce_manager, tx_signer) =
             create_test_wallet_and_nonce_manager(rpc_arc.clone());
 
         let l1_rpc = Arc::new(
@@ -533,8 +561,7 @@ mod tests {
                 GasPriceParams::default(),
                 10000,
                 nonce_manager,
-                wallet,
-                signer_address,
+                tx_signer,
             )
             .await
             .unwrap(),
@@ -584,7 +611,7 @@ mod tests {
         // InitL1InfoRootMap event is on block 6487027
         let contracts = ContractSetup::new();
         let rpc_arc = Arc::new(rpc.clone());
-        let (nonce_manager, wallet, signer_address) =
+        let (nonce_manager, tx_signer) =
             create_test_wallet_and_nonce_manager(rpc_arc.clone());
 
         let _l1_rpc = L1RpcClient::try_new(
@@ -595,8 +622,7 @@ mod tests {
             GasPriceParams::default(),
             10000, // default event_filter_block_range
             nonce_manager,
-            wallet,
-            signer_address,
+            tx_signer,
         )
         .await
         .expect("Failed to create L1RpcClient");

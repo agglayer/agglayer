@@ -4,7 +4,7 @@ use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
-use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
+use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient, TxSigner};
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
@@ -204,6 +204,9 @@ impl Node {
         // This ensures nonces are assigned atomically across all concurrent transactions
         let nonce_manager = Arc::new(agglayer_contracts::NonceManager::new(rpc.clone()));
 
+        // Create TxSigner from wallet and signer address
+        let tx_signer = TxSigner::new(wallet, signer_address);
+
         tracing::debug!("RPC provider created");
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
@@ -221,8 +224,7 @@ impl Node {
                 },
                 config.l1.event_filter_block_range.get(),
                 nonce_manager.clone(),
-                wallet.clone(),
-                signer_address,
+                tx_signer,
             )
             .await?,
         );

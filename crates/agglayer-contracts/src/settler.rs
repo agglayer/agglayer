@@ -118,7 +118,7 @@ where
             // Get next nonce from NonceManager (thread-safe)
             let assignment = self
                 .nonce_manager
-                .get_next_nonce(self.signer_address, false)
+                .get_next_nonce(self.signer_address(), false)
                 .await
                 .map_err(|e| {
                     error!(?e, "Failed to get nonce from NonceManager");
@@ -128,7 +128,7 @@ where
                     ))
                 })?;
             debug!(
-                address = %self.signer_address,
+                address = %self.signer_address(),
                 nonce = assignment.nonce,
                 "Assigned nonce from NonceManager"
             );
@@ -205,11 +205,11 @@ where
                 error!(
                     ?e,
                     nonce,
-                    address = %self.signer_address,
+                    address = %self.signer_address(),
                     "Nonce too low error detected, invalidating cache"
                 );
                 self.nonce_manager
-                    .report_nonce_error(self.signer_address, nonce);
+                    .report_nonce_error(self.signer_address(), nonce);
             }
             e
         })
