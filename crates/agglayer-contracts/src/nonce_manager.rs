@@ -204,23 +204,23 @@ impl<P> std::fmt::Debug for NonceManager<P> {
 
 #[cfg(test)]
 mod tests {
-    // TODO: Fix tests - these need to be updated for the new alloy API
-    /*
-    use alloy::providers::{ProviderBuilder};
-    use alloy::providers::mock::Asserter;
+    use super::*;
+    use alloy::{
+        providers::{mock::Asserter, ProviderBuilder},
+        transports::mock::MockTransport,
+    };
 
     #[tokio::test]
     async fn test_nonce_manager_basic() {
         let asserter = Asserter::new();
+        let _transport = MockTransport::new(asserter.clone());
         let provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter.clone()));
         let manager = NonceManager::new(provider);
 
-        let address = agglayer_types::Address::ZERO;
+        let address = alloy::primitives::Address::ZERO;
 
         // Mock the get_transaction_count call to return 100
-        asserter.mock_response(serde_json::json!(
-            "0x64" // 100 in hex
-        ));
+        asserter.push_success(&"0x64"); // 100 in hex
 
         let assignment = manager.get_next_nonce(address, false).await.unwrap();
         assert_eq!(assignment.nonce, 100);
@@ -234,34 +234,34 @@ mod tests {
     #[tokio::test]
     async fn test_force_refresh() {
         let asserter = Asserter::new();
+        let _transport = MockTransport::new(asserter.clone());
         let provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter.clone()));
         let manager = NonceManager::new(provider);
 
-        let address = agglayer_types::Address::ZERO;
+        let address = alloy::primitives::Address::ZERO;
 
         // First call - mock response 100
-        asserter.mock_response(serde_json::json!("0x64"));
+        asserter.push_success(&"0x64");
         let assignment = manager.get_next_nonce(address, false).await.unwrap();
         assert_eq!(assignment.nonce, 100);
 
         // Force refresh - mock response 105 (simulating 5 txs were submitted externally)
-        asserter.mock_response(serde_json::json!("0x69"));
+        asserter.push_success(&"0x69");
         let assignment = manager.get_next_nonce(address, true).await.unwrap();
         assert_eq!(assignment.nonce, 105);
     }
 
     #[tokio::test]
     async fn test_concurrent_nonce_assignment() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-
         let asserter = Asserter::new();
+        let _transport = MockTransport::new(asserter.clone());
         let provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter.clone()));
         let manager = Arc::new(NonceManager::new(provider));
 
-        let address = agglayer_types::Address::ZERO;
+        let address = alloy::primitives::Address::ZERO;
 
         // Mock initial nonce as 1000
-        asserter.mock_response(serde_json::json!("0x3e8"));
+        asserter.push_success(&"0x3e8");
 
         // Spawn multiple concurrent tasks to get nonces
         let num_tasks = 10;
@@ -299,13 +299,14 @@ mod tests {
     #[tokio::test]
     async fn test_report_nonce_error() {
         let asserter = Asserter::new();
+        let _transport = MockTransport::new(asserter.clone());
         let provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter.clone()));
         let manager = NonceManager::new(provider);
 
-        let address = agglayer_types::Address::ZERO;
+        let address = alloy::primitives::Address::ZERO;
 
         // Initial query - mock response 100
-        asserter.mock_response(serde_json::json!("0x64"));
+        asserter.push_success(&"0x64");
         let assignment = manager.get_next_nonce(address, false).await.unwrap();
         assert_eq!(assignment.nonce, 100);
 
@@ -313,9 +314,101 @@ mod tests {
         manager.report_nonce_error(address, 100);
 
         // Next call should refresh from L1 - mock response 102
-        asserter.mock_response(serde_json::json!("0x66"));
+        asserter.push_success(&"0x66");
         let assignment = manager.get_next_nonce(address, false).await.unwrap();
         assert_eq!(assignment.nonce, 102);
     }
-    */
+
+    #[tokio::test]
+    async fn test_set_next_nonce() {
+        let asserter = Asserter::new();
+        let _transport = MockTransport::new(asserter.clone());
+        let provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter.clone()));
+        let manager = NonceManager::new(provider);
+
+        let address = alloy::primitives::Address::ZERO;
+
+        // Manually set the next nonce to 500
+        manager.set_next_nonce(address, 500);
+
+        // Get next nonce should return 500 (no L1 query needed)
+        let assignment = manager.get_next_nonce(address, false).await.unwrap();
+        assert_eq!(assignment.nonce, 500);
+
+        // Next call should return 501
+        let assignment = manager.get_next_nonce(address, false).await.unwrap();
+        assert_eq!(assignment.nonce, 501);
+    }
+
+    #[tokio::test]
+    async fn test_peek_nonce() {
+        let asserter = Asserter::new();
+        let _transport = MockTransport::new(asserter.clone());
+        let provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter.clone()));
+        let manager = NonceManager::new(provider);
+
+        let address = alloy::primitives::Address::ZERO;
+
+        // Initially, cache should be empty
+        assert_eq!(manager.peek_nonce(address), None);
+
+        // Set a nonce
+        manager.set_next_nonce(address, 100);
+
+        // Peek should return the cached value
+        assert_eq!(manager.peek_nonce(address), Some(100));
+
+        // Get next nonce increments the counter
+        let _ = manager.get_next_nonce(address, false).await.unwrap();
+
+        // Peek should now show 101
+        assert_eq!(manager.peek_nonce(address), Some(101));
+    }
+
+    #[tokio::test]
+    async fn test_invalidate_cache() {
+        let asserter = Asserter::new();
+        let _transport = MockTransport::new(asserter.clone());
+        let provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter.clone()));
+        let manager = NonceManager::new(provider);
+
+        let address = alloy::primitives::Address::ZERO;
+
+        // Set a nonce
+        manager.set_next_nonce(address, 100);
+        assert_eq!(manager.peek_nonce(address), Some(100));
+
+        // Invalidate the cache
+        manager.invalidate_cache(address);
+        assert_eq!(manager.peek_nonce(address), None);
+
+        // Next call should query L1
+        asserter.push_success(&"0x6e"); // 110 in hex
+        let assignment = manager.get_next_nonce(address, false).await.unwrap();
+        assert_eq!(assignment.nonce, 110);
+    }
+
+    #[tokio::test]
+    async fn test_clear_all_caches() {
+        let asserter = Asserter::new();
+        let _transport = MockTransport::new(asserter.clone());
+        let provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter.clone()));
+        let manager = NonceManager::new(provider);
+
+        let address1 = alloy::primitives::Address::ZERO;
+        let address2 = alloy::primitives::address!("0000000000000000000000000000000000000001");
+
+        // Set nonces for both addresses
+        manager.set_next_nonce(address1, 100);
+        manager.set_next_nonce(address2, 200);
+
+        assert_eq!(manager.peek_nonce(address1), Some(100));
+        assert_eq!(manager.peek_nonce(address2), Some(200));
+
+        // Clear all caches
+        manager.clear_all_caches();
+
+        assert_eq!(manager.peek_nonce(address1), None);
+        assert_eq!(manager.peek_nonce(address2), None);
+    }
 }
