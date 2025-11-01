@@ -382,7 +382,7 @@ where
                                     }
                                 }
                                 Err(error) => {
-                                    if confirmation_attempt <= self.config.max_retries {
+                                    if confirmation_attempt < self.config.max_retries {
                                         warn!(
                                             ?error,
                                             "Failed to get current block number, retrying"
@@ -432,7 +432,7 @@ where
                         agglayer_contracts::L1RpcError::TransactionNotYetMined(_)
                     ) {
                         // Transaction not yet included in a block, continue retrying
-                        if attempt <= self.config.max_retries {
+                        if attempt < self.config.max_retries {
                             const N: usize = 4; // Split progress into 4 equal stages.
                             let max_attempts = self.config.max_retries.max(1);
                             let curr_stage = N * attempt / max_attempts;
@@ -449,22 +449,6 @@ where
                             }
                             tokio::time::sleep(self.config.retry_interval).await;
                             continue;
-                        } else {
-                            // Max retries reached
-                            error!(
-                                %settlement_tx_hash,
-                                ?error,
-                                ?timeout,
-                                "Timeout while waiting the pending settlement transaction"
-                            );
-                            return Err(Error::PendingTransactionTimeout {
-                                certificate_id,
-                                settlement_tx_hash,
-                                error: format!(
-                                    "Timeout while waiting for the pending settlement transaction \
-                                     {timeout:?}, error: {error}"
-                                ),
-                            });
                         }
                     } else {
                         // Other error (e.g., network issue, RPC error)
@@ -484,13 +468,13 @@ where
         // This should not be reached, but added for completeness
         error!(
             ?timeout,
-            "Unexpected timeout while watching the pending settlement transaction"
+            "Timeout while watching the pending settlement transaction"
         );
         Err(Error::PendingTransactionTimeout {
             certificate_id,
             settlement_tx_hash,
             error: format!(
-                "Unexpected timeout while watching the pending settlement transaction after \
+                "Timeout while watching the pending settlement transaction after \
                  {timeout:?}"
             ),
         })
