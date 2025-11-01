@@ -3,8 +3,7 @@
 //! This module provides a `NonceManager` that coordinates nonce assignment
 //! across concurrent transaction submissions to prevent "nonce too low" errors.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use alloy::providers::Provider;
 use parking_lot::Mutex;
@@ -17,7 +16,8 @@ use crate::L1RpcError;
 pub struct NonceAssignment {
     /// The nonce to use for the transaction
     pub nonce: u64,
-    /// The address this nonce is for (using alloy's Address which implements Hash)
+    /// The address this nonce is for (using alloy's Address which implements
+    /// Hash)
     pub address: alloy::primitives::Address,
 }
 
@@ -31,7 +31,8 @@ pub struct NonceManager<P> {
     /// The underlying L1 provider
     provider: Arc<P>,
     /// Cache of next nonces per address
-    /// Key: Address (alloy Address which implements Hash), Value: Next nonce to use
+    /// Key: Address (alloy Address which implements Hash), Value: Next nonce to
+    /// use
     nonces: Arc<Mutex<HashMap<alloy::primitives::Address, u64>>>,
 }
 
@@ -47,7 +48,8 @@ where
         }
     }
 
-    /// Get the next nonce for the given address and increment the internal counter.
+    /// Get the next nonce for the given address and increment the internal
+    /// counter.
     ///
     /// This method is thread-safe and ensures that each call returns a unique,
     /// sequential nonce value.
@@ -55,7 +57,8 @@ where
     /// # Arguments
     ///
     /// * `address` - The Ethereum address to get the nonce for
-    /// * `force_refresh` - If true, queries L1 for the current nonce regardless of cache
+    /// * `force_refresh` - If true, queries L1 for the current nonce regardless
+    ///   of cache
     ///
     /// # Returns
     ///
@@ -92,7 +95,7 @@ where
             let mut nonces = self.nonces.lock();
             let cached_nonce = nonces.get(&address).copied().unwrap_or(0);
             let new_nonce = l1_nonce.max(cached_nonce);
-            
+
             if new_nonce != l1_nonce {
                 warn!(
                     %address,
@@ -121,12 +124,13 @@ where
 
     /// Report that a transaction with the given nonce failed.
     ///
-    /// This method should be called when a transaction fails with a nonce-related
-    /// error (e.g., "nonce too low"). It will reset the cached nonce for the address
-    /// so that the next call to `get_next_nonce` will refresh from L1.
+    /// This method should be called when a transaction fails with a
+    /// nonce-related error (e.g., "nonce too low"). It will reset the
+    /// cached nonce for the address so that the next call to
+    /// `get_next_nonce` will refresh from L1.
     pub fn report_nonce_error(&self, address: alloy::primitives::Address, failed_nonce: u64) {
         let mut nonces = self.nonces.lock();
-        
+
         warn!(
             %address,
             failed_nonce,
@@ -139,8 +143,8 @@ where
 
     /// Manually set the next nonce for an address.
     ///
-    /// This is useful for recovery scenarios or when you have external knowledge
-    /// about the correct nonce value.
+    /// This is useful for recovery scenarios or when you have external
+    /// knowledge about the correct nonce value.
     ///
     /// # Safety
     ///
@@ -148,7 +152,7 @@ where
     /// lead to nonce conflicts if used incorrectly.
     pub fn set_next_nonce(&self, address: alloy::primitives::Address, nonce: u64) {
         let mut nonces = self.nonces.lock();
-        
+
         info!(
             %address,
             nonce,
@@ -315,4 +319,3 @@ mod tests {
     }
     */
 }
-

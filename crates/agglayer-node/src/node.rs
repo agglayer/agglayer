@@ -201,7 +201,8 @@ impl Node {
         let rpc = Arc::new(provider);
 
         // Create a NonceManager for thread-safe nonce management
-        // This ensures nonces are assigned atomically across all concurrent transactions
+        // This ensures nonces are assigned atomically across all concurrent
+        // transactions
         let nonce_manager = Arc::new(agglayer_contracts::NonceManager::new(rpc.clone()));
 
         // Create TxSigner from wallet and signer address

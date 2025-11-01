@@ -220,6 +220,7 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn try_new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
@@ -432,12 +433,7 @@ mod tests {
     }
 
     // Test helper to create test wallet and nonce manager
-    fn create_test_wallet_and_nonce_manager<P>(
-        provider: Arc<P>,
-    ) -> (
-        Arc<NonceManager<P>>,
-        TxSigner,
-    )
+    fn create_test_wallet_and_nonce_manager<P>(provider: Arc<P>) -> (Arc<NonceManager<P>>, TxSigner)
     where
         P: alloy::providers::Provider + 'static,
     {
@@ -477,8 +473,7 @@ mod tests {
         // InitL1InfoRootMap event is on block 6487027
         let contracts = ContractSetup::new();
         let rpc_arc = Arc::new(rpc.clone());
-        let (nonce_manager, tx_signer) =
-            create_test_wallet_and_nonce_manager(rpc_arc.clone());
+        let (nonce_manager, tx_signer) = create_test_wallet_and_nonce_manager(rpc_arc.clone());
 
         let l1_rpc = L1RpcClient::try_new(
             rpc_arc,
@@ -550,8 +545,7 @@ mod tests {
 
         let contracts = ContractSetup::new();
         let rpc_arc = Arc::new(rpc.clone());
-        let (nonce_manager, tx_signer) =
-            create_test_wallet_and_nonce_manager(rpc_arc.clone());
+        let (nonce_manager, tx_signer) = create_test_wallet_and_nonce_manager(rpc_arc.clone());
 
         let l1_rpc = Arc::new(
             L1RpcClient::try_new(
@@ -612,8 +606,7 @@ mod tests {
         // InitL1InfoRootMap event is on block 6487027
         let contracts = ContractSetup::new();
         let rpc_arc = Arc::new(rpc.clone());
-        let (nonce_manager, tx_signer) =
-            create_test_wallet_and_nonce_manager(rpc_arc.clone());
+        let (nonce_manager, tx_signer) = create_test_wallet_and_nonce_manager(rpc_arc.clone());
 
         let _l1_rpc = L1RpcClient::try_new(
             rpc_arc,

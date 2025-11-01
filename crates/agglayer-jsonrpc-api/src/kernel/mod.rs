@@ -346,7 +346,7 @@ where
         rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError> {
         let signed_tx_hash = format!("{}", signed_tx.hash());
-        
+
         // Get nonce from NonceManager (thread-safe)
         let nonce_assignment = self
             .nonce_manager
@@ -354,13 +354,14 @@ where
             .await
             .map_err(|e| {
                 error!(?e, "Failed to get nonce from NonceManager");
-                SettlementError::ContractError(
-                    alloy::contract::Error::TransportError(alloy::transports::RpcError::local_usage_str(
-                        &format!("Failed to get nonce: {}", e),
-                    ))
-                )
+                SettlementError::ContractError(alloy::contract::Error::TransportError(
+                    alloy::transports::RpcError::local_usage_str(&format!(
+                        "Failed to get nonce: {}",
+                        e
+                    )),
+                ))
             })?;
-        
+
         debug!(
             address = %self.signer_address,
             nonce = nonce_assignment.nonce,
@@ -414,7 +415,7 @@ where
         let rpc = self.rpc.clone();
         let settlement_config = self.settlement_config.clone();
         let tx_hash = *pending_tx.tx_hash();
-        
+
         let receipt = tokio::spawn(async move {
             Self::wait_for_transaction_receipt_static(rpc, settlement_config, &tx_hash)
                 .await
@@ -431,7 +432,8 @@ where
         receipt.await.map_err(|_| SettlementError::NoReceipt)?
     }
 
-    /// Wait for transaction receipt with configurable retries and intervals (static version)
+    /// Wait for transaction receipt with configurable retries and intervals
+    /// (static version)
     async fn wait_for_transaction_receipt_static(
         rpc: Arc<RpcProvider>,
         settlement_config: OutboundRpcSettleConfig,

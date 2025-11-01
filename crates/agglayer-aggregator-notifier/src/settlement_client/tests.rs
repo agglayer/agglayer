@@ -208,7 +208,7 @@ async fn test_fetch_last_settled_pp_root() {
     // Create test wallet and nonce manager
     let rpc_arc = Arc::new(rpc.clone());
     let nonce_manager = Arc::new(agglayer_contracts::NonceManager::new(rpc_arc.clone()));
-    
+
     // Create a test wallet (for testing only!)
     use alloy::signers::local::PrivateKeySigner;
     let signer = PrivateKeySigner::random();

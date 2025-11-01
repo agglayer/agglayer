@@ -474,8 +474,7 @@ where
             certificate_id,
             settlement_tx_hash,
             error: format!(
-                "Timeout while watching the pending settlement transaction after \
-                 {timeout:?}"
+                "Timeout while watching the pending settlement transaction after {timeout:?}"
             ),
         })
     }

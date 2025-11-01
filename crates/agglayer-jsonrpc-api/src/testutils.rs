@@ -37,12 +37,7 @@ pub type MockProvider = FillProvider<
 >;
 
 // Test helper to create test wallet and nonce manager
-fn create_test_wallet_and_nonce_manager<P>(
-    provider: Arc<P>,
-) -> (
-    Arc<NonceManager<P>>,
-    TxSigner,
-)
+fn create_test_wallet_and_nonce_manager<P>(provider: Arc<P>) -> (Arc<NonceManager<P>>, TxSigner)
 where
     P: alloy::providers::Provider + 'static,
 {
@@ -249,8 +244,7 @@ impl TestContext {
         );
 
         // Create test wallet and nonce manager
-        let (nonce_manager, tx_signer) =
-            create_test_wallet_and_nonce_manager(provider.clone());
+        let (nonce_manager, tx_signer) = create_test_wallet_and_nonce_manager(provider.clone());
 
         L1RpcClient::new(
             provider,

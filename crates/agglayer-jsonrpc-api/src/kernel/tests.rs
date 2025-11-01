@@ -20,10 +20,7 @@ use crate::{
 // Test helper to create test wallet and nonce manager
 fn create_test_nonce_manager<P>(
     provider: Arc<P>,
-) -> (
-    Arc<NonceManager<P>>,
-    alloy::primitives::Address,
-)
+) -> (Arc<NonceManager<P>>, alloy::primitives::Address)
 where
     P: alloy::providers::Provider + 'static,
 {
@@ -57,8 +54,7 @@ async fn interop_executor_check_tx() {
     let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
     let provider_arc = Arc::new(provider);
-    let (nonce_manager, signer_address) =
-        create_test_nonce_manager(provider_arc.clone());
+    let (nonce_manager, signer_address) = create_test_nonce_manager(provider_arc.clone());
 
     let kernel = Kernel::new(
         provider_arc,
@@ -101,8 +97,7 @@ async fn interop_executor_verify_zkp() {
     let provider = ProviderBuilder::new().on_mocked_client(asserter.clone());
 
     let provider_arc = Arc::new(provider);
-    let (nonce_manager, signer_address) =
-        create_test_nonce_manager(provider_arc.clone());
+    let (nonce_manager, signer_address) = create_test_nonce_manager(provider_arc.clone());
 
     let _l1 = config.l1.clone();
     let kernel = Kernel::new(provider_arc, config, nonce_manager, signer_address);
@@ -187,8 +182,7 @@ async fn verify_cert_signature() {
     let asserter = Asserter::new();
     let provider = ProviderBuilder::new().on_mocked_client(asserter);
     let provider_arc = Arc::new(provider);
-    let (nonce_manager, signer_address) =
-        create_test_nonce_manager(provider_arc.clone());
+    let (nonce_manager, signer_address) = create_test_nonce_manager(provider_arc.clone());
     let kernel = Kernel::new(provider_arc, config, nonce_manager, signer_address);
 
     {
@@ -271,8 +265,7 @@ mod interop_executor_execute {
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
         let provider_arc = Arc::new(provider);
-        let (nonce_manager, signer_address) =
-            create_test_nonce_manager(provider_arc.clone());
+        let (nonce_manager, signer_address) = create_test_nonce_manager(provider_arc.clone());
 
         let kernel = Kernel::new(
             provider_arc,
@@ -306,8 +299,7 @@ mod interop_executor_execute {
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
         let provider_arc = Arc::new(provider);
-        let (nonce_manager, signer_address) =
-            create_test_nonce_manager(provider_arc.clone());
+        let (nonce_manager, signer_address) = create_test_nonce_manager(provider_arc.clone());
 
         let kernel = Kernel::new(
             provider_arc,
@@ -348,8 +340,7 @@ mod interop_executor_execute {
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
         let provider_arc = Arc::new(provider);
-        let (nonce_manager, signer_address) =
-            create_test_nonce_manager(provider_arc.clone());
+        let (nonce_manager, signer_address) = create_test_nonce_manager(provider_arc.clone());
 
         let kernel = Kernel::new(
             provider_arc,
@@ -391,8 +382,7 @@ mod interop_executor_execute {
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
         let provider_arc = Arc::new(provider);
-        let (nonce_manager, signer_address) =
-            create_test_nonce_manager(provider_arc.clone());
+        let (nonce_manager, signer_address) = create_test_nonce_manager(provider_arc.clone());
 
         let kernel = Kernel::new(
             provider_arc,
