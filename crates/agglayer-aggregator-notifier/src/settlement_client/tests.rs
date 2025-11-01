@@ -205,14 +205,27 @@ async fn test_fetch_last_settled_pp_root() {
             .parse()
             .expect("Invalid PolygonZkEVMGlobalExitRootV2 address");
 
+    // Create test wallet and nonce manager
+    let rpc_arc = Arc::new(rpc.clone());
+    let nonce_manager = Arc::new(agglayer_contracts::NonceManager::new(rpc_arc.clone()));
+    
+    // Create a test wallet (for testing only!)
+    use alloy::signers::local::PrivateKeySigner;
+    let signer = PrivateKeySigner::random();
+    let signer_address = signer.address();
+    let wallet = alloy::network::EthereumWallet::from(signer);
+
     // Create L1RpcClient with default config for other parameters for Bali testnet
     let l1_rpc = agglayer_contracts::L1RpcClient::try_new(
-        Arc::new(rpc.clone()),
+        rpc_arc,
         agglayer_contracts::contracts::PolygonRollupManager::new(rollup_manager_address, rpc),
         global_exit_root_manager_address,
         100, // default gas_multiplier_factor
         agglayer_contracts::GasPriceParams::default(),
         10000, // default event_filter_block_range
+        nonce_manager,
+        wallet,
+        signer_address,
     )
     .await
     .expect("Failed to create L1RpcClient");

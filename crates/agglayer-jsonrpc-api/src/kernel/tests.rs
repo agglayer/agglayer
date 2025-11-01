@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_contracts::NonceManager;
 use agglayer_types::{Address, Certificate, Height, SignerError};
 use alloy::{
     primitives::{Signature, B256, U256, U64},
     providers::{mock::Asserter, ProviderBuilder},
-    signers::local::LocalSigner,
+    signers::local::{LocalSigner, PrivateKeySigner},
 };
 use futures::TryFutureExt;
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
@@ -15,6 +16,24 @@ use crate::{
     signed_tx::{Proof, SignedTx, HASH_LENGTH, PROOF_LENGTH},
     zkevm_node_client::BatchByNumberResponse,
 };
+
+// Test helper to create test wallet and nonce manager
+fn create_test_nonce_manager<P>(
+    provider: Arc<P>,
+) -> (
+    Arc<NonceManager<P>>,
+    alloy::primitives::Address,
+)
+where
+    P: alloy::providers::Provider + 'static,
+{
+    // Create a test signer with a random private key (for testing only!)
+    let signer = PrivateKeySigner::random();
+    let address = signer.address();
+    let nonce_manager = Arc::new(NonceManager::new(provider));
+
+    (nonce_manager, address)
+}
 
 /// Test to check if the rollup_id is registered
 #[tokio::test]
@@ -37,7 +56,16 @@ async fn interop_executor_check_tx() {
     let asserter = Asserter::new();
     let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-    let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+    let provider_arc = Arc::new(provider);
+    let (nonce_manager, signer_address) =
+        create_test_nonce_manager(provider_arc.clone());
+
+    let kernel = Kernel::new(
+        provider_arc,
+        Arc::new(config),
+        nonce_manager,
+        signer_address,
+    );
 
     let mut signed_tx = signed_tx();
 
@@ -72,8 +100,12 @@ async fn interop_executor_verify_zkp() {
     let asserter = Asserter::new();
     let provider = ProviderBuilder::new().on_mocked_client(asserter.clone());
 
+    let provider_arc = Arc::new(provider);
+    let (nonce_manager, signer_address) =
+        create_test_nonce_manager(provider_arc.clone());
+
     let _l1 = config.l1.clone();
-    let kernel = Kernel::new(Arc::new(provider), config);
+    let kernel = Kernel::new(provider_arc, config, nonce_manager, signer_address);
 
     let signed_tx = signed_tx();
 
@@ -154,7 +186,10 @@ async fn verify_cert_signature() {
 
     let asserter = Asserter::new();
     let provider = ProviderBuilder::new().on_mocked_client(asserter);
-    let kernel = Kernel::new(Arc::new(provider), config);
+    let provider_arc = Arc::new(provider);
+    let (nonce_manager, signer_address) =
+        create_test_nonce_manager(provider_arc.clone());
+    let kernel = Kernel::new(provider_arc, config, nonce_manager, signer_address);
 
     {
         // valid signature
@@ -235,7 +270,16 @@ mod interop_executor_execute {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+        let provider_arc = Arc::new(provider);
+        let (nonce_manager, signer_address) =
+            create_test_nonce_manager(provider_arc.clone());
+
+        let kernel = Kernel::new(
+            provider_arc,
+            Arc::new(config),
+            nonce_manager,
+            signer_address,
+        );
 
         assert!(kernel.verify_proof_zkevm_node(&signed_tx).await.is_ok());
     }
@@ -261,7 +305,16 @@ mod interop_executor_execute {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+        let provider_arc = Arc::new(provider);
+        let (nonce_manager, signer_address) =
+            create_test_nonce_manager(provider_arc.clone());
+
+        let kernel = Kernel::new(
+            provider_arc,
+            Arc::new(config),
+            nonce_manager,
+            signer_address,
+        );
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -294,7 +347,16 @@ mod interop_executor_execute {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+        let provider_arc = Arc::new(provider);
+        let (nonce_manager, signer_address) =
+            create_test_nonce_manager(provider_arc.clone());
+
+        let kernel = Kernel::new(
+            provider_arc,
+            Arc::new(config),
+            nonce_manager,
+            signer_address,
+        );
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -328,7 +390,16 @@ mod interop_executor_execute {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+        let provider_arc = Arc::new(provider);
+        let (nonce_manager, signer_address) =
+            create_test_nonce_manager(provider_arc.clone());
+
+        let kernel = Kernel::new(
+            provider_arc,
+            Arc::new(config),
+            nonce_manager,
+            signer_address,
+        );
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,

@@ -45,6 +45,8 @@ pub struct Kernel<RpcProvider> {
     config: Arc<Config>,
     gas_price_params: GasPriceParams,
     settlement_config: OutboundRpcSettleConfig,
+    nonce_manager: Arc<agglayer_contracts::NonceManager<RpcProvider>>,
+    signer_address: alloy::primitives::Address,
 }
 
 /// Errors related to the ZkEVM node proof verification process.
@@ -72,8 +74,16 @@ pub enum ZkevmNodeVerificationError {
     RootsNotFound { batch_no: u64, network_id: u32 },
 }
 
-impl<RpcProvider> Kernel<RpcProvider> {
-    pub fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
+impl<RpcProvider> Kernel<RpcProvider>
+where
+    RpcProvider: Provider + 'static,
+{
+    pub fn new(
+        rpc: Arc<RpcProvider>,
+        config: Arc<Config>,
+        nonce_manager: Arc<agglayer_contracts::NonceManager<RpcProvider>>,
+        signer_address: alloy::primitives::Address,
+    ) -> Self {
         Self {
             rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
@@ -87,6 +97,8 @@ impl<RpcProvider> Kernel<RpcProvider> {
             },
             settlement_config: config.outbound.rpc.settle.clone(),
             config,
+            nonce_manager,
+            signer_address,
         }
     }
 
@@ -334,6 +346,27 @@ where
         rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError> {
         let signed_tx_hash = format!("{}", signed_tx.hash());
+        
+        // Get nonce from NonceManager (thread-safe)
+        let nonce_assignment = self
+            .nonce_manager
+            .get_next_nonce(self.signer_address, false)
+            .await
+            .map_err(|e| {
+                error!(?e, "Failed to get nonce from NonceManager");
+                SettlementError::ContractError(
+                    alloy::contract::Error::TransportError(alloy::transports::RpcError::local_usage_str(
+                        &format!("Failed to get nonce: {}", e),
+                    ))
+                )
+            })?;
+        
+        debug!(
+            address = %self.signer_address,
+            nonce = nonce_assignment.nonce,
+            "Assigned nonce from NonceManager for SignedTx settlement"
+        );
+
         let pending_tx = self
             .verify_batches_trusted_aggregator(signed_tx)
             .and_then(|call| async move {
@@ -347,13 +380,30 @@ where
                     "Applying fee adjustments with gas price params"
                 );
 
-                call.max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)
+                // Set nonce explicitly BEFORE calling .send()
+                // This prevents alloy's NonceFiller from overriding it.
+                call.nonce(nonce_assignment.nonce)
+                    .max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)
                     .max_fee_per_gas(adjusted.max_fee_per_gas)
                     .send()
                     .await
             })
             .await
-            .map_err(SettlementError::ContractError)?;
+            .map_err(|e| {
+                // Check if this is a nonce-related error
+                let error_str = e.to_string().to_lowercase();
+                if error_str.contains("nonce") && error_str.contains("too low") {
+                    error!(
+                        ?e,
+                        nonce = nonce_assignment.nonce,
+                        address = %self.signer_address,
+                        "Nonce too low error detected in Kernel::settle, invalidating cache"
+                    );
+                    self.nonce_manager
+                        .report_nonce_error(self.signer_address, nonce_assignment.nonce);
+                }
+                SettlementError::ContractError(e)
+            })?;
 
         debug!(l1_tx_hash = %pending_tx.tx_hash(), "For signed tx {signed_tx_hash} l1 transaction {} sent", pending_tx.tx_hash());
 

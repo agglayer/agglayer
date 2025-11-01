@@ -184,15 +184,25 @@ impl Node {
         );
 
         let signer = ConfiguredSigner::new(config.clone()).await?;
-        let address = signer.address();
-        tracing::info!("Signer address: {:?}", address);
+        let signer_address = signer.address();
+        tracing::info!("Signer address: {:?}", signer_address);
 
-        // Create a new L1 RPC provider with signer support
+        // Create wallet from signer
         let wallet = EthereumWallet::from(signer);
+
+        // Create L1 RPC provider WITH wallet for transaction signing
+        // Note: We intentionally use the wallet here so alloy can sign transactions,
+        // but we manage nonces manually via NonceManager to prevent race conditions.
+        // The key is that we explicitly set nonces before calling .send(), which
+        // prevents alloy's NonceFiller from making concurrent nonce queries.
         let provider = ProviderBuilder::new()
-            .wallet(wallet)
+            .wallet(wallet.clone())
             .on_http(config.l1.node_url.clone());
         let rpc = Arc::new(provider);
+
+        // Create a NonceManager for thread-safe nonce management
+        // This ensures nonces are assigned atomically across all concurrent transactions
+        let nonce_manager = Arc::new(agglayer_contracts::NonceManager::new(rpc.clone()));
 
         tracing::debug!("RPC provider created");
         let rollup_manager = Arc::new(
@@ -210,6 +220,9 @@ impl Node {
                     }
                 },
                 config.l1.event_filter_block_range.get(),
+                nonce_manager.clone(),
+                wallet.clone(),
+                signer_address,
             )
             .await?,
         );
@@ -225,7 +238,12 @@ impl Node {
         info!("Certifier client created.");
 
         // Construct the core.
-        let core = Kernel::new(rpc.clone(), config.clone());
+        let core = Kernel::new(
+            rpc.clone(),
+            config.clone(),
+            nonce_manager.clone(),
+            signer_address,
+        );
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
         let epoch_packing_aggregator_task = RpcSettlementClient::new(

@@ -4,7 +4,7 @@ use alloy::{
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
 };
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::{adjust_gas_estimate, L1RpcClient};
 
@@ -109,11 +109,37 @@ where
             tx_call = tx_call.gas(adjusted_gas);
         }
 
+        // Get or assign nonce using NonceManager
+        let nonce = if let Some((nonce, _, _)) = nonce_info {
+            // Use the provided nonce for retries
+            debug!("Using provided nonce for retry: {nonce}");
+            nonce
+        } else {
+            // Get next nonce from NonceManager (thread-safe)
+            let assignment = self
+                .nonce_manager
+                .get_next_nonce(self.signer_address, false)
+                .await
+                .map_err(|e| {
+                    error!(?e, "Failed to get nonce from NonceManager");
+                    // Map to a ContractError using local_usage_str
+                    ContractError::TransportError(alloy::transports::RpcError::local_usage_str(
+                        &format!("Failed to get nonce: {}", e),
+                    ))
+                })?;
+            debug!(
+                address = %self.signer_address,
+                nonce = assignment.nonce,
+                "Assigned nonce from NonceManager"
+            );
+            assignment.nonce
+        };
+
         let tx_call = {
             let estimate = self.rpc.estimate_eip1559_fees().await?;
 
             let adjusted_fees =
-                if let Some((nonce, previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) =
+                if let Some((_, previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) =
                     nonce_info
                 {
                     // This is repeated transaction, increase the previous max_fee_per_gas and
@@ -160,6 +186,8 @@ where
                     tx_call = tx_call.nonce(nonce);
                     adjust
                 } else {
+                    // Set the nonce from NonceManager
+                    tx_call = tx_call.nonce(nonce);
                     // Adjust the gas fees based on the configuration.
                     adjust_gas_estimate(&estimate, &self.gas_price_params)
                 };
@@ -169,6 +197,21 @@ where
                 .max_fee_per_gas(adjusted_fees.max_fee_per_gas)
         };
 
-        tx_call.send().await
+        // Send transaction with error handling for nonce issues
+        tx_call.send().await.map_err(|e| {
+            // Check if this is a nonce-related error
+            let error_str = e.to_string().to_lowercase();
+            if error_str.contains("nonce") && error_str.contains("too low") {
+                error!(
+                    ?e,
+                    nonce,
+                    address = %self.signer_address,
+                    "Nonce too low error detected, invalidating cache"
+                );
+                self.nonce_manager
+                    .report_nonce_error(self.signer_address, nonce);
+            }
+            e
+        })
     }
 }
