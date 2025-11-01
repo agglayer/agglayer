@@ -182,17 +182,14 @@ where
                         "Nonce provided: {nonce_info:?}, increasing  previous max_fee_per_gas and \
                          max_priority_fee_per_gas to {adjust:?} for rollup_id: {rollup_id}"
                     );
-                    // Set the nonce for the transaction
-                    tx_call = tx_call.nonce(nonce);
                     adjust
                 } else {
-                    // Set the nonce from NonceManager
-                    tx_call = tx_call.nonce(nonce);
                     // Adjust the gas fees based on the configuration.
                     adjust_gas_estimate(&estimate, &self.gas_price_params)
                 };
 
             tx_call
+                .nonce(nonce) // Set the nonce from NonceManager or previous transaction to repeat
                 .max_priority_fee_per_gas(adjusted_fees.max_priority_fee_per_gas)
                 .max_fee_per_gas(adjusted_fees.max_fee_per_gas)
         };
