@@ -54,12 +54,15 @@ agglayer-tries = "0.11.0"
 unified-bridge = "0.11.0"
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.1" }
+agglayer-prover = { path = "crates/agglayer-prover" }
+agglayer-prover-config = { path = "crates/agglayer-prover-config" }
+agglayer-prover-types = { path = "crates/agglayer-prover-types" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.2" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.2" }
+prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.2" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.2" }
+prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.2" }
+prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.4.2" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
@@ -132,6 +135,7 @@ toml = "0.8.20"
 tonic = { version = "0.12.3", default-features = false }
 tonic-reflection = "0.12.3"
 tonic-types = "0.12.3"
+tonic-health = "0.12.1"
 tower = "0.4.13"
 tower-http = { version = "0.6.2", features = ["full"] }
 tracing = "0.1.41"
