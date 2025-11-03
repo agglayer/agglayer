@@ -1,16 +1,20 @@
 //! The core logic of the agglayer.
 use std::sync::Arc;
 
-use agglayer_config::Config;
-use agglayer_contracts::contracts::{
-    PolygonRollupManager::{
-        verifyBatchesTrustedAggregatorCall, PolygonRollupManagerInstance, RollupDataReturnV2,
+use agglayer_config::{outbound::OutboundRpcSettleConfig, Config};
+use agglayer_contracts::{
+    adjust_gas_estimate,
+    contracts::{
+        PolygonRollupManager::{
+            verifyBatchesTrustedAggregatorCall, PolygonRollupManagerInstance, RollupDataReturnV2,
+        },
+        PolygonZkEvm::PolygonZkEvmInstance,
     },
-    PolygonZkEvm::PolygonZkEvmInstance,
+    GasPriceParams,
 };
 use agglayer_rate_limiting::RateLimiter;
 use agglayer_rpc::error::SignatureVerificationError;
-use agglayer_types::Address;
+use agglayer_types::{primitives::alloy_primitives::TxHash, Address};
 use alloy::{
     contract::Error as ContractError,
     primitives::{BlockNumber, B256},
@@ -20,7 +24,7 @@ use alloy::{
 };
 use futures::TryFutureExt;
 use thiserror::Error;
-use tracing::{info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::{signed_tx::SignedTx, zkevm_node_client::ZkevmNodeClient};
 
@@ -39,6 +43,8 @@ pub struct Kernel<RpcProvider> {
     rpc: Arc<RpcProvider>,
     rate_limiter: RateLimiter,
     config: Arc<Config>,
+    gas_price_params: GasPriceParams,
+    settlement_config: OutboundRpcSettleConfig,
 }
 
 /// Errors related to the ZkEVM node proof verification process.
@@ -71,6 +77,16 @@ impl<RpcProvider> Kernel<RpcProvider> {
         Self {
             rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
+            gas_price_params: {
+                let gas_config = &config.outbound.rpc.settle.gas_price;
+                agglayer_contracts::GasPriceParams::new(
+                    gas_config.multiplier.as_u64_per_1000(),
+                    gas_config.floor,
+                    gas_config.ceiling,
+                )
+                .expect("wrong config, TODO: validate this at the config load time")
+            },
+            settlement_config: config.outbound.rpc.settle.clone(),
             config,
         }
     }
@@ -179,6 +195,8 @@ pub enum SettlementError {
     Timeout(std::time::Duration),
     #[error("pending transaction error: {0}")]
     PendingTransactionError(PendingTransactionError),
+    #[error("receipt without block number: {0}")]
+    ReceiptWithoutBlockNumberError(TxHash),
 }
 
 #[derive(Error, Debug)]
@@ -310,37 +328,175 @@ where
     }
 
     /// Settle the given [`SignedTx`] to the rollup manager.
-    #[instrument(skip(self, rate_guard), level = "debug")]
+    #[instrument(skip(self, signed_tx, rate_guard), level = "debug")]
     pub(crate) async fn settle(
         &self,
         signed_tx: &SignedTx,
         rate_guard: agglayer_rate_limiting::SendTxSlotGuard,
     ) -> Result<TransactionReceipt, SettlementError> {
-        let hex_hash = signed_tx.hash();
-        let hash = format!("{hex_hash:?}");
-
+        let signed_tx_hash = format!("{}", signed_tx.hash());
         let pending_tx = self
             .verify_batches_trusted_aggregator(signed_tx)
-            .and_then(|call| async move { call.send().await })
+            .and_then(|call| async move {
+                let estimate = self.rpc.estimate_eip1559_fees().await?;
+                let adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
+
+                debug!(
+                    gas_price_params=?self.gas_price_params,
+                    estimate=?estimate,
+                    adjusted=?adjusted,
+                    "Applying fee adjustments with gas price params"
+                );
+
+                call.max_priority_fee_per_gas(adjusted.max_priority_fee_per_gas)
+                    .max_fee_per_gas(adjusted.max_fee_per_gas)
+                    .send()
+                    .await
+            })
             .await
             .map_err(SettlementError::ContractError)?;
 
-        if let Ok(Some(tx)) = self.check_tx_status(*pending_tx.tx_hash()).await {
-            warn!(hash, "Transaction already settled: {tx:?}");
-        }
+        debug!(l1_tx_hash = %pending_tx.tx_hash(), "For signed tx {signed_tx_hash} l1 transaction {} sent", pending_tx.tx_hash());
 
-        pending_tx
-            .get_receipt()
+        self.wait_for_transaction_receipt(pending_tx.tx_hash())
             .await
             .inspect(|tx_receipt| {
                 rate_guard.record(tokio::time::Instant::now());
                 info!(
                     block_hash = ?tx_receipt.block_hash,
                     block_number = ?tx_receipt.block_number,
-                    "Inspect settle transaction: {}", tx_receipt.transaction_hash
+                    l1_tx_hash = %tx_receipt.transaction_hash,
+                    "Inspect settle l1 transaction"
                 )
             })
-            .map_err(SettlementError::PendingTransactionError)
+    }
+
+    /// Wait for transaction receipt with configurable retries and intervals
+    #[instrument(skip(self), level = "debug")]
+    async fn wait_for_transaction_receipt(
+        &self,
+        tx_hash: &TxHash,
+    ) -> Result<TransactionReceipt, SettlementError> {
+        let timeout = self
+            .settlement_config
+            .retry_interval
+            .mul_f64(self.settlement_config.max_retries as f64); // only used for logs
+        let max_retries = self.settlement_config.max_retries;
+        let retry_interval = self.settlement_config.retry_interval;
+        let required_confirmations = self.settlement_config.confirmations;
+
+        debug!(
+            max_retries,
+            timeout=?timeout,
+            retry_interval=?retry_interval,
+            "Waiting for signed transaction receipt with timeout of {timeout:?}, max_retries: \
+             {max_retries} and retry_interval: {retry_interval:?}",
+        );
+
+        for attempt in 0..=max_retries {
+            match self.rpc.get_transaction_receipt(*tx_hash).await {
+                Ok(Some(receipt)) => {
+                    info!(attempt, "Successfully fetched transaction receipt");
+
+                    // Wait for the required number of confirmations
+                    if required_confirmations > 0 {
+                        let receipt_block = receipt.block_number.ok_or_else(|| {
+                            error!(%tx_hash, "Transaction receipt has no block number");
+                            SettlementError::ReceiptWithoutBlockNumberError(
+                                receipt.transaction_hash,
+                            )
+                        })?;
+
+                        debug!(
+                            receipt_block,
+                            required_confirmations, "Waiting for L1 block confirmations"
+                        );
+
+                        // Wait until we have the required number of confirmations
+                        for confirmation_attempt in attempt..=max_retries {
+                            match self.rpc.get_block_number().await {
+                                Ok(current_block) => {
+                                    let current_confirmations = current_block
+                                        .saturating_sub(receipt_block)
+                                        .saturating_add(1);
+                                    if current_confirmations >= required_confirmations as u64 {
+                                        info!(
+                                            current_confirmations,
+                                            required_confirmations,
+                                            current_block,
+                                            "L1 transaction confirmed with required confirmations"
+                                        );
+                                        return Ok(receipt);
+                                    } else {
+                                        debug!(
+                                            current_confirmations,
+                                            required_confirmations,
+                                            "Waiting for more confirmations, sleeping"
+                                        );
+                                        tokio::time::sleep(retry_interval).await;
+                                    }
+                                }
+                                Err(error) => {
+                                    if confirmation_attempt < max_retries {
+                                        warn!(
+                                            ?error,
+                                            "Failed to get current block number, retrying"
+                                        );
+                                        tokio::time::sleep(retry_interval).await;
+                                        continue;
+                                    } else {
+                                        error!(
+                                            ?error,
+                                            "Failed to get current block number after maximum \
+                                             retries"
+                                        );
+                                        return Err(SettlementError::ProviderError(error));
+                                    }
+                                }
+                            }
+                        }
+
+                        // Timeout waiting for confirmations
+                        error!(
+                            ?timeout,
+                            "Timeout while waiting for transaction confirmations"
+                        );
+                        return Err(SettlementError::Timeout(timeout));
+                    } else {
+                        // No confirmations required, return immediately
+                        return Ok(receipt);
+                    }
+                }
+                Ok(None) => {
+                    // Transaction not yet included in a block, continue retrying
+                    if attempt < max_retries {
+                        debug!(
+                            %tx_hash,
+                            next_attempt = attempt + 1,
+                            max_retries,
+                            retry_interval = ?retry_interval,
+                            "L1 transaction receipt not found yet, retrying",
+                        );
+                        tokio::time::sleep(retry_interval).await;
+                        continue;
+                    }
+                }
+                Err(error) => {
+                    // Other error (e.g., network issue, RPC error)
+                    error!(
+                        ?error,
+                        "Error watching the pending signed transaction settlement"
+                    );
+                    return Err(SettlementError::ProviderError(error));
+                }
+            }
+        }
+
+        error!(
+            ?timeout,
+            "Timeout while watching the pending signed transaction settlement"
+        );
+        Err(SettlementError::Timeout(timeout))
     }
 
     /// Check the status of the given hash.
