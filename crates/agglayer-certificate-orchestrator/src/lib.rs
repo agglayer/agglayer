@@ -39,7 +39,7 @@ mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
 pub use error::{CertificationError, Error, PreCertificationError};
-pub use settlement_client::{NonceInfo, SettlementClient};
+pub use settlement_client::{NonceInfo, SettlementClient, TxReceiptStatus};
 
 const MAX_POLL_READS: usize = 1_000;
 
