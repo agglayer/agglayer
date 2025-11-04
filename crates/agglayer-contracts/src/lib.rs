@@ -47,9 +47,9 @@ impl GasPriceParams {
     /// Returns an error if ceiling < floor.
     pub fn new(
         multiplier_per_1000: u64,
-        floor: u128,
-        ceiling: u128,
+        range: std::ops::RangeInclusive<u128>,
     ) -> Result<Self, GasPriceParamsError> {
+        let (floor, ceiling) = (*range.start(), *range.end());
         if ceiling < floor {
             return Err(GasPriceParamsError { floor, ceiling });
         }

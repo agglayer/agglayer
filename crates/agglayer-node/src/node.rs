@@ -205,8 +205,7 @@ impl Node {
                     let gas_config = &config.outbound.rpc.settle.gas_price;
                     agglayer_contracts::GasPriceParams::new(
                         gas_config.multiplier.as_u64_per_1000(),
-                        gas_config.floor,
-                        gas_config.ceiling,
+                        gas_config.floor..=gas_config.ceiling,
                     )?
                 },
                 config.l1.event_filter_block_range.get(),

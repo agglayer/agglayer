@@ -81,8 +81,7 @@ impl<RpcProvider> Kernel<RpcProvider> {
                 let gas_config = &config.outbound.rpc.settle.gas_price;
                 agglayer_contracts::GasPriceParams::new(
                     gas_config.multiplier.as_u64_per_1000(),
-                    gas_config.floor,
-                    gas_config.ceiling,
+                    gas_config.floor..=gas_config.ceiling,
                 )?
             },
             settlement_config: config.outbound.rpc.settle.clone(),
