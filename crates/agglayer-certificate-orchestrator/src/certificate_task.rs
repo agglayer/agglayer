@@ -196,10 +196,10 @@ where
         let previous_settlement_tx_hash = {
             // TODO: collect ALL hashes present on L1?
             let mut previous_settlement_tx_hash = None;
-            let prev_hashes = self
+            let prev_settlement_tx_hashes = self
                 .pending_store
                 .get_settlement_tx_hashes_for_certificate(certificate_id)?;
-            for previous_tx_hash in prev_hashes.iter().rev() {
+            for previous_tx_hash in prev_settlement_tx_hashes.iter().rev() {
                 let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
                     oneshot::channel();
                 self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
@@ -208,27 +208,21 @@ where
                     tx_mined_notifier: request_is_settlement_tx_mined,
                 })
                 .await?;
+
                 let result_is_settlement_tx_mined =
                     response_is_settlement_tx_mined.await.map_err(recv_err)?;
                 debug!(
                     "Settlement tx {previous_tx_hash} existence on L1: \
                      {result_is_settlement_tx_mined:?}"
                 );
+
                 let missing = match result_is_settlement_tx_mined {
-                    Ok(true) => false,  // We have fetched the receipt, tx status 1, tx exist on L1
-                    Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
-                    Err(error) => {
-                        if error.to_string().contains("No transaction receipt found") {
-                            true
-                        } else {
-                            // Some error happened while checking the tx receipt on L1
-                            warn!(
-                                "Failed to check settlement tx {previous_tx_hash} existence on \
-                                 L1: {error}"
-                            );
-                            false
-                        }
+                    Ok(crate::TxReceiptStatus::TxSuccessful)
+                    | Ok(crate::TxReceiptStatus::TxFailed) => {
+                        false // We have fetched the receipt, tx exists on L1
                     }
+                    Ok(crate::TxReceiptStatus::NotFound) => true, // Tx not found on L1
+                    Err(_error) => false,                         // On error we do nothing
                 };
                 if !missing {
                     previous_settlement_tx_hash = Some(*previous_tx_hash);
@@ -237,7 +231,10 @@ where
             }
 
             if previous_settlement_tx_hash.is_none() {
-                warn!(?prev_hashes, "No previous settlement tx hash found L1");
+                warn!(
+                    ?prev_settlement_tx_hashes,
+                    "No previous settlement tx hash found L1"
+                );
             }
             previous_settlement_tx_hash
         };
