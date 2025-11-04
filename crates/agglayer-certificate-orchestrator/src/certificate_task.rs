@@ -642,8 +642,9 @@ mod testutils {
                 warn!("FAIL POINT ACTIVE: Injecting invalid settlement tx hash");
                 let unexistent_tx_hash = SettlementTxHash::new(Digest::from([21u8; 32]));
                 header.settlement_tx_hash = Some(unexistent_tx_hash);
-                let _ =
-                    state_store.update_settlement_tx_hash(certificate_id, unexistent_tx_hash, true);
+                state_store
+                    .update_settlement_tx_hash(certificate_id, unexistent_tx_hash, true)
+                    .expect("Valid tx hash update");
                 Some(())
             },
         );
