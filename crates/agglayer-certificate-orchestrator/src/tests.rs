@@ -937,8 +937,8 @@ impl SettlementClient for Check {
     async fn fetch_settlement_receipt_status(
         &self,
         _settlement_tx_hash: SettlementTxHash,
-    ) -> Result<bool, Error> {
-        Ok(true)
+    ) -> Result<crate::TxReceiptStatus, Error> {
+        Ok(crate::TxReceiptStatus::TxSuccessful)
     }
 }
 

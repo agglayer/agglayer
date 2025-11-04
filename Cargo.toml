@@ -31,6 +31,9 @@ agglayer-grpc-server = { path = "crates/agglayer-grpc-server" }
 agglayer-grpc-types = { path = "crates/agglayer-grpc-types" }
 agglayer-jsonrpc-api = { path = "crates/agglayer-jsonrpc-api" }
 agglayer-node = { path = "crates/agglayer-node" }
+agglayer-prover = { path = "crates/agglayer-prover" }
+agglayer-prover-config = { path = "crates/agglayer-prover-config" }
+agglayer-prover-types = { path = "crates/agglayer-prover-types" }
 agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 agglayer-rpc = { path = "crates/agglayer-rpc" }
 agglayer-signer = { path = "crates/agglayer-signer" }
@@ -54,12 +57,12 @@ agglayer-tries = "0.11.0"
 unified-bridge = "0.11.0"
 
 # Provers
-agglayer-prover = { git = "https://github.com/agglayer/provers.git", tag = "v1.5.0" }
-agglayer-prover-config = { git = "https://github.com/agglayer/provers.git",  tag = "v1.5.0"}
-agglayer-prover-types = { git = "https://github.com/agglayer/provers.git", tag = "v1.5.0" }
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.5.0" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.5.0" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.5.0" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
+prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
+prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
+prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
@@ -130,6 +133,7 @@ tokio-stream = { version = "0.1.17", features = ["sync"] }
 tokio-util = "0.7.13"
 toml = "0.8.20"
 tonic = { version = "0.13.1", default-features = false }
+tonic-health = "0.13.1"
 tonic-reflection = "0.13.1"
 tonic-types = "0.13.1"
 tower = "0.4.13"

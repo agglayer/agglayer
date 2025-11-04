@@ -488,11 +488,10 @@ dependencies = [
 [[package]]
 name = "agglayer-prover"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "agglayer-prover-config",
  "agglayer-prover-types",
- "agglayer-telemetry 0.2.1",
+ "agglayer-telemetry 0.1.0",
  "anyhow",
  "buildstructor",
  "eyre",
@@ -513,8 +512,9 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
+ "insta",
+ "pretty_assertions",
  "prover-config",
  "prover-logger",
  "prover-utils",
@@ -526,10 +526,9 @@ dependencies = [
 [[package]]
 name = "agglayer-prover-types"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
 dependencies = [
  "agglayer-interop",
- "pbjson 0.7.0",
+ "pbjson 0.8.0",
  "prost 0.13.5",
  "prover-executor",
  "serde",
@@ -6683,7 +6682,7 @@ dependencies = [
 [[package]]
 name = "prover-alloy"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.7.0#31494312c8a864e7f11f44e40aaf375d58c59dcb"
 dependencies = [
  "agglayer-evm-client",
  "alloy",
@@ -6699,7 +6698,7 @@ dependencies = [
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.7.0#31494312c8a864e7f11f44e40aaf375d58c59dcb"
 dependencies = [
  "prover-utils",
  "serde",
@@ -6710,7 +6709,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.7.0#31494312c8a864e7f11f44e40aaf375d58c59dcb"
 dependencies = [
  "agglayer-telemetry 0.2.1",
  "anyhow",
@@ -6731,7 +6730,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.7.0#31494312c8a864e7f11f44e40aaf375d58c59dcb"
 dependencies = [
  "anyhow",
  "buildstructor",
@@ -6758,7 +6757,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.7.0#31494312c8a864e7f11f44e40aaf375d58c59dcb"
 dependencies = [
  "serde",
  "tracing",
@@ -6769,7 +6768,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v1.5.0#347a140649383d8f5aa5a14907a45cfa756426af"
+source = "git+https://github.com/agglayer/provers.git?tag=v1.7.0#31494312c8a864e7f11f44e40aaf375d58c59dcb"
 dependencies = [
  "humantime-serde",
  "serde",
