@@ -132,10 +132,15 @@ mod test {
     #[case(-1.0)]
     #[case(-0.001)]
     #[case(-100.0)]
+    #[case((1u64 << f64::MANTISSA_DIGITS) as f64)]
     #[case(1.001 * u64::MAX as f64)]
-    fn try_from_f64_strict_out_of_range(#[case] input: f64) {
+    fn try_from_f64_out_of_range(#[case] input: f64) {
         assert_eq!(
             Multiplier::try_from_f64_strict(input).unwrap_err(),
+            FromF64Error::OutOfRange
+        );
+        assert_eq!(
+            Multiplier::try_from_f64_lossy(input).unwrap_err(),
             FromF64Error::OutOfRange
         );
     }
@@ -163,17 +168,6 @@ mod test {
     fn try_from_f64_lossy_valid_values(#[case] input: f64, #[case] expected: u64) {
         let result = Multiplier::try_from_f64_lossy(input).unwrap();
         assert_eq!(result, Multiplier::from_u64_per_1000(expected));
-    }
-
-    #[rstest]
-    #[case(-1.0)]
-    #[case(-0.001)]
-    #[case(-100.0)]
-    fn try_from_f64_lossy_out_of_range(#[case] input: f64) {
-        assert_eq!(
-            Multiplier::try_from_f64_lossy(input).unwrap_err(),
-            FromF64Error::OutOfRange
-        );
     }
 
     #[rstest]
