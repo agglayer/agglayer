@@ -225,7 +225,7 @@ impl Node {
         info!("Certifier client created.");
 
         // Construct the core.
-        let core = Kernel::new(rpc.clone(), config.clone());
+        let core = Kernel::new(rpc.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
         let epoch_packing_aggregator_task = RpcSettlementClient::new(

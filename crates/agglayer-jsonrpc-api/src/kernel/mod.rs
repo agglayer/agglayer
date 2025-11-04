@@ -73,8 +73,8 @@ pub enum ZkevmNodeVerificationError {
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
-    pub fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
-        Self {
+    pub fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> eyre::Result<Self> {
+        Ok(Self {
             rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
             gas_price_params: {
@@ -83,12 +83,11 @@ impl<RpcProvider> Kernel<RpcProvider> {
                     gas_config.multiplier.as_u64_per_1000(),
                     gas_config.floor,
                     gas_config.ceiling,
-                )
-                .expect("wrong config, TODO: validate this at the config load time")
+                )?
             },
             settlement_config: config.outbound.rpc.settle.clone(),
             config,
-        }
+        })
     }
 
     pub(crate) fn rate_limiter(&self) -> &RateLimiter {
