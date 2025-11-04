@@ -80,6 +80,12 @@ mock! {
             new_state: &LocalNetworkStateData,
             new_leaves: &[Digest],
         ) -> Result<(), Error>;
+
+        fn set_certificate_id_for_pp_root(
+            &self,
+            pp_root: &Digest,
+            certificate_id: &CertificateId,
+        ) -> Result<(), Error>;
     }
 
     impl StateReader for StateStore {
@@ -106,5 +112,10 @@ mock! {
             &self,
             network_id: NetworkId,
         ) -> Result<Option<LocalNetworkStateData>, Error>;
+
+        fn get_certificate_id_for_pp_root(
+            &self,
+            pp_root: &Digest,
+        ) -> Result<Option<CertificateId>, Error>;
     }
 }
