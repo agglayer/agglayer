@@ -93,6 +93,12 @@ pub trait StateWriter: Send + Sync {
         new_state: &LocalNetworkStateData,
         new_leaves: &[Digest],
     ) -> Result<(), Error>;
+
+    fn set_certificate_id_for_pp_root(
+        &self,
+        pp_root: &Digest,
+        certificate_id: &CertificateId,
+    ) -> Result<(), Error>;
 }
 
 pub trait PendingCertificateWriter: Send + Sync {

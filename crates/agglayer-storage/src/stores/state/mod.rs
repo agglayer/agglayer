@@ -33,6 +33,7 @@ use crate::{
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        pp_root_to_certificate_id::PpRootToCertificateIdColumn,
         ColumnSchema,
     },
     error::Error,
@@ -381,6 +382,14 @@ impl StateWriter for StateStore {
 
         Ok(())
     }
+
+    fn set_certificate_id_for_pp_root(
+        &self,
+        pp_root: &Digest,
+        certificate_id: &CertificateId,
+    ) -> Result<(), Error> {
+        Ok(self.db.put::<PpRootToCertificateIdColumn>(pp_root, certificate_id)?)
+    }
 }
 
 impl StateStore {
@@ -642,6 +651,13 @@ impl StateReader for StateStore {
             .db
             .get::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)
             .map(|v| v.is_some())?)
+    }
+
+    fn get_certificate_id_for_pp_root(
+        &self,
+        pp_root: &Digest,
+    ) -> Result<Option<CertificateId>, Error> {
+        Ok(self.db.get::<PpRootToCertificateIdColumn>(pp_root)?)
     }
 }
 

@@ -403,6 +403,10 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier,
                         nonce_info, previous_tx_hashes, height, new_pp_root, .. }) => {
+
+                        // Associate the pp root with the certificate ID.
+                        self.state_store.set_certificate_id_for_pp_root(&new_pp_root, &certificate_id)?;
+
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.

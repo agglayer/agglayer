@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    primitives::alloy_primitives::BlockNumber, Certificate, CertificateHeader, CertificateId,
-    CertificateIndex, EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
+    primitives::alloy_primitives::BlockNumber, Digest, Certificate, CertificateHeader,
+    CertificateId, CertificateIndex, EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 
 use crate::{
@@ -107,6 +107,12 @@ pub trait StateReader: Send + Sync {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error>;
+
+    /// Get the certificate ID for a given pp root.
+    fn get_certificate_id_for_pp_root(
+        &self,
+        pp_root: &Digest,
+    ) -> Result<Option<CertificateId>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {

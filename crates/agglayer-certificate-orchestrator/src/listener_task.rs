@@ -1,8 +1,7 @@
 use std::{future::IntoFuture, sync::Arc};
 
 use agglayer_contracts::{
-    contracts::PolygonRollupManager::VerifyPessimisticStateTransition,
-    rollup::RollupContract,
+    contracts::PolygonRollupManager::VerifyPessimisticStateTransition, rollup::RollupContract,
     L1TransactionFetcher,
 };
 use agglayer_storage::stores::{MetadataReader, MetadataWriter};
