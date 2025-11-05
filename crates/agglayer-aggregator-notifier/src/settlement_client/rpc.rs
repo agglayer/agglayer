@@ -360,7 +360,9 @@ where
                         for confirmation_attempt in attempt..=self.config.max_retries {
                             match self.l1_rpc.get_provider().get_block_number().await {
                                 Ok(current_block) => {
-                                    let confirmations = current_block.saturating_sub(receipt_block);
+                                    let confirmations = current_block
+                                        .saturating_sub(receipt_block)
+                                        .saturating_add(1);
                                     if confirmations >= self.config.confirmations as u64 {
                                         info!(
                                             confirmations,
