@@ -7,6 +7,9 @@ use std::{
 
 use rand::Rng as _;
 
+pub mod db_generator;
+#[cfg(test)]
+mod db_generator_test;
 pub mod mocks;
 
 pub struct TempDBDir {
