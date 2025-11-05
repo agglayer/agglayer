@@ -203,11 +203,10 @@ impl Node {
                 config.outbound.rpc.settle.gas_multiplier_factor,
                 {
                     let gas_config = &config.outbound.rpc.settle.gas_price;
-                    agglayer_contracts::GasPriceParams {
-                        multiplier_per_1000: gas_config.multiplier.as_u64_per_1000(),
-                        floor: gas_config.floor,
-                        ceiling: gas_config.ceiling,
-                    }
+                    agglayer_contracts::GasPriceParams::new(
+                        gas_config.multiplier.as_u64_per_1000(),
+                        gas_config.floor..=gas_config.ceiling,
+                    )?
                 },
                 config.l1.event_filter_block_range.get(),
             )
@@ -225,7 +224,7 @@ impl Node {
         info!("Certifier client created.");
 
         // Construct the core.
-        let core = Kernel::new(rpc.clone(), config.clone());
+        let core = Kernel::new(rpc.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
         let epoch_packing_aggregator_task = RpcSettlementClient::new(
