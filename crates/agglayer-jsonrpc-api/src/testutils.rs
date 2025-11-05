@@ -129,7 +129,7 @@ impl TestContext {
 
         // Create AgglayerService (V0Rpc service) with the provider
         let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(real_provider.clone(), config.clone()),
+            crate::kernel::Kernel::new(real_provider.clone(), config.clone()).unwrap(),
         ));
 
         // Create a real epoch store for testing
@@ -279,7 +279,7 @@ impl TestContext {
 
         // Create AgglayerService (V0Rpc service)
         let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()),
+            crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()).unwrap(),
         ));
 
         // Create a real epoch store for testing
