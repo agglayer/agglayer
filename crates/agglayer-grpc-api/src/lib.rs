@@ -15,11 +15,7 @@ use certificate_submission_service::CertificateSubmissionServer;
 use configuration_service::ConfigurationServer;
 use http::{Request, Response};
 use node_state_service::NodeStateServer;
-use tonic::{
-    body::{boxed, BoxBody},
-    codec::CompressionEncoding,
-    server::NamedService,
-};
+use tonic::{body::Body, codec::CompressionEncoding, server::NamedService};
 use tower::{Service, ServiceExt as _};
 
 mod certificate_submission_service;
@@ -38,7 +34,7 @@ pub struct ServerBuilder {
 impl ServerBuilder {
     fn add_rpc_service<S>(mut self, rpc_service: S) -> Self
     where
-        S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Infallible>
+        S: Service<Request<Body>, Response = Response<Body>, Error = Infallible>
             + NamedService
             + Clone
             + Sync
@@ -49,7 +45,7 @@ impl ServerBuilder {
     {
         self.router = self.router.route_service(
             &format!("/{}/{{*rest}}", S::NAME),
-            rpc_service.map_request(|r: Request<axum::body::Body>| r.map(boxed)),
+            rpc_service.map_request(|r: Request<axum::body::Body>| r.map(Body::new)),
         );
 
         self

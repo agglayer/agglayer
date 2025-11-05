@@ -68,7 +68,7 @@ impl Prover {
         let svc = Self::create_service(&config, program)
             .await
             .context("Failed creating PessimisticProofServiceServer")?;
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
         health_reporter
             .set_serving::<PessimisticProofServiceServer<ProverRPC>>()
