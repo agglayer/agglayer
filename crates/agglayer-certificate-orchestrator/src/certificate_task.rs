@@ -137,8 +137,8 @@ where
         // TODO: Hack to deal with Proven certificates in case the PP changed.
         // See https://github.com/agglayer/agglayer/pull/819#discussion_r2152193517 for the details
         // Note that we still have the problem, this is here only to mitigate a bit the
-        // issue When we finally make the storage refactoring, we should remove
-        // this
+        // issue. When we finally do the storage refactoring, we should remove
+        // this.
         if self.header.status == CertificateStatus::Proven {
             warn!(%certificate_id,
                 "Certificate is already proven but we do not have the new_state anymore... \
@@ -321,10 +321,10 @@ where
             };
 
             if recomputed_from_contract.is_none() {
-                // Failed to recompute the state, moving back to proven.
-                self.set_status(CertificateStatus::Proven)?;
+                // Tx not found on L1, and pp root from contract not matching,
+                // Make the cert InError and wait for aggkit to resubmit it.
                 return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx not found on L1, moving certificate back to Proven"
+                    "Settlement tx not found on L1, moving certificate back to Proven",
                 )));
             }
         };
@@ -540,6 +540,14 @@ where
                         "Retrying the settlement transaction after a timeout for certificate \
                          {certificate_id}"
                     );
+                    // We should theoretically remove the settlement_tx_hash here. However, doing so
+                    // would currently expose us to bugs: recompute_state checks for already-settled
+                    // cert only if there's already a settlement_tx_hash.
+                    // Considering fixing this would likely be relatively hard right now, we
+                    // currently leave the settlement_tx_hash here. This is not by design, and as
+                    // soon as the settlement logic is refactored properly, we can remove
+                    // the settlement_tx_hash here. But the refactor will likely lead to this code
+                    // disappearing anyway, so… :shrug:
                     self.set_status(CertificateStatus::Proven)?;
                     return Box::pin(self.process_from_proven()).await;
                 }
