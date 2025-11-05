@@ -196,6 +196,8 @@ pub enum SettlementError {
     PendingTransactionError(PendingTransactionError),
     #[error("receipt without block number: {0}")]
     ReceiptWithoutBlockNumberError(TxHash),
+    #[error("Internal error while waiting for the receipt: {0:?}")]
+    InternalError(#[source] eyre::Error),
 }
 
 #[derive(Error, Debug)]
@@ -366,7 +368,7 @@ where
         let tx_hash = *pending_tx.tx_hash();
 
         let receipt = tokio::spawn(async move {
-            Self::wait_for_transaction_receipt_static(rpc, settlement_config, &tx_hash)
+            Self::wait_for_transaction_receipt(rpc, settlement_config, &tx_hash)
                 .await
                 .inspect(|tx_receipt| {
                     rate_guard.record(tokio::time::Instant::now());
@@ -378,12 +380,13 @@ where
                     )
                 })
         });
-        receipt.await.map_err(|_| SettlementError::NoReceipt)?
+        receipt
+            .await
+            .map_err(|error| SettlementError::InternalError(error.into()))?
     }
 
     /// Wait for transaction receipt with configurable retries and intervals
-    /// (static version)
-    async fn wait_for_transaction_receipt_static(
+    async fn wait_for_transaction_receipt(
         rpc: Arc<RpcProvider>,
         settlement_config: OutboundRpcSettleConfig,
         tx_hash: &TxHash,
