@@ -126,6 +126,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
     let first_certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
+        .inspect_err(|err| eprintln!("Error sending first certificate: {err:?}"))
         .unwrap();
 
     // Send the first certificate. This should be settled.
@@ -138,13 +139,17 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
             rpc_params![first_certificate_id],
         )
         .await
+        .inspect_err(|err| eprintln!("Error getting certificate header: {err:?}"))
         .unwrap();
     assert!(matches!(first_header.status, CertificateStatus::Settled));
+
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Send the second certificate, identical to the first and check the error.
     let second_submission_err = client
         .request::<CertificateId, _>("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
+        .inspect(|result| eprintln!("Managed to settle same certificate twice! Result: {result:?}"))
         .unwrap_err();
     match second_submission_err {
         jsonrpsee::core::ClientError::Call(error) => {
@@ -155,7 +160,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
     }
 
     // Optional await sufficient time for cert to be processed.
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Verify status is Settled. The two submissions have the same ID.
     // This checks the first submission still succeeds.

@@ -196,44 +196,40 @@ where
         debug!("Recomputing new state for already-proven certificate");
         // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
         // certificate header is not found on L1.
-        let settlement_tx_hash_missing_on_l1: bool =
-            if let Some(previous_tx_hash) = self.header.settlement_tx_hash {
-                let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
-                    oneshot::channel();
-                self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
-                    settlement_tx_hash: previous_tx_hash,
-                    certificate_id,
-                    tx_mined_notifier: request_is_settlement_tx_mined,
-                })
-                .await?;
-                let result_is_settlement_tx_mined =
-                    response_is_settlement_tx_mined.await.map_err(recv_err)?;
-                debug!(
-                    %previous_tx_hash,
-                    existence_check_result = ?result_is_settlement_tx_mined,
-                    "Checked whether settlement tx exists on L1"
-                );
-                match result_is_settlement_tx_mined {
-                    Ok(true) => false,  // We have fetched the receipt, tx status 1, tx exist on L1
-                    Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
-                    Err(error) => {
-                        if error.to_string().contains("No transaction receipt found") {
-                            true
-                        } else {
-                            // Some error happened while checking the tx receipt on L1
-                            warn!(
-                                %previous_tx_hash,
-                                ?error,
-                                "Failed to check settlement tx existence on L1"
-                            );
-                            false
-                        }
-                    }
+        let settlement_tx_hash_missing_on_l1: bool = if let Some(previous_tx_hash) =
+            self.header.settlement_tx_hash
+        {
+            let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
+                oneshot::channel();
+            self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
+                settlement_tx_hash: previous_tx_hash,
+                certificate_id,
+                tx_mined_notifier: request_is_settlement_tx_mined,
+            })
+            .await?;
+
+            let result_is_settlement_tx_mined = response_is_settlement_tx_mined
+                .await
+                .map_err(recv_err)?
+                .inspect_err(|error| {
+                    // Some error happened while checking the tx receipt on L1
+                    warn!(
+                        ?error,
+                        settlement_tx_hash = %previous_tx_hash,
+                        "Failed to check settlement tx prior existence on L1",
+                    );
+                });
+            match result_is_settlement_tx_mined {
+                Ok(crate::TxReceiptStatus::TxSuccessful) | Ok(crate::TxReceiptStatus::TxFailed) => {
+                    false // We have fetched the receipt, tx exists on L1
                 }
-            } else {
-                // No settlement tx hash in the cert header, nothing to check
-                false
-            };
+                Ok(crate::TxReceiptStatus::NotFound) => true, // Tx not found on L1
+                Err(_error) => false,                         // If error happened we do nothing
+            }
+        } else {
+            // No settlement tx hash in the cert header, nothing to check
+            false
+        };
 
         if settlement_tx_hash_missing_on_l1 {
             warn!(

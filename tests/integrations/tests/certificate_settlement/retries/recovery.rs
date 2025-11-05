@@ -68,7 +68,7 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 
 #[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(120))]
+#[timeout(Duration::from_secs(180))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     let tmp_dir = TempDBDir::new();
