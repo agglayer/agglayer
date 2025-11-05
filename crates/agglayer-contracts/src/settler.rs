@@ -119,7 +119,7 @@ where
                     // This is repeated transaction, increase the previous max_fee_per_gas and
                     // max_priority_fee_per_gas by a factor
                     // If previous_max_priority_fee_per_gas is None, set it to estimated.
-                    let adjust: Eip1559Estimation = Eip1559Estimation {
+                    let adjust = Eip1559Estimation {
                         max_fee_per_gas: {
                             let mut new_max_fee_per_gas = previous_max_fee_per_gas
                                 .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
@@ -153,8 +153,11 @@ where
                             .min(self.gas_price_params.ceiling),
                     };
                     debug!(
-                        "Nonce provided: {nonce_info:?}, increasing  previous max_fee_per_gas and \
-                         max_priority_fee_per_gas to {adjust:?} for rollup_id: {rollup_id}"
+                        provided_nonce_info = ?nonce_info,
+                        adjusted_max_fees = ?adjust,
+                        %rollup_id,
+                        "Nonce provided, increasing  previous max_fee_per_gas and \
+                         max_priority_fee_per_gas"
                     );
                     // Set the nonce for the transaction
                     tx_call = tx_call.nonce(nonce);
