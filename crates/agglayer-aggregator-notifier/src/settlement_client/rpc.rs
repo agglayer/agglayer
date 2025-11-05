@@ -628,12 +628,14 @@ where
         &self,
         settlement_tx_hash: SettlementTxHash,
     ) -> Result<bool, Error> {
-        let tx_hash = settlement_tx_hash.into();
-
-        match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
+        match self
+            .l1_rpc
+            .fetch_transaction_receipt(settlement_tx_hash.into())
+            .await
+        {
             Ok(receipt) => {
                 debug!(
-                    %tx_hash,
+                    %settlement_tx_hash,
                     ?receipt,
                     "Fetched receipt for settlement tx",
                 );
@@ -651,13 +653,11 @@ where
         &self,
         settlement_tx_hash: SettlementTxHash,
     ) -> Result<Option<NonceInfo>, Error> {
-        let tx_hash = settlement_tx_hash.into();
-
         // First, get the transaction to extract the nonce.
         let nonce_info = match self
             .l1_rpc
             .get_provider()
-            .get_transaction_by_hash(tx_hash)
+            .get_transaction_by_hash(settlement_tx_hash.into())
             .await
             .map_err(|e| {
                 Error::L1CommunicationError(Box::new(
@@ -679,11 +679,13 @@ where
                 }
             }
             None => {
-                warn!(%tx_hash, "Settlement tx not found on L1");
+                warn!(%settlement_tx_hash, "Settlement tx not found on L1");
                 return Err(Error::L1CommunicationError(Box::new(
                     agglayer_contracts::L1RpcError::UnableToGetTransaction {
                         tx_hash: settlement_tx_hash.to_string(),
-                        source: eyre::eyre!("Settlement tx not found on L1 for tx: {tx_hash}"),
+                        source: eyre::eyre!(
+                            "Settlement tx not found on L1 for tx: {settlement_tx_hash}"
+                        ),
                     },
                 )));
             }

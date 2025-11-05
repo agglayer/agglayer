@@ -237,7 +237,7 @@ where
 
         if settlement_tx_hash_missing_on_l1 {
             warn!(
-                tx_hash = ?self.header.settlement_tx_hash,
+                settlement_tx_hash = ?self.header.settlement_tx_hash,
                 "Previous settlement tx hash is missing on L1",
             );
 
