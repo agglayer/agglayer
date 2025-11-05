@@ -1,0 +1,8 @@
+---
+source: crates/agglayer-grpc-types/src/compat/v1/tests.rs
+expression: "format!(\"{:?}\", eyre::Error::from(error))"
+---
+value: invalid value
+
+Location:
+    <REDACTED>

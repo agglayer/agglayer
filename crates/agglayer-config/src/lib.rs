@@ -5,8 +5,8 @@
 
 use std::{collections::HashMap, path::Path};
 
+use agglayer_primitives::Address;
 use agglayer_prover_config::GrpcConfig;
-use ethers::types::Address;
 use outbound::OutboundConfig;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
 use serde_with::DisplayFromStr;
@@ -25,7 +25,9 @@ pub mod epoch;
 pub(crate) mod l1;
 pub(crate) mod l2;
 pub mod log;
+mod multiplier;
 pub mod outbound;
+mod port;
 pub mod rate_limiting;
 pub(crate) mod rpc;
 pub mod shutdown;
@@ -38,6 +40,8 @@ pub use epoch::Epoch;
 pub use l1::L1;
 pub use l2::L2;
 pub use log::Log;
+pub use multiplier::Multiplier;
+use port::{Port, PortDefaults};
 use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
@@ -62,21 +66,27 @@ pub struct Config {
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     #[serde(default)]
     pub proof_signers: HashMap<u32, Address>,
+
     /// The log configuration.
     #[serde(default)]
     pub log: Log,
+
     /// The local RPC server configuration.
     #[serde(default)]
     pub rpc: RpcConfig,
+
     /// Rate limiting configuration.
     #[serde(default)]
     pub rate_limiting: RateLimitingConfig,
+
     /// The configuration for every outbound network component.
     #[serde(default)]
     pub outbound: OutboundConfig,
+
     /// The L1 configuration.
     #[serde(default)]
     pub l1: L1,
+
     /// The authentication configuration.
     #[serde(default)]
     pub auth: AuthConfig,
@@ -119,6 +129,14 @@ pub struct Config {
 
     #[serde(default, skip_serializing_if = "crate::is_default")]
     pub grpc: GrpcConfig,
+
+    /// Extra Certificate signer per network.
+    /// Signatures is expected to be performed on the same commitment as
+    /// the certificate signature, which is the V2 commitment for now.
+    #[serde(default)]
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub extra_certificate_signer: HashMap<u32, Address>,
 }
 
 impl Config {
@@ -134,8 +152,7 @@ impl Config {
             .parent()
             .ok_or_else(|| ConfigurationError::UnableToReadConfigFile {
                 path: path.to_path_buf(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                source: std::io::Error::other(
                     "Unable to determine the parent folder of the configuration file",
                 ),
             })?;
@@ -172,17 +189,23 @@ impl Config {
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
+            extra_certificate_signer: Default::default(),
         }
     }
 
-    /// Get the target RPC socket address from the configuration.
-    pub fn rpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.port))
+    /// Get the target ReadRPC socket address from the configuration.
+    pub fn readrpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.readrpc_port.as_u16()))
+    }
+
+    /// Get the target gRPC socket address from the configuration.
+    pub fn public_grpc_addr(&self) -> std::net::SocketAddr {
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.grpc_port.as_u16()))
     }
 
     /// Get the admin RPC socket address from the configuration.
     pub fn admin_rpc_addr(&self) -> std::net::SocketAddr {
-        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port))
+        std::net::SocketAddr::from((self.rpc.host, self.rpc.admin_port.as_u16()))
     }
 
     pub fn path_contextualized(mut self, base_path: &Path) -> Self {
@@ -234,8 +257,7 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
                 .storage
                 .path_contextualized(&self.path.canonicalize().map_err(|error| {
                     serde::de::Error::custom(format!(
-                        "Unable to canonicalize the storage path: {}",
-                        error
+                        "Unable to canonicalize the storage path: {error}"
                     ))
                 })?);
 

@@ -5,6 +5,7 @@ pub mod storage;
 #[rustfmt::skip]
 pub mod stores;
 
+#[macro_use]
 #[rustfmt::skip]
 pub mod columns;
 #[rustfmt::skip]

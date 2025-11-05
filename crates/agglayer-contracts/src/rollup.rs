@@ -1,14 +1,28 @@
 use std::collections::HashMap;
 
-use ethers::prelude::*;
-use ethers::providers::Middleware;
-use tracing::{debug, error};
+use agglayer_primitives::Address;
+use alloy::{
+    eips::{BlockId, BlockNumberOrTag},
+    primitives::{TxHash, U256},
+    providers::Provider,
+    rpc::types::Filter,
+    signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
+};
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
+use tracing::{debug, error, trace};
 
-use super::polygon_rollup_manager::RollupIDToRollupDataReturn;
-use super::polygon_zk_evm::PolygonZkEvm;
-use super::polygon_zkevm_global_exit_root_v2::PolygonZkEVMGlobalExitRootV2Events;
-use crate::{L1RpcClient, L1RpcError};
+use crate::{
+    contracts::{PolygonRollupManager::RollupDataReturnV2, PolygonZkEvm},
+    L1RpcClient, L1RpcError,
+};
 
+#[derive(Debug, FromPrimitive)]
+pub enum VerifierType {
+    StateTransition = 0,
+    Pessimistic = 1,
+    ALGateway = 2,
+}
 /// Polling tick interval used to check for one block to be finalized.
 const CHECK_BLOCK_FINALIZED_TICK_INTERVAL: tokio::time::Duration =
     tokio::time::Duration::from_secs(10);
@@ -18,56 +32,87 @@ const TIME_TO_FINALITY_ETHEREUM: tokio::time::Duration = tokio::time::Duration::
 
 #[async_trait::async_trait]
 pub trait RollupContract {
-    type M: Middleware;
     async fn get_trusted_sequencer_address(
         &self,
         rollup_id: u32,
         proof_signers: HashMap<u32, Address>,
     ) -> Result<Address, L1RpcError>;
 
+    async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, L1RpcError>;
+    async fn get_prev_pessimistic_root(
+        &self,
+        rollup_id: u32,
+        before_tx: Option<TxHash>,
+    ) -> Result<[u8; 32], L1RpcError>;
+
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
+    async fn get_verifier_type(&self, rollup_id: u32) -> Result<VerifierType, L1RpcError>;
 
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
+
+    fn get_rollup_manager_address(&self) -> Address;
+
+    fn get_event_filter_block_range(&self) -> u64;
 }
 
 #[async_trait::async_trait]
 impl<RpcProvider> RollupContract for L1RpcClient<RpcProvider>
 where
-    RpcProvider: Middleware + 'static,
+    RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
-    type M = RpcProvider;
-
     /// Returns the first entry of the l1 info tree map in the L1.
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]) {
         self.default_l1_info_tree_entry
     }
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
-        // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
+        // Check if we already have this l1_info_root cached
+        {
+            let cache = self
+                .l1_info_roots
+                .read()
+                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
+            if let Some(&cached_root) = cache.get(&l1_leaf_count) {
+                trace!(
+                    "Retrieved cached L1 info root for leaf count {}: {}",
+                    l1_leaf_count,
+                    alloy::primitives::B256::from(cached_root)
+                );
+                return Ok(cached_root);
+            }
+        }
+
+        use alloy::sol_types::SolEvent;
+
+        use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
+
+        // Get first `UpdateL1InfoTreeV2` event for the given leaf count.
+        // l1 leaf count increases over time for a network, when we filter by
+        // `l1_leaf_count` we would not get provider limit.
+        debug!("Searching for UpdateL1InfoTreeV2 event with leaf count {l1_leaf_count}");
         let filter = Filter::new()
-            .address(self.l1_info_tree.address())
-            .event("UpdateL1InfoTreeV2(bytes32,uint32,uint256,uint64)")
-            .topic1(U256::from_big_endian(&l1_leaf_count.to_be_bytes()))
-            .from_block(BlockNumber::Earliest);
+            .address(self.global_exit_root_manager_contract)
+            .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
+            .topic1(U256::from(l1_leaf_count))
+            .from_block(BlockNumberOrTag::Earliest);
+        let events = self.rpc.get_logs(&filter).await.map_err(|error| {
+            error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
+            L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
+        })?;
 
-        let events = self
-            .l1_info_tree
-            .client()
-            .get_logs(&filter)
-            .await
-            .map_err(|e| L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string()))?;
-
-        // Extract event details
+        // Extract event details using alloy's event decoding
         let (l1_info_root, event_block_number, event_block_hash) = events
             .first()
             .and_then(|log| {
-                match PolygonZkEVMGlobalExitRootV2Events::decode_log(&log.clone().into()).ok()? {
-                    PolygonZkEVMGlobalExitRootV2Events::UpdateL1InfoTreeV2Filter(event) => Some((
-                        event.current_l1_info_root,
+                // Use alloy's direct event decoding
+                if let Ok(decoded_event) = UpdateL1InfoTreeV2::decode_log(&log.clone().into()) {
+                    Some((
+                        <[u8; 32]>::from(decoded_event.currentL1InfoRoot),
                         log.block_number?,
                         log.block_hash?,
-                    )),
-                    _ => None,
+                    ))
+                } else {
+                    None
                 }
             })
             .ok_or(L1RpcError::UpdateL1InfoTreeV2EventNotFound)?;
@@ -77,14 +122,14 @@ where
              {}",
             event_block_number,
             l1_leaf_count,
-            H256::from_slice(l1_info_root.as_slice())
+            alloy::primitives::B256::from(l1_info_root) // Use alloy's B256 instead of H256
         );
 
         // Await for the related block to be finalized
         // NOTE: Cannot use block subscription because the provider is not websocket
         {
             let mut tick = tokio::time::interval(CHECK_BLOCK_FINALIZED_TICK_INTERVAL);
-            let mut finalized_block_number: U64 = 0.into();
+            let mut finalized_block_number = 0;
 
             _ = tokio::time::timeout(TIME_TO_FINALITY_ETHEREUM, async {
                 loop {
@@ -92,11 +137,11 @@ where
 
                     finalized_block_number = self
                         .rpc
-                        .get_block(BlockNumber::Finalized)
+                        .get_block(BlockId::Number(BlockNumberOrTag::Finalized))
                         .await
                         .ok()
                         .flatten()
-                        .and_then(|block| block.number)
+                        .map(|block| block.header.number)
                         .ok_or(L1RpcError::LatestFinalizedBlockNotFound)?;
 
                     debug!(
@@ -115,8 +160,8 @@ where
                             .await
                             .ok()
                             .flatten()
-                            .and_then(|block| block.hash)
-                            .ok_or(L1RpcError::BlockHashNotFound(event_block_number.as_u64()))?;
+                            .map(|block| block.header.hash)
+                            .ok_or(L1RpcError::BlockHashNotFound(event_block_number))?;
 
                         if retrieved_block_hash != event_block_hash {
                             error!(
@@ -124,7 +169,7 @@ where
                                  expected event block hash ({:?}).",
                                 retrieved_block_hash, event_block_hash
                             );
-                            return Err(L1RpcError::ReorgDetected(event_block_number.as_u64()));
+                            return Err(L1RpcError::ReorgDetected(event_block_number));
                         }
 
                         break;
@@ -144,6 +189,15 @@ where
             })??;
         }
 
+        // Cache the retrieved l1_info_root for future use
+        {
+            let mut cache = self
+                .l1_info_roots
+                .write()
+                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
+            cache.insert(l1_leaf_count, l1_info_root);
+        }
+
         Ok(l1_info_root)
     }
 
@@ -157,18 +211,97 @@ where
         } else {
             let rollup_data = self
                 .inner
-                .rollup_id_to_rollup_data(rollup_id)
+                .rollupIDToRollupData(rollup_id)
+                .call()
                 .await
                 .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
 
-            let rollup_metadata = RollupIDToRollupDataReturn { rollup_data };
-            PolygonZkEvm::new(
-                rollup_metadata.rollup_data.rollup_contract,
-                self.inner.client().clone(),
-            )
-            .trusted_sequencer()
-            .await
-            .map_err(|_| L1RpcError::TrustedSequencerRetrievalFailed)
+            if rollup_data.rollupContract.is_zero() {
+                return Err(L1RpcError::InvalidRollupContract(rollup_id));
+            }
+
+            PolygonZkEvm::new(rollup_data.rollupContract, self.rpc.clone())
+                .trustedSequencer()
+                .call()
+                .await
+                .map(Into::into)
+                .map_err(|_| L1RpcError::TrustedSequencerRetrievalFailed)
         }
+    }
+
+    async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, L1RpcError> {
+        let rollup_data = self
+            .inner
+            .rollupIDToRollupData(rollup_id)
+            .call()
+            .await
+            .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
+
+        if rollup_data.rollupContract.is_zero() {
+            return Err(L1RpcError::InvalidRollupContract(rollup_id));
+        }
+
+        Ok(rollup_data.rollupContract.into())
+    }
+    async fn get_prev_pessimistic_root(
+        &self,
+        rollup_id: u32,
+        before_tx_hash: Option<TxHash>,
+    ) -> Result<[u8; 32], L1RpcError> {
+        let at_block = if let Some(tx_hash) = before_tx_hash {
+            let receipt = self
+                .rpc
+                .get_transaction_receipt(tx_hash)
+                .await
+                .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
+                    tx_hash: tx_hash.to_string(),
+                    source: err.into(),
+                })?
+                .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))?;
+
+            if receipt.status() {
+                receipt
+                    .block_number
+                    .map(|block| {
+                        let block = block.saturating_sub(1);
+                        BlockId::number(block)
+                    })
+                    .unwrap_or_else(BlockId::latest)
+            } else {
+                return Err(L1RpcError::TransactionReceiptFailedOnL1(tx_hash));
+            }
+        } else {
+            BlockId::latest()
+        };
+
+        let rollup_data: RollupDataReturnV2 = self
+            .inner
+            .rollupIDToRollupDataV2(rollup_id)
+            .block(at_block)
+            .call()
+            .await
+            .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
+
+        Ok(*rollup_data.lastPessimisticRoot)
+    }
+
+    async fn get_verifier_type(&self, rollup_id: u32) -> Result<VerifierType, L1RpcError> {
+        let rollup_data: RollupDataReturnV2 = self
+            .inner
+            .rollupIDToRollupDataV2(rollup_id)
+            .call()
+            .await
+            .map_err(|_| L1RpcError::RollupDataRetrievalFailed)?;
+
+        Ok(VerifierType::from_u8(rollup_data.rollupVerifierType)
+            .ok_or(L1RpcError::VerifierTypeRetrievalFailed)?)
+    }
+
+    fn get_rollup_manager_address(&self) -> Address {
+        (*self.inner.address()).into()
+    }
+
+    fn get_event_filter_block_range(&self) -> u64 {
+        self.event_filter_block_range
     }
 }

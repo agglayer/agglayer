@@ -1,32 +1,36 @@
 // @generated
-impl serde::Serialize for ConfigurationErrorKind {
+impl serde::Serialize for GetCertificateHeaderErrorKind {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Unspecified => "CONFIGURATION_ERROR_KIND_UNSPECIFIED",
-            Self::UnexpectedClockConfiguration => "CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION",
+            Self::Unspecified => "GET_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED",
+            Self::MissingField => "GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD",
+            Self::InvalidData => "GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA",
+            Self::NotFound => "GET_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND",
         };
         serializer.serialize_str(variant)
     }
 }
-impl<'de> serde::Deserialize<'de> for ConfigurationErrorKind {
+impl<'de> serde::Deserialize<'de> for GetCertificateHeaderErrorKind {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "CONFIGURATION_ERROR_KIND_UNSPECIFIED",
-            "CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION",
+            "GET_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED",
+            "GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD",
+            "GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA",
+            "GET_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND",
         ];
 
         struct GeneratedVisitor;
 
         impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = ConfigurationErrorKind;
+            type Value = GetCertificateHeaderErrorKind;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(formatter, "expected one of: {:?}", &FIELDS)
@@ -61,79 +65,10 @@ impl<'de> serde::Deserialize<'de> for ConfigurationErrorKind {
                 E: serde::de::Error,
             {
                 match value {
-                    "CONFIGURATION_ERROR_KIND_UNSPECIFIED" => Ok(ConfigurationErrorKind::Unspecified),
-                    "CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION" => Ok(ConfigurationErrorKind::UnexpectedClockConfiguration),
-                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
-                }
-            }
-        }
-        deserializer.deserialize_any(GeneratedVisitor)
-    }
-}
-impl serde::Serialize for ErrorKind {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let variant = match self {
-            Self::Unspecified => "ERROR_KIND_UNSPECIFIED",
-            Self::SignatureVerification => "ERROR_KIND_SIGNATURE_VERIFICATION",
-        };
-        serializer.serialize_str(variant)
-    }
-}
-impl<'de> serde::Deserialize<'de> for ErrorKind {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "ERROR_KIND_UNSPECIFIED",
-            "ERROR_KIND_SIGNATURE_VERIFICATION",
-        ];
-
-        struct GeneratedVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = ErrorKind;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(formatter, "expected one of: {:?}", &FIELDS)
-            }
-
-            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                i32::try_from(v)
-                    .ok()
-                    .and_then(|x| x.try_into().ok())
-                    .ok_or_else(|| {
-                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
-                    })
-            }
-
-            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                i32::try_from(v)
-                    .ok()
-                    .and_then(|x| x.try_into().ok())
-                    .ok_or_else(|| {
-                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
-                    })
-            }
-
-            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                match value {
-                    "ERROR_KIND_UNSPECIFIED" => Ok(ErrorKind::Unspecified),
-                    "ERROR_KIND_SIGNATURE_VERIFICATION" => Ok(ErrorKind::SignatureVerification),
+                    "GET_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED" => Ok(GetCertificateHeaderErrorKind::Unspecified),
+                    "GET_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD" => Ok(GetCertificateHeaderErrorKind::MissingField),
+                    "GET_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA" => Ok(GetCertificateHeaderErrorKind::InvalidData),
+                    "GET_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND" => Ok(GetCertificateHeaderErrorKind::NotFound),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -325,6 +260,77 @@ impl<'de> serde::Deserialize<'de> for GetCertificateHeaderResponse {
         deserializer.deserialize_struct("agglayer.node.v1.GetCertificateHeaderResponse", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for GetEpochConfigurationErrorKind {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "GET_EPOCH_CONFIGURATION_ERROR_KIND_UNSPECIFIED",
+            Self::UnexpectedClockConfiguration => "GET_EPOCH_CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetEpochConfigurationErrorKind {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "GET_EPOCH_CONFIGURATION_ERROR_KIND_UNSPECIFIED",
+            "GET_EPOCH_CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetEpochConfigurationErrorKind;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "GET_EPOCH_CONFIGURATION_ERROR_KIND_UNSPECIFIED" => Ok(GetEpochConfigurationErrorKind::Unspecified),
+                    "GET_EPOCH_CONFIGURATION_ERROR_KIND_UNEXPECTED_CLOCK_CONFIGURATION" => Ok(GetEpochConfigurationErrorKind::UnexpectedClockConfiguration),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
 impl serde::Serialize for GetEpochConfigurationRequest {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -486,6 +492,83 @@ impl<'de> serde::Deserialize<'de> for GetEpochConfigurationResponse {
             }
         }
         deserializer.deserialize_struct("agglayer.node.v1.GetEpochConfigurationResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GetLatestCertificateHeaderErrorKind {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED",
+            Self::MissingField => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD",
+            Self::InvalidData => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA",
+            Self::NotFound => "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderErrorKind {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED",
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD",
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA",
+            "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetLatestCertificateHeaderErrorKind;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_UNSPECIFIED" => Ok(GetLatestCertificateHeaderErrorKind::Unspecified),
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_MISSING_FIELD" => Ok(GetLatestCertificateHeaderErrorKind::MissingField),
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_INVALID_DATA" => Ok(GetLatestCertificateHeaderErrorKind::InvalidData),
+                    "GET_LATEST_CERTIFICATE_HEADER_ERROR_KIND_NOT_FOUND" => Ok(GetLatestCertificateHeaderErrorKind::NotFound),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
     }
 }
 impl serde::Serialize for GetLatestCertificateHeaderRequest {
@@ -693,6 +776,272 @@ impl<'de> serde::Deserialize<'de> for GetLatestCertificateHeaderResponse {
         deserializer.deserialize_struct("agglayer.node.v1.GetLatestCertificateHeaderResponse", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for GetNetworkInfoErrorKind {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "GET_NETWORK_INFO_ERROR_KIND_UNSPECIFIED",
+            Self::InvalidNetworkId => "GET_NETWORK_INFO_ERROR_KIND_INVALID_NETWORK_ID",
+            Self::NetworkInfoError => "GET_NETWORK_INFO_ERROR_KIND_NETWORK_INFO_ERROR",
+            Self::UnknownNetworkType => "GET_NETWORK_INFO_ERROR_KIND_UNKNOWN_NETWORK_TYPE",
+            Self::InternalError => "GET_NETWORK_INFO_ERROR_KIND_INTERNAL_ERROR",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetNetworkInfoErrorKind {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "GET_NETWORK_INFO_ERROR_KIND_UNSPECIFIED",
+            "GET_NETWORK_INFO_ERROR_KIND_INVALID_NETWORK_ID",
+            "GET_NETWORK_INFO_ERROR_KIND_NETWORK_INFO_ERROR",
+            "GET_NETWORK_INFO_ERROR_KIND_UNKNOWN_NETWORK_TYPE",
+            "GET_NETWORK_INFO_ERROR_KIND_INTERNAL_ERROR",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetNetworkInfoErrorKind;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "GET_NETWORK_INFO_ERROR_KIND_UNSPECIFIED" => Ok(GetNetworkInfoErrorKind::Unspecified),
+                    "GET_NETWORK_INFO_ERROR_KIND_INVALID_NETWORK_ID" => Ok(GetNetworkInfoErrorKind::InvalidNetworkId),
+                    "GET_NETWORK_INFO_ERROR_KIND_NETWORK_INFO_ERROR" => Ok(GetNetworkInfoErrorKind::NetworkInfoError),
+                    "GET_NETWORK_INFO_ERROR_KIND_UNKNOWN_NETWORK_TYPE" => Ok(GetNetworkInfoErrorKind::UnknownNetworkType),
+                    "GET_NETWORK_INFO_ERROR_KIND_INTERNAL_ERROR" => Ok(GetNetworkInfoErrorKind::InternalError),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GetNetworkInfoRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.network_id != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetNetworkInfoRequest", len)?;
+        if self.network_id != 0 {
+            struct_ser.serialize_field("networkId", &self.network_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetNetworkInfoRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "network_id",
+            "networkId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            NetworkId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "networkId" | "network_id" => Ok(GeneratedField::NetworkId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetNetworkInfoRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.node.v1.GetNetworkInfoRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetNetworkInfoRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut network_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::NetworkId => {
+                            if network_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("networkId"));
+                            }
+                            network_id__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(GetNetworkInfoRequest {
+                    network_id: network_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.node.v1.GetNetworkInfoRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GetNetworkInfoResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.network_info.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("agglayer.node.v1.GetNetworkInfoResponse", len)?;
+        if let Some(v) = self.network_info.as_ref() {
+            struct_ser.serialize_field("networkInfo", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GetNetworkInfoResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "network_info",
+            "networkInfo",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            NetworkInfo,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "networkInfo" | "network_info" => Ok(GeneratedField::NetworkInfo),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GetNetworkInfoResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct agglayer.node.v1.GetNetworkInfoResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GetNetworkInfoResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut network_info__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::NetworkInfo => {
+                            if network_info__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("networkInfo"));
+                            }
+                            network_info__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(GetNetworkInfoResponse {
+                    network_info: network_info__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("agglayer.node.v1.GetNetworkInfoResponse", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for LatestCertificateRequestType {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -760,6 +1109,86 @@ impl<'de> serde::Deserialize<'de> for LatestCertificateRequestType {
                     "LATEST_CERTIFICATE_REQUEST_TYPE_UNSPECIFIED" => Ok(LatestCertificateRequestType::Unspecified),
                     "LATEST_CERTIFICATE_REQUEST_TYPE_PENDING" => Ok(LatestCertificateRequestType::Pending),
                     "LATEST_CERTIFICATE_REQUEST_TYPE_SETTLED" => Ok(LatestCertificateRequestType::Settled),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for SubmitCertificateErrorKind {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "SUBMIT_CERTIFICATE_ERROR_KIND_UNSPECIFIED",
+            Self::MissingField => "SUBMIT_CERTIFICATE_ERROR_KIND_MISSING_FIELD",
+            Self::InvalidData => "SUBMIT_CERTIFICATE_ERROR_KIND_INVALID_DATA",
+            Self::SignatureVerification => "SUBMIT_CERTIFICATE_ERROR_KIND_SIGNATURE_VERIFICATION",
+            Self::UnableToReplacePendingCertificate => "SUBMIT_CERTIFICATE_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for SubmitCertificateErrorKind {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "SUBMIT_CERTIFICATE_ERROR_KIND_UNSPECIFIED",
+            "SUBMIT_CERTIFICATE_ERROR_KIND_MISSING_FIELD",
+            "SUBMIT_CERTIFICATE_ERROR_KIND_INVALID_DATA",
+            "SUBMIT_CERTIFICATE_ERROR_KIND_SIGNATURE_VERIFICATION",
+            "SUBMIT_CERTIFICATE_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = SubmitCertificateErrorKind;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "SUBMIT_CERTIFICATE_ERROR_KIND_UNSPECIFIED" => Ok(SubmitCertificateErrorKind::Unspecified),
+                    "SUBMIT_CERTIFICATE_ERROR_KIND_MISSING_FIELD" => Ok(SubmitCertificateErrorKind::MissingField),
+                    "SUBMIT_CERTIFICATE_ERROR_KIND_INVALID_DATA" => Ok(SubmitCertificateErrorKind::InvalidData),
+                    "SUBMIT_CERTIFICATE_ERROR_KIND_SIGNATURE_VERIFICATION" => Ok(SubmitCertificateErrorKind::SignatureVerification),
+                    "SUBMIT_CERTIFICATE_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE" => Ok(SubmitCertificateErrorKind::UnableToReplacePendingCertificate),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

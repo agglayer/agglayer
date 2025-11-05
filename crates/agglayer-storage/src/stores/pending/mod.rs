@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// A logical store for pending.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PendingStore {
     db: Arc<DB>,
 }

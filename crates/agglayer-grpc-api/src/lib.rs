@@ -1,10 +1,15 @@
 use std::{convert::Infallible, sync::Arc};
 
 use agglayer_config::Config;
+use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_grpc_server::node::v1::{
     certificate_submission_service_server::CertificateSubmissionServiceServer,
     configuration_service_server::ConfigurationServiceServer,
     node_state_service_server::NodeStateServiceServer,
+};
+use agglayer_storage::stores::{
+    DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
+    PendingCertificateWriter, StateReader, StateWriter,
 };
 use certificate_submission_service::CertificateSubmissionServer;
 use configuration_service::ConfigurationServer;
@@ -15,8 +20,7 @@ use tonic::{
     codec::CompressionEncoding,
     server::NamedService,
 };
-use tower::Service;
-use tower::ServiceExt as _;
+use tower::{Service, ServiceExt as _};
 
 mod certificate_submission_service;
 mod configuration_service;
@@ -41,7 +45,7 @@ impl ServerBuilder {
             + Send
             + 'static,
         S::Future: Send + 'static,
-        S::Error: Into<anyhow::Error> + Send,
+        S::Error: Into<eyre::Error> + Send,
     {
         self.router = self.router.route_service(
             &format!("/{}/{{*rest}}", S::NAME),
@@ -78,8 +82,22 @@ impl ServerBuilder {
 }
 
 impl Server {
-    pub fn with_config(config: Arc<Config>) -> ServerBuilder {
-        let certificate_submission_server = CertificateSubmissionServer {};
+    pub fn with_config<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>(
+        config: Arc<Config>,
+        rpc_service: Arc<
+            agglayer_rpc::AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>,
+        >,
+    ) -> ServerBuilder
+    where
+        L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
+        PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
+        StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
+        DebugStore: DebugReader + DebugWriter + 'static,
+        EpochsStore: EpochStoreReader + 'static,
+    {
+        let certificate_submission_server = CertificateSubmissionServer {
+            service: rpc_service.clone(),
+        };
         let certificate_submission_service =
             CertificateSubmissionServiceServer::new(certificate_submission_server)
                 .max_decoding_message_size(config.grpc.max_decoding_message_size)
@@ -87,14 +105,18 @@ impl Server {
                 .send_compressed(CompressionEncoding::Zstd)
                 .accept_compressed(CompressionEncoding::Zstd);
 
-        let configuration_server = ConfigurationServer {};
+        let configuration_server = ConfigurationServer {
+            service: rpc_service.clone(),
+        };
         let configuration_service = ConfigurationServiceServer::new(configuration_server)
             .max_decoding_message_size(config.grpc.max_decoding_message_size)
             .max_encoding_message_size(config.grpc.max_encoding_message_size)
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
 
-        let network_state_server = NodeStateServer {};
+        let network_state_server = NodeStateServer {
+            service: rpc_service.clone(),
+        };
         let network_state_service = NodeStateServiceServer::new(network_state_server)
             .max_decoding_message_size(config.grpc.max_decoding_message_size)
             .max_encoding_message_size(config.grpc.max_encoding_message_size)
@@ -106,6 +128,9 @@ impl Server {
             .add_rpc_service(configuration_service)
             .add_rpc_service(network_state_service)
             .add_reflection_service(agglayer_grpc_types::node::v1::FILE_DESCRIPTOR_SET)
-            .add_reflection_service(agglayer_grpc_types::protocol::types::v1::FILE_DESCRIPTOR_SET)
+            .add_reflection_service(agglayer_interop::grpc::v1::FILE_DESCRIPTOR_SET)
     }
 }
+
+#[cfg(test)]
+mod tests;

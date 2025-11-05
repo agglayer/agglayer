@@ -1,0 +1,36 @@
+name: PR Review Reminder
+
+on:
+  schedule:
+    # Run every day at 9:00 AM UTC
+    - cron: "0 9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      min_days_old:
+        description: "Minimum number of days a PR must be open"
+        required: false
+        type: number
+        default: 2
+      dry_run:
+        description: "Run without sending Slack notification (for testing)"
+        required: false
+        type: boolean
+        default: false
+      include_drafts:
+        description: "Include draft PRs in the check"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  call-pr-reminder:
+    uses: agglayer/reusable-workflows/.github/workflows/pr-review-reminder.yml@main
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      min_days_old: ${{ fromJSON(inputs.min_days_old || '2') }}
+      dry_run: ${{ inputs.dry_run || false }}
+      include_drafts: ${{ inputs.include_drafts || false }}
+      repository: ${{ github.repository }}
+    secrets: inherit

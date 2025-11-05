@@ -1,18 +1,171 @@
-use agglayer_types::primitives::U256;
-use pessimistic_proof::core::generate_pessimistic_proof;
-use pessimistic_proof::local_state::LocalNetworkState;
-use pessimistic_proof::NetworkState;
-use pessimistic_proof::{bridge_exit::TokenInfo, core};
+use agglayer_types::{
+    aggchain_data::CertificateAggchainDataCtx, primitives::U256, Certificate, Digest, Error,
+    L1WitnessCtx, LocalNetworkStateData, PessimisticRootInput,
+};
+use pessimistic_proof::{
+    core::{
+        commitment::{
+            PessimisticRootCommitmentValues, PessimisticRootCommitmentVersion,
+            SignatureCommitmentVersion,
+        },
+        generate_pessimistic_proof, AggchainData, AggchainProof, MultiSignature,
+    },
+    local_state::LocalNetworkState,
+    unified_bridge::TokenInfo,
+    NetworkState, ProofError,
+};
 use pessimistic_proof_test_suite::{
     forest::Forest,
     sample_data::{ETH, USDC},
     PESSIMISTIC_PROOF_ELF,
 };
 use rand::random;
+use rstest::rstest;
 use sp1_sdk::{utils, HashableKey, ProverClient, SP1Stdin};
+use unified_bridge::Claim;
 
 fn u(x: u64) -> U256 {
     x.try_into().unwrap()
+}
+
+struct VersionConsistencyChecker {
+    /// Initial state
+    initial_state: LocalNetworkStateData,
+    /// Certificate
+    certificate: Certificate,
+    /// Commitment version of the settled PP root, indicates the latest settled
+    /// commitment version.
+    last_settled_pp_root_version: PessimisticRootCommitmentVersion,
+    /// Version used to sign the commitment contained in the Certificate,
+    /// indicates the desired next commitment version.
+    certificate_signature_version: SignatureCommitmentVersion,
+}
+
+fn state_transition(
+    certificate_signature_version: SignatureCommitmentVersion,
+) -> (LocalNetworkStateData, Certificate) {
+    let mut forest = Forest::new(vec![(USDC, u(100)), (ETH, u(200))]);
+    let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
+    let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
+
+    let initial_state = forest.state_b.clone();
+    let certificate = forest.apply_events_with_version(
+        &imported_bridge_events,
+        &bridge_events,
+        certificate_signature_version,
+    );
+
+    (initial_state, certificate)
+}
+
+impl VersionConsistencyChecker {
+    fn check(&self) -> Result<(), ProofError> {
+        let l1_info_root = self.certificate.l1_info_root().unwrap().unwrap_or_default();
+        let signer = self
+            .certificate
+            .retrieve_signer(self.certificate_signature_version)
+            .unwrap();
+
+        let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
+            self.certificate.aggchain_data
+        else {
+            panic!("inconsistent test data")
+        };
+
+        self.certificate
+            .verify_legacy_ecdsa(signer, &signature)
+            .unwrap();
+
+        // Previous state settled in L1
+        let expected_prev_pp_root = PessimisticRootCommitmentValues {
+            balance_root: self.initial_state.balance_tree.root.into(),
+            nullifier_root: self.initial_state.nullifier_tree.root.into(),
+            ler_leaf_count: self.initial_state.exit_tree.leaf_count(),
+            height: self.certificate.height.as_u64(),
+            origin_network: self.certificate.network_id,
+        }
+        .compute_pp_root(self.last_settled_pp_root_version);
+
+        let multi_batch_header = self
+            .initial_state
+            .make_multi_batch_header(
+                &self.certificate,
+                L1WitnessCtx {
+                    l1_info_root,
+                    prev_pessimistic_root: PessimisticRootInput::Fetched(expected_prev_pp_root),
+                    aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                },
+            )
+            .unwrap();
+
+        let new_state = {
+            let mut state = self.initial_state.clone();
+            state
+                .apply_certificate(
+                    &self.certificate,
+                    L1WitnessCtx {
+                        l1_info_root,
+                        prev_pessimistic_root: PessimisticRootInput::Fetched(expected_prev_pp_root),
+                        aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                    },
+                )
+                .unwrap();
+            state
+        };
+
+        // New state about to be settled in L1
+        let expected_new_pp_root = PessimisticRootCommitmentValues {
+            balance_root: new_state.balance_tree.root.into(),
+            nullifier_root: new_state.nullifier_tree.root.into(),
+            ler_leaf_count: new_state.exit_tree.leaf_count(),
+            height: self.certificate.height.as_u64() + 1,
+            origin_network: self.certificate.network_id,
+        }
+        .compute_pp_root(match self.certificate_signature_version {
+            SignatureCommitmentVersion::V2 => PessimisticRootCommitmentVersion::V2,
+            _ => PessimisticRootCommitmentVersion::V3,
+        });
+
+        let (pv, _) =
+            generate_pessimistic_proof(self.initial_state.clone().into(), &multi_batch_header)?;
+
+        assert_eq!(expected_prev_pp_root, pv.prev_pessimistic_root);
+        assert_eq!(expected_new_pp_root, pv.new_pessimistic_root);
+
+        Ok(())
+    }
+}
+
+#[rstest]
+// pre-migration: from V2 to V2 is ok
+#[case(PessimisticRootCommitmentVersion::V2, SignatureCommitmentVersion::V2, Ok(()))]
+// migration: from V2 to V3 is ok
+#[case(PessimisticRootCommitmentVersion::V2, SignatureCommitmentVersion::V3, Ok(()))]
+// post-migration: from V3 to V3 is ok
+#[case(PessimisticRootCommitmentVersion::V3, SignatureCommitmentVersion::V3, Ok(()))]
+// rollback: from V3 to V2 is forbidden and lead to an inconsistent signed payload error
+#[case(
+    PessimisticRootCommitmentVersion::V3,
+    SignatureCommitmentVersion::V2,
+    Err(ProofError::InconsistentSignedPayload)
+)]
+fn pp_root_migration(
+    #[case] prev_version: PessimisticRootCommitmentVersion,
+    #[case] new_version: SignatureCommitmentVersion,
+    #[case] expected_result: Result<(), ProofError>,
+) {
+    let (initial_state, certificate) = state_transition(new_version);
+
+    assert_eq!(
+        VersionConsistencyChecker {
+            certificate_signature_version: new_version,
+            last_settled_pp_root_version: prev_version,
+            initial_state,
+            certificate
+        }
+        .check(),
+        expected_result
+    );
 }
 
 fn e2e_local_pp_simple_helper(
@@ -28,7 +181,18 @@ fn e2e_local_pp_simple_helper(
     let certificate = forest.apply_events(&imported_events, &events);
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(
+            &certificate,
+            L1WitnessCtx {
+                l1_info_root,
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                    signer: forest.get_signer(),
+                },
+            },
+        )
         .unwrap();
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
 }
@@ -47,6 +211,20 @@ fn e2e_local_pp_simple_zero_initial_balances() {
     e2e_local_pp_simple_helper(
         [],
         vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))],
+        vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(30))],
+    )
+}
+
+#[test]
+fn e2e_local_pp_overflow_attempt() {
+    e2e_local_pp_simple_helper(
+        [],
+        vec![
+            (USDC, U256::MAX),
+            (USDC, u(3)),
+            (ETH, u(100)),
+            (USDC, u(10)),
+        ],
         vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(30))],
     )
 }
@@ -88,10 +266,57 @@ fn e2e_local_pp_random() {
 
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
     let multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(
+            &certificate,
+            L1WitnessCtx {
+                l1_info_root,
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                    signer: forest.get_signer(),
+                },
+            },
+        )
         .unwrap();
 
     generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
+}
+
+#[test]
+fn inconsistent_ger() {
+    let mut forest = Forest::new(vec![(USDC, u(100)), (ETH, u(200))]);
+    let imported_bridge_events = vec![(USDC, u(50)), (ETH, u(100)), (USDC, u(10))];
+    let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
+
+    let initial_state = forest.state_b.clone();
+    let mut certificate = forest.apply_events(&imported_bridge_events, &bridge_events);
+
+    // Change the global exit root
+    {
+        let Claim::Mainnet(ref mut claim_0) = certificate.imported_bridge_exits[0].claim_data
+        else {
+            unreachable!("expect from mainnet");
+        };
+
+        claim_0.l1_leaf.inner.global_exit_root = Digest::default();
+    }
+
+    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
+    let res = initial_state.make_multi_batch_header(
+        &certificate,
+        L1WitnessCtx {
+            l1_info_root,
+            prev_pessimistic_root: PessimisticRootInput::Computed(
+                PessimisticRootCommitmentVersion::V2,
+            ),
+            aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                signer: forest.get_signer(),
+            },
+        },
+    );
+
+    assert!(matches!(res, Err(Error::InconsistentGlobalExitRoot)))
 }
 
 // Same as `e2e_local_pp_simple` with an SP1 proof on top
@@ -106,18 +331,36 @@ fn test_sp1_simple() {
     let bridge_events = vec![(USDC, u(20)), (ETH, u(50)), (USDC, u(130))];
 
     let initial_state = forest.state_b.clone();
-    let (certificate, aggchain_vkey, aggchain_params, aggchain_proof) =
+    let (certificate, aggchain_vkey, aggchain_params, aggchain_proof, signature) =
         forest.apply_events_with_aggchain_proof(&imported_bridge_events, &bridge_events);
     let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
     let mut multi_batch_header = initial_state
-        .make_multi_batch_header(&certificate, forest.get_signer(), l1_info_root)
+        .make_multi_batch_header(
+            &certificate,
+            L1WitnessCtx {
+                l1_info_root,
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                    signer: forest.get_signer(),
+                },
+            },
+        )
         .unwrap();
 
     // Set the aggchain proof to the sp1 variant
-    multi_batch_header.aggchain_proof = core::AggchainData::Generic {
-        aggchain_params: aggchain_params.into(),
-        aggchain_vkey: aggchain_vkey.hash_u32(),
+    multi_batch_header.aggchain_data = AggchainData::MultisigAndAggchainProof {
+        multisig: MultiSignature {
+            signatures: vec![Some(signature)],
+            expected_signers: vec![forest.get_signer()],
+            threshold: 1,
+        },
+        aggchain_proof: AggchainProof {
+            aggchain_params: aggchain_params.into(),
+            aggchain_vkey: aggchain_vkey.hash_u32(),
+        },
     };
 
     let initial_state: NetworkState = LocalNetworkState::from(initial_state).into();

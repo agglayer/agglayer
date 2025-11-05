@@ -1,30 +1,48 @@
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId,
+    primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use mockall::mock;
 
 use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
-    stores::{MetadataReader, MetadataWriter, StateReader, StateWriter},
+    stores::{MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter},
 };
 mock! {
     pub StateStore {}
+    impl NetworkInfoReader for StateStore {
+        fn get_network_info(&self, network_id: NetworkId) -> Result<agglayer_types::NetworkInfo, Error>;
+
+        fn get_latest_pending_height(&self, network_id: NetworkId) -> Result<Option<Height>, Error>;
+
+        fn get_latest_settled_certificate_id(
+            &self,
+            network_id: NetworkId,
+        ) -> Result<Option<CertificateId>, Error>;
+    }
+
     impl MetadataReader for StateStore {
-        fn get_latest_settled_epoch(&self) -> Result<Option<u64>, Error>;
+        fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error>;
     }
 
     impl MetadataWriter for StateStore {
-        fn set_latest_settled_epoch(&self, value: u64) -> Result<(), Error>;
+        fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
     }
 
     impl StateWriter for StateStore {
         fn update_settlement_tx_hash(
             &self,
             certificate_id: &CertificateId,
-            tx_hash: Digest,
+            tx_hash: SettlementTxHash,
+            force: bool,
         ) -> Result<(), Error>;
+
+        fn remove_settlement_tx_hash(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<(), Error>;
+
         fn assign_certificate_to_epoch(
             &self,
             certificate_id: &CertificateId,

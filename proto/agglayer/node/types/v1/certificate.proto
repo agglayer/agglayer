@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package agglayer.node.types.v1;
+
+import "agglayer/interop/types/v1/aggchain.proto";
+import "agglayer/interop/types/v1/bridge_exit.proto";
+import "agglayer/interop/types/v1/bytes.proto";
+import "agglayer/interop/types/v1/imported_bridge_exit.proto";
+
+// Certificate type.
+message Certificate {
+  // NetworkID of the origin network.
+  uint32 network_id = 1;
+  // Simple increment to count the Certificate per network.
+  uint64 height = 2;
+  // Previous local exit root.
+  agglayer.interop.types.v1.FixedBytes32 prev_local_exit_root = 3;
+  // New local exit root.
+  agglayer.interop.types.v1.FixedBytes32 new_local_exit_root = 4;
+  // List of bridge exits included in this state transition.
+  repeated agglayer.interop.types.v1.BridgeExit bridge_exits = 5;
+  // List of imported bridge exits included in this state transition.
+  repeated agglayer.interop.types.v1.ImportedBridgeExit imported_bridge_exits = 6;
+  // Fixed size field of arbitrary data for the chain needs.
+  agglayer.interop.types.v1.FixedBytes32 metadata = 7;
+  // Aggchain data.
+  agglayer.interop.types.v1.AggchainData aggchain_data = 8;
+  // custom chain data.
+  bytes custom_chain_data = 9;
+  // Defines which L1 info tree leaf count is used for this certificate.
+  // The L1 info tree leaf count is the L1 info tree leaf index + 1.
+  optional uint32 l1_info_tree_leaf_count = 10;
+}
