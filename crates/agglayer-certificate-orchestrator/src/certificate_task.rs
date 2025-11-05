@@ -140,8 +140,8 @@ where
         // TODO: Hack to deal with Proven certificates in case the PP changed.
         // See https://github.com/agglayer/agglayer/pull/819#discussion_r2152193517 for the details
         // Note that we still have the problem, this is here only to mitigate a bit the
-        // issue When we finally make the storage refactoring, we should remove
-        // this
+        // issue. When we finally do the storage refactoring, we should remove
+        // this.
         if self.header.status == CertificateStatus::Proven {
             warn!(%certificate_id,
                 "Certificate is already proven but we do not have the new_state anymore... \
@@ -319,31 +319,10 @@ where
 
             if recomputed_from_contract.is_none() {
                 // Tx not found on L1, and pp root from contract not matching,
-                // clean tx from cert header and move back to Proven
-                let previous_tx_hash = self.header.settlement_tx_hash;
-                error!(
-                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
-                );
-                self.header.settlement_tx_hash = None;
-                if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
-                    error!(
-                        ?error,
-                        "Failed to remove tx_hash {previous_tx_hash:?} from database"
-                    );
-                };
-
-                self.header.status = CertificateStatus::Proven;
-                if let Err(error) = self.state_store.update_certificate_header_status(
-                    &self.header.certificate_id,
-                    &CertificateStatus::Proven,
-                ) {
-                    error!(?error, "Failed to update certificate status in database");
-                };
-
+                // Make the cert InError and wait for aggkit to resubmit it.
                 return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
+                    "Settlement tx {:?} not found on L1, moving certificate back to Proven",
+                    self.header.settlement_tx_hash
                 )));
             }
         };
@@ -546,6 +525,14 @@ where
                     "Retrying the settlement transaction after a timeout for certificate \
                      {certificate_id}"
                 );
+                // We should theoretically remove the settlement_tx_hash here. However, doing so
+                // would currently expose us to bugs: recompute_state checks for already-settled
+                // cert only if there's already a settlement_tx_hash.
+                // Considering fixing this would likely be relatively hard right now, we
+                // currently leave the settlement_tx_hash here. This is not by design, and as
+                // soon as the settlement logic is refactored properly, we can remove
+                // the settlement_tx_hash here. But the refactor will likely lead to this code
+                // disappearing anyway, so… :shrug:
                 self.set_status(CertificateStatus::Proven)?;
                 return Box::pin(self.process_from_proven()).await;
             }
