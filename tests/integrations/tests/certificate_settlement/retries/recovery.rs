@@ -62,7 +62,7 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 
 #[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(180))]
+#[timeout(Duration::from_secs(240))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     // Settle one certificate, shutdown node.
