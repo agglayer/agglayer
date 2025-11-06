@@ -291,10 +291,8 @@ where
 
         impl Operation {
             fn parse(operation: &str) -> Result<Self, Error> {
-                if operation.starts_with("set status from ") {
-                    let parts = operation["set status from ".len()..]
-                        .split(" to ")
-                        .collect::<Vec<_>>();
+                if let Some(operation) = operation.strip_prefix("set status from ") {
+                    let parts = operation.split(" to ").collect::<Vec<_>>();
                     let [from_status, to_status] = parts[..] else {
                         return Err(Error::InvalidArgument(
                             "Invalid set status operation format".to_string(),
@@ -322,10 +320,10 @@ where
                         from: parse_status(from_status)?,
                         to: parse_status(to_status)?,
                     })
-                } else if operation.starts_with("set settlement tx hash ") {
-                    let parts = operation["set settlement tx hash from ".len()..]
-                        .split(" to ")
-                        .collect::<Vec<_>>();
+                } else if let Some(operation) =
+                    operation.strip_prefix("set settlement tx hash from ")
+                {
+                    let parts = operation.split(" to ").collect::<Vec<_>>();
                     let [from_tx_hash, to_tx_hash] = parts[..] else {
                         return Err(Error::InvalidArgument(
                             "Invalid set settlement tx hash operation format".to_string(),
