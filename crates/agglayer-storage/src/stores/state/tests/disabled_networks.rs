@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::SystemTime};
 
 use agglayer_types::EpochNumber;
-use prost_types::Timestamp;
 
 use crate::{
     columns::{
