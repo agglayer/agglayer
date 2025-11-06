@@ -13,8 +13,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::{Deserialize, Serialize};
 use agglayer_types::CertificateHeader;
+use serde::{Deserialize, Serialize};
+
 use crate::storage::{
     debug_db_cf_definitions, epochs_db_cf_definitions, pending_db_cf_definitions,
     state_db_cf_definitions, DB,
@@ -460,10 +461,8 @@ fn test_reference_db_v1_read_epochs() {
 
     use crate::{
         columns::epochs::{
-            certificates::CertificatePerIndexColumn,
-            end_checkpoint::EndCheckpointColumn,
-            metadata::PerEpochMetadataColumn,
-            proofs::ProofPerIndexColumn,
+            certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
+            metadata::PerEpochMetadataColumn, proofs::ProofPerIndexColumn,
             start_checkpoint::StartCheckpointColumn,
         },
         types::{PerEpochMetadataKey, PerEpochMetadataValue},
@@ -586,10 +585,7 @@ fn test_reference_db_v1_read_epochs() {
         certificates.insert(cert_index, cert);
     }
 
-    println!(
-        "   ✅ Found {} certificates in epoch",
-        certificates.len()
-    );
+    println!("   ✅ Found {} certificates in epoch", certificates.len());
     for (idx, cert) in certificates.iter().take(3) {
         println!(
             "      Index {}: Network {}, Height {}",
@@ -671,8 +667,9 @@ fn test_reference_db_v1_read_epochs() {
     let _ = fs::remove_dir_all(&temp_dir);
 }
 
-/// Test reconstruction of complete LocalNetworkStateData from the state database.
-/// This is the highest-level state structure that combines all three trees.
+/// Test reconstruction of complete LocalNetworkStateData from the state
+/// database. This is the highest-level state structure that combines all three
+/// trees.
 #[test]
 fn test_reference_db_v1_read_local_network_state() {
     use agglayer_tries::smt::Smt;
@@ -693,8 +690,7 @@ fn test_reference_db_v1_read_local_network_state() {
 
     const LOCAL_EXIT_TREE_DEPTH: usize = 32;
 
-    let tarball_path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
+    let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
     let temp_dir = std::env::temp_dir().join(format!(
         "agglayer_regression_test_state_{}",
         std::time::SystemTime::now()
@@ -702,17 +698,14 @@ fn test_reference_db_v1_read_local_network_state() {
             .unwrap()
             .as_secs()
     ));
-    let db_path = extract_tarball(&tarball_path, &temp_dir)
-        .expect("Failed to extract tarball");
+    let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
     let metadata = read_metadata(&db_path).expect("Failed to read metadata");
     let state_path = db_path.join(&metadata.database_paths.state);
     let state_db = DB::open_cf_readonly(&state_path, state_db_cf_definitions())
         .expect("Failed to open state DB");
 
     println!("\n=== Testing LocalNetworkStateData Reconstruction ===");
-    println!(
-        "This validates the complete state per network, combining all three trees.\n"
-    );
+    println!("This validates the complete state per network, combining all three trees.\n");
 
     // Collect all networks that have balance trees
     let mut network_ids = std::collections::BTreeSet::new();
@@ -931,8 +924,14 @@ fn test_reference_db_v1_read_local_network_state() {
         println!("     ✅ State commitment validated:");
         println!("        - Exit Root: {}", state_commitment.exit_root);
         println!("        - Balance Root: {}", state_commitment.balance_root);
-        println!("        - Nullifier Root: {}", state_commitment.nullifier_root);
-        println!("        - LER Leaf Count: {}", state_commitment.ler_leaf_count);
+        println!(
+            "        - Nullifier Root: {}",
+            state_commitment.nullifier_root
+        );
+        println!(
+            "        - LER Leaf Count: {}",
+            state_commitment.ler_leaf_count
+        );
 
         // 6. Verify conversion to LocalNetworkState (pessimistic proof type)
         println!("  6. Testing conversion to LocalNetworkState...");
@@ -944,7 +943,10 @@ fn test_reference_db_v1_read_local_network_state() {
         let _pessimistic_state: pessimistic_proof::NetworkState = local_state.into();
         println!("     ✅ Successfully converted to NetworkState");
 
-        println!("  ✅ Network {} fully reconstructed and validated!\n", network_id);
+        println!(
+            "  ✅ Network {} fully reconstructed and validated!\n",
+            network_id
+        );
     }
 
     println!("✅ All LocalNetworkStateData structures successfully reconstructed from database!");
