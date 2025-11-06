@@ -134,8 +134,8 @@ async fn start_from_zero() {
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t, _f| *i == certificate_id && *t == SettlementTxHash::for_tests())
-        .returning(|_, _, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id && *t == SettlementTxHash::for_tests())
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -348,8 +348,8 @@ async fn one_per_epoch() {
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t, _f| *i == certificate_id && *t == SettlementTxHash::for_tests())
-        .returning(|_, _, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id && *t == SettlementTxHash::for_tests())
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -638,8 +638,8 @@ async fn retries() {
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t, _f| *i == certificate_id2 && *t == SettlementTxHash::for_tests())
-        .returning(|_, _, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SettlementTxHash::for_tests())
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -877,8 +877,8 @@ async fn changing_epoch_triggers_certify() {
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t, _f| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
-        .returning(|_, _, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_submit_certificate_settlement()
@@ -901,8 +901,8 @@ async fn changing_epoch_triggers_certify() {
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t, _f| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_2)
-        .returning(|_, _, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_2)
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()

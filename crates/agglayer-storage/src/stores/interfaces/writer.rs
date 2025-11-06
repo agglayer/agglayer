@@ -36,12 +36,25 @@ pub trait MetadataWriter: Send + Sync {
     fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateEvenIfAlreadyPresent {
+    Yes,
+    No,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateStatusToCandidate {
+    Yes,
+    No,
+}
+
 pub trait StateWriter: Send + Sync {
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
-        force: bool,
+        force: UpdateEvenIfAlreadyPresent,
+        set_status: UpdateStatusToCandidate,
     ) -> Result<(), Error>;
 
     fn remove_settlement_tx_hash(
