@@ -1,0 +1,66 @@
+[tasks.generate-proto]
+dependencies = [
+    "install-buf",
+    "install-protoc-gen-prost",
+    "install-protoc-gen-prost-serde",
+    "install-protoc-gen-prost-crate",
+    "install-protoc-gen-tonic",
+    "generate-proto-node",
+    "generate-proto-storage",
+    "generate-proto-prover"
+]
+
+[tasks.generate-proto-storage]
+command = "buf"
+args = ["generate", "--template", "buf.storage.gen.yaml", "--path", "proto/agglayer/storage"]
+
+[tasks.generate-proto-prover]
+command = "buf"
+args = ["generate", "--template", "buf.agglayer-prover.gen.yaml", "--path", "proto/agglayer/prover"]
+
+[tasks.generate-proto-node]
+command = "buf"
+args = ["generate", "--template", "buf.rust.gen.yaml", "--path", "proto/agglayer/node"]
+
+[tasks.install-buf]
+condition = { env_not_set = ["GITHUB_RUN_ID"] }
+run_task = [
+    { name = "install-buf-linux", condition = { platforms = [
+        "linux",
+    ] } },
+    { name = "install-buf-mac", condition = { platforms = [
+        "mac",
+    ] } },
+]
+
+[tasks.install-buf-linux]
+script = '''
+npm install @bufbuild/buf
+'''
+
+[tasks.install-buf-mac]
+script = '''
+brew install bufbuild/buf/buf
+'''
+
+# Upstream https://github.com/neoeinstein/protoc-gen-prost hasn't any new release since 08/2024,
+# so we have forked it to update dependencies (tonic)
+[tasks.install-protoc-gen-prost]
+script = '''
+cargo install --git https://github.com/agglayer/protoc-gen-prost.git --tag protoc-gen-prost-v0.4.1 protoc-gen-prost
+'''
+
+[tasks.install-protoc-gen-prost-serde]
+script = '''
+cargo install --git https://github.com/agglayer/protoc-gen-prost.git --tag protoc-gen-prost-serde-v0.3.2 protoc-gen-prost-serde
+'''
+
+[tasks.install-protoc-gen-prost-crate]
+script = '''
+cargo install --git https://github.com/agglayer/protoc-gen-prost.git --tag protoc-gen-prost-crate-v0.4.2 protoc-gen-prost-crate
+'''
+
+[tasks.install-protoc-gen-tonic]
+script = '''
+cargo install --git https://github.com/agglayer/protoc-gen-prost.git --tag protoc-gen-tonic-v0.4.2 protoc-gen-tonic
+'''

@@ -4,11 +4,28 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+testutils = [
+    "dep:arbitrary",
+    "pessimistic-proof/testutils",
+    "agglayer-interop-types/testutils",
+]
+
+[[bench]]
+name = "criterion"
+harness = false
+
 [dependencies]
 agglayer-primitives.workspace = true
-pessimistic-proof = { path = "../pessimistic-proof" }
+agglayer-tries.workspace = true
+agglayer-interop-types.workspace = true
+pessimistic-proof.workspace = true
+unified-bridge.workspace = true
 
-ethers = { workspace = true, optional = true }
+alloy.workspace = true
+arbitrary = { workspace = true, optional = true }
+derive_more.workspace = true
 hex.workspace = true
 serde.workspace = true
 serde_with.workspace = true
@@ -16,12 +33,12 @@ sp1-sdk.workspace = true
 sp1-core-machine.workspace = true
 sp1-prover.workspace = true
 thiserror.workspace = true
-bincode.workspace = true
 rand.workspace = true
+strum_macros.workspace = true
 
 [dev-dependencies]
 agglayer-types = { path = ".", features = ["testutils"] }
+agglayer-bincode.workspace = true
 
-[features]
-default = []
-testutils = ["dep:ethers"]
+criterion.workspace = true
+rstest.workspace = true

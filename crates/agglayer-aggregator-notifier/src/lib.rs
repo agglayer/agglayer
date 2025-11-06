@@ -1,10 +1,8 @@
 /// ELF of the pessimistic proof program
-const ELF: &[u8] =
-    include_bytes!("../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
+const ELF: &[u8] = pessimistic_proof::ELF;
 
 mod certifier;
-mod packer;
-mod proof;
+mod settlement_client;
 
 pub use certifier::CertifierClient;
-pub use packer::EpochPackerClient;
+pub use settlement_client::RpcSettlementClient;

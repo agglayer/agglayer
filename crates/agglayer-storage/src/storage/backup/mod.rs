@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use agglayer_types::EpochNumber;
 use rocksdb::backup::{
     BackupEngine as RocksBackupEngine, BackupEngineInfo as RocksBackupEngineInfo,
     BackupEngineOptions, RestoreOptions,
@@ -19,7 +20,7 @@ use super::{BackupError, DB};
 /// Request to create a new backup.
 pub struct BackupRequest {
     /// Optional epoch db to backup.
-    pub epoch_db: Option<(Arc<DB>, u64)>,
+    pub epoch_db: Option<(Arc<DB>, EpochNumber)>,
 }
 
 struct BackupEngineConfig {
@@ -134,7 +135,7 @@ impl BackupEngine {
             let epochs_opts = rocksdb::backup::BackupEngineOptions::new(
                 self.config
                     .epochs_backup_path
-                    .join(format!("{}", epoch_number)),
+                    .join(format!("{epoch_number}")),
             )?;
 
             match RocksBackupEngine::open(&epochs_opts, &self.env) {

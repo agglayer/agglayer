@@ -1,28 +1,27 @@
-use pessimistic_proof_core::{keccak::digest::Digest, local_exit_tree::hasher::Keccak256Hasher};
+use agglayer_primitives::Digest;
+use agglayer_tries::roots::{LocalBalanceRoot, LocalExitRoot, LocalNullifierRoot};
 use serde::{Deserialize, Serialize};
+use unified_bridge::LocalExitTree;
 
-use crate::{
-    local_balance_tree::LocalBalanceTree, local_exit_tree::LocalExitTree,
-    nullifier_tree::NullifierTree,
-};
+use crate::{local_balance_tree::LocalBalanceTree, nullifier_tree::NullifierTree};
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
-    pub exit_tree: LocalExitTree<Keccak256Hasher>,
+    pub exit_tree: LocalExitTree,
     /// Commitment to the balance for each token.
-    pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
+    pub balance_tree: LocalBalanceTree,
     /// Commitment to the Nullifier tree for the local network, tracks claimed
     /// assets on foreign networks
-    pub nullifier_tree: NullifierTree<Keccak256Hasher>,
+    pub nullifier_tree: NullifierTree,
 }
 
 impl From<LocalNetworkState> for pessimistic_proof_core::NetworkState {
     fn from(state: LocalNetworkState) -> Self {
         pessimistic_proof_core::NetworkState {
-            exit_tree: state.exit_tree.into(),
+            exit_tree: state.exit_tree,
             balance_tree: state.balance_tree.into(),
             nullifier_tree: state.nullifier_tree.into(),
         }
@@ -47,13 +46,13 @@ impl StateCommitment {
     }
 }
 
-impl From<StateCommitment> for pessimistic_proof_core::local_state::StateCommitment {
+impl From<StateCommitment> for pessimistic_proof_core::local_state::commitment::StateCommitment {
     fn from(commitment: StateCommitment) -> Self {
         Self {
-            exit_root: commitment.exit_root,
+            exit_root: LocalExitRoot::new(commitment.exit_root),
             ler_leaf_count: commitment.ler_leaf_count,
-            balance_root: commitment.balance_root,
-            nullifier_root: commitment.nullifier_root,
+            balance_root: LocalBalanceRoot::new(commitment.balance_root),
+            nullifier_root: LocalNullifierRoot::new(commitment.nullifier_root),
         }
     }
 }

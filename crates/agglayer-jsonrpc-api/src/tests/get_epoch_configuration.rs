@@ -10,10 +10,10 @@ use jsonrpsee::{
 use rstest::*;
 use serde_json::json;
 
-use crate::testutils::context;
-use crate::testutils::raw_rpc;
-use crate::testutils::TestContext;
-use crate::{testutils::RawRpcContext, AgglayerServer};
+use crate::{
+    testutils::{context, raw_rpc, RawRpcContext, TestContext},
+    AgglayerServer,
+};
 
 #[test_log::test(tokio::test)]
 async fn fetch_timeclock_config() {
@@ -25,7 +25,7 @@ async fn fetch_timeclock_config() {
     let context = TestContext::new_with_config(config).await;
 
     let payload: Result<EpochConfiguration, ClientError> = context
-        .client
+        .api_client
         .request("interop_getEpochConfiguration", rpc_params![])
         .await;
 
@@ -41,7 +41,7 @@ async fn fetch_timeclock_config() {
 #[test_log::test(tokio::test)]
 async fn fetch_block_clock_config(#[future] context: TestContext) {
     let payload: EpochConfiguration = context
-        .client
+        .api_client
         .request("interop_getEpochConfiguration", rpc_params![])
         .await
         .unwrap();

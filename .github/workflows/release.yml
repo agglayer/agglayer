@@ -32,7 +32,7 @@ jobs:
       VERSION: ${{ steps.meta.outputs.version }}
     steps:
       - name: validate tag
-        run: echo ${{ github.ref_name }} | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'
+        run: echo ${{ github.ref_name }} | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|post)\.[0-9]+)?$'
 
       - name: Prepare
         run: |
@@ -40,7 +40,7 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Docker meta
         id: meta
@@ -104,7 +104,7 @@ jobs:
       - build
     steps:
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: /tmp/digests
           pattern: digests-*

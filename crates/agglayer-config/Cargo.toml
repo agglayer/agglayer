@@ -5,7 +5,8 @@ edition.workspace = true
 
 [dependencies]
 dirs.workspace = true
-ethers.workspace = true
+alloy-primitives.workspace = true
+educe.workspace = true
 humantime-serde = "1.1.1"
 jsonrpsee.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -17,10 +18,12 @@ tracing-appender.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 url = { workspace = true, features = ["serde"] }
 
+agglayer-primitives.workspace = true
 agglayer-prover-config.workspace = true
+agglayer-types.workspace = true
 
 [dev-dependencies]
-insta = { workspace = true, features = ["toml", "redactions", "filters"] }
+insta.workspace = true
 pretty_assertions = "1.4.0"
 rstest.workspace = true
 serde_json = { workspace = true }

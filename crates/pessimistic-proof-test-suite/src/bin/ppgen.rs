@@ -1,9 +1,14 @@
 use std::{path::PathBuf, time::Instant};
 
-use agglayer_types::{Address, Certificate, U256};
+use agglayer_types::{
+    aggchain_data::CertificateAggchainDataCtx, Address, Certificate, L1WitnessCtx, NetworkId,
+    PessimisticRootInput, U256,
+};
 use clap::Parser;
-use pessimistic_proof::bridge_exit::{NetworkId, TokenInfo};
-use pessimistic_proof::PessimisticProofOutput;
+use pessimistic_proof::{
+    core::commitment::PessimisticRootCommitmentVersion, unified_bridge::TokenInfo,
+    PessimisticProofOutput,
+};
 use pessimistic_proof_test_suite::{
     runner::Runner,
     sample_data::{self as data},
@@ -22,7 +27,7 @@ struct PPGenArgs {
     n_exits: usize,
 
     /// The number of imported bridge exits.
-    #[clap(long, default_value = "0")]
+    #[clap(long, default_value = "10")]
     n_imported_exits: usize,
 
     /// The optional output directory to write the proofs in JSON. If not set,
@@ -65,16 +70,42 @@ pub fn main() {
 
     let certificate = state.apply_events(&imported_bridge_exits, &bridge_exits);
 
+    if let Some(proof_dir) = &args.proof_dir {
+        let cert_path = proof_dir.join(format!(
+            "{}-certificate-{}.json",
+            args.n_exits,
+            Uuid::new_v4()
+        ));
+        if let Err(e) = std::fs::create_dir_all(proof_dir) {
+            warn!("Failed to create directory: {e}");
+        }
+        info!("Writing the certificate to {:?}", cert_path);
+        std::fs::write(
+            cert_path,
+            serde_json::to_string_pretty(&certificate).unwrap(),
+        )
+        .expect("failed to write certificate");
+    }
+
     info!(
         "Certificate {}: [{}]",
         certificate.hash(),
         serde_json::to_string(&certificate).unwrap()
     );
 
-    let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
-
     let multi_batch_header = old_state
-        .make_multi_batch_header(&certificate, state.get_signer(), l1_info_root)
+        .make_multi_batch_header(
+            &certificate,
+            L1WitnessCtx {
+                l1_info_root: certificate.l1_info_root().unwrap().unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                    signer: state.get_signer(),
+                },
+            },
+        )
         .unwrap();
 
     info!(
@@ -151,7 +182,7 @@ impl From<PessimisticProofOutput> for VerifierInputs {
             prev_local_exit_root: format!("0x{}", hex::encode(v.prev_local_exit_root)),
             prev_pessimistic_root: format!("0x{}", hex::encode(v.prev_pessimistic_root)),
             l1_info_root: format!("0x{}", hex::encode(v.l1_info_root)),
-            origin_network: v.origin_network.into(),
+            origin_network: v.origin_network,
             aggchain_hash: format!("0x{}", hex::encode(v.aggchain_hash)),
             new_local_exit_root: format!("0x{}", hex::encode(v.new_local_exit_root)),
             new_pessimistic_root: format!("0x{}", hex::encode(v.new_pessimistic_root)),

@@ -1,10 +1,8 @@
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
+use agglayer_types::EpochNumber;
 use backup::BackupConfig;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub(crate) const STORAGE_DIR: &str = "storage";
 const METADATA_DB_NAME: &str = "metadata";
@@ -75,6 +73,10 @@ impl StorageConfig {
             debug_db_path: db_path.join(DEBUG_DB_PATH),
             backup: BackupConfig::default(),
         }
+    }
+
+    pub fn epoch_db_path(&self, epoch_number: EpochNumber) -> PathBuf {
+        self.epochs_db_path.join(format!("{epoch_number}"))
     }
 }
 

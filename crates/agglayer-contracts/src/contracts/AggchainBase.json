@@ -5,6 +5,31 @@
   "abi": [
     {
       "inputs": [],
+      "name": "AdminCannotBeZeroAddress",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "AggchainManagerAlreadyInitialized",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "AggchainManagerCannotBeZero",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "AggchainSignersHashNotInitialized",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "AggchainSignersTooHigh",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "AggchainVKeyNotFound",
       "type": "error"
     },
@@ -16,6 +41,11 @@
     {
       "inputs": [],
       "name": "BatchNotSequencedOrNotSequenceEnd",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ConflictingDefaultSignersConfiguration",
       "type": "error"
     },
     {
@@ -105,6 +135,11 @@
     },
     {
       "inputs": [],
+      "name": "IndicesNotInDescendingOrder",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "InitNumBatchAboveLastVerifiedBatch",
       "type": "error"
     },
@@ -120,7 +155,17 @@
     },
     {
       "inputs": [],
-      "name": "InvalidAggchainVKey",
+      "name": "InvalidAggchainDataLength",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidAggchainType",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidInitAggchainVKey",
       "type": "error"
     },
     {
@@ -131,11 +176,6 @@
     {
       "inputs": [],
       "name": "InvalidInitializeTransaction",
-      "type": "error"
-    },
-    {
-      "inputs": [],
-      "name": "InvalidInitializer",
       "type": "error"
     },
     {
@@ -160,12 +200,27 @@
     },
     {
       "inputs": [],
+      "name": "InvalidThreshold",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidZeroAddress",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "L1InfoTreeLeafCountInvalid",
       "type": "error"
     },
     {
       "inputs": [],
       "name": "MaxTimestampSequenceInvalid",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MetadataArrayLengthMismatch",
       "type": "error"
     },
     {
@@ -215,12 +270,22 @@
     },
     {
       "inputs": [],
+      "name": "OnlyAggchainManager",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyAggchainMetadataManager",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "OnlyPendingAdmin",
       "type": "error"
     },
     {
       "inputs": [],
-      "name": "OnlyPendingVKeyManager",
+      "name": "OnlyPendingAggchainManager",
       "type": "error"
     },
     {
@@ -240,17 +305,7 @@
     },
     {
       "inputs": [],
-      "name": "OnlyVKeyManager",
-      "type": "error"
-    },
-    {
-      "inputs": [],
       "name": "OwnedAggchainVKeyAlreadyAdded",
-      "type": "error"
-    },
-    {
-      "inputs": [],
-      "name": "OwnedAggchainVKeyLengthMismatch",
       "type": "error"
     },
     {
@@ -295,6 +350,26 @@
     },
     {
       "inputs": [],
+      "name": "SignerAlreadyExists",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "SignerCannotBeZero",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "SignerDoesNotExist",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "SignerURLCannotBeEmpty",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "StoredRootMustBeDifferentThanNewRoot",
       "type": "error"
     },
@@ -315,7 +390,27 @@
     },
     {
       "inputs": [],
-      "name": "UseDefaultGatewayAlreadySet",
+      "name": "UseDefaultSignersAlreadyDisabled",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UseDefaultSignersAlreadyEnabled",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UseDefaultVkeysAlreadyDisabled",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UseDefaultVkeysAlreadyEnabled",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ZeroValueAggchainVKey",
       "type": "error"
     },
     {
@@ -337,11 +432,17 @@
         {
           "indexed": false,
           "internalType": "address",
-          "name": "newVKeyManager",
+          "name": "oldAggchainManager",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newAggchainManager",
           "type": "address"
         }
       ],
-      "name": "AcceptVKeyManagerRole",
+      "name": "AcceptAggchainManagerRole",
       "type": "event"
     },
     {
@@ -367,6 +468,49 @@
       "anonymous": false,
       "inputs": [
         {
+          "indexed": true,
+          "internalType": "string",
+          "name": "key",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "value",
+          "type": "string"
+        }
+      ],
+      "name": "AggchainMetadataSet",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [],
+      "name": "DisableUseDefaultSignersFlag",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [],
+      "name": "DisableUseDefaultVkeysFlag",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [],
+      "name": "EnableUseDefaultSignersFlag",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [],
+      "name": "EnableUseDefaultVkeysFlag",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
           "indexed": false,
           "internalType": "uint8",
           "name": "version",
@@ -374,6 +518,25 @@
         }
       ],
       "name": "Initialized",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "oldAggchainMetadataManager",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newAggchainMetadataManager",
+          "type": "address"
+        }
+      ],
+      "name": "SetAggchainMetadataManager",
       "type": "event"
     },
     {
@@ -407,6 +570,31 @@
       "inputs": [
         {
           "indexed": false,
+          "internalType": "address[]",
+          "name": "aggchainSigners",
+          "type": "address[]"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "newThreshold",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "newAggchainMultisigHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "SignersAndThresholdUpdated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
           "internalType": "address",
           "name": "newPendingAdmin",
           "type": "address"
@@ -421,11 +609,17 @@
         {
           "indexed": false,
           "internalType": "address",
-          "name": "newVKeyManager",
+          "name": "currentAggchainManager",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newPendingAggchainManager",
           "type": "address"
         }
       ],
-      "name": "TransferVKeyManagerRole",
+      "name": "TransferAggchainManagerRole",
       "type": "event"
     },
     {
@@ -440,6 +634,12 @@
         {
           "indexed": false,
           "internalType": "bytes32",
+          "name": "previousAggchainVKey",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
           "name": "newAggchainVKey",
           "type": "bytes32"
         }
@@ -448,26 +648,65 @@
       "type": "event"
     },
     {
-      "anonymous": false,
-      "inputs": [
+      "inputs": [],
+      "name": "AGGCHAIN_TYPE",
+      "outputs": [
         {
-          "indexed": false,
-          "internalType": "bool",
-          "name": "useDefaultGateway",
-          "type": "bool"
+          "internalType": "bytes2",
+          "name": "",
+          "type": "bytes2"
         }
       ],
-      "name": "UpdateUseDefaultGatewayFlag",
-      "type": "event"
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
-      "name": "AGGCHAIN_TYPE",
+      "name": "CONSENSUS_TYPE",
       "outputs": [
         {
           "internalType": "uint32",
           "name": "",
           "type": "uint32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "MAX_AGGCHAIN_SIGNERS",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "_legacypendingVKeyManager",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "_legacyvKeyManager",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
         }
       ],
       "stateMutability": "view",
@@ -482,7 +721,7 @@
     },
     {
       "inputs": [],
-      "name": "acceptVKeyManagerRole",
+      "name": "acceptAggchainManagerRole",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -491,7 +730,7 @@
       "inputs": [
         {
           "internalType": "bytes4",
-          "name": "aggchainSelector",
+          "name": "aggchainVKeySelector",
           "type": "bytes4"
         },
         {
@@ -533,6 +772,101 @@
     },
     {
       "inputs": [],
+      "name": "aggchainManager",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "name": "aggchainMetadata",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "aggchainMetadataManager",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "aggchainMultisigHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "aggchainSigners",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string[]",
+          "name": "keys",
+          "type": "string[]"
+        },
+        {
+          "internalType": "string[]",
+          "name": "values",
+          "type": "string[]"
+        }
+      ],
+      "name": "batchSetAggchainMetadata",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "bridgeAddress",
       "outputs": [
         {
@@ -546,14 +880,28 @@
     },
     {
       "inputs": [],
-      "name": "disableUseDefaultGatewayFlag",
+      "name": "disableUseDefaultSignersFlag",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
     },
     {
       "inputs": [],
-      "name": "enableUseDefaultGatewayFlag",
+      "name": "disableUseDefaultVkeysFlag",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "enableUseDefaultSignersFlag",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "enableUseDefaultVkeysFlag",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -632,8 +980,110 @@
     {
       "inputs": [
         {
+          "internalType": "bytes",
+          "name": "aggchainData",
+          "type": "bytes"
+        }
+      ],
+      "name": "getAggchainHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getAggchainMultisigHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getAggchainSignerInfos",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "addr",
+              "type": "address"
+            },
+            {
+              "internalType": "string",
+              "name": "url",
+              "type": "string"
+            }
+          ],
+          "internalType": "struct IAggchainSigners.SignerInfo[]",
+          "name": "",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getAggchainSigners",
+      "outputs": [
+        {
+          "internalType": "address[]",
+          "name": "",
+          "type": "address[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getAggchainSignersCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "bytes4",
-          "name": "aggchainSelector",
+          "name": "aggchainVKeySelector",
+          "type": "bytes4"
+        }
+      ],
+      "name": "getAggchainTypeFromSelector",
+      "outputs": [
+        {
+          "internalType": "bytes2",
+          "name": "",
+          "type": "bytes2"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes4",
+          "name": "aggchainVKeySelector",
           "type": "bytes4"
         }
       ],
@@ -642,6 +1092,86 @@
         {
           "internalType": "bytes32",
           "name": "aggchainVKey",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes2",
+          "name": "aggchainVKeyVersion",
+          "type": "bytes2"
+        },
+        {
+          "internalType": "bytes2",
+          "name": "aggchainType",
+          "type": "bytes2"
+        }
+      ],
+      "name": "getAggchainVKeySelector",
+      "outputs": [
+        {
+          "internalType": "bytes4",
+          "name": "",
+          "type": "bytes4"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes4",
+          "name": "aggchainVKeySelector",
+          "type": "bytes4"
+        }
+      ],
+      "name": "getAggchainVKeyVersionFromSelector",
+      "outputs": [
+        {
+          "internalType": "bytes2",
+          "name": "",
+          "type": "bytes2"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getThreshold",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes",
+          "name": "aggchainData",
+          "type": "bytes"
+        }
+      ],
+      "name": "getVKeyAndAggchainParams",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "",
           "type": "bytes32"
         }
       ],
@@ -659,6 +1189,19 @@
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newAggchainManager",
+          "type": "address"
+        }
+      ],
+      "name": "initAggchainManager",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -697,6 +1240,25 @@
       "name": "initialize",
       "outputs": [],
       "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_signer",
+          "type": "address"
+        }
+      ],
+      "name": "isSigner",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -754,6 +1316,19 @@
     {
       "inputs": [
         {
+          "internalType": "bytes",
+          "name": "aggchainData",
+          "type": "bytes"
+        }
+      ],
+      "name": "onVerifyPessimistic",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "bytes4",
           "name": "aggchainVKeySelector",
           "type": "bytes4"
@@ -785,7 +1360,7 @@
     },
     {
       "inputs": [],
-      "name": "pendingVKeyManager",
+      "name": "pendingAggchainManager",
       "outputs": [
         {
           "internalType": "address",
@@ -825,6 +1400,37 @@
     {
       "inputs": [
         {
+          "internalType": "string",
+          "name": "key",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "value",
+          "type": "string"
+        }
+      ],
+      "name": "setAggchainMetadata",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newAggchainMetadataManager",
+          "type": "address"
+        }
+      ],
+      "name": "setAggchainMetadataManager",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "address",
           "name": "newTrustedSequencer",
           "type": "address"
@@ -852,6 +1458,38 @@
       "inputs": [
         {
           "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "signerToURLs",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "threshold",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
           "name": "newPendingAdmin",
           "type": "address"
         }
@@ -865,11 +1503,11 @@
       "inputs": [
         {
           "internalType": "address",
-          "name": "newVKeyManager",
+          "name": "newAggchainManager",
           "type": "address"
         }
       ],
-      "name": "transferVKeyManagerRole",
+      "name": "transferAggchainManagerRole",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -904,7 +1542,7 @@
       "inputs": [
         {
           "internalType": "bytes4",
-          "name": "aggchainSelector",
+          "name": "aggchainVKeySelector",
           "type": "bytes4"
         },
         {
@@ -919,8 +1557,55 @@
       "type": "function"
     },
     {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "addr",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "index",
+              "type": "uint256"
+            }
+          ],
+          "internalType": "struct IAggchainSigners.RemoveSignerInfo[]",
+          "name": "_signersToRemove",
+          "type": "tuple[]"
+        },
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "addr",
+              "type": "address"
+            },
+            {
+              "internalType": "string",
+              "name": "url",
+              "type": "string"
+            }
+          ],
+          "internalType": "struct IAggchainSigners.SignerInfo[]",
+          "name": "_signersToAdd",
+          "type": "tuple[]"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_newThreshold",
+          "type": "uint256"
+        }
+      ],
+      "name": "updateSignersAndThreshold",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [],
-      "name": "useDefaultGateway",
+      "name": "useDefaultSigners",
       "outputs": [
         {
           "internalType": "bool",
@@ -933,15 +1618,28 @@
     },
     {
       "inputs": [],
-      "name": "vKeyManager",
+      "name": "useDefaultVkeys",
       "outputs": [
         {
-          "internalType": "address",
+          "internalType": "bool",
           "name": "",
-          "type": "address"
+          "type": "bool"
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "version",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "pure",
       "type": "function"
     }
   ],

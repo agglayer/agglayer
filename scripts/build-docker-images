@@ -1,0 +1,4 @@
+#!/bin/sh
+
+echo "Building the docker images. Note this script should be run from the repository root."
+docker build -t agglayer:local .

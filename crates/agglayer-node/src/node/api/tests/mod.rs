@@ -3,8 +3,7 @@ use std::future::IntoFuture as _;
 use agglayer_jsonrpc_api::testutils::TestContext;
 use http::Request;
 use http_body_util::Empty;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
+use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
@@ -24,7 +23,7 @@ async fn healthcheck_method_can_be_called() {
     );
 
     let http_client = Client::builder(TokioExecutor::new()).build_http();
-    let uri = format!("http://{}/health", addr);
+    let uri = format!("http://{addr}/health");
 
     let req = Request::builder()
         .method("GET")

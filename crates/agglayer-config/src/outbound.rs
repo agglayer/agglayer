@@ -1,8 +1,9 @@
 use std::time::Duration;
 
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+
+use crate::Multiplier;
 
 /// Outbound configuration.
 #[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
@@ -54,6 +55,10 @@ pub struct OutboundRpcSettleConfig {
         skip_serializing_if = "same_as_default_gas_multiplier_factor"
     )]
     pub gas_multiplier_factor: u32,
+
+    /// Gas price configuration.
+    #[serde(default)]
+    pub gas_price: GasPriceConfig,
 }
 
 impl Default for OutboundRpcSettleConfig {
@@ -64,6 +69,41 @@ impl Default for OutboundRpcSettleConfig {
             confirmations: default_rpc_confirmations(),
             settlement_timeout: default_settlement_timeout(),
             gas_multiplier_factor: default_gas_multiplier_factor(),
+            gas_price: GasPriceConfig::default(),
+        }
+    }
+}
+
+/// Gas price configuration for settlement transactions.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct GasPriceConfig {
+    /// Gas price multiplier for the transaction.
+    /// The gas price is calculated as follows:
+    /// `gas_price = estimate_gas_price * multiplier`
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    pub multiplier: Multiplier,
+
+    /// Minimum gas price floor (in wei) for the transaction.
+    /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei"
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde_as(as = "crate::with::EthAmount")]
+    pub floor: u128,
+
+    /// Maximum gas price ceiling (in wei) for the transaction.
+    /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
+    #[serde(default = "default_gas_price_ceiling")]
+    #[serde_as(as = "crate::with::EthAmount")]
+    pub ceiling: u128,
+}
+
+impl Default for GasPriceConfig {
+    fn default() -> Self {
+        GasPriceConfig {
+            multiplier: Multiplier::default(),
+            floor: 0,
+            ceiling: default_gas_price_ceiling(),
         }
     }
 }
@@ -77,15 +117,14 @@ const fn same_as_default_gas_multiplier_factor(v: &u32) -> bool {
     *v == default_gas_multiplier_factor()
 }
 
-/// Default number of retries for the transaction. It matches the ethers default
-/// value.
+/// Default number of retries for the transaction.
 const fn default_rpc_retries() -> usize {
-    3
+    30
 }
 
 /// Default interval for the polling of the transaction.
 const fn default_rpc_retry_interval() -> Duration {
-    Duration::from_secs(7)
+    Duration::from_secs(10)
 }
 
 /// Default number of confirmations required for the transaction to resolve a
@@ -97,6 +136,12 @@ const fn default_rpc_confirmations() -> usize {
 /// Default timeout for settlement transaction submission and confirmation.
 const fn default_settlement_timeout() -> Duration {
     Duration::from_secs(20 * 60)
+}
+
+/// Default gas price ceiling for the transaction.
+const fn default_gas_price_ceiling() -> u128 {
+    // 100 gwei
+    100_000_000_000_u128
 }
 
 #[cfg(test)]
@@ -136,8 +181,8 @@ mod tests {
 
                     let config = toml::from_str::<OutboundRpcSettleConfig>(toml).unwrap();
 
-                    assert_eq!(config.max_retries, 3);
-                    assert_eq!(config.retry_interval, Duration::from_secs(7));
+                    assert_eq!(config.max_retries, 30);
+                    assert_eq!(config.retry_interval, Duration::from_secs(10));
                     assert_eq!(config.confirmations, 1);
                 }
 

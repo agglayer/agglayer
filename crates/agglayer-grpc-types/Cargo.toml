@@ -6,17 +6,28 @@ license.workspace = true
 
 [features]
 default = []
-compat = ["dep:agglayer-types", "dep:bincode", "dep:thiserror"]
+compat = ["dep:agglayer-types", "dep:thiserror"]
 
 [lints]
 workspace = true
 
 [dependencies]
-bincode = { workspace = true, optional = true }
-pbjson = "0.7.0"
+agglayer-interop = { workspace = true, features = ["grpc-compat"] }
+agglayer-types = { workspace = true, optional = true }
+
+
+hex.workspace = true
+pbjson.workspace = true
 prost.workspace = true
 serde.workspace = true
-tonic-types.workspace = true
 thiserror = { workspace = true, optional = true }
 
-agglayer-types = { workspace = true, optional = true }
+[dev-dependencies]
+agglayer-interop = { workspace = true, features = ["testutils"] }
+agglayer-types = { workspace = true, features = ["testutils"] }
+
+
+bolero.workspace = true
+eyre.workspace = true
+insta.workspace = true
+rstest.workspace = true
