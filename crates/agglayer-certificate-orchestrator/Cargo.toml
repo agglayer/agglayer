@@ -19,20 +19,21 @@ testutils = [
 ]
 
 [dependencies]
-async-trait.workspace = true
-anyhow.workspace = true
-arc-swap.workspace = true
-buildstructor.workspace = true
 alloy.workspace = true
+arc-swap.workspace = true
+async-trait.workspace = true
+buildstructor.workspace = true
+eyre.workspace = true
 fail = { workspace = true, optional = true }
+futures-util.workspace = true
 parking_lot.workspace = true
+reqwest.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
-futures-util = "0.3.31"
-reqwest.workspace = true
+
 agglayer-clock.workspace = true
 agglayer-config = { workspace = true, optional = true }
 agglayer-contracts.workspace = true

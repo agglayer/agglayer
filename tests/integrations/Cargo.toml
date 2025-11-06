@@ -8,10 +8,10 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-alloy.workspace = true
-anyhow.workspace = true
+alloy = { workspace = true, features = ["rpc", "rpc-types"] }
 arc-swap.workspace = true
 buildstructor.workspace = true
+eyre.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
 futures.workspace = true
 hex.workspace = true
@@ -24,7 +24,7 @@ mockall.workspace = true
 parking_lot.workspace = true
 pin-project.workspace = true
 rand.workspace = true
-reqwest = "0.12.12"
+reqwest = "0.12.23"
 rstest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -53,3 +53,5 @@ agglayer-types.workspace = true
 agglayer-prover-config.workspace = true
 pessimistic-proof-test-suite.workspace = true
 pessimistic-proof.workspace = true
+
+test-log.workspace = true

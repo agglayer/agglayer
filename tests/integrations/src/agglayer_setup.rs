@@ -77,7 +77,7 @@ pub async fn start_agglayer(
     };
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::new(ELF);
+    let fake_prover = FakeProver::new(ELF).await.unwrap();
     let endpoint = prover_config.grpc_endpoint;
 
     config.prover_entrypoint = format!("http://{endpoint}");
@@ -105,9 +105,9 @@ pub async fn start_agglayer(
     let grpc_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
     let admin_addr = next_available_addr();
-    config.rpc.grpc_port = grpc_addr.port();
-    config.rpc.readrpc_port = readrpc_addr.port();
-    config.rpc.admin_port = admin_addr.port();
+    config.rpc.grpc_port = grpc_addr.port().into();
+    config.rpc.readrpc_port = readrpc_addr.port().into();
+    config.rpc.admin_port = admin_addr.port().into();
 
     config.telemetry.addr = next_available_addr();
     config.log.level = LogLevel::Debug;

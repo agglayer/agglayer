@@ -7,10 +7,10 @@ use agglayer_storage::{
         backup::BackupClient, debug_db_cf_definitions, pending_db_cf_definitions,
         state_db_cf_definitions, DB,
     },
-    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
+    stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
-use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateId, EpochNumber, Height, NetworkId};
 use alloy::{
     providers::{
         fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
@@ -42,7 +42,7 @@ pub type RawRpcClient = crate::AgglayerImpl<
     PendingStore,
     StateStore,
     DebugStore,
-    Box<dyn 'static + Send + Sync + Fn(NetworkId) -> bool>,
+    EpochsStore<PendingStore, StateStore>,
 >;
 
 pub struct RawRpcContext {
@@ -67,7 +67,6 @@ pub struct TestContext {
     pub pending_store: Arc<PendingStore>,
     pub api_client: HttpClient,
     pub admin_client: HttpClient,
-    pub proxied_grpc_client: Option<HttpClient>,
     pub config: Arc<Config>,
     pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
@@ -130,35 +129,39 @@ impl TestContext {
 
         // Create AgglayerService (V0Rpc service) with the provider
         let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(real_provider.clone(), config.clone()),
+            crate::kernel::Kernel::new(real_provider.clone(), config.clone()).unwrap(),
         ));
+
+        // Create a real epoch store for testing
+        let epochs_store = Arc::new(
+            EpochsStore::new(
+                config.clone(),
+                EpochNumber::ZERO,
+                pending_store.clone(),
+                state_store.clone(),
+                BackupClient::noop(),
+            )
+            .unwrap(),
+        );
 
         // Create agglayer_rpc::AgglayerService with the provider
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
-            certificate_sender,
+            certificate_sender.clone(),
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
+            epochs_store,
             config.clone(),
             Arc::new(l1_rpc_client),
         ));
 
-        // Create the allowed_networks function for network filtering
-        let proxied_networks = config
-            .proxied_networks
-            .as_ref()
-            .map(|pn| pn.networks.clone());
-        let allowed_networks = Box::new(move |incoming| match &proxied_networks {
-            None => true,
-            Some(pn) => !pn.contains(&incoming),
-        }) as Box<dyn Fn(NetworkId) -> bool + Send + Sync + 'static>;
-
-        // Create AgglayerImpl with allowed_networks
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service, allowed_networks);
+        // Create AgglayerImpl
+        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
 
         // Create the routers
         let router = agglayer_impl.start().await.unwrap();
         let admin_router = AdminAgglayerImpl::new(
+            certificate_sender,
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
@@ -178,12 +181,6 @@ impl TestContext {
         let api_client = HttpClientBuilder::default().build(api_url).unwrap();
         let admin_client = HttpClientBuilder::default().build(admin_url).unwrap();
 
-        // Create proxied gRPC client if proxied networks are configured
-        let proxied_grpc_client = config.proxied_networks.as_ref().map(|pn| {
-            let proxied_url = format!("http://{}:{}", pn.host, pn.grpc_port);
-            HttpClientBuilder::default().build(proxied_url).unwrap()
-        });
-
         let listener_api = tokio::net::TcpListener::bind(api_addr).await.unwrap();
 
         let listener_admin = tokio::net::TcpListener::bind(admin_addr).await.unwrap();
@@ -202,7 +199,6 @@ impl TestContext {
             pending_store,
             api_client,
             admin_client,
-            proxied_grpc_client,
             config,
             certificate_receiver,
         }
@@ -227,6 +223,8 @@ impl TestContext {
             Address::ZERO.into(), // Use real L1 info tree address in non-test environments
             (0u32, [0u8; 32]),    // Use real default L1 info tree entry in non-test environments
             100,                  // Default gas multiplier factor
+            agglayer_contracts::GasPriceParams::default(), // Default gas price parameters
+            10000,
         )
     }
 
@@ -249,17 +247,7 @@ impl TestContext {
         Self::new_raw_rpc_with_config(config).await
     }
 
-    pub async fn new_raw_rpc_with_config(mut config: Config) -> RawRpcContext {
-        // Set up proxied networks configuration with available addresses
-        if let Some(proxied_networks) = config.proxied_networks.as_mut() {
-            let proxied_addr = Self::next_available_address();
-            proxied_networks.host = match proxied_addr.ip() {
-                std::net::IpAddr::V4(ip) => ip,
-                std::net::IpAddr::V6(_) => std::net::Ipv4Addr::new(127, 0, 0, 1),
-            };
-            proxied_networks.grpc_port = proxied_addr.port();
-        }
-
+    pub async fn new_raw_rpc_with_config(config: Config) -> RawRpcContext {
         let config = Arc::new(config);
 
         let state_db = Arc::new(
@@ -291,8 +279,20 @@ impl TestContext {
 
         // Create AgglayerService (V0Rpc service)
         let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()),
+            crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()).unwrap(),
         ));
+
+        // Create a real epoch store for testing
+        let epochs_store = Arc::new(
+            EpochsStore::new(
+                config.clone(),
+                EpochNumber::ZERO,
+                pending_store.clone(),
+                state_store.clone(),
+                BackupClient::noop(),
+            )
+            .unwrap(),
+        );
 
         // Create agglayer_rpc::AgglayerService
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
@@ -300,22 +300,13 @@ impl TestContext {
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
+            epochs_store,
             config.clone(),
             Arc::new(l1_rpc_client),
         ));
 
-        // Create the allowed_networks function for network filtering
-        let proxied_networks = config
-            .proxied_networks
-            .as_ref()
-            .map(|pn| pn.networks.clone());
-        let allowed_networks = Box::new(move |incoming| match &proxied_networks {
-            None => true,
-            Some(pn) => !pn.contains(&incoming),
-        }) as Box<dyn Fn(NetworkId) -> bool + Send + Sync + 'static>;
-
-        // Create AgglayerImpl with allowed_networks
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service, allowed_networks);
+        // Create AgglayerImpl
+        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
 
         RawRpcContext {
             rpc: agglayer_impl,

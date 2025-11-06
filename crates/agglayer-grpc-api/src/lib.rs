@@ -1,26 +1,21 @@
 use std::{convert::Infallible, sync::Arc};
 
 use agglayer_config::Config;
-use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_grpc_server::node::v1::{
     certificate_submission_service_server::CertificateSubmissionServiceServer,
     configuration_service_server::ConfigurationServiceServer,
     node_state_service_server::NodeStateServiceServer,
 };
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter,
+    DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
+    PendingCertificateWriter, StateReader, StateWriter,
 };
-use agglayer_types::NetworkId;
 use certificate_submission_service::CertificateSubmissionServer;
 use configuration_service::ConfigurationServer;
 use http::{Request, Response};
 use node_state_service::NodeStateServer;
-use tonic::{
-    body::{boxed, BoxBody},
-    codec::CompressionEncoding,
-    server::NamedService,
-};
+use tonic::{body::Body, codec::CompressionEncoding, server::NamedService};
 use tower::{Service, ServiceExt as _};
 
 mod certificate_submission_service;
@@ -39,18 +34,18 @@ pub struct ServerBuilder {
 impl ServerBuilder {
     fn add_rpc_service<S>(mut self, rpc_service: S) -> Self
     where
-        S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Infallible>
+        S: Service<Request<Body>, Response = Response<Body>, Error = Infallible>
             + NamedService
             + Clone
             + Sync
             + Send
             + 'static,
         S::Future: Send + 'static,
-        S::Error: Into<anyhow::Error> + Send,
+        S::Error: Into<eyre::Error> + Send,
     {
         self.router = self.router.route_service(
             &format!("/{}/{{*rest}}", S::NAME),
-            rpc_service.map_request(|r: Request<axum::body::Body>| r.map(boxed)),
+            rpc_service.map_request(|r: Request<axum::body::Body>| r.map(Body::new)),
         );
 
         self
@@ -83,22 +78,21 @@ impl ServerBuilder {
 }
 
 impl Server {
-    pub fn with_config<L1Rpc, PendingStore, StateStore, DebugStore>(
+    pub fn with_config<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>(
         config: Arc<Config>,
         rpc_service: Arc<
-            agglayer_rpc::AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>,
+            agglayer_rpc::AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>,
         >,
-        allowed_networks: impl Fn(NetworkId) -> bool + Send + Sync + 'static,
     ) -> ServerBuilder
     where
-        L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
+        L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
         PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
-        StateStore: StateReader + StateWriter + 'static,
+        StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
         DebugStore: DebugReader + DebugWriter + 'static,
+        EpochsStore: EpochStoreReader + 'static,
     {
         let certificate_submission_server = CertificateSubmissionServer {
             service: rpc_service.clone(),
-            allowed_networks,
         };
         let certificate_submission_service =
             CertificateSubmissionServiceServer::new(certificate_submission_server)

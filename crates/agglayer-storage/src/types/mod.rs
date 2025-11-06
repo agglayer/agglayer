@@ -1,17 +1,12 @@
 use agglayer_types::{
-    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof
+    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
+    NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::columns::Codec;
-
 mod certificate;
-
-macro_rules! default_codec_impl {
-    ($($ident: ident),+) => {
-        $(impl crate::columns::Codec for $ident {})+
-    };
-}
+mod generated;
+pub(crate) mod network_info;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
@@ -55,10 +50,7 @@ pub enum SmtValue {
     Leaf(Digest),
 }
 
-impl Codec for SmtKey {}
-impl Codec for SmtValue {}
-
-default_codec_impl!(
+crate::columns::impl_codec_using_bincode_for!(
     u64,
     u32,
     CertificateId,
@@ -71,5 +63,8 @@ default_codec_impl!(
     NetworkId,
     PerEpochMetadataKey,
     PerEpochMetadataValue,
-    Proof
+    Proof,
+    SmtKey,
+    SmtValue,
+    network_info::Key
 );

@@ -8,14 +8,14 @@ use agglayer_types::{
 use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
 use pessimistic_proof::{
-    core::commitment::SignatureCommitmentValues,
-    keccak::{keccak256_combine, Keccak256Hasher},
+    core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion},
+    keccak::keccak256_combine,
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
     proof::zero_if_empty_local_exit_root,
     unified_bridge::{
-        BridgeExit, Claim, ClaimFromMainnet, CommitmentVersion, GlobalIndex, ImportedBridgeExit,
-        L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
+        BridgeExit, Claim, ClaimFromMainnet, GlobalIndex, ImportedBridgeExit, L1InfoTreeLeaf,
+        L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
     },
     PessimisticProofOutput,
 };
@@ -49,8 +49,8 @@ pub fn compute_aggchain_proof(
 pub struct Forest {
     pub network_id: NetworkId,
     pub wallet: PrivateKeySigner,
-    pub l1_info_tree: LocalExitTreeData<Keccak256Hasher>,
-    pub local_exit_tree_data_a: LocalExitTreeData<Keccak256Hasher>,
+    pub l1_info_tree: LocalExitTreeData,
+    pub local_exit_tree_data_a: LocalExitTreeData,
     pub state_b: LocalNetworkStateData,
 }
 
@@ -89,7 +89,7 @@ impl Forest {
     /// Override the local exit tree for network B
     pub fn new_with_local_exit_tree(
         initial_balances: impl IntoIterator<Item = (TokenInfo, U256)>,
-        local_exit_tree: LocalExitTree<Keccak256Hasher>,
+        local_exit_tree: LocalExitTree,
     ) -> Self {
         let mut local_balance_tree = Smt::new();
         for (token, balance) in initial_balances {
@@ -191,6 +191,7 @@ impl Forest {
         &mut self,
         imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
         bridge_exits: impl IntoIterator<Item = BridgeExit>,
+        version: SignatureCommitmentVersion,
     ) -> Certificate {
         let prev_local_exit_root = self.state_b.exit_tree.get_root().into();
 
@@ -210,6 +211,7 @@ impl Forest {
             &imported_bridge_exits,
             &self.wallet,
             height,
+            version,
         );
 
         Certificate {
@@ -232,9 +234,23 @@ impl Forest {
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
     ) -> Certificate {
+        self.apply_events_with_version(
+            imported_bridge_events,
+            bridge_events,
+            SignatureCommitmentVersion::V2,
+        )
+    }
+
+    /// Apply a sequence of events and return the corresponding [`Certificate`].
+    pub fn apply_events_with_version(
+        &mut self,
+        imported_bridge_events: &[(TokenInfo, U256)],
+        bridge_events: &[(TokenInfo, U256)],
+        version: SignatureCommitmentVersion,
+    ) -> Certificate {
         let imported_bridge_events = imported_bridge_events.iter().cloned();
         let bridge_exits = bridge_events.iter().map(|(tok, amt)| exit_to_a(*tok, *amt));
-        self.apply_bridge_exits(imported_bridge_events, bridge_exits)
+        self.apply_bridge_exits(imported_bridge_events, bridge_exits, version)
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].
@@ -242,20 +258,27 @@ impl Forest {
         &mut self,
         imported_bridge_events: &[(TokenInfo, U256)],
         bridge_events: &[(TokenInfo, U256)],
-    ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof) {
-        let certificate = self.apply_events(imported_bridge_events, bridge_events);
+    ) -> (Certificate, SP1VerifyingKey, [u8; 32], SP1Proof, Signature) {
+        let certificate = self.apply_events_with_version(
+            imported_bridge_events,
+            bridge_events,
+            SignatureCommitmentVersion::V5,
+        );
 
-        let signature = match certificate.aggchain_data {
-            AggchainData::ECDSA { signature } => signature,
-            AggchainData::Generic { .. } => unimplemented!("SP1 handling not implemented"),
+        let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
+            certificate.aggchain_data
+        else {
+            panic!("inconsistent test data")
         };
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
-                signer: certificate.signer().unwrap(),
+                signer: certificate
+                    .retrieve_signer(SignatureCommitmentVersion::V2)
+                    .unwrap(),
                 signature,
                 commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
-                    .commitment(CommitmentVersion::V2)
+                    .commitment(SignatureCommitmentVersion::V2)
                     .0,
                 prev_local_exit_root: certificate.prev_local_exit_root,
                 new_local_exit_root: certificate.new_local_exit_root,
@@ -263,7 +286,13 @@ impl Forest {
                 origin_network: self.network_id,
             });
 
-        (certificate, aggchain_vkey, aggchain_params, aggchain_proof)
+        (
+            certificate,
+            aggchain_vkey,
+            aggchain_params,
+            aggchain_proof,
+            signature,
+        )
     }
 
     pub fn get_signer(&self) -> Address {

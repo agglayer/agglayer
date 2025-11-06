@@ -219,6 +219,7 @@ impl From<service::error::SettlementError> for Error {
             E::RateLimited(error) => error.into(),
             error @ E::Timeout(_) => SettlementError::io_error(error).into(),
             E::PendingTransactionError(error) => SettlementError::io_error(error).into(),
+            error @ E::ReceiptWithoutBlockNumberError(_) => SettlementError::io_error(error).into(),
         }
     }
 }
@@ -246,6 +247,14 @@ impl From<agglayer_rpc::CertificateRetrievalError> for Error {
                 Self::ResourceNotFound(format!("Certificate({certificate_id})"))
             }
         }
+    }
+}
+
+impl From<agglayer_rpc::GetNetworkInfoError> for Error {
+    fn from(err: agglayer_rpc::GetNetworkInfoError) -> Self {
+        // Since NetworkStateRetrievalError is currently empty, convert to internal
+        // error
+        Self::internal(format!("Network state retrieval error: {err}"))
     }
 }
 

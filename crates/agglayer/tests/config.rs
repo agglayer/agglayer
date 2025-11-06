@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 
 #[test]
-fn config_display() -> Result<(), Box<dyn std::error::Error>> {
+fn config_display() -> eyre::Result<()> {
     let mut cmd = Command::cargo_bin("agglayer")?;
     cmd.args(["config", "--base-dir", "/tmp/agglayer-test"]);
 
@@ -15,7 +15,7 @@ fn config_display() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn prover_config_display() -> Result<(), Box<dyn std::error::Error>> {
+fn prover_config_display() -> eyre::Result<()> {
     let mut cmd = Command::cargo_bin("agglayer")?;
     cmd.args(["prover-config"]);
 

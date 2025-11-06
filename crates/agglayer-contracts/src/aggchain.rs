@@ -1,36 +1,28 @@
-use agglayer_primitives::Address;
+pub use agglayer_primitives::vkey_hash::VKeyHash;
+use agglayer_primitives::{Address, U256};
 use alloy::primitives::Bytes;
 use tracing::error;
 
 use crate::{contracts::AggchainBase, L1RpcClient, L1RpcError};
 
-#[derive(PartialEq, Eq)]
-pub struct AggchainVkeyHash([u8; 32]);
-
-impl AggchainVkeyHash {
-    pub fn new(vkey: [u8; 32]) -> Self {
-        Self(vkey)
-    }
-
-    pub fn to_hex(&self) -> String {
-        hex::encode(self.0)
-    }
-}
-
 #[async_trait::async_trait]
 pub trait AggchainContract {
-    type M: alloy::providers::Provider;
     async fn get_aggchain_vkey_hash(
         &self,
         rollup_address: Address,
         aggchain_vkey_selector: u16,
-    ) -> Result<AggchainVkeyHash, L1RpcError>;
+    ) -> Result<VKeyHash, L1RpcError>;
 
     async fn get_aggchain_hash(
         &self,
         rollup_address: Address,
         aggchain_data: Bytes,
     ) -> Result<[u8; 32], L1RpcError>;
+
+    async fn get_multisig_context(
+        &self,
+        rollup_address: Address,
+    ) -> Result<(Vec<Address>, usize), L1RpcError>;
 }
 
 #[async_trait::async_trait]
@@ -38,13 +30,11 @@ impl<RpcProvider> AggchainContract for L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
-    type M = RpcProvider;
-
     async fn get_aggchain_vkey_hash(
         &self,
         rollup_address: Address,
         aggchain_vkey_selector: u16,
-    ) -> Result<AggchainVkeyHash, L1RpcError> {
+    ) -> Result<VKeyHash, L1RpcError> {
         let aggchain_selector = (((aggchain_vkey_selector as u32) << 16) | 1u32).to_be_bytes();
 
         let client = AggchainBase::new(rollup_address.into(), self.rpc.clone());
@@ -53,7 +43,7 @@ where
             .getAggchainVKey(alloy::primitives::FixedBytes(aggchain_selector))
             .call()
             .await
-            .map(|arg0| AggchainVkeyHash::new(arg0.0))
+            .map(VKeyHash::from)
             .map_err(|error| {
                 error!(?error, "Unable to fetch the aggchain vkey");
 
@@ -76,5 +66,33 @@ where
 
                 L1RpcError::AggchainHashFetchFailed
             })
+    }
+
+    async fn get_multisig_context(
+        &self,
+        rollup_address: Address,
+    ) -> Result<(Vec<Address>, usize), L1RpcError> {
+        let signers = AggchainBase::new(rollup_address.into(), self.rpc.clone())
+            .getAggchainSigners()
+            .call()
+            .await
+            .map(|alloy_vec| alloy_vec.into_iter().map(Address::from_alloy).collect())
+            .map_err(L1RpcError::MultisigSignersFetchFailed)?;
+
+        let threshold: usize = {
+            let threshold_u256: U256 = AggchainBase::new(rollup_address.into(), self.rpc.clone())
+                .getThreshold()
+                .call()
+                .await
+                .map_err(L1RpcError::MultisigThresholdFetchFailed)?;
+
+            threshold_u256
+                .try_into()
+                .map_err(|_| L1RpcError::ThresholdTypeOverflow {
+                    fetched: threshold_u256,
+                })?
+        };
+
+        Ok((signers, threshold))
     }
 }

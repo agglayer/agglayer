@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
-use agglayer_types::{Address, Certificate, Height};
+use agglayer_types::{Address, Certificate, Height, SignerError};
 use alloy::{
     primitives::{Signature, B256, U256, U64},
     providers::{mock::Asserter, ProviderBuilder},
     signers::local::LocalSigner,
 };
+use futures::TryFutureExt;
 use jsonrpsee_test_utils::{helpers::ok_response, mocks::Id, TimeoutFutureExt as _};
 
 use crate::{
@@ -36,7 +37,7 @@ async fn interop_executor_check_tx() {
     let asserter = Asserter::new();
     let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-    let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+    let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
     let mut signed_tx = signed_tx();
 
@@ -72,7 +73,7 @@ async fn interop_executor_verify_zkp() {
     let provider = ProviderBuilder::new().on_mocked_client(asserter.clone());
 
     let _l1 = config.l1.clone();
-    let kernel = Kernel::new(Arc::new(provider), config);
+    let kernel = Kernel::new(Arc::new(provider), config).unwrap();
 
     let signed_tx = signed_tx();
 
@@ -90,7 +91,10 @@ async fn interop_executor_verify_zkp() {
     // proof_signers optimization works correctly.
 
     // Execute the function under test
-    let result = kernel.verify_batches_trusted_aggregator(&signed_tx).await;
+    let result = kernel
+        .verify_batches_trusted_aggregator(&signed_tx)
+        .and_then(|call| async move { call.send().await })
+        .await;
 
     // In a real implementation, with proper mocks, this should succeed
     // For now, we verify that we get a specific error indicating the mock
@@ -139,7 +143,6 @@ async fn interop_executor_verify_tx_signature_proof_signer() {}
 #[tokio::test]
 async fn verify_cert_signature() {
     let signer1 = Certificate::wallet_for_test(1.into()).address().into();
-    let signer2 = Certificate::wallet_for_test(2.into()).address().into();
     let signer3 = Certificate::wallet_for_test(3.into()).address().into();
     let mut config = Config::new_for_test();
     // Proof signer for network 1 is ok
@@ -151,7 +154,7 @@ async fn verify_cert_signature() {
 
     let asserter = Asserter::new();
     let provider = ProviderBuilder::new().on_mocked_client(asserter);
-    let kernel = Kernel::new(Arc::new(provider), config);
+    let kernel = Kernel::new(Arc::new(provider), config).unwrap();
 
     {
         // valid signature
@@ -164,8 +167,12 @@ async fn verify_cert_signature() {
         let signed_cert = Certificate::new_for_test(2.into(), Height::ZERO);
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
-            Err(agglayer_rpc::error::SignatureVerificationError::InvalidSigner { signer, trusted_sequencer })
-            if signer == signer2 && trusted_sequencer == signer3
+            Err(
+                agglayer_rpc::error::SignatureVerificationError::InvalidPessimisticProofSignature(
+                    SignerError::InvalidPessimisticProofSignature { expected_signer }
+                )
+            )
+            if expected_signer == signer3
         ));
     }
 
@@ -188,8 +195,12 @@ async fn verify_cert_signature() {
         signed_cert.new_local_exit_root.as_mut()[0] += 1;
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
-            Err(agglayer_rpc::error::SignatureVerificationError::InvalidSigner { signer: _, trusted_sequencer })
-            if trusted_sequencer == signer1
+            Err(
+                agglayer_rpc::error::SignatureVerificationError::InvalidPessimisticProofSignature(
+                    SignerError::InvalidPessimisticProofSignature { expected_signer }
+                )
+            )
+            if expected_signer == signer1
         ));
     }
 }
@@ -224,7 +235,7 @@ mod interop_executor_execute {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
         assert!(kernel.verify_proof_zkevm_node(&signed_tx).await.is_ok());
     }
@@ -250,7 +261,7 @@ mod interop_executor_execute {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -283,7 +294,7 @@ mod interop_executor_execute {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,
@@ -317,7 +328,7 @@ mod interop_executor_execute {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new().on_mocked_client(asserter);
 
-        let kernel = Kernel::new(Arc::new(provider), Arc::new(config));
+        let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
         assert!(matches!(
             kernel.verify_proof_zkevm_node(&signed_tx).await,

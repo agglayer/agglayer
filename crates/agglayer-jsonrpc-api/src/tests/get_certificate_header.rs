@@ -305,9 +305,7 @@ async fn debug_get_certificate_after_overwrite() {
         .state_store
         .update_certificate_header_status(
             &id,
-            &CertificateStatus::InError {
-                error: CertificateStatusError::InternalError("testing".to_string()),
-            },
+            &CertificateStatus::error(CertificateStatusError::InternalError("testing".to_string())),
         )
         .expect("unable to update certificate header status");
 
@@ -383,9 +381,7 @@ async fn debug_get_certificate_after_overwrite_with_debug_false() {
         .state_store
         .update_certificate_header_status(
             &id,
-            &CertificateStatus::InError {
-                error: CertificateStatusError::InternalError("testing".to_string()),
-            },
+            &CertificateStatus::error(CertificateStatusError::InternalError("testing".to_string())),
         )
         .expect("unable to update certificate header status");
 

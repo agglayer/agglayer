@@ -4,6 +4,7 @@ pub mod event_data;
 pub mod forest;
 pub mod runner;
 pub mod sample_data;
+pub mod test_vector;
 
 /// The ELF we want to execute inside the zkVM.
 pub const PESSIMISTIC_PROOF_ELF: &[u8] = pessimistic_proof::ELF;

@@ -5,8 +5,12 @@ use agglayer_storage::{
     tests::TempDBDir,
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
+use agglayer_types::{aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx};
 use mockall::predicate::{always, eq};
-use pessimistic_proof::{core::generate_pessimistic_proof, LocalNetworkState};
+use pessimistic_proof::{
+    core::{commitment::PessimisticRootCommitmentVersion, generate_pessimistic_proof},
+    LocalNetworkState,
+};
 use rstest::rstest;
 
 use super::*;
@@ -56,24 +60,39 @@ async fn from_pending_to_settle() {
                 .expect("Certificate not found");
 
             let signer = agglayer_types::Address::new([0; 20]);
+            let ctx_from_l1 = L1WitnessCtx {
+                l1_info_root: certificate
+                    .l1_info_root()
+                    .expect("Failed to get L1 info root")
+                    .unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            };
+
             let _ = new_state
-                .apply_certificate(
-                    &certificate,
-                    signer,
-                    certificate
-                        .l1_info_root()
-                        .expect("Failed to get L1 info root")
-                        .unwrap_or_default(),
-                    PessimisticRootInput::Computed(CommitmentVersion::V2),
-                    None,
-                )
+                .apply_certificate(&certificate, ctx_from_l1)
                 .expect("Failed to apply certificate");
+
+            let state_commitment = new_state.get_roots();
+            let pp_commitment_values =
+                pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                    height: height.as_u64(),
+                    origin_network: network_id,
+                    ler_leaf_count: state_commitment.ler_leaf_count,
+                    balance_root: state_commitment.balance_root.into(),
+                    nullifier_root: state_commitment.nullifier_root.into(),
+                };
+            let pp_root =
+                pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
 
             Ok(CertifierOutput {
                 certificate,
                 height,
                 new_state,
                 network,
+                new_pp_root: pp_root,
             })
         });
 
@@ -81,8 +100,19 @@ async fn from_pending_to_settle() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -164,24 +194,38 @@ async fn from_proven_to_settled() {
                 .expect("Certificate not found");
             let signer = agglayer_types::Address::new([0; 20]);
 
+            let ctx_from_l1 = L1WitnessCtx {
+                l1_info_root: certificate
+                    .l1_info_root()
+                    .expect("Failed to get L1 info root")
+                    .unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            };
+
             let _ = new_state
-                .apply_certificate(
-                    &certificate,
-                    signer,
-                    certificate
-                        .l1_info_root()
-                        .expect("Failed to get L1 info root")
-                        .unwrap_or_default(),
-                    PessimisticRootInput::Computed(CommitmentVersion::V2),
-                    None,
-                )
+                .apply_certificate(&certificate, ctx_from_l1)
                 .expect("Failed to apply certificate");
+            let state_commitment = new_state.get_roots();
+            let pp_commitment_values =
+                pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                    height: height.as_u64(),
+                    origin_network: network_id,
+                    ler_leaf_count: state_commitment.ler_leaf_count,
+                    balance_root: state_commitment.balance_root.into(),
+                    nullifier_root: state_commitment.nullifier_root.into(),
+                };
+            let pp_root =
+                pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
 
             Ok(CertifierOutput {
                 certificate,
                 height,
                 new_state,
                 network,
+                new_pp_root: pp_root,
             })
         });
 
@@ -189,8 +233,19 @@ async fn from_proven_to_settled() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -263,25 +318,28 @@ async fn from_candidate_to_settle() {
 
     storage
         .state
-        .update_settlement_tx_hash(&certificate_id, SettlementTxHash::for_tests())
+        .update_settlement_tx_hash(&certificate_id, SettlementTxHash::for_tests(), false)
         .unwrap();
 
     certifier.expect_certify().never();
     certifier
         .expect_witness_generation()
-        .withf(move |c, _| c.hash() == certificate_id)
+        .withf(move |c, _, _| c.hash() == certificate_id)
         .once()
-        .returning(move |cert, state| {
+        .returning(move |cert, state, _tx_hash| {
             let initial = LocalNetworkState::from(state.clone());
             let l1_info_root = cert.l1_info_root().unwrap().unwrap_or_default();
 
             let batch = state
                 .apply_certificate(
                     cert,
-                    signer,
-                    l1_info_root,
-                    PessimisticRootInput::Computed(CommitmentVersion::V2),
-                    None,
+                    L1WitnessCtx {
+                        l1_info_root,
+                        prev_pessimistic_root: PessimisticRootInput::Computed(
+                            PessimisticRootCommitmentVersion::V2,
+                        ),
+                        aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                    },
                 )
                 .unwrap();
 
@@ -293,6 +351,11 @@ async fn from_candidate_to_settle() {
     settlement_client
         .expect_submit_certificate_settlement()
         .never();
+    settlement_client
+        .expect_fetch_settlement_receipt_status()
+        .with(eq(SettlementTxHash::for_tests()))
+        .times(1)
+        .returning(|_| Ok(crate::TxReceiptStatus::TxSuccessful));
     settlement_client
         .expect_wait_for_settlement()
         .with(eq(SettlementTxHash::for_tests()), eq(certificate_id))

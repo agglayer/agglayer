@@ -21,18 +21,19 @@ ecdsa-proof-lib = { path = "./aggchain-proof-ecdsa-example/lib/" }
 alloy.workspace = true
 base64.workspace = true
 clap.workspace = true
+eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 sp1-sdk = { workspace = true }
 sp1-core-machine.workspace = true
 lazy_static.workspace = true
-anyhow.workspace = true
 rand.workspace = true
 hex-literal = "0.4"
 hex.workspace = true
+tokio.workspace = true
 tracing.workspace = true
-uuid = { version = "1.13.1", features = ["v4", "fast-rng"] }
+uuid = { version = "1.18.0", features = ["v4", "fast-rng"] }
 regex = "1.11"
 
 [dev-dependencies]

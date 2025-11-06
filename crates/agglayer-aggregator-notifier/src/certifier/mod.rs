@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{panic::AssertUnwindSafe, sync::Arc};
 
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
@@ -9,26 +9,30 @@ use agglayer_prover_types::v1::{
 };
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    aggchain_proof::AggchainData, bincode, primitives::keccak::Keccak256Hasher, Certificate,
-    Digest, Height, LocalNetworkStateData, NetworkId, PessimisticRootInput, Proof,
+    aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
+    NetworkId, Proof,
 };
+use eyre::{eyre, Context as _};
 use pessimistic_proof::{
-    core::{commitment::StateCommitment, generate_pessimistic_proof},
+    core::{commitment::StateCommitment, generate_pessimistic_proof, AggchainHashValues},
     local_state::LocalNetworkState,
     multi_batch_header::MultiBatchHeader,
     unified_bridge::{
-        AggchainProofPublicValues, CommitmentVersion, ImportedBridgeExitCommitmentValues,
+        AggchainProofPublicValues, ImportedBridgeExitCommitmentValues,
+        ImportedBridgeExitCommitmentVersion,
     },
     NetworkState, PessimisticProofOutput,
 };
+use prover_executor::{sp1_blocking, sp1_fast};
 use sp1_sdk::{
-    CpuProver, HashableKey, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError,
-    SP1VerifyingKey,
+    CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
 };
 use tonic::{codec::CompressionEncoding, transport::Channel};
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::ELF;
+
+mod l1_context;
 
 #[cfg(test)]
 mod tests;
@@ -54,14 +58,22 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         pending_store: Arc<PendingStore>,
         l1_rpc: Arc<L1Rpc>,
         config: Arc<Config>,
-    ) -> anyhow::Result<Self> {
+    ) -> eyre::Result<Self> {
         debug!("Initializing the CertifierClient verifier...");
-        let verifier = if config.mock_verifier {
-            sp1_sdk::ProverClient::builder().mock().build()
-        } else {
-            sp1_sdk::ProverClient::builder().cpu().build()
-        };
-        let (_, verifying_key) = verifier.setup(ELF);
+        let (verifier, verifying_key) = sp1_blocking({
+            let mock_verifier = config.mock_verifier;
+            move || {
+                let verifier = if mock_verifier {
+                    sp1_sdk::ProverClient::builder().mock().build()
+                } else {
+                    sp1_sdk::ProverClient::builder().cpu().build()
+                };
+                let (_, verifying_key) = verifier.setup(ELF);
+                (verifier, verifying_key)
+            }
+        })
+        .await
+        .context("Failed setting up SP1 verifier")?;
         debug!("CertifierClient verifier successfully initialized!");
 
         debug!("Connecting to the prover service...");
@@ -88,7 +100,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         verifier: Arc<CpuProver>,
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
-    ) -> Result<(), SP1VerificationError> {
+    ) -> eyre::Result<()> {
         // This fail_point is use to make the verification pass or fail
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
@@ -96,11 +108,12 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
                 let verifier = sp1_sdk::ProverClient::builder().mock().build();
                 let (_, verifying_key) = verifier.setup(ELF);
 
-                verifier.verify(proof, &verifying_key)
+                Ok(verifier.verify(proof, &verifying_key)?)
             }
         );
 
-        verifier.verify(proof, verifying_key)
+        Ok(sp1_fast(|| verifier.verify(proof, verifying_key))
+            .context("Failed verifying sp1 proof")??)
     }
 }
 
@@ -134,15 +147,27 @@ where
         let verifying_key = self.verifying_key.clone();
 
         let mut state = state.clone();
-        let (multi_batch_header, initial_state, pv_native) =
-            self.witness_generation(&certificate, &mut state).await?;
+        let (multi_batch_header, initial_state, pv_native) = self
+            .witness_generation(&certificate, &mut state, None)
+            .await?;
 
-        info!("Successfully generated the witness for the PP for the Certificate {certificate_id}");
+        let prev_pp_root = pv_native.prev_pessimistic_root;
+        let new_pp_root = pv_native.new_pessimistic_root;
+        info!(
+            %prev_pp_root,
+            %new_pp_root,
+            %certificate_id,
+            "Successfully generated the witness for the PP for certificate",
+        );
 
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
-        let mut stdin = SP1Stdin::new();
-        stdin.write(&network_state);
-        stdin.write(&multi_batch_header);
+        let mut stdin = sp1_fast(|| {
+            let mut stdin = SP1Stdin::new();
+            stdin.write(&network_state);
+            stdin.write(&multi_batch_header);
+            stdin
+        })
+        .map_err(CertificationError::Other)?;
 
         // Writing the proof to the stdin if needed
         // At this point, we have the proof and the verifying key coming from the chain
@@ -150,10 +175,28 @@ where
         // the multibatch header is configured to use the hash from L1
         match certificate.aggchain_data {
             AggchainData::ECDSA { .. } => {}
+            AggchainData::MultisigOnly { .. } => {}
             AggchainData::Generic { ref proof, .. } => {
                 let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
 
-                stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
+                // This operation is unwind safe: if it errors, we will discard stdin and
+                // stark_proof anyway.
+                sp1_fast(AssertUnwindSafe(|| {
+                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone())
+                }))
+                .map_err(CertificationError::Other)?;
+            }
+            AggchainData::MultisigAndAggchainProof {
+                ref aggchain_proof, ..
+            } => {
+                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) =
+                    &aggchain_proof.proof;
+                // This operation is unwind safe: if it errors, we will discard stdin and
+                // stark_proof anyway.
+                sp1_fast(AssertUnwindSafe(|| {
+                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
+                }))
+                .map_err(CertificationError::Other)?;
             }
         };
 
@@ -161,12 +204,19 @@ where
         let (pv_sp1_execute, _report) = {
             // Do not verify the deferred proof if we are in mock mode
             let deferred_proof_verification = !self.config.mock_verifier;
-            let (pv, report) = self
-                .verifier
-                .execute(ELF, &stdin.clone())
-                .deferred_proof_verification(deferred_proof_verification)
-                .run()
-                .map_err(CertificationError::Sp1ExecuteFailed)?;
+            let (pv, report) = sp1_blocking({
+                let verifier = self.verifier.clone();
+                let stdin = stdin.clone();
+                move || {
+                    verifier
+                        .execute(ELF, &stdin)
+                        .deferred_proof_verification(deferred_proof_verification)
+                        .run()
+                }
+            })
+            .await
+            .map_err(CertificationError::Other)?
+            .map_err(|e| CertificationError::Sp1ExecuteFailed(eyre!(e)))?;
 
             let pv_sp1_execute: PessimisticProofOutput = PessimisticProofOutput::bincode_codec()
                 .deserialize(pv.as_slice())
@@ -182,12 +232,15 @@ where
             });
         }
 
-        info!("Successfully executed the PP program locally");
+        info!(
+            public_inputs = ?pv_sp1_execute,
+            "Successfully executed the PP program locally"
+        );
 
         let request = GenerateProofRequest {
             stdin: Some(Stdin::Sp1Stdin(
-                bincode::default()
-                    .serialize(&stdin)
+                sp1_fast(|| bincode::default().serialize(&stdin))
+                    .map_err(CertificationError::Other)?
                     .map_err(|source| CertificationError::Serialize { source })?
                     .into(),
             )),
@@ -269,8 +322,8 @@ where
             })?;
 
         let proof = prover_response.into_inner().proof;
-        let proof: Proof = std::panic::catch_unwind(|| bincode::default().deserialize(&proof))
-            .map_err(|_| CertificationError::InternalError(String::from("panic")))?
+        let proof: Proof = sp1_fast(|| bincode::default().deserialize(&proof))
+            .map_err(CertificationError::Other)?
             .map_err(|source| CertificationError::Deserialize { source })?;
 
         debug!("Proof successfully generated!");
@@ -281,10 +334,12 @@ where
 
         if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify) {
             error!("Failed to verify the p-proof: {:?}", error);
-
-            Err(CertificationError::ProofVerificationFailed {
-                source: error.into(),
-            })
+            match error.downcast::<SP1VerificationError>() {
+                Ok(error) => Err(CertificationError::ProofVerificationFailed {
+                    source: error.into(),
+                }),
+                Err(error) => Err(CertificationError::Other(error)),
+            }
         } else {
             info!("Successfully generated and verified the p-proof!");
 
@@ -301,6 +356,7 @@ where
                 height,
                 new_state: state,
                 network: multi_batch_header.origin_network,
+                new_pp_root,
             })
         }
     }
@@ -309,134 +365,33 @@ where
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
-    ) -> Result<
-        (
-            MultiBatchHeader<Keccak256Hasher>,
-            LocalNetworkState,
-            PessimisticProofOutput,
-        ),
-        CertificationError,
-    > {
-        let network_id = certificate.network_id;
-        let certificate_id = certificate.hash();
+        certificate_tx_hash: Option<Digest>,
+    ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>
+    {
+        // Fetch all the necessary context from the L1
+        let ctx_from_l1 = self
+            .fetch_l1_context(certificate, certificate_tx_hash)
+            .await?;
 
-        let signer = self
-            .l1_rpc
-            .get_trusted_sequencer_address(network_id.to_u32(), self.config.proof_signers.clone())
-            .await
-            .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
-
-        let prev_pessimistic_root = self
-            .l1_rpc
-            .get_prev_pessimistic_root(network_id.to_u32())
-            .await
-            .map_err(|_| CertificationError::LastPessimisticRootNotFound(network_id))?;
-
-        let declared_l1_info_root = certificate
-            .l1_info_root()
-            .map_err(|source| CertificationError::Types { source })?;
-
-        let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
-
-        let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
-            // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
-            (None, _) if matches!(certificate.aggchain_data, AggchainData::Generic { .. }) => {
-                return Err(CertificationError::MissingL1InfoTreeLeafCountForGenericAggchainData);
-            }
-            (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
-            // Retrieve the event corresponding to the declared entry and await for finalization
-            (Some(declared_leaf), declared_root) => {
-                // Retrieve from contract and await for finalization
-                let retrieved_root = self
-                    .l1_rpc
-                    .get_l1_info_root(declared_leaf)
-                    .await
-                    .map_err(|_| {
-                        CertificationError::L1InfoRootNotFound(certificate_id, declared_leaf)
-                    })?
-                    .into();
-
-                if let Some(declared_root) = declared_root {
-                    // Check that the retrieved l1 info root is equal to the declared one
-                    if declared_root != retrieved_root {
-                        return Err(CertificationError::Types {
-                            source: agglayer_types::Error::L1InfoRootIncorrect {
-                                declared: declared_root,
-                                retrieved: retrieved_root,
-                                leaf_count: declared_leaf,
-                            },
-                        });
-                    }
-                }
-
-                retrieved_root
-            }
-            // Inconsistent declared L1 info tree entry
-            (l1_leaf, l1_info_root) => {
-                return Err(CertificationError::Types {
-                    source: agglayer_types::Error::InconsistentL1InfoTreeInformation {
-                        l1_leaf,
-                        l1_info_root,
-                    },
-                })
-            }
-        };
-
-        // Fetching rollup contract address
-        let rollup_address = self
-            .l1_rpc
-            .get_rollup_contract_address(network_id.to_u32())
-            .await
-            .map_err(CertificationError::RollupContractAddressNotFound)?;
-
-        let aggchain_vkey = match certificate.aggchain_data {
-            AggchainData::ECDSA { .. } => None,
-            AggchainData::Generic { ref proof, .. } => {
-                let aggchain_vkey_selector = certificate
-                    .custom_chain_data
-                    .first_chunk::<2>()
-                    .ok_or(CertificationError::Types {
-                        source: agglayer_types::Error::InvalidCustomChainDataLength {
-                            expected_at_least: 2,
-                            actual: certificate.custom_chain_data.len(),
-                        },
-                    })
-                    .map(|bytes| u16::from_be_bytes(*bytes))?;
-
-                let aggchain_vkey = self
-                    .l1_rpc
-                    .get_aggchain_vkey_hash(rollup_address, aggchain_vkey_selector)
-                    .await
-                    .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
-
-                let agglayer_types::aggchain_proof::Proof::SP1Stark(sp1_reduce_proof) = proof;
-
-                let proof_vk_hash = agglayer_contracts::aggchain::AggchainVkeyHash::new(
-                    sp1_reduce_proof.vkey.vk.hash_bytes(),
-                );
-
-                if aggchain_vkey != proof_vk_hash {
-                    return Err(CertificationError::AggchainProofVkeyMismatch {
-                        expected: aggchain_vkey.to_hex(),
-                        actual: proof_vk_hash.to_hex(),
-                    });
-                }
-
-                Some(sp1_reduce_proof.vkey.vk.hash_u32())
-            }
-        };
+        debug!("Context fetched from the L1: {ctx_from_l1:?}");
 
         let initial_state = LocalNetworkState::from(state.clone());
 
         let multi_batch_header = state
-            .apply_certificate(
-                certificate,
-                signer,
-                l1_info_root,
-                PessimisticRootInput::Fetched(prev_pessimistic_root.into()),
-                aggchain_vkey,
-            )
+            .apply_certificate(certificate, ctx_from_l1)
             .map_err(|source| CertificationError::Types { source })?;
+
+        let aggchain_hash_values = AggchainHashValues::from(&multi_batch_header.aggchain_data);
+
+        debug!(
+            "Unrolled aggchain data values: {:?}",
+            multi_batch_header.aggchain_data
+        );
+        debug!("Unrolled aggchain hash values: {:?}", aggchain_hash_values);
+        debug!(
+            "Aggchain hash computed by the agglayer node and PP: {:?}",
+            aggchain_hash_values.hash()
+        );
 
         let targets_witness_generation: StateCommitment = {
             let ns: LocalNetworkState = state.clone().into();
@@ -445,9 +400,14 @@ where
 
         // Perform the native PP execution without the STARK verification in order to
         // cross check the target roots.
-        let (pv, targets_native_execution) =
-            generate_pessimistic_proof(initial_state.clone().into(), &multi_batch_header)
-                .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
+        let (pv, targets_native_execution) = tokio::task::spawn_blocking({
+            let initial_state = initial_state.clone();
+            let multi_batch_header = multi_batch_header.clone();
+            move || generate_pessimistic_proof(initial_state.into(), &multi_batch_header)
+        })
+        .await
+        .map_err(|e| CertificationError::InternalError(e.to_string()))?
+        .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
         // Verify consistency on the aggchain proof public values if provided in the
         // optional context
@@ -457,6 +417,13 @@ where
             ..
         } = &certificate.aggchain_data
         {
+            // Fetching rollup contract address
+            let rollup_address = self
+                .l1_rpc
+                .get_rollup_contract_address(certificate.network_id.to_u32())
+                .await
+                .map_err(CertificationError::RollupContractAddressNotFound)?;
+
             // Verify matching on the aggchain hash between the L1 and the agglayer
             let l1_aggchain_hash: Digest = self
                 .l1_rpc
@@ -465,7 +432,7 @@ where
                 .map_err(CertificationError::UnableToFindAggchainHash)?
                 .into();
 
-            let computed_aggchain_hash = multi_batch_header.aggchain_proof.aggchain_hash();
+            let computed_aggchain_hash = multi_batch_header.aggchain_data.aggchain_hash();
 
             if l1_aggchain_hash != computed_aggchain_hash {
                 return Err(CertificationError::AggchainHashMismatch {
@@ -495,7 +462,7 @@ where
                         .map(|(exit, _)| exit.to_indexed_exit_hash())
                         .collect(),
                 }
-                .commitment(CommitmentVersion::V3),
+                .commitment(ImportedBridgeExitCommitmentVersion::V3),
                 aggchain_params: *aggchain_params,
             };
 

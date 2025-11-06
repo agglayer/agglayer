@@ -324,3 +324,61 @@ fn adding_certificate_and_restart() {
         2
     );
 }
+
+#[rstest]
+fn can_retrieve_proof_at_index() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+
+    let backup_client = BackupClient::noop();
+    let store = PerEpochStore::try_open(
+        config,
+        EpochNumber::ZERO,
+        pending_store,
+        state_store,
+        None,
+        backup_client,
+    )
+    .unwrap();
+
+    let network = 1.into();
+    let height = Height::ZERO;
+
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    // Add the certificate to the epoch store
+    assert!(
+        store
+            .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
+            .is_ok(),
+        "Failed to add certificate to epoch store"
+    );
+
+    // Verify that we can retrieve the proof at index 0
+    let proof = store.get_proof_at_index(CertificateIndex::ZERO).unwrap();
+    assert!(proof.is_some(), "Should retrieve a proof");
+
+    // Verify that retrieving proof at non-existent index returns None
+    let non_existent_proof = store.get_proof_at_index(CertificateIndex::new(1)).unwrap();
+    assert!(non_existent_proof.is_none(), "Should return None for non-existent index");
+}

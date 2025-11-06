@@ -1,16 +1,20 @@
 use alloy::{
     contract::Error as ContractError,
+    eips::eip1559::Eip1559Estimation,
     primitives::Bytes,
     providers::{PendingTransactionBuilder, Provider},
 };
 use tracing::debug;
 
-use crate::L1RpcClient;
+use crate::{adjust_gas_estimate, L1RpcClient};
+
+const DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR: u128 = 150; //1.5X
 
 #[async_trait::async_trait]
 pub trait Settler {
     fn decode_contract_revert(error: &ContractError) -> Option<String>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
@@ -19,6 +23,8 @@ pub trait Settler {
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
+        nonce_info: Option<(u64, u128, Option<u128>)>, /* nonce, previous_max_fee_per_gas,
+                                                        * optional previous_max_priority_fee_per_gas */
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError>;
 }
 
@@ -44,6 +50,7 @@ where
         Some(format!("{error:?}"))
     }
 
+    #[tracing::instrument(skip(self, proof))]
     async fn verify_pessimistic_trusted_aggregator(
         &self,
         rollup_id: u32,
@@ -52,6 +59,8 @@ where
         new_pessimistic_root: [u8; 32],
         proof: Bytes,
         custom_chain_data: Bytes,
+        nonce_info: Option<(u64, u128, Option<u128>)>, /* nonce, previous_max_fee_per_gas,
+                                                        * optional previous_max_priority_fee_per_gas */
     ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, ContractError> {
         // Build the transaction call
         let mut tx_call = self.inner.verifyPessimisticTrustedAggregator(
@@ -61,6 +70,11 @@ where
             new_pessimistic_root.into(),
             proof,
             custom_chain_data,
+        );
+
+        debug!(
+            "Building the L1 settlement tx with calldata: {:?}",
+            tx_call.calldata()
         );
 
         // This is a fail point for testing purposes, it simulates low gas conditions.
@@ -81,6 +95,7 @@ where
 
         // Check if a gas multiplier factor is provided
         if self.gas_multiplier_factor != 100 {
+            // Adjust the gas limit based on the configuration.
             // Apply gas multiplier if it's not the default (100).
             // First estimate gas, then multiply by the factor.
             let gas_estimate = tx_call.estimate_gas().await?;
@@ -93,6 +108,69 @@ where
             );
             tx_call = tx_call.gas(adjusted_gas);
         }
+
+        let tx_call = {
+            let estimate = self.rpc.estimate_eip1559_fees().await?;
+
+            let adjusted_fees =
+                if let Some((nonce, previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) =
+                    nonce_info
+                {
+                    // This is repeated transaction, increase the previous max_fee_per_gas and
+                    // max_priority_fee_per_gas by a factor
+                    // If previous_max_priority_fee_per_gas is None, set it to estimated.
+                    let adjust = Eip1559Estimation {
+                        max_fee_per_gas: {
+                            let mut new_max_fee_per_gas = previous_max_fee_per_gas
+                                .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
+                                .div_ceil(100)
+                                .max(self.gas_price_params.floor)
+                                .min(self.gas_price_params.ceiling);
+                            // In the corner case that the previous fee is the same as the new fee
+                            // due to rounding, multiply it by 2 to
+                            // ensure progress
+                            if new_max_fee_per_gas == previous_max_fee_per_gas {
+                                new_max_fee_per_gas =
+                                    (new_max_fee_per_gas * 2).min(self.gas_price_params.ceiling);
+                            }
+                            new_max_fee_per_gas
+                        },
+                        max_priority_fee_per_gas: previous_max_priority_fee_per_gas
+                            .map(|previous| {
+                                let mut new_max_priority_fee_per_gas = previous
+                                    .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
+                                    .div_ceil(100);
+                                // In the corner case that the previous priority fee is the same as
+                                // the new fee due to rounding,
+                                // multiply it by 2 to ensure progress
+                                if new_max_priority_fee_per_gas == previous {
+                                    new_max_priority_fee_per_gas *= 2;
+                                }
+                                new_max_priority_fee_per_gas
+                            })
+                            .unwrap_or(estimate.max_priority_fee_per_gas)
+                            .max(self.gas_price_params.floor)
+                            .min(self.gas_price_params.ceiling),
+                    };
+                    debug!(
+                        provided_nonce_info = ?nonce_info,
+                        adjusted_max_fees = ?adjust,
+                        %rollup_id,
+                        "Nonce provided, increasing  previous max_fee_per_gas and \
+                         max_priority_fee_per_gas"
+                    );
+                    // Set the nonce for the transaction
+                    tx_call = tx_call.nonce(nonce);
+                    adjust
+                } else {
+                    // Adjust the gas fees based on the configuration.
+                    adjust_gas_estimate(&estimate, &self.gas_price_params)
+                };
+
+            tx_call
+                .max_priority_fee_per_gas(adjusted_fees.max_priority_fee_per_gas)
+                .max_fee_per_gas(adjusted_fees.max_fee_per_gas)
+        };
 
         tx_call.send().await
     }

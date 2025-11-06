@@ -2,14 +2,15 @@ use std::{sync::Arc, thread, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
-use agglayer_contracts::{aggchain::AggchainVkeyHash, L1RpcError, Settler};
+use agglayer_contracts::{L1RpcError, Settler};
+use agglayer_primitives::vkey_hash::VKeyHash;
 use agglayer_prover::fake::FakeProver;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
-use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
+use agglayer_types::{Address, Height, LocalNetworkStateData, NetworkId};
 use alloy::{
     contract::Error as ContractError,
     network::Ethereum,
-    primitives::{Bytes, FixedBytes},
+    primitives::{Bytes, FixedBytes, TxHash},
     rpc::types::TransactionReceipt,
 };
 use fail::FailScenario;
@@ -25,14 +26,23 @@ use crate::{CertifierClient, ELF};
 async fn happy_path() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
-    let config = Config::new(&base_path.path);
+    let mut config = Config::new(&base_path.path);
 
     let mut pending_store = MockPendingStore::new();
     let mut l1_rpc = MockL1Rpc::new();
-    let prover_config = agglayer_prover_config::ProverConfig::default();
+    let prover_config = agglayer_prover_config::ProverConfig {
+        grpc_endpoint: next_available_addr(),
+        ..Default::default()
+    };
+
+    config.prover_entrypoint = format!(
+        "http://{}:{}",
+        prover_config.grpc_endpoint.ip(),
+        prover_config.grpc_endpoint.port()
+    );
 
     // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::new(ELF);
+    let fake_prover = FakeProver::new(ELF).await.unwrap();
     let endpoint = prover_config.grpc_endpoint;
     let cancellation = CancellationToken::new();
 
@@ -74,7 +84,7 @@ async fn happy_path() {
     l1_rpc
         .expect_get_rollup_contract_address()
         .once()
-        .returning(|_| Ok(alloy::primitives::Address::default().into()));
+        .returning(|_| Ok(Address::ZERO));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -84,7 +94,7 @@ async fn happy_path() {
     l1_rpc
         .expect_get_prev_pessimistic_root()
         .once()
-        .returning(|_| Ok([0u8; 32]));
+        .returning(|_, _| Ok([0u8; 32]));
 
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
@@ -179,7 +189,7 @@ async fn prover_timeout() {
     l1_rpc
         .expect_get_rollup_contract_address()
         .once()
-        .returning(|_| Ok(alloy::primitives::Address::default().into()));
+        .returning(|_| Ok(Address::ZERO));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -189,7 +199,7 @@ async fn prover_timeout() {
     l1_rpc
         .expect_get_prev_pessimistic_root()
         .once()
-        .returning(|_| Ok([0u8; 32]));
+        .returning(|_, _| Ok([0u8; 32]));
 
     fail::cfg(
         "notifier::certifier::certify::before_verifying_proof",
@@ -219,8 +229,6 @@ mockall::mock! {
     L1Rpc {}
     #[async_trait::async_trait]
     impl agglayer_contracts::RollupContract for L1Rpc {
-        type P = alloy::providers::RootProvider<Ethereum>;
-
         async fn get_trusted_sequencer_address(
             &self,
             rollup_id: u32,
@@ -231,32 +239,37 @@ mockall::mock! {
 
         async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
         fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
-        async fn get_prev_pessimistic_root(&self, rollup_id: u32) -> Result<[u8; 32], L1RpcError>;
+        async fn get_prev_pessimistic_root(&self, rollup_id: u32, before_tx: Option<TxHash>) -> Result<[u8; 32], L1RpcError>;
         async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
+        fn get_rollup_manager_address(&self) -> agglayer_types::Address;
+        fn get_event_filter_block_range(&self) -> u64;
     }
 
     #[async_trait::async_trait]
     impl agglayer_contracts::AggchainContract for L1Rpc {
-        type M = alloy::providers::RootProvider<Ethereum>;
-
         async fn get_aggchain_vkey_hash(
             &self,
             rollup_address: agglayer_types::Address,
             aggchain_vkey_selector: u16,
-        ) -> Result<AggchainVkeyHash, L1RpcError>;
+        ) -> Result<VKeyHash, L1RpcError>;
 
         async fn get_aggchain_hash(
             &self,
             rollup_address: agglayer_types::primitives::Address,
             aggchain_data: Bytes,
         ) -> Result<[u8; 32], L1RpcError>;
+
+        async fn get_multisig_context(
+            &self,
+            rollup_address: agglayer_types::Address,
+        ) -> Result<(Vec<agglayer_types::Address>, usize), L1RpcError>;
     }
 
     #[async_trait::async_trait]
     impl agglayer_contracts::L1TransactionFetcher for L1Rpc {
         type Provider = alloy::providers::RootProvider<Ethereum>;
 
-        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<TransactionReceipt, L1RpcError>;
+        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as agglayer_contracts::L1TransactionFetcher>::Provider;
     }
@@ -273,6 +286,7 @@ mockall::mock! {
             new_pessimistic_root: [u8; 32],
             proof: Bytes,
             custom_chain_data: Bytes,
+            nonce: Option<(u64, u128, Option<u128>)>
         ) -> Result<alloy::providers::PendingTransactionBuilder<Ethereum>, ContractError>;
     }
 }

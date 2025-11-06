@@ -79,14 +79,32 @@ pub enum SignatureVerificationError {
         expected_signer: Address,
     },
 
-    /// The extra signature is not signed from the expected signer, or not
-    /// performed on the right commitment.
-    #[error("wrong signed commitment or invalid extra signer: expected: {expected}, got: {got}")]
-    InvalidExtraSignature {
-        /// The expected extra signer.
-        expected: Address,
-        /// The recovered signer address.
-        got: Address,
+    /// The extra signature is invalid.
+    #[error("invalid extra signature: {0}")]
+    InvalidExtraSignature(#[source] SignerError),
+
+    /// The pessimistic proof signature is invalid.
+    #[error("invalid pessimistic proof signature: {0}")]
+    InvalidPessimisticProofSignature(#[source] SignerError),
+
+    /// The multisig is invalid.
+    #[error("invalid multisig: {0}")]
+    InvalidMultisig(#[source] SignerError),
+
+    /// The rollup contract (zkevm or aggchain base contract) fails to be
+    /// retrieved from the L1.
+    #[error("unable to retrieve the rollup contract for the network {network_id}: {source}")]
+    UnableToRetrieveRollupContractAddress {
+        source: L1RpcError,
+        network_id: NetworkId,
+    },
+
+    /// The multisig context (signers or threshold) fails to be retrieved from
+    /// the L1.
+    #[error("unable to retrieve the multisig context for the network {network_id}: {source}")]
+    UnableToRetrieveMultisigContext {
+        source: L1RpcError,
+        network_id: NetworkId,
     },
 }
 
@@ -94,9 +112,72 @@ impl SignatureVerificationError {
     pub fn from_signer_error(e: agglayer_types::SignerError) -> Self {
         match e {
             agglayer_types::SignerError::Missing => Self::SignatureMissing,
-            agglayer_types::SignerError::Recovery(e) => {
-                Self::CouldNotRecoverCertSigner(agglayer_types::SignerError::Recovery(e))
+            e @ agglayer_types::SignerError::Recovery(_) => Self::CouldNotRecoverCertSigner(e),
+            e @ agglayer_types::SignerError::InvalidExtraSignature { .. } => {
+                Self::InvalidExtraSignature(e)
             }
+            e @ agglayer_types::SignerError::InvalidPessimisticProofSignature { .. } => {
+                Self::InvalidPessimisticProofSignature(e)
+            }
+            e @ agglayer_types::SignerError::InvalidMultisig(_) => Self::InvalidMultisig(e),
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProofRetrievalError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Proof for certificate {certificate_id} not found")]
+    NotFound { certificate_id: CertificateId },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetLatestCertificateError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Unknown latest certificate header for network {network_id}")]
+    UnknownLatestCertificateHeader {
+        network_id: NetworkId,
+        source: Box<CertificateRetrievalError>,
+    },
+
+    #[error(
+        "Mismatch on the certificate id. expected: {expected}, re-computed from the certificate \
+         in DB: {got}"
+    )]
+    CertificateIdHashMismatch {
+        expected: CertificateId,
+        got: CertificateId,
+    },
+
+    #[error("Latest certificate header for certificate {certificate_id} not found")]
+    NotFound { certificate_id: CertificateId },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetLatestSettledClaimError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error("Cound not get latest settled claim, inconsistent state for {network_id}")]
+    InconsistentState {
+        network_id: NetworkId,
+        height: Height,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetNetworkInfoError {
+    #[error("Unable to determine network type for network {network_id}")]
+    UnknownNetworkType { network_id: NetworkId },
+
+    #[error("Could not get network status for network {network_id}, internal error: {source}")]
+    InternalError {
+        network_id: NetworkId,
+        #[source]
+        source: eyre::Error,
+    },
 }

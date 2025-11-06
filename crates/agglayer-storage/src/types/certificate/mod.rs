@@ -21,7 +21,7 @@ use std::borrow::Cow;
 
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
-    aggchain_proof::{AggchainData, Proof},
+    aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof},
     primitives::Digest,
     Certificate, Height, Metadata, NetworkId, Signature,
 };
@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use crate::columns::{bincode_codec, CodecError};
 
 /// A unit type serializing to a constant byte representing the storage version.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(try_from = "u8", into = "u8")]
 struct VersionTag<const VERSION: u8>;
 
@@ -56,8 +56,8 @@ impl<const VERSION: u8> From<VersionTag<VERSION>> for u8 {
 ///
 /// In v0, the first byte of network ID was reserved to specify the storage
 /// format version.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "testutils", derive(Serialize))]
 struct NetworkIdV0([u8; 3]);
 
 impl From<NetworkIdV0> for NetworkId {
@@ -68,7 +68,7 @@ impl From<NetworkIdV0> for NetworkId {
 
 /// The pre-0.3 certificate format (`v0`).
 #[derive(Debug, Clone, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
+#[cfg_attr(feature = "testutils", derive(Serialize, Eq, PartialEq))]
 struct CertificateV0 {
     version: VersionTag<0>,
     network_id: NetworkIdV0,
@@ -112,6 +112,7 @@ impl From<CertificateV0> for Certificate {
 
 /// The new certificate format as stored in the database (`v1`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "testutils", derive(Eq, PartialEq))]
 struct CertificateV1<'a> {
     version: VersionTag<1>,
     network_id: NetworkId,
@@ -191,6 +192,7 @@ impl<'a> From<&'a Certificate> for CertificateV1<'a> {
 // Duplicated from `agglayer-types` since we need slightly different serde
 // impls.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "testutils", derive(Eq, PartialEq))]
 #[allow(clippy::upper_case_acronyms)]
 pub enum AggchainDataV1<'a> {
     ECDSA {
@@ -214,6 +216,17 @@ pub enum AggchainDataV1<'a> {
         signature: Option<Box<Signature>>,
         public_values: Cow<'a, Box<AggchainProofPublicValues>>,
     },
+
+    MultisigOnly {
+        multisig: Cow<'a, [Option<Signature>]>,
+    },
+
+    MultisigAndAggchainProof {
+        multisig: Cow<'a, [Option<Signature>]>,
+        proof: Cow<'a, Proof>,
+        aggchain_params: Digest,
+        public_values: Option<Cow<'a, Box<AggchainProofPublicValues>>>,
+    },
 }
 
 impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
@@ -222,7 +235,6 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
             AggchainData::ECDSA { signature } => Self::ECDSA {
                 signature: *signature,
             },
-
             AggchainData::Generic {
                 proof,
                 aggchain_params,
@@ -251,6 +263,19 @@ impl<'a> From<&'a AggchainData> for AggchainDataV1<'a> {
                     },
                 }
             }
+
+            AggchainData::MultisigOnly { multisig } => AggchainDataV1::MultisigOnly {
+                multisig: Cow::Borrowed(multisig.0.as_slice()),
+            },
+            AggchainData::MultisigAndAggchainProof {
+                multisig,
+                aggchain_proof,
+            } => AggchainDataV1::MultisigAndAggchainProof {
+                multisig: Cow::Borrowed(multisig.0.as_slice()),
+                proof: Cow::Borrowed(&aggchain_proof.proof),
+                aggchain_params: aggchain_proof.aggchain_params,
+                public_values: aggchain_proof.public_values.as_ref().map(Cow::Borrowed),
+            },
         }
     }
 }
@@ -289,6 +314,22 @@ impl From<AggchainDataV1<'_>> for AggchainData {
                 signature,
                 public_values: Some(public_values.into_owned()),
             },
+            AggchainDataV1::MultisigOnly { multisig } => Self::MultisigOnly {
+                multisig: MultisigPayload(multisig.into_owned()),
+            },
+            AggchainDataV1::MultisigAndAggchainProof {
+                multisig,
+                proof,
+                aggchain_params,
+                public_values,
+            } => Self::MultisigAndAggchainProof {
+                multisig: MultisigPayload(multisig.into_owned()),
+                aggchain_proof: AggchainProof {
+                    proof: proof.into_owned(),
+                    aggchain_params,
+                    public_values: public_values.map(|pv| pv.into_owned()),
+                },
+            },
         }
     }
 }
@@ -303,9 +344,8 @@ fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
 }
 
 impl crate::columns::Codec for Certificate {
-    fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        // TODO get rid of the clones <https://github.com/agglayer/agglayer/issues/618>
-        Ok(bincode_codec().serialize(&CurrentCertificate::from(self))?)
+    fn encode_into<W: std::io::Write>(&self, writer: W) -> Result<(), CodecError> {
+        Ok(bincode_codec().serialize_into(writer, &CurrentCertificate::from(self))?)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {

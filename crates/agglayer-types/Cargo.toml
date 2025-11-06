@@ -6,7 +6,15 @@ license.workspace = true
 
 [features]
 default = []
-testutils = ["dep:arbitrary", "pessimistic-proof/testutils"]
+testutils = [
+    "dep:arbitrary",
+    "pessimistic-proof/testutils",
+    "agglayer-interop-types/testutils",
+]
+
+[[bench]]
+name = "criterion"
+harness = false
 
 [dependencies]
 agglayer-primitives.workspace = true
@@ -26,6 +34,11 @@ sp1-core-machine.workspace = true
 sp1-prover.workspace = true
 thiserror.workspace = true
 rand.workspace = true
+strum_macros.workspace = true
 
 [dev-dependencies]
 agglayer-types = { path = ".", features = ["testutils"] }
+agglayer-bincode.workspace = true
+
+criterion.workspace = true
+rstest.workspace = true

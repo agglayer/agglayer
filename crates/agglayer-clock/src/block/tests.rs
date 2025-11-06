@@ -21,6 +21,20 @@ use crate::{
     BlockClock, Clock, ClockRef, Event, BROADCAST_CHANNEL_SIZE,
 };
 
+impl BlockClock<BlockProvider> {
+    async fn default_for_test(ws: WsConnect, genesis_block: u64, epoch_duration: u64) -> Self {
+        BlockClock::new_with_ws(
+            ws,
+            genesis_block,
+            epoch_duration.try_into().unwrap(),
+            // note: high value for compatibility with existing tests
+            Duration::from_secs(90),
+        )
+        .await
+        .expect("Failed to create BlockClock")
+    }
+}
+
 #[test]
 fn test_block_calculation() {
     assert_eq!(
@@ -46,9 +60,7 @@ async fn test_block_clock() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -66,9 +78,7 @@ async fn test_block_clock_with_genesis() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
     tokio::time::sleep(Duration::from_secs(3)).await;
-    let clock = BlockClock::new_with_ws(ws, 2, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 2, 3).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -86,10 +96,7 @@ async fn test_block_clock_with_genesis_in_future() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock =
-        BlockClock::new_with_ws(ws, 10, NonZeroU64::new(2).unwrap(), Duration::from_secs(1))
-            .await
-            .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 10, 2).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -108,9 +115,7 @@ async fn test_block_clock_starting_with_genesis_in_future_should_trigger_epoch_0
     let ws = WsConnect::new(anvil.ws_endpoint());
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -138,10 +143,7 @@ async fn test_block_clock_starting_with_genesis() {
     let test_client = client.clone();
     let mut subscribe = test_client.subscribe_blocks().await.unwrap().into_stream();
 
-    let clock =
-        BlockClock::new_with_ws(ws, 10, NonZeroU64::new(1).unwrap(), Duration::from_secs(1))
-            .await
-            .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 10, 1).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -173,9 +175,7 @@ async fn test_block_clock_starting_with_genesis_already_passed() {
 
     tokio::time::sleep(Duration::from_secs(10)).await;
     let ws = WsConnect::new(anvil.ws_endpoint());
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .expect("Failed to create BlockClock");
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
 
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token).await.unwrap();
@@ -195,10 +195,7 @@ async fn test_block_clock_overflow() {
     let anvil = Anvil::new().block_time(1u64).spawn();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let mut clock =
-        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-            .await
-            .expect("Failed to create BlockClock");
+    let mut clock = BlockClock::default_for_test(ws, 0, 3).await;
     let blocks = clock.block_height.clone();
     let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
 
@@ -235,10 +232,7 @@ async fn test_block_clock_overflow_epoch() {
 
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let mut clock =
-        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-            .await
-            .expect("Failed to create BlockClock");
+    let mut clock = BlockClock::default_for_test(ws, 0, 3).await;
     let epoch = clock.current_epoch.clone();
     let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
 
@@ -291,7 +285,7 @@ async fn regression_block_disconnection() {
     let ws = WsConnect::new(anvil.ws_endpoint());
 
     let clock =
-        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(10))
+        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(90))
             .await
             .unwrap();
     let token = CancellationToken::new();
@@ -327,9 +321,7 @@ async fn disconnection_with_timeout() {
     let port = anvil.port();
     let ws = WsConnect::new(anvil.ws_endpoint());
 
-    let clock = BlockClock::new_with_ws(ws, 0, NonZeroU64::new(3).unwrap(), Duration::from_secs(1))
-        .await
-        .unwrap();
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
     let token = CancellationToken::new();
     let clock_ref = clock.spawn(token.clone()).await.unwrap();
 
@@ -362,7 +354,7 @@ async fn can_catchup_on_disconnection() {
     let ws = WsConnect::new(anvil.ws_endpoint());
 
     let clock =
-        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(1).unwrap(), Duration::from_secs(10))
+        BlockClock::new_with_ws(ws, 0, NonZeroU64::new(1).unwrap(), Duration::from_secs(90))
             .await
             .unwrap();
     let token = CancellationToken::new();
@@ -400,5 +392,56 @@ async fn can_catchup_on_disconnection() {
     })
     .await
     .expect("Timeout");
+    scenario.teardown();
+}
+
+#[rstest::rstest]
+// The test should still work without a lag.
+#[case("off")]
+// Anvil bounds its broadcast channel size to 16 by default.
+// At one block per second, we need over 16 seconds for it to start lagging.
+#[case("1*return(20)")]
+// This one is fine during initialization but lags later on.
+#[case("4*off->1*return(20)")]
+// Limit the total running time.
+#[timeout(Duration::from_secs(60))]
+#[test_log::test(tokio::test)]
+async fn skipped_blocks_are_handled(#[case] lag_cfg: &str) {
+    let scenario = FailScenario::setup();
+
+    fail::cfg("block_clock::BlockClock::recv_block::before", lag_cfg).unwrap();
+
+    let anvil = Anvil::new().block_time(1u64).spawn();
+    let ws = WsConnect::new(anvil.ws_endpoint());
+
+    let clock = BlockClock::default_for_test(ws, 0, 3).await;
+    let token = CancellationToken::new();
+
+    let start = tokio::time::Instant::now();
+    let clock_ref = clock.spawn(token.clone()).await.unwrap();
+    let mut recv = clock_ref.subscribe().unwrap();
+
+    tokio::time::sleep_until(start + Duration::from_secs(25)).await;
+
+    let Event::EpochEnded(last_epoch) = {
+        let mut last_epoch = None;
+        loop {
+            match recv.try_recv() {
+                Ok(epoch) => last_epoch = Some(epoch),
+                Err(broadcast::error::TryRecvError::Lagged(_)) => (),
+                Err(broadcast::error::TryRecvError::Empty) => {
+                    break last_epoch.expect("Nothing in the epoch broadcast channel")
+                }
+                Err(broadcast::error::TryRecvError::Closed) => {
+                    panic!("Clock channel unexpectedly closed; the clock is probably dead")
+                }
+            }
+        }
+    };
+
+    // After 25 seconds, we should be at epoch 7. This should be independent
+    // of the lag as the clock should have recovered from it by this point.
+    assert_eq!(last_epoch, EpochNumber::new(7));
+
     scenario.teardown();
 }

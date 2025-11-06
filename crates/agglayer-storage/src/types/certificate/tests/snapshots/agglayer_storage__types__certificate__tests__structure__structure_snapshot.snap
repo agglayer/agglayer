@@ -1,9 +1,27 @@
 ---
 source: crates/agglayer-storage/src/types/certificate/tests/structure.rs
 expression: "&registry"
-snapshot_kind: text
 ---
 {
+  "AggchainDataError": {
+    "ENUM": {
+      "0": {
+        "InvalidVariant": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "1": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
+      },
+      "2": {
+        "MissingSignature": "UNIT"
+      }
+    }
+  },
   "CertificateStatus": {
     "ENUM": {
       "0": {
@@ -137,6 +155,67 @@ snapshot_kind: text
       },
       "2": {
         "FrontierIndexOutOfBounds": "UNIT"
+      }
+    }
+  },
+  "MultisigError": {
+    "ENUM": {
+      "0": {
+        "TooManySigners": {
+          "STRUCT": [
+            {
+              "num": "U64"
+            },
+            {
+              "max": "U64"
+            }
+          ]
+        }
+      },
+      "1": {
+        "UnderThreshold": {
+          "STRUCT": [
+            {
+              "got": "U64"
+            },
+            {
+              "expected": "U64"
+            }
+          ]
+        }
+      },
+      "2": {
+        "InvalidSignature": {
+          "STRUCT": [
+            {
+              "idx": "U64"
+            }
+          ]
+        }
+      },
+      "3": {
+        "InvalidSigner": {
+          "STRUCT": [
+            {
+              "idx": "U64"
+            },
+            {
+              "expected_signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "recovered_signer": {
+                "TYPENAME": "agglayer_primitives::Address"
+              }
+            },
+            {
+              "commitment": {
+                "TYPENAME": "agglayer_primitives::Digest"
+              }
+            }
+          ]
+        }
       }
     }
   },
@@ -372,6 +451,13 @@ snapshot_kind: text
       },
       "24": {
         "HeightOverflow": "UNIT"
+      },
+      "25": {
+        "InvalidMultisig": {
+          "NEWTYPE": {
+            "TYPENAME": "MultisigError"
+          }
+        }
       }
     }
   },
@@ -603,6 +689,13 @@ snapshot_kind: text
               }
             }
           ]
+        }
+      },
+      "14": {
+        "InvalidChainData": {
+          "NEWTYPE": {
+            "TYPENAME": "AggchainDataError"
+          }
         }
       }
     }

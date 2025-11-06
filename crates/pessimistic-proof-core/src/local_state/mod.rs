@@ -1,6 +1,6 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use agglayer_primitives::{keccak::Keccak256Hasher, ruint::UintTryFrom, Hashable, U256, U512};
+use agglayer_primitives::{ruint::UintTryFrom, Hashable, U256, U512};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
@@ -20,12 +20,12 @@ pub mod commitment;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetworkState {
     /// Commitment to the [`BridgeExit`](struct@crate::bridge_exit::BridgeExit).
-    pub exit_tree: LocalExitTree<Keccak256Hasher>,
+    pub exit_tree: LocalExitTree,
     /// Commitment to the balance for each token.
-    pub balance_tree: LocalBalanceTree<Keccak256Hasher>,
+    pub balance_tree: LocalBalanceTree,
     /// Commitment to the Nullifier tree for the local network, tracks claimed
     /// assets on foreign networks
-    pub nullifier_tree: NullifierTree<Keccak256Hasher>,
+    pub nullifier_tree: NullifierTree,
 }
 
 impl NetworkState {
@@ -44,7 +44,7 @@ impl NetworkState {
     /// The state isn't modified on error.
     pub fn apply_batch_header(
         &mut self,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+        multi_batch_header: &MultiBatchHeader,
     ) -> Result<StateCommitment, ProofError> {
         let mut clone = self.clone();
         let roots = clone.apply_batch_header_helper(multi_batch_header)?;
@@ -58,9 +58,8 @@ impl NetworkState {
     /// The state can be modified on error.
     fn apply_batch_header_helper(
         &mut self,
-        multi_batch_header: &MultiBatchHeader<Keccak256Hasher>,
+        multi_batch_header: &MultiBatchHeader,
     ) -> Result<StateCommitment, ProofError> {
-        // TODO: benchmark if BTreeMap is the best choice in terms of SP1 cycles
         let mut new_balances = BTreeMap::new();
         for (k, v) in &multi_batch_header.balances_proofs {
             if new_balances.insert(*k, U512::from(v.0)).is_some() {
@@ -164,8 +163,7 @@ impl NetworkState {
         }
 
         // Verify that the original balances were correct and update the local balance
-        // tree with the new balances. TODO: implement batch `verify_and_update`
-        // for the LBT
+        // tree with the new balances.
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
             let new_balance = new_balances[token];
             let new_balance = U256::uint_try_from(new_balance)

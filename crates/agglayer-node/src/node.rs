@@ -1,4 +1,4 @@
-use std::{collections::HashSet, num::NonZeroU64, sync::Arc};
+use std::{num::NonZeroU64, sync::Arc};
 
 use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
@@ -24,7 +24,7 @@ use alloy::{
     providers::{ProviderBuilder, WsConnect},
     signers::Signer,
 };
-use anyhow::Result;
+use eyre::Context as _;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -54,9 +54,8 @@ impl Node {
     /// # use agglayer_config::Config;
     /// # use agglayer_node::Node;
     /// # use tokio_util::sync::CancellationToken;
-    /// # use anyhow::Result;
     /// #
-    /// async fn start_node() -> Result<()> {
+    /// async fn start_node() -> eyre::Result<()> {
     ///    let config: Arc<Config> = Arc::new(Config::default());
     ///
     ///    Node::builder()
@@ -80,7 +79,7 @@ impl Node {
     pub(crate) async fn start(
         config: Arc<Config>,
         cancellation_token: CancellationToken,
-    ) -> Result<Self> {
+    ) -> eyre::Result<Self> {
         if config.mock_verifier {
             warn!(
                 "Mock verifier is being used. This should only be used for testing purposes and \
@@ -141,7 +140,7 @@ impl Node {
                     WsConnect::new(config.l1.ws_node_url.as_str()),
                     cfg.genesis_block,
                     cfg.epoch_duration,
-                    config.l1.max_reconnection_elapsed_time,
+                    config.l1.connect_attempt_timeout,
                 )
                 .await
                 .inspect_err(|e| {
@@ -176,7 +175,8 @@ impl Node {
         info!("Epoch synchronization started.");
         let current_epoch_store =
             EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
-                .await?;
+                .await
+                .context("Failed starting epoch synchronizer")?;
 
         info!(
             "Epoch synchronization completed, active epoch: {}.",
@@ -201,6 +201,14 @@ impl Node {
                 PolygonRollupManager::new(config.l1.rollup_manager_contract.into(), (*rpc).clone()),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
                 config.outbound.rpc.settle.gas_multiplier_factor,
+                {
+                    let gas_config = &config.outbound.rpc.settle.gas_price;
+                    agglayer_contracts::GasPriceParams::new(
+                        gas_config.multiplier.as_u64_per_1000(),
+                        gas_config.floor..=gas_config.ceiling,
+                    )?
+                },
+                config.l1.event_filter_block_range.get(),
             )
             .await?,
         );
@@ -216,7 +224,7 @@ impl Node {
         info!("Certifier client created.");
 
         // Construct the core.
-        let core = Kernel::new(rpc.clone(), config.clone());
+        let core = Kernel::new(rpc.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
         let epoch_packing_aggregator_task = RpcSettlementClient::new(
@@ -246,69 +254,42 @@ impl Node {
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
             .start()
-            .await?;
+            .await
+            .context("Failed starting certificate orchestrator")?;
 
         info!("Certificate orchestrator started.");
 
         // Set up the core service object.
         let service = Arc::new(AgglayerService::new(core));
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
-            data_sender,
+            data_sender.clone(),
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
+            epochs_store.clone(),
             config.clone(),
             Arc::clone(&rollup_manager),
         ));
 
         let admin_router = AdminAgglayerImpl::new(
+            data_sender,
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
             config.clone(),
         )
         .start()
-        .await?;
-
-        // List the public vs. proxied networks.
-        let (public_networks, proxied_networks) = {
-            let proxied = config
-                .proxied_networks
-                .as_ref()
-                .map(|n| n.networks.iter().cloned().collect::<HashSet<_>>())
-                .inspect(|pn| {
-                    if pn.is_empty() {
-                        warn!(
-                            "No proxied networks configured, but a port was configured. All \
-                             networks will be considered public."
-                        );
-                    }
-                });
-            let proxied2 = proxied.clone();
-            (
-                // Is the incoming network public?
-                move |incoming| proxied.as_ref().is_none_or(|p| !p.contains(&incoming)),
-                // Is the incoming network proxied?
-                proxied2.map(|proxied| move |incoming| proxied.contains(&incoming)),
-            )
-        };
+        .await
+        .context("Failed starting admin router")?;
 
         // Bind the core to the RPC server.
-        let json_rpc_router =
-            AgglayerImpl::new(service, rpc_service.clone(), public_networks.clone())
-                .start()
-                .await?;
+        let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
+            .start()
+            .await
+            .context("Failed starting JSON-RPC router")?;
 
-        let proxied_grpc_router = match proxied_networks {
-            None => None,
-            Some(pn) => Some(
-                agglayer_grpc_api::Server::with_config(config.clone(), rpc_service.clone(), pn)
-                    .build()
-                    .inspect_err(|err| error!(?err, "Failed to build proxied gRPC router"))?,
-            ),
-        };
         let public_grpc_router =
-            agglayer_grpc_api::Server::with_config(config.clone(), rpc_service, public_networks)
+            agglayer_grpc_api::Server::with_config(config.clone(), rpc_service)
                 .build()
                 .inspect_err(|err| error!(?err, "Failed to build public gRPC router"))?;
 
@@ -320,18 +301,9 @@ impl Node {
 
         let readrpc_listener = tokio::net::TcpListener::bind(config.readrpc_addr()).await?;
         let public_grpc_listener = tokio::net::TcpListener::bind(config.public_grpc_addr()).await?;
-        let proxied_grpc_listener = match config.proxied_grpc_addr() {
-            None => None,
-            Some(addr) => Some(tokio::net::TcpListener::bind(addr).await?),
-        };
         let admin_listener = tokio::net::TcpListener::bind(config.admin_rpc_addr()).await?;
         info!(on = %config.readrpc_addr(), "ReadRPC listening");
         info!(on = %config.public_grpc_addr(), "Public gRPC listening");
-        if let Some(on) = config.proxied_grpc_addr() {
-            info!(%on, nets=?config.proxied_networks.as_ref().map(|p| &p.networks), "Proxied gRPC listening");
-        } else {
-            debug!("No proxied gRPC server configured.");
-        }
         info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
 
         let readrpc_server = axum::serve(readrpc_listener, readrpc_router)
@@ -340,27 +312,13 @@ impl Node {
         let public_grpc_server = axum::serve(public_grpc_listener, public_grpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
-        let proxied_grpc_server = proxied_grpc_listener.map(|listener| {
-            // Both parameters are existing iff the `proxied_networks` section is
-            // configured.
-            axum::serve(listener, proxied_grpc_router.unwrap())
-                .with_graceful_shutdown(cancellation_token.clone().cancelled_owned())
-        });
-
         let admin_server = axum::serve(admin_listener, admin_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
         let rpc_handle = tokio::spawn(async move {
-            let proxied_grpc_server = async move {
-                match proxied_grpc_server {
-                    Some(server) => Some(server.await),
-                    None => None,
-                }
-            };
             tokio::select! {
                 _ = readrpc_server => {},
                 _ = public_grpc_server => {},
-                Some(_) = proxied_grpc_server => {}, // Stop if there was a proxied gRPC server and it stopped.
                 _ = admin_server => {},
                 _ = cancellation_token.cancelled() => {
                     debug!("Node RPC shutdown requested.");
