@@ -47,7 +47,7 @@ impl FakeProver {
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
 
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
         health_reporter
             .set_serving::<PessimisticProofServiceServer<FakeProver>>()

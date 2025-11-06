@@ -209,13 +209,17 @@ where
                 })
                 .await?;
 
-                let result_is_settlement_tx_mined =
-                    response_is_settlement_tx_mined.await.map_err(recv_err)?;
-                debug!(
-                    "Settlement tx {previous_tx_hash} existence on L1: \
-                     {result_is_settlement_tx_mined:?}"
-                );
-
+                let result_is_settlement_tx_mined = response_is_settlement_tx_mined
+                    .await
+                    .map_err(recv_err)?
+                    .inspect_err(|error| {
+                        // Some error happened while checking the tx receipt on L1
+                        warn!(
+                            ?error,
+                            settlement_tx_hash = %previous_tx_hash,
+                            "Failed to check settlement tx prior existence on L1",
+                        );
+                    });
                 let missing = match result_is_settlement_tx_mined {
                     Ok(crate::TxReceiptStatus::TxSuccessful)
                     | Ok(crate::TxReceiptStatus::TxFailed) => {
@@ -266,9 +270,9 @@ where
                         Ok((_, _, recomputed_output)) => {
                             if contract_pp_root == recomputed_output.new_pessimistic_root {
                                 info!(
+                                    %contract_settlement_tx_hash,
                                     "Certificate new pp root matches the latest settled pp root \
-                                     on L1, updating certificate settlement tx hash to \
-                                     {contract_settlement_tx_hash:?}"
+                                     on L1, updating certificate settlement tx hash to the one in contracts"
                                 );
                                 let insert_result = self
                                     .pending_store
@@ -289,19 +293,20 @@ where
                                 Some(contract_settlement_tx_hash.into())
                             } else {
                                 warn!(
-                                    ?certificate_id,
-                                    ?contract_settlement_tx_hash,
+                                    certificate_pp_root = %recomputed_output.new_pessimistic_root,
+                                    %contract_settlement_tx_hash,
+                                    %contract_pp_root,
                                     "Certificate pp root does not match the latest settled pp root \
-                                     on L1, moving certificate back to Proven",
+                                     on L1 contract, moving certificate back to Proven",
                                 );
                                 None
                             }
                         }
                         Err(error) => {
                             warn!(
-                                "Failed to recompute the state with the latest contract tx \
-                                 {contract_settlement_tx_hash}: {error:?}, moving certificate \
-                                 back to Proven"
+                                %contract_settlement_tx_hash,
+                                ?error,
+                                "Failed to recompute the state with the latest contract tx, moving certificate back to Proven"
                             );
                             None
                         }
@@ -312,7 +317,7 @@ where
                     None
                 }
                 Err(error) => {
-                    error!("Failed to fetch latest pp root from contract: {error:?}");
+                    error!(?error, "Failed to fetch latest pp root from contract");
                     return Err(CertificateStatusError::SettlementError(format!(
                         "Cert settlement tx is missing from the l1, but failed to fetch latest pp \
                          root from contract: {error}"
@@ -327,7 +332,7 @@ where
                     "Settlement tx not found on L1, moving certificate back to Proven",
                 )));
             }
-        };
+        }
 
         // Execute the witness generation to retrieve the new local network state
         let (_, _, output) = self
@@ -427,8 +432,11 @@ where
             .get_settlement_tx_hashes_for_certificate(certificate_id)?;
 
         if previous_tx_hashes.len() > MAX_TX_RETRY {
-            error!(?previous_tx_hashes,
-                "More than 5 different settlement transactions submitted for the same certificate, something is wrong"
+            error!(
+                ?previous_tx_hashes,
+                max_retries = MAX_TX_RETRY,
+                "More than 5 different settlement transactions submitted for the same certificate, \
+                 something is wrong"
             );
             return Err(CertificateStatusError::SettlementError(format!(
                 "Too many different settlement transactions submitted for the same certificate: \
@@ -477,10 +485,18 @@ where
 
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
+
         self.header.status = CertificateStatus::Candidate;
         self.set_status(CertificateStatus::Candidate)?;
 
         debug!(?settlement_tx_hash, "Submitted certificate for settlement");
+
+        #[cfg(feature = "testutils")]
+        testutils::inject_fail_points_after_proving(
+            &certificate_id,
+            &mut self.header,
+            &self.state_store,
+        );
 
         self.process_from_candidate().await
     }
@@ -637,4 +653,36 @@ fn recv_err(_: oneshot::error::RecvError) -> CertificateStatusError {
     CertificateStatusError::InternalError(
         "Failed to receive network task answer: sender dropped".into(),
     )
+}
+
+#[cfg(feature = "testutils")]
+mod testutils {
+    use agglayer_types::SettlementTxHash;
+
+    use super::*;
+
+    pub(crate) fn inject_fail_points_after_proving<StateStore: StateWriter>(
+        certificate_id: &agglayer_types::CertificateId,
+        header: &mut CertificateHeader,
+        state_store: &Arc<StateStore>,
+    ) {
+        // Fail point to inject invalid settlement tx hash
+        fail::eval(
+            "certificate_task::process_impl::invalid_settlement_tx_hash",
+            |_| {
+                // Write an unexistent tx hash to simulate the settlement tx not being found on
+                // L1
+                warn!("FAIL POINT ACTIVE: Injecting invalid settlement tx hash");
+                let unexistent_tx_hash = SettlementTxHash::new(Digest::from([21u8; 32]));
+                header.settlement_tx_hash = Some(unexistent_tx_hash);
+                state_store
+                    .update_settlement_tx_hash(certificate_id, unexistent_tx_hash, true)
+                    .expect("Valid tx hash update");
+                Some(())
+            },
+        );
+
+        // Fail point to record candidate and potentially shutdown
+        fail::fail_point!("certificate_task::process_impl::candidate_recorded");
+    }
 }
