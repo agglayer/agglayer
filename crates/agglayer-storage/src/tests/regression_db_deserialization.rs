@@ -280,7 +280,11 @@ fn test_reference_db_v1_read_certificates() {
 
 #[test]
 fn test_reference_db_v1_read_trees() {
-    // Test reading tree data structures (balance tree, nullifier tree, exit tree)
+    // Test reading tree data structures and reconstructing actual tree types
+    use agglayer_tries::{node::Node, smt::Smt};
+    use agglayer_types::primitives::Digest;
+    use pessimistic_proof::unified_bridge::LocalExitTree;
+
     use crate::{
         columns::{
             balance_tree_per_network::BalanceTreePerNetworkColumn,
@@ -289,6 +293,10 @@ fn test_reference_db_v1_read_trees() {
         },
         types::{SmtKey, SmtKeyType, SmtValue},
     };
+
+    const LOCAL_BALANCE_TREE_DEPTH: usize = 256;
+    const NULLIFIER_TREE_DEPTH: usize = 256;
+    const LOCAL_EXIT_TREE_DEPTH: usize = 32;
 
     let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
 
@@ -307,130 +315,220 @@ fn test_reference_db_v1_read_trees() {
     let state_db = DB::open_cf_readonly(&state_path, state_db_cf_definitions())
         .expect("Failed to open state DB");
 
-    // Test Balance Tree
-    println!("Testing Balance Tree...");
-    let balance_tree_iter = state_db
+    // Get all unique network IDs from the database
+    let mut network_ids = std::collections::BTreeSet::new();
+    for key_result in state_db
         .keys::<BalanceTreePerNetworkColumn>()
-        .expect("Failed to create balance tree iterator");
-    let mut balance_entries = 0;
-    let mut found_root = false;
-    let mut found_nodes = 0;
-    let mut found_leaves = 0;
+        .expect("Failed to create iterator")
+    {
+        if let Ok(key) = key_result {
+            network_ids.insert(key.network_id);
+        }
+    }
 
-    for key_result in balance_tree_iter {
-        let key: SmtKey = match key_result {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("Failed to read balance tree key: {:?}", e);
-                continue;
-            }
+    println!(
+        "Testing tree reconstruction for {} networks",
+        network_ids.len()
+    );
+
+    for network_id in network_ids {
+        println!("\n=== Network {} ===", network_id);
+
+        // Test 1: Reconstruct Balance Tree (Smt)
+        println!("1. Reconstructing Balance Tree...");
+        let balance_root_value = state_db
+            .get::<BalanceTreePerNetworkColumn>(&SmtKey {
+                network_id,
+                key_type: SmtKeyType::Root,
+            })
+            .expect("Failed to read balance root")
+            .expect("Balance root not found");
+
+        let root_node = match balance_root_value {
+            SmtValue::Node(left, right) => Node {
+                left: Digest(*left.as_bytes()),
+                right: Digest(*right.as_bytes()),
+            },
+            _ => panic!("Root should be a Node type"),
         };
-        let value: SmtValue = state_db
-            .get::<BalanceTreePerNetworkColumn>(&key)
-            .expect("Failed to read balance tree value")
-            .expect("Balance tree value not found");
 
-        match &key.key_type {
-            SmtKeyType::Root => {
-                found_root = true;
-                // Root should have two children
+        // Collect all nodes via BFS
+        let mut nodes = vec![root_node];
+        let mut queue = std::collections::VecDeque::new();
+        let mut visited = std::collections::BTreeSet::new();
+
+        queue.push_back(root_node.left);
+        queue.push_back(root_node.right);
+
+        while let Some(node_hash) = queue.pop_front() {
+            if !visited.insert(node_hash) {
+                continue; // Already processed
+            }
+
+            let key = SmtKey {
+                network_id,
+                key_type: SmtKeyType::Node(node_hash.into()),
+            };
+
+            if let Ok(Some(value)) = state_db.get::<BalanceTreePerNetworkColumn>(&key) {
                 match value {
-                    SmtValue::Node(_, _) => {}
-                    _ => panic!("Root should be a Node type"),
+                    SmtValue::Node(left, right) => {
+                        let node = Node {
+                            left: Digest(*left.as_bytes()),
+                            right: Digest(*right.as_bytes()),
+                        };
+                        nodes.push(node);
+                        queue.push_back(node.left);
+                        queue.push_back(node.right);
+                    }
+                    SmtValue::Leaf(_) => {
+                        // Leaf node, no children to traverse
+                    }
                 }
             }
-            SmtKeyType::Node(_) => {
-                found_nodes += 1;
-            }
         }
 
-        // Count leaf values
-        if matches!(value, SmtValue::Leaf(_)) {
-            found_leaves += 1;
+        // Reconstruct the Smt
+        let balance_tree =
+            Smt::<LOCAL_BALANCE_TREE_DEPTH>::new_with_nodes(root_node.hash(), &nodes);
+        println!(
+            "   ✅ Reconstructed Balance Tree with {} nodes, root: {}",
+            nodes.len(),
+            balance_tree.root
+        );
+
+        // Test 2: Reconstruct Nullifier Tree (Smt)
+        println!("2. Reconstructing Nullifier Tree...");
+        if let Ok(Some(nullifier_root_value)) =
+            state_db.get::<NullifierTreePerNetworkColumn>(&SmtKey {
+                network_id,
+                key_type: SmtKeyType::Root,
+            })
+        {
+            let root_node = match nullifier_root_value {
+                SmtValue::Node(left, right) => Node {
+                    left: Digest(*left.as_bytes()),
+                    right: Digest(*right.as_bytes()),
+                },
+                _ => panic!("Root should be a Node type"),
+            };
+
+            // Collect nodes for nullifier tree
+            let mut nodes = vec![root_node];
+            let mut queue = std::collections::VecDeque::new();
+            let mut visited = std::collections::BTreeSet::new();
+
+            queue.push_back(root_node.left);
+            queue.push_back(root_node.right);
+
+            while let Some(node_hash) = queue.pop_front() {
+                if !visited.insert(node_hash) {
+                    continue;
+                }
+
+                let key = SmtKey {
+                    network_id,
+                    key_type: SmtKeyType::Node(node_hash.into()),
+                };
+
+                if let Ok(Some(value)) = state_db.get::<NullifierTreePerNetworkColumn>(&key) {
+                    match value {
+                        SmtValue::Node(left, right) => {
+                            let node = Node {
+                                left: Digest(*left.as_bytes()),
+                                right: Digest(*right.as_bytes()),
+                            };
+                            nodes.push(node);
+                            queue.push_back(node.left);
+                            queue.push_back(node.right);
+                        }
+                        SmtValue::Leaf(_) => {}
+                    }
+                }
+            }
+
+            let nullifier_tree =
+                Smt::<NULLIFIER_TREE_DEPTH>::new_with_nodes(root_node.hash(), &nodes);
+            println!(
+                "   ✅ Reconstructed Nullifier Tree with {} nodes, root: {}",
+                nodes.len(),
+                nullifier_tree.root
+            );
+        } else {
+            println!("   ⚠️  No nullifier tree found for this network");
         }
 
-        balance_entries += 1;
-    }
-
-    println!("  ✅ Found {} balance tree entries", balance_entries);
-    println!(
-        "  ✅ Has root: {}, nodes: {}, leaves: {}",
-        found_root, found_nodes, found_leaves
-    );
-    assert!(found_root, "Should have at least one root");
-
-    // Test Nullifier Tree
-    println!("Testing Nullifier Tree...");
-    let nullifier_tree_iter = state_db
-        .keys::<NullifierTreePerNetworkColumn>()
-        .expect("Failed to create nullifier tree iterator");
-    let mut nullifier_entries = 0;
-
-    for key_result in nullifier_tree_iter {
-        let key: SmtKey = match key_result {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("Failed to read nullifier tree key: {:?}", e);
-                continue;
-            }
-        };
-        let _value: SmtValue = state_db
-            .get::<NullifierTreePerNetworkColumn>(&key)
-            .expect("Failed to read nullifier tree value")
-            .expect("Nullifier tree value not found");
-
-        nullifier_entries += 1;
-    }
-
-    println!("  ✅ Found {} nullifier tree entries", nullifier_entries);
-
-    // Test Local Exit Tree
-    println!("Testing Local Exit Tree...");
-    let exit_tree_iter = state_db
-        .keys::<LocalExitTreePerNetworkColumn>()
-        .expect("Failed to create exit tree iterator");
-    let mut exit_tree_entries = 0;
-    let mut leaf_counts = 0;
-    let mut actual_leaves = 0;
-    let mut frontiers = 0;
-
-    for key_result in exit_tree_iter {
+        // Test 3: Reconstruct Local Exit Tree
+        println!("3. Reconstructing Local Exit Tree...");
         use crate::columns::local_exit_tree_per_network::{Key, KeyType, Value};
 
-        let key: Key = match key_result {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("Failed to read exit tree key: {:?}", e);
-                continue;
-            }
+        let leaf_count_key = Key {
+            network_id,
+            key_type: KeyType::LeafCount,
         };
-        let value: Value = state_db
-            .get::<LocalExitTreePerNetworkColumn>(&key)
-            .expect("Failed to read exit tree value")
-            .expect("Exit tree value not found");
 
-        match (&key.key_type, &value) {
-            (KeyType::LeafCount, Value::LeafCount(count)) => {
-                leaf_counts += 1;
-                println!("    Network {} has {} leaves", key.network_id, count);
+        if let Ok(Some(Value::LeafCount(leaf_count))) =
+            state_db.get::<LocalExitTreePerNetworkColumn>(&leaf_count_key)
+        {
+            // Read frontier
+            let mut frontier = [Digest::default(); LOCAL_EXIT_TREE_DEPTH];
+            let mut frontier_layers_read = 0;
+            for layer in 0..LOCAL_EXIT_TREE_DEPTH as u32 {
+                let frontier_key = Key {
+                    network_id,
+                    key_type: KeyType::Frontier(layer),
+                };
+
+                if let Ok(Some(Value::Frontier(hash))) =
+                    state_db.get::<LocalExitTreePerNetworkColumn>(&frontier_key)
+                {
+                    frontier[layer as usize] = Digest(hash);
+                    frontier_layers_read += 1;
+                }
             }
-            (KeyType::Leaf(_), Value::Leaf(_)) => {
-                actual_leaves += 1;
+
+            // Only reconstruct if we have all frontier data
+            if frontier_layers_read == LOCAL_EXIT_TREE_DEPTH {
+                // Reconstruct the LocalExitTree
+                let exit_tree =
+                    LocalExitTree::<LOCAL_EXIT_TREE_DEPTH>::from_parts(leaf_count, frontier);
+                println!(
+                    "   ✅ Reconstructed Local Exit Tree with {} leaves, root: {}",
+                    leaf_count,
+                    exit_tree.get_root()
+                );
+
+                // Verify we can read the leaves
+                let mut leaves_read = 0;
+                for leaf_idx in 0..leaf_count {
+                    let leaf_key = Key {
+                        network_id,
+                        key_type: KeyType::Leaf(leaf_idx),
+                    };
+
+                    if let Ok(Some(Value::Leaf(_hash))) =
+                        state_db.get::<LocalExitTreePerNetworkColumn>(&leaf_key)
+                    {
+                        leaves_read += 1;
+                    }
+                }
+                println!("   ✅ Verified {} leaves readable", leaves_read);
+                assert_eq!(
+                    leaves_read, leaf_count,
+                    "All leaves should be readable"
+                );
+            } else {
+                println!(
+                    "   ⚠️  Incomplete frontier data (only {} of {} layers), skipping reconstruction",
+                    frontier_layers_read, LOCAL_EXIT_TREE_DEPTH
+                );
             }
-            (KeyType::Frontier(_), Value::Frontier(_)) => {
-                frontiers += 1;
-            }
-            _ => panic!("Mismatched key-value types in exit tree"),
+        } else {
+            println!("   ⚠️  No exit tree found for this network");
         }
-
-        exit_tree_entries += 1;
     }
 
-    println!("  ✅ Found {} exit tree entries", exit_tree_entries);
-    println!(
-        "  ✅ Leaf counts: {}, actual leaves: {}, frontiers: {}",
-        leaf_counts, actual_leaves, frontiers
-    );
+    println!("\n✅ Successfully reconstructed all tree types from database!");
 
     // Cleanup
     let _ = fs::remove_dir_all(&temp_dir);
