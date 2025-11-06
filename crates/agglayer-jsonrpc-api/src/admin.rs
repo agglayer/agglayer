@@ -6,9 +6,11 @@ use agglayer_storage::stores::{
     StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
+    Height, NetworkId, SettlementTxHash,
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
+use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::{error, info, instrument, warn};
 
@@ -28,6 +30,15 @@ pub(crate) trait AdminAgglayer {
         &self,
         certificate: Certificate,
         status: CertificateStatus,
+    ) -> RpcResult<()>;
+
+    #[method(name = "forceSetCertificateStatus")]
+    async fn force_set_certificate_status(
+        &self,
+        certificate_id: CertificateId,
+        status: CertificateStatus,
+        process_now: bool,
+        remove_settlement_tx_hash: Option<SettlementTxHash>,
     ) -> RpcResult<()>;
 
     #[method(name = "setLatestPendingCertificate")]
@@ -50,6 +61,7 @@ pub(crate) trait AdminAgglayer {
 
 /// The Admin RPC agglayer service implementation.
 pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+    certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
@@ -59,12 +71,14 @@ pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
 impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
     /// Create an instance of the admin RPC agglayer service.
     pub fn new(
+        certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
         pending_store: Arc<PendingStore>,
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
     ) -> Self {
         Self {
+            certificate_sender,
             pending_store,
             state,
             debug_store,
@@ -79,7 +93,7 @@ where
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
-    pub async fn start(self) -> anyhow::Result<axum::Router> {
+    pub async fn start(self) -> eyre::Result<axum::Router> {
         // Create the RPC service
         let config = self.config.clone();
 
@@ -174,8 +188,7 @@ where
                 }
             },
             Ok(None) => Err(Error::ResourceNotFound(format!(
-                "Certificate({})",
-                certificate_id
+                "Certificate({certificate_id})"
             ))),
             Err(error) => {
                 error!("Failed to get certificate: {}", error);
@@ -197,6 +210,20 @@ where
             "(ADMIN) Forcing push of pending certificate: {}",
             certificate.hash()
         );
+        let header = self
+            .state
+            .get_certificate_header(&certificate.hash())
+            .map_err(|error| {
+                error!(?error, "Failed to get certificate header");
+                Error::internal("Unable to get certificate header")
+            })?;
+        if let Some(header) = header {
+            if header.status == CertificateStatus::Settled {
+                return Err(Error::InvalidArgument(
+                    "Cannot change status of a settled certificate".to_string(),
+                ));
+            }
+        }
         match self.pending_store.insert_pending_certificate(
             certificate.network_id,
             certificate.height,
@@ -218,6 +245,69 @@ where
             }
         }
     }
+
+    #[instrument(skip(self), level = "debug")]
+    async fn force_set_certificate_status(
+        &self,
+        certificate_id: CertificateId,
+        status: CertificateStatus,
+        process_now: bool,
+        remove_settlement_tx_hash: Option<SettlementTxHash>,
+    ) -> RpcResult<()> {
+        warn!(
+            ?certificate_id,
+            ?status,
+            "(ADMIN) Forcing status of certificate"
+        );
+        let header = self
+            .state
+            .get_certificate_header(&certificate_id)
+            .map_err(|error| {
+                error!(?error, "Failed to get certificate header");
+                Error::internal("Unable to get certificate header")
+            })?
+            .ok_or_else(|| {
+                error!("Certificate header not found");
+                Error::ResourceNotFound(format!("CertificateHeader({certificate_id})"))
+            })?;
+        if header.status == CertificateStatus::Settled {
+            return Err(Error::InvalidArgument(
+                "Cannot change status of a settled certificate".to_string(),
+            ));
+        }
+        if let Some(remove_settlement_tx_hash) = remove_settlement_tx_hash {
+            if header.settlement_tx_hash != Some(remove_settlement_tx_hash) {
+                return Err(Error::InvalidArgument(format!(
+                    "Provided settlement_tx_hash to remove ({remove_settlement_tx_hash:?}) does \
+                     not match the existing one ({:?})",
+                    header.settlement_tx_hash
+                )));
+            }
+            self.state
+                .remove_settlement_tx_hash(&certificate_id)
+                .map_err(|error| {
+                    error!(?error, "Failed to remove settlement_tx_hash");
+                    Error::internal("Unable to remove settlement_tx_hash")
+                })?;
+        }
+        self.state
+            .update_certificate_header_status(&certificate_id, &status)
+            .map_err(|error| {
+                error!(?error, "Failed to update certificate status");
+                Error::internal("Unable to update certificate status")
+            })?;
+        if process_now {
+            self.certificate_sender
+                .send((header.network_id, header.height, certificate_id))
+                .await
+                .map_err(|error| {
+                    error!(?error, "Failed to send certificate to orchestrator");
+                    Error::internal("Unable to send certificate to orchestrator")
+                })?;
+        }
+        Ok(())
+    }
+
     #[instrument(skip(self, certificate_id), level = "debug")]
     async fn set_latest_pending_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
         warn!(
@@ -234,8 +324,7 @@ where
             certificate
         } else {
             return Err(Error::ResourceNotFound(format!(
-                "CertificateHeader({})",
-                certificate_id
+                "CertificateHeader({certificate_id})"
             )));
         };
 
@@ -272,8 +361,7 @@ where
             certificate
         } else {
             return Err(Error::ResourceNotFound(format!(
-                "CertificateHeader({})",
-                certificate_id
+                "CertificateHeader({certificate_id})"
             )));
         };
 
@@ -330,24 +418,43 @@ where
             certificate.hash()
         } else {
             return Err(Error::ResourceNotFound(format!(
-                "PendingCertificate({:?}, {:?})",
-                network_id, height
+                "PendingCertificate({network_id:?}, {height:?})",
             )));
         };
 
         self.pending_store
             .remove_pending_certificate(network_id, height)
             .map_err(|error| {
-                error!("Failed to remove pending certificate: {}", error);
+                error!("Failed to remove pending certificate: {error}");
                 Error::internal("Unable to remove pending certificate")
+            })?;
+
+        // Update certificate status to InError in the state store
+        let error_status = CertificateStatus::error(CertificateStatusError::InternalError(
+            "Certificate removed from pending store by administrator".to_string(),
+        ));
+        self.state
+            .update_certificate_header_status(&certificate_id, &error_status)
+            .map_err(|error| {
+                error!(
+                    %certificate_id,
+                    ?error,
+                    "Failed to update certificate status in the state store on pending removal"
+                );
+                Error::internal(format!(
+                    "Unable to update certificate_id: {certificate_id} status in the state store \
+                     on pending removal"
+                ))
             })?;
 
         if remove_proof {
             self.pending_store
                 .remove_generated_proof(&certificate_id)
                 .map_err(|error| {
-                    error!("Failed to remove certificate header: {}", error);
-                    Error::internal("Unable to remove certificate header")
+                    error!( %certificate_id, ?error, "Failed to remove generated proof");
+                    Error::internal(format!(
+                        "Failed to remove generated proof for certificate_id: {certificate_id}"
+                    ))
                 })?;
         }
 

@@ -1,18 +1,20 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
-use agglayer_contracts::{L1TransactionFetcher, RollupContract};
+use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter,
+    DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
+    PendingCertificateWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId,
+    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, NetworkInfo,
 };
+use alloy::{primitives::B256, providers::Provider};
 use error::{Error, RpcResult};
-use ethers::{providers::Middleware, types::H256};
 use futures::FutureExt;
 use hyper::StatusCode;
 use jsonrpsee::{
@@ -20,8 +22,7 @@ use jsonrpsee::{
     proc_macros::rpc,
     server::{HttpBody, PingConfig, ServerBuilder},
 };
-use tower_http::compression::CompressionLayer;
-use tower_http::cors::CorsLayer;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::info;
 
 use crate::{service::AgglayerService, signed_tx::SignedTx};
@@ -44,10 +45,10 @@ pub mod admin;
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
     #[method(name = "sendTx")]
-    async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256>;
+    async fn send_tx(&self, tx: SignedTx) -> RpcResult<B256>;
 
     #[method(name = "getTxStatus")]
-    async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus>;
+    async fn get_tx_status(&self, hash: B256) -> RpcResult<TxStatus>;
 
     #[method(name = "sendCertificate")]
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId>;
@@ -78,22 +79,27 @@ trait Agglayer {
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>>;
+
+    #[method(name = "getNetworkInfo")]
+    async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<NetworkInfo>;
 }
 
 /// The RPC agglayer service implementation.
-pub struct AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> {
+pub struct AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
     service: Arc<AgglayerService<V0Rpc>>,
     pub(crate) rpc_service:
-        Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
+        Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>>,
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 {
     /// Create an instance of the RPC agglayer service.
     pub fn new(
         service: Arc<AgglayerService<V0Rpc>>,
-        rpc_service: Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore>>,
+        rpc_service: Arc<
+            agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>,
+        >,
     ) -> Self {
         Self {
             service,
@@ -102,24 +108,25 @@ impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
     }
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> Drop
-    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore> Drop
+    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer JsonRPC server");
     }
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
-    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
-    V0Rpc: Middleware + 'static,
-    Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
+    V0Rpc: Provider + Clone + 'static,
+    Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    EpochsStore: EpochStoreReader + 'static,
 {
-    pub async fn start(self) -> anyhow::Result<axum::Router> {
+    pub async fn start(self) -> eyre::Result<axum::Router> {
         let config = self.rpc_service.config();
 
         // Create the RPC server.
@@ -185,25 +192,32 @@ where
 }
 
 #[async_trait]
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore> AgglayerServer
-    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore>
+impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore> AgglayerServer
+    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
-    V0Rpc: Middleware + 'static,
-    Rpc: RollupContract + L1TransactionFetcher + 'static + Send + Sync,
+    V0Rpc: Provider + Clone + 'static,
+    Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    EpochsStore: EpochStoreReader + 'static,
 {
-    async fn send_tx(&self, tx: SignedTx) -> RpcResult<H256> {
+    async fn send_tx(&self, tx: SignedTx) -> RpcResult<B256> {
         Ok(self.service.send_tx(tx).await?)
     }
 
-    async fn get_tx_status(&self, hash: H256) -> RpcResult<TxStatus> {
+    async fn get_tx_status(&self, hash: B256) -> RpcResult<TxStatus> {
         Ok(self.service.get_tx_status(hash).await?.to_string())
     }
 
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {
-        Ok(self.rpc_service.send_certificate(certificate).await?)
+        // NOTE: Extra certificate signature is not supported on the json rpc api
+        let extra_signature = None;
+
+        Ok(self
+            .rpc_service
+            .send_certificate(certificate, extra_signature)
+            .await?)
     }
 
     async fn get_certificate_header(
@@ -250,6 +264,12 @@ where
             .rpc_service
             .get_latest_pending_certificate_header(network_id)?;
         Ok(header)
+    }
+
+    async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<NetworkInfo> {
+        let state = self.rpc_service.get_network_info(network_id)?;
+
+        Ok(state)
     }
 }
 

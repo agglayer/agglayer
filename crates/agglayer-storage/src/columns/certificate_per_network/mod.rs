@@ -1,7 +1,7 @@
-use agglayer_types::CertificateId;
+use agglayer_types::{CertificateId, Height};
 use serde::{Deserialize, Serialize};
 
-use super::{Codec, ColumnSchema, CERTIFICATE_PER_NETWORK_CF};
+use super::{ColumnSchema, CERTIFICATE_PER_NETWORK_CF};
 
 #[cfg(test)]
 mod tests;
@@ -18,10 +18,10 @@ pub struct CertificatePerNetworkColumn;
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Key {
     pub(crate) network_id: u32,
-    pub(crate) height: u64,
+    pub(crate) height: Height,
 }
 
-impl Codec for Key {}
+crate::columns::impl_codec_using_bincode_for!(Key);
 
 impl ColumnSchema for CertificatePerNetworkColumn {
     type Key = Key;

@@ -1,14 +1,14 @@
 use std::process::exit;
 
 use agglayer_config::storage::backup::BackupConfig;
-use anyhow::Context;
 use clap::Parser;
 use cli::Cli;
+use eyre::Context as _;
 use pessimistic_proof::ELF;
 
 mod cli;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> eyre::Result<()> {
     dotenvy::dotenv().ok();
 
     let cli = Cli::parse();
@@ -35,18 +35,28 @@ fn main() -> anyhow::Result<()> {
                             .context("Failed to serialize ValidateConfig to TOML")?
                     );
                 }
-                Err(error) => eprintln!("{}", error),
+                Err(error) => eprintln!("{error}"),
             }
         }
         cli::Commands::Vkey => {
-            let vkey = agglayer_prover::compute_program_vkey(ELF);
-            println!("{}", vkey);
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?
+                .block_on(async move {
+                    let vkey_hex = agglayer_prover::compute_program_vkey(ELF)
+                        .await
+                        .context("Failed to compute program vkey");
+                    match vkey_hex {
+                        Ok(vkey_hex) => println!("{vkey_hex}"),
+                        Err(error) => eprintln!("{error:?}"),
+                    }
+                });
         }
 
         cli::Commands::VkeySelector => {
-            let vkey_selector =
+            let vkey_selector_hex =
                 hex::encode(pessimistic_proof::core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR);
-            println!("{vkey_selector}");
+            println!("0x{vkey_selector_hex}");
         }
 
         cli::Commands::Backup(cli::Backup::List { config_path: cfg }) => {
@@ -55,7 +65,7 @@ fn main() -> anyhow::Result<()> {
             if let BackupConfig::Enabled { path, .. } = cfg.storage.backup {
                 match agglayer_storage::storage::backup::BackupEngine::list_backups(&path) {
                     Ok(result) => println!("{}", serde_json::to_string(&result).unwrap()),
-                    Err(error) => eprintln!("{}", error),
+                    Err(error) => eprintln!("{error}"),
                 }
             }
         }

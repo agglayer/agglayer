@@ -1,4 +1,4 @@
-use agglayer_primitives::keccak::{Digest, Keccak256Hasher};
+use agglayer_primitives::Digest;
 use rs_merkle::{Hasher as MerkleHasher, MerkleTree};
 use tiny_keccak::{Hasher as _, Keccak};
 
@@ -9,7 +9,7 @@ fn test_local_exit_tree_basic() {
     const TREE_DEPTH: usize = 3;
     let leaves = [[1_u8; 32].into(), [2_u8; 32].into(), [3_u8; 32].into()];
 
-    let local_exit_tree: LocalExitTree<Keccak256Hasher, TREE_DEPTH> =
+    let local_exit_tree: LocalExitTree<TREE_DEPTH> =
         LocalExitTree::from_leaves(leaves.into_iter()).unwrap();
 
     let ground_truth_tree: MerkleTree<TestKeccak256> = {

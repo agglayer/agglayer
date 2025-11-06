@@ -8,7 +8,8 @@ use agglayer_storage::{
         StateReader,
     },
 };
-use anyhow::Result;
+use agglayer_types::EpochNumber;
+use tokio::sync::broadcast::error::TryRecvError;
 use tracing::{debug, error, info};
 
 pub(crate) struct EpochSynchronizer {}
@@ -17,9 +18,9 @@ impl EpochSynchronizer {
     fn walk_epochs<EpochsStore>(
         epochs_store: Arc<EpochsStore>,
         mut opened_epoch: EpochsStore::PerEpochStore,
-        mut current_epoch_number: u64,
+        mut current_epoch_number: EpochNumber,
         mut epoch_stream: tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
-    ) -> Result<EpochsStore::PerEpochStore>
+    ) -> eyre::Result<EpochsStore::PerEpochStore>
     where
         EpochsStore: EpochStoreWriter,
         EpochsStore::PerEpochStore: PerEpochReader + PerEpochWriter,
@@ -44,12 +45,27 @@ impl EpochSynchronizer {
                 Ok(_) => {}
             }
             opened_epoch = epochs_store.open_with_start_checkpoint(
-                opened_epoch.get_epoch_number() + 1,
+                opened_epoch.get_epoch_number().next(),
                 opened_epoch.get_end_checkpoint(),
             )?;
 
-            if let Ok(agglayer_clock::Event::EpochEnded(n)) = epoch_stream.try_recv() {
-                current_epoch_number = n;
+            match epoch_stream.try_recv() {
+                Ok(agglayer_clock::Event::EpochEnded(n)) => {
+                    current_epoch_number = n;
+                }
+                Err(TryRecvError::Closed) => {
+                    eyre::bail!("Epoch stream closed during epoch synchronization");
+                }
+                Err(TryRecvError::Lagged(n)) => {
+                    debug!(
+                        "Epoch stream lagged on {} EpochEnded update during epoch synchronization",
+                        n
+                    );
+                }
+                Err(TryRecvError::Empty) => {
+                    // We don't care about empty stream during epoch
+                    // synchronization
+                }
             }
         }
 
@@ -60,7 +76,7 @@ impl EpochSynchronizer {
         state_store: Arc<StateStore>,
         epochs_store: Arc<EpochsStore>,
         clock_ref: ClockRef,
-    ) -> Result<EpochsStore::PerEpochStore>
+    ) -> eyre::Result<EpochsStore::PerEpochStore>
     where
         StateStore: StateReader + MetadataReader + MetadataWriter,
         EpochsStore: EpochStoreWriter,
@@ -76,12 +92,23 @@ impl EpochSynchronizer {
         debug!("synchronizer: Current epoch: {}", current_epoch_number);
         let opened_epoch = match lse_number {
             // No LSE, we start from epoch 0
-            None => epochs_store.open(0)?,
+            None => {
+                debug!("synchronizer: No LSE, starting from epoch 0");
+                epochs_store.open(EpochNumber::ZERO)?
+            }
 
             Some(lse_number) => {
+                debug!("synchronizer: Latest settled epoch: {}", lse_number);
+                if current_epoch_number < lse_number {
+                    eyre::bail!(
+                        "Unable to synchronize: Current epoch is less than the latest settled \
+                         epoch"
+                    );
+                }
+
                 let lse = epochs_store.open(lse_number)?;
                 epochs_store.open_with_start_checkpoint(
-                    lse.get_epoch_number() + 1,
+                    lse.get_epoch_number().next(),
                     lse.get_end_checkpoint(),
                 )?
             }
@@ -113,7 +140,9 @@ mod tests {
             TempDBDir,
         },
     };
-    use agglayer_types::{Certificate, CertificateStatus, ExecutionMode, Height, NetworkId, Proof};
+    use agglayer_types::{
+        Certificate, CertificateStatus, EpochNumber, ExecutionMode, Height, NetworkId, Proof,
+    };
     use mockall::{predicate::eq, Sequence};
 
     use super::*;
@@ -127,16 +156,19 @@ mod tests {
             .returning(|| Ok(None));
 
         let mut epochs_store = MockEpochsStore::new();
-        epochs_store.expect_open().with(eq(0)).returning(|epoch| {
-            let mut mock = MockPerEpochStore::new();
-            mock.expect_get_epoch_number().returning(move || epoch);
-            mock.expect_start_packing().once().returning(|| Ok(()));
-            mock.expect_get_end_checkpoint()
-                .once()
-                .returning(BTreeMap::new);
+        epochs_store
+            .expect_open()
+            .with(eq(EpochNumber::ZERO))
+            .returning(|epoch| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .returning(BTreeMap::new);
 
-            Ok(mock)
-        });
+                Ok(mock)
+            });
 
         let mut seq = Sequence::new();
 
@@ -146,7 +178,7 @@ mod tests {
                 .expect_open_with_start_checkpoint()
                 .once()
                 .in_sequence(&mut seq)
-                .with(eq(i), eq(BTreeMap::new()))
+                .with(eq(EpochNumber::new(i)), eq(BTreeMap::new()))
                 .returning(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
                     let mut mock = MockPerEpochStore::new();
                     mock.expect_get_epoch_number().returning(move || epoch);
@@ -162,7 +194,7 @@ mod tests {
             .expect_open_with_start_checkpoint()
             .once()
             .in_sequence(&mut seq)
-            .with(eq(10), eq(BTreeMap::new()))
+            .with(eq(EpochNumber::new(10)), eq(BTreeMap::new()))
             .returning(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
                 let mut mock = MockPerEpochStore::new();
                 mock.expect_get_epoch_number().returning(move || epoch);
@@ -189,7 +221,7 @@ mod tests {
 
         let epoch = result.unwrap();
 
-        assert_eq!(epoch.get_epoch_number(), 10);
+        assert_eq!(epoch.get_epoch_number(), EpochNumber::new(10));
     }
 
     #[test_log::test(tokio::test)]
@@ -198,10 +230,10 @@ mod tests {
         state_store
             .expect_get_latest_settled_epoch()
             .once()
-            .returning(|| Ok(Some(10)));
+            .returning(|| Ok(Some(EpochNumber::new(10))));
 
         let mut start_checkpoint = BTreeMap::new();
-        start_checkpoint.insert(0.into(), 0);
+        start_checkpoint.insert(0.into(), Height::ZERO);
 
         let mut epochs_store = MockEpochsStore::new();
         let end_checkpoint = start_checkpoint.clone();
@@ -209,7 +241,7 @@ mod tests {
         epochs_store
             .expect_open()
             .once()
-            .with(eq(10))
+            .with(eq(EpochNumber::new(10)))
             .return_once(move |epoch| {
                 let mut mock = MockPerEpochStore::new();
                 mock.expect_get_epoch_number().returning(move || epoch);
@@ -227,7 +259,7 @@ mod tests {
                 .expect_open_with_start_checkpoint()
                 .once()
                 .in_sequence(&mut seq)
-                .with(eq(i), eq(start_checkpoint.clone()))
+                .with(eq(EpochNumber::new(i)), eq(start_checkpoint.clone()))
                 .return_once(move |epoch, _start_checkpoint| {
                     let mut mock = MockPerEpochStore::new();
                     mock.expect_get_epoch_number().returning(move || epoch);
@@ -242,7 +274,7 @@ mod tests {
             .expect_open_with_start_checkpoint()
             .once()
             .in_sequence(&mut seq)
-            .with(eq(15), eq(start_checkpoint))
+            .with(eq(EpochNumber::new(15)), eq(start_checkpoint))
             .returning(|epoch, start_checkpoint| {
                 let mut mock = MockPerEpochStore::new();
                 mock.expect_get_epoch_number().returning(move || epoch);
@@ -270,7 +302,7 @@ mod tests {
 
         let epoch = result.unwrap();
 
-        assert_eq!(epoch.get_epoch_number(), 15);
+        assert_eq!(epoch.get_epoch_number(), EpochNumber::new(15));
     }
 
     #[test_log::test(tokio::test)]
@@ -286,7 +318,7 @@ mod tests {
         let epochs_store = Arc::new(
             EpochsStore::new(
                 config.clone(),
-                15,
+                EpochNumber::new(15),
                 pending_store.clone(),
                 state_store.clone(),
                 BackupClient::noop(),
@@ -300,12 +332,12 @@ mod tests {
         let network_2 = 2.into();
 
         let epoch_10 = epochs_store
-            .open_with_start_checkpoint(10, start_checkpoint.clone())
+            .open_with_start_checkpoint(EpochNumber::new(10), start_checkpoint.clone())
             .unwrap();
-        let certificate_1 = Certificate::new_for_test(network_1, 0);
-        let certificate_2 = Certificate::new_for_test(network_2, 0);
+        let certificate_1 = Certificate::new_for_test(network_1, Height::ZERO);
+        let certificate_2 = Certificate::new_for_test(network_2, Height::ZERO);
         pending_store
-            .insert_pending_certificate(network_1, 0, &certificate_1)
+            .insert_pending_certificate(network_1, Height::ZERO, &certificate_1)
             .unwrap();
         pending_store
             .insert_generated_proof(&certificate_1.hash(), &Proof::dummy())
@@ -314,7 +346,7 @@ mod tests {
             .insert_certificate_header(&certificate_1, CertificateStatus::Pending)
             .unwrap();
         pending_store
-            .insert_pending_certificate(network_2, 0, &certificate_2)
+            .insert_pending_certificate(network_2, Height::ZERO, &certificate_2)
             .unwrap();
         pending_store
             .insert_generated_proof(&certificate_2.hash(), &Proof::dummy())
@@ -332,8 +364,8 @@ mod tests {
 
         let mut expected_end_checkpoint = BTreeMap::new();
 
-        expected_end_checkpoint.insert(network_1, 0);
-        expected_end_checkpoint.insert(network_2, 0);
+        expected_end_checkpoint.insert(network_1, Height::ZERO);
+        expected_end_checkpoint.insert(network_2, Height::ZERO);
 
         let path_15 = config.storage.epochs_db_path.join("15");
         let epoch_15 =
@@ -343,7 +375,7 @@ mod tests {
 
         expected_end_checkpoint_15
             .entry(network_1)
-            .and_modify(|e| *e += 1);
+            .and_modify(|e| e.increment());
 
         epoch_15
             .multi_insert::<EndCheckpointColumn>(&expected_end_checkpoint_15)
@@ -351,7 +383,9 @@ mod tests {
 
         drop(epoch_15);
         drop(epoch_10);
-        state_store.set_latest_settled_epoch(10).unwrap();
+        state_store
+            .set_latest_settled_epoch(EpochNumber::new(10))
+            .unwrap();
 
         let (sender, _receiver) = tokio::sync::broadcast::channel(1);
         let current_block = AtomicU64::new(15);
@@ -365,39 +399,42 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(result.get_epoch_number(), 15);
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(15));
 
         drop(result);
-        let epoch_10 = epochs_store.open(10).unwrap();
-        assert_eq!(epoch_10.get_epoch_number(), 10);
+        let epoch_10 = epochs_store.open(EpochNumber::new(10)).unwrap();
+        assert_eq!(epoch_10.get_epoch_number(), EpochNumber::new(10));
         assert_eq!(epoch_10.get_start_checkpoint(), &start_checkpoint);
         assert_eq!(epoch_10.get_end_checkpoint(), expected_end_checkpoint);
 
-        let epoch_11 = epochs_store.open(11).unwrap();
-        assert_eq!(epoch_11.get_epoch_number(), 11);
+        let epoch_11 = epochs_store.open(EpochNumber::new(11)).unwrap();
+        assert_eq!(epoch_11.get_epoch_number(), EpochNumber::new(11));
         assert_eq!(epoch_11.get_end_checkpoint(), expected_end_checkpoint);
 
-        let epoch_12 = epochs_store.open(12).unwrap();
-        assert_eq!(epoch_12.get_epoch_number(), 12);
+        let epoch_12 = epochs_store.open(EpochNumber::new(12)).unwrap();
+        assert_eq!(epoch_12.get_epoch_number(), EpochNumber::new(12));
         assert_eq!(epoch_12.get_start_checkpoint(), &expected_end_checkpoint);
         assert_eq!(epoch_12.get_end_checkpoint(), expected_end_checkpoint);
 
-        let epoch_13 = epochs_store.open(13).unwrap();
-        assert_eq!(epoch_13.get_epoch_number(), 13);
+        let epoch_13 = epochs_store.open(EpochNumber::new(13)).unwrap();
+        assert_eq!(epoch_13.get_epoch_number(), EpochNumber::new(13));
         assert_eq!(epoch_13.get_start_checkpoint(), &expected_end_checkpoint);
         assert_eq!(epoch_13.get_end_checkpoint(), expected_end_checkpoint);
 
-        let epoch_14 = epochs_store.open(14).unwrap();
-        assert_eq!(epoch_14.get_epoch_number(), 14);
+        let epoch_14 = epochs_store.open(EpochNumber::new(14)).unwrap();
+        assert_eq!(epoch_14.get_epoch_number(), EpochNumber::new(14));
         assert_eq!(epoch_14.get_start_checkpoint(), &expected_end_checkpoint);
         assert_eq!(epoch_14.get_end_checkpoint(), expected_end_checkpoint);
 
-        let epoch_15 = epochs_store.open(15).unwrap();
-        assert_eq!(epoch_15.get_epoch_number(), 15);
+        let epoch_15 = epochs_store.open(EpochNumber::new(15)).unwrap();
+        assert_eq!(epoch_15.get_epoch_number(), EpochNumber::new(15));
         assert_eq!(epoch_15.get_start_checkpoint(), &expected_end_checkpoint);
         assert_eq!(epoch_15.get_end_checkpoint(), expected_end_checkpoint_15);
 
-        assert_eq!(state_store.get_latest_settled_epoch().unwrap(), Some(14));
+        assert_eq!(
+            state_store.get_latest_settled_epoch().unwrap(),
+            Some(EpochNumber::new(14))
+        );
     }
 
     #[test_log::test(tokio::test)]
@@ -413,7 +450,7 @@ mod tests {
         let epochs_store = Arc::new(
             EpochsStore::new(
                 config.clone(),
-                15,
+                EpochNumber::new(15),
                 pending_store.clone(),
                 state_store.clone(),
                 BackupClient::noop(),
@@ -427,12 +464,12 @@ mod tests {
         let network_2 = 2.into();
 
         let epoch_10 = epochs_store
-            .open_with_start_checkpoint(10, start_checkpoint.clone())
+            .open_with_start_checkpoint(EpochNumber::new(10), start_checkpoint.clone())
             .unwrap();
-        let certificate_1 = Certificate::new_for_test(network_1, 0);
-        let certificate_2 = Certificate::new_for_test(network_2, 0);
+        let certificate_1 = Certificate::new_for_test(network_1, Height::ZERO);
+        let certificate_2 = Certificate::new_for_test(network_2, Height::ZERO);
         pending_store
-            .insert_pending_certificate(network_1, 0, &certificate_1)
+            .insert_pending_certificate(network_1, Height::ZERO, &certificate_1)
             .unwrap();
         state_store
             .insert_certificate_header(&certificate_1, CertificateStatus::Pending)
@@ -443,7 +480,7 @@ mod tests {
             .unwrap();
 
         pending_store
-            .insert_pending_certificate(network_2, 0, &certificate_2)
+            .insert_pending_certificate(network_2, Height::ZERO, &certificate_2)
             .unwrap();
         state_store
             .insert_certificate_header(&certificate_2, CertificateStatus::Pending)
@@ -462,8 +499,8 @@ mod tests {
 
         let mut expected_end_checkpoint = BTreeMap::new();
 
-        expected_end_checkpoint.insert(network_1, 0);
-        expected_end_checkpoint.insert(network_2, 0);
+        expected_end_checkpoint.insert(network_1, Height::ZERO);
+        expected_end_checkpoint.insert(network_2, Height::ZERO);
 
         let path_15 = config.storage.epochs_db_path.join("15");
         let epoch_15 =
@@ -473,7 +510,7 @@ mod tests {
 
         expected_end_checkpoint_15
             .entry(network_1)
-            .and_modify(|e| *e += 1);
+            .and_modify(|e| e.increment());
 
         epoch_15
             .multi_insert::<EndCheckpointColumn>(&expected_end_checkpoint_15)
@@ -481,7 +518,9 @@ mod tests {
 
         drop(epoch_15);
         drop(epoch_10);
-        state_store.set_latest_settled_epoch(10).unwrap();
+        state_store
+            .set_latest_settled_epoch(EpochNumber::new(10))
+            .unwrap();
 
         let (sender, _receiver) = tokio::sync::broadcast::channel(1);
         let current_block = AtomicU64::new(15);
@@ -495,18 +534,21 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(result.get_epoch_number(), 15);
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(15));
 
         drop(result);
-        let epoch_15 = epochs_store.open(15).unwrap();
-        assert_eq!(epoch_15.get_epoch_number(), 15);
+        let epoch_15 = epochs_store.open(EpochNumber::new(15)).unwrap();
+        assert_eq!(epoch_15.get_epoch_number(), EpochNumber::new(15));
         assert_eq!(epoch_15.get_start_checkpoint(), &expected_end_checkpoint);
         assert_eq!(epoch_15.get_end_checkpoint(), expected_end_checkpoint_15);
         assert!(!epoch_15.is_epoch_packed());
 
-        let epoch_14 = epochs_store.open(14).unwrap();
+        let epoch_14 = epochs_store.open(EpochNumber::new(14)).unwrap();
         assert!(epoch_14.is_epoch_packed());
 
-        assert_eq!(state_store.get_latest_settled_epoch().unwrap(), Some(14));
+        assert_eq!(
+            state_store.get_latest_settled_epoch().unwrap(),
+            Some(EpochNumber::new(14))
+        );
     }
 }

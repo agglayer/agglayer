@@ -1,5 +1,4 @@
-use std::path::Path;
-use std::{env, fs};
+use std::{env, fs, path::Path};
 
 use semver::Version;
 use toml::Value;
@@ -27,10 +26,7 @@ fn main() {
     let dest_path = Path::new(&env::var_os("OUT_DIR").expect("OUT_DIR not set")).join("version.rs");
     fs::write(
         &dest_path,
-        format!(
-            "pub const PESSIMISTIC_PROOF_PROGRAM_VERSION: u32 = {};\n",
-            major_version
-        ),
+        format!("pub const PESSIMISTIC_PROOF_PROGRAM_VERSION: u32 = {major_version};\n"),
     )
     .expect("Failed to write pessimistic-proof-core version.rs");
 }

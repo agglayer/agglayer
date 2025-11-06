@@ -6,20 +6,18 @@ use agglayer_config::{
 };
 use agglayer_grpc_client::node::v1::configuration_service_client::ConfigurationServiceClient;
 use agglayer_grpc_server::node::v1::configuration_service_server::ConfigurationServiceServer;
-use agglayer_grpc_types::node::types::v1;
-use agglayer_grpc_types::node::v1::GetEpochConfigurationRequest;
+use agglayer_grpc_types::node::{types::v1, v1::GetEpochConfigurationRequest};
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
     storage::backup::BackupClient,
-    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
+    stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
+use agglayer_types::EpochNumber;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
-use tonic::{
-    transport::{server::TcpIncoming, Channel, Server},
-    Code,
-};
+use tonic::{transport::Channel, Code};
 use tonic_types::StatusExt as _;
+use tower::ServiceExt as _;
 
 use crate::configuration_service::ConfigurationServer;
 
@@ -97,13 +95,26 @@ async fn start_server_with_configuration_service(
     JoinHandle<()>,
 ) {
     let (sender, _receiver) = tokio::sync::mpsc::channel(10);
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
     let service = Arc::new(AgglayerService::new(
         sender,
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap()),
-        Arc::new(
-            StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
-        ),
+        pending_store.clone(),
+        state_store.clone(),
         Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap()),
+        Arc::new(
+            EpochsStore::new(
+                config.clone(),
+                EpochNumber::ZERO,
+                pending_store,
+                state_store,
+                BackupClient::noop(),
+            )
+            .unwrap(),
+        ),
         config,
         Arc::new(L1Rpc {}),
     ));
@@ -112,13 +123,15 @@ async fn start_server_with_configuration_service(
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let incoming =
-        TcpIncoming::from_listener(listener, true, Some(Duration::from_secs(1))).unwrap();
+
+    let app = axum::Router::new().route_service(
+        "/agglayer.node.v1.ConfigurationService/{*rest}",
+        svc.map_request(|r: http::Request<axum::body::Body>| r.map(tonic::body::Body::new)),
+    );
 
     let jh = tokio::spawn(async move {
-        Server::builder()
-            .add_service(svc)
-            .serve_with_incoming_shutdown(incoming, async { drop(rx.await) })
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async { drop(rx.await) })
             .await
             .unwrap();
     });

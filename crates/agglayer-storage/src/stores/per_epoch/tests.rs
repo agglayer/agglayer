@@ -4,12 +4,12 @@ use std::{
 };
 
 use agglayer_config::Config;
-use agglayer_types::{Certificate, CertificateStatus};
+use agglayer_types::{Certificate, CertificateIndex, CertificateStatus, EpochNumber};
 use agglayer_types::{Height, NetworkId, Proof};
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};
 
-use crate::stores::{PendingCertificateWriter as _, StateReader};
+use crate::stores::{PendingCertificateWriter as _, PerEpochReader as _, StateReader};
 use crate::{
     error::Error,
     stores::{
@@ -31,7 +31,7 @@ fn store() -> PerEpochStore<PendingStore, StateStore> {
     );
 
     let backup_client = BackupClient::noop();
-    PerEpochStore::try_open(config, 0, pending_store, state_store, None, backup_client).unwrap()
+    PerEpochStore::try_open(config, EpochNumber::ZERO, pending_store, state_store, None, backup_client).unwrap()
 }
 
 #[rstest]
@@ -71,38 +71,53 @@ type EndCheckpointState = CheckpointState;
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     |result: Result<_, Error>| result.is_ok(),
-    0, Some(0), Some(0))]
+    Height::ZERO, Some(EpochNumber::ZERO), Some(CertificateIndex::ZERO))]
 #[case::when_state_is_incorrect(
-    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 0)]),
+    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ZERO)]),
     EndCheckpointState::Empty,
     |result: Result<_, Error>| matches!(result, Err(Error::Unexpected(_))),
-    0, None, None)]
+    Height::ZERO, None, None)]
 #[case::when_certificate_is_unexpected(
-    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
+    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::new(1))]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::new(1))]),
     |result: Result<_, Error>| {
-        matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 0, 1))))
-    }, 0, None, None)]
+        matches!(
+            result,
+            Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, Height::ZERO, h1)))
+                if h1 == Height::new(1)
+        )
+    },
+    Height::ZERO, None, None)]
 #[case::when_certificate_is_already_present(
-    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
+    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::new(1))]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::new(1))]),
     |result: Result<_, Error>| {
-        matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 1, 1))))
-    }, 1, None, None)]
+        matches!(
+            result,
+            Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, h1, h1_)))
+                if h1 == Height::new(1) && h1_ == Height::new(1)
+        )
+    },
+    Height::new(1), None, None)]
 #[case::when_there_is_a_gap(
-    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 1)]),
+    StartCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::new(1))]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::new(1))]),
     |result: Result<_, Error>| {
-        matches!(result, Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, 3, 1))))
-    }, 3, None, None)]
+        matches!(
+            result,
+            Err(Error::CertificateCandidateError(crate::error::CertificateCandidateError::UnexpectedHeight(_, h3, h1)))
+                if h1 == Height::new(1) && h3 == Height::new(3)
+        )
+    },
+    Height::new(3), None, None)]
 fn adding_a_certificate(
     mut store: PerEpochStore<PendingStore, StateStore>,
     #[case] start_checkpoint: StartCheckpointState,
     #[case] end_checkpoint: EndCheckpointState,
-    #[case] expected_result: impl FnOnce(Result<(u64, u64), Error>) -> bool,
+    #[case] expected_result: impl FnOnce(Result<(EpochNumber, CertificateIndex), Error>) -> bool,
     #[case] height: Height,
-    #[case] expected_epoch_number: Option<u64>,
-    #[case] expected_certificate_index: Option<u64>,
+    #[case] expected_epoch_number: Option<EpochNumber>,
+    #[case] expected_certificate_index: Option<CertificateIndex>,
 ) {
     use agglayer_types::CertificateStatus;
 
@@ -153,32 +168,32 @@ fn adding_a_certificate(
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     VecDeque::from([|result: Result<_, Error>| result.is_ok(), |result: Result<_, Error>| result.is_err()]),
-    0)]
+    Height::ZERO)]
 #[case::when_state_are_empty_and_starting_at_wrong_height(
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
     VecDeque::from([|result: Result<_, Error>| result.is_err()]),
-    1)]
+    Height::new(1))]
 #[case::when_state_is_already_full(
     StartCheckpointState::Empty,
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), 0)]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ZERO)]),
     VecDeque::from([|result: Result<_, Error>| result.is_err()]),
-    1)]
+    Height::new(1))]
 #[case::when_state_contains_other_network(
     StartCheckpointState::Empty,
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), 0)]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), Height::ZERO)]),
     VecDeque::from([|result: Result<_, Error>| result.is_ok()]),
-    0)]
+    Height::ZERO)]
 #[case::when_state_contains_other_network_but_wrong_height(
     StartCheckpointState::Empty,
-    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), 0)]),
+    EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(1), Height::ZERO)]),
     VecDeque::from([|result: Result<_, Error>| result.is_err()]),
-    1)]
+    Height::new(1))]
 fn adding_multiple_certificates(
     mut store: PerEpochStore<PendingStore, StateStore>,
     #[case] start_checkpoint: StartCheckpointState,
     #[case] end_checkpoint: EndCheckpointState,
-    #[case] mut expected_results: VecDeque<impl FnOnce(Result<(u64, u64), Error>) -> bool>,
+    #[case] mut expected_results: VecDeque<impl FnOnce(Result<(EpochNumber, CertificateIndex), Error>) -> bool>,
     #[case] mut height: Height,
 ) {
     use agglayer_types::Certificate;
@@ -209,12 +224,161 @@ fn adding_multiple_certificates(
         assert!(
             expected_result(
                 store.add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
-            ),
-            "{}:{} failed to pass the test",
-            network,
-            height
-        );
+            ), "{network}:{height} failed to pass the test");
 
-        height += 1;
+        height.increment();
     }
+}
+
+#[rstest]
+fn adding_certificate_and_restart() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+
+    let backup_client = BackupClient::noop();
+    let store = PerEpochStore::try_open(
+        config.clone(),
+        EpochNumber::ZERO,
+        pending_store,
+        state_store,
+        None,
+        backup_client.clone(),
+    )
+    .unwrap();
+
+    let network = 1.into();
+    let height = Height::ZERO;
+
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    assert!(
+        store
+            .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
+            .is_ok(),
+        "{network}:{height} failed to pass the test");
+
+    drop(store);
+
+    let store = PerEpochStore::try_open(config, EpochNumber::ZERO, pending_store, state_store, None, backup_client)
+        .unwrap();
+
+    let network = 2.into();
+    let height = Height::ZERO;
+
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    assert!(
+        store
+            .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
+            .is_ok(),
+        "{network}:{height} failed to pass the test");
+
+    let first = store.get_certificate_at_index(CertificateIndex::ZERO).unwrap().unwrap();
+    assert!(
+        first.network_id == 1.into(),
+        "Network ID mismatch {} != {}",
+        first.network_id,
+        1
+    );
+
+    let second = store.get_certificate_at_index(CertificateIndex::new(1)).unwrap().unwrap();
+    assert!(
+        second.network_id == 2.into(),
+        "Network ID mismatch {} != {}",
+        second.network_id,
+        2
+    );
+}
+
+#[rstest]
+fn can_retrieve_proof_at_index() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+
+    let backup_client = BackupClient::noop();
+    let store = PerEpochStore::try_open(
+        config,
+        EpochNumber::ZERO,
+        pending_store,
+        state_store,
+        None,
+        backup_client,
+    )
+    .unwrap();
+
+    let network = 1.into();
+    let height = Height::ZERO;
+
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    // Add the certificate to the epoch store
+    assert!(
+        store
+            .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
+            .is_ok(),
+        "Failed to add certificate to epoch store"
+    );
+
+    // Verify that we can retrieve the proof at index 0
+    let proof = store.get_proof_at_index(CertificateIndex::ZERO).unwrap();
+    assert!(proof.is_some(), "Should retrieve a proof");
+
+    // Verify that retrieving proof at non-existent index returns None
+    let non_existent_proof = store.get_proof_at_index(CertificateIndex::new(1)).unwrap();
+    assert!(non_existent_proof.is_none(), "Should return None for non-existent index");
 }

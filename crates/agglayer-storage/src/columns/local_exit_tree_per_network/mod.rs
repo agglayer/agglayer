@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{Codec, ColumnSchema, LOCAL_EXIT_TREE_PER_NETWORK_CF};
+use super::{ColumnSchema, LOCAL_EXIT_TREE_PER_NETWORK_CF};
 
 /// Column family for the local exit tree per network.
 ///
@@ -33,8 +33,7 @@ pub enum Value {
     Frontier([u8; 32]),
 }
 
-impl Codec for Key {}
-impl Codec for Value {}
+crate::columns::impl_codec_using_bincode_for!(Key, Value);
 
 impl ColumnSchema for LocalExitTreePerNetworkColumn {
     type Key = Key;

@@ -2,8 +2,8 @@ use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions, WriteBatch,
-    WriteOptions,
+    ColumnFamily, ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions,
+    WriteBatch, WriteOptions,
 };
 
 use crate::columns::{Codec, ColumnSchema};
@@ -13,10 +13,10 @@ pub(crate) mod iterators;
 
 pub mod backup;
 
-pub use cf_definitions::debug::debug_db_cf_definitions;
-pub use cf_definitions::epochs::epochs_db_cf_definitions;
-pub use cf_definitions::pending::pending_db_cf_definitions;
-pub use cf_definitions::state::state_db_cf_definitions;
+pub use cf_definitions::{
+    debug::debug_db_cf_definitions, epochs::epochs_db_cf_definitions,
+    pending::pending_db_cf_definitions, state::state_db_cf_definitions,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
@@ -28,6 +28,9 @@ pub enum DBError {
 
     #[error("Trying to access an unknown ColumnFamily")]
     ColumnFamilyNotFound,
+
+    #[error("Database was opened in read-only mode")]
+    ReadOnlyMode,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -45,7 +48,7 @@ pub enum BackupError {
 /// A physical storage component with an active RocksDB.
 pub struct DB {
     rocksdb: rocksdb::DB,
-    default_write_options: WriteOptions,
+    default_write_options: Option<WriteOptions>,
 }
 
 impl DB {
@@ -60,35 +63,84 @@ impl DB {
 
         Ok(DB {
             rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, cfs)?,
-            default_write_options: writeopts,
+            default_write_options: Some(writeopts),
         })
+    }
+
+    /// Open a RocksDB instance in read-only mode at the given path with some
+    /// column families. This prevents concurrency issues when multiple
+    /// processes need to read from the database.
+    pub fn open_cf_readonly(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
+        let mut options = Options::default();
+        options.create_if_missing(false); // Don't create if missing in readonly mode
+        options.create_missing_column_families(false); // Don't create missing column families
+
+        Ok(DB {
+            rocksdb: rocksdb::DB::open_cf_descriptors_read_only(&options, path, cfs, false)?,
+            default_write_options: None,
+        })
+    }
+
+    fn write_options(&self) -> Result<&WriteOptions, DBError> {
+        self.default_write_options
+            .as_ref()
+            .ok_or(DBError::ReadOnlyMode)
+    }
+
+    fn cf<C: ColumnSchema>(&self) -> Result<&ColumnFamily, DBError> {
+        self.rocksdb
+            .cf_handle(C::COLUMN_FAMILY_NAME)
+            .ok_or(DBError::ColumnFamilyNotFound)
     }
 
     /// Try to get the value for the given key.
     pub fn get<C: ColumnSchema>(&self, key: &C::Key) -> Result<Option<C::Value>, DBError> {
         let key = key.encode()?;
-        let cf = self
-            .rocksdb
-            .cf_handle(C::COLUMN_FAMILY_NAME)
-            .ok_or(DBError::ColumnFamilyNotFound)?;
+        let cf = self.cf::<C>()?;
 
         self.rocksdb
-            .get_cf(&cf, &key)?
+            .get_cf(cf, &key)?
             .map(|v| C::Value::decode(&v[..]).map_err(Into::into))
             // If the value is not found, return None.
             // If the value is found, decode it and wrap it in Some to propagate decode error.
             .map_or(Ok(None), |v| v.map(Some))
     }
 
-    pub fn multi_get<C: ColumnSchema>(
+    pub fn atomic_multi_get<C: ColumnSchema>(
         &self,
         keys: impl IntoIterator<Item = C::Key>,
     ) -> Result<Vec<Option<C::Value>>, DBError> {
+        let snapshot = self.rocksdb.snapshot();
         let cf = self
             .rocksdb
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(DBError::ColumnFamilyNotFound)?;
 
+        let keys: Result<Vec<_>, _> = keys
+            .into_iter()
+            .map(|k| k.encode().map(|key| (cf, key)))
+            .collect();
+
+        let results = snapshot
+            .multi_get_cf(keys?)
+            .into_iter()
+            .map(|r| r.map_err(DBError::from))
+            .collect::<Result<Vec<Option<_>>, _>>()?;
+
+        results
+            .into_iter()
+            .map(|bytes| match bytes {
+                Some(bytes) => C::Value::decode(&bytes[..]).map_err(Into::into).map(Some),
+                None => Ok(None),
+            })
+            .collect()
+    }
+
+    pub fn multi_get<C: ColumnSchema>(
+        &self,
+        keys: impl IntoIterator<Item = C::Key>,
+    ) -> Result<Vec<Option<C::Value>>, DBError> {
+        let cf = self.cf::<C>()?;
         let keys: Result<Vec<_>, _> = keys.into_iter().map(|k| k.encode()).collect();
 
         let results: Result<Vec<Option<DBPinnableSlice>>, _> = self
@@ -111,19 +163,17 @@ impl DB {
     pub fn put<C: ColumnSchema>(&self, key: &C::Key, value: &C::Value) -> Result<(), DBError> {
         let key = key.encode()?;
         let value = value.encode()?;
-        let cf = self
-            .rocksdb
-            .cf_handle(C::COLUMN_FAMILY_NAME)
-            .ok_or(DBError::ColumnFamilyNotFound)?;
+        let cf = self.cf::<C>()?;
 
-        self.rocksdb
-            .put_cf_opt(&cf, key, value, &self.default_write_options)?;
+        let write_options = self.write_options()?;
+        self.rocksdb.put_cf_opt(cf, key, value, write_options)?;
 
         Ok(())
     }
 
     pub fn write_batch(&self, batch: WriteBatch) -> Result<(), DBError> {
-        self.rocksdb.write(batch)?;
+        let write_options = self.write_options()?;
+        self.rocksdb.write_opt(batch, write_options)?;
 
         Ok(())
     }
@@ -133,10 +183,7 @@ impl DB {
         key_val_pairs: impl IntoIterator<Item = (&'a C::Key, &'a C::Value)>,
         batch: &mut WriteBatch,
     ) -> Result<(), DBError> {
-        let cf = self
-            .rocksdb
-            .cf_handle(C::COLUMN_FAMILY_NAME)
-            .ok_or(DBError::ColumnFamilyNotFound)?;
+        let cf = self.cf::<C>()?;
 
         key_val_pairs
             .into_iter()
@@ -163,11 +210,8 @@ impl DB {
     }
 
     /// Try to get every key in the column family.
-    pub fn keys<C: ColumnSchema>(&self) -> Result<KeysIterator<C>, DBError> {
-        let cf = self
-            .rocksdb
-            .cf_handle(C::COLUMN_FAMILY_NAME)
-            .ok_or(DBError::ColumnFamilyNotFound)?;
+    pub fn keys<C: ColumnSchema>(&self) -> Result<KeysIterator<'_, C>, DBError> {
+        let cf = self.cf::<C>()?;
 
         let mut iterator = self.rocksdb.raw_iterator_cf(&cf);
         iterator.seek_to_first();
@@ -179,11 +223,8 @@ impl DB {
         &self,
         opts: ReadOptions,
         direction: Direction,
-    ) -> Result<ColumnIterator<C>, DBError> {
-        let cf = self
-            .rocksdb
-            .cf_handle(C::COLUMN_FAMILY_NAME)
-            .ok_or(DBError::ColumnFamilyNotFound)?;
+    ) -> Result<ColumnIterator<'_, C>, DBError> {
+        let cf = self.cf::<C>()?;
 
         let mut iterator = self.rocksdb.raw_iterator_cf_opt(&cf, opts);
 
@@ -196,14 +237,10 @@ impl DB {
     }
 
     pub(crate) fn delete<C: ColumnSchema>(&self, key: &C::Key) -> Result<(), DBError> {
-        let cf = self
-            .rocksdb
-            .cf_handle(C::COLUMN_FAMILY_NAME)
-            .ok_or(DBError::ColumnFamilyNotFound)?;
+        let cf = self.cf::<C>()?;
         let key = key.encode()?;
 
-        Ok(self
-            .rocksdb
-            .delete_cf_opt(&cf, key, &self.default_write_options)?)
+        let write_options = self.write_options()?;
+        Ok(self.rocksdb.delete_cf_opt(&cf, key, write_options)?)
     }
 }
