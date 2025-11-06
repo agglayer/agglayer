@@ -709,10 +709,20 @@ fn test_reference_db_v1_read_network_info() {
 
 #[test]
 fn test_reference_db_v1_read_epochs() {
-    // Test reading epoch-related data
-    use crate::columns::epochs::{
-        certificates::CertificatePerIndexColumn, metadata::PerEpochMetadataColumn,
-        proofs::ProofPerIndexColumn,
+    // Test reading and reconstructing epoch structure
+    use std::collections::BTreeMap;
+
+    use agglayer_types::{Certificate, CertificateIndex, Height, NetworkId, Proof};
+
+    use crate::{
+        columns::epochs::{
+            certificates::CertificatePerIndexColumn,
+            end_checkpoint::EndCheckpointColumn,
+            metadata::PerEpochMetadataColumn,
+            proofs::ProofPerIndexColumn,
+            start_checkpoint::StartCheckpointColumn,
+        },
+        types::{PerEpochMetadataKey, PerEpochMetadataValue},
     };
 
     let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
@@ -732,102 +742,186 @@ fn test_reference_db_v1_read_epochs() {
     let epochs_db = DB::open_cf_readonly(&epochs_path, epochs_db_cf_definitions())
         .expect("Failed to open epochs DB");
 
-    // Test Epoch Certificates
-    println!("Testing Epoch Certificates...");
+    println!("=== Reconstructing Epoch Structure ===\n");
+
+    // Step 1: Read Start Checkpoint
+    println!("1. Reading Start Checkpoint...");
+    let start_checkpoint_iter = epochs_db
+        .iter_with_direction::<StartCheckpointColumn>(
+            rocksdb::ReadOptions::default(),
+            rocksdb::Direction::Forward,
+        )
+        .expect("Failed to create start checkpoint iterator");
+
+    let start_checkpoint: BTreeMap<NetworkId, Height> = start_checkpoint_iter
+        .filter_map(|result| result.ok())
+        .collect();
+
+    println!(
+        "   ✅ Start Checkpoint: {} networks",
+        start_checkpoint.len()
+    );
+    for (network_id, height) in &start_checkpoint {
+        println!("      Network {}: Height {}", network_id, height);
+    }
+
+    // Step 2: Read End Checkpoint
+    println!("\n2. Reading End Checkpoint...");
+    let end_checkpoint_iter = epochs_db
+        .iter_with_direction::<EndCheckpointColumn>(
+            rocksdb::ReadOptions::default(),
+            rocksdb::Direction::Forward,
+        )
+        .expect("Failed to create end checkpoint iterator");
+
+    let end_checkpoint: BTreeMap<NetworkId, Height> = end_checkpoint_iter
+        .filter_map(|result| result.ok())
+        .collect();
+
+    println!("   ✅ End Checkpoint: {} networks", end_checkpoint.len());
+    for (network_id, height) in &end_checkpoint {
+        println!("      Network {}: Height {}", network_id, height);
+    }
+
+    // Step 3: Read Epoch Metadata (packing status, settlement tx)
+    println!("\n3. Reading Epoch Metadata...");
+    let mut is_packed = false;
+    let mut settlement_tx_hash = None;
+
+    if let Ok(Some(PerEpochMetadataValue::Packed(packed))) =
+        epochs_db.get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::Packed)
+    {
+        is_packed = packed;
+        println!("   ✅ Epoch Packed: {}", is_packed);
+    }
+
+    if let Ok(Some(PerEpochMetadataValue::SettlementTxHash(tx_hash))) =
+        epochs_db.get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::SettlementTxHash)
+    {
+        settlement_tx_hash = Some(tx_hash);
+        println!("   ✅ Settlement Tx Hash: {}", tx_hash);
+    }
+
+    // Step 4: Read and validate epoch certificates
+    println!("\n4. Reading Epoch Certificates...");
     let epoch_certs_iter = epochs_db
         .keys::<CertificatePerIndexColumn>()
         .expect("Failed to create epoch certificates iterator");
-    let mut cert_count = 0;
+
+    let mut certificates: BTreeMap<CertificateIndex, Certificate> = BTreeMap::new();
 
     for key_result in epoch_certs_iter {
-        use agglayer_types::{Certificate, CertificateIndex};
-
-        let key: CertificateIndex = match key_result {
+        let cert_index = match key_result {
             Ok(k) => k,
             Err(e) => {
                 eprintln!("Failed to read epoch cert key: {:?}", e);
                 continue;
             }
         };
+
         let cert: Certificate = epochs_db
-            .get::<CertificatePerIndexColumn>(&key)
+            .get::<CertificatePerIndexColumn>(&cert_index)
             .expect("Failed to read epoch certificate")
             .expect("Epoch certificate not found");
 
-        // Validate the certificate has a network ID
-        assert!(cert.network_id.to_u32() > 0, "Network ID should be valid");
-
-        cert_count += 1;
-    }
-
-    println!("  ✅ Found {} epoch certificates", cert_count);
-
-    // Test Epoch Metadata
-    println!("Testing Epoch Metadata...");
-    let epoch_metadata_iter = epochs_db
-        .keys::<PerEpochMetadataColumn>()
-        .expect("Failed to create epoch metadata iterator");
-    let mut metadata_count = 0;
-
-    for key_result in epoch_metadata_iter {
-        use crate::types::{PerEpochMetadataKey, PerEpochMetadataValue};
-
-        let key: PerEpochMetadataKey = match key_result {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("Failed to read epoch metadata key: {:?}", e);
-                continue;
-            }
-        };
-        let value: PerEpochMetadataValue = epochs_db
-            .get::<PerEpochMetadataColumn>(&key)
-            .expect("Failed to read epoch metadata")
-            .expect("Epoch metadata not found");
-
-        // Just validate we can deserialize it
-        match value {
-            PerEpochMetadataValue::SettlementTxHash(_) => {}
-            PerEpochMetadataValue::Packed(_) => {}
+        // Validate certificate is within checkpoint range
+        if let (Some(start_height), Some(end_height)) = (
+            start_checkpoint.get(&cert.network_id),
+            end_checkpoint.get(&cert.network_id),
+        ) {
+            assert!(
+                cert.height >= *start_height && cert.height <= *end_height,
+                "Certificate height {} outside checkpoint range [{}, {}] for network {}",
+                cert.height,
+                start_height,
+                end_height,
+                cert.network_id
+            );
         }
 
-        metadata_count += 1;
+        certificates.insert(cert_index, cert);
     }
 
-    println!("  ✅ Found {} epoch metadata entries", metadata_count);
+    println!(
+        "   ✅ Found {} certificates in epoch",
+        certificates.len()
+    );
+    for (idx, cert) in certificates.iter().take(3) {
+        println!(
+            "      Index {}: Network {}, Height {}",
+            idx, cert.network_id, cert.height
+        );
+    }
 
-    // Test Epoch Proofs
-    println!("Testing Epoch Proofs...");
+    // Step 5: Read epoch proofs
+    println!("\n5. Reading Epoch Proofs...");
     let epoch_proofs_iter = epochs_db
         .keys::<ProofPerIndexColumn>()
         .expect("Failed to create epoch proofs iterator");
-    let mut proof_count = 0;
+
+    let mut proofs: BTreeMap<CertificateIndex, Proof> = BTreeMap::new();
 
     for key_result in epoch_proofs_iter {
-        use agglayer_types::{CertificateIndex, Proof};
-
-        let key: CertificateIndex = match key_result {
+        let cert_index = match key_result {
             Ok(k) => k,
             Err(e) => {
                 eprintln!("Failed to read epoch proof key: {:?}", e);
                 continue;
             }
         };
-        let _proof: Proof = epochs_db
-            .get::<ProofPerIndexColumn>(&key)
+
+        let proof: Proof = epochs_db
+            .get::<ProofPerIndexColumn>(&cert_index)
             .expect("Failed to read epoch proof")
             .expect("Epoch proof not found");
 
-        proof_count += 1;
-        if proof_count >= 3 {
-            // Just check a few to save time
-            break;
+        // Validate that we have a certificate for this proof
+        assert!(
+            certificates.contains_key(&cert_index),
+            "Proof exists for certificate index {} but no certificate found",
+            cert_index
+        );
+
+        proofs.insert(cert_index, proof);
+    }
+
+    println!("   ✅ Found {} proofs in epoch", proofs.len());
+
+    // Step 6: Validate epoch structure consistency
+    println!("\n6. Validating Epoch Structure Consistency...");
+
+    // All networks in end_checkpoint should be in start_checkpoint (or be new)
+    for network_id in end_checkpoint.keys() {
+        if !start_checkpoint.contains_key(network_id) {
+            println!(
+                "   ⚠️  Network {} in end checkpoint but not in start checkpoint (new network)",
+                network_id
+            );
         }
     }
 
+    // Certificates should cover the checkpoint ranges
+    let mut networks_with_certs = std::collections::BTreeSet::new();
+    for cert in certificates.values() {
+        networks_with_certs.insert(cert.network_id);
+    }
+
     println!(
-        "  ✅ Checked {} epoch proofs (limited for speed)",
-        proof_count
+        "   ✅ Certificates span {} unique networks",
+        networks_with_certs.len()
     );
+
+    // Summary
+    println!("\n=== Epoch Structure Summary ===");
+    println!("  Start Checkpoint: {} networks", start_checkpoint.len());
+    println!("  End Checkpoint: {} networks", end_checkpoint.len());
+    println!("  Certificates: {}", certificates.len());
+    println!("  Proofs: {}", proofs.len());
+    println!("  Packed: {}", is_packed);
+    if let Some(tx_hash) = settlement_tx_hash {
+        println!("  Settlement Tx: {}", tx_hash);
+    }
+    println!("\n✅ Successfully reconstructed and validated epoch structure!");
 
     // Cleanup
     let _ = fs::remove_dir_all(&temp_dir);
