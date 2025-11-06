@@ -8,7 +8,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-alloy.workspace = true
+alloy = { workspace = true, features = ["full", "json-rpc"] }
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 arc-swap.workspace = true
 buildstructor.workspace = true
