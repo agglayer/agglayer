@@ -4,14 +4,30 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
     groups:
-      all:
+      agglayer:
         applies-to: version-updates
         patterns:
-        - "*"
+          - "aggchain-*"
+          - "aggkit-*"
+          - "agglayer-*"
+          - "proposer-*"
+          - "prover-*"
+          - "unified-bridge"
+
+      sp1:
+        applies-to: version-updates
+        patterns:
+          - "sp1-*"
+
+      external:
+        applies-to: version-updates
+        patterns:
+          - "*"
         update-types:
-        - "minor"
-        - "patch"
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"

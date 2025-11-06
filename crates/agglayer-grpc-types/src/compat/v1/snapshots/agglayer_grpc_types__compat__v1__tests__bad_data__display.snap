@@ -1,0 +1,5 @@
+---
+source: crates/agglayer-grpc-types/src/compat/v1/tests.rs
+expression: error
+---
+invalid value

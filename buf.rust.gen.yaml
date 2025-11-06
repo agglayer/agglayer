@@ -9,6 +9,8 @@ plugins:
     opt:
       - bytes=.
       - file_descriptor_set
+      - extern_path=.agglayer.interop.types=::agglayer-interop::grpc
+      - compile_well_known_types
 
   - local: protoc-gen-prost-serde
     out: crates/agglayer-grpc-types/src/generated

@@ -1,0 +1,52 @@
+[env]
+CONTRACT_VERSION = "feature/ongoing-v0.3.0"
+CONTRACT_REPO = "https://api.github.com/repos/agglayer/agglayer-contracts"
+
+[tasks.contracts]
+description = "Download and update the contracts of agglayer-contracts"
+dependencies = ["contracts-downloader"]
+
+[tasks.contracts-downloader]
+dependencies = [
+    { name = "contracts-download-PolygonRollupManager" },
+    { name = "contracts-download-PolygonZkEVM" },
+    { name = "contracts-download-PolygonZkEVMGlobalExitRootV2" },
+    { name = "contracts-download-AggchainBase" },
+    { name = "contracts-download-AggLayerGateway" },
+]
+
+[tasks.contracts-download-AggLayerGateway]
+env = { "CONTRACT" = "AggLayerGateway.json" }
+run_task = "contracts-download"
+
+[tasks.contracts-download-AggchainBase]
+env = { "CONTRACT" = "AggchainBase.json" }
+run_task = "contracts-download"
+
+[tasks.contracts-download-PolygonRollupManager]
+env = { "CONTRACT" = "PolygonRollupManager.json" }
+run_task = "contracts-download"
+
+[tasks.contracts-download-PolygonZkEVM]
+env = { "CONTRACT" = "PolygonZkEVM.json" }
+run_task = "contracts-download"
+
+[tasks.contracts-download-PolygonZkEVMGlobalExitRootV2]
+env = { "CONTRACT" = "PolygonZkEVMGlobalExitRootV2.json" }
+run_task = "contracts-download"
+
+[tasks.contracts-download]
+condition = { env_set = ["CONTRACT", "GITHUB_TOKEN"] }
+description = "Download the contract of agglayer-contracts"
+cwd = "crates/agglayer-contracts"
+command = "curl"
+args = [
+    "-HAuthorization: token ${GITHUB_TOKEN}",
+    "-HAccept: application/vnd.github.v4.raw",
+    "-Ls",
+    "--output",
+    "./src/contracts/${CONTRACT}",
+    "--proto",
+    "=https",
+    "${CONTRACT_REPO}/contents/compiled-contracts/${CONTRACT}?ref=${CONTRACT_VERSION}",
+]

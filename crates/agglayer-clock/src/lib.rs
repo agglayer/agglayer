@@ -11,6 +11,7 @@ use std::{
     },
 };
 
+use agglayer_types::EpochNumber;
 use tokio::sync::broadcast;
 
 mod block;
@@ -81,13 +82,20 @@ impl ClockRef {
     }
 
     /// Returns the current Epoch.
-    pub fn current_epoch(&self) -> u64 {
-        self.current_block_height() / *self.block_per_epoch
+    pub fn current_epoch(&self) -> EpochNumber {
+        EpochNumber::new(self.current_block_height() / *self.block_per_epoch)
     }
 
     /// Returns the current Block height.
     pub fn current_block_height(&self) -> u64 {
         self.block_height.load(Ordering::Acquire)
+    }
+
+    /// Returns progress information about the current epoch
+    pub fn epoch_progress(&self) -> f64 {
+        let current_block = self.current_block_height();
+        let blocks_in_epoch = current_block % *self.block_per_epoch;
+        blocks_in_epoch as f64 / self.block_per_epoch.get() as f64
     }
 }
 
@@ -95,7 +103,7 @@ impl ClockRef {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
     /// Notify that an Epoch just ended with the associated Epoch number.
-    EpochEnded(u64),
+    EpochEnded(EpochNumber),
 }
 
 /// Errors that can be returned by the Clock.

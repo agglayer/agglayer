@@ -1,8 +1,7 @@
-use agglayer_types::LocalNetworkStateData;
-use agglayer_types::{Certificate, Height, NetworkId};
-use pessimistic_proof::local_exit_tree::hasher::Keccak256Hasher;
-use pessimistic_proof::multi_batch_header::MultiBatchHeader;
-use pessimistic_proof::LocalNetworkState;
+use agglayer_types::{Certificate, Digest, Height, LocalNetworkStateData, NetworkId};
+use pessimistic_proof::{
+    multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
+};
 
 use crate::error::CertificationError;
 
@@ -22,6 +21,7 @@ pub struct CertifierOutput {
     pub height: Height,
     pub new_state: LocalNetworkStateData,
     pub network: NetworkId,
+    pub new_pp_root: Digest,
 }
 
 pub type CertifierResult = Result<CertifierOutput, CertificationError>;
@@ -36,9 +36,10 @@ pub trait Certifier: Unpin + Send + Sync + 'static {
         height: Height,
     ) -> CertifierResult;
 
-    async fn witness_execution(
+    async fn witness_generation(
         &self,
         certificate: &Certificate,
         state: &mut LocalNetworkStateData,
-    ) -> Result<(MultiBatchHeader<Keccak256Hasher>, LocalNetworkState), CertificationError>;
+        certificate_tx_hash: Option<Digest>,
+    ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>;
 }

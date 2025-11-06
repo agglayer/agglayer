@@ -1,7 +1,7 @@
 use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 
 use agglayer_config::Config;
-use anyhow::{bail, Result};
+use eyre::bail;
 use node::Node;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
@@ -24,9 +24,9 @@ pub fn main(
     cfg: PathBuf,
     version: &str,
     cancellation_token: Option<CancellationToken>,
-) -> Result<()> {
+) -> eyre::Result<()> {
     let cfg = cfg.canonicalize().map_err(|_| {
-        anyhow::Error::msg(format!(
+        eyre::Error::msg(format!(
             "Configuration file path must be absolute, given: {}",
             cfg.display()
         ))
@@ -49,7 +49,23 @@ pub fn main(
     }
 
     // Initialize the logger
-    logging::tracing(&config.log);
+    match logging::tracing(&config.log) {
+        Ok(()) => {
+            info!("Tracing initialized successfully.");
+        }
+        Err(e)
+            if e.to_string()
+                .contains("trace dispatcher has already been set") =>
+        {
+            // This is a common case in integration tests where the logger is initialized
+            // multiple times. We can safely ignore this error.
+            debug!("Logger already initialized, ignoring error: {e}");
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize logger: {e:?}");
+            return Err(e);
+        }
+    }
 
     info!("Starting agglayer node version info: {}", version);
 
@@ -57,6 +73,10 @@ pub fn main(
         .thread_name("agglayer-node-runtime")
         .enable_all()
         .build()?;
+    info!(
+        num_workers = node_runtime.metrics().num_workers(),
+        "Node runtime created."
+    );
 
     let metrics_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("metrics-runtime")

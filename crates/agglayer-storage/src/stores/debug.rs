@@ -11,7 +11,7 @@ pub enum DebugStore {
 }
 
 /// A logical store for debug.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct EnabledDebugStore {
     db: Arc<DB>,
 }

@@ -1,18 +1,31 @@
-use agglayer_primitives::Address;
-pub use bincode::Options;
+use agglayer_bincode as bincode;
+use agglayer_primitives::{Address, Digest};
+use agglayer_tries::roots::LocalExitRoot;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use unified_bridge::{
+    Error, GlobalIndex, ImportedBridgeExitCommitmentValues, ImportedBridgeExitCommitmentVersion,
+    LocalExitTreeError, NetworkId, TokenInfo,
+};
 
 use crate::{
-    bridge_exit::{NetworkId, TokenInfo},
-    global_index::GlobalIndex,
-    imported_bridge_exit,
-    keccak::{digest::Digest, keccak256_combine},
-    local_exit_tree::{hasher::Keccak256Hasher, LocalExitTreeError},
-    local_state::{NetworkState, StateCommitment},
+    aggchain_data::MultisigError,
+    local_state::{
+        commitment::{
+            PessimisticRootCommitmentValues, PessimisticRootCommitmentVersion, StateCommitment,
+        },
+        NetworkState,
+    },
     multi_batch_header::MultiBatchHeader,
 };
+
+/// Refers to the commitment on the imported bridge exits involved in the
+/// aggchain proof public values (`commit_imported_bridge_exits` field).
+/// This constant defines which commitment version is expected to verify the
+/// aggchain proof.
+pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: ImportedBridgeExitCommitmentVersion =
+    ImportedBridgeExitCommitmentVersion::V3;
 
 /// Represents all errors that can occur while generating the proof.
 ///
@@ -23,81 +36,80 @@ use crate::{
 /// as witness and what is *computed* by the prover.
 #[derive(Clone, Error, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProofError {
-    /// The previous local exit root declared by the chain does not match the
-    /// one computed by the prover.
+    // Note: The following arms are no longer generated but may be present in
+    //       storage having been produced by an alder version of the node.
     #[error("Invalid previous local exit root. declared: {declared}, computed: {computed}")]
     InvalidPreviousLocalExitRoot { declared: Digest, computed: Digest },
-    /// The previous balance root declared by the agglayer does not match the
-    /// one computed by the prover.
     #[error("Invalid previous balance root. declared: {declared}, computed: {computed}")]
     InvalidPreviousBalanceRoot { declared: Digest, computed: Digest },
-    /// The previous nullifier root declared by the agglayer does not match the
-    /// one computed by the prover.
     #[error("Invalid previous nullifier root. declared: {declared}, computed: {computed}")]
     InvalidPreviousNullifierRoot { declared: Digest, computed: Digest },
-    /// The new local exit root declared by the chain does not match the
-    /// one computed by the prover.
     #[error("Invalid new local exit root. declared: {declared}, computed: {computed}")]
     InvalidNewLocalExitRoot { declared: Digest, computed: Digest },
-    /// The new leaf count of the local exit root declared by the chain does not
-    /// match the one computed by the prover.
-    #[error("Invalid new local exit root leaf count. declared: {declared}, computed: {computed}")]
-    InvalidNewLocalExitRootLeafCount { declared: u32, computed: u32 },
-    /// The new balance root declared by the agglayer does not match the
-    /// one computed by the prover.
     #[error("Invalid new balance root. declared: {declared}, computed: {computed}")]
     InvalidNewBalanceRoot { declared: Digest, computed: Digest },
-    /// The new nullifier root declared by the agglayer does not match the
-    /// one computed by the prover.
     #[error("Invalid new nullifier root. declared: {declared}, computed: {computed}")]
     InvalidNewNullifierRoot { declared: Digest, computed: Digest },
+
     /// The provided imported bridge exit is invalid.
     #[error("Invalid imported bridge exit. global index: {global_index:?}, error: {source}")]
     InvalidImportedBridgeExit {
-        source: imported_bridge_exit::Error,
+        source: Error,
         global_index: GlobalIndex,
     },
+
     /// The commitment to the list of imported bridge exits is invalid.
     #[error(
         "Invalid commitment on the imported bridge exits. declared: {declared}, computed: \
          {computed}"
     )]
     InvalidImportedExitsRoot { declared: Digest, computed: Digest },
-    /// The commitment to the list of imported bridge exits should be `Some`
-    /// if and only if this list is non-empty, should be `None` otherwise.
+
+    // Note: No longer produced, present for storage compatibility.
     #[error("Mismatch between the imported bridge exits list and its commitment.")]
     MismatchImportedExitsRoot,
+
     /// The provided nullifier path is invalid.
     #[error("Invalid nullifier path.")]
     InvalidNullifierPath,
+
     /// The provided balance path is invalid.
     #[error("Invalid balance path.")]
     InvalidBalancePath,
+
     /// The imported bridge exit led to balance overflow.
     #[error("Balance overflow in bridge exit.")]
     BalanceOverflowInBridgeExit,
+
     /// The bridge exit led to balance underflow.
     #[error("Balance underflow in bridge exit.")]
     BalanceUnderflowInBridgeExit,
+
     /// The provided bridge exit goes to the sender's own network which is not
     /// permitted.
     #[error("Cannot perform bridge exit to the same network as the origin.")]
     CannotExitToSameNetwork,
+
     /// The provided bridge exit message is invalid.
     #[error("Invalid message origin network.")]
     InvalidMessageOriginNetwork,
+
     /// The token address is zero if and only if it refers to the L1 native eth.
     #[error("Invalid L1 TokenInfo. TokenInfo: {0:?}")]
     InvalidL1TokenInfo(TokenInfo),
+
     /// The provided token is missing a balance proof.
     #[error("Missing token balance proof. TokenInfo: {0:?}")]
     MissingTokenBalanceProof(TokenInfo),
+
     /// The provided token comes with multiple balance proofs.
     #[error("Duplicate token in balance proofs. TokenInfo: {0:?}")]
     DuplicateTokenBalanceProof(TokenInfo),
+
     /// The signature on the state transition is invalid.
     #[error("Invalid signature.")]
     InvalidSignature,
+
     /// The signer recovered from the signature differs from the one declared as
     /// witness.
     #[error("Invalid signer. declared: {declared}, recovered: {recovered}")]
@@ -105,19 +117,44 @@ pub enum ProofError {
         declared: Address,
         recovered: Address,
     },
+
     /// The operation cannot be applied on the local exit tree.
     #[error(transparent)]
     InvalidLocalExitTreeOperation(#[from] LocalExitTreeError),
+
     /// Unknown error.
     #[error("Unknown error: {0}")]
     Unknown(String),
+
+    /// The previous pessimistic root is not re-computable.
+    #[error(
+        "Invalid previous pessimistic root. declared: {declared}, ppr_v2: {computed_v2}, ppr_v3: \
+         {computed_v3}"
+    )]
+    InvalidPreviousPessimisticRoot {
+        declared: Digest,
+        computed_v2: Digest,
+        computed_v3: Digest,
+    },
+
+    /// The signature is on a payload that is with an inconsistent version.
+    #[error("Inconsistent signed payload version.")]
+    InconsistentSignedPayload,
+
+    /// Height overflow.
+    #[error("Height overflow")]
+    HeightOverflow,
+
+    /// Invalid multisig
+    #[error("Invalid multisig")]
+    InvalidMultisig(#[source] MultisigError),
 }
 
 /// Outputs of the pessimistic proof.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PessimisticProofOutput {
     /// The previous local exit root.
-    pub prev_local_exit_root: Digest,
+    pub prev_local_exit_root: LocalExitRoot,
     /// The previous pessimistic root.
     pub prev_pessimistic_root: Digest,
     /// The l1 info root against which we prove the inclusion of the imported
@@ -128,109 +165,129 @@ pub struct PessimisticProofOutput {
     /// The aggchain hash.
     pub aggchain_hash: Digest,
     /// The new local exit root.
-    pub new_local_exit_root: Digest,
-    /// The new pessimistic root which commits to the balance and nullifier
-    /// tree.
+    pub new_local_exit_root: LocalExitRoot,
+    /// The new pessimistic root.
     pub new_pessimistic_root: Digest,
 }
 
 impl PessimisticProofOutput {
-    pub fn bincode_options() -> impl bincode::Options {
-        bincode::DefaultOptions::new()
-            .with_big_endian()
-            .with_fixint_encoding()
+    pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
+        bincode::contracts()
     }
 }
 
-pub const EMPTY_LER: Digest = Digest(hex!(
+pub const EMPTY_LER: LocalExitRoot = LocalExitRoot::new(Digest(hex!(
     "27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757"
-));
+)));
 
-pub const EMPTY_PP_ROOT: Digest = Digest(hex!(
+pub const EMPTY_PP_ROOT_V2: Digest = Digest(hex!(
     "c89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184"
 ));
 
+/// Represents all the enforced values for the stark and for the signed
+/// commitments.
+#[derive(Clone)]
+pub struct ConstrainedValues {
+    pub initial_state_commitment: StateCommitment,
+    pub final_state_commitment: StateCommitment,
+    pub prev_pessimistic_root: Digest,
+    pub prev_pessimistic_root_version: PessimisticRootCommitmentVersion,
+    pub height: u64,
+    pub origin_network: NetworkId,
+    pub l1_info_root: Digest,
+    pub commit_imported_bridge_exits: ImportedBridgeExitCommitmentValues,
+    pub certificate_id: Digest,
+}
+
+impl ConstrainedValues {
+    fn try_new(
+        batch_header: &MultiBatchHeader,
+        initial_state_commitment: &StateCommitment,
+        final_state_commitment: &StateCommitment,
+    ) -> Result<Self, ProofError> {
+        let settled_prev_pp_root = batch_header.prev_pessimistic_root;
+
+        // Infer the version of the settled prev pp root based on the constrained
+        // values. Return error if unable to re-compute a matching prev pp root.
+        let prev_pessimistic_root_version = PessimisticRootCommitmentValues {
+            balance_root: initial_state_commitment.balance_root,
+            nullifier_root: initial_state_commitment.nullifier_root,
+            ler_leaf_count: initial_state_commitment.ler_leaf_count,
+            height: batch_header.height,
+            origin_network: batch_header.origin_network,
+        }
+        .infer_settled_pp_root_version(settled_prev_pp_root)?;
+
+        Ok(Self {
+            initial_state_commitment: initial_state_commitment.clone(),
+            final_state_commitment: final_state_commitment.clone(),
+            height: batch_header.height,
+            origin_network: batch_header.origin_network,
+            l1_info_root: batch_header.l1_info_root,
+            commit_imported_bridge_exits: batch_header.commit_imported_bridge_exits(),
+            certificate_id: batch_header.certificate_id,
+            prev_pessimistic_root: settled_prev_pp_root,
+            prev_pessimistic_root_version,
+        })
+    }
+}
+
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
-/// [`LocalNetworkState`].
+/// [`NetworkState`].
 pub fn generate_pessimistic_proof(
     initial_network_state: NetworkState,
-    batch_header: &MultiBatchHeader<Keccak256Hasher>,
-) -> Result<PessimisticProofOutput, ProofError> {
-    let StateCommitment {
-        exit_root: prev_ler,
-        ler_leaf_count: prev_ler_leaf_count,
-        balance_root: prev_lbr,
-        nullifier_root: prev_nr,
-    } = initial_network_state.roots();
-    let prev_pessimistic_root = keccak256_combine([
-        prev_lbr.as_slice(),
-        prev_nr.as_slice(),
-        prev_ler_leaf_count.to_le_bytes().as_slice(),
-    ]);
+    batch_header: &MultiBatchHeader,
+) -> Result<(PessimisticProofOutput, StateCommitment), ProofError> {
+    // Get the initial state commitment
+    let initial_state_commitment = initial_network_state.get_state_commitment();
+    let mut network_state: NetworkState = initial_network_state;
+    let final_state_commitment = network_state.apply_batch_header(batch_header)?;
 
-    let new_pessimistic_root = keccak256_combine([
-        batch_header.target.balance_root.as_slice(),
-        batch_header.target.nullifier_root.as_slice(),
-        batch_header.target.ler_leaf_count.to_le_bytes().as_slice(),
-    ]);
+    // Also verify initial state commitment and PP root matches
+    let constrained_values = ConstrainedValues::try_new(
+        batch_header,
+        &initial_state_commitment,
+        &final_state_commitment,
+    )?;
 
-    let mut network_state = initial_network_state;
-    let computed_target = network_state.apply_batch_header(batch_header)?;
+    // Verify multisig, aggchain proof, or both.
+    let target_pp_root_version = batch_header.aggchain_data.verify(constrained_values)?;
 
-    if computed_target.exit_root != batch_header.target.exit_root {
-        return Err(ProofError::InvalidNewLocalExitRoot {
-            declared: batch_header.target.exit_root,
-            computed: computed_target.exit_root,
-        });
-    }
+    let height = batch_header
+        .height
+        .checked_add(1)
+        .ok_or(ProofError::HeightOverflow)?;
 
-    if computed_target.balance_root != batch_header.target.balance_root {
-        return Err(ProofError::InvalidNewBalanceRoot {
-            declared: batch_header.target.balance_root,
-            computed: computed_target.balance_root,
-        });
-    }
-
-    if computed_target.nullifier_root != batch_header.target.nullifier_root {
-        return Err(ProofError::InvalidNewNullifierRoot {
-            declared: batch_header.target.nullifier_root,
-            computed: computed_target.nullifier_root,
-        });
-    }
-
-    if computed_target.ler_leaf_count != batch_header.target.ler_leaf_count {
-        return Err(ProofError::InvalidNewLocalExitRootLeafCount {
-            declared: batch_header.target.ler_leaf_count,
-            computed: computed_target.ler_leaf_count,
-        });
-    }
-
-    // NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
-    // empty roots of the different trees involved. Therefore, we do
-    // one mapping of empty tree hash <> 0x00..0 on the public inputs.
-    let (prev_local_exit_root, prev_pessimistic_root) = {
-        let prev_ler = if prev_ler == EMPTY_LER {
-            [0; 32].into()
-        } else {
-            prev_ler
-        };
-
-        let prev_pp_root = if prev_pessimistic_root == EMPTY_PP_ROOT {
-            [0; 32].into()
-        } else {
-            prev_pessimistic_root
-        };
-
-        (prev_ler, prev_pp_root)
-    };
-
-    Ok(PessimisticProofOutput {
-        prev_local_exit_root,
-        prev_pessimistic_root,
-        l1_info_root: batch_header.l1_info_root,
+    let new_pessimistic_root = PessimisticRootCommitmentValues {
+        balance_root: final_state_commitment.balance_root,
+        nullifier_root: final_state_commitment.nullifier_root,
+        ler_leaf_count: final_state_commitment.ler_leaf_count,
+        height,
         origin_network: batch_header.origin_network,
-        aggchain_hash: batch_header.aggchain_proof.aggchain_hash(),
-        new_local_exit_root: batch_header.target.exit_root,
-        new_pessimistic_root,
-    })
+    }
+    .compute_pp_root(target_pp_root_version);
+
+    Ok((
+        PessimisticProofOutput {
+            prev_local_exit_root: zero_if_empty_local_exit_root(initial_state_commitment.exit_root),
+            prev_pessimistic_root: batch_header.prev_pessimistic_root,
+            l1_info_root: batch_header.l1_info_root,
+            origin_network: batch_header.origin_network,
+            aggchain_hash: batch_header.aggchain_data.aggchain_hash(),
+            new_local_exit_root: zero_if_empty_local_exit_root(final_state_commitment.exit_root),
+            new_pessimistic_root,
+        },
+        final_state_commitment,
+    ))
+}
+
+// NOTE: Hack to comply with the L1 contracts which assume `0x00..00` for the
+// empty roots of the different trees involved. Therefore, we do
+// one mapping of empty tree hash <> 0x00..0 on the public inputs.
+pub fn zero_if_empty_local_exit_root(root: LocalExitRoot) -> LocalExitRoot {
+    if root == EMPTY_LER {
+        LocalExitRoot::default()
+    } else {
+        root
+    }
 }

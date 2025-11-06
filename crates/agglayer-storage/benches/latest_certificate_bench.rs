@@ -11,6 +11,7 @@ use agglayer_storage::{
     storage::{backup::BackupClient, state_db_cf_definitions, DB},
     stores::{state::StateStore, StateReader as _},
 };
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::Rng;
 
@@ -43,7 +44,12 @@ fn bench_latest_certificate(c: &mut Criterion) {
         for i in 1..=expected {
             db.put::<LatestSettledCertificatePerNetworkColumn>(
                 &i.into(),
-                &SettledCertificate([0; 32].into(), 0, 0, (i - 1).into()),
+                &SettledCertificate(
+                    CertificateId::new([0; 32].into()),
+                    Height::ZERO,
+                    EpochNumber::ZERO,
+                    CertificateIndex::new(u64::from(i - 1)),
+                ),
             )
             .expect("Unable to put certificate into storage");
         }
@@ -113,7 +119,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
                 let mut total = Duration::new(0, 0);
 
                 (0..iters).for_each(|_| {
-                    let elapsed = run(dir_path.clone(), 1_000_000);
+                    let elapsed = run(dir_path.clone(), 100_000);
                     total = total.add(elapsed);
                 });
 

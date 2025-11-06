@@ -1,13 +1,13 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/errors.rs
-expression: "Validation(RootVerification { detail: \"invalid exit root. expected: 0x7777…7777, got: 0x8888…8888\" })"
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "Validation(RootVerification { detail: \"invalid exit root. expected: 0x7777777777777777777777777777777777777777777777777777777777777777, got: 0x8888888888888888888888888888888888888888888888888888888888888888\" })"
 ---
 {
   "code": -10003,
   "data": {
     "validation": {
       "root-verification": {
-        "detail": "invalid exit root. expected: 0x7777…7777, got: 0x8888…8888"
+        "detail": "invalid exit root. expected: 0x7777777777777777777777777777777777777777777777777777777777777777, got: 0x8888888888888888888888888888888888888888888888888888888888888888"
       }
     }
   },

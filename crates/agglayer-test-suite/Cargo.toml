@@ -10,7 +10,5 @@ agglayer-storage = { path = "../agglayer-storage" }
 pessimistic-proof = { path = "../pessimistic-proof" }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 
-rstest.workspace = true
-
 [lints]
 workspace = true
