@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+import "google/protobuf/timestamp.proto";
+
+// All the possible values that can be stored in the network info.
+message DisabledNetwork {
+  // The timestamp when the network was disabled.
+  google.protobuf.Timestamp disabled_at = 1;
+  // The reason who disabled the network.
+  DisabledBy disabled_by = 2;
+}
+
+// Enum representing who disabled the network.
+enum DisabledBy {
+  // Default value, should not be used.
+  DISABLED_BY_UNSPECIFIED = 0;
+  // The network was disabled by an admin.
+  DISABLED_BY_ADMIN = 1;
+  // The network was disabled by the system.
+  DISABLED_BY_SYSTEM = 2;
+}

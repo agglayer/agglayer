@@ -645,6 +645,23 @@ where
             }
         }
 
+        if self
+            .state
+            .is_network_disabled(&network_id)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to check if network {network_id} is disabled in storage"
+                );
+                GetNetworkInfoError::InternalError {
+                    network_id,
+                    source: error.into(),
+                }
+            })?
+        {
+            network_info.network_status = NetworkStatus::Disabled;
+        }
+
         Ok(network_info)
     }
 }

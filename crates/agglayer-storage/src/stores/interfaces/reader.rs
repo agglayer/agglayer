@@ -74,6 +74,9 @@ pub trait MetadataReader: Send + Sync {
 }
 
 pub trait StateReader: Send + Sync {
+    /// Check if a network is disabled.
+    fn is_network_disabled(&self, network_id: &NetworkId) -> Result<bool, Error>;
+
     /// Get the active networks.
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
 

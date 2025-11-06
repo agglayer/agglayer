@@ -18,6 +18,8 @@ pub enum NetworkStatus {
     Syncing = 2,
     /// The network is experiencing an error.
     Error = 3,
+    /// The network is disabled.
+    Disabled = 4,
 }
 
 // The aggchain type of network

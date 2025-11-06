@@ -111,6 +111,13 @@ impl PerEpochWriter for DummyPendingStore {
 }
 
 impl StateReader for DummyPendingStore {
+    fn is_network_disabled(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<bool, agglayer_storage::error::Error> {
+        Ok(false)
+    }
+
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
         Ok(vec![])
     }

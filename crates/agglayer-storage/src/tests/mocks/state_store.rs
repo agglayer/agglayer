@@ -80,6 +80,7 @@ mock! {
     }
 
     impl StateReader for StateStore {
+        fn is_network_disabled(&self, network_id: &NetworkId) -> Result<bool, Error>;
         fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
 
         fn get_latest_settled_certificate_per_network(

@@ -8,7 +8,7 @@ plugins:
     out: crates/agglayer-storage/src/types/generated
     opt:
       - bytes=.
-      - compile_well_known_types
+      # - compile_well_known_types
       - type_attribute=.agglayer.storage.v0.NetworkInfoValue.value=#[derive(strum_macros::EnumIter\, strum_macros::EnumDiscriminants)]
       - type_attribute=.agglayer.storage.v0.NetworkInfoValue.value=#[strum_discriminants(derive(strum_macros::EnumIter\, strum_macros::FromRepr\, strum_macros::EnumCount\, serde::Serialize\, serde::Deserialize))]
 
