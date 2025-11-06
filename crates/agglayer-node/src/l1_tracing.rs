@@ -1,5 +1,8 @@
 use tracing::debug;
 
+type Request = alloy::rpc::json_rpc::RequestPacket;
+type Response = alloy::rpc::json_rpc::ResponsePacket;
+
 #[derive(Clone)]
 pub struct L1TraceLayer;
 
@@ -15,19 +18,15 @@ pub struct L1TraceService<S> {
     inner: S,
 }
 
-impl<S, Request> tower::Service<Request> for L1TraceService<S>
+impl<S> tower::Service<Request> for L1TraceService<S>
 where
-    S: tower::Service<Request> + Clone + Send + 'static,
+    S: tower::Service<Request, Response = Response> + Clone + Send + 'static,
     S::Future: Send + 'static,
-    Request: std::fmt::Debug,
-    S::Response: std::fmt::Debug,
     S::Error: std::fmt::Debug,
 {
-    type Response = S::Response;
+    type Response = Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
+    type Future = futures::future::BoxFuture<'static, Result<Response, Self::Error>>;
 
     fn poll_ready(
         &mut self,
@@ -36,19 +35,25 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request) -> Self::Future {
+    fn call(&mut self, request: Request) -> Self::Future {
         let span = tracing::debug_span!("L1 interaction");
         let _span_guard = span.enter();
-        debug!(?req, "L1 request");
+        match &request {
+            Request::Single(request) => debug!(?request, "L1 request"),
+            Request::Batch(request) => debug!(?request, "L1 batch request"),
+        }
 
-        let inner_fut = self.inner.call(req);
+        let inner_fut = self.inner.call(request);
         Box::pin(async move {
-            let start = std::time::Instant::now();
+            let start = tokio::time::Instant::now();
             let res = inner_fut.await;
             let elapsed_ms = start.elapsed().as_millis();
             match &res {
-                Ok(response) => debug!(elapsed_ms, ?response, "L1 response"),
-                Err(error) => debug!(elapsed_ms, ?error, "L1 error"),
+                Ok(response) => match response {
+                    Response::Single(response) => debug!(elapsed_ms, ?response, "L1 response"),
+                    Response::Batch(response) => debug!(elapsed_ms, ?response, "L1 batch response"),
+                },
+                Err(error) => debug!(elapsed_ms, ?error, "L1 interaction error"),
             }
             res
         })
