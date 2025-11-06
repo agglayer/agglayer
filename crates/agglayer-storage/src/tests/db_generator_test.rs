@@ -1,7 +1,9 @@
 //! Tests for the database generator
 
-use super::db_generator::{generate_all_databases, GeneratorConfig};
-use super::TempDBDir;
+use super::{
+    db_generator::{generate_all_databases, GeneratorConfig},
+    TempDBDir,
+};
 
 #[test]
 fn test_generate_databases() {
@@ -13,7 +15,8 @@ fn test_generate_databases() {
         seed: 42,
     };
 
-    let result = generate_all_databases(&temp_dir.path, &config).expect("Failed to generate databases");
+    let result =
+        generate_all_databases(&temp_dir.path, &config).expect("Failed to generate databases");
 
     // Verify we have the expected number of networks
     assert_eq!(result.network_ids.len(), 2);
@@ -23,7 +26,7 @@ fn test_generate_databases() {
 
     // Verify we have entries in column families
     assert!(!result.entries_per_cf.is_empty());
-    
+
     // Print statistics for manual verification
     println!("Generated {} networks", result.network_ids.len());
     println!("Generated {} certificates", result.certificate_ids.len());
@@ -43,9 +46,9 @@ fn test_generate_minimal_database() {
         seed: 123,
     };
 
-    let result = generate_all_databases(&temp_dir.path, &config).expect("Failed to generate databases");
+    let result =
+        generate_all_databases(&temp_dir.path, &config).expect("Failed to generate databases");
 
     assert_eq!(result.network_ids.len(), 1);
     assert_eq!(result.certificate_ids.len(), 1);
 }
-

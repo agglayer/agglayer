@@ -3,8 +3,8 @@
 //! This module provides utilities to generate populated RocksDB databases
 //! for regression testing across version upgrades (e.g., alloy 0.14 -> 1.0).
 //!
-//! The generated databases contain realistic test data across all column families
-//! and can be used as artifacts for deserialization regression tests.
+//! The generated databases contain realistic test data across all column
+//! families and can be used as artifacts for deserialization regression tests.
 
 use std::path::Path;
 
@@ -46,7 +46,10 @@ use crate::{
         debug_db_cf_definitions, epochs_db_cf_definitions, pending_db_cf_definitions,
         state_db_cf_definitions, DB,
     },
-    types::{MetadataKey, MetadataValue, PerEpochMetadataKey, PerEpochMetadataValue, SmtKey, SmtKeyType, SmtValue},
+    types::{
+        MetadataKey, MetadataValue, PerEpochMetadataKey, PerEpochMetadataValue, SmtKey, SmtKeyType,
+        SmtValue,
+    },
 };
 
 /// Configuration for database generation
@@ -82,7 +85,8 @@ pub struct GenerationResult {
     pub network_ids: Vec<NetworkId>,
     /// List of certificate IDs that were generated
     pub certificate_ids: Vec<CertificateId>,
-    /// Map of (network_id, height_as_u64) to Certificate for reuse across databases
+    /// Map of (network_id, height_as_u64) to Certificate for reuse across
+    /// databases
     pub certificates: std::collections::HashMap<(NetworkId, u64), Certificate>,
 }
 
@@ -101,7 +105,9 @@ pub fn generate_all_databases(
     // Generate state database
     let state_path = base_path.join("state");
     let state_result = generate_state_db(&state_path, config)?;
-    result.entries_per_cf.extend(state_result.entries_per_cf.clone());
+    result
+        .entries_per_cf
+        .extend(state_result.entries_per_cf.clone());
     result.network_ids = state_result.network_ids.clone();
     result.certificate_ids = state_result.certificate_ids.clone();
     result.certificates = state_result.certificates.clone();
@@ -131,7 +137,7 @@ pub fn generate_state_db(
 ) -> Result<GenerationResult, crate::storage::DBError> {
     let db = DB::open_cf(path, state_db_cf_definitions())?;
     let mut rng = rand::rng();
-    
+
     let mut result = GenerationResult {
         entries_per_cf: std::collections::HashMap::new(),
         network_ids: Vec::new(),
@@ -150,9 +156,11 @@ pub fn generate_state_db(
             let certificate = Certificate::new_for_test(network_id, height);
             let cert_id = certificate.hash();
             result.certificate_ids.push(cert_id);
-            
+
             // Store certificate for reuse in other databases
-            result.certificates.insert((network_id, height.as_u64()), certificate.clone());
+            result
+                .certificates
+                .insert((network_id, height.as_u64()), certificate.clone());
 
             // 1. CertificatePerNetwork: (network_id, height) -> certificate_id
             let cert_per_net_key = CertPerNetKey {
@@ -172,8 +180,10 @@ pub fn generate_state_db(
             // - certificate_index is the position within the epoch
             let certificates_per_epoch = 3; // Configurable if needed
             let epoch_number = Some(EpochNumber::new(height.as_u64() / certificates_per_epoch));
-            let certificate_index = Some(CertificateIndex::new(height.as_u64() % certificates_per_epoch));
-            
+            let certificate_index = Some(CertificateIndex::new(
+                height.as_u64() % certificates_per_epoch,
+            ));
+
             let header = CertificateHeader {
                 network_id,
                 height,
@@ -214,10 +224,7 @@ pub fn generate_state_db(
             network_id: network_id.to_u32(),
             key_type: LetKeyType::LeafCount,
         };
-        db.put::<LocalExitTreePerNetworkColumn>(
-            &leaves_key,
-            &LetValue::LeafCount(num_leaves),
-        )?;
+        db.put::<LocalExitTreePerNetworkColumn>(&leaves_key, &LetValue::LeafCount(num_leaves))?;
         *result
             .entries_per_cf
             .entry("local_exit_tree_per_network_cf".to_string())
@@ -316,16 +323,16 @@ pub fn generate_state_db(
             .or_insert(0) += 1;
 
         // 7. NetworkInfo: Store network information
-        use crate::types::network_info::{Key as NetworkInfoKey, Value as NetworkInfoValue};
         use strum::IntoEnumIterator;
-        
-        for kind in crate::types::network_info::v0::network_info_value::ValueDiscriminants::iter()
-        {
+
+        use crate::types::network_info::{Key as NetworkInfoKey, Value as NetworkInfoValue};
+
+        for kind in crate::types::network_info::v0::network_info_value::ValueDiscriminants::iter() {
             let key = NetworkInfoKey {
                 network_id: network_id.to_u32(),
                 kind,
             };
-            
+
             // Create appropriate value based on discriminant
             let value = match kind {
                 crate::types::network_info::v0::network_info_value::ValueDiscriminants::NetworkType => {
@@ -373,7 +380,7 @@ pub fn generate_state_db(
                     }
                 }
             };
-            
+
             db.put::<NetworkInfoColumn>(&key, &value)?;
             *result
                 .entries_per_cf
@@ -401,7 +408,7 @@ pub fn generate_pending_db(
     state_result: &GenerationResult,
 ) -> Result<GenerationResult, crate::storage::DBError> {
     let db = DB::open_cf(path, pending_db_cf_definitions())?;
-    
+
     let mut result = GenerationResult {
         entries_per_cf: std::collections::HashMap::new(),
         network_ids: state_result.network_ids.clone(),
@@ -474,7 +481,7 @@ pub fn generate_epochs_db(
 ) -> Result<GenerationResult, crate::storage::DBError> {
     let db = DB::open_cf(path, epochs_db_cf_definitions())?;
     let mut rng = rand::rng();
-    
+
     let mut result = GenerationResult {
         entries_per_cf: std::collections::HashMap::new(),
         network_ids: state_result.network_ids.clone(),
@@ -484,40 +491,46 @@ pub fn generate_epochs_db(
 
     // Use the same epoch logic as in generate_state_db
     let certificates_per_epoch = 3;
-    
-    // Calculate how many complete epochs we'll have based on certificates_per_network
-    let num_epochs = config.certificates_per_network.div_ceil(certificates_per_epoch);
-    
+
+    // Calculate how many complete epochs we'll have based on
+    // certificates_per_network
+    let num_epochs = config
+        .certificates_per_network
+        .div_ceil(certificates_per_epoch);
+
     // Generate data for each network
     for network_id in &state_result.network_ids {
         // Generate certificates grouped by epochs
         for epoch_idx in 0..num_epochs {
             // Calculate how many certificates are in this epoch
-            let certs_in_this_epoch = if (epoch_idx + 1) * certificates_per_epoch <= config.certificates_per_network {
-                certificates_per_epoch
-            } else {
-                config.certificates_per_network - (epoch_idx * certificates_per_epoch)
-            };
-            
+            let certs_in_this_epoch =
+                if (epoch_idx + 1) * certificates_per_epoch <= config.certificates_per_network {
+                    certificates_per_epoch
+                } else {
+                    config.certificates_per_network - (epoch_idx * certificates_per_epoch)
+                };
+
             // Generate certificates for this epoch
             for cert_idx in 0..certs_in_this_epoch {
                 let certificate_index = CertificateIndex::new(cert_idx);
                 let height = Height::from(epoch_idx * certificates_per_epoch + cert_idx);
-                
+
                 // Reuse the certificate generated in state_db
-                let certificate = state_result.certificates.get(&(*network_id, height.as_u64()))
+                let certificate = state_result
+                    .certificates
+                    .get(&(*network_id, height.as_u64()))
                     .expect("Certificate should exist from state generation")
                     .clone();
                 let cert_id = certificate.hash();
                 result.certificate_ids.push(cert_id);
-                
+
                 // 1. CertificatePerIndex: certificate_index -> certificate
                 db.put::<CertificatePerIndexColumn>(&certificate_index, &certificate)?;
                 *result
                     .entries_per_cf
                     .entry("per_epoch_certificates_cf".to_string())
                     .or_insert(0) += 1;
-                
+
                 // 2. ProofPerIndex: certificate_index -> proof (if enabled)
                 if config.generate_proofs {
                     let proof = Proof::dummy();
@@ -528,19 +541,19 @@ pub fn generate_epochs_db(
                         .or_insert(0) += 1;
                 }
             }
-            
+
             // 3. PerEpochMetadata: Store metadata for this epoch
             // Store a random settlement tx hash
             let settlement_tx_hash_key = PerEpochMetadataKey::SettlementTxHash;
             let settlement_tx_hash_value = PerEpochMetadataValue::SettlementTxHash(
-                agglayer_types::Digest(rng.random::<[u8; 32]>())
+                agglayer_types::Digest(rng.random::<[u8; 32]>()),
             );
             db.put::<PerEpochMetadataColumn>(&settlement_tx_hash_key, &settlement_tx_hash_value)?;
             *result
                 .entries_per_cf
                 .entry("per_epoch_metadata_cf".to_string())
                 .or_insert(0) += 1;
-            
+
             // Store packed status
             let packed_key = PerEpochMetadataKey::Packed;
             let packed_value = PerEpochMetadataValue::Packed(true);
@@ -551,7 +564,7 @@ pub fn generate_epochs_db(
                 .or_insert(0) += 1;
         }
     }
-    
+
     Ok(result)
 }
 
@@ -562,7 +575,7 @@ pub fn generate_debug_db(
     state_result: &GenerationResult,
 ) -> Result<GenerationResult, crate::storage::DBError> {
     let db = DB::open_cf(path, debug_db_cf_definitions())?;
-    
+
     let mut result = GenerationResult {
         entries_per_cf: std::collections::HashMap::new(),
         network_ids: state_result.network_ids.clone(),
@@ -575,7 +588,7 @@ pub fn generate_debug_db(
     for ((_network_id, _height), certificate) in &state_result.certificates {
         let cert_id = certificate.hash();
         result.certificate_ids.push(cert_id);
-        
+
         // Store certificate in debug database
         db.put::<DebugCertificatesColumn>(&cert_id, certificate)?;
         *result
@@ -583,8 +596,6 @@ pub fn generate_debug_db(
             .entry("debug_certificates".to_string())
             .or_insert(0) += 1;
     }
-    
+
     Ok(result)
 }
-
-

@@ -1,10 +1,12 @@
 //! CLI tool to generate RocksDB test databases for regression testing
 //!
-//! This tool generates populated RocksDB databases that can be used as artifacts
-//! for regression testing across version upgrades (e.g., alloy 0.14 -> 1.0).
+//! This tool generates populated RocksDB databases that can be used as
+//! artifacts for regression testing across version upgrades (e.g., alloy 0.14
+//! -> 1.0).
 //!
 //! Usage:
-//!   cargo run --bin generate-test-db --features testutils -- --output-dir ./test-artifacts
+//!   cargo run --bin generate-test-db --features testutils -- --output-dir
+//! ./test-artifacts
 //!
 //! The tool will create:
 //! - Four database directories (state, pending, epochs, debug)
@@ -13,10 +15,9 @@
 
 use std::{fs, path::PathBuf};
 
+use agglayer_storage::tests::db_generator::{generate_all_databases, GeneratorConfig};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-
-use agglayer_storage::tests::db_generator::{generate_all_databases, GeneratorConfig};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -98,7 +99,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Output directory: {}", args.output_dir.display());
     println!("Configuration:");
     println!("  - Networks: {}", args.num_networks);
-    println!("  - Certificates per network: {}", args.certificates_per_network);
+    println!(
+        "  - Certificates per network: {}",
+        args.certificates_per_network
+    );
     println!("  - Generate proofs: {}", args.generate_proofs);
     println!("  - Seed: {}", args.seed);
     println!();
@@ -126,7 +130,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "  - Certificates generated: {}",
         result.certificate_ids.len()
     );
-    println!("  - Column families populated: {}", result.entries_per_cf.len());
+    println!(
+        "  - Column families populated: {}",
+        result.entries_per_cf.len()
+    );
     println!();
     println!("Entries per column family:");
     for (cf, count) in &result.entries_per_cf {
@@ -215,4 +222,3 @@ fn create_tarball(db_dir: &PathBuf, tarball_name: &str) -> Result<(), Box<dyn st
 
     Ok(())
 }
-
