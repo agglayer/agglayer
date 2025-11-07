@@ -13,7 +13,10 @@
 //! - A metadata.json file describing the generated data
 //! - Optionally, a compressed tarball of all databases
 
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use agglayer_storage::tests::db_generator::{generate_all_databases, GeneratorConfig};
 use clap::Parser;
@@ -183,7 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn create_tarball(db_dir: &PathBuf, tarball_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn create_tarball(db_dir: &Path, tarball_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     use std::process::Command;
 
     // Get the parent directory and the db directory name

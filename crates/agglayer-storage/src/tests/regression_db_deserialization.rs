@@ -709,13 +709,12 @@ fn test_reference_db_v1_read_local_network_state() {
 
     // Collect all networks that have balance trees
     let mut network_ids = std::collections::BTreeSet::new();
-    for key_result in state_db
+    for key in state_db
         .keys::<BalanceTreePerNetworkColumn>()
         .expect("Failed to create iterator")
+        .flatten()
     {
-        if let Ok(key) = key_result {
-            network_ids.insert(key.network_id);
-        }
+        network_ids.insert(key.network_id);
     }
 
     println!("Found {} networks with state data\n", network_ids.len());
@@ -756,7 +755,7 @@ fn test_reference_db_v1_read_local_network_state() {
 
             let key = SmtKey {
                 network_id,
-                key_type: SmtKeyType::Node(node_hash.into()),
+                key_type: SmtKeyType::Node(node_hash),
             };
 
             if let Ok(Some(value)) = state_db.get::<BalanceTreePerNetworkColumn>(&key) {
@@ -817,7 +816,7 @@ fn test_reference_db_v1_read_local_network_state() {
 
             let key = SmtKey {
                 network_id,
-                key_type: SmtKeyType::Node(node_hash.into()),
+                key_type: SmtKeyType::Node(node_hash),
             };
 
             if let Ok(Some(value)) = state_db.get::<NullifierTreePerNetworkColumn>(&key) {
