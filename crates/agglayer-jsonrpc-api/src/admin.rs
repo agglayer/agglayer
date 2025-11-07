@@ -18,6 +18,15 @@ use tracing::{error, info, instrument, warn};
 use super::error::RpcResult;
 use crate::{error::Error, rpc_middleware, JsonRpcService};
 
+#[derive(Debug, Eq, PartialEq, serde::Deserialize)]
+pub enum ProcessNow {
+    #[serde(rename = "process-now=true")]
+    True,
+
+    #[serde(rename = "process-now=false")]
+    False,
+}
+
 #[rpc(server, namespace = "admin")]
 pub(crate) trait AdminAgglayer {
     #[method(name = "getCertificate")]
@@ -37,7 +46,7 @@ pub(crate) trait AdminAgglayer {
     async fn force_edit_certificate(
         &self,
         certificate_id: CertificateId,
-        process_now: String,
+        process_now: ProcessNow,
         operation_1: Option<String>,
         operation_2: Option<String>,
         // Add one more operation for each allowed operation, so we can do all the needed changes
@@ -255,28 +264,17 @@ where
     async fn force_edit_certificate(
         &self,
         certificate_id: CertificateId,
-        process_now: String,
+        process_now: ProcessNow,
         operation_1: Option<String>,
         operation_2: Option<String>,
     ) -> RpcResult<()> {
         warn!(
             %certificate_id,
-            %process_now,
+            ?process_now,
             ?operation_1,
             ?operation_2,
             "(ADMIN) Editing certificate"
         );
-
-        let process_now = match process_now.as_str() {
-            "process now" => true,
-            "do not process now" => false,
-            _ => {
-                return Err(Error::InvalidArgument(
-                    "process_now argument must be either 'process now' or 'do not process now'"
-                        .to_string(),
-                ))
-            }
-        };
 
         enum Operation {
             SetStatus {
@@ -291,8 +289,8 @@ where
 
         impl Operation {
             fn parse(operation: &str) -> Result<Self, Error> {
-                if let Some(operation) = operation.strip_prefix("set status from ") {
-                    let parts = operation.split(" to ").collect::<Vec<_>>();
+                if let Some(operation) = operation.strip_prefix("set-status,from=") {
+                    let parts = operation.split(",to=").collect::<Vec<_>>();
                     let [from_status, to_status] = parts[..] else {
                         return Err(Error::InvalidArgument(
                             "Invalid set status operation format".to_string(),
@@ -321,9 +319,9 @@ where
                         to: parse_status(to_status)?,
                     })
                 } else if let Some(operation) =
-                    operation.strip_prefix("set settlement tx hash from ")
+                    operation.strip_prefix("set-settlement-tx-hash,from=")
                 {
-                    let parts = operation.split(" to ").collect::<Vec<_>>();
+                    let parts = operation.split(",to=").collect::<Vec<_>>();
                     let [from_tx_hash, to_tx_hash] = parts[..] else {
                         return Err(Error::InvalidArgument(
                             "Invalid set settlement tx hash operation format".to_string(),
@@ -384,7 +382,10 @@ where
         for operation in operations.iter() {
             match operation {
                 Operation::SetStatus { from, to: _ } => {
-                    // Ignore the error details when changing from InError to anything else
+                    // Ensure that the original status is the one described in `from=`.
+                    // However, for InError status, the `from=` does not contain the error message.
+                    // So, we match it separately, and we do not verify the current error message if
+                    // we had `set-status,from=InError,to=*`
                     if &header.status != from
                         && !matches!(
                             (&header.status, &from),
@@ -451,7 +452,7 @@ where
         }
 
         // Finally, if requested, reprocess the certificate
-        if process_now {
+        if process_now == ProcessNow::True {
             self.certificate_sender
                 .send((header.network_id, header.height, certificate_id))
                 .await
