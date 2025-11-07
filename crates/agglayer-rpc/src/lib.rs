@@ -751,19 +751,11 @@ where
                                 "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
                             );
                         } else {
-                            let message = "Unable to replace a certificate in error that has \
-                                           already been settled";
-                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
-
-                            return Err(
-                                CertificateSubmissionError::UnableToReplacePendingCertificate {
-                                    reason: message.to_string(),
-                                    height: certificate.height,
-                                    network_id: certificate.network_id,
-                                    stored_certificate_id: pre_existing_certificate_id,
-                                    replacement_certificate_id: new_certificate_id,
-                                    source: None,
-                                },
+                            info!(
+                                %pre_existing_certificate_id,
+                                %tx_hash,
+                                ?l1_transaction,
+                                "Automatically replacing certificate in error that has already been settled (transaction succeeded)"
                             );
                         }
                     }
