@@ -1,5 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
+use agglayer_contracts::L1RpcError;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
@@ -196,42 +197,49 @@ where
         debug!("Recomputing new state for already-proven certificate");
         // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
         // certificate header is not found on L1.
-        let settlement_tx_hash_missing_on_l1: bool =
-            if let Some(previous_tx_hash) = self.header.settlement_tx_hash {
-                let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
-                    oneshot::channel();
-                self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
-                    settlement_tx_hash: previous_tx_hash,
-                    certificate_id,
-                    tx_mined_notifier: request_is_settlement_tx_mined,
-                })
-                .await?;
-                let result_is_settlement_tx_mined =
-                    response_is_settlement_tx_mined.await.map_err(recv_err)?;
-                debug!(
-                    "Settlement tx {previous_tx_hash} existence on L1: \
-                     {result_is_settlement_tx_mined:?}"
-                );
-                match result_is_settlement_tx_mined {
-                    Ok(true) => false,  // We have fetched the receipt, tx status 1, tx exist on L1
-                    Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
-                    Err(error) => {
-                        if error.to_string().contains("No transaction receipt found") {
-                            true
-                        } else {
-                            // Some error happened while checking the tx receipt on L1
-                            warn!(
-                                "Failed to check settlement tx {previous_tx_hash} existence on \
-                                 L1: {error}"
-                            );
-                            false
-                        }
+        let settlement_tx_hash_missing_on_l1: bool = if let Some(previous_tx_hash) =
+            self.header.settlement_tx_hash
+        {
+            let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
+                oneshot::channel();
+            self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
+                settlement_tx_hash: previous_tx_hash,
+                certificate_id,
+                tx_mined_notifier: request_is_settlement_tx_mined,
+            })
+            .await?;
+            let result_is_settlement_tx_mined =
+                response_is_settlement_tx_mined.await.map_err(recv_err)?;
+            debug!(
+                "Settlement tx {previous_tx_hash} existence on L1: \
+                 {result_is_settlement_tx_mined:?}"
+            );
+            match result_is_settlement_tx_mined {
+                Ok(true) => false,  // We have fetched the receipt, tx status 1, tx exist on L1
+                Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
+                Err(error) => {
+                    // TODO: this is not a clean way of handling the error, it should be returned as
+                    // a proper error variant directly available in
+                    // result_is_settlement_tx_mined
+                    if matches!(
+                        error,
+                        Error::L1CommunicationError(ref err) if matches!(**err, L1RpcError::TransactionNotYetMined(_))
+                    ) {
+                        true
+                    } else {
+                        // Some error happened while checking the tx receipt on L1
+                        warn!(
+                            "Failed to check settlement tx {previous_tx_hash} existence on L1: \
+                             {error}"
+                        );
+                        false
                     }
                 }
-            } else {
-                // No settlement tx hash in the cert header, nothing to check
-                false
-            };
+            }
+        } else {
+            // No settlement tx hash in the cert header, nothing to check
+            false
+        };
 
         if settlement_tx_hash_missing_on_l1 {
             warn!(
@@ -336,11 +344,7 @@ where
                     );
                 };
 
-                self.header.status = CertificateStatus::Proven;
-                if let Err(error) = self.state_store.update_certificate_header_status(
-                    &self.header.certificate_id,
-                    &CertificateStatus::Proven,
-                ) {
+                if let Err(error) = self.set_status(CertificateStatus::Proven) {
                     error!(?error, "Failed to update certificate status in database");
                 };
 
@@ -564,6 +568,8 @@ where
                 )?;
                 // No set_status: update_settlement_tx_hash already updates the status in the
                 // database
+                // Reprocess from Candidate, and not directly to Settled: we want to check the
+                // number of confirmations, and have not done that here yet.
                 self.header.status = CertificateStatus::Candidate;
                 return Box::pin(self.process_from_candidate()).await;
             }

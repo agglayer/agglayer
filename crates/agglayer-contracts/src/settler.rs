@@ -8,7 +8,7 @@ use tracing::debug;
 
 use crate::{adjust_gas_estimate, L1RpcClient};
 
-const DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR: u128 = 150; //1.5X
+const DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR_PERCENTS: u128 = 150; //1.5X
 
 #[async_trait::async_trait]
 pub trait Settler {
@@ -121,32 +121,25 @@ where
                     // If previous_max_priority_fee_per_gas is None, set it to estimated.
                     let adjust: Eip1559Estimation = Eip1559Estimation {
                         max_fee_per_gas: {
-                            let mut new_max_fee_per_gas = previous_max_fee_per_gas
-                                .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
+                            previous_max_fee_per_gas
+                                .saturating_mul(
+                                    DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR_PERCENTS,
+                                )
                                 .div_ceil(100)
                                 .max(self.gas_price_params.floor)
-                                .min(self.gas_price_params.ceiling);
-                            // In the corner case that the previous fee is the same as the new fee
-                            // due to rounding, multiply it by 2 to
-                            // ensure progress
-                            if new_max_fee_per_gas == previous_max_fee_per_gas {
-                                new_max_fee_per_gas =
-                                    (new_max_fee_per_gas * 2).min(self.gas_price_params.ceiling);
-                            }
-                            new_max_fee_per_gas
+                                .min(self.gas_price_params.ceiling)
+                            // Note: we use div_ceil here, so we will always
+                            // increase the fee until ceiling
                         },
                         max_priority_fee_per_gas: previous_max_priority_fee_per_gas
                             .map(|previous| {
-                                let mut new_max_priority_fee_per_gas = previous
-                                    .saturating_mul(DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR)
-                                    .div_ceil(100);
-                                // In the corner case that the previous priority fee is the same as
-                                // the new fee due to rounding,
-                                // multiply it by 2 to ensure progress
-                                if new_max_priority_fee_per_gas == previous {
-                                    new_max_priority_fee_per_gas *= 2;
-                                }
-                                new_max_priority_fee_per_gas
+                                previous
+                                    .saturating_mul(
+                                        DEFAULT_GAS_PRICE_REPEAT_TX_INCREASE_FACTOR_PERCENTS,
+                                    )
+                                    .div_ceil(100)
+                                // Note: we use div_ceil here, so we will always
+                                // increase the fee until ceiling
                             })
                             .unwrap_or(estimate.max_priority_fee_per_gas)
                             .max(self.gas_price_params.floor)
