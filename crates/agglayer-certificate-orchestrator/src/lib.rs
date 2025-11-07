@@ -142,7 +142,7 @@ impl<
 where
     PendingStore: PendingCertificateReader,
     RollupManagerRpc: RollupContract + L1TransactionFetcher,
-    StateStore: MetadataReader + MetadataWriter,
+    StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter,
 {
     const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
 

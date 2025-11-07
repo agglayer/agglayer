@@ -178,6 +178,13 @@ impl StateReader for DummyPendingStore {
     ) -> Result<Option<LocalNetworkStateData>, agglayer_storage::error::Error> {
         todo!()
     }
+
+    fn get_certificate_id_for_pp_root(
+        &self,
+        _pp_root: &Digest,
+    ) -> Result<Option<CertificateId>, agglayer_storage::error::Error> {
+        todo!()
+    }
 }
 impl EpochStoreReader for DummyPendingStore {
     fn get_certificate(
@@ -393,6 +400,14 @@ impl StateWriter for DummyPendingStore {
         _network_id: &NetworkId,
         _new_state: &LocalNetworkStateData,
         _new_leaves: &[Digest],
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn set_certificate_id_for_pp_root(
+        &self,
+        _pp_root: &Digest,
+        _certificate_id: &CertificateId,
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
