@@ -1,3 +1,8 @@
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+
 use tracing::debug;
 
 type Request = alloy::rpc::json_rpc::RequestPacket;
@@ -9,13 +14,15 @@ pub struct L1TraceLayer;
 impl<S> tower::Layer<S> for L1TraceLayer {
     type Service = L1TraceService<S>;
     fn layer(&self, inner: S) -> Self::Service {
-        L1TraceService { inner }
+        let seq_no = Arc::new(0.into());
+        L1TraceService { inner, seq_no }
     }
 }
 
 #[derive(Clone)]
 pub struct L1TraceService<S> {
     inner: S,
+    seq_no: Arc<AtomicUsize>,
 }
 
 impl<S> tower::Service<Request> for L1TraceService<S>
@@ -36,11 +43,11 @@ where
     }
 
     fn call(&mut self, request: Request) -> Self::Future {
-        let span = tracing::debug_span!("L1 interaction");
-        let _span_guard = span.enter();
+        let seq_no = self.seq_no.fetch_add(1, Ordering::Relaxed);
+
         match &request {
-            Request::Single(request) => debug!(?request, "L1 request"),
-            Request::Batch(request) => debug!(?request, "L1 batch request"),
+            Request::Single(request) => debug!(seq_no, ?request, "L1 request"),
+            Request::Batch(request) => debug!(seq_no, ?request, "L1 batch request"),
         }
 
         let inner_fut = self.inner.call(request);
@@ -50,10 +57,14 @@ where
             let elapsed_ms = start.elapsed().as_millis();
             match &res {
                 Ok(response) => match response {
-                    Response::Single(response) => debug!(elapsed_ms, ?response, "L1 response"),
-                    Response::Batch(response) => debug!(elapsed_ms, ?response, "L1 batch response"),
+                    Response::Single(response) => {
+                        debug!(seq_no, elapsed_ms, ?response, "L1 response")
+                    }
+                    Response::Batch(response) => {
+                        debug!(seq_no, elapsed_ms, ?response, "L1 batch response")
+                    }
                 },
-                Err(error) => debug!(elapsed_ms, ?error, "L1 interaction error"),
+                Err(error) => debug!(seq_no, elapsed_ms, ?error, "L1 interaction error"),
             }
             res
         })
