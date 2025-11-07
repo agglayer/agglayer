@@ -3,19 +3,29 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter,
+    StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
     Height, NetworkId, SettlementTxHash,
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
+use serde::Deserialize as _;
 use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::{error, info, instrument, warn};
 
 use super::error::RpcResult;
 use crate::{error::Error, rpc_middleware, JsonRpcService};
+
+#[derive(Debug, Eq, PartialEq, serde::Deserialize)]
+pub enum ProcessNow {
+    #[serde(rename = "process-now=true")]
+    True,
+
+    #[serde(rename = "process-now=false")]
+    False,
+}
 
 #[rpc(server, namespace = "admin")]
 pub(crate) trait AdminAgglayer {
@@ -32,13 +42,17 @@ pub(crate) trait AdminAgglayer {
         status: CertificateStatus,
     ) -> RpcResult<()>;
 
-    #[method(name = "forceSetCertificateStatus")]
-    async fn force_set_certificate_status(
+    #[method(name = "forceEditCertificate")]
+    async fn force_edit_certificate(
         &self,
         certificate_id: CertificateId,
-        status: CertificateStatus,
-        process_now: bool,
-        remove_settlement_tx_hash: Option<SettlementTxHash>,
+        process_now: ProcessNow,
+        operation_1: Option<String>,
+        operation_2: Option<String>,
+        // Add one more operation for each allowed operation, so we can do all the needed changes
+        // "atomically". For now, we have:
+        // * set status
+        // * (un)set settlement tx hash.
     ) -> RpcResult<()>;
 
     #[method(name = "setLatestPendingCertificate")]
@@ -247,18 +261,105 @@ where
     }
 
     #[instrument(skip(self), level = "debug")]
-    async fn force_set_certificate_status(
+    async fn force_edit_certificate(
         &self,
         certificate_id: CertificateId,
-        status: CertificateStatus,
-        process_now: bool,
-        remove_settlement_tx_hash: Option<SettlementTxHash>,
+        process_now: ProcessNow,
+        operation_1: Option<String>,
+        operation_2: Option<String>,
     ) -> RpcResult<()> {
         warn!(
-            ?certificate_id,
-            ?status,
-            "(ADMIN) Forcing status of certificate"
+            %certificate_id,
+            ?process_now,
+            ?operation_1,
+            ?operation_2,
+            "(ADMIN) Editing certificate"
         );
+
+        enum Operation {
+            SetStatus {
+                from: CertificateStatus,
+                to: CertificateStatus,
+            },
+            SetSettlementTxHash {
+                from: Option<SettlementTxHash>,
+                to: Option<SettlementTxHash>,
+            },
+        }
+
+        impl Operation {
+            fn parse(operation: &str) -> Result<Self, Error> {
+                if let Some(operation) = operation.strip_prefix("set-status,from=") {
+                    let parts = operation.split(",to=").collect::<Vec<_>>();
+                    let [from_status, to_status] = parts[..] else {
+                        return Err(Error::InvalidArgument(
+                            "Invalid set status operation format".to_string(),
+                        ));
+                    };
+                    fn parse_status(status_str: &str) -> Result<CertificateStatus, Error> {
+                        if status_str == "InError" {
+                            Ok(CertificateStatus::error(
+                                CertificateStatusError::InternalError(
+                                    "Set to InError by administrator".to_string(),
+                                ),
+                            ))
+                        } else {
+                            CertificateStatus::deserialize(
+                                serde::de::value::BorrowedStrDeserializer::new(status_str),
+                            )
+                            .map_err(|e: serde::de::value::Error| {
+                                Error::InvalidArgument(format!(
+                                    "Invalid status {status_str}: {e:?}"
+                                ))
+                            })
+                        }
+                    }
+                    Ok(Operation::SetStatus {
+                        from: parse_status(from_status)?,
+                        to: parse_status(to_status)?,
+                    })
+                } else if let Some(operation) =
+                    operation.strip_prefix("set-settlement-tx-hash,from=")
+                {
+                    let parts = operation.split(",to=").collect::<Vec<_>>();
+                    let [from_tx_hash, to_tx_hash] = parts[..] else {
+                        return Err(Error::InvalidArgument(
+                            "Invalid set settlement tx hash operation format".to_string(),
+                        ));
+                    };
+                    fn parse_tx_hash(tx_hash_str: &str) -> Result<Option<SettlementTxHash>, Error> {
+                        if tx_hash_str == "null" {
+                            Ok(None)
+                        } else {
+                            SettlementTxHash::deserialize(
+                                serde::de::value::BorrowedStrDeserializer::new(tx_hash_str),
+                            )
+                            .map(Some)
+                            .map_err(|e: serde::de::value::Error| {
+                                Error::InvalidArgument(format!(
+                                    "Invalid settlement tx hash {tx_hash_str}: {e:?}"
+                                ))
+                            })
+                        }
+                    }
+                    Ok(Operation::SetSettlementTxHash {
+                        from: parse_tx_hash(from_tx_hash)?,
+                        to: parse_tx_hash(to_tx_hash)?,
+                    })
+                } else {
+                    Err(Error::InvalidArgument(format!(
+                        "Unknown operation: {operation:?}"
+                    )))
+                }
+            }
+        }
+
+        let operations = [operation_1, operation_2]
+            .into_iter()
+            .flatten()
+            .map(|op_str| Operation::parse(&op_str))
+            .collect::<Result<Vec<_>, _>>()?;
+
         let header = self
             .state
             .get_certificate_header(&certificate_id)
@@ -270,33 +371,88 @@ where
                 error!("Certificate header not found");
                 Error::ResourceNotFound(format!("CertificateHeader({certificate_id})"))
             })?;
+
         if header.status == CertificateStatus::Settled {
             return Err(Error::InvalidArgument(
-                "Cannot change status of a settled certificate".to_string(),
+                "Cannot edit a settled certificate".to_string(),
             ));
         }
-        if let Some(remove_settlement_tx_hash) = remove_settlement_tx_hash {
-            if header.settlement_tx_hash != Some(remove_settlement_tx_hash) {
-                return Err(Error::InvalidArgument(format!(
-                    "Provided settlement_tx_hash to remove ({remove_settlement_tx_hash:?}) does \
-                     not match the existing one ({:?})",
-                    header.settlement_tx_hash
-                )));
+
+        // Check that the current values match the "from" value
+        for operation in operations.iter() {
+            match operation {
+                Operation::SetStatus { from, to: _ } => {
+                    // Ensure that the original status is the one described in `from=`.
+                    // However, for InError status, the `from=` does not contain the error message.
+                    // So, we match it separately, and we do not verify the current error message if
+                    // we had `set-status,from=InError,to=*`
+                    if &header.status != from
+                        && !matches!(
+                            (&header.status, &from),
+                            (
+                                &CertificateStatus::InError { .. },
+                                &CertificateStatus::InError { .. }
+                            )
+                        )
+                    {
+                        return Err(Error::InvalidArgument(format!(
+                            "Current status ({:?}) does not match expected 'from' status ({:?})",
+                            header.status, from
+                        )));
+                    }
+                }
+                Operation::SetSettlementTxHash { from, to: _ } => {
+                    if &header.settlement_tx_hash != from {
+                        return Err(Error::InvalidArgument(format!(
+                            "Current settlement_tx_hash ({:?}) does not match expected 'from' \
+                             settlement_tx_hash ({:?})",
+                            header.settlement_tx_hash, from
+                        )));
+                    }
+                }
             }
-            self.state
-                .remove_settlement_tx_hash(&certificate_id)
-                .map_err(|error| {
-                    error!(?error, "Failed to remove settlement_tx_hash");
-                    Error::internal("Unable to remove settlement_tx_hash")
-                })?;
         }
-        self.state
-            .update_certificate_header_status(&certificate_id, &status)
-            .map_err(|error| {
-                error!(?error, "Failed to update certificate status");
-                Error::internal("Unable to update certificate status")
-            })?;
-        if process_now {
+
+        // Now, actually apply the operations
+        for operation in operations {
+            match operation {
+                Operation::SetStatus { from: _, to } => {
+                    self.state
+                        .update_certificate_header_status(&certificate_id, &to)
+                        .map_err(|error| {
+                            error!(?error, ?to, "Failed to update certificate status");
+                            Error::internal("Unable to update certificate status")
+                        })?;
+                }
+                Operation::SetSettlementTxHash {
+                    from: _,
+                    to: Some(to),
+                } => {
+                    self.state
+                        .update_settlement_tx_hash(
+                            &certificate_id,
+                            to,
+                            UpdateEvenIfAlreadyPresent::Yes,
+                            UpdateStatusToCandidate::No,
+                        )
+                        .map_err(|error| {
+                            error!(?error, ?to, "Failed to update settlement_tx_hash");
+                            Error::internal("Unable to update settlement_tx_hash")
+                        })?;
+                }
+                Operation::SetSettlementTxHash { from: _, to: None } => {
+                    self.state
+                        .remove_settlement_tx_hash(&certificate_id)
+                        .map_err(|error| {
+                            error!(?error, "Failed to remove settlement_tx_hash");
+                            Error::internal("Unable to remove settlement_tx_hash")
+                        })?;
+                }
+            }
+        }
+
+        // Finally, if requested, reprocess the certificate
+        if process_now == ProcessNow::True {
             self.certificate_sender
                 .send((header.network_id, header.height, certificate_id))
                 .await
@@ -305,6 +461,7 @@ where
                     Error::internal("Unable to send certificate to orchestrator")
                 })?;
         }
+
         Ok(())
     }
 

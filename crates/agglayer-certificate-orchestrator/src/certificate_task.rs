@@ -2,7 +2,10 @@ use std::{collections::HashSet, sync::Arc};
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
+    stores::{
+        PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    },
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
@@ -273,7 +276,8 @@ where
                                 if let Err(error) = self.state_store.update_settlement_tx_hash(
                                     &certificate_id,
                                     contract_settlement_tx_hash,
-                                    true,
+                                    UpdateEvenIfAlreadyPresent::Yes,
+                                    UpdateStatusToCandidate::Yes,
                                 ) {
                                     error!(
                                         ?error,
@@ -487,8 +491,12 @@ where
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
         self.header.settlement_tx_hash = Some(settlement_tx_hash);
-        self.state_store
-            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)?;
+        self.state_store.update_settlement_tx_hash(
+            &certificate_id,
+            settlement_tx_hash,
+            UpdateEvenIfAlreadyPresent::Yes,
+            UpdateStatusToCandidate::Yes,
+        )?;
         // No set_status: update_settlement_tx_hash already updates the status in the
         // database
         self.header.status = CertificateStatus::Candidate;
@@ -560,7 +568,8 @@ where
                 self.state_store.update_settlement_tx_hash(
                     &certificate_id,
                     alternative_settlement_tx_hash,
-                    true,
+                    UpdateEvenIfAlreadyPresent::Yes,
+                    UpdateStatusToCandidate::Yes,
                 )?;
                 // No set_status: update_settlement_tx_hash already updates the status in the
                 // database
