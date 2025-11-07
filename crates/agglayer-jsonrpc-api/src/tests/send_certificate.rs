@@ -289,8 +289,8 @@ async fn pending_certificate_in_error_force_set_status() {
             "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                "do not process now",
-                "set status from InError to Candidate"
+                "process-now=false",
+                "set-status,from=InError,to=Candidate"
             ],
         )
         .await;
@@ -311,7 +311,7 @@ async fn pending_certificate_in_error_force_set_status() {
         .admin_client
         .request(
             "admin_forceEditCertificate",
-            rpc_params![pending_certificate.hash(), "process now"],
+            rpc_params![pending_certificate.hash(), "process-now=true"],
         )
         .await;
 
@@ -375,9 +375,9 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
             "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                "do not process now",
-                "set status from Candidate to Proven",
-                format!("set settlement tx hash from {fake_settlement_tx_hash} to null")
+                "process-now=false",
+                "set-status,from=Candidate,to=Proven",
+                format!("set-settlement-tx-hash,from={fake_settlement_tx_hash},to=null")
             ],
         )
         .await;
@@ -454,11 +454,11 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_admin_fixup_tx_has
             "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                "do not process now",
-                "set status from InError to Candidate",
+                "process-now=false",
+                "set-status,from=InError,to=Candidate",
                 format!(
-                    "set settlement tx hash from {fake_settlement_tx_hash} to \
-                     {fake_settlement_tx_hash_2}"
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash},\
+                     to={fake_settlement_tx_hash_2}"
                 )
             ],
         )
@@ -483,11 +483,11 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_admin_fixup_tx_has
             "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                "do not process now",
-                "set status from Candidate to InError",
+                "process-now=false",
+                "set-status,from=Candidate,to=InError",
                 format!(
-                    "set settlement tx hash from {fake_settlement_tx_hash_2} to \
-                     {fake_settlement_tx_hash}"
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash_2},\
+                     to={fake_settlement_tx_hash}"
                 )
             ],
         )
@@ -513,11 +513,11 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_admin_fixup_tx_has
             "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                "do not process now",
-                "set status from Candidate to InError",
+                "process-now=false",
+                "set-status,from=Candidate,to=InError",
                 format!(
-                    "set settlement tx hash from {fake_settlement_tx_hash} to \
-                     {fake_settlement_tx_hash_2}"
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash},\
+                     to={fake_settlement_tx_hash_2}"
                 )
             ],
         )
@@ -543,11 +543,11 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_admin_fixup_tx_has
             "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                "do not process now",
-                "set status from InError to Candidate",
+                "process-now=false",
+                "set-status,from=InError,to=Candidate",
                 format!(
-                    "set settlement tx hash from {fake_settlement_tx_hash_2} to \
-                     {fake_settlement_tx_hash}"
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash_2},\
+                     to={fake_settlement_tx_hash}"
                 )
             ],
         )
@@ -614,9 +614,9 @@ async fn pending_certificate_settled_force_set_status() {
             "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                "do not process now",
-                "set status from Settled to Proven",
-                format!("set settlement tx hash from {fake_settlement_tx_hash} to null")
+                "process-now=false",
+                "set-status,from=Settled,to=Proven",
+                format!("set-settlement-tx-hash,from{fake_settlement_tx_hash},to=null")
             ],
         )
         .await;
