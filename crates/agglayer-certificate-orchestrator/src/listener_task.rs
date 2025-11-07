@@ -88,8 +88,8 @@ where
         {
             let pp_root = Digest::from(pp_root);
             debug!(
-                "Retrieved latest VerifyPessimisticStateTransition event for network {} \
-                latest pp_root: {}, tx_hash: {tx_hash}",
+                "Retrieved latest VerifyPessimisticStateTransition event for network {}, latest \
+                pp_root: {}, tx_hash: {tx_hash}",
                 network_id, pp_root
             );
 
