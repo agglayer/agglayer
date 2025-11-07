@@ -78,7 +78,7 @@ where
         let event = VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok();
         let latest_pp_root = event
             .as_ref()
-            .map(|val| <[u8; 32]>::from(val.newPessimisticRoot));
+            .map(|val| Digest::from(val.newPessimisticRoot));
         let tx_hash = log.transaction_hash.map(Digest::from);
         // rollupID is the same as topic1, which is the network ID
         let network_id = event.as_ref().map(|val| val.rollupID);
@@ -86,7 +86,6 @@ where
         if let (Some(pp_root), Some(tx_hash), Some(network_id), Some(block_number)) =
             (latest_pp_root, tx_hash, network_id, log.block_number)
         {
-            let pp_root = Digest::from(pp_root);
             debug!(
                 "Retrieved latest VerifyPessimisticStateTransition event for network {}, latest \
                 pp_root: {}, tx_hash: {tx_hash}",
