@@ -25,7 +25,7 @@ use petgraph::{
     visit::EdgeRef,
     Direction::{Incoming, Outgoing},
 };
-use sp1_sdk::{HashableKey, ProverClient, SP1Proof, SP1Stdin};
+use sp1_sdk::{HashableKey, ProverClient, SP1Stdin};
 use unified_bridge::{ImportedBridgeExit, NetworkId, RollupIndex};
 
 use crate::{sample_data::USDC, PESSIMISTIC_PROOF_ELF};

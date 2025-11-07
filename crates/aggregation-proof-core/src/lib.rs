@@ -402,6 +402,7 @@ pub struct AggregationPublicValues {
     /// Hash chain on all the pp inputs
     pub hash_chain_pp_inputs: Digest,
     /// Pessimistic proof vkey
+    /// TODO: hardcoded
     pub pp_vkey: [u32; 8],
     /// L1 info root
     pub l1_info_root: Digest,
