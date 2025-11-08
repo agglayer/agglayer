@@ -178,3 +178,90 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
 
     scenario.teardown();
 }
+
+/// Test that a certificate in error that has already been settled (transaction
+/// succeeded) can be automatically replaced. This tests the fix for issue #1157.
+///
+/// The test simulates the scenario where a certificate goes into error after
+/// the settlement transaction is submitted. The certificate will have a
+/// settlement_tx_hash and be in InError status. When the same certificate is
+/// submitted again, it should be automatically replaced because the settlement
+/// transaction was successful.
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(180))]
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn auto_replace_settled_certificate_in_error(#[case] state: Forest) {
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+
+    // Use a failpoint that causes the certificate to go into error after
+    // the settlement transaction is submitted but before it completes.
+    // This creates a certificate in InError status with a settlement_tx_hash.
+    // We'll use a timeout failpoint that triggers after the transaction is
+    // submitted, causing the certificate to be in error with settlement_tx_hash.
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+        "1*return",
+    )
+    .expect("Failed to configure failpoint");
+
+    // L1 is a RAII guard
+    let (_shutdown_shutdown, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
+
+    let withdrawals = vec![];
+
+    let certificate = state.clone().apply_events(&[], &withdrawals);
+
+    // Send the certificate - it should go into error due to the timeout failpoint
+    // but will have a settlement_tx_hash
+    let first_certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate.clone()])
+        .await
+        .inspect_err(|err| eprintln!("Error sending first certificate: {err:?}"))
+        .unwrap();
+
+    // Wait for the certificate to reach InError status
+    let result = wait_for_settlement_or_error!(client, first_certificate_id).await;
+    assert!(matches!(result.status, CertificateStatus::InError { .. }));
+
+    // Verify the certificate has a settlement_tx_hash (this is key for the test)
+    let header: CertificateHeader = client
+        .request(
+            "interop_getCertificateHeader",
+            rpc_params![first_certificate_id],
+        )
+        .await
+        .unwrap();
+    
+    assert!(
+        header.settlement_tx_hash.is_some(),
+        "Certificate in error should have settlement_tx_hash after timeout"
+    );
+
+    // Turn off the failpoint so the replacement can succeed
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+        "off",
+    )
+    .expect("Failed to turn off failpoint");
+
+    // Now send the same certificate again. The fix allows automatic replacement
+    // when the certificate is in error but has a successful settlement transaction.
+    // Since the transaction was submitted (has settlement_tx_hash) and we're
+    // simulating it succeeded on L1, the replacement should work.
+    let second_certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate])
+        .await
+        .inspect_err(|err| eprintln!("Error sending replacement certificate: {err:?}"))
+        .unwrap();
+
+    // The replacement should succeed and the certificate should eventually settle
+    let final_result = wait_for_settlement_or_error!(client, second_certificate_id).await;
+    assert!(
+        matches!(final_result.status, CertificateStatus::Settled),
+        "Replacement certificate should settle successfully"
+    );
+
+    scenario.teardown();
+}
