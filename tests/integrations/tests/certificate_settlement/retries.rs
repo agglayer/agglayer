@@ -180,7 +180,8 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
 }
 
 /// Test that a certificate in error that has already been settled (transaction
-/// succeeded) can be automatically replaced. This tests the fix for issue #1157.
+/// succeeded) can be automatically replaced. This tests the fix for issue
+/// #1157.
 ///
 /// The test simulates the scenario where a certificate goes into error after
 /// the settlement transaction is submitted. The certificate will have a
@@ -233,7 +234,7 @@ async fn auto_replace_settled_certificate_in_error(#[case] state: Forest) {
         )
         .await
         .unwrap();
-    
+
     assert!(
         header.settlement_tx_hash.is_some(),
         "Certificate in error should have settlement_tx_hash after timeout"
