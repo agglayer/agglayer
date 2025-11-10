@@ -29,7 +29,7 @@ const SETTLEMENT_TX_HASH_1: SettlementTxHash = SettlementTxHash::new(Digest([1; 
 const SETTLEMENT_TX_HASH_2: SettlementTxHash = SettlementTxHash::new(Digest([2; 32]));
 
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(1))]
 async fn start_from_zero() {
     let mut pending = MockPendingStore::new();
@@ -107,10 +107,34 @@ async fn start_from_zero() {
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
         .returning(|_, _, _| Ok(()));
 
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(vec![]));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(vec![SettlementTxHash::for_tests()]));
+
     state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     settlement_client
