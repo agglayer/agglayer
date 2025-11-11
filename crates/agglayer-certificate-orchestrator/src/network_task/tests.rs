@@ -345,10 +345,34 @@ async fn one_per_epoch() {
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
         .returning(|_, _, _| Ok(()));
 
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(vec![]));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(vec![SettlementTxHash::for_tests()]));
+
     state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     settlement_client
@@ -603,6 +627,30 @@ async fn retries() {
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id2))
         .returning(|_, _, _| Ok(()));
 
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(vec![]));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|_| Ok(vec![]));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id2), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|_| Ok(vec![SettlementTxHash::for_tests()]));
+
     state
         .expect_update_certificate_header_status()
         .once()
@@ -613,6 +661,12 @@ async fn retries() {
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id2), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id2), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     state
@@ -868,6 +922,42 @@ async fn changing_epoch_triggers_certify() {
         .with(eq(network_id), eq(Height::new(1)), eq(certificate_id2))
         .returning(|_, _, _| Ok(()));
 
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(vec![]));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(vec![SETTLEMENT_TX_HASH_1]));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|_| Ok(vec![]));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id2), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|_| Ok(vec![SETTLEMENT_TX_HASH_2]));
+
     state
         .expect_update_certificate_header_status()
         .once()
@@ -877,7 +967,19 @@ async fn changing_epoch_triggers_certify() {
     state
         .expect_update_certificate_header_status()
         .once()
+        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
         .with(eq(certificate_id2), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id2), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     settlement_client
