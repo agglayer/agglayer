@@ -23,7 +23,7 @@ impl SettlementTxHashRecord {
         self.hashes.len()
     }
 
-    pub const fn is_empty(&self) -> usize {
+    pub const fn is_empty(&self) -> bool {
         self.hashes.is_empty()
     }
 
