@@ -23,6 +23,10 @@ impl SettlementTxHashRecord {
         self.hashes.len()
     }
 
+    pub const fn is_empty(&self) -> usize {
+        self.hashes.is_empty()
+    }
+
     pub fn contains(&self, hash: &SettlementTxHash) -> bool {
         self.hashes.contains(hash)
     }
