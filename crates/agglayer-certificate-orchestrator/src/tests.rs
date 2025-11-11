@@ -288,8 +288,7 @@ impl PendingCertificateWriter for DummyPendingStore {
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
     ) -> Result<(), agglayer_storage::error::Error> {
-        self
-            .settlement_tx_hashes
+        self.settlement_tx_hashes
             .write()
             .unwrap()
             .entry(*certificate_id)
@@ -306,8 +305,9 @@ impl PendingCertificateWriter for DummyPendingStore {
     where
         F: FnOnce(SettlementTxHashRecord) -> Result<SettlementTxHashRecord, String> + 'a,
     {
-        use agglayer_storage::error::Error;
         use std::collections::btree_map::Entry;
+
+        use agglayer_storage::error::Error;
 
         let mut hashes = self.settlement_tx_hashes.write().unwrap();
         match hashes.entry(*certificate_id) {

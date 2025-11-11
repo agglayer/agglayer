@@ -435,8 +435,8 @@ where
             error!(
                 ?previous_tx_hashes,
                 max_retries = MAX_TX_RETRY,
-                "More than 5 different settlement transactions submitted for the same certificate, \
-                 something is wrong"
+                "More than 5 different settlement transactions submitted for the same \
+                 certificate, something is wrong"
             );
             return Err(CertificateStatusError::SettlementError(format!(
                 "Too many different settlement transactions submitted for the same certificate: \
