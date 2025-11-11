@@ -282,7 +282,7 @@ where
         if !hashes_to_remove.is_empty() {
             self.pending_store
                 .update_settlement_tx_hashes_for_certificate(&certificate_id, move |mut record| {
-                    record.retain(|hash| !hashes_to_remove.remove(&hash));
+                    record.retain(|hash| !hashes_to_remove.remove(hash));
                     if !hashes_to_remove.is_empty() {
                         return Err(format!(
                             "Settlement tx hashes to remove not found: {hashes_to_remove:?}"

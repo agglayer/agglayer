@@ -328,9 +328,9 @@ where
             if recomputed_from_contract.is_none() {
                 // Tx not found on L1, and pp root from contract not matching,
                 // Make the cert InError and wait for aggkit to resubmit it.
-                return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx not found on L1, moving certificate back to Proven",
-                )));
+                return Err(CertificateStatusError::SettlementError(
+                    "Settlement tx not found on L1, moving certificate back to Proven".to_string(),
+                ));
             }
         }
 
