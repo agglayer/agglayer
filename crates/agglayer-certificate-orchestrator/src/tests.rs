@@ -31,7 +31,7 @@ use agglayer_types::{
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
-use mocks::MockCertifier;
+use mocks::{MockCertifier, MockL1Rpc};
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
 };
@@ -166,6 +166,13 @@ impl StateReader for DummyPendingStore {
         &self,
         _network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, agglayer_storage::error::Error> {
+        todo!()
+    }
+
+    fn get_certificate_id_for_pp_root(
+        &self,
+        _pp_root: &Digest,
+    ) -> Result<Option<CertificateId>, agglayer_storage::error::Error> {
         todo!()
     }
 }
@@ -373,6 +380,14 @@ impl StateWriter for DummyPendingStore {
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
+
+    fn set_certificate_id_for_pp_root(
+        &self,
+        _pp_root: &Digest,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        todo!()
+    }
 }
 
 impl PendingCertificateReader for DummyPendingStore {
@@ -474,6 +489,7 @@ async fn test_certificate_orchestrator_can_stop() {
         )
         .expect("Unable to create store"),
     );
+    let rollup_manager = Arc::new(MockL1Rpc::new());
 
     let current_epoch = ArcSwap::new(Arc::new(
         epochs_store
@@ -508,6 +524,7 @@ async fn test_certificate_orchestrator_can_stop() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        rollup_manager.clone(),
     )
     .expect("Unable to create orchestrator");
 
@@ -531,6 +548,7 @@ async fn test_collect_certificates() {
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
             .expect("Unable to create store"),
     );
+    let rollup_manager = Arc::new(MockL1Rpc::new());
 
     let epochs_store = Arc::new(
         EpochsStore::new(
@@ -574,6 +592,7 @@ async fn test_collect_certificates() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        rollup_manager.clone(),
     )
     .expect("Unable to create orchestrator");
 
@@ -612,6 +631,7 @@ async fn test_collect_certificates_after_epoch() {
         )
         .expect("Unable to create store"),
     );
+    let rollup_manager = Arc::new(MockL1Rpc::new());
 
     let current_epoch = ArcSwap::new(Arc::new(
         epochs_store
@@ -645,6 +665,7 @@ async fn test_collect_certificates_after_epoch() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        rollup_manager.clone(),
     )
     .expect("Unable to create orchestrator");
 
@@ -684,6 +705,7 @@ async fn test_collect_certificates_when_empty() {
         )
         .expect("Unable to create store"),
     );
+    let rollup_manager = Arc::new(MockL1Rpc::new());
 
     let current_epoch = ArcSwap::new(Arc::new(
         epochs_store
@@ -718,6 +740,7 @@ async fn test_collect_certificates_when_empty() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        rollup_manager.clone(),
     )
     .expect("Unable to create orchestrator");
 
@@ -788,6 +811,7 @@ type IMockOrchestrator = CertificateOrchestrator<
     MockEpochsStore,
     MockPerEpochStore,
     MockStateStore,
+    MockL1Rpc,
 >;
 
 #[derive(Default, buildstructor::Builder)]
@@ -821,6 +845,7 @@ pub(crate) fn create_orchestrator_mock(
     let epochs_store = Arc::new(builder.epochs_store.unwrap_or_default());
     let current_epoch = ArcSwap::new(Arc::new(builder.current_epoch.unwrap_or_default()));
     let state_store = Arc::new(builder.state_store.unwrap_or_default());
+    let rollup_manager = Arc::new(MockL1Rpc::new());
 
     (
         (data_sender, clock.clone()),
@@ -848,6 +873,7 @@ pub(crate) fn create_orchestrator_mock(
             epochs_store,
             Arc::new(current_epoch),
             state_store,
+            rollup_manager,
         )
         .expect("Unable to create orchestrator"),
     )
