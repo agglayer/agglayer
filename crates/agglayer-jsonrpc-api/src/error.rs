@@ -220,6 +220,7 @@ impl From<service::error::SettlementError> for Error {
             error @ E::Timeout(_) => SettlementError::io_error(error).into(),
             E::PendingTransactionError(error) => SettlementError::io_error(error).into(),
             error @ E::ReceiptWithoutBlockNumberError(_) => SettlementError::io_error(error).into(),
+            error @ E::InternalError(_) => SettlementError::io_error(error).into(),
         }
     }
 }
