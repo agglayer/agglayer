@@ -10,6 +10,9 @@ on:
     branches:
       - main
 
+env:
+  REPOSITORY_NAME: agglayer/agglayer
+
 # Default permissions (individual jobs can override as needed)
 permissions:
   contents: read
@@ -47,7 +50,7 @@ jobs:
   deploy-gh-pages:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.repository.fork != true
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == ${{ env.REPOSITORY_NAME }}
     permissions:
       pages: write
       id-token: write
@@ -75,7 +78,7 @@ jobs:
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers
     needs: build
-    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.repository.fork != true
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.repository == ${{ env.REPOSITORY_NAME }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -145,7 +148,7 @@ jobs:
 
   cleanup-cloudflare:
     name: Cleanup Cloudflare deployment
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.repository.fork != true
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.repository == ${{ env.REPOSITORY_NAME }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
