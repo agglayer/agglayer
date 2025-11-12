@@ -47,7 +47,7 @@ jobs:
   deploy-gh-pages:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.repository.fork != true
     permissions:
       pages: write
       id-token: write
@@ -75,7 +75,7 @@ jobs:
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers
     needs: build
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.repository.fork != true
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -93,7 +93,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install Wrangler
         run: npm install -g wrangler
@@ -154,7 +154,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install Wrangler
         run: npm install -g wrangler
