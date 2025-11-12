@@ -9,7 +9,7 @@ pub struct L1Docker {
 }
 
 impl L1Docker {
-    pub async fn new(name: String) -> Self {
+    pub async fn new(name: &str) -> Self {
         let ws_port = next_available_addr().port();
         let rpc_port = next_available_addr().port();
 
@@ -22,7 +22,7 @@ impl L1Docker {
                 &format!("{ws_port}:8546"),
                 "-d",
                 "--name",
-                &name,
+                &format!("{name}_10"),
                 "hermeznetwork/geth-zkevm-contracts",
             ])
             .output()

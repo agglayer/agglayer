@@ -3,8 +3,9 @@ use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 use agglayer_config::Config;
 use eyre::bail;
 use node::Node;
+use rustls::crypto;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 mod logging;
 
 mod epoch_synchronizer;
@@ -44,12 +45,6 @@ pub fn main(
         )
     };
 
-    let global_cancellation_token = cancellation_token.unwrap_or_default();
-
-    if global_cancellation_token.is_cancelled() {
-        bail!("Received cancellation signal before starting the node.");
-    }
-
     // Initialize the logger
     match logging::tracing(&config.log) {
         Ok(()) => {
@@ -70,6 +65,16 @@ pub fn main(
     }
 
     info!("Starting agglayer node version info: {}", version);
+
+    // Initialize rustls crypto provider.
+    crypto::CryptoProvider::install_default(crypto::aws_lc_rs::default_provider())
+        .unwrap_or_else(|_| warn!("Attempt to re-install rustls crypto provider."));
+
+    let global_cancellation_token = cancellation_token.unwrap_or_default();
+
+    if global_cancellation_token.is_cancelled() {
+        bail!("Received cancellation signal before starting the node.");
+    }
 
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("agglayer-node-runtime")
