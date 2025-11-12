@@ -807,7 +807,7 @@ where
 
     /// Verify that the signer of the given [`Certificate`] is the trusted
     /// sequencer for the rollup id it specified.
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self, cert), fields(certificate_id = %cert.hash()), level = "debug")]
     pub(crate) async fn verify_cert_signature(
         &self,
         cert: &Certificate,
