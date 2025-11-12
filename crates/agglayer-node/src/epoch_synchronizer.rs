@@ -51,7 +51,7 @@ impl EpochSynchronizer {
 
             match epoch_stream.try_recv() {
                 Ok(agglayer_clock::Event::EpochEnded(n)) => {
-                    current_epoch_number = n;
+                    current_epoch_number = n.next();
                 }
                 Err(TryRecvError::Closed) => {
                     eyre::bail!("Epoch stream closed during epoch synchronization");
@@ -550,5 +550,93 @@ mod tests {
             state_store.get_latest_settled_epoch().unwrap(),
             Some(EpochNumber::new(14))
         );
+    }
+
+    #[tokio::test]
+    async fn handles_epoch_ended_event_during_walk() {
+        let mut state_store = MockStateStore::new();
+        state_store
+            .expect_get_latest_settled_epoch()
+            .once()
+            .returning(|| Ok(Some(EpochNumber::new(10))));
+
+        let mut epochs_store = MockEpochsStore::new();
+
+        epochs_store
+            .expect_open()
+            .once()
+            .with(eq(EpochNumber::new(10)))
+            .return_once(|epoch| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .returning(BTreeMap::new);
+                Ok(mock)
+            });
+
+        let (sender, _receiver) = tokio::sync::broadcast::channel(8);
+        let current_block = AtomicU64::new(12);
+        let clock_ref = ClockRef::new(
+            sender.clone(),
+            Arc::new(current_block),
+            Arc::new(NonZeroU64::new(1).unwrap()),
+        );
+
+        let mut seq = Sequence::new();
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(11)), eq(BTreeMap::new()))
+            .return_once(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        let sender_clone = sender.clone();
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(12)), eq(BTreeMap::new()))
+            .return_once(move |epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(epoch));
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(13)), eq(BTreeMap::new()))
+            .return_once(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().never().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .never()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        let result =
+            EpochSynchronizer::start(Arc::new(state_store), Arc::new(epochs_store), clock_ref)
+                .await
+                .unwrap();
+
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(13));
     }
 }
