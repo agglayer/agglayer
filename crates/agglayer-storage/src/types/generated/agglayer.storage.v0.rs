@@ -18,8 +18,6 @@ pub enum DisabledBy {
     Unspecified = 0,
     /// The network was disabled by an admin.
     Admin = 1,
-    /// The network was disabled by the system.
-    System = 2,
 }
 impl DisabledBy {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -30,7 +28,6 @@ impl DisabledBy {
         match self {
             Self::Unspecified => "DISABLED_BY_UNSPECIFIED",
             Self::Admin => "DISABLED_BY_ADMIN",
-            Self::System => "DISABLED_BY_SYSTEM",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -38,7 +35,6 @@ impl DisabledBy {
         match value {
             "DISABLED_BY_UNSPECIFIED" => Some(Self::Unspecified),
             "DISABLED_BY_ADMIN" => Some(Self::Admin),
-            "DISABLED_BY_SYSTEM" => Some(Self::System),
             _ => None,
         }
     }
