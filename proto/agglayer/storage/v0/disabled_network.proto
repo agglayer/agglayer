@@ -18,6 +18,4 @@ enum DisabledBy {
   DISABLED_BY_UNSPECIFIED = 0;
   // The network was disabled by an admin.
   DISABLED_BY_ADMIN = 1;
-  // The network was disabled by the system.
-  DISABLED_BY_SYSTEM = 2;
 }

@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     path::Path,
     sync::Arc,
+    time::SystemTime,
 };
 
 use agglayer_tries::{node::Node, smt::Smt};
@@ -66,6 +67,28 @@ impl StateStore {
 }
 
 impl StateWriter for StateStore {
+    fn disable_network(
+        &self,
+        network_id: &NetworkId,
+        disabled_by: agglayer_types::network_info::DisabledBy,
+    ) -> Result<(), Error> {
+        Ok(self
+            .db
+            .put::<crate::columns::disabled_networks::DisabledNetworksColumn>(
+                network_id,
+                &crate::types::network_info::v0::DisabledNetwork {
+                    disabled_at: Some(SystemTime::now().into()),
+                    disabled_by: disabled_by as i32,
+                },
+            )?)
+    }
+
+    fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error> {
+        Ok(self
+            .db
+            .delete::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)?)
+    }
+
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
@@ -501,6 +524,14 @@ impl StateStore {
 }
 
 impl StateReader for StateStore {
+    fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, Error> {
+        Ok(self
+            .db
+            .keys::<crate::columns::disabled_networks::DisabledNetworksColumn>()?
+            .filter_map(|v| v.ok())
+            .collect())
+    }
+
     /// Get the active networks.
     /// Meaning, the networks that have at least one submitted certificate.
     ///

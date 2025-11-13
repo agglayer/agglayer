@@ -430,6 +430,7 @@ where
 
     /// Assemble the current information of the specified network from
     /// the data in various sources.
+    #[instrument(skip(self))]
     pub fn get_network_info(
         &self,
         network_id: NetworkId,

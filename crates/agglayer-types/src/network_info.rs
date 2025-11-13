@@ -22,6 +22,14 @@ pub enum NetworkStatus {
     Disabled = 4,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DisabledBy {
+    /// Default value, should not be used.
+    Unknown = 0,
+    /// The network was disabled by an admin.
+    Admin = 1,
+}
+
 // The aggchain type of network
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkType {

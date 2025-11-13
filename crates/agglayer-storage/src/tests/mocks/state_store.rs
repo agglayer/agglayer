@@ -77,9 +77,17 @@ mock! {
             new_state: &LocalNetworkStateData,
             new_leaves: &[Digest],
         ) -> Result<(), Error>;
+
+        fn disable_network(
+            &self,
+            network_id: &NetworkId,
+            disabled_by: agglayer_types::network_info::DisabledBy,
+        ) -> Result<(), Error>;
+        fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error>;
     }
 
     impl StateReader for StateStore {
+        fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, Error>;
         fn is_network_disabled(&self, network_id: &NetworkId) -> Result<bool, Error>;
         fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
 
