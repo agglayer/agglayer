@@ -17,7 +17,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  ZKEVM_CONTRACT_GIT_REF: v11.0.0-rc.1
+  # temporary image for v11 that support dockerv2::contracts::all build: https://github.com/agglayer/agglayer-contracts/pull/570/files
+  ZKEVM_CONTRACT_GIT_REF: pr-570v11-all
 
 jobs:
   unit:
@@ -42,81 +43,18 @@ jobs:
           tool: protoc,cargo-hack
       - run: cargo hack --each-feature --all check --all-targets --locked
 
-  build_contracts_image:
-    runs-on: ubuntu-latest-16-cores
-    strategy:
-      matrix:
-        node-version: [20.x]
-
-    steps:
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ matrix.node-version }}
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          repository: agglayer/agglayer-contracts
-          token: ${{ secrets.GH_PAT }}
-          ref: ${{ env.ZKEVM_CONTRACT_GIT_REF }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Install npm packages
-        run: |
-          npm i
-      - name: Build docker
-        run: |
-          npm run dockerv2:contracts:all
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: hermeznetwork/geth-zkevm-contracts
-
-      - name: Build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          tags: hermeznetwork/geth-zkevm-contracts:latest
-          file: docker/Dockerfile
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: ${{ format('type=docker,dest={0}/{1}.tar', '/tmp', 'contracts-image') }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: "contracts-image"
-          path: /tmp/contracts-image.tar
-
   integrations:
     name: Integration tests
-    needs:
-      - build_contracts_image
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 30
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
 
-      - name: Download artifact
-        uses: actions/download-artifact@v5
-        with:
-          name: "contracts-image"
-          path: "/tmp"
-
       - name: Load image
         run: |
-          echo ${{ needs.build_contracts_image.outputs.tags }}
-          docker load --input /tmp/contracts-image.tar
+          docker pull ghcr.io/agglayer/agglayer-contracts:${{ env.ZKEVM_CONTRACT_GIT_REF }}
+          docker tag ghcr.io/agglayer/agglayer-contracts:${{ env.ZKEVM_CONTRACT_GIT_REF }} hermeznetwork/geth-zkevm-contracts
           docker image ls -a
 
       - name: Install toolchain
