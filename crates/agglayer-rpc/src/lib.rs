@@ -631,22 +631,7 @@ where
             }
         }
 
-        match network_info.latest_pending_status {
-            None => {
-                // No pending certificate means the network status is unknown
-                network_info.network_status = NetworkStatus::Unknown;
-            }
-            Some(CertificateStatus::InError { .. }) => {
-                // Network is in error if the latest pending certificate is in error
-                network_info.network_status = NetworkStatus::Error;
-            }
-            _ => {
-                // Otherwise, the network is active
-                network_info.network_status = NetworkStatus::Active;
-            }
-        }
-
-        if self
+        let network_is_disabled = self
             .state
             .is_network_disabled(&network_id)
             .map_err(|error| {
@@ -658,9 +643,25 @@ where
                     network_id,
                     source: error.into(),
                 }
-            })?
-        {
-            network_info.network_status = NetworkStatus::Disabled;
+            })?;
+
+        match network_info.latest_pending_status {
+            None => {
+                // No pending certificate means the network status is unknown
+                network_info.network_status = NetworkStatus::Unknown;
+            }
+            Some(CertificateStatus::InError { .. }) => {
+                // Network is in error if the latest pending certificate is in error
+                network_info.network_status = NetworkStatus::Error;
+            }
+            _ if network_is_disabled => {
+                // If the network is disabled in storage, mark it as disabled
+                network_info.network_status = NetworkStatus::Disabled;
+            }
+            _ => {
+                // Otherwise, the network is active
+                network_info.network_status = NetworkStatus::Active;
+            }
         }
 
         Ok(network_info)
