@@ -8,9 +8,11 @@ use tracing::{debug, info};
 mod logging;
 
 mod epoch_synchronizer;
+mod l1_tracing;
 mod node;
 
 use agglayer_telemetry::ServerBuilder as MetricsBuilder;
+use l1_tracing::L1TraceLayer;
 
 /// This is the main node entrypoint.
 ///
