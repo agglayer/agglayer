@@ -204,7 +204,10 @@ where
             .await
         {
             Ok(pending_tx) => {
-                info!("Certificate settlement transaction submitted");
+                info!(
+                    settlement_tx_hash = ?pending_tx.tx_hash(),
+                    "Certificate settlement transaction submitted",
+                );
                 pending_tx
             }
             Err(error) => {

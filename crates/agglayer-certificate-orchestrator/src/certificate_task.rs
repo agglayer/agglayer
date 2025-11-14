@@ -347,7 +347,7 @@ where
                 error!(
                     %certificate_id,
                     ?error,
-                        "Failed recomputing the new state for already-proven certificate"
+                    "Failed recomputing the new state for already-proven certificate",
                 );
             })?;
         debug!("Recomputing new state completed");
@@ -475,8 +475,6 @@ where
             warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
         }
 
-        debug!("Certificate settlement transactions list: {previous_tx_hashes:?}");
-
         // Keep the nonce and previous fees for future use (e.g., retries)
         if let Some(nonce_info) = nonce_info {
             debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce_info:?}");
@@ -486,7 +484,6 @@ where
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
 
-        self.header.status = CertificateStatus::Candidate;
         self.set_status(CertificateStatus::Candidate)?;
 
         debug!(?settlement_tx_hash, "Submitted certificate for settlement");
@@ -530,6 +527,13 @@ where
                 CertificateStatusError::SettlementError(err_message)
             })?;
 
+            debug!(
+                "Pre check prev txhash {settlement_tx_hash}: {:?}",
+                self.state_store
+                    .get_certificate_header(&certificate_id)
+                    .map(|h| h.map(|h| h.status))
+            );
+
             if processed_tx_hashes.contains(&settlement_tx_hash) {
                 continue;
             }
@@ -545,6 +549,10 @@ where
                 .await?
             {
                 CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
+                    debug!(
+                        ?settlement_tx_hash,
+                        %epoch_number, %certificate_index, "Previous tx hash settled"
+                    );
                     break (epoch_number, certificate_index, settlement_tx_hash);
                 }
                 CertificateSettlementResult::Error(error) => {
@@ -586,10 +594,16 @@ where
 
         let settled_certificate =
             SettledCertificate(certificate_id, height, epoch_number, certificate_index);
+        debug!(
+            "Pre update txhash and status: {:?}",
+            self.state_store
+                .get_certificate_header(&certificate_id)
+                .map(|h| h.map(|h| h.status))
+        );
         self.state_store
             .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)
             .inspect_err(|error| error!(?error, "Failed to write the settlement tx hash"))?;
-        self.set_status(CertificateStatus::Settled)?;
+        self.header.status = CertificateStatus::Settled;
         debug!(
             ?settlement_tx_hash,
             ?settled_certificate,
