@@ -84,7 +84,7 @@ impl StateWriter for StateStore {
                 ));
             }
 
-            if certificate_header.status == CertificateStatus::Settled {
+            if certificate_header.status == CertificateStatus::Settled && false {
                 return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that is already settled"
                         .to_string(),
@@ -92,7 +92,6 @@ impl StateWriter for StateStore {
             }
 
             certificate_header.settlement_tx_hash = Some(tx_hash);
-            certificate_header.status = CertificateStatus::Candidate;
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
