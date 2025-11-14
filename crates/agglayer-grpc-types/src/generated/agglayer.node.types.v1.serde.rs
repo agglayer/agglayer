@@ -1277,6 +1277,7 @@ impl serde::Serialize for NetworkStatus {
             Self::Active => "NETWORK_STATUS_ACTIVE",
             Self::Syncing => "NETWORK_STATUS_SYNCING",
             Self::Error => "NETWORK_STATUS_ERROR",
+            Self::Disabled => "NETWORK_STATUS_DISABLED",
         };
         serializer.serialize_str(variant)
     }
@@ -1292,6 +1293,7 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
             "NETWORK_STATUS_ACTIVE",
             "NETWORK_STATUS_SYNCING",
             "NETWORK_STATUS_ERROR",
+            "NETWORK_STATUS_DISABLED",
         ];
 
         struct GeneratedVisitor;
@@ -1336,6 +1338,7 @@ impl<'de> serde::Deserialize<'de> for NetworkStatus {
                     "NETWORK_STATUS_ACTIVE" => Ok(NetworkStatus::Active),
                     "NETWORK_STATUS_SYNCING" => Ok(NetworkStatus::Syncing),
                     "NETWORK_STATUS_ERROR" => Ok(NetworkStatus::Error),
+                    "NETWORK_STATUS_DISABLED" => Ok(NetworkStatus::Disabled),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

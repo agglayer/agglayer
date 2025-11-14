@@ -25,6 +25,7 @@ use crate::{
     tests::TempDBDir,
 };
 
+mod disabled_networks;
 mod metadata;
 
 #[test]

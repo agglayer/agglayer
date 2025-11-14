@@ -430,6 +430,7 @@ where
 
     /// Assemble the current information of the specified network from
     /// the data in various sources.
+    #[instrument(skip(self))]
     pub fn get_network_info(
         &self,
         network_id: NetworkId,
@@ -630,6 +631,20 @@ where
             }
         }
 
+        let network_is_disabled = self
+            .state
+            .is_network_disabled(&network_id)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to check if network {network_id} is disabled in storage"
+                );
+                GetNetworkInfoError::InternalError {
+                    network_id,
+                    source: error.into(),
+                }
+            })?;
+
         match network_info.latest_pending_status {
             None => {
                 // No pending certificate means the network status is unknown
@@ -638,6 +653,10 @@ where
             Some(CertificateStatus::InError { .. }) => {
                 // Network is in error if the latest pending certificate is in error
                 network_info.network_status = NetworkStatus::Error;
+            }
+            _ if network_is_disabled => {
+                // If the network is disabled in storage, mark it as disabled
+                network_info.network_status = NetworkStatus::Disabled;
             }
             _ => {
                 // Otherwise, the network is active

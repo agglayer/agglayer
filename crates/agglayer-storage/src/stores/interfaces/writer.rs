@@ -37,6 +37,14 @@ pub trait MetadataWriter: Send + Sync {
 }
 
 pub trait StateWriter: Send + Sync {
+    fn disable_network(
+        &self,
+        network_id: &NetworkId,
+        disabled_by: agglayer_types::network_info::DisabledBy,
+    ) -> Result<(), Error>;
+
+    fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error>;
+
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
@@ -44,10 +52,7 @@ pub trait StateWriter: Send + Sync {
         force: bool,
     ) -> Result<(), Error>;
 
-    fn remove_settlement_tx_hash(
-        &self,
-        certificate_id: &CertificateId,
-    ) -> Result<(), Error>;
+    fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error>;
 
     fn insert_certificate_header(
         &self,

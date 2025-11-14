@@ -13,6 +13,7 @@ impl From<AgglayerRpcNetworkStatus> for v1::NetworkStatus {
             AgglayerRpcNetworkStatus::Active => v1::NetworkStatus::Active,
             AgglayerRpcNetworkStatus::Syncing => v1::NetworkStatus::Syncing,
             AgglayerRpcNetworkStatus::Error => v1::NetworkStatus::Error,
+            AgglayerRpcNetworkStatus::Disabled => v1::NetworkStatus::Disabled,
         }
     }
 }

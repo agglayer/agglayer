@@ -31,18 +31,17 @@ impl Key {
 pub type Value = super::generated::agglayer::storage::v0::NetworkInfoValue;
 
 impl Codec for Value {
-    fn encode(&self) -> Result<Vec<u8>, crate::columns::CodecError> {
+    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
         let len = self.encoded_len();
 
         let mut buf = BytesMut::new();
         buf.reserve(len);
+
         <Value as prost::Message>::encode(self, &mut buf)?;
 
-        Ok(buf.to_vec())
-    }
+        writer.write_all(&buf)?;
 
-    fn encode_into<W: io::Write>(&self, _writer: W) -> Result<(), crate::columns::CodecError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn decode(buf: &[u8]) -> Result<Self, crate::columns::CodecError> {

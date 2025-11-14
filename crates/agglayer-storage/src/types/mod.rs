@@ -5,6 +5,7 @@ use agglayer_types::{
 use serde::{Deserialize, Serialize};
 
 mod certificate;
+pub(crate) mod disabled_network;
 mod generated;
 pub(crate) mod network_info;
 
