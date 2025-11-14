@@ -7,7 +7,10 @@ use mockall::mock;
 use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
-    stores::{MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter},
+    stores::{
+        MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    },
 };
 mock! {
     pub StateStore {}
@@ -35,7 +38,8 @@ mock! {
             &self,
             certificate_id: &CertificateId,
             tx_hash: SettlementTxHash,
-            force: bool,
+            force: UpdateEvenIfAlreadyPresent,
+            set_status: UpdateStatusToCandidate,
         ) -> Result<(), Error>;
 
         fn remove_settlement_tx_hash(
