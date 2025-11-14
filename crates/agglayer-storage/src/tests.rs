@@ -7,7 +7,12 @@ use std::{
 
 use rand::Rng as _;
 
+pub mod db_generator;
+#[cfg(test)]
+mod db_generator_test;
 pub mod mocks;
+#[cfg(test)]
+mod regression_db_deserialization;
 
 pub struct TempDBDir {
     pub path: PathBuf,
