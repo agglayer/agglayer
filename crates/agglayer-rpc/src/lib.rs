@@ -646,6 +646,10 @@ where
             })?;
 
         match network_info.latest_pending_status {
+            _ if network_is_disabled => {
+                // If the network is disabled in storage, mark it as disabled
+                network_info.network_status = NetworkStatus::Disabled;
+            }
             None => {
                 // No pending certificate means the network status is unknown
                 network_info.network_status = NetworkStatus::Unknown;
@@ -653,10 +657,6 @@ where
             Some(CertificateStatus::InError { .. }) => {
                 // Network is in error if the latest pending certificate is in error
                 network_info.network_status = NetworkStatus::Error;
-            }
-            _ if network_is_disabled => {
-                // If the network is disabled in storage, mark it as disabled
-                network_info.network_status = NetworkStatus::Disabled;
             }
             _ => {
                 // Otherwise, the network is active
