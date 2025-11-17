@@ -88,9 +88,7 @@ impl ProverConfig {
             }
         })?;
 
-        let deserializer = toml::de::Deserializer::new(&reader);
-        serde::Deserialize::deserialize(deserializer)
-            .map_err(ConfigurationError::DeserializationError)
+        toml::from_str(&reader).map_err(ConfigurationError::DeserializationError)
     }
 }
 
