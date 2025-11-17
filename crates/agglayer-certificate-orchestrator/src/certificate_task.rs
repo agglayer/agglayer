@@ -194,12 +194,21 @@ where
         // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
         // certificate header is not found on L1.
         let previous_settlement_tx_hash = {
-            // TODO: collect ALL hashes present on L1?
             let mut previous_settlement_tx_hash = None;
             let prev_settlement_tx_hashes = self
                 .pending_store
                 .get_settlement_tx_hashes_for_certificate(certificate_id)?;
+            debug!(
+                ?prev_settlement_tx_hashes,
+                "About to check previous settlement transactions"
+            );
+
             for previous_tx_hash in prev_settlement_tx_hashes.iter().rev() {
+                debug!(
+                    ?previous_tx_hash,
+                    "Checking previous settlement transaction"
+                );
+
                 let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
                     oneshot::channel();
                 self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
@@ -229,6 +238,7 @@ where
                     Err(_error) => false,                         // On error we do nothing
                 };
                 if !missing {
+                    debug!(?previous_tx_hash, "Found previous settlement tx hash");
                     previous_settlement_tx_hash = Some(*previous_tx_hash);
                     break;
                 }

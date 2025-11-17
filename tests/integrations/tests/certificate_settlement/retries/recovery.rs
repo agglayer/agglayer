@@ -61,7 +61,7 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 }
 
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(240))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
@@ -90,7 +90,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     cancellation_token.cancel();
     _ = agglayer_shutdowned.await;
 
-    println!("Node killed for the first time, recovering...");
+    tracing::info!("Node killed for the first time, recovering...");
 
     let cancellation_token = CancellationToken::new();
     let (agglayer_shutdowned, client, _) =
@@ -122,7 +122,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     _ = agglayer_shutdowned.await;
 
-    println!("Node killed for the second time, recovering...");
+    tracing::info!("Node killed for the second time, recovering...");
 
     fail::cfg(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
@@ -133,9 +133,10 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     tokio::time::sleep(Duration::from_secs(30)).await;
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
-    println!("Node recovered, waiting for settlement...");
+    tracing::info!("Node recovered, waiting for settlement...");
 
     let result = wait_for_settlement_or_error!(client, certificate2_id).await;
+    tracing::info!("Second settlement result: {result:?}");
     assert!(matches!(result.status, CertificateStatus::Settled));
 
     scenario.teardown();
