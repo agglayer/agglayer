@@ -48,35 +48,35 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = "0.11.0"
-agglayer-interop = "0.11.0"
-agglayer-interop-types = "0.11.0"
-agglayer-elf-build = "0.11.0"
-agglayer-primitives = "0.11.0"
-agglayer-tries = "0.11.0"
-unified-bridge = "0.11.0"
+agglayer-bincode = "0.12.0"
+agglayer-interop = "0.12.0"
+agglayer-interop-types = "0.12.0"
+agglayer-elf-build = "0.12.0"
+agglayer-primitives = "0.12.0"
+agglayer-tries = "0.12.0"
+unified-bridge = "0.12.0"
 
 # Provers
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
-prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
-prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
-prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.7.0" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
+prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
+prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
+prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
 #       It is specified at the top of scripts/make/Makefile.pp.toml.
-sp1-core-machine = "=5.0.0"
-sp1-sdk = "=5.0.3"
-sp1-primitives = "=5.0.0"
-sp1-prover = "=5.0.1"
-sp1-zkvm = { version = "=5.0.0", default-features = false }
+sp1-core-machine = "=5.2.2"
+sp1-sdk = "=5.2.2"
+sp1-primitives = "=5.2.2"
+sp1-prover = "=5.2.2"
+sp1-zkvm = { version = "=5.2.2", default-features = false }
 
 # Core dependencies
-alloy = { version = "0.14.0", features = ["full", "json-rpc"] }
-alloy-primitives = { version = "1.3", features = ["serde", "k256"] }
-alloy-signer-local = { version = "0.14.0", features = ["keystore", "mnemonic"] }
+alloy = { version = "1.0.42", features = ["full", "json-rpc"] }
+alloy-primitives = { version = "1.4.1", features = ["serde", "k256"] }
+alloy-signer-local = { version = "1.0.42", features = ["keystore", "mnemonic"] }
 anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"] }
 arc-swap = "1.7"
@@ -92,14 +92,11 @@ derive_more = "2.0"
 dirs = "5.0"
 dotenvy = "0.15.7"
 educe = { version = "0.6", features = ["Debug", "Clone", "Eq", "Ord"] }
-ethers = "2.0"
-ethers-gcp-kms-signer = "0.1.5"
-ethers-signers = "2.0"
 eyre = "0.6.12"
 fail = { version = "0.5.1", default-features = false }
 futures = "0.3.31"
 futures-util = "0.3.31"
-gcloud-sdk = "0.26.4"
+gcloud-sdk = "0.27.4"
 hex = "0.4.3"
 http = "1.2"
 hyper = "1.7"
@@ -116,7 +113,7 @@ mockall = "0.13.1"
 parking_lot = "0.12.3"
 pbjson = "0.8.0"
 pin-project = "1.1"
-prost = "0.13.4"
+prost = "0.13.5"
 rand = "0.9.0"
 reqwest = "0.12.23"
 rstest = "0.22.0"

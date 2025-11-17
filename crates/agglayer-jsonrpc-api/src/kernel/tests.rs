@@ -35,7 +35,7 @@ async fn interop_executor_check_tx() {
     config.full_node_rpcs.insert(1, uri.parse().unwrap());
 
     let asserter = Asserter::new();
-    let provider = ProviderBuilder::new().on_mocked_client(asserter);
+    let provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
     let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
@@ -70,7 +70,7 @@ async fn interop_executor_verify_zkp() {
     let config = Arc::new(config);
 
     let asserter = Asserter::new();
-    let provider = ProviderBuilder::new().on_mocked_client(asserter.clone());
+    let provider = ProviderBuilder::new().connect_mocked_client(asserter.clone());
 
     let _l1 = config.l1.clone();
     let kernel = Kernel::new(Arc::new(provider), config).unwrap();
@@ -153,7 +153,7 @@ async fn verify_cert_signature() {
     let config = Arc::new(config);
 
     let asserter = Asserter::new();
-    let provider = ProviderBuilder::new().on_mocked_client(asserter);
+    let provider = ProviderBuilder::new().connect_mocked_client(asserter);
     let kernel = Kernel::new(Arc::new(provider), config).unwrap();
 
     {
@@ -233,7 +233,7 @@ mod interop_executor_execute {
         config.full_node_rpcs.insert(1, uri.parse().unwrap());
 
         let asserter = Asserter::new();
-        let provider = ProviderBuilder::new().on_mocked_client(asserter);
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
         let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
@@ -259,7 +259,7 @@ mod interop_executor_execute {
         config.full_node_rpcs.insert(1, uri.parse().unwrap());
 
         let asserter = Asserter::new();
-        let provider = ProviderBuilder::new().on_mocked_client(asserter);
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
         let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
@@ -292,7 +292,7 @@ mod interop_executor_execute {
         config.full_node_rpcs.insert(1, uri.parse().unwrap());
 
         let asserter = Asserter::new();
-        let provider = ProviderBuilder::new().on_mocked_client(asserter);
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
         let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 
@@ -326,7 +326,7 @@ mod interop_executor_execute {
         config.full_node_rpcs.insert(1, uri.parse().unwrap());
 
         let asserter = Asserter::new();
-        let provider = ProviderBuilder::new().on_mocked_client(asserter);
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
         let kernel = Kernel::new(Arc::new(provider), Arc::new(config)).unwrap();
 

@@ -88,7 +88,7 @@ fn transient_network_info() {
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,
@@ -245,7 +245,7 @@ fn pending_certificate_defined() {
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,
@@ -310,7 +310,7 @@ fn pending_certificate_defined_with_network_info() {
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,
