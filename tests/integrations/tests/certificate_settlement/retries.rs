@@ -8,6 +8,7 @@ use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rand::random;
 use rstest::rstest;
+use tracing::error;
 
 mod recovery;
 
@@ -109,7 +110,7 @@ async fn regression_pushing_certificate_while_settling(#[case] state: Forest) {
 /// Validate that a certificate that has been proven and sent to L1 can't be
 /// replaced in the certificate header store.
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(180))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
@@ -126,7 +127,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
     let first_certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
-        .inspect_err(|err| eprintln!("Error sending first certificate: {err:?}"))
+        .inspect_err(|err| error!(%err, "Error sending first certificate"))
         .unwrap();
 
     // Send the first certificate. This should be settled.
@@ -139,7 +140,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
             rpc_params![first_certificate_id],
         )
         .await
-        .inspect_err(|err| eprintln!("Error getting certificate header: {err:?}"))
+        .inspect_err(|err| error!(%err, "Error getting certificate header"))
         .unwrap();
     assert!(matches!(first_header.status, CertificateStatus::Settled));
 
@@ -149,7 +150,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
     let second_submission_err = client
         .request::<CertificateId, _>("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
-        .inspect(|result| eprintln!("Managed to settle same certificate twice! Result: {result:?}"))
+        .inspect(|result| error!(?result, "Managed to settle same certificate twice!"))
         .unwrap_err();
     match second_submission_err {
         jsonrpsee::core::ClientError::Call(error) => {

@@ -203,13 +203,7 @@ where
             )
             .await
         {
-            Ok(pending_tx) => {
-                info!(
-                    settlement_tx_hash = ?pending_tx.tx_hash(),
-                    "Certificate settlement transaction submitted",
-                );
-                pending_tx
-            }
+            Ok(pending_tx) => pending_tx,
             Err(error) => {
                 // TODO: Differentiate between different error types, check if decoding works
                 // properly for custom errors as well.
@@ -228,7 +222,7 @@ where
 
         // Get the transaction hash from the pending transaction
         let tx_hash = *pending_tx.tx_hash();
-        info!("Settlement transaction hash: {}", tx_hash);
+        info!(?tx_hash, "Settlement transaction hash");
 
         Ok(SettlementTxHash::from(tx_hash))
     }

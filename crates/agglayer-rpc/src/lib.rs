@@ -671,6 +671,9 @@ where
             .state
             .get_certificate_header_by_cursor(network_id, height)?
             .map(|header| header.certificate_id);
+        if certificate_id.is_none() {
+            debug!(%network_id, %height, "Pre-existing certificate not found");
+        }
         Ok(certificate_id)
     }
 
@@ -686,18 +689,19 @@ where
         {
             warn!(
                 pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
-                "Certificate already exists in store for network {} at height {}",
-                certificate.network_id,
-                certificate.height
+                network_id = %certificate.network_id,
+                height = %certificate.height,
+                "Certificate already exists in store",
             );
-            if let Some(CertificateHeader {
-                status: CertificateStatus::InError { .. },
-                settlement_tx_hash,
-                ..
-            }) = self
+            let header = self
                 .state
-                .get_certificate_header(&pre_existing_certificate_id)?
-            {
+                .get_certificate_header(&pre_existing_certificate_id)?;
+            if header.is_some() {
+                let settlement_tx_hash = self
+                    .pending_store
+                    .get_settlement_tx_hashes_for_certificate(pre_existing_certificate_id)?
+                    .last()
+                    .copied();
                 match settlement_tx_hash {
                     None => {
                         info!(
@@ -900,8 +904,10 @@ where
         tracing::Span::current().record("hash", &hash_string);
 
         info!(
-            %hash,
-            "Received certificate {hash} for rollup {} at height {}", certificate.network_id.to_u32(), certificate.height
+            certificate_id = %hash,
+            network_id = %certificate.network_id.to_u32(),
+            height = %certificate.height,
+            "Received certificate"
         );
         self.validate_pre_existing_certificate(&certificate).await?;
 

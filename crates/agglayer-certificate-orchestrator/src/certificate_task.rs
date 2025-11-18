@@ -350,7 +350,8 @@ where
             .witness_generation(
                 &self.certificate,
                 &mut state,
-                self.header.settlement_tx_hash.map(Into::into),
+                // TODO this is wrong
+                previous_settlement_tx_hash.map(Digest::from),
             )
             .await
             .inspect_err(|error| {
@@ -613,7 +614,7 @@ where
         self.state_store
             .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)
             .inspect_err(|error| error!(?error, "Failed to write the settlement tx hash"))?;
-        self.header.status = CertificateStatus::Settled;
+        self.set_status(CertificateStatus::Settled)?;
         debug!(
             ?settlement_tx_hash,
             ?settled_certificate,
