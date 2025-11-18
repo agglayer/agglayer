@@ -9,7 +9,7 @@ mod certificate;
 mod epoch;
 mod error;
 mod local_network_state;
-mod network_info;
+pub mod network_info;
 mod proof_modes;
 
 #[cfg(feature = "testutils")]

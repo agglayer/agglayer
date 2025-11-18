@@ -68,4 +68,6 @@ enum NetworkStatus {
   NETWORK_STATUS_SYNCING = 2;
   // The network is experiencing an error.
   NETWORK_STATUS_ERROR = 3;
+  // The network is disabled.
+  NETWORK_STATUS_DISABLED = 4;
 }
