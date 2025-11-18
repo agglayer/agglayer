@@ -6,6 +6,7 @@ use agglayer_grpc_types::node::v1::{
 };
 use agglayer_rpc::AgglayerService;
 use tonic_types::{ErrorDetails, StatusExt as _};
+use tracing::instrument;
 
 pub(crate) const GET_EPOCH_CONFIGURATION_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.configuration-service.get-epoch-configuration";
@@ -25,10 +26,14 @@ where
     StateStore: Send + Sync + 'static,
     EpochsStore: Send + Sync + 'static,
 {
+    #[instrument(skip(self, request), level = "debug", fields(client_info = tracing::field::Empty))]
     async fn get_epoch_configuration(
         &self,
-        _request: tonic::Request<GetEpochConfigurationRequest>,
+        request: tonic::Request<GetEpochConfigurationRequest>,
     ) -> Result<tonic::Response<GetEpochConfigurationResponse>, tonic::Status> {
+        let client_info = crate::client_info_from_metadata(request.metadata());
+        tracing::Span::current().record("client_info", &client_info);
+
         let epoch_configuration = self.service.get_epoch_configuration().ok_or_else(|| {
             let mut error_details = ErrorDetails::with_error_info(
                 GetEpochConfigurationErrorKind::UnexpectedClockConfiguration.as_str_name(),
