@@ -200,15 +200,23 @@ fn create_tarball(db_dir: &Path, tarball_name: &str) -> Result<(), Box<dyn std::
         .to_str()
         .ok_or("Invalid directory name")?;
 
+    // Compute the expected directory name from tarball_name (remove .tar.gz)
+    let expected_dir_name = tarball_name
+        .trim_end_matches(".tar.gz")
+        .trim_end_matches(".tar");
+
     // Create tarball in the parent directory
     let tarball_path = parent_dir.join(tarball_name);
 
-    // Use tar command to create compressed archive
+    // Use tar command to create compressed archive with renaming
+    // The --transform flag renames the directory in the archive
     let output = Command::new("tar")
         .arg("-czf")
         .arg(&tarball_path)
         .arg("-C")
         .arg(&parent_dir)
+        .arg("--transform")
+        .arg(format!("s|^{}|{}|", db_name, expected_dir_name))
         .arg(db_name)
         .output()?;
 
