@@ -91,36 +91,21 @@ impl Certificate {
         height: Height,
         version: SignatureCommitmentVersion,
     ) -> Self {
-        let wallet = Self::wallet_for_test(network_id);
         // The LET depth can't be inferred to be the default of 32 due to the
         // limitations of the Rust compiler's type inference, so we specify it here.
         let local_exit_root = LocalExitTree::<32>::default().get_root().into();
-        let (_, signature, _signer) =
-            compute_signature_info(local_exit_root, &[], &wallet, height, version);
 
-        Self {
+        Self::new_for_test_custom(
             network_id,
             height,
-            prev_local_exit_root: local_exit_root,
-            new_local_exit_root: local_exit_root,
-            bridge_exits: Default::default(),
-            imported_bridge_exits: Default::default(),
-            aggchain_data: AggchainData::ECDSA { signature },
-            metadata: Default::default(),
-            custom_chain_data: vec![],
-            l1_info_tree_leaf_count: None,
-        }
+            local_exit_root,
+            0, // No bridge exits for basic test certificates
+            AggchainDataType::Ecdsa,
+            version,
+        )
     }
 
     /// Generate a certificate with random bridge exits and custom parameters.
-    ///
-    /// # Arguments
-    /// * `network_id` - The network ID
-    /// * `height` - The certificate height
-    /// * `prev_local_exit_root` - The previous local exit root
-    /// * `num_bridge_exits` - Number of random bridge exits to generate
-    /// * `aggchain_data_type` - Type of AggchainData variant to use
-    /// * `version` - Signature commitment version
     pub fn new_for_test_custom(
         network_id: NetworkId,
         height: Height,
@@ -259,14 +244,14 @@ pub enum AggchainDataType {
     MultisigAndAggchainProof { num_signers: usize },
 }
 
+/// Empty ELF file for testing purposes.
+/// This is a minimal ELF that can be used to create dummy SP1 proofs in tests.
+pub const EMPTY_ELF: &[u8] = include_bytes!("tests/empty.elf");
+
 /// Create a dummy STARK proof for testing purposes.
 /// This creates a minimal SP1 proof that can be used in tests.
 fn create_dummy_stark_proof() -> agglayer_interop_types::aggchain_proof::Proof {
     use sp1_sdk::Prover;
-
-    // Use empty ELF file for minimal setup
-    const EMPTY_ELF: &[u8] =
-        include_bytes!("../../../agglayer-storage/src/types/certificate/tests/empty.elf");
 
     let (proof, vkey) = {
         let client = sp1_sdk::ProverClient::builder().mock().build();
