@@ -99,6 +99,11 @@ async fn pending_certificate_in_error_can_be_replaced() {
     let mut second_pending = Certificate::new_for_test(network_id, Height::ZERO);
     second_pending.metadata = Metadata::new([1; 32].into());
 
+    tracing::info!(
+        pending_certificate = %pending_certificate.hash(),
+        second_pending = %second_pending.hash(),
+    );
+
     assert_ne!(pending_certificate.hash(), second_pending.hash());
     context
         .state_store
@@ -117,7 +122,7 @@ async fn pending_certificate_in_error_can_be_replaced() {
         )
         .await;
 
-    assert!(res.is_err());
+    assert!(res.is_err(), "{res:?}");
 
     context
         .state_store

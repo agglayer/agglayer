@@ -696,7 +696,7 @@ where
             let header = self
                 .state
                 .get_certificate_header(&pre_existing_certificate_id)?;
-            if header.is_some() {
+            if header.is_some_and(|h| h.status.is_in_error()) {
                 let settlement_tx_hash = self
                     .pending_store
                     .get_settlement_tx_hashes_for_certificate(pre_existing_certificate_id)?
