@@ -611,9 +611,6 @@ where
                 .map(|h| h.map(|h| h.status)),
             "Header before settlement info write",
         );
-        self.state_store
-            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)
-            .inspect_err(|error| error!(?error, "Failed to write the settlement tx hash"))?;
         self.set_status(CertificateStatus::Settled)?;
         debug!(
             ?settlement_tx_hash,

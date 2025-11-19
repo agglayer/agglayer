@@ -103,7 +103,7 @@ impl StateWriter for StateStore {
                 warn!(%existing_hash, "Overwriting an existing settlement tx hash");
             }
 
-            if certificate_header.status == CertificateStatus::Settled && false {
+            if certificate_header.status == CertificateStatus::Settled {
                 return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that is already settled"
                         .to_string(),
