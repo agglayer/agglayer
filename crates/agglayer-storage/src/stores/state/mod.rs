@@ -33,7 +33,7 @@ use crate::{
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
-        pp_root_to_certificate_id::PpRootToCertificateIdColumn,
+        pp_root_to_certificate_ids::PpRootToCertificateIdsColumn,
         ColumnSchema,
     },
     error::Error,
@@ -383,12 +383,19 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
-    fn set_certificate_id_for_pp_root(
+    fn add_certificate_id_for_pp_root(
         &self,
         pp_root: &Digest,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        Ok(self.db.put::<PpRootToCertificateIdColumn>(pp_root, certificate_id)?)
+        let mut certificate_ids = self.db.get::<PpRootToCertificateIdsColumn>(pp_root)?
+            .map(|v| v.0)
+            .unwrap_or_default();
+        certificate_ids.push(*certificate_id);
+        Ok(self.db.put::<PpRootToCertificateIdsColumn>(
+            pp_root,
+            &crate::columns::pp_root_to_certificate_ids::Value(certificate_ids),
+        )?)
     }
 }
 
@@ -653,11 +660,14 @@ impl StateReader for StateStore {
             .map(|v| v.is_some())?)
     }
 
-    fn get_certificate_id_for_pp_root(
+    fn get_certificate_ids_for_pp_root(
         &self,
         pp_root: &Digest,
-    ) -> Result<Option<CertificateId>, Error> {
-        Ok(self.db.get::<PpRootToCertificateIdColumn>(pp_root)?)
+    ) -> Result<Vec<CertificateId>, Error> {
+        Ok(self.db.get::<PpRootToCertificateIdsColumn>(pp_root)?
+            .map(|v| v.0)
+            .unwrap_or_default()
+        )
     }
 }
 

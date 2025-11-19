@@ -88,7 +88,7 @@ mock! {
         ) -> Result<(), Error>;
         fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error>;
 
-        fn set_certificate_id_for_pp_root(
+        fn add_certificate_id_for_pp_root(
             &self,
             pp_root: &Digest,
             certificate_id: &CertificateId,
@@ -122,9 +122,9 @@ mock! {
             network_id: NetworkId,
         ) -> Result<Option<LocalNetworkStateData>, Error>;
 
-        fn get_certificate_id_for_pp_root(
+        fn get_certificate_ids_for_pp_root(
             &self,
             pp_root: &Digest,
-        ) -> Result<Option<CertificateId>, Error>;
+        ) -> Result<Vec<CertificateId>, Error>;
     }
 }

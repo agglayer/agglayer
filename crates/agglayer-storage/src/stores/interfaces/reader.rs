@@ -108,11 +108,11 @@ pub trait StateReader: Send + Sync {
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error>;
 
-    /// Get the certificate ID for a given pp root.
-    fn get_certificate_id_for_pp_root(
+    /// Get the certificate IDs for a given pp root.
+    fn get_certificate_ids_for_pp_root(
         &self,
         pp_root: &Digest,
-    ) -> Result<Option<CertificateId>, Error>;
+    ) -> Result<Vec<CertificateId>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {

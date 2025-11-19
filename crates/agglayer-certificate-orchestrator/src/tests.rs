@@ -404,7 +404,7 @@ impl StateWriter for DummyPendingStore {
         todo!()
     }
 
-    fn set_certificate_id_for_pp_root(
+    fn add_certificate_id_for_pp_root(
         &self,
         _pp_root: &Digest,
         _certificate_id: &CertificateId,

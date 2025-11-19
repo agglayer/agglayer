@@ -52,7 +52,7 @@ pub const LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF: &str =
 pub const LATEST_PENDING_CERTIFICATE_PER_NETWORK_CF: &str =
     "latest_pending_certificate_per_network_cf";
 pub const METADATA_CF: &str = "metadata_cf";
-pub const PP_ROOT_TO_CERTIFICATE_ID_CF: &str = "pp_root_to_certificate_id_cf";
+pub const PP_ROOT_TO_CERTIFICATE_IDS_CF: &str = "pp_root_to_certificate_ids_cf";
 
 // epochs related CFs
 pub const PER_EPOCH_CERTIFICATES_CF: &str = "per_epoch_certificates_cf";
@@ -127,7 +127,7 @@ pub mod latest_pending_certificate_per_network;
 pub mod latest_proven_certificate_per_network;
 pub mod latest_settled_certificate_per_network;
 pub(crate) mod metadata;
-pub(crate) mod pp_root_to_certificate_id;
+pub(crate) mod pp_root_to_certificate_ids;
 
 // Debug
 pub(crate) mod debug_certificates;
