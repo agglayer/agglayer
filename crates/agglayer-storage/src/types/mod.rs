@@ -67,7 +67,6 @@ crate::columns::impl_codec_using_bincode_for!(
     PerEpochMetadataKey,
     PerEpochMetadataValue,
     Proof,
-    SettlementTxHashRecord,
     SmtKey,
     SmtValue,
     network_info::Key,

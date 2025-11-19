@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+// Record of settlement transaction hashes for a certificate.
+// Stores hashes in the order of insertion with automatic deduplication.
+message SettlementTxHashRecord {
+  // Settlement transaction hash history.
+  // Optional to differentiate between empty history and missing history,
+  // which allows for easier field deprecation in the future.
+  TxHashHistory hashes = 1;
+}
+
+// Transaction hash history wrapper.
+message TxHashHistory {
+  // Settlement transaction hashes, uniqued and in order of insertion.
+  // Each hash represents a settlement transaction associated with a certificate.
+  repeated bytes hashes = 1;
+}
