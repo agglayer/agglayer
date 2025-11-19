@@ -350,7 +350,6 @@ where
             .witness_generation(
                 &self.certificate,
                 &mut state,
-                // TODO this is wrong
                 previous_settlement_tx_hash.map(Digest::from),
             )
             .await

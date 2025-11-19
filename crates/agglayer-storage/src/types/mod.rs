@@ -9,8 +9,6 @@ mod generated;
 pub(crate) mod network_info;
 mod settlement_tx_hash_record;
 
-pub use settlement_tx_hash_record::SettlementTxHashRecord;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
     LatestSettledEpoch,

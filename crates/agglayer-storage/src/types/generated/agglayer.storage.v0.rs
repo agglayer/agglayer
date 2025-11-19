@@ -164,7 +164,7 @@ impl NetworkType {
 /// Record of settlement transaction hashes for a certificate.
 /// Stores hashes in the order of insertion with automatic deduplication.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SettlementTxHashRecord {
+pub struct SettlementTxRecord {
     /// Settlement transaction hash history.
     /// Optional to differentiate between empty history and missing history,
     /// which allows for easier field deprecation in the future.

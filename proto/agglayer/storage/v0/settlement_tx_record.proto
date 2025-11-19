@@ -4,7 +4,7 @@ package agglayer.storage.v0;
 
 // Record of settlement transaction hashes for a certificate.
 // Stores hashes in the order of insertion with automatic deduplication.
-message SettlementTxHashRecord {
+message SettlementTxRecord {
   // Settlement transaction hash history.
   // Optional to differentiate between empty history and missing history,
   // which allows for easier field deprecation in the future.

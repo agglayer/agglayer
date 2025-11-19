@@ -11,6 +11,7 @@ mod error;
 mod local_network_state;
 mod network_info;
 mod proof_modes;
+mod settlement_tx_record;
 
 #[cfg(feature = "testutils")]
 pub use certificate::compute_signature_info;
@@ -23,3 +24,4 @@ pub use error::{CertificateStatusError, Error, SignerError};
 pub use local_network_state::{L1WitnessCtx, LocalNetworkStateData, PessimisticRootInput};
 pub use network_info::{NetworkInfo, NetworkStatus, NetworkType, SettledClaim};
 pub use proof_modes::{ExecutionMode, GenerationType};
+pub use settlement_tx_record::SettlementTxRecord;

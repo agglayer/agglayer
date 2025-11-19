@@ -24,11 +24,11 @@ use agglayer_storage::{
         mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
         TempDBDir,
     },
-    types::SettlementTxHashRecord,
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    SettlementTxRecord,
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
@@ -59,7 +59,7 @@ pub(crate) struct DummyPendingStore {
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
     pub(crate) latest_proven_certificate_per_network:
         RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
-    pub(crate) settlement_tx_hashes: RwLock<BTreeMap<CertificateId, SettlementTxHashRecord>>,
+    pub(crate) settlement_tx_hashes: RwLock<BTreeMap<CertificateId, SettlementTxRecord>>,
     pub(crate) is_packed: bool,
 }
 
@@ -303,7 +303,7 @@ impl PendingCertificateWriter for DummyPendingStore {
         f: F,
     ) -> Result<(), agglayer_storage::error::Error>
     where
-        F: FnOnce(SettlementTxHashRecord) -> Result<SettlementTxHashRecord, String> + 'a,
+        F: FnOnce(SettlementTxRecord) -> Result<SettlementTxRecord, String> + 'a,
     {
         use std::collections::btree_map::Entry;
 

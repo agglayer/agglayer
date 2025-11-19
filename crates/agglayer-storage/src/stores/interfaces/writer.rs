@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    SettlementTxRecord,
 };
 
-use crate::{error::Error, stores::PerEpochReader, types::SettlementTxHashRecord};
+use crate::{error::Error, stores::PerEpochReader};
 
 pub trait DebugWriter: Send + Sync {
     fn add_certificate(&self, certificate: &Certificate) -> Result<(), Error>;
@@ -130,5 +131,5 @@ pub trait PendingCertificateWriter: Send + Sync {
         f: F,
     ) -> Result<(), Error>
     where
-        F: FnOnce(SettlementTxHashRecord) -> Result<SettlementTxHashRecord, String> + 'a;
+        F: FnOnce(SettlementTxRecord) -> Result<SettlementTxRecord, String> + 'a;
 }

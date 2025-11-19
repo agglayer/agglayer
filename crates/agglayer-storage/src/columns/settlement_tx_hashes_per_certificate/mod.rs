@@ -1,14 +1,11 @@
-use agglayer_types::CertificateId;
+use agglayer_types::{CertificateId, SettlementTxRecord};
 
-use crate::{
-    columns::{ColumnSchema, SETTLEMENT_TX_HASHSES_PER_CERTIFICATE_CF},
-    types::SettlementTxHashRecord,
-};
+use crate::columns::{ColumnSchema, SETTLEMENT_TX_HASHSES_PER_CERTIFICATE_CF};
 
 pub struct SettlementTxHashesPerCertificateColumn;
 
 pub type Key = CertificateId;
-pub type Value = SettlementTxHashRecord;
+pub type Value = SettlementTxRecord;
 
 impl ColumnSchema for SettlementTxHashesPerCertificateColumn {
     type Key = Key;

@@ -1,6 +1,6 @@
 use std::io;
 
-use agglayer_types::{Digest, SettlementTxHash};
+use agglayer_types::{Digest, SettlementTxHash, SettlementTxRecord};
 use prost::{bytes::BytesMut, Message as _};
 
 use crate::{
@@ -8,54 +8,13 @@ use crate::{
     types::generated::agglayer::storage::v0,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
-pub struct SettlementTxHashRecord {
-    // Hash data, uniqued and in the order of insertion
-    hashes: Vec<SettlementTxHash>,
-}
-
-impl SettlementTxHashRecord {
-    pub const fn new() -> Self {
-        let hashes = Vec::new();
-        Self { hashes }
-    }
-
-    pub const fn len(&self) -> usize {
-        self.hashes.len()
-    }
-
-    pub const fn is_empty(&self) -> bool {
-        self.hashes.is_empty()
-    }
-
-    pub fn contains(&self, hash: &SettlementTxHash) -> bool {
-        self.hashes.contains(hash)
-    }
-
-    pub fn insert(&mut self, hash: SettlementTxHash) {
-        // If we already have this hash, put it last.
-        if let Some(orig_idx) = self.hashes.iter().position(|h| h == &hash) {
-            self.hashes.remove(orig_idx);
-        }
-        self.hashes.push(hash);
-    }
-
-    pub fn retain(&mut self, f: impl FnMut(&SettlementTxHash) -> bool) {
-        self.hashes.retain(f);
-    }
-
-    pub fn into_vec(self) -> Vec<SettlementTxHash> {
-        self.hashes
-    }
-}
-
 // Conversion from SettlementTxHashRecord to protobuf type
-impl From<&SettlementTxHashRecord> for v0::SettlementTxHashRecord {
-    fn from(record: &SettlementTxHashRecord) -> Self {
-        v0::SettlementTxHashRecord {
+impl From<&SettlementTxRecord> for v0::SettlementTxRecord {
+    fn from(record: &SettlementTxRecord) -> Self {
+        v0::SettlementTxRecord {
             hashes: Some(v0::TxHashHistory {
                 hashes: record
-                    .hashes
+                    .hashes()
                     .iter()
                     .map(|h| prost::bytes::Bytes::from(Digest::from(*h).to_vec()))
                     .collect(),
@@ -64,11 +23,11 @@ impl From<&SettlementTxHashRecord> for v0::SettlementTxHashRecord {
     }
 }
 
-// Conversion from protobuf type to SettlementTxHashRecord
-impl TryFrom<v0::SettlementTxHashRecord> for SettlementTxHashRecord {
+// Conversion from protobuf type to SettlementTxRecord
+impl TryFrom<v0::SettlementTxRecord> for SettlementTxRecord {
     type Error = CodecError;
 
-    fn try_from(proto: v0::SettlementTxHashRecord) -> Result<Self, Self::Error> {
+    fn try_from(proto: v0::SettlementTxRecord) -> Result<Self, Self::Error> {
         let hashes = proto
             .hashes
             .ok_or_else(|| {
@@ -86,13 +45,13 @@ impl TryFrom<v0::SettlementTxHashRecord> for SettlementTxHashRecord {
             })
             .collect::<Result<Vec<_>, CodecError>>()?;
 
-        Ok(SettlementTxHashRecord { hashes })
+        Ok(SettlementTxRecord::from_vec(hashes))
     }
 }
 
-impl Codec for SettlementTxHashRecord {
+impl Codec for SettlementTxRecord {
     fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        let proto: v0::SettlementTxHashRecord = self.into();
+        let proto: v0::SettlementTxRecord = self.into();
         let len = proto.encoded_len();
 
         let mut buf = BytesMut::new();
@@ -108,6 +67,6 @@ impl Codec for SettlementTxHashRecord {
     }
 
     fn decode(buf: &[u8]) -> Result<Self, CodecError> {
-        v0::SettlementTxHashRecord::decode(buf)?.try_into()
+        v0::SettlementTxRecord::decode(buf)?.try_into()
     }
 }

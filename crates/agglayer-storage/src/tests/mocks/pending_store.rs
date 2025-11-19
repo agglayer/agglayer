@@ -1,11 +1,12 @@
-use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof, SettlementTxHash};
+use agglayer_types::{
+    Certificate, CertificateId, Height, NetworkId, Proof, SettlementTxHash, SettlementTxRecord,
+};
 use mockall::mock;
 
 use crate::{
     columns::latest_proven_certificate_per_network::ProvenCertificate,
     error::Error,
     stores::{PendingCertificateReader, PendingCertificateWriter},
-    types::SettlementTxHashRecord,
 };
 
 mock! {
@@ -97,6 +98,6 @@ mock! {
             f: F,
         ) -> Result<(), Error>
         where
-            F: FnOnce(SettlementTxHashRecord) -> Result<SettlementTxHashRecord, String> + 'a;
+            F: FnOnce(SettlementTxRecord) -> Result<SettlementTxRecord, String> + 'a;
     }
 }

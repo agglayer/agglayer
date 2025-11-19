@@ -1,6 +1,8 @@
 use std::{path::Path, sync::Arc};
 
-use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof, SettlementTxHash};
+use agglayer_types::{
+    Certificate, CertificateId, Height, NetworkId, Proof, SettlementTxHash, SettlementTxRecord,
+};
 use rocksdb::{Direction, ReadOptions};
 
 use super::{PendingCertificateReader, PendingCertificateWriter};
@@ -18,7 +20,6 @@ use crate::{
     },
     error::Error,
     storage::DB,
-    types::SettlementTxHashRecord,
 };
 
 /// A logical store for pending.
@@ -145,7 +146,7 @@ impl PendingCertificateWriter for PendingStore {
         f: F,
     ) -> Result<(), Error>
     where
-        F: FnOnce(SettlementTxHashRecord) -> Result<SettlementTxHashRecord, String> + 'a,
+        F: FnOnce(SettlementTxRecord) -> Result<SettlementTxRecord, String> + 'a,
     {
         let record = self
             .db
@@ -240,7 +241,7 @@ impl PendingCertificateReader for PendingStore {
         let result = self
             .db
             .get::<SettlementTxHashesPerCertificateColumn>(&certificate_id)?
-            .map(SettlementTxHashRecord::into_vec)
+            .map(SettlementTxRecord::into_vec)
             .unwrap_or_default();
         Ok(result)
     }
