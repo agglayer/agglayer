@@ -604,11 +604,12 @@ where
 
         let settled_certificate =
             SettledCertificate(certificate_id, height, epoch_number, certificate_index);
-        debug!(
-            "Pre update txhash and status: {:?}",
-            self.state_store
+        tracing::trace!(
+            header = ?self
+                .state_store
                 .get_certificate_header(&certificate_id)
-                .map(|h| h.map(|h| h.status))
+                .map(|h| h.map(|h| h.status)),
+            "Header before settlement info write",
         );
         self.state_store
             .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)
