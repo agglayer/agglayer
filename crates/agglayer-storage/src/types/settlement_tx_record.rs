@@ -62,7 +62,7 @@ impl Codec for SettlementTxRecord {
     }
 
     fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), CodecError> {
-        writer.write(self.encode()?.as_slice())?;
+        writer.write_all(self.encode()?.as_slice())?;
         Ok(())
     }
 
