@@ -155,7 +155,6 @@ async fn start_from_zero() {
             }))
         });
 
-
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -387,7 +386,6 @@ async fn one_per_epoch() {
                 previous_max_priority_fee_per_gas: None,
             }))
         });
-
 
     settlement_client
         .expect_wait_for_settlement()
@@ -703,7 +701,6 @@ async fn retries() {
             }))
         });
 
-
     settlement_client
         .expect_wait_for_settlement()
         .once()
@@ -985,7 +982,6 @@ async fn changing_epoch_triggers_certify() {
             }))
         });
 
-
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
@@ -1003,7 +999,6 @@ async fn changing_epoch_triggers_certify() {
                 previous_max_priority_fee_per_gas: None,
             }))
         });
-
 
     settlement_client
         .expect_wait_for_settlement()
