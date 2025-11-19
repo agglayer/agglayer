@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{
-    aggchain_proof::AggchainData, compute_signature_info, CertificateId, CertificateStatus,
+    aggchain_proof::AggchainData, testutils::compute_signature_info, CertificateId,
+    CertificateStatus,
 };
 use fail::FailScenario;
 use integrations::{
