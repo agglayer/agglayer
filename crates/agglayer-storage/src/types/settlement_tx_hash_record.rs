@@ -1,7 +1,7 @@
 use std::io;
 
 use agglayer_types::{Digest, SettlementTxHash};
-use prost::{bytes::BytesMut, Message};
+use prost::{bytes::BytesMut, Message as _};
 
 use crate::{
     columns::{Codec, CodecError},
