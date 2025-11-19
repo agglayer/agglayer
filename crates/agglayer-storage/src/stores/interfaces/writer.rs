@@ -38,6 +38,14 @@ pub trait MetadataWriter: Send + Sync {
 }
 
 pub trait StateWriter: Send + Sync {
+    fn disable_network(
+        &self,
+        network_id: &NetworkId,
+        disabled_by: agglayer_types::network_info::DisabledBy,
+    ) -> Result<(), Error>;
+
+    fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error>;
+
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,

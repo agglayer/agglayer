@@ -113,6 +113,16 @@ impl PerEpochWriter for DummyPendingStore {
 }
 
 impl StateReader for DummyPendingStore {
+    fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
+        Ok(Vec::new())
+    }
+    fn is_network_disabled(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<bool, agglayer_storage::error::Error> {
+        Ok(false)
+    }
+
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
         Ok(vec![])
     }
@@ -323,6 +333,19 @@ impl PendingCertificateWriter for DummyPendingStore {
 }
 
 impl StateWriter for DummyPendingStore {
+    fn disable_network(
+        &self,
+        _network_id: &NetworkId,
+        _disabled_by: agglayer_types::network_info::DisabledBy,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+    fn enable_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
     fn update_settlement_tx_hash(
         &self,
         _certificate_id: &CertificateId,

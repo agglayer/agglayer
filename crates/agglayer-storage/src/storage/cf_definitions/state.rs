@@ -9,7 +9,7 @@ pub const CFS: [&str; 9] = [
     crate::columns::BALANCE_TREE_PER_NETWORK_CF,
     crate::columns::NULLIFIER_TREE_PER_NETWORK_CF,
     crate::columns::NETWORK_INFO_CF,
-    crate::columns::SETTLEMENT_TX_HASHSES_PER_CERTIFICATE_CF,
+    crate::columns::DISABLED_NETWORKS_CF,
 ];
 
 /// Definitions for the column families in the state storage.

@@ -38,8 +38,7 @@ pub const NULLIFIER_TREE_PER_NETWORK_CF: &str = "nullifier_tree_per_network_cf";
 pub const BALANCE_TREE_PER_NETWORK_CF: &str = "balance_tree_per_network_cf";
 pub const LOCAL_EXIT_TREE_PER_NETWORK_CF: &str = "local_exit_tree_per_network_cf";
 pub const NETWORK_INFO_CF: &str = "network_info_cf";
-pub const SETTLEMENT_TX_HASHSES_PER_CERTIFICATE_CF: &str =
-    "settlement_tx_hashes_per_certificate_cf";
+pub const DISABLED_NETWORKS_CF: &str = "disabled_networks_cf";
 
 // Metadata CFs
 pub const CERTIFICATE_HEADER_CF: &str = "certificate_header_cf";
@@ -61,6 +60,8 @@ pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
+pub const SETTLEMENT_TX_HASHSES_PER_CERTIFICATE_CF: &str =
+    "settlement_tx_hashes_per_certificate_cf";
 
 // debug CFs
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
@@ -109,6 +110,7 @@ pub trait ColumnSchema {
 // State
 pub(crate) mod balance_tree_per_network;
 pub(crate) mod certificate_per_network;
+pub(crate) mod disabled_networks;
 pub(crate) mod local_exit_tree_per_network;
 pub(crate) mod network_info;
 pub(crate) mod nullifier_tree_per_network;
