@@ -318,7 +318,7 @@ async fn from_candidate_to_settle() {
 
     storage
         .state
-        .update_settlement_tx_hash(&certificate_id, SettlementTxHash::for_tests(), false)
+        .update_settlement_tx_hash(&certificate_id, SettlementTxHash::for_tests())
         .unwrap();
 
     storage

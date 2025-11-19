@@ -89,22 +89,18 @@ impl StateWriter for StateStore {
             .delete::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)?)
     }
 
+    #[tracing::instrument(skip(self))]
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
-        force: bool,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hash.is_some() && !force {
-                return Err(Error::UnprocessedAction(
-                    "Tried to update settlement tx hash for a certificate that already has a \
-                     settlement tx hash"
-                        .to_string(),
-                ));
+            if let Some(existing_hash) = certificate_header.settlement_tx_hash {
+                warn!(%existing_hash, "Overwriting an existing settlement tx hash");
             }
 
             if certificate_header.status == CertificateStatus::Settled && false {
@@ -120,17 +116,10 @@ impl StateWriter for StateStore {
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
 
             if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-                warn!(
-                    hash = certificate_id.to_string(),
-                    "Unable to trigger backup for the state database: {}", error
-                );
+                warn!(%error, "Unable to trigger backup for the state database");
             }
         } else {
-            info!(
-                hash = %certificate_id,
-                "Certificate header not found for certificate_id: {}",
-                certificate_id
-            )
+            info!("Certificate header not found");
         }
 
         Ok(())

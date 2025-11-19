@@ -611,7 +611,7 @@ where
                 .map(|h| h.map(|h| h.status))
         );
         self.state_store
-            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)
+            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)
             .inspect_err(|error| error!(?error, "Failed to write the settlement tx hash"))?;
         self.set_status(CertificateStatus::Settled)?;
         debug!(
@@ -700,7 +700,7 @@ mod testutils {
                 let unexistent_tx_hash = SettlementTxHash::new(Digest::from([21u8; 32]));
                 header.settlement_tx_hash = Some(unexistent_tx_hash);
                 state_store
-                    .update_settlement_tx_hash(certificate_id, unexistent_tx_hash, true)
+                    .update_settlement_tx_hash(certificate_id, unexistent_tx_hash)
                     .expect("Valid tx hash update");
                 Some(())
             },
