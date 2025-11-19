@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 mod certificate;
 mod generated;
 pub(crate) mod network_info;
-mod settlement_tx_hash_record;
+mod settlement_tx_record;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
