@@ -154,7 +154,7 @@ where
         let status = match receipt.block_number {
             Some(block_number) if block_number < current_block => TxStatus::Done,
             Some(_) => TxStatus::Pending,
-            None => TxStatus::NotFound,
+            None => TxStatus::Pending,
         };
         Ok(status)
     }
