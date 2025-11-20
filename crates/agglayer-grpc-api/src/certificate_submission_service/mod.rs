@@ -39,7 +39,10 @@ where
     L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
-    #[instrument(skip(self, request), level = "debug", fields(certificate_id = tracing::field::Empty))]
+    #[instrument(skip(self, request), level = "debug", fields(
+        certificate_id = tracing::field::Empty,
+        client = crate::client_info_from_metadata(request.metadata())
+    ))]
     async fn submit_certificate(
         &self,
         request: tonic::Request<SubmitCertificateRequest>,
