@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    LocalNetworkStateData, NetworkId, Proof, SettlementTxRecord,
 };
 
 use crate::{
@@ -70,7 +70,7 @@ pub trait PendingCertificateReader: Send + Sync {
     fn get_settlement_tx_hashes_for_certificate(
         &self,
         certificate_id: CertificateId,
-    ) -> Result<Vec<SettlementTxHash>, Error>;
+    ) -> Result<SettlementTxRecord, Error>;
 }
 
 pub trait MetadataReader: Send + Sync {

@@ -44,6 +44,10 @@ impl SettlementTxRecord {
         self.hashes.retain(f);
     }
 
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &SettlementTxHash> + '_ {
+        self.hashes.iter()
+    }
+
     pub fn into_vec(self) -> Vec<SettlementTxHash> {
         self.hashes
     }

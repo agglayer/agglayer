@@ -47,7 +47,7 @@ mock! {
         fn get_settlement_tx_hashes_for_certificate(
             &self,
             certificate_id: CertificateId,
-        ) -> Result<Vec<SettlementTxHash>, Error>;
+        ) -> Result<SettlementTxRecord, Error>;
     }
 
     impl PendingCertificateWriter for PendingStore {

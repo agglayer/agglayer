@@ -10,7 +10,7 @@ use agglayer_storage::{
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateStatus, L1WitnessCtx,
-    Metadata, PessimisticRootInput,
+    Metadata, PessimisticRootInput, SettlementTxRecord,
 };
 use mockall::predicate::{always, eq, in_iter};
 use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
@@ -111,7 +111,7 @@ async fn start_from_zero() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(vec![]));
+        .returning(|_| Ok(SettlementTxRecord::new()));
 
     pending
         .expect_insert_settlement_tx_hash_for_certificate()
@@ -123,7 +123,7 @@ async fn start_from_zero() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(vec![SettlementTxHash::for_tests()]));
+        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SettlementTxHash::for_tests()])));
 
     state
         .expect_update_certificate_header_status()
@@ -343,7 +343,7 @@ async fn one_per_epoch() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(vec![]));
+        .returning(|_| Ok(SettlementTxRecord::new()));
 
     pending
         .expect_insert_settlement_tx_hash_for_certificate()
@@ -355,7 +355,7 @@ async fn one_per_epoch() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(vec![SettlementTxHash::for_tests()]));
+        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SettlementTxHash::for_tests()])));
 
     state
         .expect_update_certificate_header_status()
@@ -619,13 +619,13 @@ async fn retries() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(vec![]));
+        .returning(|_| Ok(SettlementTxRecord::new()));
 
     pending
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id2))
-        .returning(|_| Ok(vec![]));
+        .returning(|_| Ok(SettlementTxRecord::new()));
 
     pending
         .expect_insert_settlement_tx_hash_for_certificate()
@@ -637,7 +637,7 @@ async fn retries() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id2))
-        .returning(|_| Ok(vec![SettlementTxHash::for_tests()]));
+        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SettlementTxHash::for_tests()])));
 
     state
         .expect_update_certificate_header_status()
@@ -908,7 +908,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(vec![]));
+        .returning(|_| Ok(SettlementTxRecord::new()));
 
     pending
         .expect_insert_settlement_tx_hash_for_certificate()
@@ -920,13 +920,13 @@ async fn changing_epoch_triggers_certify() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(vec![SETTLEMENT_TX_HASH_1]));
+        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SETTLEMENT_TX_HASH_1])));
 
     pending
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id2))
-        .returning(|_| Ok(vec![]));
+        .returning(|_| Ok(SettlementTxRecord::new()));
 
     pending
         .expect_insert_settlement_tx_hash_for_certificate()
@@ -938,7 +938,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id2))
-        .returning(|_| Ok(vec![SETTLEMENT_TX_HASH_2]));
+        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SETTLEMENT_TX_HASH_2])));
 
     state
         .expect_update_certificate_header_status()

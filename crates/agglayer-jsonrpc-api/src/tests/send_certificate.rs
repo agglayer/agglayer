@@ -384,7 +384,7 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status(
         .pending_store
         .get_settlement_tx_hashes_for_certificate(certificate_id)
         .unwrap();
-    assert_eq!(pending_hashes, &[fake_settlement_tx_hash]);
+    assert_eq!(pending_hashes.hashes(), &[fake_settlement_tx_hash]);
 
     let res: Result<(), _> = context
         .admin_client

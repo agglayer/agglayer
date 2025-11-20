@@ -719,6 +719,7 @@ where
                 let settlement_tx_hash = self
                     .pending_store
                     .get_settlement_tx_hashes_for_certificate(pre_existing_certificate_id)?
+                    .hashes()
                     .last()
                     .copied();
                 match settlement_tx_hash {

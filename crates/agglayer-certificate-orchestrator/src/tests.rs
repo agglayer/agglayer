@@ -515,14 +515,13 @@ impl PendingCertificateReader for DummyPendingStore {
     fn get_settlement_tx_hashes_for_certificate(
         &self,
         certificate_id: CertificateId,
-    ) -> Result<Vec<SettlementTxHash>, agglayer_storage::error::Error> {
+    ) -> Result<SettlementTxRecord, agglayer_storage::error::Error> {
         Ok(self
             .settlement_tx_hashes
             .read()
             .unwrap()
             .get(&certificate_id)
             .cloned()
-            .map(|record| record.into_vec())
             .unwrap_or_default())
     }
 }

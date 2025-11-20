@@ -237,11 +237,10 @@ impl PendingCertificateReader for PendingStore {
     fn get_settlement_tx_hashes_for_certificate(
         &self,
         certificate_id: CertificateId,
-    ) -> Result<Vec<SettlementTxHash>, Error> {
+    ) -> Result<SettlementTxRecord, Error> {
         let result = self
             .db
             .get::<SettlementTxHashesPerCertificateColumn>(&certificate_id)?
-            .map(SettlementTxRecord::into_vec)
             .unwrap_or_default();
         Ok(result)
     }

@@ -439,7 +439,8 @@ where
 
         let mut previous_tx_hashes = self
             .pending_store
-            .get_settlement_tx_hashes_for_certificate(certificate_id)?;
+            .get_settlement_tx_hashes_for_certificate(certificate_id)?
+            .into_vec();
 
         if previous_tx_hashes.len() > MAX_TX_RETRY {
             error!(
@@ -527,7 +528,8 @@ where
         let mut prev_tx_hashes = self
             .pending_store
             .get_settlement_tx_hashes_for_certificate(certificate_id)
-            .inspect_err(|error| error!(?error, "Failed to query prev tx hashes"))?;
+            .inspect_err(|error| error!(?error, "Failed to query prev tx hashes"))?
+            .into_vec();
         let mut processed_tx_hashes = Vec::new();
 
         let (epoch_number, certificate_index, settlement_tx_hash) = loop {
