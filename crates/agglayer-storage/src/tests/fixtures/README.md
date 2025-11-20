@@ -16,58 +16,79 @@ These fixtures ensure that:
 Reference database generated with the following configuration:
 
 - **Version**: 1.0.0
+- **Generation date**: 2025-11-20
 - **Networks**: 3
 - **Certificates per network**: 10
 - **Total certificates**: 30
 - **Seed**: 42 (for reproducibility)
-- **Proofs**: Included
-- **Size**: ~60 KB compressed, ~564 KB uncompressed
+- **Proofs**: Included (mock proofs for testing)
+- **Size**: ~80 KB compressed
 
 #### Column Families Included
 
-The database contains data across 16 column families:
+The database contains data across **17 column families**:
 
 **State Database:**
-- `certificate_header_cf` (30 entries)
-- `certificate_per_network_cf` (30 entries)
-- `latest_settled_certificate_per_network_cf` (3 entries)
-- `metadata_cf` (1 entry)
-- `local_exit_tree_per_network_cf` (18 entries)
-- `balance_tree_per_network_cf` (15 entries)
-- `nullifier_tree_per_network_cf` (3 entries)
-- `network_info_cf` (12 entries)
+- `certificate_header_cf` (30 entries) - Headers with epoch/index mapping
+- `certificate_per_network_cf` (30 entries) - Network-height to cert ID mapping
+- `latest_settled_certificate_per_network_cf` (3 entries) - Latest settled cert per network
+- `disabled_networks_cf` (1 entry) - Networks that have been disabled (~30% randomly)
+- `metadata_cf` (1 entry) - Global metadata (latest settled epoch)
+- `local_exit_tree_per_network_cf` (19 entries) - LET leaves, leaf count, frontier nodes
+- `balance_tree_per_network_cf` (15 entries) - Sparse merkle tree nodes for balances
+- `nullifier_tree_per_network_cf` (3 entries) - Nullifier tree roots
+- `network_info_cf` (12 entries) - Network type, settled cert info, claims, pending cert info
 
 **Pending Database:**
-- `latest_pending_certificate_per_network_cf` (3 entries)
-- `latest_proven_certificate_per_network_cf` (3 entries)
-- `pending_queue_cf` (6 entries)
-- `proof_per_certificate_cf` (1 entry)
+- `latest_pending_certificate_per_network_cf` (3 entries) - Latest pending cert per network
+- `latest_proven_certificate_per_network_cf` (3 entries) - Latest proven cert per network
+- `pending_queue_cf` (6 entries) - Pending certificates queue
+- `proof_per_certificate_cf` (1 entry) - Proofs for certificates
 
 **Epochs Database:**
-- `per_epoch_certificates_cf` (30 entries)
-- `per_epoch_metadata_cf` (24 entries)
-- `per_epoch_proofs_cf` (30 entries)
+- `per_epoch_certificates_cf` (30 entries) - Certificates indexed by epoch
+- `per_epoch_metadata_cf` (24 entries) - Per-epoch metadata (settlement tx hash, packed status)
+- `per_epoch_proofs_cf` (30 entries) - Proofs indexed by epoch
 
 **Debug Database:**
-- `debug_certificates` (30 entries)
+- `debug_certificates` (30 entries) - Full certificate data for debugging
 
-**Total**: 239 entries across all databases
+**Total**: 241 entries across all databases
+
+#### Data Characteristics
+
+All data is generated using a seeded random number generator (seed: 42) for reproducibility:
+
+- **Certificates**: Diverse parameters (0-4 bridge exits, varying signature versions, multiple aggchain data types)
+- **Network Types**: Varied across Ecdsa, Generic, MultisigOnly, MultisigAndAggchainProof
+- **Network Info**: Realistic random hashes for pp_root, LER, global indexes, bridge exit hashes
+- **Disabled Networks**: ~30% randomly disabled with Admin/Unspecified reasons and random timestamps
+- **Trees**: Random sparse merkle tree structures with multiple nodes and leaves
+- **Epochs**: 3 certificates per epoch (configurable via `CERTIFICATES_PER_EPOCH` constant)
 
 ## Regenerating Artifacts
 
 If you need to regenerate these artifacts (e.g., after intentional serialization format changes):
 
 ```bash
-cargo run --bin generate-test-db --features testutils,cli -p agglayer-storage -- \
-  --output-dir ./crates/agglayer-storage/tests/fixtures/reference_db_v1 \
+# Generate in temp directory first for testing
+cargo run -p agglayer-storage --bin generate-test-db --features "testutils,cli" -- \
+  --output-dir ./temp/reference_db_v1 \
   --num-networks 3 \
   --certificates-per-network 10 \
   --seed 42 \
   --tarball \
   --tarball-name reference_db_v1.tar.gz
+
+# After validation, move to fixtures directory
+mv temp/reference_db_v1.tar.gz crates/agglayer-storage/tests/fixtures/
 ```
 
-**Important**: Always use the same seed (42) to ensure reproducibility!
+**Important Notes**:
+- Always use the same seed (42) to ensure reproducibility!
+- The data generation uses seeded RNG for deterministic output
+- Review the metadata.json to verify expected statistics
+- Test the new artifact with regression tests before committing
 
 ## Using in Tests
 
@@ -90,11 +111,13 @@ When creating new artifacts for major changes:
 
 ## Metadata
 
-Each database directory includes a `metadata.json` file with:
-- Generation timestamp
-- Configuration used
-- Statistics (networks, certificates, entries per CF)
-- Database paths
+Each database archive has an accompanying `reference_db_v1_metadata.json` file in this directory for quick reference.
 
-This metadata is used by regression tests to validate the database contents.
+The extracted database directory also includes a `metadata.json` file with:
+- Generation timestamp
+- Configuration used (networks, certificates, seed, proofs)
+- Statistics (total networks, total certificates, entries per column family)
+- Database paths (state, pending, epochs, debug)
+
+This metadata is used by regression tests to validate the database contents match expectations.
 

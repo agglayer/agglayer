@@ -1,8 +1,8 @@
 //! CLI tool to generate RocksDB test databases for regression testing
 //!
-//! This tool generates populated RocksDB databases that can be used as
-//! artifacts for regression testing across version upgrades (e.g., alloy 0.14
-//! -> 1.0).
+//! This tool generates populated RocksDB databases with some mock data
+//! that can be used as artifacts for regression testing across
+//! version upgrades (e.g., alloy 0.14 -> 1.0).
 //!
 //! Usage:
 //!   cargo run --bin generate-test-db --features testutils -- --output-dir
@@ -18,9 +18,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use agglayer_storage::tests::db_generator::{generate_all_databases, GeneratorConfig};
+use agglayer_storage::tests::db_generator::{
+    generate_all_databases, DatabaseMetadata, DatabasePaths, GenerationStatistics, GeneratorConfig,
+};
 use clap::Parser;
-use serde::{Deserialize, Serialize};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -38,7 +39,7 @@ struct Args {
     num_networks: u32,
 
     /// Number of certificates per network
-    #[arg(short, long, default_value_t = 5)]
+    #[arg(short, long, default_value_t = 10)]
     certificates_per_network: u64,
 
     /// Generate proofs for certificates (slower but more complete)
@@ -56,43 +57,6 @@ struct Args {
     /// Name for the tarball (only used if --tarball is set)
     #[arg(long, default_value = "reference_db_v1.tar.gz")]
     tarball_name: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct DatabaseMetadata {
-    /// Version identifier for this database artifact
-    version: String,
-    /// Generation timestamp
-    timestamp: String,
-    /// Configuration used to generate the databases
-    config: GeneratorConfigMetadata,
-    /// Statistics about generated data
-    statistics: GenerationStatistics,
-    /// Database paths relative to the metadata file
-    database_paths: DatabasePaths,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct GeneratorConfigMetadata {
-    num_networks: u32,
-    certificates_per_network: u64,
-    generate_proofs: bool,
-    seed: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct GenerationStatistics {
-    total_networks: usize,
-    total_certificates: usize,
-    entries_per_column_family: std::collections::HashMap<String, usize>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct DatabasePaths {
-    state: String,
-    pending: String,
-    epochs: String,
-    debug: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -148,12 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let metadata = DatabaseMetadata {
         version: "1.0.0".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
-        config: GeneratorConfigMetadata {
-            num_networks: args.num_networks,
-            certificates_per_network: args.certificates_per_network,
-            generate_proofs: args.generate_proofs,
-            seed: args.seed,
-        },
+        config: config.clone(),
         statistics: GenerationStatistics {
             total_networks: result.network_ids.len(),
             total_certificates: result.certificate_ids.len(),

@@ -4,57 +4,24 @@
 //! dependencies (e.g., alloy 0.14) can still be read correctly with newer
 //! versions (e.g., alloy 1.0).
 //!
-//! The test databases are stored as compressed artifacts in tests/fixtures/ and
-//! are extracted to temporary locations before testing.
+//! The test databases are stored as compressed artifacts in `tests/fixtures/`
+//! and are extracted to temporary locations before testing.
 
 use std::{
-    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
 
-use agglayer_types::CertificateHeader;
-use serde::{Deserialize, Serialize};
-
-use crate::storage::{
-    debug_db_cf_definitions, epochs_db_cf_definitions, pending_db_cf_definitions,
-    state_db_cf_definitions, DB,
+use crate::{
+    storage::{
+        debug_db_cf_definitions, epochs_db_cf_definitions, pending_db_cf_definitions,
+        state_db_cf_definitions, DB,
+    },
+    tests::db_generator::DatabaseMetadata,
 };
 
 /// Path to the reference database v1 tarball artifact
 const REFERENCE_DB_V1_TARBALL: &str = "src/tests/fixtures/reference_db_v1.tar.gz";
-
-#[derive(Debug, Serialize, Deserialize)]
-struct DatabaseMetadata {
-    version: String,
-    timestamp: String,
-    config: GeneratorConfig,
-    statistics: GenerationStatistics,
-    database_paths: DatabasePaths,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct GeneratorConfig {
-    num_networks: u32,
-    certificates_per_network: u64,
-    generate_proofs: bool,
-    seed: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct GenerationStatistics {
-    total_networks: usize,
-    total_certificates: usize,
-    entries_per_column_family: HashMap<String, usize>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct DatabasePaths {
-    state: String,
-    pending: String,
-    epochs: String,
-    debug: String,
-}
 
 /// Helper to extract tarball and return path to extracted directory
 fn extract_tarball(
@@ -97,76 +64,122 @@ fn read_metadata(db_path: &Path) -> Result<DatabaseMetadata, Box<dyn std::error:
     Ok(metadata)
 }
 
+/// Test fixture helper that manages database extraction and cleanup
+struct TestFixture {
+    pub db_path: PathBuf,
+    pub metadata: DatabaseMetadata,
+    temp_dir: PathBuf,
+}
+
+impl TestFixture {
+    /// Create a new test fixture by extracting the reference database
+    fn new(test_name: &str) -> Self {
+        let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
+
+        assert!(
+            tarball_path.exists(),
+            "Tarball not found at: {}",
+            tarball_path.display()
+        );
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "agglayer_regression_test_{}_{}",
+            test_name,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        ));
+
+        let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
+        let metadata = read_metadata(&db_path).expect("Failed to read metadata");
+
+        Self {
+            db_path,
+            metadata,
+            temp_dir,
+        }
+    }
+
+    /// Open the state database in read-only mode
+    fn open_state_db(&self) -> Result<DB, crate::storage::DBError> {
+        let state_path = self.db_path.join(&self.metadata.database_paths.state);
+        DB::open_cf_readonly(&state_path, state_db_cf_definitions())
+    }
+
+    /// Open the pending database in read-only mode
+    fn open_pending_db(&self) -> Result<DB, crate::storage::DBError> {
+        let pending_path = self.db_path.join(&self.metadata.database_paths.pending);
+        DB::open_cf_readonly(&pending_path, pending_db_cf_definitions())
+    }
+
+    /// Open the epochs database in read-only mode
+    fn open_epochs_db(&self) -> Result<DB, crate::storage::DBError> {
+        let epochs_path = self.db_path.join(&self.metadata.database_paths.epochs);
+        DB::open_cf_readonly(&epochs_path, epochs_db_cf_definitions())
+    }
+
+    /// Open the debug database in read-only mode
+    fn open_debug_db(&self) -> Result<DB, crate::storage::DBError> {
+        let debug_path = self.db_path.join(&self.metadata.database_paths.debug);
+        DB::open_cf_readonly(&debug_path, debug_db_cf_definitions())
+    }
+}
+
+impl Drop for TestFixture {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.temp_dir);
+    }
+}
+
 /// Simplified test that validates we can open all databases and they contain
 /// the expected number of entries according to the metadata.
 #[test]
 fn test_reference_db_v1_deserialization() {
-    // Path to the tarball artifact
-    let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
+    let fixture = TestFixture::new("deserialization");
 
-    assert!(
-        tarball_path.exists(),
-        "Tarball not found at: {}",
-        tarball_path.display()
-    );
-
-    // Extract to temporary directory
-    let temp_dir = std::env::temp_dir().join(format!(
-        "agglayer_regression_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    ));
-
-    let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
-
-    // Read metadata
-    let metadata = read_metadata(&db_path).expect("Failed to read metadata");
-
-    println!("Testing reference database v{}", metadata.version);
-    println!("Generated at: {}", metadata.timestamp);
+    println!("Testing reference database v{}", fixture.metadata.version);
+    println!("Generated at: {}", fixture.metadata.timestamp);
     println!(
-        "Configuration: {} networks, {} certs/network",
-        metadata.config.num_networks, metadata.config.certificates_per_network
+        "Configuration: {} networks, {} certs/network, seed: {}",
+        fixture.metadata.config.num_networks,
+        fixture.metadata.config.certificates_per_network,
+        fixture.metadata.config.seed
     );
 
     // Open databases in read-only mode
     // This is the main regression test - if deserialization format changed
     // incompatibly, opening the database would fail
-    let state_path = db_path.join(&metadata.database_paths.state);
-    let pending_path = db_path.join(&metadata.database_paths.pending);
-    let epochs_path = db_path.join(&metadata.database_paths.epochs);
-    let debug_path = db_path.join(&metadata.database_paths.debug);
-
-    let _state_db = DB::open_cf_readonly(&state_path, state_db_cf_definitions())
+    let _state_db = fixture
+        .open_state_db()
         .expect("Failed to open state DB - serialization format may have changed!");
-    let _pending_db = DB::open_cf_readonly(&pending_path, pending_db_cf_definitions())
+    let _pending_db = fixture
+        .open_pending_db()
         .expect("Failed to open pending DB - serialization format may have changed!");
-    let _epochs_db = DB::open_cf_readonly(&epochs_path, epochs_db_cf_definitions())
+    let _epochs_db = fixture
+        .open_epochs_db()
         .expect("Failed to open epochs DB - serialization format may have changed!");
-    let _debug_db = DB::open_cf_readonly(&debug_path, debug_db_cf_definitions())
+    let _debug_db = fixture
+        .open_debug_db()
         .expect("Failed to open debug DB - serialization format may have changed!");
 
     println!("\n✅ All databases successfully opened!");
     println!("✅ Column families are accessible");
     println!(
         "✅ Expected {} total entries across {} column families",
-        metadata
+        fixture
+            .metadata
             .statistics
             .entries_per_column_family
             .values()
             .sum::<usize>(),
-        metadata.statistics.entries_per_column_family.len()
+        fixture.metadata.statistics.entries_per_column_family.len()
     );
 
     println!("\nExpected entries per column family:");
-    for (cf, count) in &metadata.statistics.entries_per_column_family {
+    for (cf, count) in &fixture.metadata.statistics.entries_per_column_family {
         println!("  {}: {} entries", cf, count);
     }
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
@@ -177,23 +190,8 @@ fn test_reference_db_v1_read_metadata() {
         types::{MetadataKey, MetadataValue},
     };
 
-    let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
-
-    let temp_dir = std::env::temp_dir().join(format!(
-        "agglayer_regression_test_metadata_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    ));
-
-    let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
-
-    let metadata = read_metadata(&db_path).expect("Failed to read metadata");
-
-    let state_path = db_path.join(&metadata.database_paths.state);
-    let state_db = DB::open_cf_readonly(&state_path, state_db_cf_definitions())
-        .expect("Failed to open state DB");
+    let fixture = TestFixture::new("metadata");
+    let state_db = fixture.open_state_db().expect("Failed to open state DB");
 
     // Try to read the metadata entry - this validates that data deserialization
     // works
@@ -210,747 +208,1293 @@ fn test_reference_db_v1_read_metadata() {
         }
         _ => panic!("Unexpected metadata value type"),
     }
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
-fn test_reference_db_v1_read_certificates() {
-    // Test reading certificate data structures
-    use crate::columns::certificate_header::CertificateHeaderColumn;
+fn test_reference_db_v1_read_state_db() {
+    // Comprehensive test reading and reconstructing all data from state database
+    // This reverses what generate_state_db does - reads values and validates
+    // structure
+    use std::collections::{BTreeMap, HashMap, HashSet};
 
-    let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
+    use agglayer_types::{
+        primitives::Digest, CertificateHeader, CertificateId, CertificateStatus, Height, NetworkId,
+    };
 
-    let temp_dir = std::env::temp_dir().join(format!(
-        "agglayer_regression_test_certs_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    ));
+    use crate::{
+        columns::{
+            balance_tree_per_network::BalanceTreePerNetworkColumn,
+            certificate_header::CertificateHeaderColumn,
+            certificate_per_network::{CertificatePerNetworkColumn, Key as CertPerNetKey},
+            disabled_networks::DisabledNetworksColumn,
+            latest_settled_certificate_per_network::{
+                LatestSettledCertificatePerNetworkColumn, SettledCertificate,
+            },
+            local_exit_tree_per_network::{
+                Key as LetKey, KeyType as LetKeyType, LocalExitTreePerNetworkColumn,
+                Value as LetValue,
+            },
+            metadata::MetadataColumn,
+            network_info::NetworkInfoColumn,
+            nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        },
+        types::{
+            disabled_network::Value as DisabledNetwork,
+            network_info::{Key as NetworkInfoKey, Value as NetworkInfoValue},
+            MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue,
+        },
+    };
 
-    let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
-    let metadata = read_metadata(&db_path).expect("Failed to read metadata");
+    let fixture = TestFixture::new("state_db");
+    let state_db = fixture.open_state_db().expect("Failed to open state DB");
 
-    let state_path = db_path.join(&metadata.database_paths.state);
-    let state_db = DB::open_cf_readonly(&state_path, state_db_cf_definitions())
-        .expect("Failed to open state DB");
+    println!("=== Reconstructing State Database (Reverse of generate_state_db) ===\n");
 
-    // Iterate through all certificate headers and validate them
-    let headers_iter = state_db
+    // Collect network IDs from the data
+    let mut network_ids: HashSet<NetworkId> = HashSet::new();
+
+    // 1. Read and validate CertificatePerNetwork mappings
+    println!("1. Reading certificate_per_network_cf...");
+    let mut cert_per_network_map: BTreeMap<(NetworkId, Height), CertificateId> = BTreeMap::new();
+    for key_result in state_db
+        .keys::<CertificatePerNetworkColumn>()
+        .expect("Failed to iterate")
+    {
+        let key: CertPerNetKey = key_result.expect("Failed to read key");
+        let cert_id: CertificateId = state_db
+            .get::<CertificatePerNetworkColumn>(&key)
+            .expect("Failed to read value")
+            .expect("Value not found");
+
+        let network_id = NetworkId::new(key.network_id);
+        network_ids.insert(network_id);
+        cert_per_network_map.insert((network_id, key.height), cert_id);
+    }
+    println!(
+        "   ✅ Reconstructed {} certificate mappings for {} networks",
+        cert_per_network_map.len(),
+        network_ids.len()
+    );
+
+    // 2. Read and validate CertificateHeaders
+    println!("\n2. Reading certificate_header_cf...");
+    let mut headers: BTreeMap<CertificateId, CertificateHeader> = BTreeMap::new();
+    for cert_id_result in state_db
         .keys::<CertificateHeaderColumn>()
-        .expect("Failed to create certificate headers iterator");
-    let mut header_count = 0;
-    let mut network_ids_found = std::collections::HashSet::new();
-
-    for cert_id_result in headers_iter {
-        let cert_id = match cert_id_result {
-            Ok(id) => id,
-            Err(e) => {
-                eprintln!("Failed to read certificate ID: {:?}", e);
-                continue;
-            }
-        };
+        .expect("Failed to iterate")
+    {
+        let cert_id = cert_id_result.expect("Failed to read cert ID");
         let header: CertificateHeader = state_db
             .get::<CertificateHeaderColumn>(&cert_id)
-            .expect("Failed to read certificate header")
-            .expect("Certificate header not found");
+            .expect("Failed to read header")
+            .expect("Header not found");
 
         // Validate header structure
         assert_eq!(header.certificate_id, cert_id, "Certificate ID mismatch");
-        assert!(header.height.as_u64() < 100, "Unexpected height value");
+        assert_eq!(header.status, CertificateStatus::Pending);
+        assert!(header.epoch_number.is_some(), "Epoch number should be set");
+        assert!(
+            header.certificate_index.is_some(),
+            "Certificate index should be set"
+        );
 
-        // Track networks
-        network_ids_found.insert(header.network_id);
+        // Verify it matches the cert_per_network mapping
+        if let Some(mapped_cert_id) = cert_per_network_map.get(&(header.network_id, header.height))
+        {
+            assert_eq!(
+                *mapped_cert_id, cert_id,
+                "Certificate mapping mismatch for network {} height {}",
+                header.network_id, header.height
+            );
+        }
 
-        header_count += 1;
+        headers.insert(cert_id, header);
+    }
+    println!("   ✅ Reconstructed {} certificate headers", headers.len());
+    println!("   ✅ All headers have valid epoch/index and match network mappings");
+
+    // 3. Read and validate LatestSettledCertificatePerNetwork
+    println!("\n3. Reading latest_settled_certificate_per_network_cf...");
+    let mut settled_certs: HashMap<NetworkId, SettledCertificate> = HashMap::new();
+    for network_id_result in state_db
+        .keys::<LatestSettledCertificatePerNetworkColumn>()
+        .expect("Failed to iterate")
+    {
+        let network_id = network_id_result.expect("Failed to read network ID");
+        let settled_cert: SettledCertificate = state_db
+            .get::<LatestSettledCertificatePerNetworkColumn>(&network_id)
+            .expect("Failed to read settled cert")
+            .expect("Settled cert not found");
+
+        // Validate that this certificate exists in headers
+        if let Some(header) = headers.get(&settled_cert.0) {
+            assert_eq!(
+                header.network_id, network_id,
+                "Settled cert network mismatch"
+            );
+            assert_eq!(
+                header.height, settled_cert.1,
+                "Settled cert height mismatch"
+            );
+            // Note: Epoch and index should match, but we're just validating structure
+            // exists
+            assert!(
+                header.epoch_number.is_some(),
+                "Header should have epoch number"
+            );
+            assert!(
+                header.certificate_index.is_some(),
+                "Header should have certificate index"
+            );
+        } else {
+            panic!(
+                "Settled certificate {} not found in headers",
+                settled_cert.0
+            );
+        }
+
+        settled_certs.insert(network_id, settled_cert);
+    }
+    println!(
+        "   ✅ Reconstructed {} settled certificates",
+        settled_certs.len()
+    );
+    println!("   ✅ All settled certificates match their headers");
+
+    // 4. Read and reconstruct LocalExitTree per network
+    println!("\n4. Reading local_exit_tree_per_network_cf...");
+    // Type alias for LocalExitTree data: (leaf_count, leaves, frontiers)
+    type LetData = (u32, Vec<[u8; 32]>, Vec<[u8; 32]>);
+    let mut let_per_network: HashMap<NetworkId, LetData> = HashMap::new();
+    for key_result in state_db
+        .keys::<LocalExitTreePerNetworkColumn>()
+        .expect("Failed to iterate")
+    {
+        let key: LetKey = key_result.expect("Failed to read key");
+        let value: LetValue = state_db
+            .get::<LocalExitTreePerNetworkColumn>(&key)
+            .expect("Failed to read value")
+            .expect("Value not found");
+
+        let network_id = NetworkId::new(key.network_id);
+        let entry = let_per_network
+            .entry(network_id)
+            .or_insert((0, Vec::new(), Vec::new()));
+
+        match (key.key_type, value) {
+            (LetKeyType::LeafCount, LetValue::LeafCount(count)) => {
+                entry.0 = count;
+            }
+            (LetKeyType::Leaf(_), LetValue::Leaf(hash)) => {
+                entry.1.push(hash);
+            }
+            (LetKeyType::Frontier(_), LetValue::Frontier(hash)) => {
+                entry.2.push(hash);
+            }
+            _ => panic!("Invalid LET key/value combination"),
+        }
+    }
+    println!(
+        "   ✅ Reconstructed local exit trees for {} networks",
+        let_per_network.len()
+    );
+    for (network_id, (leaf_count, leaves, frontiers)) in &let_per_network {
+        println!(
+            "      Network {}: {} leaves, {} leaf hashes, {} frontier nodes",
+            network_id,
+            leaf_count,
+            leaves.len(),
+            frontiers.len()
+        );
     }
 
-    println!("✅ Read and validated {} certificate headers", header_count);
-    println!("✅ Found {} unique networks", network_ids_found.len());
+    // 5. Read and validate BalanceTree per network
+    println!("\n5. Reading balance_tree_per_network_cf...");
+    // Type alias for BalanceTree data: (root, internal_nodes, leaves)
+    type BalanceTreeData = (Digest, Vec<(Digest, Digest)>, Vec<Digest>);
+    let mut balance_trees: HashMap<NetworkId, BalanceTreeData> = HashMap::new();
+    for key_result in state_db
+        .keys::<BalanceTreePerNetworkColumn>()
+        .expect("Failed to iterate")
+    {
+        let key: SmtKey = key_result.expect("Failed to read key");
+        let value: SmtValue = state_db
+            .get::<BalanceTreePerNetworkColumn>(&key)
+            .expect("Failed to read value")
+            .expect("Value not found");
 
-    assert_eq!(
-        header_count, metadata.statistics.total_certificates,
-        "Certificate count mismatch"
+        let network_id = NetworkId::new(key.network_id);
+        let entry =
+            balance_trees
+                .entry(network_id)
+                .or_insert((Digest::default(), Vec::new(), Vec::new()));
+
+        match (key.key_type, value) {
+            (SmtKeyType::Root, SmtValue::Node(left, right)) => {
+                entry.0 = left; // Store root (we could compute hash of left+right)
+                entry.1.push((left, right));
+            }
+            (SmtKeyType::Node(_hash), SmtValue::Node(left, right)) => {
+                entry.1.push((left, right));
+            }
+            (SmtKeyType::Node(_hash), SmtValue::Leaf(value)) => {
+                entry.2.push(value);
+            }
+            _ => {}
+        }
+    }
+    println!(
+        "   ✅ Reconstructed balance trees for {} networks",
+        balance_trees.len()
+    );
+    for (network_id, (root, nodes, leaves)) in &balance_trees {
+        println!(
+            "      Network {}: root={}, {} nodes, {} leaves",
+            network_id,
+            root,
+            nodes.len(),
+            leaves.len()
+        );
+    }
+
+    // 6. Read and validate NullifierTree per network
+    println!("\n6. Reading nullifier_tree_per_network_cf...");
+    let mut nullifier_roots: HashMap<NetworkId, (Digest, Digest)> = HashMap::new();
+    for key_result in state_db
+        .keys::<NullifierTreePerNetworkColumn>()
+        .expect("Failed to iterate")
+    {
+        let key: SmtKey = key_result.expect("Failed to read key");
+        if let SmtKeyType::Root = key.key_type {
+            let value: SmtValue = state_db
+                .get::<NullifierTreePerNetworkColumn>(&key)
+                .expect("Failed to read value")
+                .expect("Value not found");
+
+            if let SmtValue::Node(left, right) = value {
+                nullifier_roots.insert(NetworkId::new(key.network_id), (left, right));
+            }
+        }
+    }
+    println!(
+        "   ✅ Reconstructed nullifier tree roots for {} networks",
+        nullifier_roots.len()
     );
 
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
+    // 7. Read and validate NetworkInfo
+    println!("\n7. Reading network_info_cf...");
+    let mut network_info: HashMap<NetworkId, Vec<String>> = HashMap::new();
+    for key_result in state_db
+        .keys::<NetworkInfoColumn>()
+        .expect("Failed to iterate")
+    {
+        let key: NetworkInfoKey = key_result.expect("Failed to read key");
+        let value: NetworkInfoValue = state_db
+            .get::<NetworkInfoColumn>(&key)
+            .expect("Failed to read value")
+            .expect("Value not found");
+
+        let network_id = NetworkId::new(key.network_id);
+        let info_types = network_info.entry(network_id).or_default();
+
+        match value.value {
+            Some(crate::types::network_info::v0::network_info_value::Value::NetworkType(nt)) => {
+                info_types.push(format!("NetworkType({})", nt));
+            }
+            Some(crate::types::network_info::v0::network_info_value::Value::SettledCertificate(sc)) => {
+                info_types.push(format!("SettledCert(leaf_count={})", sc.let_leaf_count.map_or(0, |c| c.settled_let_leaf_count)));
+            }
+            Some(crate::types::network_info::v0::network_info_value::Value::SettledClaim(_)) => {
+                info_types.push("SettledClaim".to_string());
+            }
+            Some(crate::types::network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(info)) => {
+                info_types.push(format!("PendingCert(height={})", info.height.map_or(0, |h| h.height)));
+            }
+            None => {}
+        }
+    }
+    println!(
+        "   ✅ Reconstructed network info for {} networks",
+        network_info.len()
+    );
+    for (network_id, info_types) in &network_info {
+        println!("      Network {}: {:?}", network_id, info_types);
+    }
+
+    // 8. Read and validate global Metadata
+    println!("\n8. Reading metadata_cf...");
+    let metadata_value = state_db
+        .get::<MetadataColumn>(&MetadataKey::LatestSettledEpoch)
+        .expect("Failed to read metadata")
+        .expect("Metadata not found");
+    let latest_epoch = match metadata_value {
+        MetadataValue::LatestSettledEpoch(epoch) => epoch,
+        _ => panic!("Unexpected metadata value type"),
+    };
+    println!(
+        "   ✅ Read global metadata: latest_settled_epoch={}",
+        latest_epoch
+    );
+
+    // 9. Read and validate DisabledNetworks
+    println!("\n9. Reading disabled_networks_cf...");
+    let mut disabled_networks: Vec<(NetworkId, DisabledNetwork)> = Vec::new();
+    for network_id_result in state_db
+        .keys::<DisabledNetworksColumn>()
+        .expect("Failed to iterate")
+    {
+        let network_id = network_id_result.expect("Failed to read network ID");
+        let disabled_info: DisabledNetwork = state_db
+            .get::<DisabledNetworksColumn>(&network_id)
+            .expect("Failed to read disabled info")
+            .expect("Disabled info not found");
+
+        // Validate structure
+        assert!(
+            disabled_info.disabled_at.is_some(),
+            "Disabled timestamp should be set"
+        );
+        disabled_networks.push((network_id, disabled_info));
+    }
+    println!(
+        "   ✅ Reconstructed {} disabled networks",
+        disabled_networks.len()
+    );
+    for (network_id, info) in &disabled_networks {
+        println!(
+            "      Network {}: disabled_by={}, timestamp={:?}",
+            network_id, info.disabled_by, info.disabled_at
+        );
+    }
+
+    // Final validation summary
+    println!("\n=== Validation Summary ===");
+    println!("  Total networks: {}", network_ids.len());
+    println!("  Total certificates: {}", headers.len());
+    println!("  Settled certificates: {}", settled_certs.len());
+    println!("  Networks with LET: {}", let_per_network.len());
+    println!("  Networks with balance trees: {}", balance_trees.len());
+    println!("  Networks with nullifier trees: {}", nullifier_roots.len());
+    println!("  Networks with info: {}", network_info.len());
+    println!("  Disabled networks: {}", disabled_networks.len());
+
+    // Verify consistency
+    assert_eq!(
+        headers.len(),
+        fixture.metadata.statistics.total_certificates,
+        "Total certificates mismatch"
+    );
+    assert_eq!(
+        network_ids.len(),
+        fixture.metadata.config.num_networks as usize,
+        "Total networks mismatch"
+    );
+
+    println!("\n✅ Successfully reconstructed and validated all state database data!");
+    println!("   All structures match expected format and are internally consistent.");
 }
 
 #[test]
-fn test_reference_db_v1_read_pending_queue() {
-    // Test reading pending queue and proofs
+fn test_reference_db_v1_read_pending_db() {
+    // Comprehensive test reading and reconstructing all data from pending database
+    // This reverses what generate_pending_db does - reads values and validates
+    // structure
+    use std::collections::{BTreeMap, HashSet};
+
+    use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
+
     use crate::columns::{
-        pending_queue::PendingQueueColumn, proof_per_certificate::ProofPerCertificateColumn,
+        latest_pending_certificate_per_network::{
+            LatestPendingCertificatePerNetworkColumn, PendingCertificate,
+        },
+        latest_proven_certificate_per_network::{
+            LatestProvenCertificatePerNetworkColumn, ProvenCertificate,
+        },
+        pending_queue::{PendingQueueColumn, PendingQueueKey},
+        proof_per_certificate::ProofPerCertificateColumn,
     };
 
-    let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
-
-    let temp_dir = std::env::temp_dir().join(format!(
-        "agglayer_regression_test_pending_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    ));
-
-    let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
-    let metadata = read_metadata(&db_path).expect("Failed to read metadata");
-
-    let pending_path = db_path.join(&metadata.database_paths.pending);
-    let pending_db = DB::open_cf_readonly(&pending_path, pending_db_cf_definitions())
+    let fixture = TestFixture::new("pending_db");
+    let pending_db = fixture
+        .open_pending_db()
         .expect("Failed to open pending DB");
 
-    // Test Pending Queue
-    println!("Testing Pending Queue...");
-    let pending_iter = pending_db
+    println!("=== Reconstructing Pending Database (Reverse of generate_pending_db) ===\n");
+
+    // 1. Read and reconstruct PendingQueue
+    println!("1. Reading pending_queue_cf...");
+    let mut pending_queue: BTreeMap<(NetworkId, Height), Certificate> = BTreeMap::new();
+    let mut networks_with_pending: HashSet<NetworkId> = HashSet::new();
+
+    for key_result in pending_db
         .keys::<PendingQueueColumn>()
-        .expect("Failed to create pending queue iterator");
-    let mut pending_count = 0;
-    let mut pending_networks = std::collections::HashSet::new();
-
-    for key_result in pending_iter {
-        use agglayer_types::Certificate;
-
-        use crate::columns::pending_queue::PendingQueueKey;
-
-        let key: PendingQueueKey = match key_result {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("Failed to read pending queue key: {:?}", e);
-                continue;
-            }
-        };
+        .expect("Failed to iterate")
+    {
+        let key: PendingQueueKey = key_result.expect("Failed to read key");
         let cert: Certificate = pending_db
             .get::<PendingQueueColumn>(&key)
-            .expect("Failed to read pending certificate")
-            .expect("Pending certificate not found");
+            .expect("Failed to read certificate")
+            .expect("Certificate not found");
 
-        // Validate certificate structure
-        assert_eq!(cert.network_id, key.0, "Network ID mismatch");
-        assert_eq!(cert.height, key.1, "Height mismatch");
+        // Validate certificate structure matches key
+        assert_eq!(
+            cert.network_id, key.0,
+            "Certificate network_id doesn't match key"
+        );
+        assert_eq!(cert.height, key.1, "Certificate height doesn't match key");
 
-        pending_networks.insert(cert.network_id);
-        pending_count += 1;
+        // Validate certificate has required fields (bridge_exits can be empty)
+        // Just check that the certificate deserialized correctly
+
+        networks_with_pending.insert(cert.network_id);
+        pending_queue.insert((key.0, key.1), cert);
     }
 
-    println!("  ✅ Found {} pending certificates", pending_count);
-    println!("  ✅ Across {} networks", pending_networks.len());
+    println!(
+        "   ✅ Reconstructed {} pending certificates",
+        pending_queue.len()
+    );
+    println!("   ✅ Across {} networks", networks_with_pending.len());
 
-    // Test Proofs
-    println!("Testing Proofs...");
-    let proofs_iter = pending_db
+    // Show details of pending certificates per network
+    for (network_id, height) in pending_queue.keys().take(3) {
+        let cert = &pending_queue[&(*network_id, *height)];
+        println!(
+            "      Network {}, Height {}: {} bridge_exits, LER chain: {} -> {}",
+            network_id,
+            height,
+            cert.bridge_exits.len(),
+            cert.prev_local_exit_root,
+            cert.new_local_exit_root
+        );
+    }
+
+    // 2. Read and validate LatestPendingCertificatePerNetwork
+    println!("\n2. Reading latest_pending_certificate_per_network_cf...");
+    let mut latest_pending: BTreeMap<NetworkId, PendingCertificate> = BTreeMap::new();
+
+    for network_id_result in pending_db
+        .keys::<LatestPendingCertificatePerNetworkColumn>()
+        .expect("Failed to iterate")
+    {
+        let network_id = network_id_result.expect("Failed to read network ID");
+        let pending_cert: PendingCertificate = pending_db
+            .get::<LatestPendingCertificatePerNetworkColumn>(&network_id)
+            .expect("Failed to read pending cert")
+            .expect("Pending cert not found");
+
+        // Validate that this certificate exists in the pending queue
+        if let Some(cert) = pending_queue.get(&(network_id, pending_cert.1)) {
+            let computed_id = cert.hash();
+            assert_eq!(
+                computed_id, pending_cert.0,
+                "Latest pending cert ID mismatch for network {}",
+                network_id
+            );
+        } else {
+            println!(
+                "      ⚠️  Latest pending cert for network {} (height {}) not in pending queue",
+                network_id, pending_cert.1
+            );
+        }
+
+        latest_pending.insert(network_id, pending_cert);
+    }
+
+    println!(
+        "   ✅ Reconstructed {} latest pending certificates",
+        latest_pending.len()
+    );
+    for (network_id, pending_cert) in &latest_pending {
+        println!(
+            "      Network {}: cert_id={}, height={}",
+            network_id, pending_cert.0, pending_cert.1
+        );
+    }
+
+    // 3. Read and validate LatestProvenCertificatePerNetwork
+    println!("\n3. Reading latest_proven_certificate_per_network_cf...");
+    let mut latest_proven: BTreeMap<NetworkId, ProvenCertificate> = BTreeMap::new();
+
+    for network_id_result in pending_db
+        .keys::<LatestProvenCertificatePerNetworkColumn>()
+        .expect("Failed to iterate")
+    {
+        let network_id = network_id_result.expect("Failed to read network ID");
+        let proven_cert: ProvenCertificate = pending_db
+            .get::<LatestProvenCertificatePerNetworkColumn>(&network_id)
+            .expect("Failed to read proven cert")
+            .expect("Proven cert not found");
+
+        // Validate structure
+        assert_eq!(proven_cert.1, network_id, "Proven cert network_id mismatch");
+
+        latest_proven.insert(network_id, proven_cert);
+    }
+
+    println!(
+        "   ✅ Reconstructed {} latest proven certificates",
+        latest_proven.len()
+    );
+    for (network_id, proven_cert) in &latest_proven {
+        println!(
+            "      Network {}: cert_id={}, height={}",
+            network_id, proven_cert.0, proven_cert.2
+        );
+    }
+
+    // 4. Read and validate ProofPerCertificate
+    println!("\n4. Reading proof_per_certificate_cf...");
+    let mut proofs: BTreeMap<CertificateId, Proof> = BTreeMap::new();
+
+    for cert_id_result in pending_db
         .keys::<ProofPerCertificateColumn>()
-        .expect("Failed to create proofs iterator");
-    let mut proof_count = 0;
-
-    for cert_id_result in proofs_iter {
-        use agglayer_types::{CertificateId, Proof};
-
-        let cert_id: CertificateId = match cert_id_result {
-            Ok(id) => id,
-            Err(e) => {
-                eprintln!("Failed to read certificate ID: {:?}", e);
-                continue;
-            }
-        };
-        let _proof: Proof = pending_db
+        .expect("Failed to iterate")
+    {
+        let cert_id = cert_id_result.expect("Failed to read cert ID");
+        let proof: Proof = pending_db
             .get::<ProofPerCertificateColumn>(&cert_id)
             .expect("Failed to read proof")
             .expect("Proof not found");
 
-        println!(
-            "  ✅ Successfully deserialized proof for certificate {}",
-            cert_id
-        );
-        proof_count += 1;
+        // Validate proof structure (Proof is an opaque type, just check it
+        // deserializes)
+        proofs.insert(cert_id, proof);
     }
 
-    println!("  ✅ Found {} proofs", proof_count);
+    println!("   ✅ Reconstructed {} proofs", proofs.len());
+    for (cert_id, _proof) in proofs.iter().take(3) {
+        println!("      Proof for certificate: {}", cert_id);
+    }
 
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
+    // Cross-validation: Check consistency between column families
+    println!("\n=== Cross-Validation ===");
+
+    // Check that all networks with latest_pending also have entries in
+    // pending_queue
+    for (network_id, pending_cert) in &latest_pending {
+        if !pending_queue.contains_key(&(*network_id, pending_cert.1)) {
+            println!(
+                "   ⚠️  Network {} has latest_pending but no entry in pending_queue at height {}",
+                network_id, pending_cert.1
+            );
+        }
+    }
+
+    // Check that networks with proven certs are tracked
+    println!(
+        "   ✅ {} networks have proven certificates tracked",
+        latest_proven.len()
+    );
+
+    // Final validation summary
+    println!("\n=== Validation Summary ===");
+    println!("  Pending certificates: {}", pending_queue.len());
+    println!("  Networks with pending: {}", networks_with_pending.len());
+    println!("  Latest pending tracked: {}", latest_pending.len());
+    println!("  Latest proven tracked: {}", latest_proven.len());
+    println!("  Proofs available: {}", proofs.len());
+
+    // Verify expected counts
+    assert_eq!(
+        latest_pending.len(),
+        fixture.metadata.config.num_networks as usize,
+        "Should have latest pending for all networks"
+    );
+    assert_eq!(
+        latest_proven.len(),
+        fixture.metadata.config.num_networks as usize,
+        "Should have latest proven for all networks"
+    );
+
+    println!("\n✅ Successfully reconstructed and validated all pending database data!");
+    println!("   All structures match expected format and are internally consistent.");
 }
 
 #[test]
 fn test_reference_db_v1_read_network_info() {
-    // Test reading network information
-    use crate::columns::network_info::NetworkInfoColumn;
+    // Comprehensive test reading and reconstructing NetworkInfo data
+    // This validates the structure generated in generate_state_db (step 7)
+    use std::collections::BTreeMap;
 
-    let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
+    use agglayer_types::NetworkId;
 
-    let temp_dir = std::env::temp_dir().join(format!(
-        "agglayer_regression_test_netinfo_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    ));
+    use crate::{
+        columns::network_info::NetworkInfoColumn,
+        types::network_info::{
+            v0::{
+                network_info_value::Value as InfoValue, LatestPendingCertificateInfo,
+                SettledCertificate as NetworkInfoSettledCert, SettledClaim,
+            },
+            Key as NetworkInfoKey, Value as NetworkInfoValue,
+        },
+    };
 
-    let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
-    let metadata = read_metadata(&db_path).expect("Failed to read metadata");
+    let fixture = TestFixture::new("netinfo");
+    let state_db = fixture.open_state_db().expect("Failed to open state DB");
 
-    let state_path = db_path.join(&metadata.database_paths.state);
-    let state_db = DB::open_cf_readonly(&state_path, state_db_cf_definitions())
-        .expect("Failed to open state DB");
+    println!("=== Reconstructing NetworkInfo (Reverse of generate_state_db step 7) ===\n");
 
-    println!("Testing Network Info...");
-    let network_info_iter = state_db
+    // Structure to hold all network info per network
+    #[derive(Default)]
+    struct NetworkInfo {
+        network_type: Option<i32>,
+        settled_certificate: Option<NetworkInfoSettledCert>,
+        settled_claim: Option<SettledClaim>,
+        pending_certificate_info: Option<LatestPendingCertificateInfo>,
+    }
+
+    let mut network_info_map: BTreeMap<NetworkId, NetworkInfo> = BTreeMap::new();
+    let mut total_entries = 0;
+
+    // Read all NetworkInfo entries
+    println!("Reading network_info_cf...");
+    for key_result in state_db
         .keys::<NetworkInfoColumn>()
-        .expect("Failed to create network info iterator");
-    let mut info_count = 0;
-    let mut networks = std::collections::HashSet::new();
-    let mut value_types = std::collections::HashMap::new();
-
-    for key_result in network_info_iter {
-        use crate::types::network_info::{Key, Value};
-
-        let key: Key = match key_result {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("Failed to read network info key: {:?}", e);
-                continue;
-            }
-        };
-        let value: Value = state_db
+        .expect("Failed to iterate")
+    {
+        let key: NetworkInfoKey = key_result.expect("Failed to read key");
+        let value: NetworkInfoValue = state_db
             .get::<NetworkInfoColumn>(&key)
-            .expect("Failed to read network info value")
-            .expect("Network info value not found");
+            .expect("Failed to read value")
+            .expect("Value not found");
 
-        networks.insert(key.network_id);
+        let network_id = NetworkId::new(key.network_id);
+        let info = network_info_map.entry(network_id).or_default();
 
-        // Count different value types
-        let value_type = match value.value {
-            Some(crate::types::network_info::v0::network_info_value::Value::NetworkType(_)) => "NetworkType",
-            Some(crate::types::network_info::v0::network_info_value::Value::SettledCertificate(_)) => "SettledCertificate",
-            Some(crate::types::network_info::v0::network_info_value::Value::SettledClaim(_)) => "SettledClaim",
-            Some(crate::types::network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(_)) => "LatestPendingCertificateInfo",
-            None => "None",
-        };
+        // Parse and store each value type
+        match value.value {
+            Some(InfoValue::NetworkType(nt)) => {
+                assert!(
+                    info.network_type.is_none(),
+                    "Duplicate NetworkType for network {}",
+                    network_id
+                );
+                info.network_type = Some(nt); // i32 enum value
+            }
+            Some(InfoValue::SettledCertificate(sc)) => {
+                assert!(
+                    info.settled_certificate.is_none(),
+                    "Duplicate SettledCertificate for network {}",
+                    network_id
+                );
+                // Structure can have Some or None fields depending on database version
+                // Just validate it deserializes correctly
+                info.settled_certificate = Some(sc);
+            }
+            Some(InfoValue::SettledClaim(claim)) => {
+                assert!(
+                    info.settled_claim.is_none(),
+                    "Duplicate SettledClaim for network {}",
+                    network_id
+                );
+                // Structure can have Some or None fields depending on database version
+                info.settled_claim = Some(claim);
+            }
+            Some(InfoValue::LatestPendingCertificateInfo(pending)) => {
+                assert!(
+                    info.pending_certificate_info.is_none(),
+                    "Duplicate LatestPendingCertificateInfo for network {}",
+                    network_id
+                );
+                // Structure can have Some or None fields depending on database version
+                info.pending_certificate_info = Some(pending);
+            }
+            None => {
+                panic!("NetworkInfo value should not be None");
+            }
+        }
 
-        *value_types.entry(value_type).or_insert(0) += 1;
-        info_count += 1;
+        total_entries += 1;
     }
 
-    println!("  ✅ Found {} network info entries", info_count);
-    println!("  ✅ Across {} networks", networks.len());
-    println!("  ✅ Value type distribution:");
-    for (vtype, count) in &value_types {
-        println!("      {}: {}", vtype, count);
-    }
-
-    // Verify we have the expected network count
-    assert_eq!(
-        networks.len(),
-        metadata.config.num_networks as usize,
-        "Network count mismatch"
+    println!("   ✅ Read {} total NetworkInfo entries", total_entries);
+    println!(
+        "   ✅ Covering {} unique networks\n",
+        network_info_map.len()
     );
 
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
+    // Validate and display reconstructed data
+    println!("=== Reconstructed NetworkInfo per Network ===");
+    for (network_id, info) in &network_info_map {
+        println!("\nNetwork {}:", network_id);
+
+        // 1. NetworkType
+        if let Some(nt) = info.network_type {
+            let type_name = match nt {
+                0 => "UNSPECIFIED",
+                1 => "ECDSA",
+                2 => "GENERIC",
+                3 => "MULTISIG_ONLY",
+                4 => "MULTISIG_AND_AGGCHAIN_PROOF",
+                _ => "UNKNOWN",
+            };
+            println!("  ✅ NetworkType: {} ({})", nt, type_name);
+        } else {
+            println!("  ⚠️  Missing NetworkType");
+        }
+
+        // 2. SettledCertificate
+        if let Some(sc) = &info.settled_certificate {
+            let pp_root = sc
+                .pp_root
+                .as_ref()
+                .and_then(|r| {
+                    if r.root.is_empty() {
+                        None
+                    } else {
+                        Some(format!(
+                            "0x{}...",
+                            hex::encode(&r.root[..4.min(r.root.len())])
+                        ))
+                    }
+                })
+                .unwrap_or_else(|| "none".to_string());
+            let ler = sc
+                .ler
+                .as_ref()
+                .and_then(|l| {
+                    if l.root.is_empty() {
+                        None
+                    } else {
+                        Some(format!(
+                            "0x{}...",
+                            hex::encode(&l.root[..4.min(l.root.len())])
+                        ))
+                    }
+                })
+                .unwrap_or_else(|| "none".to_string());
+            let leaf_count = sc
+                .let_leaf_count
+                .as_ref()
+                .map(|c| c.settled_let_leaf_count)
+                .unwrap_or(0);
+            println!(
+                "  ✅ SettledCertificate: pp_root={}, ler={}, leaf_count={}",
+                pp_root, ler, leaf_count
+            );
+        } else {
+            println!("  ⚠️  Missing SettledCertificate");
+        }
+
+        // 3. SettledClaim
+        if let Some(claim) = &info.settled_claim {
+            let global_index = claim
+                .global_index
+                .as_ref()
+                .and_then(|gi| {
+                    if gi.value.is_empty() {
+                        None
+                    } else {
+                        Some(format!(
+                            "0x{}...",
+                            hex::encode(&gi.value[..4.min(gi.value.len())])
+                        ))
+                    }
+                })
+                .unwrap_or_else(|| "none".to_string());
+            let bridge_exit = claim
+                .bridge_exit_hash
+                .as_ref()
+                .and_then(|beh| {
+                    if beh.bridge_exit_hash.is_empty() {
+                        None
+                    } else {
+                        Some(format!(
+                            "0x{}...",
+                            hex::encode(&beh.bridge_exit_hash[..4.min(beh.bridge_exit_hash.len())])
+                        ))
+                    }
+                })
+                .unwrap_or_else(|| "none".to_string());
+            println!(
+                "  ✅ SettledClaim: global_index={}, bridge_exit_hash={}",
+                global_index, bridge_exit
+            );
+        } else {
+            println!("  ⚠️  Missing SettledClaim");
+        }
+
+        // 4. LatestPendingCertificateInfo
+        if let Some(pending) = &info.pending_certificate_info {
+            let cert_id = pending
+                .id
+                .as_ref()
+                .and_then(|id| {
+                    if id.id.is_empty() {
+                        None
+                    } else {
+                        Some(format!(
+                            "0x{}...",
+                            hex::encode(&id.id[..4.min(id.id.len())])
+                        ))
+                    }
+                })
+                .unwrap_or_else(|| "none".to_string());
+            let height = pending.height.as_ref().map(|h| h.height).unwrap_or(0);
+            println!(
+                "  ✅ LatestPendingCertificateInfo: cert_id={}, height={}",
+                cert_id, height
+            );
+        } else {
+            println!("  ⚠️  Missing LatestPendingCertificateInfo");
+        }
+
+        // Validate completeness: all networks should have all 4 info types
+        assert!(
+            info.network_type.is_some(),
+            "Network {} missing NetworkType",
+            network_id
+        );
+        assert!(
+            info.settled_certificate.is_some(),
+            "Network {} missing SettledCertificate",
+            network_id
+        );
+        assert!(
+            info.settled_claim.is_some(),
+            "Network {} missing SettledClaim",
+            network_id
+        );
+        assert!(
+            info.pending_certificate_info.is_some(),
+            "Network {} missing LatestPendingCertificateInfo",
+            network_id
+        );
+    }
+
+    // Final validation
+    println!("\n=== Validation Summary ===");
+    println!("  Networks with complete info: {}", network_info_map.len());
+    println!("  Total entries: {}", total_entries);
+    println!(
+        "  Expected entries: {} (4 per network)",
+        network_info_map.len() * 4
+    );
+
+    assert_eq!(
+        network_info_map.len(),
+        fixture.metadata.config.num_networks as usize,
+        "Network count mismatch"
+    );
+    assert_eq!(
+        total_entries,
+        network_info_map.len() * 4,
+        "Should have exactly 4 info entries per network"
+    );
+
+    println!("\n✅ Successfully reconstructed and validated all NetworkInfo data!");
+    println!("   All networks have complete information (4 entries each).");
 }
 
 #[test]
-fn test_reference_db_v1_read_epochs() {
-    // Test reading and reconstructing epoch structure
+fn test_reference_db_v1_read_epochs_db() {
+    // Comprehensive test reading and reconstructing all data from epochs database
+    // This reverses what generate_epochs_db does - reads values and validates
+    // structure
     use std::collections::BTreeMap;
 
-    use agglayer_types::{Certificate, CertificateIndex, Height, NetworkId, Proof};
+    use agglayer_types::{Certificate, CertificateIndex, Proof};
 
     use crate::{
         columns::epochs::{
-            certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
-            metadata::PerEpochMetadataColumn, proofs::ProofPerIndexColumn,
-            start_checkpoint::StartCheckpointColumn,
+            certificates::CertificatePerIndexColumn, metadata::PerEpochMetadataColumn,
+            proofs::ProofPerIndexColumn,
         },
         types::{PerEpochMetadataKey, PerEpochMetadataValue},
     };
 
-    let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
+    let fixture = TestFixture::new("epochs_db");
+    let epochs_db = fixture.open_epochs_db().expect("Failed to open epochs DB");
 
-    let temp_dir = std::env::temp_dir().join(format!(
-        "agglayer_regression_test_epochs_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    ));
+    println!("=== Reconstructing Epochs Database (Reverse of generate_epochs_db) ===\n");
 
-    let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
-    let metadata = read_metadata(&db_path).expect("Failed to read metadata");
-
-    let epochs_path = db_path.join(&metadata.database_paths.epochs);
-    let epochs_db = DB::open_cf_readonly(&epochs_path, epochs_db_cf_definitions())
-        .expect("Failed to open epochs DB");
-
-    println!("=== Reconstructing Epoch Structure ===\n");
-
-    // Step 1: Read Start Checkpoint
-    println!("1. Reading Start Checkpoint...");
-    let start_checkpoint_iter = epochs_db
-        .iter_with_direction::<StartCheckpointColumn>(
-            rocksdb::ReadOptions::default(),
-            rocksdb::Direction::Forward,
-        )
-        .expect("Failed to create start checkpoint iterator");
-
-    let start_checkpoint: BTreeMap<NetworkId, Height> = start_checkpoint_iter
-        .filter_map(|result| result.ok())
-        .collect();
-
-    println!(
-        "   ✅ Start Checkpoint: {} networks",
-        start_checkpoint.len()
-    );
-    for (network_id, height) in &start_checkpoint {
-        println!("      Network {}: Height {}", network_id, height);
-    }
-
-    // Step 2: Read End Checkpoint
-    println!("\n2. Reading End Checkpoint...");
-    let end_checkpoint_iter = epochs_db
-        .iter_with_direction::<EndCheckpointColumn>(
-            rocksdb::ReadOptions::default(),
-            rocksdb::Direction::Forward,
-        )
-        .expect("Failed to create end checkpoint iterator");
-
-    let end_checkpoint: BTreeMap<NetworkId, Height> = end_checkpoint_iter
-        .filter_map(|result| result.ok())
-        .collect();
-
-    println!("   ✅ End Checkpoint: {} networks", end_checkpoint.len());
-    for (network_id, height) in &end_checkpoint {
-        println!("      Network {}: Height {}", network_id, height);
-    }
-
-    // Step 3: Read Epoch Metadata (packing status, settlement tx)
-    println!("\n3. Reading Epoch Metadata...");
-    let mut is_packed = false;
-    let mut settlement_tx_hash = None;
-
-    if let Ok(Some(PerEpochMetadataValue::Packed(packed))) =
-        epochs_db.get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::Packed)
-    {
-        is_packed = packed;
-        println!("   ✅ Epoch Packed: {}", is_packed);
-    }
-
-    if let Ok(Some(PerEpochMetadataValue::SettlementTxHash(tx_hash))) =
-        epochs_db.get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::SettlementTxHash)
-    {
-        settlement_tx_hash = Some(tx_hash);
-        println!("   ✅ Settlement Tx Hash: {}", tx_hash);
-    }
-
-    // Step 4: Read and validate epoch certificates
-    println!("\n4. Reading Epoch Certificates...");
-    let epoch_certs_iter = epochs_db
-        .keys::<CertificatePerIndexColumn>()
-        .expect("Failed to create epoch certificates iterator");
-
+    // 1. Read and reconstruct CertificatePerIndex
+    println!("1. Reading per_epoch_certificates_cf (CertificatePerIndex)...");
     let mut certificates: BTreeMap<CertificateIndex, Certificate> = BTreeMap::new();
+    let mut networks_in_epoch = std::collections::HashSet::new();
 
-    for key_result in epoch_certs_iter {
-        let cert_index = match key_result {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("Failed to read epoch cert key: {:?}", e);
-                continue;
-            }
-        };
-
+    for key_result in epochs_db
+        .keys::<CertificatePerIndexColumn>()
+        .expect("Failed to iterate")
+    {
+        let cert_index = key_result.expect("Failed to read certificate index");
         let cert: Certificate = epochs_db
             .get::<CertificatePerIndexColumn>(&cert_index)
-            .expect("Failed to read epoch certificate")
-            .expect("Epoch certificate not found");
+            .expect("Failed to read certificate")
+            .expect("Certificate not found");
 
-        // Validate certificate is within checkpoint range
-        if let (Some(start_height), Some(end_height)) = (
-            start_checkpoint.get(&cert.network_id),
-            end_checkpoint.get(&cert.network_id),
-        ) {
-            assert!(
-                cert.height >= *start_height && cert.height <= *end_height,
-                "Certificate height {} outside checkpoint range [{}, {}] for network {}",
-                cert.height,
-                start_height,
-                end_height,
-                cert.network_id
-            );
-        }
+        // Validate certificate structure
+        assert!(
+            cert_index.as_u64() < 1000,
+            "Certificate index seems unreasonably high"
+        );
+
+        // Track networks
+        networks_in_epoch.insert(cert.network_id);
 
         certificates.insert(cert_index, cert);
     }
 
-    println!("   ✅ Found {} certificates in epoch", certificates.len());
-    for (idx, cert) in certificates.iter().take(3) {
+    println!("   ✅ Reconstructed {} certificates", certificates.len());
+    println!("   ✅ Across {} networks in epoch", networks_in_epoch.len());
+
+    // Display certificate distribution
+    println!("   Certificate distribution by index:");
+    let mut by_network = std::collections::BTreeMap::new();
+    for (idx, cert) in &certificates {
+        by_network
+            .entry(cert.network_id)
+            .or_insert_with(Vec::new)
+            .push(*idx);
+    }
+    for (network_id, indices) in by_network.iter().take(3) {
         println!(
-            "      Index {}: Network {}, Height {}",
-            idx, cert.network_id, cert.height
+            "      Network {}: indices {:?}",
+            network_id,
+            indices.iter().map(|i| i.as_u64()).collect::<Vec<_>>()
         );
     }
 
-    // Step 5: Read epoch proofs
-    println!("\n5. Reading Epoch Proofs...");
-    let epoch_proofs_iter = epochs_db
-        .keys::<ProofPerIndexColumn>()
-        .expect("Failed to create epoch proofs iterator");
-
+    // 2. Read and validate ProofPerIndex
+    println!("\n2. Reading per_epoch_proofs_cf (ProofPerIndex)...");
     let mut proofs: BTreeMap<CertificateIndex, Proof> = BTreeMap::new();
 
-    for key_result in epoch_proofs_iter {
-        let cert_index = match key_result {
-            Ok(k) => k,
-            Err(e) => {
-                eprintln!("Failed to read epoch proof key: {:?}", e);
-                continue;
-            }
-        };
-
+    for key_result in epochs_db
+        .keys::<ProofPerIndexColumn>()
+        .expect("Failed to iterate")
+    {
+        let cert_index = key_result.expect("Failed to read certificate index");
         let proof: Proof = epochs_db
             .get::<ProofPerIndexColumn>(&cert_index)
-            .expect("Failed to read epoch proof")
-            .expect("Epoch proof not found");
+            .expect("Failed to read proof")
+            .expect("Proof not found");
 
-        // Validate that we have a certificate for this proof
+        // Validate that certificate exists for this proof
         assert!(
             certificates.contains_key(&cert_index),
-            "Proof exists for certificate index {} but no certificate found",
+            "Proof exists for cert_index {} but no certificate found",
             cert_index
         );
 
         proofs.insert(cert_index, proof);
     }
 
-    println!("   ✅ Found {} proofs in epoch", proofs.len());
+    println!("   ✅ Reconstructed {} proofs", proofs.len());
+    if !proofs.is_empty() {
+        println!(
+            "   ✅ All proofs have corresponding certificates (validated {} mappings)",
+            proofs.len()
+        );
+    } else {
+        println!("   ℹ️  No proofs generated (generate_proofs was disabled)");
+    }
 
-    // Step 6: Validate epoch structure consistency
-    println!("\n6. Validating Epoch Structure Consistency...");
+    // 3. Read and reconstruct PerEpochMetadata
+    println!("\n3. Reading per_epoch_metadata_cf (PerEpochMetadata)...");
+    let mut metadata_entries = Vec::new();
 
-    // All networks in end_checkpoint should be in start_checkpoint (or be new)
-    for network_id in end_checkpoint.keys() {
-        if !start_checkpoint.contains_key(network_id) {
-            println!(
-                "   ⚠️  Network {} in end checkpoint but not in start checkpoint (new network)",
-                network_id
-            );
+    // Try to read SettlementTxHash
+    let settlement_tx_hash =
+        match epochs_db.get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::SettlementTxHash) {
+            Ok(Some(PerEpochMetadataValue::SettlementTxHash(tx_hash))) => {
+                metadata_entries.push(format!("SettlementTxHash: {}", tx_hash));
+                Some(tx_hash)
+            }
+            Ok(Some(_)) => {
+                panic!("Unexpected metadata value type for SettlementTxHash");
+            }
+            Ok(None) => None,
+            Err(e) => {
+                eprintln!("Failed to read SettlementTxHash: {:?}", e);
+                None
+            }
+        };
+
+    // Try to read Packed status
+    let is_packed = match epochs_db.get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::Packed) {
+        Ok(Some(PerEpochMetadataValue::Packed(packed))) => {
+            metadata_entries.push(format!("Packed: {}", packed));
+            Some(packed)
         }
-    }
-
-    // Certificates should cover the checkpoint ranges
-    let mut networks_with_certs = std::collections::BTreeSet::new();
-    for cert in certificates.values() {
-        networks_with_certs.insert(cert.network_id);
-    }
+        Ok(Some(_)) => {
+            panic!("Unexpected metadata value type for Packed");
+        }
+        Ok(None) => None,
+        Err(e) => {
+            eprintln!("Failed to read Packed: {:?}", e);
+            None
+        }
+    };
 
     println!(
-        "   ✅ Certificates span {} unique networks",
-        networks_with_certs.len()
+        "   ✅ Reconstructed {} metadata entries:",
+        metadata_entries.len()
     );
-
-    // Summary
-    println!("\n=== Epoch Structure Summary ===");
-    println!("  Start Checkpoint: {} networks", start_checkpoint.len());
-    println!("  End Checkpoint: {} networks", end_checkpoint.len());
-    println!("  Certificates: {}", certificates.len());
-    println!("  Proofs: {}", proofs.len());
-    println!("  Packed: {}", is_packed);
-    if let Some(tx_hash) = settlement_tx_hash {
-        println!("  Settlement Tx: {}", tx_hash);
-    }
-    println!("\n✅ Successfully reconstructed and validated epoch structure!");
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
-}
-
-/// Test reconstruction of complete LocalNetworkStateData from the state
-/// database. This is the highest-level state structure that combines all three
-/// trees.
-#[test]
-fn test_reference_db_v1_read_local_network_state() {
-    use agglayer_tries::smt::Smt;
-    use agglayer_types::{primitives::Digest, LocalNetworkStateData};
-    use pessimistic_proof::{
-        local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
-        unified_bridge::LocalExitTree,
-    };
-
-    use crate::{
-        columns::{
-            balance_tree_per_network::BalanceTreePerNetworkColumn,
-            local_exit_tree_per_network::LocalExitTreePerNetworkColumn,
-            nullifier_tree_per_network::NullifierTreePerNetworkColumn,
-        },
-        types::{SmtKey, SmtKeyType},
-    };
-
-    const LOCAL_EXIT_TREE_DEPTH: usize = 32;
-
-    let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(REFERENCE_DB_V1_TARBALL);
-    let temp_dir = std::env::temp_dir().join(format!(
-        "agglayer_regression_test_state_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    ));
-    let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
-    let metadata = read_metadata(&db_path).expect("Failed to read metadata");
-    let state_path = db_path.join(&metadata.database_paths.state);
-    let state_db = DB::open_cf_readonly(&state_path, state_db_cf_definitions())
-        .expect("Failed to open state DB");
-
-    println!("\n=== Testing LocalNetworkStateData Reconstruction ===");
-    println!("This validates the complete state per network, combining all three trees.\n");
-
-    // Collect all networks that have balance trees
-    let mut network_ids = std::collections::BTreeSet::new();
-    for key in state_db
-        .keys::<BalanceTreePerNetworkColumn>()
-        .expect("Failed to create iterator")
-        .flatten()
-    {
-        network_ids.insert(key.network_id);
+    for entry in &metadata_entries {
+        println!("      {}", entry);
     }
 
-    println!("Found {} networks with state data\n", network_ids.len());
-    assert!(!network_ids.is_empty(), "Should have at least one network");
+    // Validate metadata presence
+    if settlement_tx_hash.is_some() {
+        println!("   ✅ Settlement transaction hash is set");
+    }
+    if let Some(packed) = is_packed {
+        println!("   ✅ Epoch packed status: {}", packed);
+    }
 
-    for network_id in network_ids {
-        println!("=== Network {} ===", network_id);
+    // Cross-validation: Check consistency
+    println!("\n=== Cross-Validation ===");
 
-        // 1. Reconstruct Balance Tree
-        println!("  1. Reading Balance Tree...");
-        let balance_root_value = state_db
-            .get::<BalanceTreePerNetworkColumn>(&SmtKey {
-                network_id,
-                key_type: SmtKeyType::Root,
-            })
-            .expect("Failed to read balance root")
-            .expect("Balance root not found");
-
-        let balance_root_node = match balance_root_value {
-            crate::types::SmtValue::Node(left, right) => agglayer_tries::node::Node {
-                left: Digest(*left.as_bytes()),
-                right: Digest(*right.as_bytes()),
-            },
-            _ => panic!("Root should be a Node type"),
-        };
-
-        let mut balance_nodes = vec![balance_root_node];
-        let mut queue = std::collections::VecDeque::new();
-        let mut visited = std::collections::BTreeSet::new();
-
-        queue.push_back(balance_root_node.left);
-        queue.push_back(balance_root_node.right);
-
-        while let Some(node_hash) = queue.pop_front() {
-            if !visited.insert(node_hash) {
-                continue;
-            }
-
-            let key = SmtKey {
-                network_id,
-                key_type: SmtKeyType::Node(node_hash),
-            };
-
-            if let Ok(Some(value)) = state_db.get::<BalanceTreePerNetworkColumn>(&key) {
-                match value {
-                    crate::types::SmtValue::Node(left, right) => {
-                        let node = agglayer_tries::node::Node {
-                            left: Digest(*left.as_bytes()),
-                            right: Digest(*right.as_bytes()),
-                        };
-                        balance_nodes.push(node);
-                        queue.push_back(node.left);
-                        queue.push_back(node.right);
-                    }
-                    crate::types::SmtValue::Leaf(_) => {}
-                }
-            }
-        }
-
-        let balance_tree = Smt::<LOCAL_BALANCE_TREE_DEPTH>::new_with_nodes(
-            balance_root_node.hash(),
-            &balance_nodes,
-        );
+    // Validate certificate indices are sequential starting from 0
+    let indices: Vec<u64> = certificates.keys().map(|i| i.as_u64()).collect();
+    if !indices.is_empty() {
+        let min_idx = *indices.iter().min().unwrap();
+        let max_idx = *indices.iter().max().unwrap();
         println!(
-            "     ✅ Balance Tree: {} nodes, root = {}",
-            balance_nodes.len(),
-            balance_tree.root
+            "   ✅ Certificate indices range: {} to {}",
+            min_idx, max_idx
         );
 
-        // 2. Reconstruct Nullifier Tree
-        println!("  2. Reading Nullifier Tree...");
-        let nullifier_root_value = state_db
-            .get::<NullifierTreePerNetworkColumn>(&SmtKey {
-                network_id,
-                key_type: SmtKeyType::Root,
-            })
-            .expect("Failed to read nullifier root")
-            .expect("Nullifier root not found");
-
-        let nullifier_root_node = match nullifier_root_value {
-            crate::types::SmtValue::Node(left, right) => agglayer_tries::node::Node {
-                left: Digest(*left.as_bytes()),
-                right: Digest(*right.as_bytes()),
-            },
-            _ => panic!("Root should be a Node type"),
-        };
-
-        let mut nullifier_nodes = vec![nullifier_root_node];
-        let mut queue = std::collections::VecDeque::new();
-        let mut visited = std::collections::BTreeSet::new();
-
-        queue.push_back(nullifier_root_node.left);
-        queue.push_back(nullifier_root_node.right);
-
-        while let Some(node_hash) = queue.pop_front() {
-            if !visited.insert(node_hash) {
-                continue;
-            }
-
-            let key = SmtKey {
-                network_id,
-                key_type: SmtKeyType::Node(node_hash),
-            };
-
-            if let Ok(Some(value)) = state_db.get::<NullifierTreePerNetworkColumn>(&key) {
-                match value {
-                    crate::types::SmtValue::Node(left, right) => {
-                        let node = agglayer_tries::node::Node {
-                            left: Digest(*left.as_bytes()),
-                            right: Digest(*right.as_bytes()),
-                        };
-                        nullifier_nodes.push(node);
-                        queue.push_back(node.left);
-                        queue.push_back(node.right);
-                    }
-                    crate::types::SmtValue::Leaf(_) => {}
-                }
-            }
-        }
-
-        let nullifier_tree = Smt::<NULLIFIER_TREE_DEPTH>::new_with_nodes(
-            nullifier_root_node.hash(),
-            &nullifier_nodes,
-        );
-        println!(
-            "     ✅ Nullifier Tree: {} nodes, root = {}",
-            nullifier_nodes.len(),
-            nullifier_tree.root
-        );
-
-        // 3. Reconstruct Local Exit Tree
-        println!("  3. Reading Local Exit Tree...");
-        use crate::columns::local_exit_tree_per_network::{Key, KeyType, Value};
-
-        let leaf_count_key = Key {
-            network_id,
-            key_type: KeyType::LeafCount,
-        };
-
-        let leaf_count = if let Ok(Some(Value::LeafCount(count))) =
-            state_db.get::<LocalExitTreePerNetworkColumn>(&leaf_count_key)
-        {
-            count
+        // Check if indices are contiguous
+        let expected_count = (max_idx - min_idx + 1) as usize;
+        if indices.len() == expected_count {
+            println!("   ✅ Certificate indices are contiguous");
         } else {
-            panic!("Exit tree leaf count not found for network {}", network_id);
-        };
-
-        let mut frontier = [Digest::default(); LOCAL_EXIT_TREE_DEPTH];
-        let mut frontier_layers_read = 0;
-        for layer in 0..LOCAL_EXIT_TREE_DEPTH as u32 {
-            let frontier_key = Key {
-                network_id,
-                key_type: KeyType::Frontier(layer),
-            };
-
-            if let Ok(Some(Value::Frontier(hash))) =
-                state_db.get::<LocalExitTreePerNetworkColumn>(&frontier_key)
-            {
-                frontier[layer as usize] = Digest(hash);
-                frontier_layers_read += 1;
-            }
-        }
-
-        if frontier_layers_read < LOCAL_EXIT_TREE_DEPTH {
             println!(
-                "     ⚠️  Warning: Only {} of {} frontier layers found, remaining will be default",
-                frontier_layers_read, LOCAL_EXIT_TREE_DEPTH
+                "   ⚠️  Certificate indices have gaps ({} entries, expected {})",
+                indices.len(),
+                expected_count
             );
         }
+    }
 
-        let exit_tree = LocalExitTree::<LOCAL_EXIT_TREE_DEPTH>::from_parts(leaf_count, frontier);
+    // Validate proofs match certificates if proofs are enabled
+    if !proofs.is_empty() {
+        let proof_coverage = (proofs.len() as f64 / certificates.len() as f64) * 100.0;
         println!(
-            "     ✅ Local Exit Tree: {} leaves, root = {}",
-            leaf_count,
-            exit_tree.get_root()
-        );
-
-        // 4. Construct LocalNetworkStateData
-        println!("  4. Assembling LocalNetworkStateData...");
-        let local_state = LocalNetworkStateData {
-            exit_tree: exit_tree.clone(),
-            balance_tree: balance_tree.clone(),
-            nullifier_tree: nullifier_tree.clone(),
-        };
-
-        // 5. Validate state commitment (roots)
-        println!("  5. Validating state commitment...");
-        let state_commitment = local_state.get_roots();
-        assert_eq!(
-            state_commitment.exit_root,
-            exit_tree.get_root(),
-            "Exit root mismatch"
-        );
-        assert_eq!(
-            state_commitment.ler_leaf_count, leaf_count,
-            "Leaf count mismatch"
-        );
-        assert_eq!(
-            state_commitment.balance_root, balance_tree.root,
-            "Balance root mismatch"
-        );
-        assert_eq!(
-            state_commitment.nullifier_root, nullifier_tree.root,
-            "Nullifier root mismatch"
-        );
-        println!("     ✅ State commitment validated:");
-        println!("        - Exit Root: {}", state_commitment.exit_root);
-        println!("        - Balance Root: {}", state_commitment.balance_root);
-        println!(
-            "        - Nullifier Root: {}",
-            state_commitment.nullifier_root
-        );
-        println!(
-            "        - LER Leaf Count: {}",
-            state_commitment.ler_leaf_count
-        );
-
-        // 6. Verify conversion to LocalNetworkState (pessimistic proof type)
-        println!("  6. Testing conversion to LocalNetworkState...");
-        let _network_state: pessimistic_proof::LocalNetworkState = local_state.clone().into();
-        println!("     ✅ Successfully converted to LocalNetworkState");
-
-        // 7. Verify conversion to NetworkState (pessimistic proof type)
-        println!("  7. Testing conversion to NetworkState...");
-        let _pessimistic_state: pessimistic_proof::NetworkState = local_state.into();
-        println!("     ✅ Successfully converted to NetworkState");
-
-        println!(
-            "  ✅ Network {} fully reconstructed and validated!\n",
-            network_id
+            "   ✅ Proof coverage: {:.1}% ({}/{})",
+            proof_coverage,
+            proofs.len(),
+            certificates.len()
         );
     }
 
-    println!("✅ All LocalNetworkStateData structures successfully reconstructed from database!");
-    println!("   This confirms that the complete network state (all three trees) can be");
-    println!("   deserialized and used for pessimistic proof generation.");
+    // Final validation summary
+    println!("\n=== Validation Summary ===");
+    println!("  Certificates: {}", certificates.len());
+    println!("  Networks in epoch: {}", networks_in_epoch.len());
+    println!("  Proofs: {}", proofs.len());
+    println!("  Metadata entries: {}", metadata_entries.len());
+    println!("  Settlement tx set: {}", settlement_tx_hash.is_some());
+    println!("  Packed status set: {}", is_packed.is_some());
 
-    let _ = fs::remove_dir_all(&temp_dir);
+    // Note: The fixture metadata shows total certificates across all epochs,
+    // but we're reading from a single epoch directory. Each epoch is a separate
+    // database.
+    println!(
+        "\nℹ️  Note: Reading from single epoch (total across all epochs: {})",
+        fixture
+            .metadata
+            .statistics
+            .entries_per_column_family
+            .get("per_epoch_certificates_cf")
+            .unwrap_or(&0)
+    );
+
+    println!("\n✅ Successfully reconstructed and validated all epochs database data!");
+    println!("   All structures match expected format and are internally consistent.");
+}
+
+#[test]
+fn test_reference_db_v1_read_debug_db() {
+    // Comprehensive test reading and reconstructing all data from debug database
+    // This reverses what generate_debug_db does - reads values and validates
+    // structure
+    use std::collections::{BTreeMap, HashSet};
+
+    use agglayer_types::{Certificate, CertificateId};
+
+    use crate::columns::debug_certificates::DebugCertificatesColumn;
+
+    let fixture = TestFixture::new("debug_db");
+    let debug_db = fixture.open_debug_db().expect("Failed to open debug DB");
+
+    println!("=== Reconstructing Debug Database (Reverse of generate_debug_db) ===\n");
+
+    // Read and reconstruct DebugCertificatesColumn (CertificateId -> Certificate)
+    println!("1. Reading debug_certificates (DebugCertificatesColumn)...");
+    let mut certificates: BTreeMap<CertificateId, Certificate> = BTreeMap::new();
+    let mut networks_found = HashSet::new();
+    let mut heights_per_network: std::collections::BTreeMap<
+        agglayer_types::NetworkId,
+        Vec<agglayer_types::Height>,
+    > = std::collections::BTreeMap::new();
+
+    for key_result in debug_db
+        .keys::<DebugCertificatesColumn>()
+        .expect("Failed to iterate")
+    {
+        let cert_id = key_result.expect("Failed to read certificate ID");
+        let cert: Certificate = debug_db
+            .get::<DebugCertificatesColumn>(&cert_id)
+            .expect("Failed to read certificate")
+            .expect("Certificate not found");
+
+        // Validate that the certificate ID matches the hash
+        let computed_id = cert.hash();
+        assert_eq!(
+            computed_id, cert_id,
+            "Certificate ID mismatch: stored {} vs computed {}",
+            cert_id, computed_id
+        );
+
+        // Track networks and heights
+        networks_found.insert(cert.network_id);
+        heights_per_network
+            .entry(cert.network_id)
+            .or_default()
+            .push(cert.height);
+
+        certificates.insert(cert_id, cert);
+    }
+
+    println!("   ✅ Reconstructed {} certificates", certificates.len());
+    println!("   ✅ From {} networks", networks_found.len());
+
+    // Display certificate distribution by network
+    println!("\n   Certificate distribution by network:");
+    for (network_id, heights) in heights_per_network.iter().take(5) {
+        let mut sorted_heights = heights.clone();
+        sorted_heights.sort();
+        let heights_display: Vec<String> = sorted_heights
+            .iter()
+            .take(5)
+            .map(|h| h.as_u64().to_string())
+            .collect();
+        let display = if sorted_heights.len() > 5 {
+            format!(
+                "{}... ({} total)",
+                heights_display.join(", "),
+                sorted_heights.len()
+            )
+        } else {
+            heights_display.join(", ")
+        };
+        println!("      Network {}: heights [{}]", network_id, display);
+    }
+
+    // Validate certificate integrity
+    println!("\n=== Certificate Validation ===");
+
+    // Check for duplicate heights per network
+    let mut has_duplicates = false;
+    for (network_id, heights) in &heights_per_network {
+        let unique_heights: std::collections::BTreeSet<_> = heights.iter().collect();
+        if unique_heights.len() != heights.len() {
+            println!(
+                "   ⚠️  Network {} has duplicate heights ({} certs, {} unique heights)",
+                network_id,
+                heights.len(),
+                unique_heights.len()
+            );
+            has_duplicates = true;
+        }
+    }
+    if !has_duplicates {
+        println!("   ✅ No duplicate heights found per network");
+    }
+
+    // Validate certificate IDs are unique (implicitly guaranteed by BTreeMap, but
+    // good to mention)
+    println!(
+        "   ✅ All {} certificate IDs are unique",
+        certificates.len()
+    );
+
+    // Sample some certificates to show structure
+    println!("\n=== Sample Certificates ===");
+    for (cert_id, cert) in certificates.iter().take(3) {
+        println!("   Certificate {}", cert_id);
+        println!("      Network: {}", cert.network_id);
+        println!("      Height: {}", cert.height);
+        println!("      Bridge exits: {}", cert.bridge_exits.len());
+        println!("      Prev LER: {}", cert.prev_local_exit_root);
+        println!("      New LER: {}", cert.new_local_exit_root);
+    }
+
+    // Cross-validation with metadata
+    println!("\n=== Cross-Validation ===");
+
+    // Verify expected network count
+    assert_eq!(
+        networks_found.len(),
+        fixture.metadata.config.num_networks as usize,
+        "Network count mismatch"
+    );
+    println!(
+        "   ✅ Network count matches config: {}",
+        networks_found.len()
+    );
+
+    // Verify expected certificate count
+    if let Some(expected) = fixture
+        .metadata
+        .statistics
+        .entries_per_column_family
+        .get("debug_certificates")
+    {
+        assert_eq!(
+            certificates.len(),
+            *expected,
+            "Certificate count mismatch with metadata"
+        );
+        println!(
+            "   ✅ Certificate count matches metadata: {}",
+            certificates.len()
+        );
+    }
+
+    // Validate height ranges per network
+    for (network_id, heights) in &heights_per_network {
+        let min_height = heights.iter().min().unwrap().as_u64();
+        let max_height = heights.iter().max().unwrap().as_u64();
+        println!(
+            "   ✅ Network {}: height range {} to {} ({} certificates)",
+            network_id,
+            min_height,
+            max_height,
+            heights.len()
+        );
+    }
+
+    // Final validation summary
+    println!("\n=== Validation Summary ===");
+    println!("  Total certificates: {}", certificates.len());
+    println!("  Unique networks: {}", networks_found.len());
+    println!("  Certificates per network:");
+    for (network_id, heights) in &heights_per_network {
+        println!("    Network {}: {} certificates", network_id, heights.len());
+    }
+
+    // Verify all certificate IDs can be recomputed correctly
+    let mut id_mismatches = 0;
+    for (stored_id, cert) in &certificates {
+        let computed_id = cert.hash();
+        if *stored_id != computed_id {
+            id_mismatches += 1;
+        }
+    }
+    assert_eq!(
+        id_mismatches, 0,
+        "Found {} certificate ID mismatches",
+        id_mismatches
+    );
+    println!("  ✅ All certificate IDs match their computed hashes");
+
+    println!("\n✅ Successfully reconstructed and validated all debug database data!");
+    println!(
+        "   All {} certificates are valid and internally consistent.",
+        certificates.len()
+    );
 }

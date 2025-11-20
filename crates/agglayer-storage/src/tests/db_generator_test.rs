@@ -9,8 +9,8 @@ use super::{
 fn test_generate_databases() {
     let temp_dir = TempDBDir::new();
     let config = GeneratorConfig {
-        num_networks: 2,
-        certificates_per_network: 3,
+        num_networks: 3,
+        certificates_per_network: 5,
         generate_proofs: true,
         seed: 42,
     };
@@ -69,8 +69,9 @@ fn test_certificate_chaining() {
     // Verify certificates are properly chained for each network
     for network_id in &result.network_ids {
         println!("\nVerifying certificate chain for network {:?}", network_id);
-        
-        // Check that each certificate's prev_local_exit_root matches the previous cert's new_local_exit_root
+
+        // Check that each certificate's prev_local_exit_root matches the previous
+        // cert's new_local_exit_root
         for height in 1..config.certificates_per_network {
             let prev_cert = result
                 .certificates
@@ -90,12 +91,16 @@ fn test_certificate_chaining() {
             assert_eq!(
                 curr_cert.prev_local_exit_root,
                 prev_cert.new_local_exit_root,
-                "Certificate at height {} should have prev_local_exit_root equal to the new_local_exit_root of certificate at height {}",
+                "Certificate at height {} should have prev_local_exit_root equal to the \
+                 new_local_exit_root of certificate at height {}",
                 height,
                 height - 1
             );
         }
-        
-        println!("  ✅ All certificates properly chained for network {:?}", network_id);
+
+        println!(
+            "  ✅ All certificates properly chained for network {:?}",
+            network_id
+        );
     }
 }
