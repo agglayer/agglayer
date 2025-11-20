@@ -41,7 +41,7 @@ where
 
         let start_block = self
             .state_store
-            .get_latest_certificate_settling_block()?
+            .get_latest_block_that_settled_any_cert()?
             .unwrap_or(0); // start from genesis if the column doesn't exist
 
         let rollup_address = self.l1_rpc.get_rollup_manager_address();
@@ -107,7 +107,7 @@ where
             )?;
 
             self.state_store
-                .set_latest_certificate_settling_block(block_number)?;
+                .set_latest_block_that_settled_any_cert(block_number)?;
         }
         Ok(())
     }

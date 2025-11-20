@@ -15,14 +15,14 @@ pub(crate) mod network_info;
 pub enum MetadataKey {
     LatestSettledEpoch,
     EpochSynchronization, // Actually unused, kept for storage backward compatibility
-    LatestCertificateSettlingBlock,
+    LatestBlockThatSettledAnyCert,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataValue {
     LatestSettledEpoch(EpochNumber),
     EpochSynchronization(u64), // Actually unused, kept for storage backward compatibility
-    LatestCertificateSettlingBlock(BlockNumber),
+    LatestBlockThatSettledAnyCert(BlockNumber),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

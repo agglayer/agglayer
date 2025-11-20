@@ -687,9 +687,9 @@ impl MetadataWriter for StateStore {
         )?)
     }
 
-    fn set_latest_certificate_settling_block(&self, value: BlockNumber) -> Result<(), Error> {
-        if let Some(current_latest_certificate_settling_block) = self.get_latest_certificate_settling_block()? {
-            if current_latest_certificate_settling_block >= value {
+    fn set_latest_block_that_settled_any_cert(&self, value: BlockNumber) -> Result<(), Error> {
+        if let Some(latest_block_that_settled_any_cert) = self.get_latest_block_that_settled_any_cert()? {
+            if latest_block_that_settled_any_cert >= value {
                 return Err(Error::UnprocessedAction(
                     "Tried to set a lower value for latest certificate settling block".to_string(),
                 ));
@@ -697,8 +697,8 @@ impl MetadataWriter for StateStore {
         }
 
         self.db.put::<MetadataColumn>(
-            &MetadataKey::LatestCertificateSettlingBlock,
-            &MetadataValue::LatestCertificateSettlingBlock(value),
+            &MetadataKey::LatestBlockThatSettledAnyCert,
+            &MetadataValue::LatestBlockThatSettledAnyCert(value),
         )?;
 
         Ok(())
@@ -722,19 +722,15 @@ impl MetadataReader for StateStore {
             })
     }
 
-    fn get_latest_certificate_settling_block(&self) -> Result<Option<BlockNumber>, Error> {
-        self.db
-            .get::<MetadataColumn>(&MetadataKey::LatestCertificateSettlingBlock)
-            .map_err(Into::into)
-            .and_then(|v| {
-                v.map_or(Ok(None), |v| match v {
-                    MetadataValue::LatestCertificateSettlingBlock(value) => Ok(Some(value)),
-                    _ => Err(Error::Unexpected(
-                        "Wrong value type decoded, was expecting LastCertificateSettlingBlock, decoded \
-                         another type"
-                            .to_string(),
-                    )),
-                })
-            })
+    fn get_latest_block_that_settled_any_cert(&self) -> Result<Option<BlockNumber>, Error> {
+        match self.db.get::<MetadataColumn>(&MetadataKey::LatestBlockThatSettledAnyCert)? {
+            Some(MetadataValue::LatestBlockThatSettledAnyCert(value)) => Ok(Some(value)),
+            None => Ok(None),
+            _ => Err(Error::Unexpected(
+                "Wrong value type decoded, was expecting LastCertificateSettlingBlock, decoded \
+                    another type"
+                    .to_string(),
+            )),
+        }
     }
 }

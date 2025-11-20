@@ -72,7 +72,7 @@ pub trait MetadataReader: Send + Sync {
     /// Get the latest settled epoch.
     fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error>;
     /// Get the latest certificate settling block.
-    fn get_latest_certificate_settling_block(&self) -> Result<Option<BlockNumber>, Error>;
+    fn get_latest_block_that_settled_any_cert(&self) -> Result<Option<BlockNumber>, Error>;
 }
 
 pub trait StateReader: Send + Sync {
