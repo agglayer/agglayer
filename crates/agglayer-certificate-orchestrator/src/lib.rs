@@ -82,7 +82,7 @@ pub struct CertificateOrchestrator<
     EpochsStore,
     PerEpochStore,
     StateStore,
-    RollupManagerRpc,
+    L1Rpc,
 > {
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
@@ -118,18 +118,10 @@ pub struct CertificateOrchestrator<
     network_tasks: NetworkTasks,
 
     /// Listener task singleton.
-    listener_task: ListenerTask<StateStore, RollupManagerRpc>,
+    listener_task: Arc<ListenerTask<StateStore, L1Rpc>>,
 }
 
-impl<
-        Sc,
-        CertifierClient,
-        PendingStore,
-        EpochsStore,
-        PerEpochStore,
-        StateStore,
-        RollupManagerRpc,
-    >
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         Sc,
         CertifierClient,
@@ -137,11 +129,11 @@ impl<
         EpochsStore,
         PerEpochStore,
         StateStore,
-        RollupManagerRpc,
+        L1Rpc,
     >
 where
     PendingStore: PendingCertificateReader,
-    RollupManagerRpc: RollupContract + L1TransactionFetcher,
+    L1Rpc: RollupContract + L1TransactionFetcher,
     StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter,
 {
     const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
@@ -158,7 +150,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
-        l1_rpc: Arc<RollupManagerRpc>,
+        l1_rpc: Arc<L1Rpc>,
     ) -> Result<Self, Error> {
         Ok(Self {
             epoch_packing_tasks: FuturesUnordered::new(),
@@ -178,21 +170,13 @@ where
             state_store: state_store.clone(),
             spawned_network_tasks: Default::default(),
             network_tasks: FuturesUnordered::new(),
-            listener_task: ListenerTask::new(state_store, l1_rpc),
+            listener_task: Arc::new(ListenerTask::new(state_store, l1_rpc)),
         })
     }
 }
 
 #[buildstructor::buildstructor]
-impl<
-        Sc,
-        CertifierClient,
-        PendingStore,
-        EpochsStore,
-        PerEpochStore,
-        StateStore,
-        RollupManagerRpc,
-    >
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         Sc,
         CertifierClient,
@@ -200,7 +184,7 @@ impl<
         EpochsStore,
         PerEpochStore,
         StateStore,
-        RollupManagerRpc,
+        L1Rpc,
     >
 where
     CertifierClient: Certifier,
@@ -209,7 +193,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter + 'static,
-    RollupManagerRpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
+    L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
     ///
@@ -240,7 +224,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
-        l1_rpc: Arc<RollupManagerRpc>,
+        l1_rpc: Arc<L1Rpc>,
     ) -> eyre::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
             clock,
@@ -255,7 +239,10 @@ where
             l1_rpc,
         )?;
 
-        orchestrator.listener_task.run(cancellation_token).await?;
+        tokio::spawn({
+            let listener_task = orchestrator.listener_task.clone();
+            async move { listener_task.run(cancellation_token).await }
+        });
 
         // Try to spawn the certifier tasks for the next height of each network
         for ProvenCertificate(_, network_id, _height) in
@@ -270,15 +257,7 @@ where
     }
 }
 
-impl<
-        Sc,
-        CertifierClient,
-        PendingStore,
-        EpochsStore,
-        PerEpochStore,
-        StateStore,
-        RollupManagerRpc,
-    >
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         Sc,
         CertifierClient,
@@ -286,7 +265,7 @@ impl<
         EpochsStore,
         PerEpochStore,
         StateStore,
-        RollupManagerRpc,
+        L1Rpc,
     >
 where
     CertifierClient: Certifier,
@@ -295,7 +274,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-    RollupManagerRpc: RollupContract + L1TransactionFetcher,
+    L1Rpc: RollupContract + L1TransactionFetcher,
 {
     fn spawn_network_task(&mut self, network_id: NetworkId) -> Result<(), Error> {
         if self.spawned_network_tasks.contains_key(&network_id) {
@@ -415,16 +394,8 @@ where
     fn handle_epoch_packing_result(&mut self) {}
 }
 
-impl<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore, RollupManagerRpc> Future
-    for CertificateOrchestrator<
-        Sc,
-        A,
-        PendingStore,
-        EpochsStore,
-        PerEpochStore,
-        StateStore,
-        RollupManagerRpc,
-    >
+impl<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc> Future
+    for CertificateOrchestrator<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
 where
     A: Certifier,
     Sc: SettlementClient,
@@ -432,7 +403,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-    RollupManagerRpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
+    L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
 {
     type Output = ();
 

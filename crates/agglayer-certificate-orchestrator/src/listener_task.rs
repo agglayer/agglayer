@@ -92,9 +92,7 @@ where
                 network_id, pp_root
             );
 
-            let certificate_ids = self
-                .state_store
-                .get_certificate_ids_for_pp_root(&pp_root)?;
+            let certificate_ids = self.state_store.get_certificate_ids_for_pp_root(&pp_root)?;
 
             let Some(settled_certificate_id) = certificate_ids.last() else {
                 return Err(Error::InternalError(format!(
@@ -102,8 +100,11 @@ where
                 )));
             };
 
-            self.state_store
-                .update_settlement_tx_hash(settled_certificate_id, tx_hash.into(), false)?;
+            self.state_store.update_settlement_tx_hash(
+                settled_certificate_id,
+                tx_hash.into(),
+                false,
+            )?;
 
             self.state_store
                 .set_latest_certificate_settling_block(block_number)?;
