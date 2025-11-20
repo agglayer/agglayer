@@ -25,12 +25,12 @@ mock! {
 
     impl MetadataReader for StateStore {
         fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error>;
-        fn get_latest_certificate_settling_block(&self) -> Result<Option<BlockNumber>, Error>;
+        fn get_latest_block_that_settled_any_cert(&self) -> Result<Option<BlockNumber>, Error>;
     }
 
     impl MetadataWriter for StateStore {
         fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
-        fn set_latest_certificate_settling_block(&self, value: BlockNumber) -> Result<(), Error>;
+        fn set_latest_block_that_settled_any_cert(&self, value: BlockNumber) -> Result<(), Error>;
     }
 
     impl StateWriter for StateStore {

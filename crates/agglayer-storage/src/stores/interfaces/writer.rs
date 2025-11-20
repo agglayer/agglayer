@@ -38,7 +38,7 @@ pub trait MetadataWriter: Send + Sync {
     /// Set the latest settled epoch.
     fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
     /// Set the latest certificate settling block.
-    fn set_latest_certificate_settling_block(&self, value: BlockNumber) -> Result<(), Error>;
+    fn set_latest_block_that_settled_any_cert(&self, value: BlockNumber) -> Result<(), Error>;
 }
 
 pub trait StateWriter: Send + Sync {
