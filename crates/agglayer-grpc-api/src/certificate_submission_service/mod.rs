@@ -39,13 +39,13 @@ where
     L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
-    #[instrument(skip(self, request), level = "debug", fields(certificate_id = tracing::field::Empty, client_info = tracing::field::Empty))]
+    #[instrument(skip(self, request), level = "debug", fields(certificate_id = tracing::field::Empty, client = tracing::field::Empty))]
     async fn submit_certificate(
         &self,
         request: tonic::Request<SubmitCertificateRequest>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let client_info = crate::client_info_from_metadata(request.metadata());
-        tracing::Span::current().record("client_info", &client_info);
+        tracing::Span::current().record("client", &client_info);
 
         // Retrieve extra signature from query metadata if any
         let extra_signature: Option<Signature> =

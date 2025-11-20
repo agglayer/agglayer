@@ -39,13 +39,13 @@ where
     L1Rpc: Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
-    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty, client_info = tracing::field::Empty))]
+    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty, client = tracing::field::Empty))]
     async fn get_certificate_header(
         &self,
         request: tonic::Request<GetCertificateHeaderRequest>,
     ) -> Result<tonic::Response<GetCertificateHeaderResponse>, tonic::Status> {
         let client_info = crate::client_info_from_metadata(request.metadata());
-        tracing::Span::current().record("client_info", &client_info);
+        tracing::Span::current().record("client", &client_info);
 
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::Span::current().record("request_id", &request_id);
@@ -89,13 +89,13 @@ where
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty,  client_info = tracing::field::Empty))]
+    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty,  client = tracing::field::Empty))]
     async fn get_latest_certificate_header(
         &self,
         request: tonic::Request<GetLatestCertificateHeaderRequest>,
     ) -> Result<tonic::Response<GetLatestCertificateHeaderResponse>, tonic::Status> {
         let client_info = crate::client_info_from_metadata(request.metadata());
-        tracing::Span::current().record("client_info", &client_info);
+        tracing::Span::current().record("client", &client_info);
 
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::Span::current().record("request_id", &request_id);
@@ -149,13 +149,13 @@ where
         }))
     }
 
-    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty, client_info = tracing::field::Empty))]
+    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty, client = tracing::field::Empty))]
     async fn get_network_info(
         &self,
         request: tonic::Request<GetNetworkInfoRequest>,
     ) -> Result<tonic::Response<GetNetworkInfoResponse>, tonic::Status> {
         let client_info = crate::client_info_from_metadata(request.metadata());
-        tracing::Span::current().record("client_info", &client_info);
+        tracing::Span::current().record("client", &client_info);
 
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::Span::current().record("request_id", &request_id);
