@@ -14,7 +14,7 @@ FROM chef AS planner
 
 COPY --link crates crates
 # Needed for cargo-chef to build, but not use during the compilation due to `--bin agglayer`
-COPY --link tests/integrations tests/integrations
+COPY --link tests tests
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
 

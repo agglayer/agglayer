@@ -24,6 +24,24 @@ impl PortDefaults for AdminService {
     const ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_PORT");
 }
 
+pub enum AdminServiceTls {}
+impl PortDefaults for AdminServiceTls {
+    const DEFAULT: u16 = 9491;
+    const ENV_VAR: Option<&str> = Some("AGGLAYER_ADMIN_TLS_PORT");
+}
+
+pub enum ReadRpcServiceTls {}
+impl PortDefaults for ReadRpcServiceTls {
+    const DEFAULT: u16 = 9490;
+    const ENV_VAR: Option<&str> = Some("AGGLAYER_READRPC_TLS_PORT");
+}
+
+pub enum GrpcServiceTls {}
+impl PortDefaults for GrpcServiceTls {
+    const DEFAULT: u16 = 9489;
+    const ENV_VAR: Option<&str> = Some("AGGLAYER_GRPC_TLS_PORT");
+}
+
 /// The local RPC server configuration.
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -46,6 +64,24 @@ pub struct RpcConfig {
     /// 9091.
     #[serde(default)]
     pub admin_port: Port<AdminService>,
+
+    /// The default port for the local AdminRPC TLS server.
+    /// Overridden by `AGGLAYER_ADMIN_TLS_PORT` environment variable, defaults
+    /// to 9491.
+    #[serde(default)]
+    pub admin_tls_port: Port<AdminServiceTls>,
+
+    /// The default port for the local ReadRPC TLS server.
+    /// Overridden by `AGGLAYER_READRPC_TLS_PORT` environment variable, defaults
+    /// to 9490.
+    #[serde(default)]
+    pub readrpc_tls_port: Port<ReadRpcServiceTls>,
+
+    /// The default port for the local gRPC TLS server.
+    /// Overridden by `AGGLAYER_GRPC_TLS_PORT` environment variable, defaults
+    /// to 9489.
+    #[serde(default)]
+    pub grpc_tls_port: Port<GrpcServiceTls>,
 
     #[serde(default = "default_host")]
     pub host: Ipv4Addr,
@@ -93,6 +129,9 @@ impl Default for RpcConfig {
             grpc_port: Default::default(),
             readrpc_port: Default::default(),
             admin_port: Default::default(),
+            admin_tls_port: Default::default(),
+            readrpc_tls_port: Default::default(),
+            grpc_tls_port: Default::default(),
             host: default_host(),
             max_request_body_size: default_body_size(),
             max_response_body_size: default_body_size(),
