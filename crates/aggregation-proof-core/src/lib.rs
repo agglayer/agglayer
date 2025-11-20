@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use agglayer_bincode as bincode;
 use agglayer_primitives::{keccak::keccak256_combine, Digest};
 use agglayer_tries::roots::LocalExitRoot;
-use pessimistic_proof_core::PessimisticProofOutput;
+use pessimistic_proof_core::{aggchain_data::AggchainHashValues, PessimisticProofOutput};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as ShaDigest, Sha256};
 use unified_bridge::{LETMerkleProof, LocalExitTree, NetworkId};
@@ -20,6 +20,8 @@ pub enum Error {
     InvalidOriginNetwork { intruder: NetworkId },
     #[error("non-equal aggchain hash")]
     HasDifferentAggchainHash,
+    #[error("FEP chains can have only 1 PP per aggregation. got: {got}")]
+    UnexpectedProofNumberFromFepChain { got: usize },
     #[error("missing entry in agglayer rer.")]
     AgglayerRerMissEntry,
     #[error("wrong prev agglayer RER")]
@@ -33,6 +35,9 @@ pub enum Error {
 /// Pointer to the right inclusion proofs.
 /// Enable verifying inclusion proofs uniquely.
 pub type Pointer = u32;
+
+/// FEP chains cannot have more than 1 PP per aggregation (and so per epoch)
+pub const MAX_NUMBER_OF_PP_FROM_FEP_CHAIN: usize = 1;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PessimisticProof {
@@ -48,6 +53,12 @@ pub struct PessimisticProof {
 }
 
 impl PessimisticProof {
+    /// Returns whether the PP is from an FEP chain,
+    /// equivalent to whether the aggchain-params is non-empty
+    pub fn is_from_fep_chain(&self) -> bool {
+        self.public_values.aggchain_params != AggchainHashValues::EMPTY_AGGCHAIN_PARAMS
+    }
+
     /// Verify the public values from `self` on the next proof of the stark
     /// stream.
     ///
@@ -191,6 +202,20 @@ impl RangePP {
             });
         }
 
+        // verify that if one PP from FEP chains, then we have only 1 PP for the
+        // aggregation
+        let has_pp_from_fep_chain = self
+            .proofs
+            .iter()
+            .find(|pp| pp.is_from_fep_chain())
+            .is_some();
+
+        if has_pp_from_fep_chain && self.proofs.len() != MAX_NUMBER_OF_PP_FROM_FEP_CHAIN {
+            return Err(Error::UnexpectedProofNumberFromFepChain {
+                got: self.proofs.len(),
+            });
+        }
+
         // verify that all PP have the exact same aggchain hash
         let Some(first_pp) = self.proofs.first() else {
             return Ok(()); // no proofs
@@ -199,9 +224,10 @@ impl RangePP {
         let has_different_aggchain_hash = self
             .proofs
             .iter()
-            .find(|&pp| pp.public_values.aggchain_hash != first_pp.public_values.aggchain_hash);
+            .find(|&pp| pp.public_values.aggchain_hash != first_pp.public_values.aggchain_hash)
+            .is_some();
 
-        if let Some(_) = has_different_aggchain_hash {
+        if has_different_aggchain_hash {
             return Err(Error::HasDifferentAggchainHash);
         }
 

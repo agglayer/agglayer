@@ -52,6 +52,21 @@ pub enum AggchainData {
 }
 
 impl AggchainData {
+    /// Returns aggchain params
+    pub fn aggchain_params(&self) -> Digest {
+        match &self {
+            AggchainData::MultisigAndAggchainProof {
+                aggchain_proof:
+                    AggchainProof {
+                        aggchain_params, ..
+                    },
+                ..
+            } => *aggchain_params,
+            AggchainData::LegacyEcdsa { .. } => AggchainHashValues::EMPTY_AGGCHAIN_PARAMS,
+            AggchainData::MultisigOnly(_) => AggchainHashValues::EMPTY_AGGCHAIN_PARAMS,
+        }
+    }
+
     /// Returns the aggchain hash
     pub fn aggchain_hash(&self) -> Digest {
         AggchainHashValues::from(self).hash()

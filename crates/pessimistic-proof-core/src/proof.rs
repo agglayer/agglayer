@@ -169,10 +169,9 @@ pub struct PessimisticProofOutput {
     /// The new pessimistic root.
     pub new_pessimistic_root: Digest,
     /// The list of pre-confirmed LERs per origin network.
-    pub preconfirmed_lers: BTreeMap<NetworkId, BTreeSet<LocalExitRoot>>, /* todo: hash */
-
-                                                                         /* pub prev_aggchain_params: Digest,
-                                                                          * pub new_aggchain_params: Digest, */
+    pub preconfirmed_lers: BTreeMap<NetworkId, BTreeSet<LocalExitRoot>>,
+    /// Aggchain params in clear
+    pub aggchain_params: Digest,
 }
 
 impl PessimisticProofOutput {
@@ -291,6 +290,7 @@ pub fn generate_pessimistic_proof(
             new_local_exit_root: zero_if_empty_local_exit_root(final_state_commitment.exit_root),
             new_pessimistic_root,
             preconfirmed_lers,
+            aggchain_params: batch_header.aggchain_data.aggchain_params(),
         },
         final_state_commitment,
     ))
