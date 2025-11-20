@@ -8,9 +8,13 @@
 
 use std::path::Path;
 
+use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, Height, NetworkId, Proof,
+    testutils::AggchainDataType, Certificate, CertificateHeader, CertificateId, CertificateIndex,
+    CertificateStatus, EpochNumber, Height, NetworkId, Proof,
+};
+use pessimistic_proof::{
+    core::commitment::SignatureCommitmentVersion, local_exit_tree::LocalExitTree,
 };
 use rand::Rng;
 
@@ -150,10 +154,40 @@ pub fn generate_state_db(
         let network_id = NetworkId::new(network_idx + 1);
         result.network_ids.push(network_id);
 
+        // Initialize the first local exit root for this network
+        let initial_ler: LocalExitRoot = LocalExitTree::<32>::default().get_root().into();
+        let mut prev_local_exit_root = initial_ler;
+
         // Generate certificates for this network
         for height in 0..config.certificates_per_network {
             let height = Height::from(height);
-            let certificate = Certificate::new_for_test(network_id, height);
+            
+            // Vary parameters based on height to create diverse test data
+            let num_bridge_exits = (height.as_u64() % 5) as usize; // 0-4 bridge exits
+            let aggchain_data_type = match height.as_u64() % 4 {
+                0 => AggchainDataType::Ecdsa,
+                1 => AggchainDataType::Generic,
+                2 => AggchainDataType::MultisigOnly { num_signers: 3 },
+                _ => AggchainDataType::MultisigAndAggchainProof { num_signers: 5 },
+            };
+            let version = match height.as_u64() % 3 {
+                0 => SignatureCommitmentVersion::V2,
+                1 => SignatureCommitmentVersion::V3,
+                _ => SignatureCommitmentVersion::V5,
+            };
+
+            let certificate = Certificate::new_for_test_custom(
+                network_id,
+                height,
+                prev_local_exit_root,
+                num_bridge_exits,
+                aggchain_data_type,
+                version,
+            );
+            
+            // Update prev_local_exit_root for the next certificate
+            prev_local_exit_root = certificate.new_local_exit_root;
+            
             let cert_id = certificate.hash();
             result.certificate_ids.push(cert_id);
 
@@ -418,10 +452,52 @@ pub fn generate_pending_db(
 
     // Generate data for each network
     for network_id in &state_result.network_ids {
-        // 1. PendingQueue: Add a few pending certificates
-        for height in 0..config.certificates_per_network.min(2) {
-            let height = Height::from(height);
-            let certificate = Certificate::new_for_test(*network_id, height);
+        // Get the last certificate from state_result to continue the chain
+        let last_state_height = config.certificates_per_network - 1;
+        let last_state_cert = state_result
+            .certificates
+            .get(&(*network_id, last_state_height))
+            .expect("Certificate should exist from state generation");
+        let mut prev_local_exit_root = last_state_cert.new_local_exit_root;
+
+        // 1. PendingQueue: Add a few new pending certificates (continuing the chain)
+        let num_pending = config.certificates_per_network.min(2);
+        let mut last_pending_cert_id = None;
+        let mut last_pending_height = Height::ZERO;
+        
+        for i in 0..num_pending {
+            let height = Height::from(config.certificates_per_network + i);
+            
+            // Vary parameters based on height
+            let num_bridge_exits = ((height.as_u64() + 1) % 5) as usize;
+            let aggchain_data_type = match (height.as_u64() + 2) % 4 {
+                0 => AggchainDataType::Ecdsa,
+                1 => AggchainDataType::Generic,
+                2 => AggchainDataType::MultisigOnly { num_signers: 4 },
+                _ => AggchainDataType::MultisigAndAggchainProof { num_signers: 6 },
+            };
+            let version = match (height.as_u64() + 1) % 3 {
+                0 => SignatureCommitmentVersion::V2,
+                1 => SignatureCommitmentVersion::V3,
+                _ => SignatureCommitmentVersion::V5,
+            };
+
+            let certificate = Certificate::new_for_test_custom(
+                *network_id,
+                height,
+                prev_local_exit_root,
+                num_bridge_exits,
+                aggchain_data_type,
+                version,
+            );
+            
+            // Update prev_local_exit_root for the next certificate
+            prev_local_exit_root = certificate.new_local_exit_root;
+            
+            // Save last certificate info for LatestPendingCertificatePerNetwork
+            last_pending_cert_id = Some(certificate.hash());
+            last_pending_height = height;
+            
             let key = PendingQueueKey(*network_id, height);
             db.put::<PendingQueueColumn>(&key, &certificate)?;
             *result
@@ -430,12 +506,9 @@ pub fn generate_pending_db(
                 .or_insert(0) += 1;
         }
 
-        // 2. LatestPendingCertificatePerNetwork
-        if config.certificates_per_network > 0 {
-            let latest_height = Height::from(config.certificates_per_network - 1);
-            let certificate = Certificate::new_for_test(*network_id, latest_height);
-            let cert_id = certificate.hash();
-            let pending_cert = PendingCertificate(cert_id, latest_height);
+        // 2. LatestPendingCertificatePerNetwork (use the last pending certificate from the loop above)
+        if let Some(cert_id) = last_pending_cert_id {
+            let pending_cert = PendingCertificate(cert_id, last_pending_height);
             db.put::<LatestPendingCertificatePerNetworkColumn>(network_id, &pending_cert)?;
             *result
                 .entries_per_cf
@@ -443,10 +516,14 @@ pub fn generate_pending_db(
                 .or_insert(0) += 1;
         }
 
-        // 3. LatestProvenCertificatePerNetwork
+        // 3. LatestProvenCertificatePerNetwork (use one of the state certificates)
         if config.certificates_per_network > 1 {
             let proven_height = Height::from(config.certificates_per_network - 2);
-            let certificate = Certificate::new_for_test(*network_id, proven_height);
+            let certificate = state_result
+                .certificates
+                .get(&(*network_id, proven_height.as_u64()))
+                .expect("Certificate should exist from state generation")
+                .clone();
             let cert_id = certificate.hash();
             let proven_cert = ProvenCertificate(cert_id, *network_id, proven_height);
             db.put::<LatestProvenCertificatePerNetworkColumn>(network_id, &proven_cert)?;
