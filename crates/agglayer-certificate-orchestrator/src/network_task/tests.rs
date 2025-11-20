@@ -123,7 +123,11 @@ async fn start_from_zero() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SettlementTxHash::for_tests()])));
+        .returning(|_| {
+            Ok(SettlementTxRecord::from_vec(vec![
+                SettlementTxHash::for_tests(),
+            ]))
+        });
 
     state
         .expect_update_certificate_header_status()
@@ -355,7 +359,11 @@ async fn one_per_epoch() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SettlementTxHash::for_tests()])));
+        .returning(|_| {
+            Ok(SettlementTxRecord::from_vec(vec![
+                SettlementTxHash::for_tests(),
+            ]))
+        });
 
     state
         .expect_update_certificate_header_status()
@@ -637,7 +645,11 @@ async fn retries() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id2))
-        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SettlementTxHash::for_tests()])));
+        .returning(|_| {
+            Ok(SettlementTxRecord::from_vec(vec![
+                SettlementTxHash::for_tests(),
+            ]))
+        });
 
     state
         .expect_update_certificate_header_status()
