@@ -26,14 +26,13 @@ where
     StateStore: Send + Sync + 'static,
     EpochsStore: Send + Sync + 'static,
 {
-    #[instrument(skip(self, request), level = "debug", fields(client = tracing::field::Empty))]
+    #[instrument(skip(self, _request), level = "debug", fields(
+        client = crate::client_info_from_metadata(_request.metadata())
+    ))]
     async fn get_epoch_configuration(
         &self,
-        request: tonic::Request<GetEpochConfigurationRequest>,
+        _request: tonic::Request<GetEpochConfigurationRequest>,
     ) -> Result<tonic::Response<GetEpochConfigurationResponse>, tonic::Status> {
-        let client_info = crate::client_info_from_metadata(request.metadata());
-        tracing::Span::current().record("client", &client_info);
-
         let epoch_configuration = self.service.get_epoch_configuration().ok_or_else(|| {
             let mut error_details = ErrorDetails::with_error_info(
                 GetEpochConfigurationErrorKind::UnexpectedClockConfiguration.as_str_name(),
