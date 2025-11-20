@@ -48,7 +48,7 @@ async fn successfully_push_certificate(#[case] state: Forest) {
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn send_multiple_certificates(#[case] mut state: Forest) {
     use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
-    use agglayer_types::{aggchain_proof::AggchainData, compute_signature_info};
+    use agglayer_types::{aggchain_proof::AggchainData, testutils::compute_signature_info};
     use alloy::providers::Provider as _;
     use pessimistic_proof::core::commitment::SignatureCommitmentVersion;
     use tokio_util::sync::CancellationToken;
