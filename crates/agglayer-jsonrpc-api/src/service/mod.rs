@@ -164,7 +164,6 @@ where
 pub enum TxStatus {
     Done,
     Pending,
-    NotFound,
 }
 
 impl TxStatus {
@@ -172,7 +171,6 @@ impl TxStatus {
         match self {
             TxStatus::Done => "done",
             TxStatus::Pending => "pending",
-            TxStatus::NotFound => "not found",
         }
     }
 }
