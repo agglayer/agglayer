@@ -1,6 +1,9 @@
 use agglayer_config::Config;
 use agglayer_storage::{
-    stores::{PendingCertificateWriter as _, StateReader as _, StateWriter as _},
+    stores::{
+        PendingCertificateReader as _, PendingCertificateWriter as _, StateReader as _,
+        StateWriter as _,
+    },
     tests::TempDBDir,
 };
 use agglayer_types::{
@@ -96,6 +99,11 @@ async fn pending_certificate_in_error_can_be_replaced() {
     let mut second_pending = Certificate::new_for_test(network_id, Height::ZERO);
     second_pending.metadata = Metadata::new([1; 32].into());
 
+    tracing::info!(
+        pending_certificate = %pending_certificate.hash(),
+        second_pending = %second_pending.hash(),
+    );
+
     assert_ne!(pending_certificate.hash(), second_pending.hash());
     context
         .state_store
@@ -114,7 +122,7 @@ async fn pending_certificate_in_error_can_be_replaced() {
         )
         .await;
 
-    assert!(res.is_err());
+    assert!(res.is_err(), "{res:?}");
 
     context
         .state_store
@@ -157,7 +165,6 @@ async fn pending_certificate_in_error_force_push() {
         .update_settlement_tx_hash(
             &certificate_id,
             SettlementTxHash::from(Digest::from([1; 32])),
-            false,
         )
         .expect("unable to update settlement tx hash");
 
@@ -239,7 +246,6 @@ async fn pending_certificate_in_error_force_set_status() {
         .update_settlement_tx_hash(
             &certificate_id,
             SettlementTxHash::from(Digest::from([1; 32])),
-            false,
         )
         .expect("unable to update settlement tx hash");
 
@@ -330,8 +336,16 @@ async fn pending_certificate_in_error_force_set_status() {
     assert_eq!(res.status, CertificateStatus::Candidate);
 }
 
+#[rstest::rstest]
 #[test_log::test(tokio::test)]
-async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status() {
+async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status(
+    #[values(
+        CertificateStatus::Pending,
+        CertificateStatus::Proven,
+        CertificateStatus::Candidate
+    )]
+    initial_status: CertificateStatus,
+) {
     let path = TempDBDir::new();
 
     let mut config = Config::new(&path.path);
@@ -345,14 +359,15 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
 
     context
         .state_store
-        .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
+        .insert_certificate_header(&pending_certificate, initial_status.clone())
         .expect("unable to insert pending certificate header");
 
     let fake_settlement_tx_hash = SettlementTxHash::from(Digest::from([1; 32]));
+
     context
-        .state_store
-        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash, false)
-        .expect("unable to update settlement tx hash");
+        .pending_store
+        .insert_settlement_tx_hash_for_certificate(&certificate_id, fake_settlement_tx_hash)
+        .expect("unable to insert settlement tx hash in pending store");
 
     let res: CertificateHeader = context
         .state_store
@@ -360,8 +375,16 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
         .unwrap()
         .unwrap();
 
-    assert!(res.settlement_tx_hash.is_some());
-    assert_eq!(res.status, CertificateStatus::Candidate);
+    // Settlement tx hash should not be in the header for non-settled certificates
+    assert!(res.settlement_tx_hash.is_none());
+    assert_eq!(res.status, initial_status);
+
+    // But it should be in pending storage
+    let pending_hashes = context
+        .pending_store
+        .get_settlement_tx_hashes_for_certificate(certificate_id)
+        .unwrap();
+    assert_eq!(pending_hashes.hashes(), &[fake_settlement_tx_hash]);
 
     let res: Result<(), _> = context
         .admin_client
@@ -371,11 +394,12 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
                 pending_certificate.hash(),
                 CertificateStatus::Proven,
                 false,
-                Some(fake_settlement_tx_hash)
+                Some(vec![fake_settlement_tx_hash])
             ],
         )
         .await;
 
+    tracing::debug!("Force set certificate status result: {:?}", res);
     assert!(res.is_ok());
     assert!(context.certificate_receiver.try_recv().is_err());
 
@@ -385,8 +409,15 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status()
         .unwrap()
         .unwrap();
 
-    assert!(res.settlement_tx_hash.is_none());
     assert_eq!(res.status, CertificateStatus::Proven);
+    assert!(res.settlement_tx_hash.is_none());
+
+    // Verify the settlement tx hash was removed from pending store
+    let pending_hashes = context
+        .pending_store
+        .get_settlement_tx_hashes_for_certificate(certificate_id)
+        .unwrap();
+    assert!(pending_hashes.is_empty());
 }
 
 #[test_log::test(tokio::test)]
@@ -410,7 +441,7 @@ async fn pending_certificate_settled_force_set_status() {
     let fake_settlement_tx_hash = SettlementTxHash::from(Digest::from([1; 32]));
     context
         .state_store
-        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash, false)
+        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash)
         .expect("unable to update settlement tx hash");
     context
         .state_store

@@ -203,10 +203,7 @@ where
             )
             .await
         {
-            Ok(pending_tx) => {
-                info!("Certificate settlement transaction submitted");
-                pending_tx
-            }
+            Ok(pending_tx) => pending_tx,
             Err(error) => {
                 // TODO: Differentiate between different error types, check if decoding works
                 // properly for custom errors as well.
@@ -225,7 +222,7 @@ where
 
         // Get the transaction hash from the pending transaction
         let tx_hash = *pending_tx.tx_hash();
-        info!("Settlement transaction hash: {}", tx_hash);
+        info!(?tx_hash, "Settlement transaction hash");
 
         Ok(SettlementTxHash::from(tx_hash))
     }
@@ -236,6 +233,7 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
     RollupManagerRpc: L1TransactionFetcher,
     PerEpochStore: PerEpochWriter + PerEpochReader,
+    StateStore: StateWriter,
 {
     #[tracing::instrument(skip(self), fields(%settlement_tx_hash, %certificate_id))]
     async fn wait_for_settlement(
@@ -243,7 +241,7 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        info!(%settlement_tx_hash, "Waiting for settlement of tx {settlement_tx_hash}");
+        info!("Waiting for settlement");
 
         // Apply timeout fail point if they are active for integration testing
         #[cfg(feature = "testutils")]
@@ -275,6 +273,8 @@ where
         }
 
         info!(%settlement_tx_hash, "Certificate settlement transaction successfully settled on l1");
+        self.state_store
+            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
 
         // Step 3: Add certificate to epoch with retries
         let mut max_retries = MAX_EPOCH_ASSIGNMENT_RETRIES;
