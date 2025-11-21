@@ -39,7 +39,10 @@ where
     L1Rpc: Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
-    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]
+    #[tracing::instrument(level = "debug", skip(self, request), fields(
+        request_id = tracing::field::Empty,
+        client = crate::client_info_from_metadata(request.metadata())
+    ))]
     async fn get_certificate_header(
         &self,
         request: tonic::Request<GetCertificateHeaderRequest>,
@@ -86,7 +89,10 @@ where
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]
+    #[tracing::instrument(level = "debug", skip(self, request), fields(
+        request_id = tracing::field::Empty,
+        client = crate::client_info_from_metadata(request.metadata())
+    ))]
     async fn get_latest_certificate_header(
         &self,
         request: tonic::Request<GetLatestCertificateHeaderRequest>,
@@ -143,7 +149,10 @@ where
         }))
     }
 
-    #[tracing::instrument(level = "debug", skip(self, request), fields(request_id = tracing::field::Empty))]
+    #[tracing::instrument(level = "debug", skip(self, request), fields(
+        request_id = tracing::field::Empty,
+        client = crate::client_info_from_metadata(request.metadata())
+    ))]
     async fn get_network_info(
         &self,
         request: tonic::Request<GetNetworkInfoRequest>,
