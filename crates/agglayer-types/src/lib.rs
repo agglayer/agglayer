@@ -14,7 +14,7 @@ mod proof_modes;
 
 #[cfg(feature = "testutils")]
 pub mod testutils {
-    pub use crate::certificate::{compute_signature_info, EMPTY_ELF};
+    pub use crate::certificate::{compute_signature_info, AggchainDataType, EMPTY_ELF};
 }
 pub use certificate::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Height,
