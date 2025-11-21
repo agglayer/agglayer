@@ -19,10 +19,13 @@ fn test_generate_databases() {
         generate_all_databases(&temp_dir.path, &config).expect("Failed to generate databases");
 
     // Verify we have the expected number of networks
-    assert_eq!(result.network_ids.len(), 2);
+    assert_eq!(result.network_ids.len(), config.num_networks as usize);
 
     // Verify we have certificates
-    assert_eq!(result.certificate_ids.len(), 6); // 2 networks * 3 certs
+    assert_eq!(
+        result.certificate_ids.len(),
+        (config.num_networks as u64 * config.certificates_per_network) as usize
+    );
 
     // Verify we have entries in column families
     assert!(!result.entries_per_cf.is_empty());
