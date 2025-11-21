@@ -192,7 +192,7 @@ impl Node {
         let provider = ProviderBuilder::new()
             .with_simple_nonce_management()
             .wallet(wallet)
-            .on_client(
+            .connect_client(
                 alloy::rpc::client::RpcClient::builder()
                     .layer(crate::L1TraceLayer)
                     .http(config.l1.node_url.clone()),
