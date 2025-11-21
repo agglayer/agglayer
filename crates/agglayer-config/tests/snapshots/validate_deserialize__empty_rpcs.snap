@@ -2,8 +2,6 @@
 source: crates/agglayer-config/tests/validate_deserialize.rs
 expression: config
 ---
-prover-entrypoint = "http://127.0.0.1:8080"
-
 [full-node-rpcs]
 
 [l2]
@@ -67,3 +65,7 @@ input-backpressure-buffer-size = 1000
 
 [storage]
 db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
+
+[prover.network-prover]
+proving-timeout = "5m"
+sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"

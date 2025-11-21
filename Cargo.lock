@@ -45,8 +45,6 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-node",
- "agglayer-prover",
- "agglayer-prover-config",
  "agglayer-storage",
  "assert_cmd",
  "clap",
@@ -57,7 +55,9 @@ dependencies = [
  "hex",
  "insta",
  "pessimistic-proof",
+ "prover-executor",
  "serde_json",
+ "sp1-sdk",
  "tokio",
  "tokio-util",
  "toml 0.9.8",
@@ -73,9 +73,6 @@ dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-primitives",
- "agglayer-prover",
- "agglayer-prover-config",
- "agglayer-prover-types",
  "agglayer-storage",
  "agglayer-types",
  "alloy",
@@ -90,6 +87,7 @@ dependencies = [
  "pessimistic-proof-test-suite",
  "prover-alloy",
  "prover-config",
+ "prover-engine",
  "prover-executor",
  "reqwest",
  "rstest",
@@ -102,6 +100,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic 0.13.1",
+ "tower 0.4.13",
  "tracing",
  "url",
 ]
@@ -175,7 +174,6 @@ name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
- "agglayer-prover-config",
  "agglayer-types",
  "alloy-primitives",
  "dirs 6.0.0",
@@ -184,6 +182,7 @@ dependencies = [
  "insta",
  "jsonrpsee",
  "pretty_assertions",
+ "prover-config",
  "rstest",
  "serde",
  "serde_json",
@@ -449,6 +448,7 @@ dependencies = [
  "mockall",
  "pessimistic-proof",
  "pin-project 1.1.10",
+ "prover-executor",
  "rand 0.9.2",
  "reqwest",
  "rstest",
@@ -483,58 +483,6 @@ dependencies = [
  "rand 0.9.2",
  "serde",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "agglayer-prover"
-version = "0.1.0"
-dependencies = [
- "agglayer-prover-config",
- "agglayer-prover-types",
- "agglayer-telemetry 0.1.0",
- "anyhow",
- "buildstructor 0.6.0",
- "eyre",
- "prost 0.13.5",
- "prover-engine",
- "prover-executor",
- "prover-logger",
- "sp1-sdk",
- "tokio",
- "tokio-util",
- "tonic 0.13.1",
- "tonic-health",
- "tonic-reflection",
- "tower 0.4.13",
- "tracing",
-]
-
-[[package]]
-name = "agglayer-prover-config"
-version = "0.1.0"
-dependencies = [
- "insta",
- "pretty_assertions",
- "prover-config",
- "prover-logger",
- "prover-utils",
- "serde",
- "thiserror 2.0.16",
- "toml 0.9.8",
-]
-
-[[package]]
-name = "agglayer-prover-types"
-version = "0.1.0"
-dependencies = [
- "agglayer-interop",
- "pbjson 0.8.0",
- "prost 0.13.5",
- "prover-executor",
- "serde",
- "sp1-sdk",
- "thiserror 2.0.16",
- "tonic 0.13.1",
 ]
 
 [[package]]
@@ -5233,8 +5181,6 @@ dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-node",
- "agglayer-prover",
- "agglayer-prover-config",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
@@ -5256,6 +5202,7 @@ dependencies = [
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
  "pin-project 1.1.10",
+ "prover-config",
  "rand 0.9.2",
  "reqwest",
  "rstest",
@@ -6841,7 +6788,6 @@ dependencies = [
 name = "pessimistic-proof-test-suite"
 version = "0.1.0"
 dependencies = [
- "agglayer-prover",
  "agglayer-tries",
  "agglayer-types",
  "alloy",
@@ -6854,6 +6800,7 @@ dependencies = [
  "insta",
  "lazy_static",
  "pessimistic-proof",
+ "prover-executor",
  "rand 0.9.2",
  "regex",
  "rstest",

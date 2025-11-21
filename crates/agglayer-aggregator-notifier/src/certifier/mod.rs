@@ -3,14 +3,10 @@ use std::{panic::AssertUnwindSafe, sync::Arc};
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
-use agglayer_prover_types::v1::{
-    generate_proof_request::Stdin, pessimistic_proof_service_client::PessimisticProofServiceClient,
-    ErrorKind, GenerateProofRequest, GenerateProofResponse,
-};
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    aggchain_proof::AggchainData, bincode, Certificate, Digest, Height, LocalNetworkStateData,
-    NetworkId, Proof,
+    aggchain_proof::AggchainData, Certificate, Digest, Height, LocalNetworkStateData, NetworkId,
+    Proof,
 };
 use eyre::{eyre, Context as _};
 use pessimistic_proof::{
@@ -27,7 +23,7 @@ use prover_executor::{sp1_blocking, sp1_fast};
 use sp1_sdk::{
     CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
 };
-use tonic::{codec::CompressionEncoding, transport::Channel};
+use tower::{buffer::Buffer, util::BoxCloneService, Service, ServiceExt};
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::ELF;
@@ -37,16 +33,19 @@ mod l1_context;
 #[cfg(test)]
 mod tests;
 
+type ProverService = Buffer<
+    BoxCloneService<prover_executor::Request, prover_executor::Response, prover_executor::Error>,
+    prover_executor::Request,
+>;
 #[derive(Clone)]
 pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The pending store to fetch and store certificates and proofs.
     pending_store: Arc<PendingStore>,
-    /// The prover service client.
-    prover: PessimisticProofServiceClient<Channel>,
     /// The local CPU verifier to verify the generated proofs.
     verifier: Arc<CpuProver>,
     /// The verifying key of the SP1 proof system.
     verifying_key: SP1VerifyingKey,
+    prover: ProverService,
     /// The L1 RPC client.
     l1_rpc: Arc<L1Rpc>,
     config: Arc<Config>,
@@ -54,10 +53,10 @@ pub struct CertifierClient<PendingStore, L1Rpc> {
 
 impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
     pub async fn try_new(
-        prover: String,
         pending_store: Arc<PendingStore>,
         l1_rpc: Arc<L1Rpc>,
         config: Arc<Config>,
+        mut prover: ProverService,
     ) -> eyre::Result<Self> {
         debug!("Initializing the CertifierClient verifier...");
         let (verifier, verifying_key) = sp1_blocking({
@@ -74,24 +73,19 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         })
         .await
         .context("Failed setting up SP1 verifier")?;
+        prover
+            .ready()
+            .await
+            .map_err(|error| eyre!("Failed setting up Prover executor: {:?}", error))?;
+
         debug!("CertifierClient verifier successfully initialized!");
-
-        debug!("Connecting to the prover service...");
-
-        let prover = PessimisticProofServiceClient::connect(prover)
-            .await?
-            .max_decoding_message_size(config.prover.grpc.max_decoding_message_size)
-            .max_encoding_message_size(config.prover.grpc.max_encoding_message_size)
-            .send_compressed(CompressionEncoding::Zstd)
-            .accept_compressed(CompressionEncoding::Zstd);
-        debug!("Successfully connected to the prover service!");
 
         Ok(Self {
             pending_store,
-            prover,
             verifier: Arc::new(verifier),
             verifying_key,
             l1_rpc,
+            prover,
             config,
         })
     }
@@ -141,7 +135,6 @@ where
         let certificate_id = certificate.hash();
         tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
-        let mut prover_client = self.prover.clone();
         let pending_store = self.pending_store.clone();
         let verifier = self.verifier.clone();
         let verifying_key = self.verifying_key.clone();
@@ -237,95 +230,45 @@ where
             "Successfully executed the PP program locally"
         );
 
-        let request = GenerateProofRequest {
-            stdin: Some(Stdin::Sp1Stdin(
-                sp1_fast(|| bincode::default().serialize(&stdin))
-                    .map_err(CertificationError::Other)?
-                    .map_err(|source| CertificationError::Serialize { source })?
-                    .into(),
-            )),
+        let request = prover_executor::Request {
+            stdin,
+            proof_type: prover_executor::ProofType::Plonk,
         };
-
         info!("Sending the Proof generation request to the agglayer-prover service...");
-        let prover_response: tonic::Response<GenerateProofResponse> = prover_client
-            .generate_proof(request)
+        // Check if fail points are active and log warnings
+        if fail::eval(
+            "notifier::certifier::certify::prover_service_timeout",
+            |_| true,
+        )
+        .unwrap_or(false)
+        {
+            warn!("FAIL POINT ACTIVE: Simulating ProverService timeout");
+            return Err(CertificationError::ProverFailed("Timeout".to_string()));
+        }
+        let mut prover = self.prover.clone();
+        let prover_response = prover
+            .ready()
+            .await
+            .map_err(|error| {
+                warn!("Prover executor isn't ready: {:?}", error);
+                CertificationError::ProverReturnedUnspecifiedError
+            })?
+            .call(request)
             .await
             .map_err(|source_error| {
                 debug!("Failed to generate the p-proof: {:?}", source_error);
-                if let Ok(error) = bincode::default()
-                    .deserialize::<agglayer_prover_types::v1::GenerateProofError>(
-                        source_error.details(),
-                    )
-                {
-                    match error.error_type() {
-                        ErrorKind::UnableToExecuteProver => {
-                            CertificationError::InternalError("Unable to execute prover".into())
-                        }
-                        ErrorKind::ProverFailed => {
-                            CertificationError::ProverFailed(source_error.message().to_string())
-                        }
-                        ErrorKind::ProofVerificationFailed => {
-                            let proof_error: Result<
-                                pessimistic_proof::error::ProofVerificationError,
-                                _,
-                            > = bincode::default().deserialize(&error.error);
+                if let Some(error) = source_error.downcast_ref::<prover_executor::Error>() {
+                    error!("Failed to generate proof: {}", error);
 
-                            match proof_error {
-                                Ok(error) => {
-                                    CertificationError::ProofVerificationFailed { source: error }
-                                }
-                                Err(_source) => {
-                                    warn!(
-                                        "Failed to deserialize the error details coming from the \
-                                         prover: {source_error:?}"
-                                    );
-
-                                    CertificationError::InternalError(
-                                        source_error.message().to_string(),
-                                    )
-                                }
-                            }
-                        }
-
-                        ErrorKind::ExecutorFailed => {
-                            let proof_error: Result<pessimistic_proof::ProofError, _> =
-                                bincode::default().deserialize(&error.error);
-
-                            match proof_error {
-                                Ok(error) => {
-                                    CertificationError::ProverExecutionFailed { source: error }
-                                }
-                                Err(_source) => {
-                                    warn!(
-                                        "Failed to deserialize the error details coming from the \
-                                         prover: {source_error:?}"
-                                    );
-
-                                    CertificationError::InternalError(
-                                        source_error.message().to_string(),
-                                    )
-                                }
-                            }
-                        }
-                        ErrorKind::Unspecified => {
-                            CertificationError::InternalError(source_error.message().to_string())
-                        }
-                    }
+                    CertificationError::ProverFailed(error.to_string())
                 } else {
-                    warn!(
-                        "Failed to deserialize the error details coming from the prover: \
-                         {source_error:?}"
-                    );
+                    error!("Failed to generate proof: {:?}", source_error);
 
-                    CertificationError::InternalError(source_error.message().to_string())
+                    CertificationError::ProverReturnedUnspecifiedError
                 }
             })?;
 
-        let proof = prover_response.into_inner().proof;
-        let proof: Proof = sp1_fast(|| bincode::default().deserialize(&proof))
-            .map_err(CertificationError::Other)?
-            .map_err(|source| CertificationError::Deserialize { source })?;
-
+        let proof = Proof::SP1(prover_response.proof);
         debug!("Proof successfully generated!");
 
         let Proof::SP1(ref proof_to_verify) = proof;

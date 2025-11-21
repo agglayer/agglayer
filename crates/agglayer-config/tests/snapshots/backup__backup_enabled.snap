@@ -2,8 +2,6 @@
 source: crates/agglayer-config/tests/backup.rs
 expression: config
 ---
-prover-entrypoint = "http://127.0.0.1:8080"
-
 [full-node-rpcs]
 
 [l2]
@@ -72,3 +70,7 @@ db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
 path = "./test/"
 state-max-backup-count = 100
 pending-max-backup-count = 100
+
+[prover.network-prover]
+proving-timeout = "5m"
+sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"

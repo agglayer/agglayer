@@ -31,9 +31,6 @@ agglayer-grpc-server = { path = "crates/agglayer-grpc-server" }
 agglayer-grpc-types = { path = "crates/agglayer-grpc-types" }
 agglayer-jsonrpc-api = { path = "crates/agglayer-jsonrpc-api" }
 agglayer-node = { path = "crates/agglayer-node" }
-agglayer-prover = { path = "crates/agglayer-prover" }
-agglayer-prover-config = { path = "crates/agglayer-prover-config" }
-agglayer-prover-types = { path = "crates/agglayer-prover-types" }
 agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 agglayer-rpc = { path = "crates/agglayer-rpc" }
 agglayer-signer = { path = "crates/agglayer-signer" }
@@ -63,6 +60,9 @@ prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0
 prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
 prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
 prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
+# agglayer-prover = { path = "crates/agglayer-prover" }
+agglayer-prover-config = { path = "crates/agglayer-prover-config" }
+agglayer-prover-types = { path = "crates/agglayer-prover-types" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
