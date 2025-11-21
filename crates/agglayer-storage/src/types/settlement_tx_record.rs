@@ -28,7 +28,7 @@ impl TryFrom<v0::SettlementTxRecord> for SettlementTxRecord {
     type Error = CodecError;
 
     fn try_from(proto: v0::SettlementTxRecord) -> Result<Self, Self::Error> {
-        let hashes = proto
+        proto
             .hashes
             .ok_or_else(|| {
                 CodecError::ProtobufDeserialization(prost::DecodeError::new("Hash history missing"))
@@ -43,9 +43,7 @@ impl TryFrom<v0::SettlementTxRecord> for SettlementTxRecord {
                 })?;
                 Ok(SettlementTxHash::from(Digest::from(hash_array)))
             })
-            .collect::<Result<Vec<_>, CodecError>>()?;
-
-        Ok(SettlementTxRecord::from_vec(hashes))
+            .collect()
     }
 }
 

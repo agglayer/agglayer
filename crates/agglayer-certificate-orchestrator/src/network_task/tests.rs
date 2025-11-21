@@ -123,11 +123,7 @@ async fn start_from_zero() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| {
-            Ok(SettlementTxRecord::from_vec(vec![
-                SettlementTxHash::for_tests(),
-            ]))
-        });
+        .returning(|_| Ok([SettlementTxHash::for_tests()].into_iter().collect()));
 
     state
         .expect_update_certificate_header_status()
@@ -359,11 +355,7 @@ async fn one_per_epoch() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| {
-            Ok(SettlementTxRecord::from_vec(vec![
-                SettlementTxHash::for_tests(),
-            ]))
-        });
+        .returning(|_| Ok([SettlementTxHash::for_tests()].into_iter().collect()));
 
     state
         .expect_update_certificate_header_status()
@@ -645,11 +637,7 @@ async fn retries() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id2))
-        .returning(|_| {
-            Ok(SettlementTxRecord::from_vec(vec![
-                SettlementTxHash::for_tests(),
-            ]))
-        });
+        .returning(|_| Ok([SettlementTxHash::for_tests()].into_iter().collect()));
 
     state
         .expect_update_certificate_header_status()
@@ -932,7 +920,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id))
-        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SETTLEMENT_TX_HASH_1])));
+        .returning(|_| Ok([SETTLEMENT_TX_HASH_1].into_iter().collect()));
 
     pending
         .expect_get_settlement_tx_hashes_for_certificate()
@@ -950,7 +938,7 @@ async fn changing_epoch_triggers_certify() {
         .expect_get_settlement_tx_hashes_for_certificate()
         .once()
         .with(eq(certificate_id2))
-        .returning(|_| Ok(SettlementTxRecord::from_vec(vec![SETTLEMENT_TX_HASH_2])));
+        .returning(|_| Ok([SETTLEMENT_TX_HASH_2].into_iter().collect()));
 
     state
         .expect_update_certificate_header_status()

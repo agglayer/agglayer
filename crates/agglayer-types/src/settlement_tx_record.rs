@@ -24,14 +24,20 @@ impl SettlementTxRecord {
         self.hashes.is_empty()
     }
 
+    /// Get settlement tx hashes in the order of insertion.
     pub const fn hashes(&self) -> &[SettlementTxHash] {
         self.hashes.as_slice()
     }
 
+    /// Check if the list of attempted settlement txs contains the given one.
     pub fn contains(&self, hash: &SettlementTxHash) -> bool {
         self.hashes.contains(hash)
     }
 
+    /// Add settlement tx hash to the history.
+    ///
+    /// The hash is appended to the end. If it already exists, it is moved to
+    /// the end.
     pub fn insert(&mut self, hash: SettlementTxHash) {
         // If we already have this hash, put it last.
         if let Some(orig_idx) = self.hashes.iter().position(|h| h == &hash) {
@@ -50,5 +56,12 @@ impl SettlementTxRecord {
 
     pub fn into_vec(self) -> Vec<SettlementTxHash> {
         self.hashes
+    }
+}
+
+impl FromIterator<SettlementTxHash> for SettlementTxRecord {
+    fn from_iter<T: IntoIterator<Item = SettlementTxHash>>(iter: T) -> Self {
+        let hashes = iter.into_iter().collect();
+        Self { hashes }
     }
 }
