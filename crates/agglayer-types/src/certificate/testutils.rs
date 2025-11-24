@@ -233,6 +233,7 @@ impl Certificate {
 }
 
 /// Enum to specify which AggchainData variant to use in test certificates
+#[derive(strum_macros::EnumCount)]
 pub enum AggchainDataType {
     /// Legacy ECDSA signature
     Ecdsa,

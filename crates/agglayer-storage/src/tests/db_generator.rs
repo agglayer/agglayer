@@ -21,6 +21,7 @@ use pessimistic_proof::{
     core::commitment::SignatureCommitmentVersion, local_exit_tree::LocalExitTree,
 };
 use rand::{Rng, SeedableRng};
+use strum::{EnumCount, IntoEnumIterator};
 
 use crate::{
     columns::{
@@ -56,6 +57,7 @@ use crate::{
         state_db_cf_definitions, DB,
     },
     types::{
+        network_info::{Key as NetworkInfoKey, Value as NetworkInfoValue},
         MetadataKey, MetadataValue, PerEpochMetadataKey, PerEpochMetadataValue, SmtKey, SmtKeyType,
         SmtValue,
     },
@@ -204,15 +206,33 @@ pub fn generate_state_db(
 
             // Vary parameters based on height to create diverse test data
             let num_bridge_exits = (height.as_u64() % 5) as usize; // 0-4 bridge exits
-            let aggchain_data_type = match height.as_u64() % 4 {
+
+            // Use RNG with deterministic seed based on network and height for consistent
+            // results
+            let mut param_rng = rand::rngs::StdRng::seed_from_u64(
+                config
+                    .seed
+                    .wrapping_add(network_id.to_u32() as u64)
+                    .wrapping_add(height.as_u64()),
+            );
+
+            // Generate aggchain_data_type using RNG - resilient to enum changes
+            let aggchain_data_type = match param_rng.random_range(0..AggchainDataType::COUNT) {
                 0 => AggchainDataType::Ecdsa,
                 1 => AggchainDataType::Generic,
-                2 => AggchainDataType::MultisigOnly { num_signers: 3 },
-                _ => AggchainDataType::MultisigAndAggchainProof { num_signers: 5 },
+                2 => AggchainDataType::MultisigOnly {
+                    num_signers: param_rng.random_range(2..8),
+                },
+                _ => AggchainDataType::MultisigAndAggchainProof {
+                    num_signers: param_rng.random_range(3..10),
+                },
             };
-            let version = match height.as_u64() % 3 {
+
+            // Generate version using RNG - resilient to enum changes
+            let version = match param_rng.random_range(0..SignatureCommitmentVersion::COUNT) {
                 0 => SignatureCommitmentVersion::V2,
                 1 => SignatureCommitmentVersion::V3,
+                2 => SignatureCommitmentVersion::V4,
                 _ => SignatureCommitmentVersion::V5,
             };
 
@@ -307,7 +327,7 @@ pub fn generate_state_db(
                 network_id: network_id.to_u32(),
                 key_type: LetKeyType::Leaf(leaf_idx),
             };
-            let leaf_hash = [rng.random::<u8>(); 32];
+            let leaf_hash = rng.random::<[u8; 32]>();
             db.put::<LocalExitTreePerNetworkColumn>(&leaf_key, &LetValue::Leaf(leaf_hash))?;
             *result
                 .entries_per_cf
@@ -395,9 +415,6 @@ pub fn generate_state_db(
             .or_insert(0) += 1;
 
         // 7. NetworkInfo: Store network information
-        use strum::IntoEnumIterator;
-
-        use crate::types::network_info::{Key as NetworkInfoKey, Value as NetworkInfoValue};
 
         // Get the last settled certificate for this network to use in NetworkInfo
         let last_cert_height = Height::from(config.certificates_per_network - 1);
@@ -567,15 +584,33 @@ pub fn generate_pending_db(
 
             // Vary parameters based on height
             let num_bridge_exits = ((height.as_u64() + 1) % 5) as usize;
-            let aggchain_data_type = match (height.as_u64() + 2) % 4 {
+
+            // Use RNG with deterministic seed based on network and height for consistent
+            // results
+            let mut param_rng = rand::rngs::StdRng::seed_from_u64(
+                config
+                    .seed
+                    .wrapping_add(network_id.to_u32() as u64)
+                    .wrapping_add(height.as_u64()),
+            );
+
+            // Generate aggchain_data_type using RNG - resilient to enum changes
+            let aggchain_data_type = match param_rng.random_range(0..AggchainDataType::COUNT) {
                 0 => AggchainDataType::Ecdsa,
                 1 => AggchainDataType::Generic,
-                2 => AggchainDataType::MultisigOnly { num_signers: 4 },
-                _ => AggchainDataType::MultisigAndAggchainProof { num_signers: 6 },
+                2 => AggchainDataType::MultisigOnly {
+                    num_signers: param_rng.random_range(2..8),
+                },
+                _ => AggchainDataType::MultisigAndAggchainProof {
+                    num_signers: param_rng.random_range(3..10),
+                },
             };
-            let version = match (height.as_u64() + 1) % 3 {
+
+            // Generate version using RNG - resilient to enum changes
+            let version = match param_rng.random_range(0..SignatureCommitmentVersion::COUNT) {
                 0 => SignatureCommitmentVersion::V2,
                 1 => SignatureCommitmentVersion::V3,
+                2 => SignatureCommitmentVersion::V4,
                 _ => SignatureCommitmentVersion::V5,
             };
 
@@ -675,12 +710,12 @@ pub fn generate_epochs_db(
         // Generate certificates grouped by epochs
         for epoch_idx in 0..num_epochs {
             // Calculate how many certificates are in this epoch
-            let certs_in_this_epoch =
-                if (epoch_idx + 1) * CERTIFICATES_PER_EPOCH <= config.certificates_per_network {
-                    CERTIFICATES_PER_EPOCH
-                } else {
-                    config.certificates_per_network - (epoch_idx * CERTIFICATES_PER_EPOCH)
-                };
+            let certs_in_this_epoch = std::cmp::min(
+                config
+                    .certificates_per_network
+                    .saturating_sub(epoch_idx * CERTIFICATES_PER_EPOCH),
+                CERTIFICATES_PER_EPOCH,
+            );
 
             // Generate certificates for this epoch
             for cert_idx in 0..certs_in_this_epoch {

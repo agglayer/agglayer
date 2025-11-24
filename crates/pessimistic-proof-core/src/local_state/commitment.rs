@@ -105,7 +105,7 @@ impl PessimisticRootCommitmentValues {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, strum_macros::EnumCount)]
 pub enum SignatureCommitmentVersion {
     /// Legacy commitment for the signature.
     V2,
