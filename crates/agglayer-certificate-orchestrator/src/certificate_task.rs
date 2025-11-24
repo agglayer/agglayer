@@ -307,7 +307,7 @@ where
                                     %contract_settlement_tx_hash,
                                     %contract_pp_root,
                                     "Certificate pp root does not match the latest settled pp root \
-                                     on L1 contract, moving certificate back to Proven",
+                                     on L1 contract",
                                 );
                                 None
                             }
@@ -316,14 +316,14 @@ where
                             warn!(
                                 %contract_settlement_tx_hash,
                                 ?error,
-                                "Failed to recompute the state with the latest contract tx, moving certificate back to Proven"
+                                "Failed to recompute the state with the latest contract tx"
                             );
                             None
                         }
                     }
                 }
                 Ok(None) => {
-                    warn!("No pp root found on contract, moving certificate back to Proven");
+                    warn!("No pp root found on contract");
                     None
                 }
                 Err(error) => {
@@ -339,7 +339,7 @@ where
                 // Tx not found on L1, and pp root from contract not matching,
                 // Make the cert InError and wait for aggkit to resubmit it.
                 return Err(CertificateStatusError::SettlementError(
-                    "Settlement tx not found on L1, moving certificate back to Proven".to_string(),
+                    "Settlement tx not found on L1 during recompute state".to_string(),
                 ));
             }
         }
@@ -576,14 +576,6 @@ where
                         "Retrying the settlement transaction after a timeout for certificate \
                          {certificate_id}"
                     );
-                    // We should theoretically remove the settlement_tx_hash here. However, doing so
-                    // would currently expose us to bugs: recompute_state checks for already-settled
-                    // cert only if there's already a settlement_tx_hash.
-                    // Considering fixing this would likely be relatively hard right now, we
-                    // currently leave the settlement_tx_hash here. This is not by design, and as
-                    // soon as the settlement logic is refactored properly, we can remove
-                    // the settlement_tx_hash here. But the refactor will likely lead to this code
-                    // disappearing anyway, so… :shrug:
                     self.set_status(CertificateStatus::Proven)?;
                     return Box::pin(self.process_from_proven()).await;
                 }
