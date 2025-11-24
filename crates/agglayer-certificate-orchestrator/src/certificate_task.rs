@@ -205,7 +205,7 @@ where
 
             for previous_tx_hash in prev_settlement_tx_hashes.iter().rev() {
                 debug!(
-                    ?previous_tx_hash,
+                    %previous_tx_hash,
                     "Checking previous settlement transaction"
                 );
 
@@ -225,7 +225,7 @@ where
                         // Some error happened while checking the tx receipt on L1
                         warn!(
                             ?error,
-                            settlement_tx_hash = %previous_tx_hash,
+                            %previous_tx_hash,
                             "Failed to check settlement tx prior existence on L1",
                         );
                     });
@@ -238,7 +238,7 @@ where
                     Err(_error) => false,                         // On error we do nothing
                 };
                 if !missing {
-                    debug!(?previous_tx_hash, "Found previous settlement tx hash");
+                    debug!(%previous_tx_hash, "Found previous settlement tx hash");
                     previous_settlement_tx_hash = Some(*previous_tx_hash);
                     break;
                 }
@@ -497,7 +497,7 @@ where
 
         self.set_status(CertificateStatus::Candidate)?;
 
-        debug!(?settlement_tx_hash, "Submitted certificate for settlement");
+        debug!(%settlement_tx_hash, "Submitted certificate for settlement");
 
         #[cfg(feature = "testutils")]
         testutils::inject_fail_points_after_proving(
@@ -562,7 +562,7 @@ where
             {
                 CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
                     debug!(
-                        ?settlement_tx_hash,
+                        %settlement_tx_hash,
                         %epoch_number, %certificate_index, "Previous tx hash settled"
                     );
                     break (epoch_number, certificate_index, settlement_tx_hash);
@@ -607,7 +607,7 @@ where
         );
         self.set_status(CertificateStatus::Settled)?;
         debug!(
-            ?settlement_tx_hash,
+            %settlement_tx_hash,
             ?settled_certificate,
             "Certificate settlement completed"
         );

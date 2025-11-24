@@ -221,10 +221,10 @@ where
         };
 
         // Get the transaction hash from the pending transaction
-        let tx_hash = *pending_tx.tx_hash();
-        info!(?tx_hash, "Settlement transaction hash");
+        let settlement_tx_hash = *pending_tx.tx_hash();
+        info!(%settlement_tx_hash, "Settlement transaction hash");
 
-        Ok(SettlementTxHash::from(tx_hash))
+        Ok(SettlementTxHash::from(settlement_tx_hash))
     }
 }
 
