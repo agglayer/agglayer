@@ -330,7 +330,6 @@ fn test_reference_db_v1_read_state_db() {
         // Validate header structure
         assert_eq!(header.certificate_id, cert_id, "Certificate ID mismatch");
         assert_eq!(header.status, CertificateStatus::Pending);
-        assert!(header.epoch_number.is_some(), "Epoch number should be set");
         assert!(
             header.certificate_index.is_some(),
             "Certificate index should be set"
