@@ -690,9 +690,11 @@ impl MetadataWriter for StateStore {
     fn set_latest_block_that_settled_any_cert(&self, value: BlockNumber) -> Result<(), Error> {
         if let Some(latest_block_that_settled_any_cert) = self.get_latest_block_that_settled_any_cert()? {
             if latest_block_that_settled_any_cert >= value {
-                return Err(Error::UnprocessedAction(
-                    "Tried to set a lower value for latest certificate settling block".to_string(),
-                ));
+                warn!(
+                    "Tried to set a lower value for latest certificate settling block: \
+                     {latest_block_that_settled_any_cert} >= {value}, ignoring"
+                );
+                return Ok(());
             }
         }
 
