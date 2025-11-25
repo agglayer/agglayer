@@ -75,40 +75,46 @@ where
     }
 
     fn handle_event(&self, log: Log) -> Result<(), Error> {
-        let event = VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok();
-        let latest_pp_root = event
-            .as_ref()
-            .map(|val| Digest::from(val.newPessimisticRoot));
-        let tx_hash = log.transaction_hash.map(Digest::from);
+        let Ok(event) = VerifyPessimisticStateTransition::decode_log(&log.clone().into()) else {
+            return Err(Error::InternalError(format!(
+                "Failed to decode VerifyPessimisticStateTransition log: {log:?}"
+            )));
+        };
+        let pp_root = Digest::from(event.newPessimisticRoot);
+        let Some(tx_hash) = log.transaction_hash.map(Digest::from) else {
+            return Err(Error::InternalError(format!(
+                "Failed to get tx hash from log: {log:?}"
+            )));
+        };
         // rollupID is the same as topic1, which is the network ID
-        let network_id = event.as_ref().map(|val| val.rollupID);
+        let network_id = event.rollupID;
+        let Some(block_number) = log.block_number else {
+            return Err(Error::InternalError(format!(
+                "Failed to get block number from log: {log:?}"
+            )));
+        };
 
-        if let (Some(pp_root), Some(tx_hash), Some(network_id), Some(block_number)) =
-            (latest_pp_root, tx_hash, network_id, log.block_number)
-        {
-            debug!(
-                "Retrieved latest VerifyPessimisticStateTransition event for network {}, latest \
-                pp_root: {}, tx_hash: {tx_hash}",
-                network_id, pp_root
-            );
+        debug!(
+            "Retrieved latest VerifyPessimisticStateTransition event for network {network_id}, \
+            latest pp_root: {pp_root:?}, tx_hash: {tx_hash:?}, block_number: {block_number}",
+        );
 
-            let certificate_ids = self.state_store.get_certificate_ids_for_pp_root(&pp_root)?;
+        let certificate_ids = self.state_store.get_certificate_ids_for_pp_root(&pp_root)?;
 
-            let Some(settled_certificate_id) = certificate_ids.last() else {
-                return Err(Error::InternalError(format!(
-                    "No settled certificate found for pp root: {pp_root}"
-                )));
-            };
+        let Some(settled_certificate_id) = certificate_ids.last() else {
+            return Err(Error::InternalError(format!(
+                "No settled certificate found for pp root: {pp_root:?}"
+            )));
+        };
 
-            self.state_store.update_settlement_tx_hash(
-                settled_certificate_id,
-                tx_hash.into(),
-                false,
-            )?;
+        self.state_store.update_settlement_tx_hash(
+            settled_certificate_id,
+            tx_hash.into(),
+            false,
+        )?;
 
-            self.state_store
-                .set_latest_block_that_settled_any_cert(block_number)?;
-        }
+        self.state_store
+            .set_latest_block_that_settled_any_cert(block_number)?;
         Ok(())
     }
 }
