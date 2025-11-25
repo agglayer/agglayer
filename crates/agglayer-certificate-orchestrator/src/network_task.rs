@@ -306,7 +306,7 @@ where
                 Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
                     info!(
                         %certificate_id, %height,
-                        "Received a certificate event"
+                        "Received a certificate event for {certificate_id}"
                     );
 
                     if matches!(

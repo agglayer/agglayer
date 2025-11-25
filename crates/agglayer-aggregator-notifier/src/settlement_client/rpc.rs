@@ -222,7 +222,7 @@ where
 
         // Get the transaction hash from the pending transaction
         let settlement_tx_hash = *pending_tx.tx_hash();
-        info!(%settlement_tx_hash, "Settlement transaction hash");
+        info!(%settlement_tx_hash, "Settlement transaction hash: {settlement_tx_hash}");
 
         Ok(SettlementTxHash::from(settlement_tx_hash))
     }
@@ -241,7 +241,7 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        info!("Waiting for settlement");
+        info!("Waiting for settlement of {settlement_tx_hash}");
 
         // Apply timeout fail point if they are active for integration testing
         #[cfg(feature = "testutils")]
