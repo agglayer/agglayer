@@ -74,7 +74,10 @@ impl ConfiguredSigner {
 
 #[derive(Debug)]
 pub struct ConfiguredSigners {
+    // The signer for certificate settlement.
     pub cert_settlement: ConfiguredSigner,
+    // The signer for transaction settlement, if not defined is expected
+    // that `cert_settlement` signer will be used.
     pub tx_settlement: Option<ConfiguredSigner>,
 }
 
@@ -91,11 +94,11 @@ impl ConfiguredSigners {
                 })
             }
             AuthConfig::Local(ref local) => {
-                let (local_signer1, local_signer2) =
+                let (local_signer_cert, local_signer_tx) =
                     ConfiguredSigner::local_wallet(config.l1.chain_id, local)?;
                 Ok(Self {
-                    cert_settlement: ConfiguredSigner::Local(local_signer1),
-                    tx_settlement: local_signer2.map(ConfiguredSigner::Local),
+                    cert_settlement: ConfiguredSigner::Local(local_signer_cert),
+                    tx_settlement: local_signer_tx.map(ConfiguredSigner::Local),
                 })
             }
         }

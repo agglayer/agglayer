@@ -4,3 +4,7 @@ location = "location-test"
 keyring = "keyring-test"
 key-name = "key-name-test"
 key-version = 2
+cert-settlement-key-name = "cert-settlement-key-name-test"
+cert-settlement-key-version = 3
+tx-settlement-key-name = "tx-settlement-key-name-test"
+tx-settlement-key-version = 4

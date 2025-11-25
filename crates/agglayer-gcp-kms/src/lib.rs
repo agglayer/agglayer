@@ -78,7 +78,8 @@ where
 pub struct KmsSigners {
     // The signer for certificate settlement.
     pub cert_settlement: KmsSigner,
-    // The signer for transaction settlement
+    // The signer for transaction settlement, if not defined is expected
+    // that `cert_settlement` signer will be used.
     pub tx_settlement: Option<KmsSigner>,
 }
 
