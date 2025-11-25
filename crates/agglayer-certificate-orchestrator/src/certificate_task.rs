@@ -503,7 +503,7 @@ where
         testutils::inject_fail_points_after_proving(
             &certificate_id,
             &mut self.header,
-            &self.state_store,
+            &*self.pending_store,
         );
 
         self.process_from_candidate().await
@@ -677,10 +677,10 @@ mod testutils {
 
     use super::*;
 
-    pub(crate) fn inject_fail_points_after_proving<StateStore: StateWriter>(
+    pub(crate) fn inject_fail_points_after_proving<PendingStore: PendingCertificateWriter>(
         certificate_id: &agglayer_types::CertificateId,
         header: &mut CertificateHeader,
-        state_store: &Arc<StateStore>,
+        pending_store: &PendingStore,
     ) {
         // Fail point to inject invalid settlement tx hash
         fail::eval(
@@ -691,8 +691,8 @@ mod testutils {
                 warn!("FAIL POINT ACTIVE: Injecting invalid settlement tx hash");
                 let unexistent_tx_hash = SettlementTxHash::new(Digest::from([21u8; 32]));
                 header.settlement_tx_hash = Some(unexistent_tx_hash);
-                state_store
-                    .update_settlement_tx_hash(certificate_id, unexistent_tx_hash)
+                pending_store
+                    .insert_settlement_tx_hash_for_certificate(certificate_id, unexistent_tx_hash)
                     .expect("Valid tx hash update");
                 Some(())
             },
