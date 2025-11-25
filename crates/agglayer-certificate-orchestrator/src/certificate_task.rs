@@ -362,6 +362,13 @@ where
             })?;
         debug!("Recomputing new state completed");
 
+        if let Some(settlement_tx_hash) = previous_settlement_tx_hash {
+            // The hash is technically already in the storage but re-inserting it will move
+            // it to the front of the queue for subsequent processing.
+            self.pending_store
+                .insert_settlement_tx_hash_for_certificate(&certificate_id, settlement_tx_hash)?;
+        }
+
         self.new_pp_root = Some(output.new_pessimistic_root);
         // Send the new state to the network task
         // TODO: Once we update the storage we'll have to remove this! It wouldn't be
@@ -589,7 +596,7 @@ where
                     self.pending_store
                         .insert_settlement_tx_hash_for_certificate(
                             &certificate_id,
-                            settlement_tx_hash,
+                            alternative_settlement_tx_hash,
                         )?;
                     return Box::pin(self.process_from_candidate()).await;
                 }
