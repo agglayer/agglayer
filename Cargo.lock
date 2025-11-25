@@ -254,6 +254,7 @@ dependencies = [
  "gcloud-sdk",
  "serde",
  "thiserror 2.0.16",
+ "tracing",
 ]
 
 [[package]]

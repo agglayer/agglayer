@@ -39,24 +39,21 @@ impl ConfiguredSigner {
     pub(crate) fn local_wallet(
         chain_id: u64,
         local: &LocalConfig,
-    ) -> Result<PrivateKeySigner, Error> {
-        let pk = local.private_keys.first().ok_or(Error::NoPk)?;
-        let signer = PrivateKeySigner::decrypt_keystore(&pk.path, &pk.password)?
+    ) -> Result<(PrivateKeySigner, Option<PrivateKeySigner>), Error> {
+        let pk1 = local.private_keys.first().ok_or(Error::NoPk)?;
+        let signer1 = PrivateKeySigner::decrypt_keystore(&pk1.path, &pk1.password)?
             .with_chain_id(Some(chain_id));
-        Ok(signer)
-    }
 
-    /// Get either a local wallet or GCP KMS signer based on the configuration.
-    pub async fn new(config: Arc<Config>) -> Result<Self, Error> {
-        match &config.auth {
-            AuthConfig::GcpKms(ref kms) => {
-                let kms = KMS::new(config.l1.chain_id, kms.clone());
-                Ok(Self::Kms(kms.gcp_kms_signer().await?))
-            }
-            AuthConfig::Local(ref local) => {
-                Ok(Self::Local(Self::local_wallet(config.l1.chain_id, local)?))
-            }
-        }
+        let signer2 = if let Some(pk2) = local.private_keys.get(1) {
+            Some(
+                PrivateKeySigner::decrypt_keystore(&pk2.path, &pk2.password)?
+                    .with_chain_id(Some(chain_id)),
+            )
+        } else {
+            None
+        };
+
+        Ok((signer1, signer2))
     }
 
     /// Create a new ConfiguredSigner from a local private key signer.
@@ -72,6 +69,36 @@ impl ConfiguredSigner {
     #[inline]
     pub const fn from_kms(signer: KmsSigner) -> Self {
         Self::Kms(signer)
+    }
+}
+
+#[derive(Debug)]
+pub struct ConfiguredSigners {
+    pub cert_settlement: ConfiguredSigner,
+    pub tx_settlement: Option<ConfiguredSigner>,
+}
+
+impl ConfiguredSigners {
+    /// Get either a local wallet or GCP KMS signer based on the configuration.
+    pub async fn new(config: Arc<Config>) -> Result<Self, Error> {
+        match &config.auth {
+            AuthConfig::GcpKms(ref kms) => {
+                let kms = KMS::new(config.l1.chain_id, kms.clone());
+                let kms_signers = kms.gcp_kms_signers().await?;
+                Ok(Self {
+                    cert_settlement: ConfiguredSigner::Kms(kms_signers.cert_settlement),
+                    tx_settlement: kms_signers.tx_settlement.map(ConfiguredSigner::Kms),
+                })
+            }
+            AuthConfig::Local(ref local) => {
+                let (local_signer1, local_signer2) =
+                    ConfiguredSigner::local_wallet(config.l1.chain_id, local)?;
+                Ok(Self {
+                    cert_settlement: ConfiguredSigner::Local(local_signer1),
+                    tx_settlement: local_signer2.map(ConfiguredSigner::Local),
+                })
+            }
+        }
     }
 }
 

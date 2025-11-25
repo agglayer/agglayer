@@ -70,6 +70,25 @@ pub struct GcpKmsConfig {
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub keyring: Option<String>,
+
+    // Added to support distinct keys for cert and tx signing, falling back to
+    // the older single key if not specified
+    #[serde(alias = "CertSettlementKeyName")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
+    pub cert_settlement_key_name: Option<String>,
+    #[serde(alias = "CertSettlementKeyVersion")]
+    #[serde(default)]
+    pub cert_settlement_key_version: Option<u64>,
+    #[serde(alias = "TxSettlementKeyName")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
+    pub tx_settlement_key_name: Option<String>,
+    #[serde(alias = "TxSettlementKeyVersion")]
+    #[serde(default)]
+    pub tx_settlement_key_version: Option<u64>,
+
+    // To be deprecated in favor of the above distinct keys
     #[serde(alias = "KeyName")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
