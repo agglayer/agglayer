@@ -304,8 +304,6 @@ impl Node {
             .merge(health_router)
             .merge(json_rpc_router);
 
-        info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
-
         let tls_config = if let Some(tls) = config.tls.as_ref() {
             Some(tls.to_rustls_config().await?)
         } else {
@@ -350,6 +348,8 @@ impl Node {
                     debug!("Node RPC shutdown requested.");
                 }
             };
+
+            info!("Shutting down RPC services");
 
             // Signal to all RPCs to shut down gracefully.
             for handle in rpc_service_handles {
