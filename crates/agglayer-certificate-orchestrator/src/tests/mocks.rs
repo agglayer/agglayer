@@ -3,7 +3,7 @@ use agglayer_primitives::vkey_hash::VKeyHash;
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
 use alloy::{
     network::Ethereum,
-    primitives::{Bytes, FixedBytes, TxHash},
+    primitives::{B256, Bytes, TxHash},
     rpc::types::TransactionReceipt,
 };
 use mockall::mock;
@@ -76,7 +76,7 @@ mock! {
     impl agglayer_contracts::L1TransactionFetcher for L1Rpc {
         type Provider = alloy::providers::RootProvider<Ethereum>;
 
-        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<Option<TransactionReceipt>, L1RpcError>;
+        async fn fetch_transaction_receipt(&self, tx_hash: B256) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as agglayer_contracts::L1TransactionFetcher>::Provider;
     }
