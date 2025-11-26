@@ -9,6 +9,7 @@ use std::{
 
 use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_interop_types::PessimisticRoot;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -179,10 +180,10 @@ impl StateReader for DummyPendingStore {
         todo!()
     }
 
-    fn get_certificate_id_for_pp_root(
+    fn get_certificate_ids_for_pp_root(
         &self,
-        _pp_root: &Digest,
-    ) -> Result<Option<CertificateId>, agglayer_storage::error::Error> {
+        _pp_root: &PessimisticRoot,
+    ) -> Result<Vec<CertificateId>, agglayer_storage::error::Error> {
         todo!()
     }
 }
@@ -406,7 +407,7 @@ impl StateWriter for DummyPendingStore {
 
     fn add_certificate_id_for_pp_root(
         &self,
-        _pp_root: &Digest,
+        _pp_root: &PessimisticRoot,
         _certificate_id: &CertificateId,
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
