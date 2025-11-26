@@ -164,7 +164,8 @@ impl Config {
 
         let config_with_path = ConfigDeserializer { path };
 
-        let deserializer = toml::de::Deserializer::new(&reader);
+        let deserializer = toml::de::Deserializer::parse(&reader)
+            .map_err(ConfigurationError::DeserializationError)?;
 
         config_with_path
             .deserialize(deserializer)

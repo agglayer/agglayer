@@ -26,11 +26,20 @@ use crate::{CertifierClient, ELF};
 async fn happy_path() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
-    let config = Config::new(&base_path.path);
+    let mut config = Config::new(&base_path.path);
 
     let mut pending_store = MockPendingStore::new();
     let mut l1_rpc = MockL1Rpc::new();
-    let prover_config = agglayer_prover_config::ProverConfig::default();
+    let prover_config = agglayer_prover_config::ProverConfig {
+        grpc_endpoint: next_available_addr(),
+        ..Default::default()
+    };
+
+    config.prover_entrypoint = format!(
+        "http://{}:{}",
+        prover_config.grpc_endpoint.ip(),
+        prover_config.grpc_endpoint.port()
+    );
 
     // spawning fake prover as we don't want to hit SP1
     let fake_prover = FakeProver::new(ELF).await.unwrap();
@@ -260,7 +269,7 @@ mockall::mock! {
     impl agglayer_contracts::L1TransactionFetcher for L1Rpc {
         type Provider = alloy::providers::RootProvider<Ethereum>;
 
-        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<TransactionReceipt, L1RpcError>;
+        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as agglayer_contracts::L1TransactionFetcher>::Provider;
     }

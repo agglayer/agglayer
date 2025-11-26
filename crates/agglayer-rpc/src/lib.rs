@@ -430,6 +430,7 @@ where
 
     /// Assemble the current information of the specified network from
     /// the data in various sources.
+    #[instrument(skip(self))]
     pub fn get_network_info(
         &self,
         network_id: NetworkId,
@@ -630,7 +631,25 @@ where
             }
         }
 
+        let network_is_disabled = self
+            .state
+            .is_network_disabled(&network_id)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to check if network {network_id} is disabled in storage"
+                );
+                GetNetworkInfoError::InternalError {
+                    network_id,
+                    source: error.into(),
+                }
+            })?;
+
         match network_info.latest_pending_status {
+            _ if network_is_disabled => {
+                // If the network is disabled in storage, mark it as disabled
+                network_info.network_status = NetworkStatus::Disabled;
+            }
             None => {
                 // No pending certificate means the network status is unknown
                 network_info.network_status = NetworkStatus::Unknown;
@@ -724,6 +743,23 @@ where
                                     replacement_certificate_id: new_certificate_id,
                                     source: Some(error),
                                 }
+                            })?
+                            .ok_or_else(|| {
+                                let error = agglayer_contracts::L1RpcError::TransactionNotYetMined(
+                                    tx_hash.to_string(),
+                                );
+                                warn!(
+                                    "Failed to fetch transaction receipt for certificate \
+                                     {pre_existing_certificate_id}: {error}"
+                                );
+                                CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                    reason: error.to_string(),
+                                    height: certificate.height,
+                                    network_id: certificate.network_id,
+                                    stored_certificate_id: pre_existing_certificate_id,
+                                    replacement_certificate_id: new_certificate_id,
+                                    source: Some(error),
+                                }
                             })?;
 
                         if !l1_transaction.status() {
@@ -773,7 +809,7 @@ where
 
     /// Verify that the signer of the given [`Certificate`] is the trusted
     /// sequencer for the rollup id it specified.
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self, cert), fields(certificate_id = %cert.hash()), level = "debug")]
     pub(crate) async fn verify_cert_signature(
         &self,
         cert: &Certificate,
@@ -950,7 +986,6 @@ where
 pub enum TxStatus {
     Done,
     Pending,
-    NotFound,
 }
 
 impl TxStatus {
@@ -958,7 +993,6 @@ impl TxStatus {
         match self {
             TxStatus::Done => "done",
             TxStatus::Pending => "pending",
-            TxStatus::NotFound => "not found",
         }
     }
 }

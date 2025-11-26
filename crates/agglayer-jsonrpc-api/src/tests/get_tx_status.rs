@@ -21,7 +21,7 @@ async fn check_tx_status() {
 
     // Start Anvil node for real blockchain interaction
     let anvil = Anvil::new().block_time(1u64).spawn();
-    let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
+    let provider = ProviderBuilder::new().connect_http(anvil.endpoint_url());
 
     // Get accounts and send a transaction
     let accounts = provider.get_accounts().await.unwrap();

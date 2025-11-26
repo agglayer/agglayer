@@ -4,12 +4,12 @@ pub use pessimistic_proof_core::local_balance_tree::{LocalBalancePath, LOCAL_BAL
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-/// A commitment to the set of per-network nullifier trees maintained by the
+/// A commitment to the set of per-network local balance trees maintained by the
 /// local network
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalBalanceTree {
-    /// The Merkle Root of the nullifier tree
+    /// The Merkle Root of the local balance tree
     #[serde_as(as = "_")]
     pub root: Digest,
 }
