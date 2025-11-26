@@ -3,7 +3,7 @@ use agglayer_primitives::vkey_hash::VKeyHash;
 use agglayer_types::{Height, LocalNetworkStateData, NetworkId};
 use alloy::{
     network::Ethereum,
-    primitives::{B256, Bytes, TxHash},
+    primitives::{Bytes, TxHash, B256},
     rpc::types::TransactionReceipt,
 };
 use mockall::mock;
