@@ -22,7 +22,7 @@ impl L1Docker {
                 &format!("{ws_port}:8546"),
                 "-d",
                 "--name",
-                &format!("{name}_10"),
+                &name,
                 "hermeznetwork/geth-zkevm-contracts",
             ])
             .output()
