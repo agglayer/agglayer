@@ -75,7 +75,7 @@ where
         agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
 
         // Run all the verification checks in parallel.
-        let _ = try_join(
+        let verification = try_join(
             async {
                 self.kernel
                     .verify_batches_trusted_aggregator(&tx)
@@ -106,7 +106,12 @@ where
                     .inspect(|_| agglayer_telemetry::VERIFY_ZKP.add(1, metrics_attrs))
             },
         )
-        .await?;
+        .await;
+
+        if let Err(e) = verification {
+            guard.record(tokio::time::Instant::now());
+            return Err(e);
+        }
 
         // Settle the proof on-chain and return the transaction hash.
         let receipt = self
