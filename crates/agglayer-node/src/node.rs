@@ -232,9 +232,9 @@ impl Node {
                     (*rpc_cert_settlement).clone(),
                 ),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
-                config.outbound.rpc.settle.gas_multiplier_factor,
+                config.outbound.rpc.settle_cert.gas_multiplier_factor,
                 {
-                    let gas_config = &config.outbound.rpc.settle.gas_price;
+                    let gas_config = &config.outbound.rpc.settle_cert.gas_price;
                     agglayer_contracts::GasPriceParams::new(
                         gas_config.multiplier.as_u64_per_1000(),
                         gas_config.floor..=gas_config.ceiling,
@@ -260,7 +260,7 @@ impl Node {
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
         let epoch_packing_aggregator_task = RpcSettlementClient::new(
-            Arc::new(config.outbound.rpc.settle.clone()),
+            Arc::new(config.outbound.rpc.settle_cert.clone()),
             state_store.clone(),
             pending_store.clone(),
             Arc::clone(&rollup_manager),
