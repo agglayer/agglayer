@@ -108,8 +108,6 @@ pub async fn start_agglayer(
         key: dev_tls_certs::SERVER_KEY_PATH.into(),
     });
 
-    assert!(config.tls.is_some());
-
     let grpc_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
     let readrpc_tls_addr = next_available_addr();
