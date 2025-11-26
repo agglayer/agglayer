@@ -4,8 +4,6 @@
 //!
 //! See: [`ConfiguredSigner`](enum@ConfiguredSigner)
 
-use std::sync::Arc;
-
 use agglayer_config::{AuthConfig, Config, LocalConfig};
 use agglayer_gcp_kms::{KmsSigner, KMS};
 use alloy::{
@@ -44,13 +42,12 @@ impl ConfiguredSigner {
         let signer1 = PrivateKeySigner::decrypt_keystore(&pk1.path, &pk1.password)?
             .with_chain_id(Some(chain_id));
 
-        let signer2 = if let Some(pk2) = local.private_keys.get(1) {
-            Some(
+        let mut signer2 = None;
+        if let Some(pk2) = local.private_keys.get(1) {
+            signer2 = Some(
                 PrivateKeySigner::decrypt_keystore(&pk2.path, &pk2.password)?
                     .with_chain_id(Some(chain_id)),
             )
-        } else {
-            None
         };
 
         Ok((signer1, signer2))
@@ -83,7 +80,7 @@ pub struct ConfiguredSigners {
 
 impl ConfiguredSigners {
     /// Get either a local wallet or GCP KMS signer based on the configuration.
-    pub async fn new(config: Arc<Config>) -> Result<Self, Error> {
+    pub async fn new(config: &Config) -> Result<Self, Error> {
         match &config.auth {
             AuthConfig::GcpKms(ref kms) => {
                 let kms = KMS::new(config.l1.chain_id, kms.clone());

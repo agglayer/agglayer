@@ -200,7 +200,7 @@ impl Node {
                 )
             };
 
-            let signers = ConfiguredSigners::new(config.clone()).await?;
+            let signers = ConfiguredSigners::new(&config).await?;
             let provider_cert = fn_build_provider(signers.cert_settlement);
 
             let provider_tx = if let Some(tx_settlement) = signers.tx_settlement {
