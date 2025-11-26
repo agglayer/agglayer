@@ -6,10 +6,7 @@ use agglayer_types::{
     CertificateStatus,
 };
 use fail::FailScenario;
-use integrations::{
-    agglayer_setup::{setup_network, start_agglayer},
-    wait_for_settlement_or_error,
-};
+use integrations::{agglayer_setup::AgglayerSetup, wait_for_settlement_or_error};
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof::core::commitment::SignatureCommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
@@ -35,7 +32,8 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
     }
 
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (agglayer_shutdowned, l1, client) =
+        AgglayerSetup::default().setup_network(&tmp_dir.path).await;
     let withdrawals = vec![];
     let imported_bridge_events = vec![];
     let certificate = state
@@ -52,7 +50,9 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
     for f in failpoints {
         fail::cfg(*f, "off").expect("Failed to configure failpoint");
     }
-    let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
+    let (_agglayer_shutdowned, client, _) = AgglayerSetup::default()
+        .start_agglayer(&tmp_dir.path, &l1)
+        .await;
 
     println!("Node recovered, waiting for settlement...");
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
@@ -74,8 +74,10 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     let scenario = FailScenario::setup();
     let cancellation_token = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) =
-        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
+    let (agglayer_shutdowned, l1, client) = AgglayerSetup::default()
+        .with_cancellation_token(cancellation_token.clone())
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
     let imported_bridge_events = vec![];
@@ -94,8 +96,10 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     println!("Node killed for the first time, recovering...");
 
     let cancellation_token = CancellationToken::new();
-    let (agglayer_shutdowned, client, _) =
-        start_agglayer(&tmp_dir.path, &l1, None, Some(cancellation_token.clone())).await;
+    let (agglayer_shutdowned, client, _) = AgglayerSetup::default()
+        .with_cancellation_token(cancellation_token.clone())
+        .start_agglayer(&tmp_dir.path, &l1)
+        .await;
 
     fail::cfg_callback(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
@@ -132,7 +136,9 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     .expect("Failed to configure failpoint");
 
     tokio::time::sleep(Duration::from_secs(30)).await;
-    let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
+    let (_agglayer_shutdowned, client, _) = AgglayerSetup::default()
+        .start_agglayer(&tmp_dir.path, &l1)
+        .await;
 
     println!("Node recovered, waiting for settlement...");
 
@@ -180,12 +186,11 @@ async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
     config.outbound.rpc.settle.settlement_timeout = Duration::from_secs(10);
 
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) = setup_network(
-        &tmp_dir.path,
-        Some(config),
-        Some(cancellation_token.clone()),
-    )
-    .await;
+    let (agglayer_shutdowned, l1, client) = AgglayerSetup::default()
+        .with_config(config)
+        .with_cancellation_token(cancellation_token.clone())
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
     let imported_bridge_events = vec![];
@@ -212,7 +217,9 @@ async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
         .expect("Failed to turn off candidate_recorded failpoint");
 
     tokio::time::sleep(Duration::from_secs(30)).await;
-    let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
+    let (_agglayer_shutdowned, client, _) = AgglayerSetup::default()
+        .start_agglayer(&tmp_dir.path, &l1)
+        .await;
 
     println!("Node recovered, waiting for settlement...");
 

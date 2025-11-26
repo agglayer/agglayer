@@ -10,7 +10,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use fail::FailScenario;
-use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
+use integrations::{agglayer_setup::AgglayerSetup, wait_for_settlement_or_error};
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
@@ -24,7 +24,7 @@ async fn successfully_push_certificate(#[case] state: Forest) {
     let scenario = FailScenario::setup();
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (_handle, _l1, client) = AgglayerSetup::default().setup_network(&tmp_dir.path).await;
 
     let withdrawals = vec![];
 
@@ -57,8 +57,10 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
     let cancellation_token = CancellationToken::new();
 
     // L1 is a RAII guard
-    let (_agglayer_shutdowned, l1, client) =
-        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
+    let (_agglayer_shutdowned, l1, client) = AgglayerSetup::default()
+        .with_cancellation_token(cancellation_token.clone())
+        .setup_network(&tmp_dir.path)
+        .await;
 
     for i in 0..5 {
         let withdrawals = vec![];

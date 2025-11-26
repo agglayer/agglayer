@@ -5,10 +5,7 @@ use agglayer_storage::{storage::backup::BackupEngine, tests::TempDBDir};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
 use futures::FutureExt;
-use integrations::{
-    agglayer_setup::{setup_network, start_agglayer},
-    wait_for_settlement_or_error,
-};
+use integrations::{agglayer_setup::AgglayerSetup, wait_for_settlement_or_error};
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
@@ -34,8 +31,11 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) =
-        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
+    let (agglayer_shutdowned, l1, client) = AgglayerSetup::default()
+        .with_config(config)
+        .with_cancellation_token(handle.clone())
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
 
@@ -67,8 +67,10 @@ async fn recover_with_backup(#[case] state: Forest) {
     )
     .unwrap();
 
-    let (agglayer_shutdowned, client, handle) =
-        start_agglayer(&tmp_dir.path, &l1, Some(config), None).await;
+    let (agglayer_shutdowned, client, handle) = AgglayerSetup::default()
+        .with_config(config)
+        .start_agglayer(&tmp_dir.path, &l1)
+        .await;
 
     let certificate: CertificateHeader = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id])
@@ -106,8 +108,11 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) =
-        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
+    let (agglayer_shutdowned, l1, client) = AgglayerSetup::default()
+        .with_config(config)
+        .with_cancellation_token(handle.clone())
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
 
@@ -155,8 +160,10 @@ async fn purge_after_n_backup(#[case] state: Forest) {
     )
     .unwrap();
 
-    let (agglayer_shutdowned, client, handle) =
-        start_agglayer(&tmp_dir.path, &l1, Some(config), None).await;
+    let (agglayer_shutdowned, client, handle) = AgglayerSetup::default()
+        .with_config(config)
+        .start_agglayer(&tmp_dir.path, &l1)
+        .await;
 
     let certificate: CertificateHeader = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id])
@@ -197,8 +204,11 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 
     let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) =
-        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
+    let (agglayer_shutdowned, l1, client) = AgglayerSetup::default()
+        .with_config(config)
+        .with_cancellation_token(handle.clone())
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
 
@@ -249,8 +259,10 @@ async fn report_contains_all_backups(#[case] state: Forest) {
     )
     .unwrap();
 
-    let (agglayer_shutdowned, client, handle) =
-        start_agglayer(&tmp_dir.path, &l1, Some(config), None).await;
+    let (agglayer_shutdowned, client, handle) = AgglayerSetup::default()
+        .with_config(config)
+        .start_agglayer(&tmp_dir.path, &l1)
+        .await;
 
     let certificate: CertificateHeader = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id])
@@ -291,8 +303,11 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) =
-        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
+    let (agglayer_shutdowned, l1, client) = AgglayerSetup::default()
+        .with_config(config)
+        .with_cancellation_token(handle.clone())
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
 
@@ -343,8 +358,10 @@ async fn restore_at_particular_level(#[case] state: Forest) {
     )
     .unwrap();
 
-    let (agglayer_shutdowned, client, handle) =
-        start_agglayer(&tmp_dir.path, &l1, Some(config), None).await;
+    let (agglayer_shutdowned, client, handle) = AgglayerSetup::default()
+        .with_config(config)
+        .start_agglayer(&tmp_dir.path, &l1)
+        .await;
 
     let certificate: CertificateHeader = client
         .request("interop_getCertificateHeader", rpc_params![certificate_id])

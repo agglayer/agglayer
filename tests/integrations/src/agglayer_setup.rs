@@ -53,11 +53,54 @@ pub async fn start_l1() -> L1Docker {
     l1
 }
 
-pub async fn start_agglayer(
+#[derive(Debug, Default)]
+pub struct AgglayerSetup {
+    config: Option<agglayer_config::Config>,
+    token: Option<CancellationToken>,
+    use_tls: bool,
+}
+
+impl AgglayerSetup {
+    pub fn with_config(mut self, config: agglayer_config::Config) -> Self {
+        self.config = Some(config);
+        self
+    }
+
+    pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
+        self.token = Some(token);
+        self
+    }
+
+    pub fn with_tls_enabled(mut self, use_tls: bool) -> Self {
+        self.use_tls = use_tls;
+        self
+    }
+
+    pub async fn start_agglayer(
+        self,
+        config_path: &Path,
+        l1: &L1Docker,
+    ) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
+        start_agglayer(config_path, l1, self.config, self.token, self.use_tls).await
+    }
+
+    pub async fn setup_network(
+        self,
+        tmp_dir: &Path,
+    ) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
+        let l1 = start_l1().await;
+        let (receiver, client, _token) = self.start_agglayer(tmp_dir, &l1).await;
+
+        (receiver, l1, client)
+    }
+}
+
+async fn start_agglayer(
     config_path: &Path,
     l1: &L1Docker,
     config: Option<agglayer_config::Config>,
     token: Option<CancellationToken>,
+    use_tls: bool,
 ) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
     let (shutdown, receiver) = oneshot::channel();
 
@@ -193,17 +236,6 @@ pub async fn start_agglayer(
     assert!(!handle.is_finished());
 
     (receiver, client, cancellation)
-}
-
-pub async fn setup_network(
-    tmp_dir: &Path,
-    config: Option<Config>,
-    token: Option<CancellationToken>,
-) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
-    let l1 = start_l1().await;
-    let (receiver, client, _token) = start_agglayer(tmp_dir, &l1, config, token).await;
-
-    (receiver, l1, client)
 }
 
 pub fn get_signer(index: u32) -> PrivateKeySigner {
