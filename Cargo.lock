@@ -124,6 +124,7 @@ dependencies = [
  "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-interop-types",
  "agglayer-primitives",
  "agglayer-storage",
  "agglayer-test-suite",

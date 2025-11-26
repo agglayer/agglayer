@@ -4,6 +4,7 @@ use agglayer_contracts::{
     contracts::PolygonRollupManager::VerifyPessimisticStateTransition, rollup::RollupContract,
     L1TransactionFetcher,
 };
+use agglayer_interop_types::PessimisticRoot;
 use agglayer_storage::stores::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use agglayer_types::Digest;
 use alloy::{
@@ -80,7 +81,7 @@ where
                 "Failed to decode VerifyPessimisticStateTransition log: {log:?}"
             )));
         };
-        let pp_root = Digest::from(event.newPessimisticRoot);
+        let pp_root = PessimisticRoot::from(event.newPessimisticRoot);
         let Some(tx_hash) = log.transaction_hash.map(Digest::from) else {
             return Err(Error::InternalError(format!(
                 "Failed to get tx hash from log: {log:?}"
@@ -96,7 +97,7 @@ where
 
         debug!(
             "Retrieved latest VerifyPessimisticStateTransition event for network {network_id}, \
-            latest pp_root: {pp_root:?}, tx_hash: {tx_hash:?}, block_number: {block_number}",
+             latest pp_root: {pp_root:?}, tx_hash: {tx_hash:?}, block_number: {block_number}",
         );
 
         let certificate_ids = self.state_store.get_certificate_ids_for_pp_root(&pp_root)?;

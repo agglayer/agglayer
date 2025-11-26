@@ -1,4 +1,5 @@
-use agglayer_types::{CertificateId, Digest};
+use agglayer_types::CertificateId;
+use agglayer_tries::roots::PessimisticRoot;
 use serde::{Deserialize, Serialize};
 
 use super::{ColumnSchema, PP_ROOT_TO_CERTIFICATE_IDS_CF};
@@ -7,16 +8,17 @@ use super::{ColumnSchema, PP_ROOT_TO_CERTIFICATE_IDS_CF};
 ///
 /// ## Column definition
 ///
-/// | key        | value                |
-/// | --         | --                   |
-/// | `Digest`   | `Vec<CertificateId>` |
+/// | key               | value                |
+/// | ----------------- | -------------------- |
+/// | `PessimisticRoot` | `Vec<CertificateId>` |
 pub struct PpRootToCertificateIdsColumn;
 
-pub type Key = Digest;
+pub type Key = PessimisticRoot;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Value(pub(crate) Vec<CertificateId>);
 
+crate::columns::impl_codec_using_bincode_for!(Key);
 crate::columns::impl_codec_using_bincode_for!(Value);
 
 impl ColumnSchema for PpRootToCertificateIdsColumn {

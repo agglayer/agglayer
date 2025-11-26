@@ -7,6 +7,7 @@ use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, ExecutionMode,
     Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
+use agglayer_tries::roots::PessimisticRoot;
 
 use crate::{error::Error, stores::PerEpochReader};
 
@@ -96,7 +97,7 @@ pub trait StateWriter: Send + Sync {
 
     fn add_certificate_id_for_pp_root(
         &self,
-        pp_root: &Digest,
+        pp_root: &PessimisticRoot,
         certificate_id: &CertificateId,
     ) -> Result<(), Error>;
 }

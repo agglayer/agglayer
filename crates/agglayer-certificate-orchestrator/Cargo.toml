@@ -37,6 +37,7 @@ tracing.workspace = true
 agglayer-clock.workspace = true
 agglayer-config = { workspace = true, optional = true }
 agglayer-contracts.workspace = true
+agglayer-interop-types.workspace = true
 agglayer-storage.workspace = true
 agglayer-test-suite = { workspace = true, optional = true }
 agglayer-types.workspace = true

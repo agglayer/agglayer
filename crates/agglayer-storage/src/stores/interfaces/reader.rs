@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
-    primitives::alloy_primitives::BlockNumber, Digest, Certificate, CertificateHeader,
-    CertificateId, CertificateIndex, EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
+    primitives::alloy_primitives::BlockNumber,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
+    LocalNetworkStateData, NetworkId, Proof,
 };
+use agglayer_tries::roots::PessimisticRoot;
 
 use crate::{
     columns::{
@@ -111,7 +113,7 @@ pub trait StateReader: Send + Sync {
     /// Get the certificate IDs for a given pp root.
     fn get_certificate_ids_for_pp_root(
         &self,
-        pp_root: &Digest,
+        pp_root: &PessimisticRoot,
     ) -> Result<Vec<CertificateId>, Error>;
 }
 

@@ -1,3 +1,4 @@
+use agglayer_tries::roots::PessimisticRoot;
 use agglayer_types::{
     primitives::{alloy_primitives::BlockNumber, Digest},
     Certificate, CertificateHeader, CertificateId, CertificateStatus, EpochNumber, Height,
@@ -90,7 +91,7 @@ mock! {
 
         fn add_certificate_id_for_pp_root(
             &self,
-            pp_root: &Digest,
+            pp_root: &PessimisticRoot,
             certificate_id: &CertificateId,
         ) -> Result<(), Error>;
     }
@@ -124,7 +125,7 @@ mock! {
 
         fn get_certificate_ids_for_pp_root(
             &self,
-            pp_root: &Digest,
+            pp_root: &PessimisticRoot,
         ) -> Result<Vec<CertificateId>, Error>;
     }
 }

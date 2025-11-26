@@ -5,7 +5,7 @@ use std::{
     time::SystemTime,
 };
 
-use agglayer_tries::{node::Node, smt::Smt};
+use agglayer_tries::{node::Node, roots::PessimisticRoot, smt::Smt};
 use agglayer_types::{
     primitives::{
         alloy_primitives::BlockNumber, Digest,
@@ -385,7 +385,7 @@ impl StateWriter for StateStore {
 
     fn add_certificate_id_for_pp_root(
         &self,
-        pp_root: &Digest,
+        pp_root: &PessimisticRoot,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
         let mut certificate_ids = self.db.get::<PpRootToCertificateIdsColumn>(pp_root)?
@@ -662,7 +662,7 @@ impl StateReader for StateStore {
 
     fn get_certificate_ids_for_pp_root(
         &self,
-        pp_root: &Digest,
+        pp_root: &PessimisticRoot,
     ) -> Result<Vec<CertificateId>, Error> {
         Ok(self.db.get::<PpRootToCertificateIdsColumn>(pp_root)?
             .map(|v| v.0)
