@@ -69,12 +69,13 @@ impl ConfiguredSigner {
     }
 }
 
+/// Configured signers for different purposes.
 #[derive(Debug)]
 pub struct ConfiguredSigners {
-    // The signer for certificate settlement.
+    /// The signer for certificate settlement.
     pub cert_settlement: ConfiguredSigner,
-    // The signer for transaction settlement, if not defined is expected
-    // that `cert_settlement` signer will be used.
+    /// The signer for transaction settlement, if not defined is expected
+    /// that `cert_settlement` signer will be used.
     pub tx_settlement: Option<ConfiguredSigner>,
 }
 

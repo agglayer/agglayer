@@ -18,7 +18,8 @@ pub struct OutboundConfig {
 #[serde(rename = "rpc", rename_all = "kebab-case")]
 pub struct OutboundRpcConfig {
     /// Outbound configuration of the RPC settle function call.
-    pub settle: OutboundRpcSettleConfig,
+    pub settle_tx: OutboundRpcSettleConfig,
+    pub settle_cert: OutboundRpcSettleConfig,
 }
 
 /// Outbound RPC settle configuration that is used to configure the outbound
@@ -41,12 +42,6 @@ pub struct OutboundRpcSettleConfig {
     #[serde(default = "default_rpc_confirmations")]
     pub confirmations: usize,
 
-    /// Timeout for the submission of the settlement transaction to L1,
-    /// including the required number of confirmations.
-    #[serde(default = "default_settlement_timeout")]
-    #[serde(with = "crate::with::HumanDuration")]
-    pub settlement_timeout: Duration,
-
     /// Gas multiplier factor for the transaction.
     /// The gas is calculated as follows:
     /// `gas = estimate_gas * (gas_multiplier / 100)
@@ -67,7 +62,6 @@ impl Default for OutboundRpcSettleConfig {
             max_retries: default_rpc_retries(),
             retry_interval: default_rpc_retry_interval(),
             confirmations: default_rpc_confirmations(),
-            settlement_timeout: default_settlement_timeout(),
             gas_multiplier_factor: default_gas_multiplier_factor(),
             gas_price: GasPriceConfig::default(),
         }
@@ -133,11 +127,6 @@ const fn default_rpc_confirmations() -> usize {
     1
 }
 
-/// Default timeout for settlement transaction submission and confirmation.
-const fn default_settlement_timeout() -> Duration {
-    Duration::from_secs(20 * 60)
-}
-
 /// Default gas price ceiling for the transaction.
 const fn default_gas_price_ceiling() -> u128 {
     // 100 gwei
@@ -159,13 +148,16 @@ mod tests {
             }
 
             let toml = r#"
-                [outbound.rpc.settle]
+                [outbound.rpc.settle-tx]
                 max-retries = 10
+                [outbound.rpc.settle-cert]
+                max-retries = 11
                 "#;
 
             let config = toml::from_str::<DummyContainer>(toml).unwrap();
 
-            assert_eq!(config.outbound.rpc.settle.max_retries, 10);
+            assert_eq!(config.outbound.rpc.settle_tx.max_retries, 10);
+            assert_eq!(config.outbound.rpc.settle_cert.max_retries, 11);
         }
 
         mod rpc {
