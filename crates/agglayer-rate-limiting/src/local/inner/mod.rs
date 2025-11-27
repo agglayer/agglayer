@@ -55,13 +55,13 @@ pub enum RateLimited {
     SendTxRateLimited(WallClockLimitedInfo),
 
     #[error("The `sendTx` settlement disabled by rate limiter")]
-    SendTxDiabled {},
+    SendTxDisabled {},
 }
 
 impl RateLimited {
     fn send_tx(err: limiter::RateLimited<WallClockLimitedInfo>) -> Self {
         match err {
-            limiter::RateLimited::Disabled {} => Self::SendTxDiabled {},
+            limiter::RateLimited::Disabled {} => Self::SendTxDisabled {},
             limiter::RateLimited::Inner(err) => Self::SendTxRateLimited(err),
         }
     }

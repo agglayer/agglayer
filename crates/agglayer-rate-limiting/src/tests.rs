@@ -118,7 +118,7 @@ fn network_disabled() {
     assert_eq!(limiter.limit_send_tx(12, now), Ok(()));
     assert_eq!(
         limiter.limit_send_tx(55, now),
-        Err(RateLimited::SendTxDiabled {})
+        Err(RateLimited::SendTxDisabled {})
     );
     assert_eq!(limiter.limit_send_tx(19, now), Ok(()));
 }
