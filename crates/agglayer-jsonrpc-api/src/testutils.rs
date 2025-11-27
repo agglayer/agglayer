@@ -85,7 +85,7 @@ impl TestContext {
         // Create a mock provider for the default case
         let asserter = Asserter::new();
         let _transport = MockTransport::new(asserter.clone());
-        let mock_provider = ProviderBuilder::new().on_mocked_client(asserter);
+        let mock_provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
         Self::new_with_provider(config, mock_provider).await
     }
@@ -269,7 +269,7 @@ impl TestContext {
         let _transport = MockTransport::new(asserter.clone());
 
         // Build the provider with the mock transport
-        let mock_provider = ProviderBuilder::new().on_mocked_client(asserter);
+        let mock_provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
         // Create L1RpcClient with mock provider
         let l1_rpc_client = Self::create_l1_rpc_client(Arc::new(mock_provider.clone()));

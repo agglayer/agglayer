@@ -187,11 +187,16 @@ impl Node {
         let address = signer.address();
         tracing::info!("Signer address: {:?}", address);
 
-        // Create a new L1 RPC provider with signer support
+        // Create a new L1 RPC provider with signer support and SimpleNonceManager
         let wallet = EthereumWallet::from(signer);
         let provider = ProviderBuilder::new()
+            .with_simple_nonce_management()
             .wallet(wallet)
-            .on_http(config.l1.node_url.clone());
+            .connect_client(
+                alloy::rpc::client::RpcClient::builder()
+                    .layer(crate::L1TraceLayer)
+                    .http(config.l1.node_url.clone()),
+            );
         let rpc = Arc::new(provider);
 
         tracing::debug!("RPC provider created");
