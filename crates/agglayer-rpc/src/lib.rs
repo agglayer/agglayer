@@ -727,7 +727,7 @@ where
                     Some(tx_hash) => {
                         let l1_transaction = self
                             .l1_rpc_provider
-                            .fetch_transaction_receipt(tx_hash.into())
+                            .fetch_transaction_receipt(tx_hash)
                             .await
                             .map_err(|error| {
                                 warn!(

@@ -330,7 +330,6 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<TransactionReceipt, Error> {
-        let tx_hash = settlement_tx_hash.into();
         let timeout = self
             .config
             .retry_interval
@@ -344,7 +343,11 @@ where
         );
 
         for attempt in 0..=self.config.max_retries {
-            match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
+            match self
+                .l1_rpc
+                .fetch_transaction_receipt(settlement_tx_hash)
+                .await
+            {
                 Ok(Some(receipt)) => {
                     info!(attempt, "Successfully fetched transaction receipt");
 
@@ -406,7 +409,8 @@ where
                                             certificate_id,
                                             error: format!(
                                                 "Failed to get current block number while waiting \
-                                                 for confirmations of tx {tx_hash}: {error}"
+                                                 for confirmations of tx {settlement_tx_hash}: \
+                                                 {error}"
                                             ),
                                         });
                                     }
@@ -424,7 +428,7 @@ where
                             settlement_tx_hash,
                             source: eyre!(
                                 "Timeout while waiting for transaction confirmations for tx \
-                                 {tx_hash} after {timeout:?}"
+                                 {settlement_tx_hash} after {timeout:?}"
                             ),
                         });
                     } else {
@@ -469,7 +473,7 @@ where
                         certificate_id,
                         error: format!(
                             "Error while waiting for the pending settlement transaction tx \
-                             {tx_hash}: {error}"
+                             {settlement_tx_hash}: {error}"
                         ),
                     });
                 }
@@ -626,7 +630,7 @@ where
     ) -> Result<TxReceiptStatus, Error> {
         match self
             .l1_rpc
-            .fetch_transaction_receipt(settlement_tx_hash.into())
+            .fetch_transaction_receipt(settlement_tx_hash)
             .await
         {
             Ok(Some(receipt)) => {
