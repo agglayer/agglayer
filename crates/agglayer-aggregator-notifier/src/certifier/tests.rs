@@ -37,7 +37,7 @@ async fn happy_path() {
     .await
     .unwrap();
 
-    let buffer = Buffer::new(prover, 1024);
+    let buffer = Buffer::new(prover, config.prover_buffer_size);
 
     let local_state = LocalNetworkStateData::default();
     let network: NetworkId = 1.into();
@@ -183,7 +183,7 @@ async fn prover_timeout() {
     .await
     .unwrap();
 
-    let buffer = Buffer::new(prover, 1024);
+    let buffer = Buffer::new(prover, config.prover_buffer_size);
 
     let certifier = CertifierClient::try_new(
         Arc::new(pending_store),

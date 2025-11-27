@@ -222,10 +222,9 @@ impl Node {
 
         let (_vkey, prover_executor) =
             prover_executor::Executor::create_prover(config.prover.clone(), pessimistic_proof::ELF)
-                .await
-                .unwrap();
+                .await?;
 
-        let prover_buffer = Buffer::new(prover_executor, 1024);
+        let prover_buffer = Buffer::new(prover_executor, config.prover_buffer_size);
 
         let certifier_client = CertifierClient::try_new(
             pending_store.clone(),

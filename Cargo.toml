@@ -60,9 +60,6 @@ prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0
 prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
 prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
 prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-# agglayer-prover = { path = "crates/agglayer-prover" }
-agglayer-prover-config = { path = "crates/agglayer-prover-config" }
-agglayer-prover-types = { path = "crates/agglayer-prover-types" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.

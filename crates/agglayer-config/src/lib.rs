@@ -112,6 +112,12 @@ pub struct Config {
     #[serde(default)]
     pub prover: prover_config::ProverType,
 
+    #[serde(
+        default = "default_prover_buffer_size",
+        skip_serializing_if = "same_as_default_prover_buffer_size"
+    )]
+    pub prover_buffer_size: usize,
+
     #[serde(default)]
     #[serde(skip_serializing_if = "is_false")]
     pub debug_mode: bool,
@@ -181,6 +187,7 @@ impl Config {
             prover: prover_config::ProverType::NetworkProver(
                 prover_config::NetworkProverConfig::default(),
             ),
+            prover_buffer_size: default_prover_buffer_size(),
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
@@ -260,6 +267,15 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
             .validate()
             .map_err(|e| serde::de::Error::custom(e.to_string()))
     }
+}
+
+/// Default prover buffer size.
+const fn default_prover_buffer_size() -> usize {
+    100
+}
+
+const fn same_as_default_prover_buffer_size(v: &usize) -> bool {
+    *v == default_prover_buffer_size()
 }
 
 fn is_false(b: &bool) -> bool {

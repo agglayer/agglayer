@@ -45,6 +45,7 @@ pub struct CertifierClient<PendingStore, L1Rpc> {
     verifier: Arc<CpuProver>,
     /// The verifying key of the SP1 proof system.
     verifying_key: SP1VerifyingKey,
+    /// The prover service to generate pessimistic-proofs.
     prover: ProverService,
     /// The L1 RPC client.
     l1_rpc: Arc<L1Rpc>,
@@ -264,7 +265,7 @@ where
                 } else {
                     error!("Failed to generate proof: {:?}", source_error);
 
-                    CertificationError::ProverReturnedUnspecifiedError
+                    CertificationError::InternalError(source_error.to_string())
                 }
             })?;
 
