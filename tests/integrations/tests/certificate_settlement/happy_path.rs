@@ -19,12 +19,18 @@ use rstest::rstest;
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
-async fn successfully_push_certificate(#[case] state: Forest) {
+async fn successfully_push_certificate(
+    #[case] state: Forest,
+    #[values(false, true)] use_tls: bool,
+) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = AgglayerSetup::default().setup_network(&tmp_dir.path).await;
+    let (_handle, _l1, client) = AgglayerSetup::default()
+        .with_tls_enabled(use_tls)
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
 
@@ -46,7 +52,10 @@ async fn successfully_push_certificate(#[case] state: Forest) {
 #[tokio::test]
 #[timeout(Duration::from_secs(200))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
-async fn send_multiple_certificates(#[case] mut state: Forest) {
+async fn send_multiple_certificates(
+    #[case] mut state: Forest,
+    #[values(false, true)] use_tls: bool,
+) {
     use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
     use agglayer_types::{aggchain_proof::AggchainData, testutils::compute_signature_info};
     use alloy::providers::Provider as _;
@@ -59,6 +68,7 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
     // L1 is a RAII guard
     let (_agglayer_shutdowned, l1, client) = AgglayerSetup::default()
         .with_cancellation_token(cancellation_token.clone())
+        .with_tls_enabled(use_tls)
         .setup_network(&tmp_dir.path)
         .await;
 

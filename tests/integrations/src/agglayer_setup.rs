@@ -1,6 +1,6 @@
 use std::{fs, io, path::Path, time::Duration};
 
-use agglayer_config::{log::LogLevel, Config};
+use agglayer_config::log::LogLevel;
 use agglayer_prover::fake::FakeProver;
 use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
@@ -153,15 +153,18 @@ async fn start_agglayer(
 
     let grpc_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
-    let readrpc_tls_addr = next_available_addr();
     let admin_addr = next_available_addr();
+    let readrpc_tls_addr = next_available_addr();
     let admin_tls_addr = next_available_addr();
 
     config.rpc.grpc_port = grpc_addr.port().into();
     config.rpc.readrpc_port = readrpc_addr.port().into();
-    config.rpc.readrpc_tls_port = readrpc_tls_addr.port().into();
     config.rpc.admin_port = admin_addr.port().into();
-    config.rpc.admin_tls_port = admin_tls_addr.port().into();
+
+    if use_tls {
+        config.rpc.readrpc_tls_port = readrpc_tls_addr.port().into();
+        config.rpc.admin_tls_port = admin_tls_addr.port().into();
+    }
 
     config.telemetry.addr = next_available_addr();
     config.log.level = LogLevel::Debug;
@@ -187,7 +190,11 @@ async fn start_agglayer(
     });
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    let url = format!("wss://{}/", readrpc_tls_addr);
+    let url = if use_tls {
+        format!("wss://{readrpc_tls_addr}/")
+    } else {
+        format!("ws://{readrpc_addr}/")
+    };
     info!("Connecting to {url}");
 
     let mut interval = tokio::time::interval(Duration::from_secs(10));
