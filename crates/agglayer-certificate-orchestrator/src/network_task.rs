@@ -240,7 +240,7 @@ where
 
         loop {
             tokio::select! {
-                // TODO (IN ANOTHER PR): move cancellation token to make_progress, have make_progess return ControlFlow?
+                // TODO (IN ANOTHER PR): move cancellation token to make_progress, have make_progress return ControlFlow?
                 _ = cancellation_token.cancelled() => {
                     debug!("Network task for network {} has been cancelled", self.network_id);
                     return Ok(self.network_id);
