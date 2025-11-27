@@ -1,8 +1,8 @@
 use agglayer_tries::smt::Smt;
 use agglayer_types::{
     aggchain_proof::AggchainData,
-    compute_signature_info,
     primitives::{keccak::keccak256, Hashable},
+    testutils::compute_signature_info,
     Address, Certificate, Digest, Height, LocalNetworkStateData, Signature, U256,
 };
 use alloy::signers::{local::PrivateKeySigner, SignerSync};

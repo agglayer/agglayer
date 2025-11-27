@@ -75,9 +75,9 @@ where
                 .map_err(|_| L1RpcError::CacheLockPoisoned)?;
             if let Some(&cached_root) = cache.get(&l1_leaf_count) {
                 trace!(
-                    "Retrieved cached L1 info root for leaf count {}: {}",
                     l1_leaf_count,
-                    alloy::primitives::B256::from(cached_root)
+                    cached_root = %alloy::primitives::B256::from(cached_root),
+                    "Retrieved cached L1 info root for leaf count",
                 );
                 return Ok(cached_root);
             }
@@ -90,7 +90,7 @@ where
         // Get first `UpdateL1InfoTreeV2` event for the given leaf count.
         // l1 leaf count increases over time for a network, when we filter by
         // `l1_leaf_count` we would not get provider limit.
-        debug!("Searching for UpdateL1InfoTreeV2 event with leaf count {l1_leaf_count}");
+        debug!(%l1_leaf_count, "Searching for UpdateL1InfoTreeV2 event with leaf count");
         let filter = Filter::new()
             .address(self.global_exit_root_manager_contract)
             .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
@@ -119,11 +119,10 @@ where
             .ok_or(L1RpcError::UpdateL1InfoTreeV2EventNotFound)?;
 
         debug!(
-            "Retrieved UpdateL1InfoTreeV2 event from block {}. L1 info tree leaf count: {}, root: \
-             {}",
-            event_block_number,
-            l1_leaf_count,
-            alloy::primitives::B256::from(l1_info_root) // Use alloy's B256 instead of H256
+            %event_block_number,
+            %l1_leaf_count,
+            l1_info_root = %alloy::primitives::B256::from(l1_info_root), // Use alloy's B256 instead of H256
+            "Retrieved UpdateL1InfoTreeV2 event",
         );
 
         // Await for the related block to be finalized

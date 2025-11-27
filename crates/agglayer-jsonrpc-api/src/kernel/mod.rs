@@ -73,21 +73,20 @@ pub enum ZkevmNodeVerificationError {
 }
 
 impl<RpcProvider> Kernel<RpcProvider> {
-    pub fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> Self {
-        Self {
+    pub fn new(rpc: Arc<RpcProvider>, config: Arc<Config>) -> eyre::Result<Self> {
+        Ok(Self {
             rpc,
             rate_limiter: RateLimiter::new(config.rate_limiting.clone()),
             gas_price_params: {
                 let gas_config = &config.outbound.rpc.settle.gas_price;
-                agglayer_contracts::GasPriceParams {
-                    multiplier_per_1000: gas_config.multiplier.as_u64_per_1000(),
-                    floor: gas_config.floor,
-                    ceiling: gas_config.ceiling,
-                }
+                agglayer_contracts::GasPriceParams::new(
+                    gas_config.multiplier.as_u64_per_1000(),
+                    gas_config.floor..=gas_config.ceiling,
+                )?
             },
             settlement_config: config.outbound.rpc.settle.clone(),
             config,
-        }
+        })
     }
 
     pub(crate) fn rate_limiter(&self) -> &RateLimiter {
@@ -196,6 +195,8 @@ pub enum SettlementError {
     PendingTransactionError(PendingTransactionError),
     #[error("receipt without block number: {0}")]
     ReceiptWithoutBlockNumberError(TxHash),
+    #[error("Internal error while waiting for the receipt: {0:?}")]
+    InternalError(#[source] eyre::Error),
 }
 
 #[derive(Error, Debug)]
@@ -357,32 +358,44 @@ where
 
         debug!(l1_tx_hash = %pending_tx.tx_hash(), "For signed tx {signed_tx_hash} l1 transaction {} sent", pending_tx.tx_hash());
 
-        self.wait_for_transaction_receipt(pending_tx.tx_hash())
+        // We submit the transaction in a separate task so we can observe the
+        // settlement process even if the client drops the transaction
+        // submission request. This is needed to correctly record the settlement
+        // rate limiting event in case the client drops the request.
+        let rpc = self.rpc.clone();
+        let settlement_config = self.settlement_config.clone();
+        let tx_hash = *pending_tx.tx_hash();
+
+        let receipt = tokio::spawn(async move {
+            Self::wait_for_transaction_receipt(rpc, settlement_config, &tx_hash)
+                .await
+                .inspect(|tx_receipt| {
+                    rate_guard.record(tokio::time::Instant::now());
+                    info!(
+                        block_hash = ?tx_receipt.block_hash,
+                        block_number = ?tx_receipt.block_number,
+                        l1_tx_hash = %tx_receipt.transaction_hash,
+                        "Inspect settle l1 transaction"
+                    )
+                })
+        });
+        receipt
             .await
-            .inspect(|tx_receipt| {
-                rate_guard.record(tokio::time::Instant::now());
-                info!(
-                    block_hash = ?tx_receipt.block_hash,
-                    block_number = ?tx_receipt.block_number,
-                    l1_tx_hash = %tx_receipt.transaction_hash,
-                    "Inspect settle l1 transaction"
-                )
-            })
+            .map_err(|error| SettlementError::InternalError(error.into()))?
     }
 
     /// Wait for transaction receipt with configurable retries and intervals
-    #[instrument(skip(self), level = "debug")]
     async fn wait_for_transaction_receipt(
-        &self,
+        rpc: Arc<RpcProvider>,
+        settlement_config: OutboundRpcSettleConfig,
         tx_hash: &TxHash,
     ) -> Result<TransactionReceipt, SettlementError> {
-        let timeout = self
-            .settlement_config
+        let timeout = settlement_config
             .retry_interval
-            .mul_f64(self.settlement_config.max_retries as f64); // only used for logs
-        let max_retries = self.settlement_config.max_retries;
-        let retry_interval = self.settlement_config.retry_interval;
-        let required_confirmations = self.settlement_config.confirmations;
+            .mul_f64(settlement_config.max_retries as f64); // only used for logs
+        let max_retries = settlement_config.max_retries;
+        let retry_interval = settlement_config.retry_interval;
+        let required_confirmations = settlement_config.confirmations;
 
         debug!(
             max_retries,
@@ -393,7 +406,7 @@ where
         );
 
         for attempt in 0..=max_retries {
-            match self.rpc.get_transaction_receipt(*tx_hash).await {
+            match rpc.get_transaction_receipt(*tx_hash).await {
                 Ok(Some(receipt)) => {
                     info!(attempt, "Successfully fetched transaction receipt");
 
@@ -413,7 +426,7 @@ where
 
                         // Wait until we have the required number of confirmations
                         for confirmation_attempt in attempt..=max_retries {
-                            match self.rpc.get_block_number().await {
+                            match rpc.get_block_number().await {
                                 Ok(current_block) => {
                                     let current_confirmations = current_block
                                         .saturating_sub(receipt_block)

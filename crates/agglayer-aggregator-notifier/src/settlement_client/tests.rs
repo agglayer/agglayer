@@ -47,7 +47,7 @@ mockall::mock! {
     impl L1TransactionFetcher for L1Rpc {
         type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
-        async fn fetch_transaction_receipt(&self, tx_hash: SettlementTxHash) -> Result<TransactionReceipt, L1RpcError>;
+        async fn fetch_transaction_receipt(&self, tx_hash: SettlementTxHash) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as L1TransactionFetcher>::Provider;
     }

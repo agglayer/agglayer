@@ -33,6 +33,11 @@ fn transient_network_info() {
         .return_once(|_network_id| Ok(DEFAULT_NETWORK_INFO));
 
     state_store
+        .expect_is_network_disabled()
+        .with(eq(NETWORK_1))
+        .return_once(|_network_id| Ok(false));
+
+    state_store
         .expect_get_latest_settled_certificate_per_network()
         .with(eq(NETWORK_1))
         .once()
@@ -88,7 +93,7 @@ fn transient_network_info() {
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,
@@ -126,6 +131,12 @@ fn pending_certificate_defined() {
         .expect_get_network_info()
         .with(eq(NETWORK_1))
         .return_once(|_network_id| Ok(DEFAULT_NETWORK_INFO));
+
+    state_store
+        .expect_is_network_disabled()
+        .with(eq(NETWORK_1))
+        .return_once(|_network_id| Ok(false));
+
     let settled_certificate = Certificate::new_for_test(NETWORK_1, 0.into());
     let settled_certificate_id = settled_certificate.hash();
     let settled_certificate_header = CertificateHeader {
@@ -245,7 +256,7 @@ fn pending_certificate_defined() {
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,
@@ -307,10 +318,16 @@ fn pending_certificate_defined_with_network_info() {
         .expect_get_network_info()
         .with(eq(NETWORK_1))
         .return_once(move |_| Ok(get_network_info.clone()));
+
+    state_store
+        .expect_is_network_disabled()
+        .with(eq(NETWORK_1))
+        .return_once(|_network_id| Ok(false));
+
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,

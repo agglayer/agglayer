@@ -187,11 +187,16 @@ impl Node {
         let address = signer.address();
         tracing::info!("Signer address: {:?}", address);
 
-        // Create a new L1 RPC provider with signer support
+        // Create a new L1 RPC provider with signer support and SimpleNonceManager
         let wallet = EthereumWallet::from(signer);
         let provider = ProviderBuilder::new()
+            .with_simple_nonce_management()
             .wallet(wallet)
-            .on_http(config.l1.node_url.clone());
+            .connect_client(
+                alloy::rpc::client::RpcClient::builder()
+                    .layer(crate::L1TraceLayer)
+                    .http(config.l1.node_url.clone()),
+            );
         let rpc = Arc::new(provider);
 
         tracing::debug!("RPC provider created");
@@ -203,11 +208,10 @@ impl Node {
                 config.outbound.rpc.settle.gas_multiplier_factor,
                 {
                     let gas_config = &config.outbound.rpc.settle.gas_price;
-                    agglayer_contracts::GasPriceParams {
-                        multiplier_per_1000: gas_config.multiplier.as_u64_per_1000(),
-                        floor: gas_config.floor,
-                        ceiling: gas_config.ceiling,
-                    }
+                    agglayer_contracts::GasPriceParams::new(
+                        gas_config.multiplier.as_u64_per_1000(),
+                        gas_config.floor..=gas_config.ceiling,
+                    )?
                 },
                 config.l1.event_filter_block_range.get(),
             )
@@ -225,7 +229,7 @@ impl Node {
         info!("Certifier client created.");
 
         // Construct the core.
-        let core = Kernel::new(rpc.clone(), config.clone());
+        let core = Kernel::new(rpc.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
         let epoch_packing_aggregator_task = RpcSettlementClient::new(

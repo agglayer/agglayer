@@ -9,11 +9,13 @@ mod certificate;
 mod epoch;
 mod error;
 mod local_network_state;
-mod network_info;
+pub mod network_info;
 mod proof_modes;
 
 #[cfg(feature = "testutils")]
-pub use certificate::compute_signature_info;
+pub mod testutils {
+    pub use crate::certificate::{compute_signature_info, EMPTY_ELF};
+}
 pub use certificate::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Height,
     Metadata, SettlementTxHash,

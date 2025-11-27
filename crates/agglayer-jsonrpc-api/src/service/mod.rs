@@ -154,7 +154,7 @@ where
         let status = match receipt.block_number {
             Some(block_number) if block_number < current_block => TxStatus::Done,
             Some(_) => TxStatus::Pending,
-            None => TxStatus::NotFound,
+            None => TxStatus::Pending,
         };
         Ok(status)
     }
@@ -164,7 +164,6 @@ where
 pub enum TxStatus {
     Done,
     Pending,
-    NotFound,
 }
 
 impl TxStatus {
@@ -172,7 +171,6 @@ impl TxStatus {
         match self {
             TxStatus::Done => "done",
             TxStatus::Pending => "pending",
-            TxStatus::NotFound => "not found",
         }
     }
 }

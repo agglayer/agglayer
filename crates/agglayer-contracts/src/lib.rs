@@ -28,16 +28,43 @@ pub use settler::Settler;
 #[derive(Debug, Clone)]
 pub struct GasPriceParams {
     /// Gas price multiplier for transactions (scaled by 1000).
-    pub multiplier_per_1000: u64,
+    multiplier_per_1000: u64,
     /// Minimum gas price floor (in wei) for transactions.
-    pub floor: u128,
+    floor: u128,
     /// Maximum gas price ceiling (in wei) for transactions.
-    pub ceiling: u128,
+    ceiling: u128,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("Gas price floor ({floor}) must be <= to ceiling ({ceiling})")]
+pub struct GasPriceParamsError {
+    floor: u128,
+    ceiling: u128,
+}
+
+impl GasPriceParams {
+    /// Create new gas price parameters.
+    ///
+    /// Returns an error if ceiling < floor.
+    pub fn new(
+        multiplier_per_1000: u64,
+        range: std::ops::RangeInclusive<u128>,
+    ) -> Result<Self, GasPriceParamsError> {
+        let (floor, ceiling) = (*range.start(), *range.end());
+        if ceiling < floor {
+            return Err(GasPriceParamsError { floor, ceiling });
+        }
+        Ok(Self {
+            multiplier_per_1000,
+            floor,
+            ceiling,
+        })
+    }
 }
 
 impl Default for GasPriceParams {
     fn default() -> Self {
-        GasPriceParams {
+        Self {
             multiplier_per_1000: 1000, // 1.0 scaled by 1000
             floor: 0,
             ceiling: u128::MAX,
@@ -53,7 +80,7 @@ pub trait L1TransactionFetcher {
     async fn fetch_transaction_receipt(
         &self,
         tx_hash: SettlementTxHash,
-    ) -> Result<TransactionReceipt, L1RpcError>;
+    ) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
     /// Returns the provider for direct access to watch transactions
     fn get_provider(&self) -> &Self::Provider;
@@ -109,7 +136,7 @@ pub enum L1RpcError {
     #[error("Cannot get the block hash for the block number {0}")]
     BlockHashNotFound(u64),
 
-    #[error("Unable to fetch transaction receipt for {tx_hash}: {source}")]
+    #[error("Unable to fetch transaction receipt for {tx_hash}")]
     UnableToFetchTransactionReceipt {
         tx_hash: SettlementTxHash,
         #[source]
@@ -289,15 +316,14 @@ where
     async fn fetch_transaction_receipt(
         &self,
         tx_hash: SettlementTxHash,
-    ) -> Result<TransactionReceipt, L1RpcError> {
+    ) -> Result<Option<TransactionReceipt>, L1RpcError> {
         self.rpc
             .get_transaction_receipt(tx_hash.into())
             .await
             .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
                 tx_hash,
                 source: err.into(),
-            })?
-            .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash))
+            })
     }
 
     fn get_provider(&self) -> &Self::Provider {

@@ -156,7 +156,8 @@ where
         info!(
             %prev_pp_root,
             %new_pp_root,
-            "Successfully generated the witness for the PP for the Certificate {certificate_id}"
+            %certificate_id,
+            "Successfully generated the witness for the PP for certificate",
         );
 
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
