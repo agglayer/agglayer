@@ -52,16 +52,16 @@ pub struct StateStore {
 mod network_info;
 
 impl StateStore {
+    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBError> {
+        DB::open_cf(path, crate::storage::state_db_cf_definitions())
+    }
+
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
         Self { db, backup_client }
     }
 
     pub fn new_with_path(path: &Path, backup_client: BackupClient) -> Result<Self, Error> {
-        let db = Arc::new(DB::open_cf(
-            path,
-            crate::storage::state_db_cf_definitions(),
-        )?);
-
+        let db = Arc::new(Self::init_db(path)?);
         Ok(Self { db, backup_client })
     }
 }
