@@ -589,7 +589,7 @@ where
                         self.at_capacity_for_epoch = false;
                         break;
                     }
-                    Some(NetworkTaskMessage::CheckSettlementTx { certificate_id,settlement_tx_hash, tx_mined_notifier }) => {
+                    Some(NetworkTaskMessage::CheckSettlementTx { certificate_id, settlement_tx_hash, tx_mined_notifier }) => {
                         let mined = self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await;
                         match &mined {
                             Ok(crate::TxReceiptStatus::TxSuccessful) => {
@@ -662,11 +662,7 @@ where
                 error!("Error retrieving latest pessimistic root from L1: {}", err)
             })?;
 
-        match latest_pp_root {
-            (Some(latest_pp_root), Some(latest_pp_root_tx_hash)) => {
-                Ok(Some((Digest::from(latest_pp_root), latest_pp_root_tx_hash)))
-            }
-            _ => Ok(None),
-        }
+        Ok(latest_pp_root
+            .map(|(latest_pp_root, latest_tx_hash)| (Digest::from(latest_pp_root), latest_tx_hash)))
     }
 }
