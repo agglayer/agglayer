@@ -948,8 +948,8 @@ impl SettlementClient for Check {
     async fn fetch_last_settled_pp_root(
         &self,
         _network_id: NetworkId,
-    ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
-        Ok((None, None))
+    ) -> Result<Option<([u8; 32], SettlementTxHash)>, Error> {
+        Ok(None)
     }
 
     async fn fetch_settlement_nonce(

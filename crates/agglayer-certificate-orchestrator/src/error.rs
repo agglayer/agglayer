@@ -204,11 +204,11 @@ pub enum Error {
         network_id: NetworkId,
     },
 
-    #[error("Pending transaction timeout {certificate_id}: {error}")]
+    #[error("Timeout waiting for {settlement_tx_hash} to settle {certificate_id}")]
     PendingTransactionTimeout {
         certificate_id: CertificateId,
         settlement_tx_hash: SettlementTxHash,
-        error: String,
+        source: eyre::Error,
     },
 
     #[error("Failed to settle the certificate {certificate_id}: {error}")]
@@ -264,8 +264,8 @@ impl From<Error> for CertificateStatusError {
             Error::PersistenceError { error, .. } => {
                 CertificateStatusError::InternalError(error.to_string())
             }
-            Error::PendingTransactionTimeout { error, .. } => {
-                CertificateStatusError::InternalError(error.to_string())
+            error @ Error::PendingTransactionTimeout { .. } => {
+                CertificateStatusError::InternalError(format!("{error:?}"))
             }
             Error::SettlementTransactionFetchReceiptError { error, tx_hash } => {
                 CertificateStatusError::InternalError(format!(

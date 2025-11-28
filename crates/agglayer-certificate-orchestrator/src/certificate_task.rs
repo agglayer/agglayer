@@ -568,6 +568,8 @@ where
                 )?;
                 // No set_status: update_settlement_tx_hash already updates the status in the
                 // database
+                // Reprocess from Candidate, and not directly to Settled: we want to check the
+                // number of confirmations, and have not done that here yet.
                 self.header.status = CertificateStatus::Candidate;
                 return Box::pin(self.process_from_candidate()).await;
             }

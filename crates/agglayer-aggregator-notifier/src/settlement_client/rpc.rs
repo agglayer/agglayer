@@ -15,6 +15,7 @@ use alloy::{
     signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
 use arc_swap::ArcSwap;
+use eyre::eyre;
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
 use tracing::{debug, error, info, instrument, warn};
 
@@ -218,7 +219,7 @@ where
 
                 return Err(Error::SettlementError {
                     certificate_id,
-                    error: error_message,
+                    error: format!("Message: {error_message}\nDecoded error: {error_decoded}"),
                 });
             }
         };
@@ -329,7 +330,6 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<TransactionReceipt, Error> {
-        let tx_hash = settlement_tx_hash.into();
         let timeout = self
             .config
             .retry_interval
@@ -343,7 +343,11 @@ where
         );
 
         for attempt in 0..=self.config.max_retries {
-            match self.l1_rpc.fetch_transaction_receipt(tx_hash).await {
+            match self
+                .l1_rpc
+                .fetch_transaction_receipt(settlement_tx_hash)
+                .await
+            {
                 Ok(Some(receipt)) => {
                     info!(attempt, "Successfully fetched transaction receipt");
 
@@ -405,7 +409,8 @@ where
                                             certificate_id,
                                             error: format!(
                                                 "Failed to get current block number while waiting \
-                                                 for confirmations of tx {tx_hash}: {error}"
+                                                 for confirmations of tx {settlement_tx_hash}: \
+                                                 {error}"
                                             ),
                                         });
                                     }
@@ -421,9 +426,9 @@ where
                         return Err(Error::PendingTransactionTimeout {
                             certificate_id,
                             settlement_tx_hash,
-                            error: format!(
+                            source: eyre!(
                                 "Timeout while waiting for transaction confirmations for tx \
-                                 {tx_hash} after {timeout:?}"
+                                 {settlement_tx_hash} after {timeout:?}"
                             ),
                         });
                     } else {
@@ -454,7 +459,7 @@ where
                         return Err(Error::PendingTransactionTimeout {
                             certificate_id,
                             settlement_tx_hash,
-                            error: format!(
+                            source: eyre!(
                                 "Timeout while waiting for the pending settlement transaction \
                                  {timeout:?}"
                             ),
@@ -468,7 +473,7 @@ where
                         certificate_id,
                         error: format!(
                             "Error while waiting for the pending settlement transaction tx \
-                             {tx_hash}: {error}"
+                             {settlement_tx_hash}: {error}"
                         ),
                     });
                 }
@@ -483,7 +488,7 @@ where
         Err(Error::PendingTransactionTimeout {
             certificate_id,
             settlement_tx_hash,
-            error: format!(
+            source: eyre!(
                 "Unexpected timeout while watching the pending settlement transaction after \
                  {timeout:?}"
             ),
@@ -531,7 +536,7 @@ where
     async fn fetch_last_settled_pp_root(
         &self,
         network_id: agglayer_types::NetworkId,
-    ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
+    ) -> Result<Option<([u8; 32], SettlementTxHash)>, Error> {
         use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
         use alloy::{providers::Provider, sol_types::SolEvent};
 
@@ -548,7 +553,7 @@ where
             .map_err(|error| {
                 error!(?error, "Failed to get the latest block number");
                 Error::L1CommunicationError(Box::new(
-                    agglayer_contracts::L1RpcError::FailedToQueryEvents(error.to_string()),
+                    agglayer_contracts::L1RpcError::FailedToQueryEvents(error.into()),
                 ))
             })?
             .as_u64();
@@ -577,7 +582,7 @@ where
                         "Failed to fetch VerifyPessimisticStateTransition logs"
                     );
                     Error::L1CommunicationError(Box::new(
-                        agglayer_contracts::L1RpcError::FailedToQueryEvents(error.to_string()),
+                        agglayer_contracts::L1RpcError::FailedToQueryEvents(error.into()),
                     ))
                 })?;
 
@@ -599,7 +604,7 @@ where
             }
         });
 
-        let (pp_root, tx_hash) = match result {
+        Ok(match result {
             Some((pp_root, tx_hash)) => {
                 debug!(
                     %network_id,
@@ -607,18 +612,16 @@ where
                     %tx_hash,
                     "Retrieved latest VerifyPessimisticStateTransition event",
                 );
-                (Some(pp_root), Some(tx_hash))
+                Some((pp_root, tx_hash))
             }
             None => {
                 debug!(
                     %network_id,
                     "No VerifyPessimisticStateTransition events found for network",
                 );
-                (None, None)
+                None
             }
-        };
-
-        Ok((pp_root, tx_hash))
+        })
     }
 
     async fn fetch_settlement_receipt_status(
@@ -627,7 +630,7 @@ where
     ) -> Result<TxReceiptStatus, Error> {
         match self
             .l1_rpc
-            .fetch_transaction_receipt(settlement_tx_hash.into())
+            .fetch_transaction_receipt(settlement_tx_hash)
             .await
         {
             Ok(Some(receipt)) => {
@@ -667,7 +670,7 @@ where
             .map_err(|e| {
                 Error::L1CommunicationError(Box::new(
                     agglayer_contracts::L1RpcError::UnableToGetTransaction {
-                        tx_hash: settlement_tx_hash.to_string(),
+                        tx_hash: settlement_tx_hash,
                         source: e.into(),
                     },
                 ))
@@ -687,7 +690,7 @@ where
                 warn!(%settlement_tx_hash, "Settlement tx not found on L1");
                 return Err(Error::L1CommunicationError(Box::new(
                     agglayer_contracts::L1RpcError::UnableToGetTransaction {
-                        tx_hash: settlement_tx_hash.to_string(),
+                        tx_hash: settlement_tx_hash,
                         source: eyre::eyre!(
                             "Settlement tx not found on L1 for tx: {settlement_tx_hash}"
                         ),
@@ -761,7 +764,7 @@ mod testutils {
             return Err(Error::PendingTransactionTimeout {
                 certificate_id,
                 settlement_tx_hash,
-                error: "Pending transaction timeout (simulated via fail point)".to_string(),
+                source: eyre::eyre!("Pending transaction timeout (simulated via fail point)"),
             });
         }
 
