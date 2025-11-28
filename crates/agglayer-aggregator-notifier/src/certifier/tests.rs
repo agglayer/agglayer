@@ -5,11 +5,11 @@ use agglayer_config::Config;
 use agglayer_contracts::{L1RpcError, Settler};
 use agglayer_primitives::vkey_hash::VKeyHash;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
-use agglayer_types::{Address, Height, LocalNetworkStateData, NetworkId};
+use agglayer_types::{Address, Height, LocalNetworkStateData, NetworkId, SettlementTxHash};
 use alloy::{
     contract::Error as ContractError,
     network::Ethereum,
-    primitives::{Bytes, FixedBytes, TxHash},
+    primitives::{Bytes, TxHash},
     rpc::types::TransactionReceipt,
 };
 use fail::FailScenario;
@@ -247,7 +247,7 @@ mockall::mock! {
     impl agglayer_contracts::L1TransactionFetcher for L1Rpc {
         type Provider = alloy::providers::RootProvider<Ethereum>;
 
-        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<Option<TransactionReceipt>, L1RpcError>;
+        async fn fetch_transaction_receipt(&self, tx_hash: SettlementTxHash) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as agglayer_contracts::L1TransactionFetcher>::Provider;
     }

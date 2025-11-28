@@ -727,7 +727,7 @@ where
                     Some(tx_hash) => {
                         let l1_transaction = self
                             .l1_rpc_provider
-                            .fetch_transaction_receipt(tx_hash.into())
+                            .fetch_transaction_receipt(tx_hash)
                             .await
                             .map_err(|error| {
                                 warn!(
@@ -745,9 +745,8 @@ where
                                 }
                             })?
                             .ok_or_else(|| {
-                                let error = agglayer_contracts::L1RpcError::TransactionNotYetMined(
-                                    tx_hash.to_string(),
-                                );
+                                let error =
+                                    agglayer_contracts::L1RpcError::TransactionNotYetMined(tx_hash);
                                 warn!(
                                     "Failed to fetch transaction receipt for certificate \
                                      {pre_existing_certificate_id}: {error}"

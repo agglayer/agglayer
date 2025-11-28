@@ -200,6 +200,7 @@ name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
  "agglayer-primitives",
+ "agglayer-types",
  "alloy",
  "async-trait",
  "eyre",
