@@ -156,9 +156,9 @@ pub(crate) fn client_info_from_metadata(metadata: &tonic::metadata::MetadataMap)
                 warn!("Non-ASCII GRPC header value for: {header}");
                 continue;
             };
-            client_info.push(format!("{}='{}'", header, value));
+            client_info.push(format!("{header}='{value}'"));
         } else if warn_if_not_found {
-            client_info.push(format!("{}=null", header));
+            client_info.push(format!("{header}=null"));
             warn!("Missing expected GRPC metadata header: {header}");
         }
     }
