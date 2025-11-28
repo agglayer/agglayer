@@ -598,8 +598,8 @@ where
                             &certificate_id,
                             alternative_settlement_tx_hash,
                         )?;
-                    // Reprocess from Candidate, and not directly to Settled: we want to check the
-                    // number of confirmations, and have not done that here yet.
+                    // Reprocess from Candidate, and not directly to Settled: we want to check
+                    // the number of confirmations, and have not done that here yet.
                     self.set_status(CertificateStatus::Candidate)?;
                     return Box::pin(self.process_from_candidate()).await;
                 }
