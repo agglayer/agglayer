@@ -494,16 +494,16 @@ where
         self.state
             .disable_network(&network_id, agglayer_types::network_info::DisabledBy::Admin)
             .map_err(|error| {
-                error!(?error, "Failed to disable network {}", network_id);
-                Error::internal(format!("Unable to disable network {}", network_id))
+                error!(?error, "Failed to disable network {network_id}");
+                Error::internal(format!("Unable to disable network {network_id}"))
             })
     }
 
     #[instrument(skip(self), level = "debug")]
     async fn enable_network(&self, network_id: NetworkId) -> RpcResult<()> {
         self.state.enable_network(&network_id).map_err(|error| {
-            error!(?error, "Failed to enable network {}", network_id);
-            Error::internal(format!("Unable to enable network {}", network_id))
+            error!(?error, "Failed to enable network {network_id}");
+            Error::internal(format!("Unable to enable network {network_id}"))
         })
     }
 }

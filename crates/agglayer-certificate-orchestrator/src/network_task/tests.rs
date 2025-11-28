@@ -680,7 +680,7 @@ async fn retries() {
         .expect_fetch_last_settled_pp_root()
         .once()
         .with(eq(network_id))
-        .returning(|_| Ok((None, None)));
+        .returning(|_| Ok(None));
 
     // Second one (retry) is passing
     settlement_client
