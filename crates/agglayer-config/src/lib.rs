@@ -112,10 +112,7 @@ pub struct Config {
     #[serde(default)]
     pub prover: prover_config::ProverType,
 
-    #[serde(
-        default = "default_prover_buffer_size",
-        skip_serializing_if = "same_as_default_prover_buffer_size"
-    )]
+    #[serde(default = "default_prover_buffer_size")]
     pub prover_buffer_size: usize,
 
     #[serde(default)]
@@ -126,7 +123,7 @@ pub struct Config {
     #[serde(skip_serializing_if = "is_false")]
     pub mock_verifier: bool,
 
-    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde(default)]
     pub grpc: grpc::GrpcConfig,
 
     /// Extra Certificate signer per network.
@@ -272,10 +269,6 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
 /// Default prover buffer size.
 const fn default_prover_buffer_size() -> usize {
     100
-}
-
-const fn same_as_default_prover_buffer_size(v: &usize) -> bool {
-    *v == default_prover_buffer_size()
 }
 
 fn is_false(b: &bool) -> bool {

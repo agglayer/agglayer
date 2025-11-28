@@ -2,6 +2,8 @@
 source: crates/agglayer/tests/config.rs
 expression: sanitize_config_folder_path(result)
 ---
+prover-buffer-size = 100
+
 [full-node-rpcs]
 
 [l2]
@@ -69,3 +71,5 @@ db-path = "/tmp/agglayer-test/storage"
 [prover.network-prover]
 proving-timeout = "5m"
 sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+
+[grpc]
