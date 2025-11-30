@@ -66,14 +66,6 @@ where
 
         agglayer_telemetry::VERIFY_SIGNATURE.add(1, metrics_attrs_tx);
 
-        // Reserve a rate limiting slot.
-        let guard = self
-            .kernel
-            .rate_limiter()
-            .reserve_send_tx(tx.tx.rollup_id, tokio::time::Instant::now())?;
-
-        agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
-
         // Run all the verification checks in parallel.
         let verification = try_join(
             async {
@@ -108,10 +100,15 @@ where
         )
         .await;
 
-        if let Err(e) = verification {
-            guard.record(tokio::time::Instant::now());
-            return Err(e);
-        }
+        verification?;
+
+        // Reserve settlement slot after successful verifications.
+        let guard = self
+            .kernel
+            .rate_limiter()
+            .reserve_send_tx(tx.tx.rollup_id, tokio::time::Instant::now())?;
+
+        agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
 
         // Settle the proof on-chain and return the transaction hash.
         let receipt = self
