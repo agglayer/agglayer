@@ -2,6 +2,8 @@
 source: crates/agglayer-config/tests/validate_deserialize.rs
 expression: config
 ---
+prover-buffer-size = 100
+
 [full-node-rpcs]
 
 [l2]
@@ -70,3 +72,5 @@ db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
 [prover.network-prover]
 proving-timeout = "5m"
 sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+
+[grpc]

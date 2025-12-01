@@ -2,6 +2,8 @@
 source: crates/agglayer-config/tests/backup.rs
 expression: config
 ---
+prover-buffer-size = 100
+
 [full-node-rpcs]
 
 [l2]
@@ -74,3 +76,5 @@ pending-max-backup-count = 100
 [prover.network-prover]
 proving-timeout = "5m"
 sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+
+[grpc]
