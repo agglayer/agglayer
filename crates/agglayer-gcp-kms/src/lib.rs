@@ -24,8 +24,8 @@ const GOOGLE_LOCATION: &str = "GOOGLE_LOCATION";
 const GOOGLE_KEYRING: &str = "GOOGLE_KEYRING";
 const GOOGLE_KEY_NAME_LEGACY: &str = "GOOGLE_KEY_NAME";
 const GOOGLE_KEY_VERSION_LEGACY: &str = "GOOGLE_KEY_VERSION";
-const GOOGLE_KEY_NAME_CERT_SETTLEMENT: &str = "GOOGLE_KEY_NAME_CERT_SETTLEMENT";
-const GOOGLE_KEY_VERSION_CERT_SETTLEMENT: &str = "GOOGLE_KEY_VERSION_CERT_SETTLEMENT";
+const GOOGLE_KEY_NAME_PP_SETTLEMENT: &str = "GOOGLE_KEY_NAME_PP_SETTLEMENT";
+const GOOGLE_KEY_VERSION_PP_SETTLEMENT: &str = "GOOGLE_KEY_VERSION_PP_SETTLEMENT";
 const GOOGLE_KEY_NAME_TX_SETTLEMENT: &str = "GOOGLE_KEY_NAME_TX_SETTLEMENT";
 const GOOGLE_KEY_VERSION_TX_SETTLEMENT: &str = "GOOGLE_KEY_VERSION_TX_SETTLEMENT";
 
@@ -76,10 +76,10 @@ where
 
 #[derive(Debug)]
 pub struct KmsSigners {
-    // The signer for certificate settlement.
-    pub cert_settlement: KmsSigner,
+    // The signer for PP settlement.
+    pub pp_settlement: KmsSigner,
     // The signer for transaction settlement, if not defined is expected
-    // that `cert_settlement` signer will be used.
+    // that `pp_settlement` signer will be used.
     pub tx_settlement: Option<KmsSigner>,
 }
 
@@ -117,16 +117,16 @@ impl KMS {
         let project_id = from_env_or_conf(GOOGLE_PROJECT_ID, None, &self.config.project_id, &None)?;
         let location = from_env_or_conf(GOOGLE_LOCATION, None, &self.config.location, &None)?;
         let keyring_name = from_env_or_conf(GOOGLE_KEYRING, None, &self.config.keyring, &None)?;
-        let key_name_cert_settlement = from_env_or_conf(
-            GOOGLE_KEY_NAME_CERT_SETTLEMENT,
+        let key_name_pp_settlement = from_env_or_conf(
+            GOOGLE_KEY_NAME_PP_SETTLEMENT,
             Some(GOOGLE_KEY_NAME_LEGACY),
-            &self.config.cert_settlement_key_name,
+            &self.config.pp_settlement_key_name,
             &self.config.key_name,
         )?;
-        let key_version_cert_settlement = from_env_or_conf(
-            GOOGLE_KEY_VERSION_CERT_SETTLEMENT,
+        let key_version_pp_settlement = from_env_or_conf(
+            GOOGLE_KEY_VERSION_PP_SETTLEMENT,
             Some(GOOGLE_KEY_VERSION_LEGACY),
-            &self.config.cert_settlement_key_version,
+            &self.config.pp_settlement_key_version,
             &self.config.key_version,
         )?;
         let key_name_tx_settlement = from_env_or_conf(
@@ -144,10 +144,10 @@ impl KMS {
 
         // create KeySpecifier for both signers
         let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring_name);
-        let cert_settlement_specifier = KeySpecifier::new(
+        let pp_settlement_specifier = KeySpecifier::new(
             keyring.clone(),
-            &key_name_cert_settlement,
-            key_version_cert_settlement,
+            &key_name_pp_settlement,
+            key_version_pp_settlement,
         );
         let tx_settlement_specifier =
             KeySpecifier::new(keyring, &key_name_tx_settlement, key_version_tx_settlement);
@@ -163,16 +163,15 @@ impl KMS {
                 })?;
 
         // Use GcpSigner::new with the proper client type
-        let cert_settlement_gcp_signer = GcpSigner::new(
-            client.clone(),
-            cert_settlement_specifier,
-            Some(self.chain_id),
-        )
-        .await
-        .map_err(|e| Error::KmsError(eyre::Error::new(e).wrap_err("Unable to create GcpSigner")))?;
+        let pp_settlement_gcp_signer =
+            GcpSigner::new(client.clone(), pp_settlement_specifier, Some(self.chain_id))
+                .await
+                .map_err(|e| {
+                    Error::KmsError(eyre::Error::new(e).wrap_err("Unable to create GcpSigner"))
+                })?;
 
-        let is_the_same_key = key_name_cert_settlement == key_name_tx_settlement
-            && key_version_cert_settlement == key_version_tx_settlement;
+        let is_the_same_key = key_name_pp_settlement == key_name_tx_settlement
+            && key_version_pp_settlement == key_version_tx_settlement;
 
         let tx_settlement_gcp_signer = if is_the_same_key {
             None
@@ -187,7 +186,7 @@ impl KMS {
         };
 
         Ok(KmsSigners {
-            cert_settlement: KmsSigner::new(cert_settlement_gcp_signer),
+            pp_settlement: KmsSigner::new(pp_settlement_gcp_signer),
             tx_settlement: tx_settlement_gcp_signer.map(KmsSigner::new),
         })
     }

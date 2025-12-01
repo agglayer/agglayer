@@ -58,14 +58,19 @@ pub struct PrivateKey {
 #[cfg_attr(any(test, feature = "testutils"), derive(Default))]
 #[serde(rename_all = "kebab-case")]
 pub struct GcpKmsConfig {
+    /// The GCP project ID to use.
     #[serde(alias = "ProjectId")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub project_id: Option<String>,
+
+    /// The geographical region where the Cloud KMS resource is stored.
     #[serde(alias = "Location")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub location: Option<String>,
+
+    /// The GCP KMS key ring to use.
     #[serde(alias = "Keyring")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
@@ -73,22 +78,27 @@ pub struct GcpKmsConfig {
 
     // Added to support distinct keys for cert and tx signing, falling back to
     // the older single key if not specified
-    #[serde(alias = "CertSettlementKeyName")]
+    // ------------------------------------------------------------
+    /// The key name for PP certificate settlement.
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
-    pub cert_settlement_key_name: Option<String>,
-    #[serde(alias = "CertSettlementKeyVersion")]
+    pub pp_settlement_key_name: Option<String>,
+
+    /// The key version for PP certificate settlement.
     #[serde(default)]
-    pub cert_settlement_key_version: Option<u64>,
-    #[serde(alias = "TxSettlementKeyName")]
+    pub pp_settlement_key_version: Option<u64>,
+
+    /// The key name for Tx certificate settlement.
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub tx_settlement_key_name: Option<String>,
-    #[serde(alias = "TxSettlementKeyVersion")]
+
+    /// The key version for Tx certificate settlement.
     #[serde(default)]
     pub tx_settlement_key_version: Option<u64>,
 
     // To be deprecated in favor of the above distinct keys
+    // ------------------------------------------------------------
     #[serde(alias = "KeyName")]
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]

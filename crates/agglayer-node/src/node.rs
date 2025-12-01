@@ -185,7 +185,7 @@ impl Node {
         // Create RPC clients, note that they can be the same signer
         // or not depending on the configuration. If is the same signer
         // we share the nonce management too.
-        let (rpc_cert_settlement, rpc_tx_settlement) = {
+        let (rpc_pp_settlement, rpc_tx_settlement) = {
             // We will use the same parameterization to create both providers.
             let fn_build_provider = |signer: ConfiguredSigner| {
                 Arc::new(
@@ -201,11 +201,12 @@ impl Node {
             };
 
             let signers = ConfiguredSigners::new(&config).await?;
-            let provider_cert = fn_build_provider(signers.cert_settlement);
+            let provider_cert = fn_build_provider(signers.pp_settlement);
 
             let provider_tx = if let Some(tx_settlement) = signers.tx_settlement {
                 fn_build_provider(tx_settlement)
             } else {
+                warn!("Using the same provider for certificate and tx settlement");
                 provider_cert.clone()
             };
 
@@ -226,10 +227,10 @@ impl Node {
         tracing::debug!("RPC provider created");
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
-                rpc_cert_settlement.clone(),
+                rpc_pp_settlement.clone(),
                 PolygonRollupManager::new(
                     config.l1.rollup_manager_contract.into(),
-                    (*rpc_cert_settlement).clone(),
+                    (*rpc_pp_settlement).clone(),
                 ),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
                 config.outbound.rpc.settle_cert.gas_multiplier_factor,
