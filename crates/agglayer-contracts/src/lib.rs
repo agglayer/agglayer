@@ -6,9 +6,10 @@ use std::{
 };
 
 use agglayer_primitives::U256;
+use agglayer_types::SettlementTxHash;
 use alloy::{
     eips::{eip1559::Eip1559Estimation, BlockNumberOrTag},
-    primitives::{Address, FixedBytes, TxHash, B256},
+    primitives::{Address, FixedBytes, TxHash},
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
 };
@@ -78,7 +79,7 @@ pub trait L1TransactionFetcher {
     /// Fetches the transaction receipt for a given transaction hash.
     async fn fetch_transaction_receipt(
         &self,
-        tx_hash: B256,
+        tx_hash: SettlementTxHash,
     ) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
     /// Returns the provider for direct access to watch transactions
@@ -117,58 +118,77 @@ pub enum L1RpcInitializationError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum L1RpcError {
-    #[error("Failed to get the `UpdateL1InfoTreeV2` events: {0}")]
-    UpdateL1InfoTreeV2EventFailure(String),
+    #[error("Failed to get the `UpdateL1InfoTreeV2` events")]
+    UpdateL1InfoTreeV2EventFailure(#[source] eyre::Error),
+
     #[error("Unable to find `UpdateL1InfoTreeV2` events")]
     UpdateL1InfoTreeV2EventNotFound,
+
     #[error("Unable to fetch the latest finalized block")]
     LatestFinalizedBlockNotFound,
+
     #[error("Timeout exceeded while waiting for block {0} to be finalized.")]
     FinalizationTimeoutExceeded(u64),
+
     #[error("L1 Reorg detected for block number {0}")]
     ReorgDetected(u64),
+
     #[error("Cannot get the block hash for the block number {0}")]
     BlockHashNotFound(u64),
+
     #[error("Unable to fetch transaction receipt for {tx_hash}")]
     UnableToFetchTransactionReceipt {
-        tx_hash: String,
+        tx_hash: SettlementTxHash,
         #[source]
         source: eyre::Error,
     },
-    // WARNING: following error message is used in checks, do not change without updating the
-    // checks
-    #[error("No transaction receipt found for tx {0}, not yet mined")]
-    TransactionNotYetMined(String),
+
+    #[error("Transaction receipt not found for tx {0}, it is most likely not yet mined")]
+    TransactionNotYetMined(SettlementTxHash),
+
     #[error("Failed to fetch aggchain vkey")]
     AggchainVkeyFetchFailed,
+
     #[error("Failed to retrieve trusted sequencer")]
     TrustedSequencerRetrievalFailed,
+
     #[error("Failed to retrieve rollup data")]
     RollupDataRetrievalFailed,
-    #[error("Unable to get transaction")]
+
+    #[error("Unable to get transaction {tx_hash}")]
     UnableToGetTransaction {
-        tx_hash: String,
+        tx_hash: SettlementTxHash,
         #[source]
         source: eyre::Error,
     },
+
     #[error("Unable to parse aggchain vkey")]
     UnableToParseAggchainVkey,
+
     #[error("Unable to retrieve verifier type")]
     VerifierTypeRetrievalFailed,
+
     #[error("Unable to retrieve the aggchain hash")]
     AggchainHashFetchFailed,
+
     #[error("The rollup contract is either invalid or not set for the specified rollup id {0}")]
     InvalidRollupContract(u32),
+
     #[error("Unable to fetch the multisig signers: {0}")]
     MultisigSignersFetchFailed(#[source] alloy::contract::Error),
+
     #[error("Unable to fetch the multisig threshold: {0}")]
     MultisigThresholdFetchFailed(#[source] alloy::contract::Error),
+
     #[error("Threshold value is too large to fit in usize. fetched value: {fetched}")]
     ThresholdTypeOverflow { fetched: U256 },
+
     #[error("Transaction receipt for tx {0} failed on L1")]
     TransactionReceiptFailedOnL1(TxHash),
-    #[error("Failed to get the events: {0}")]
-    FailedToQueryEvents(String),
+
+    #[error("Failed to get the events")]
+    FailedToQueryEvents(#[source] eyre::Error),
+
     #[error("L1 info roots cache lock poisoned")]
     CacheLockPoisoned,
 }
@@ -295,13 +315,13 @@ where
 
     async fn fetch_transaction_receipt(
         &self,
-        tx_hash: B256,
+        tx_hash: SettlementTxHash,
     ) -> Result<Option<TransactionReceipt>, L1RpcError> {
         self.rpc
-            .get_transaction_receipt(tx_hash)
+            .get_transaction_receipt(tx_hash.into())
             .await
             .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
-                tx_hash: tx_hash.to_string(),
+                tx_hash,
                 source: err.into(),
             })
     }

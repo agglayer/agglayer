@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use agglayer_primitives::Address;
+use agglayer_types::SettlementTxHash;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     primitives::{TxHash, U256},
@@ -97,7 +98,7 @@ where
             .from_block(BlockNumberOrTag::Earliest);
         let events = self.rpc.get_logs(&filter).await.map_err(|error| {
             error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
-            L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
+            L1RpcError::UpdateL1InfoTreeV2EventFailure(error.into())
         })?;
 
         // Extract event details using alloy's event decoding
@@ -248,15 +249,16 @@ where
         before_tx_hash: Option<TxHash>,
     ) -> Result<[u8; 32], L1RpcError> {
         let at_block = if let Some(tx_hash) = before_tx_hash {
+            let settlement_tx_hash = SettlementTxHash::from(tx_hash);
             let receipt = self
                 .rpc
                 .get_transaction_receipt(tx_hash)
                 .await
                 .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
-                    tx_hash: tx_hash.to_string(),
+                    tx_hash: settlement_tx_hash,
                     source: err.into(),
                 })?
-                .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))?;
+                .ok_or_else(|| L1RpcError::TransactionNotYetMined(settlement_tx_hash))?;
 
             if receipt.status() {
                 receipt
