@@ -96,6 +96,10 @@ where
         };
 
         debug!(
+            %network_id,
+            %pp_root,
+            %tx_hash,
+            %block_number,
             "Retrieved latest VerifyPessimisticStateTransition event for network {network_id}, \
              latest pp_root: {pp_root:?}, tx_hash: {tx_hash:?}, block_number: {block_number}",
         );
