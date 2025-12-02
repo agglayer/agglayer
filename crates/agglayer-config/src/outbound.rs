@@ -1,7 +1,8 @@
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::serde_as;
+use tracing::warn;
 
 use crate::Multiplier;
 
@@ -14,12 +15,51 @@ pub struct OutboundConfig {
 
 /// Outbound RPC configuration that is used to configure the outbound RPC
 /// clients and their RPC calls.
-#[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Serialize, Default, Debug, PartialEq, Eq)]
 #[serde(rename = "rpc", rename_all = "kebab-case")]
 pub struct OutboundRpcConfig {
     /// Outbound configuration of the RPC settle function call.
     pub settle_tx: OutboundRpcSettleConfig,
     pub settle_cert: OutboundRpcSettleConfig,
+}
+
+impl<'de> Deserialize<'de> for OutboundRpcConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
+        #[serde(rename = "rpc", rename_all = "kebab-case")]
+        pub struct Helper {
+            pub settle_tx: Option<OutboundRpcSettleConfig>,
+            pub settle_cert: Option<OutboundRpcSettleConfig>,
+            pub settle: Option<OutboundRpcSettleConfig>,
+        }
+
+        let deserialized = Helper::deserialize(deserializer)?;
+
+        let (settle_tx, settle_cert) = match (
+            deserialized.settle_tx,
+            deserialized.settle_cert,
+            deserialized.settle,
+        ) {
+            (Some(tx), Some(cert), _) => (tx, cert),
+            (None, None, Some(settle)) => {
+                warn!("'settle' is deprecated. Please use 'settle-tx' and 'settle-cert' instead.");
+                (settle.clone(), settle)
+            }
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "Either both 'settle-tx' and 'settle-cert' or 'settle' must be specified",
+                ));
+            }
+        };
+
+        Ok(OutboundRpcConfig {
+            settle_tx,
+            settle_cert,
+        })
+    }
 }
 
 /// Outbound RPC settle configuration that is used to configure the outbound
@@ -141,6 +181,7 @@ mod tests {
         use crate::outbound::OutboundConfig;
 
         #[test]
+        #[allow(deprecated)]
         fn expected_namespace() {
             #[derive(Debug, Deserialize)]
             struct DummyContainer {
@@ -152,6 +193,8 @@ mod tests {
                 max-retries = 10
                 [outbound.rpc.settle-cert]
                 max-retries = 11
+                [outbound.rpc.settle]
+                max-retries = 12
                 "#;
 
             let config = toml::from_str::<DummyContainer>(toml).unwrap();

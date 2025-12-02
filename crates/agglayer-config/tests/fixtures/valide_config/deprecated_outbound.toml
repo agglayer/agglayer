@@ -1,4 +1,0 @@
-[outbound.rpc]
-max-retries = 3
-retry-interval = "7s"
-confirmations = 1
