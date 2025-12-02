@@ -1228,19 +1228,16 @@ fn test_reference_db_v1_read_network_info() {
     use crate::{
         columns::network_info::NetworkInfoColumn,
         storage::backup::BackupClient,
-        stores::{state::StateStore, NetworkInfoReader},
+        stores::{state::StateStore, NetworkInfoReader, StateReader},
         types::network_info::Key as NetworkInfoKey,
     };
 
     let fixture = TestFixture::new("netinfo");
     let state_db = fixture.open_state_db().expect("Failed to open state DB");
 
-    println!("=== Reading NetworkInfo using NetworkInfoReader trait ===\n");
-
     // Collect all unique network IDs from the database
     let mut network_ids = BTreeSet::new();
     let mut total_entries = 0;
-    println!("Collecting network IDs from network_info_cf...");
     for key_result in state_db
         .keys::<NetworkInfoColumn>()
         .expect("Failed to iterate")
@@ -1250,96 +1247,7 @@ fn test_reference_db_v1_read_network_info() {
         total_entries += 1;
     }
 
-    println!("   ✅ Read {} total NetworkInfo entries", total_entries);
-    println!("   ✅ Covering {} unique networks\n", network_ids.len());
-
-    // Use NetworkInfoReader to read and validate each network
-    let state_store = StateStore::new(Arc::new(state_db), BackupClient::noop());
-
-    println!("=== Reading NetworkInfo per Network ===");
-    for network_id in &network_ids {
-        let network_info = state_store
-            .get_network_info(*network_id)
-            .expect("Failed to get network info");
-
-        println!("\nNetwork {}:", network_id);
-
-        // 1. NetworkType
-        println!("  ✅ NetworkType: {:?}", network_info.network_type);
-
-        // 2. Settled Certificate
-        if let Some(cert_id) = network_info.settled_certificate_id {
-            let height = network_info
-                .settled_height
-                .map_or("none".to_string(), |h| h.to_string());
-            let ler = network_info
-                .settled_ler
-                .map_or("none".to_string(), |l| format!("{:?}", l));
-            let leaf_count = network_info
-                .settled_let_leaf_count
-                .map_or("none".to_string(), |c| c.to_string());
-            let pp_root = network_info
-                .settled_pp_root
-                .map_or("none".to_string(), |r| format!("{:?}", r));
-
-            println!(
-                "  ✅ SettledCertificate: cert_id={}, height={}, ler={}, leaf_count={}, pp_root={}",
-                cert_id, height, ler, leaf_count, pp_root
-            );
-        } else {
-            println!("  ⚠️  No SettledCertificate");
-        }
-
-        // 3. SettledClaim
-        if let Some(ref claim) = network_info.settled_claim {
-            println!(
-                "  ✅ SettledClaim: global_index={}, bridge_exit_hash={}",
-                claim.global_index, claim.bridge_exit_hash
-            );
-        } else {
-            println!("  ⚠️  No SettledClaim");
-        }
-
-        // 4. LatestPendingCertificateInfo
-        if let Some(height) = network_info.latest_pending_height {
-            println!("  ✅ LatestPendingHeight: {}", height);
-        } else {
-            println!("  ⚠️  No LatestPendingHeight");
-        }
-
-        // Validate completeness: all networks should have network type and settled data
-        assert_ne!(
-            network_info.network_type,
-            agglayer_types::NetworkType::Unspecified,
-            "Network {} has unspecified NetworkType",
-            network_id
-        );
-        assert!(
-            network_info.settled_certificate_id.is_some(),
-            "Network {} missing SettledCertificate",
-            network_id
-        );
-        assert!(
-            network_info.settled_claim.is_some(),
-            "Network {} missing SettledClaim",
-            network_id
-        );
-        assert!(
-            network_info.latest_pending_height.is_some(),
-            "Network {} missing LatestPendingHeight",
-            network_id
-        );
-    }
-
-    // Final validation
-    println!("\n=== Validation Summary ===");
-    println!("  Networks with complete info: {}", network_ids.len());
-    println!("  Total entries: {}", total_entries);
-    println!(
-        "  Expected entries: {} (4 per network)",
-        network_ids.len() * 4
-    );
-
+    // Validate entry counts match expectations
     assert_eq!(
         network_ids.len(),
         fixture.metadata.config.num_networks as usize,
@@ -1348,11 +1256,131 @@ fn test_reference_db_v1_read_network_info() {
     assert_eq!(
         total_entries,
         network_ids.len() * 4,
-        "Should have exactly 4 info entries per network"
+        "Should have exactly 4 info entries per network (NetworkType, SettledCertificate, \
+         SettledClaim, LatestPendingCertificateInfo)"
     );
 
-    println!("\n✅ Successfully read and validated all NetworkInfo data using NetworkInfoReader!");
-    println!("   All networks have complete information (4 entries each).");
+    // Use NetworkInfoReader to read and validate each network
+    let state_store = StateStore::new(Arc::new(state_db), BackupClient::noop());
+
+    for network_id in &network_ids {
+        let network_info = state_store
+            .get_network_info(*network_id)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to get network info for network {}: {}",
+                    network_id, e
+                )
+            });
+
+        // Assert NetworkType is set correctly based on generator logic used to
+        // generate data (using generate_for_test with seed)
+        // The seed calculation matches what's in db_generator.rs:
+        // network_type_seed = config.seed + network_id + 5000
+        let network_type_seed = fixture
+            .metadata
+            .config
+            .seed
+            .wrapping_add(network_id.to_u32() as u64)
+            .wrapping_add(5000);
+        let expected_type = agglayer_types::NetworkType::generate_for_test(network_type_seed);
+        assert_eq!(
+            network_info.network_type, expected_type,
+            "Network {} has incorrect NetworkType (seed: {})",
+            network_id, network_type_seed
+        );
+
+        // Assert SettledCertificate fields are present
+        let cert_id = network_info
+            .settled_certificate_id
+            .unwrap_or_else(|| panic!("Network {} missing settled_certificate_id", network_id));
+
+        // Verify the certificate header exists and matches
+        let header = state_store
+            .get_certificate_header(&cert_id)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to fetch certificate header for cert_id {}: {}",
+                    cert_id, e
+                )
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "Certificate header not found for cert_id {} referenced by network {}",
+                    cert_id, network_id
+                )
+            });
+
+        // Assert height matches the certificate header
+        let settled_height = network_info
+            .settled_height
+            .unwrap_or_else(|| panic!("Network {} missing settled_height", network_id));
+        assert_eq!(
+            settled_height, header.height,
+            "Network {} settled_height mismatch",
+            network_id
+        );
+
+        // Assert LER matches the certificate header
+        let settled_ler = network_info
+            .settled_ler
+            .unwrap_or_else(|| panic!("Network {} missing settled_ler", network_id));
+        assert_eq!(
+            settled_ler, header.new_local_exit_root,
+            "Network {} settled_ler mismatch",
+            network_id
+        );
+
+        // Assert LET leaf count is present (generator sets it to num_leaves: 2-4)
+        let leaf_count = network_info
+            .settled_let_leaf_count
+            .unwrap_or_else(|| panic!("Network {} missing settled_let_leaf_count", network_id));
+        assert!(
+            leaf_count >= 2 && leaf_count < 5,
+            "Network {} has unexpected leaf_count {} (expected 2-4 based on generator)",
+            network_id,
+            leaf_count
+        );
+
+        // Assert PP root is present (32 bytes)
+        let pp_root = network_info
+            .settled_pp_root
+            .unwrap_or_else(|| panic!("Network {} missing settled_pp_root", network_id));
+        assert_eq!(
+            pp_root.0.len(),
+            32,
+            "Network {} settled_pp_root has incorrect length",
+            network_id
+        );
+
+        // Assert SettledClaim is present with valid 32-byte digests
+        let claim = network_info
+            .settled_claim
+            .unwrap_or_else(|| panic!("Network {} missing settled_claim", network_id));
+        assert_eq!(
+            claim.global_index.0.len(),
+            32,
+            "Network {} global_index has incorrect length",
+            network_id
+        );
+        assert_eq!(
+            claim.bridge_exit_hash.0.len(),
+            32,
+            "Network {} bridge_exit_hash has incorrect length",
+            network_id
+        );
+
+        // Assert LatestPendingHeight matches expected value (last certificate height)
+        let pending_height = network_info
+            .latest_pending_height
+            .unwrap_or_else(|| panic!("Network {} missing latest_pending_height", network_id));
+        assert_eq!(
+            pending_height.as_u64(),
+            fixture.metadata.config.certificates_per_network - 1,
+            "Network {} latest_pending_height mismatch",
+            network_id
+        );
+    }
 }
 
 #[test]

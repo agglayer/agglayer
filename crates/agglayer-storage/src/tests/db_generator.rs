@@ -361,16 +361,17 @@ pub fn generate_state_db(
             // Create appropriate value based on discriminant with realistic random data
             let value = match kind {
                 crate::types::network_info::v0::network_info_value::ValueDiscriminants::NetworkType => {
-                    // Vary network type based on network_id
-                    let network_type = match network_id.to_u32() % 4 {
-                        0 => crate::types::network_info::v0::NetworkType::Ecdsa,
-                        1 => crate::types::network_info::v0::NetworkType::Generic,
-                        2 => crate::types::network_info::v0::NetworkType::MultisigOnly,
-                        _ => crate::types::network_info::v0::NetworkType::MultisigAndAggchainProof,
-                    };
+                    // Generate network type using seed for deterministic results
+                    let network_type_seed = config
+                        .seed
+                        .wrapping_add(network_id.to_u32() as u64)
+                        .wrapping_add(5000); // Add offset to differentiate from other random values
+                    let network_type = agglayer_types::NetworkType::generate_for_test(network_type_seed);
+                    // Convert to storage type
+                    let storage_network_type: crate::types::network_info::v0::NetworkType = network_type.into();
                     NetworkInfoValue {
                         value: Some(crate::types::network_info::v0::network_info_value::Value::NetworkType(
-                            network_type as i32,
+                            storage_network_type as i32,
                         )),
                     }
                 }
