@@ -117,3 +117,11 @@ fn extra_certificate_signers() {
         alloy_primitives::address!("abcdefabcdefabcdefabcdefabcdefabcdefabcd").0
     );
 }
+
+#[test]
+fn fail_on_depecated_outbound_section() {
+    let input = "./tests/fixtures/valide_config/deprecated_outbound.toml";
+
+    let maybe_config: Result<Config, _> = toml::from_str(&std::fs::read_to_string(input).unwrap());
+    assert!(maybe_config.is_err());
+}
