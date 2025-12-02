@@ -48,7 +48,6 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
-
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
         epoch_number: EpochNumber,
@@ -57,10 +56,11 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
         backup_client: BackupClient,
     ) -> Result<Self, Error> {
+        let db = Arc::new(DB::open_cf(
+            &config.storage.epoch_db_path(epoch_number),
+            epochs_db_cf_definitions(),
+        )?);
 
-
-        let db = Arc::new(DB::open_cf(&config.storage.epoch_db_path(epoch_number), epochs_db_cf_definitions())?);
-        
         Self::try_open_with_db(
             db,
             epoch_number,
@@ -80,17 +80,19 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        
-        let db = Arc::new(DB::open_cf_readonly(&config.storage.epoch_db_path(epoch_number), epochs_db_cf_definitions())?);
-        
+        let db = Arc::new(DB::open_cf_readonly(
+            &config.storage.epoch_db_path(epoch_number),
+            epochs_db_cf_definitions(),
+        )?);
+
         Self::try_open_with_db(
             db,
             epoch_number,
             pending_store,
             state_store,
-            None, // No start checkpoint for readonly
+            None,                 // No start checkpoint for readonly
             BackupClient::noop(), // No backup needed for readonly access
-            true, // readonly mode
+            true,                 // readonly mode
         )
     }
 
@@ -191,7 +193,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 if checkpoint.is_empty() {
                     if next_certificate_index.load(Ordering::Relaxed) != 0 {
                         return Err(Error::Unexpected(
-                            "End checkpoint is empty, but there are certificates in the DB".to_string(),
+                            "End checkpoint is empty, but there are certificates in the DB"
+                                .to_string(),
                         ))?;
                     }
 
@@ -281,7 +284,7 @@ where
         );
         let end_checkpoint_entry = end_checkpoint.entry(network_id);
 
-        let end_checkpoint_entry_assigment;
+        let end_checkpoint_entry_assignment;
 
         // Fetch the network current point for this epoch
         match (start_checkpoint, &end_checkpoint_entry) {
@@ -308,7 +311,7 @@ where
                     network_id
                 );
                 // Adding the network to the end checkpoint.
-                end_checkpoint_entry_assigment = Some(Height::ZERO);
+                end_checkpoint_entry_assignment = Some(Height::ZERO);
 
                 // Adding the certificate to the DB
             }
@@ -319,7 +322,9 @@ where
             }
             // If the network is found in the end checkpoint and the height is 0,
             // this is an invalid certificate candidate and the operation should fail.
-            (Some(_start_height), Entry::Occupied(ref current_height)) if height == Height::ZERO => {
+            (Some(_start_height), Entry::Occupied(ref current_height))
+                if height == Height::ZERO =>
+            {
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
                     height,
@@ -339,7 +344,7 @@ where
                     height
                 );
 
-                end_checkpoint_entry_assigment = Some(height);
+                end_checkpoint_entry_assignment = Some(height);
             }
 
             (_, Entry::Occupied(current_height)) => {
@@ -371,7 +376,8 @@ where
                 )
             })?;
 
-        let certificate_index = CertificateIndex::new(self.next_certificate_index.fetch_add(1, Ordering::SeqCst));
+        let certificate_index =
+            CertificateIndex::new(self.next_certificate_index.fetch_add(1, Ordering::SeqCst));
 
         // TODO: all of this need to be batched
 
@@ -403,7 +409,7 @@ where
             epoch_number = %self.epoch_number,
             "Certificate assigned to epoch"
         );
-        if let Some(height) = end_checkpoint_entry_assigment {
+        if let Some(height) = end_checkpoint_entry_assignment {
             let entry = end_checkpoint_entry.or_default();
             *entry = height;
 

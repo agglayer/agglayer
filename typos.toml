@@ -1,0 +1,7 @@
+[default]
+extend-ignore-identifiers-re = [
+    "[g|G]roth16",
+]
+
+[files]
+extend-exclude = ["*.snap"]

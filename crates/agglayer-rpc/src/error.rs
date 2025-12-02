@@ -162,7 +162,7 @@ pub enum GetLatestSettledClaimError {
     #[error(transparent)]
     Storage(#[from] StorageError),
 
-    #[error("Cound not get latest settled claim, inconsistent state for {network_id}")]
+    #[error("Could not get latest settled claim, inconsistent state for {network_id}")]
     InconsistentState {
         network_id: NetworkId,
         height: Height,
