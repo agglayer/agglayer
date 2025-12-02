@@ -197,6 +197,9 @@ pub fn generate_state_db(
         let initial_ler: LocalExitRoot = LocalExitTree::<32>::default().get_root().into();
         let mut prev_local_exit_root = initial_ler;
 
+        // Track the latest settled certificate for this network
+        let mut latest_settled_cert: Option<(CertificateId, Height, CertificateHeader)> = None;
+
         // Generate certificates for this network
         for height in 0..config.certificates_per_network {
             let height = Height::from(height);
@@ -264,27 +267,30 @@ pub fn generate_state_db(
                 .entry("certificate_header_cf".to_string())
                 .or_insert(0) += 1;
 
-            // 3. LatestSettledCertificatePerNetwork (only for the last certificate if it's
-            //    settled)
-            if height.as_u64() == config.certificates_per_network - 1
-                && matches!(header.status, CertificateStatus::Settled)
-            {
-                let settled_cert = SettledCertificate(
-                    cert_id,
-                    height,
-                    header
-                        .epoch_number
-                        .expect("Settled certificate should have epoch_number"),
-                    header
-                        .certificate_index
-                        .expect("Settled certificate should have certificate_index"),
-                );
-                db.put::<LatestSettledCertificatePerNetworkColumn>(&network_id, &settled_cert)?;
-                *result
-                    .entries_per_cf
-                    .entry("latest_settled_certificate_per_network_cf".to_string())
-                    .or_insert(0) += 1;
+            // 3. Track the latest settled certificate for this network
+            if matches!(header.status, CertificateStatus::Settled) {
+                latest_settled_cert = Some((cert_id, height, header.clone()));
             }
+        }
+
+        // After processing all certificates, write the latest settled certificate if
+        // found
+        if let Some((cert_id, height, header)) = latest_settled_cert {
+            let settled_cert = SettledCertificate(
+                cert_id,
+                height,
+                header
+                    .epoch_number
+                    .expect("Settled certificate should have epoch_number"),
+                header
+                    .certificate_index
+                    .expect("Settled certificate should have certificate_index"),
+            );
+            db.put::<LatestSettledCertificatePerNetworkColumn>(&network_id, &settled_cert)?;
+            *result
+                .entries_per_cf
+                .entry("latest_settled_certificate_per_network_cf".to_string())
+                .or_insert(0) += 1;
         }
 
         // 4. LocalExitTree: Generate a small exit tree with a few leaves

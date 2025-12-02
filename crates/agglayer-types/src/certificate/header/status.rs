@@ -2,7 +2,9 @@ use std::fmt;
 
 use crate::CertificateStatusError;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, strum_macros::EnumCount,
+)]
 pub enum CertificateStatus {
     /// Received certificate from the network, nothing checked yet.
     ///
@@ -70,13 +72,31 @@ impl CertificateStatus {
     /// explicitly.
     pub fn generate_for_test(seed: u64) -> Self {
         use rand::{Rng, SeedableRng};
+        use strum::EnumCount;
+
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
-        match rng.random_range(0..4) {
+        // Total enum variants count (derived from strum::EnumCount)
+        const EXPECTED_VARIANTS: usize = 5;
+        // Test variants count (excluding InError for simplicity)
+        const TEST_VARIANTS: u32 = 4;
+
+        // Ensure we have the expected number of enum variants
+        assert_eq!(
+            Self::COUNT,
+            EXPECTED_VARIANTS,
+            "CertificateStatus variant count mismatch: expected {}, got {}. Update \
+             generate_for_test if variants changed.",
+            EXPECTED_VARIANTS,
+            Self::COUNT
+        );
+
+        match rng.random_range(0..TEST_VARIANTS) {
             0 => CertificateStatus::Pending,
             1 => CertificateStatus::Proven,
             2 => CertificateStatus::Candidate,
-            _ => CertificateStatus::Settled,
+            3 => CertificateStatus::Settled,
+            _ => unreachable!("random_range(0..{}) can only produce 0-3", TEST_VARIANTS),
         }
     }
 }

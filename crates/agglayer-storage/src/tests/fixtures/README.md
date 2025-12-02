@@ -16,27 +16,27 @@ These fixtures ensure that:
 Reference database generated with the following configuration:
 
 - **Version**: 1.0.0
-- **Generation date**: 2025-11-20
+- **Generation date**: 2025-12-02
 - **Networks**: 3
-- **Certificates per network**: 10
-- **Total certificates**: 30
+- **Certificates per network**: 20
+- **Total certificates**: 60
 - **Seed**: 42 (for reproducibility)
 - **Proofs**: Included (mock proofs for testing)
-- **Size**: ~80 KB compressed
+- **Size**: ~111 KB compressed
 
 #### Column Families Included
 
-The database contains data across **17 column families**:
+The database contains data across **18 column families**:
 
 **State Database:**
-- `certificate_header_cf` (30 entries) - Headers with epoch/index mapping
-- `certificate_per_network_cf` (30 entries) - Network-height to cert ID mapping
-- `latest_settled_certificate_per_network_cf` (3 entries) - Latest settled cert per network
+- `certificate_header_cf` (60 entries) - Headers with epoch/index mapping
+- `certificate_per_network_cf` (60 entries) - Network-height to cert ID mapping
+- `latest_settled_certificate_per_network_cf` (3 entries) - Latest settled certificate per network
 - `disabled_networks_cf` (1 entry) - Networks that have been disabled (~30% randomly)
 - `metadata_cf` (1 entry) - Global metadata (latest settled epoch)
-- `local_exit_tree_per_network_cf` (19 entries) - LET leaves, leaf count, frontier nodes
-- `balance_tree_per_network_cf` (15 entries) - Sparse merkle tree nodes for balances
-- `nullifier_tree_per_network_cf` (3 entries) - Nullifier tree roots
+- `local_exit_tree_per_network_cf` (105 entries) - LET leaves (2-4 per network), leaf count, and 32 frontier nodes per network (properly computed)
+- `balance_tree_per_network_cf` (24 entries) - Sparse merkle tree nodes with proper keccak256-based hash derivation
+- `nullifier_tree_per_network_cf` (24 entries) - Nullifier tree nodes with proper cryptographic structure
 - `network_info_cf` (12 entries) - Network type, settled cert info, claims, pending cert info
 
 **Pending Database:**
@@ -46,14 +46,14 @@ The database contains data across **17 column families**:
 - `proof_per_certificate_cf` (1 entry) - Proofs for certificates
 
 **Epochs Database:**
-- `per_epoch_certificates_cf` (30 entries) - Certificates indexed by epoch
-- `per_epoch_metadata_cf` (24 entries) - Per-epoch metadata (settlement tx hash, packed status)
-- `per_epoch_proofs_cf` (30 entries) - Proofs indexed by epoch
+- `per_epoch_certificates_cf` (60 entries) - Certificates indexed by epoch
+- `per_epoch_metadata_cf` (42 entries) - Per-epoch metadata (settlement tx hash, packed status)
+- `per_epoch_proofs_cf` (60 entries) - Proofs indexed by epoch
 
 **Debug Database:**
-- `debug_certificates` (30 entries) - Full certificate data for debugging
+- `debug_certificates` (60 entries) - Full certificate data for debugging
 
-**Total**: 241 entries across all databases
+**Total**: 525 entries across all databases
 
 #### Data Characteristics
 
@@ -63,7 +63,7 @@ All data is generated using a seeded random number generator (seed: 42) for repr
 - **Network Types**: Varied across Ecdsa, Generic, MultisigOnly, MultisigAndAggchainProof
 - **Network Info**: Realistic random hashes for pp_root, LER, global indexes, bridge exit hashes
 - **Disabled Networks**: ~30% randomly disabled with Admin/Unspecified reasons and random timestamps
-- **Trees**: Random sparse merkle tree structures with multiple nodes and leaves
+- **Trees**: Cryptographically correct sparse merkle trees with keccak256-derived node hashes and proper frontier computation for Local Exit Trees
 - **Epochs**: 3 certificates per epoch (configurable via `CERTIFICATES_PER_EPOCH` constant)
 
 ## Regenerating Artifacts
@@ -75,7 +75,7 @@ If you need to regenerate these artifacts (e.g., after intentional serialization
 cargo run -p agglayer-storage --bin generate-test-db --features "testutils,cli" -- \
   --output-dir ./temp/reference_db_v1 \
   --num-networks 3 \
-  --certificates-per-network 10 \
+  --certificates-per-network 20 \
   --seed 42 \
   --tarball \
   --tarball-name reference_db_v1.tar.gz

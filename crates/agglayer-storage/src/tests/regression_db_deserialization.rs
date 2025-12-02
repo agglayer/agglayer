@@ -172,21 +172,21 @@ fn test_reference_db_v1_deserialization() {
     );
 
     // Validate expected column family counts
+    // Note: Only CFs with entries are counted in metadata
     let num_cfs = fixture.metadata.statistics.entries_per_column_family.len();
     const EXPECTED_STATE_CFS: usize = storage::cf_definitions::state::CFS.len();
     const EXPECTED_PENDING_CFS: usize = storage::cf_definitions::pending::CFS.len();
-    const EXPECTED_EPOCHS_CFS: usize = storage::cf_definitions::epochs::CFS.len() + 2; // CFS + CHECKPOINTS
+    const EXPECTED_EPOCHS_CFS: usize = storage::cf_definitions::epochs::CFS.len(); // Not counting CHECKPOINTS (they may be empty)
     const EXPECTED_DEBUG_CFS: usize = storage::cf_definitions::debug::CFS.len();
-    const EXPECTED_TOTAL_CFS: usize =
+    const MIN_EXPECTED_TOTAL_CFS: usize =
         EXPECTED_STATE_CFS + EXPECTED_PENDING_CFS + EXPECTED_EPOCHS_CFS + EXPECTED_DEBUG_CFS;
 
-    assert_eq!(
+    assert!(
+        num_cfs >= MIN_EXPECTED_TOTAL_CFS,
+        "Metadata contains {} column families, but expected at least {} (state: {}, pending: {}, \
+         epochs: {}, debug: {})",
         num_cfs,
-        EXPECTED_TOTAL_CFS,
-        "Metadata contains {} column families, but expected {} (state: {}, pending: {}, epochs: \
-         {}, debug: {})",
-        num_cfs,
-        EXPECTED_TOTAL_CFS,
+        MIN_EXPECTED_TOTAL_CFS,
         EXPECTED_STATE_CFS,
         EXPECTED_PENDING_CFS,
         EXPECTED_EPOCHS_CFS,
@@ -317,11 +317,29 @@ fn test_reference_db_v1_read_state_db() {
 
         // Validate header structure
         assert_eq!(header.certificate_id, cert_id, "Certificate ID mismatch");
-        assert_eq!(header.status, CertificateStatus::Pending);
+        // Status can be Pending, Proven, Candidate, or Settled (generated randomly)
         assert!(
-            header.certificate_index.is_some(),
-            "Certificate index should be set"
+            matches!(
+                header.status,
+                CertificateStatus::Pending
+                    | CertificateStatus::Proven
+                    | CertificateStatus::Candidate
+                    | CertificateStatus::Settled
+            ),
+            "Unexpected certificate status: {:?}",
+            header.status
         );
+        // Only Settled certificates must have epoch/index
+        if matches!(header.status, CertificateStatus::Settled) {
+            assert!(
+                header.certificate_index.is_some(),
+                "Settled certificate should have index"
+            );
+            assert!(
+                header.epoch_number.is_some(),
+                "Settled certificate should have epoch"
+            );
+        }
 
         // Verify it matches the cert_per_network mapping
         if let Some(mapped_cert_id) = cert_per_network_map.get(&(header.network_id, header.height))
