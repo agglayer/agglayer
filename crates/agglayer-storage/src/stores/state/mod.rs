@@ -21,23 +21,12 @@ use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
     columns::{
-        balance_tree_per_network::BalanceTreePerNetworkColumn,
-        certificate_header::CertificateHeaderColumn,
-        certificate_per_network::{self, CertificatePerNetworkColumn},
-        latest_settled_certificate_per_network::{
+        ColumnSchema, balance_tree_per_network::BalanceTreePerNetworkColumn, certificate_header::CertificateHeaderColumn, certificate_per_network::{self, CertificatePerNetworkColumn}, latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
-        },
-        local_exit_tree_per_network as LET,
-        metadata::MetadataColumn,
-        nullifier_tree_per_network::NullifierTreePerNetworkColumn,
-        ColumnSchema,
-    },
-    error::Error,
-    storage::{
-        backup::{BackupClient, BackupRequest},
-        DB,
-    },
-    types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
+        }, local_exit_tree_per_network as LET, metadata::MetadataColumn, nullifier_tree_per_network::NullifierTreePerNetworkColumn
+    }, error::Error, storage::{
+        DB, backup::{BackupClient, BackupRequest}
+    }, stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate}, types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue}
 };
 
 #[cfg(test)]
@@ -93,13 +82,14 @@ impl StateWriter for StateStore {
         &self,
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
-        force: bool,
+        force: UpdateEvenIfAlreadyPresent,
+        set_status: UpdateStatusToCandidate,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hash.is_some() && !force {
+            if certificate_header.settlement_tx_hash.is_some() && force != UpdateEvenIfAlreadyPresent::Yes {
                 return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that already has a \
                      settlement tx hash"
@@ -115,7 +105,9 @@ impl StateWriter for StateStore {
             }
 
             certificate_header.settlement_tx_hash = Some(tx_hash);
-            certificate_header.status = CertificateStatus::Candidate;
+            if set_status == UpdateStatusToCandidate::Yes {
+                certificate_header.status = CertificateStatus::Candidate;
+            }
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
