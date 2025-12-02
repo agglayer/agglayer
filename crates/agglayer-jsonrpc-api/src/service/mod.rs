@@ -57,6 +57,24 @@ where
             return Err(SendTxError::RollupNotRegistered { rollup_id });
         }
 
+        // Reserve a rate limiting slot immediately to prevent verification spam.
+        // This protects against malicious actors flooding the system with invalid
+        // transactions that would otherwise consume resources during verification.
+        let guard = self
+            .kernel
+            .rate_limiter()
+            .reserve_send_tx(tx.tx.rollup_id, tokio::time::Instant::now())?;
+
+        // Fail point for testing: allows injecting delay after slot reservation
+        // to test parallel request handling and rate limiting behavior.
+        #[cfg(feature = "testutils")]
+        fail::fail_point!("jsonrpc_api::send_tx::after_reserve", |ms| {
+            if let Some(ms_str) = ms {
+                let delay = ms_str.parse::<u64>().unwrap_or(0);
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
+        });
+
         self.kernel
             .verify_tx_signature(&tx)
             .await
@@ -101,12 +119,6 @@ where
         .await;
 
         verification?;
-
-        // Reserve settlement slot after successful verifications.
-        let guard = self
-            .kernel
-            .rate_limiter()
-            .reserve_send_tx(tx.tx.rollup_id, tokio::time::Instant::now())?;
 
         agglayer_telemetry::CHECK_TX.add(1, metrics_attrs);
 
