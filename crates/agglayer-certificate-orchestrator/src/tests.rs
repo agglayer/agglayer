@@ -18,7 +18,8 @@ use agglayer_storage::{
     stores::{
         epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
         EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
-        PerEpochWriter, StateReader, StateWriter,
+        PerEpochWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+        UpdateStatusToCandidate,
     },
     tests::{
         mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
@@ -310,7 +311,8 @@ impl StateWriter for DummyPendingStore {
         &self,
         _certificate_id: &CertificateId,
         _tx_hash: SettlementTxHash,
-        _force: bool,
+        _force: UpdateEvenIfAlreadyPresent,
+        _set_status: UpdateStatusToCandidate,
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
