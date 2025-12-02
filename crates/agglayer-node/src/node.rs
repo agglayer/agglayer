@@ -3,7 +3,9 @@ use std::{num::NonZeroU64, sync::Arc};
 use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
-use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
+use agglayer_config::{
+    outbound::OutboundRpcSettleConfig, storage::backup::BackupConfig, Config, Epoch,
+};
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
@@ -185,6 +187,14 @@ impl Node {
         // Create RPC clients, note that they can be the same signer
         // or not depending on the configuration. If is the same signer
         // we share the nonce management too.
+
+        if config.outbound.rpc.settle_tx != OutboundRpcSettleConfig::default() {
+            warn!(
+                "Using non-default values for outbound settle_tx: {:?}",
+                config.outbound.rpc.settle_tx
+            );
+        }
+
         let (rpc_pp_settlement, rpc_tx_settlement) = {
             // We will use the same parameterization to create both providers.
             let fn_build_provider = |signer: ConfiguredSigner| {
