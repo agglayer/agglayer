@@ -7,7 +7,7 @@
 //! The test databases are stored as compressed artifacts in `tests/fixtures/`
 //! and are extracted to temporary locations before testing.
 //!
-//! ## Validation Checksj
+//! ## Validation Checks
 //!
 //! Each test performs comprehensive validation to ensure data integrity:
 //!
@@ -50,9 +50,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use tempfile::TempDir;
+
 use crate::{
     storage::{
-        debug_db_cf_definitions, epochs_db_cf_definitions, pending_db_cf_definitions,
+        self, debug_db_cf_definitions, epochs_db_cf_definitions, pending_db_cf_definitions,
         state_db_cf_definitions, DB,
     },
     tests::db_generator::DatabaseMetadata,
@@ -66,21 +68,16 @@ fn extract_tarball(
     tarball_path: &Path,
     extract_to: &Path,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    use std::process::Command;
+    use flate2::read::GzDecoder;
+    use tar::Archive;
 
     fs::create_dir_all(extract_to)?;
 
-    let output = Command::new("tar")
-        .arg("-xzf")
-        .arg(tarball_path)
-        .arg("-C")
-        .arg(extract_to)
-        .output()?;
+    let file = fs::File::open(tarball_path)?;
+    let decompressor = GzDecoder::new(file);
+    let mut archive = Archive::new(decompressor);
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to extract tarball: {}", stderr).into());
-    }
+    archive.unpack(extract_to)?;
 
     // Return the path to the extracted database directory
     // The tarball contains a directory with the same name as the tarball (minus
@@ -106,7 +103,7 @@ fn read_metadata(db_path: &Path) -> Result<DatabaseMetadata, Box<dyn std::error:
 struct TestFixture {
     pub db_path: PathBuf,
     pub metadata: DatabaseMetadata,
-    temp_dir: PathBuf,
+    _temp_dir: TempDir,
 }
 
 impl TestFixture {
@@ -120,22 +117,17 @@ impl TestFixture {
             tarball_path.display()
         );
 
-        let temp_dir = std::env::temp_dir().join(format!(
-            "agglayer_regression_test_{}_{}",
-            test_name,
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-        ));
+        let temp_dir = TempDir::with_prefix(format!("agglayer_regression_test_{}_", test_name))
+            .expect("Failed to create temporary directory");
 
-        let db_path = extract_tarball(&tarball_path, &temp_dir).expect("Failed to extract tarball");
+        let db_path =
+            extract_tarball(&tarball_path, temp_dir.path()).expect("Failed to extract tarball");
         let metadata = read_metadata(&db_path).expect("Failed to read metadata");
 
         Self {
             db_path,
             metadata,
-            temp_dir,
+            _temp_dir: temp_dir,
         }
     }
 
@@ -164,12 +156,6 @@ impl TestFixture {
     }
 }
 
-impl Drop for TestFixture {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.temp_dir);
-    }
-}
-
 /// Simplified test that validates we can open all databases and they contain
 /// the expected number of entries according to the metadata.
 #[test]
@@ -185,9 +171,29 @@ fn test_reference_db_v1_deserialization() {
         fixture.metadata.config.seed
     );
 
+    // Validate expected column family counts
+    let num_cfs = fixture.metadata.statistics.entries_per_column_family.len();
+    const EXPECTED_STATE_CFS: usize = storage::cf_definitions::state::CFS.len();
+    const EXPECTED_PENDING_CFS: usize = storage::cf_definitions::pending::CFS.len();
+    const EXPECTED_EPOCHS_CFS: usize = storage::cf_definitions::epochs::CFS.len() + 2; // CFS + CHECKPOINTS
+    const EXPECTED_DEBUG_CFS: usize = storage::cf_definitions::debug::CFS.len();
+    const EXPECTED_TOTAL_CFS: usize =
+        EXPECTED_STATE_CFS + EXPECTED_PENDING_CFS + EXPECTED_EPOCHS_CFS + EXPECTED_DEBUG_CFS;
+
+    assert_eq!(
+        num_cfs,
+        EXPECTED_TOTAL_CFS,
+        "Metadata contains {} column families, but expected {} (state: {}, pending: {}, epochs: \
+         {}, debug: {})",
+        num_cfs,
+        EXPECTED_TOTAL_CFS,
+        EXPECTED_STATE_CFS,
+        EXPECTED_PENDING_CFS,
+        EXPECTED_EPOCHS_CFS,
+        EXPECTED_DEBUG_CFS,
+    );
+
     // Open databases in read-only mode
-    // This is the main regression test - if deserialization format changed
-    // incompatibly, opening the database would fail
     let _state_db = fixture
         .open_state_db()
         .expect("Failed to open state DB - serialization format may have changed!");
@@ -200,24 +206,6 @@ fn test_reference_db_v1_deserialization() {
     let _debug_db = fixture
         .open_debug_db()
         .expect("Failed to open debug DB - serialization format may have changed!");
-
-    println!("\n✅ All databases successfully opened!");
-    println!("✅ Column families are accessible");
-    println!(
-        "✅ Expected {} total entries across {} column families",
-        fixture
-            .metadata
-            .statistics
-            .entries_per_column_family
-            .values()
-            .sum::<usize>(),
-        fixture.metadata.statistics.entries_per_column_family.len()
-    );
-
-    println!("\nExpected entries per column family:");
-    for (cf, count) in &fixture.metadata.statistics.entries_per_column_family {
-        println!("  {}: {} entries", cf, count);
-    }
 }
 
 #[test]
@@ -364,7 +352,13 @@ fn test_reference_db_v1_read_state_db() {
             .expect("Settled cert not found");
 
         // Validate that this certificate exists in headers
-        if let Some(header) = headers.get(&settled_cert.0) {
+        {
+            let header = headers.get(&settled_cert.0).unwrap_or_else(|| {
+                panic!(
+                    "Settled certificate {} not found in headers",
+                    settled_cert.0
+                )
+            });
             assert_eq!(
                 header.network_id, network_id,
                 "Settled cert network mismatch"
@@ -382,11 +376,6 @@ fn test_reference_db_v1_read_state_db() {
             assert!(
                 header.certificate_index.is_some(),
                 "Header should have certificate index"
-            );
-        } else {
-            panic!(
-                "Settled certificate {} not found in headers",
-                settled_cert.0
             );
         }
 
@@ -435,14 +424,8 @@ fn test_reference_db_v1_read_state_db() {
         "   ✅ Reconstructed local exit trees for {} networks",
         let_per_network.len()
     );
-    for (network_id, (leaf_count, leaves, frontiers)) in &let_per_network {
-        println!(
-            "      Network {}: {} leaves, {} leaf hashes, {} frontier nodes",
-            network_id,
-            leaf_count,
-            leaves.len(),
-            frontiers.len()
-        );
+    for (leaf_count, leaves, _frontiers) in let_per_network.values() {
+        assert_eq!(*leaf_count as usize, leaves.len());
     }
 
     // 5. Read and validate BalanceTree per network
@@ -477,7 +460,9 @@ fn test_reference_db_v1_read_state_db() {
             (SmtKeyType::Node(_hash), SmtValue::Leaf(value)) => {
                 entry.2.push(value);
             }
-            _ => {}
+            _ => {
+                panic!("Invalid LET key/value combination");
+            }
         }
     }
     println!(
@@ -510,6 +495,8 @@ fn test_reference_db_v1_read_state_db() {
 
             if let SmtValue::Node(left, right) = value {
                 nullifier_roots.insert(NetworkId::new(key.network_id), (left, right));
+            } else {
+                panic!("Invalid SMT key/value combination");
             }
         }
     }
@@ -547,7 +534,9 @@ fn test_reference_db_v1_read_state_db() {
             Some(crate::types::network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(info)) => {
                 info_types.push(format!("PendingCert(height={})", info.height.map_or(0, |h| h.height)));
             }
-            None => {}
+            None => {
+                panic!("Unexpected value");
+            }
         }
     }
     println!(
@@ -873,8 +862,8 @@ fn test_reference_db_v1_read_pending_db() {
                 network_id
             );
         } else {
-            println!(
-                "      ⚠️  Latest pending cert for network {} (height {}) not in pending queue",
+            panic!(
+                "⚠️  Latest pending cert for network {} (height {}) not in pending queue",
                 network_id, pending_cert.1
             );
         }
@@ -955,8 +944,8 @@ fn test_reference_db_v1_read_pending_db() {
     // pending_queue
     for (network_id, pending_cert) in &latest_pending {
         if !pending_queue.contains_key(&(*network_id, pending_cert.1)) {
-            println!(
-                "   ⚠️  Network {} has latest_pending but no entry in pending_queue at height {}",
+            panic!(
+                "⚠️  Network {} has latest_pending but no entry in pending_queue at height {}",
                 network_id, pending_cert.1
             );
         }
@@ -1070,6 +1059,13 @@ fn test_reference_db_v1_read_pending_db() {
 
     // 4. Verify proofs if present
     if !proofs.is_empty() {
+        // If we have proofs, the metadata should indicate proof generation was enabled
+        assert!(
+            fixture.metadata.config.generate_proofs,
+            "Found {} proofs in database, but metadata.config.generate_proofs is false",
+            proofs.len()
+        );
+
         for cert_id in proofs.keys() {
             assert_ne!(
                 *cert_id,
@@ -1082,7 +1078,12 @@ fn test_reference_db_v1_read_pending_db() {
             proofs.len()
         );
     } else {
-        println!("  ℹ️  No proofs present (proof generation may be disabled)");
+        // If no proofs, the metadata should indicate proof generation was disabled
+        assert!(
+            !fixture.metadata.config.generate_proofs,
+            "No proofs found in database, but metadata.config.generate_proofs is true"
+        );
+        println!("  ✅ No proofs present (proof generation disabled in metadata)");
     }
 
     // 5. Verify pending queue height ranges per network
@@ -1142,24 +1143,55 @@ fn test_reference_db_v1_read_pending_db() {
     }
     println!("  ✅ LocalExitRoot chains are valid in pending certificates");
 
-    // 7. Verify all expected column families have data
-    let expected_cfs = vec![
-        "pending_queue_cf",
-        "latest_pending_certificate_per_network_cf",
-        "latest_proven_certificate_per_network_cf",
-    ];
+    // 7. Verify actual data counts match metadata
+    println!("\n=== Verifying Data Counts Match Metadata ===");
 
-    for cf in expected_cfs {
-        if let Some(count) = fixture
-            .metadata
-            .statistics
-            .entries_per_column_family
-            .get(cf)
-        {
-            assert!(*count > 0, "Expected column family {} to have entries", cf);
-        }
-    }
-    println!("  ✅ All expected column families have data");
+    let metadata_pending_queue = fixture
+        .metadata
+        .statistics
+        .entries_per_column_family
+        .get("pending_queue_cf")
+        .copied()
+        .unwrap_or(0);
+    assert_eq!(
+        pending_queue.len(),
+        metadata_pending_queue,
+        "Pending queue count mismatch: actual {} vs metadata {}",
+        pending_queue.len(),
+        metadata_pending_queue
+    );
+
+    let metadata_latest_pending = fixture
+        .metadata
+        .statistics
+        .entries_per_column_family
+        .get("latest_pending_certificate_per_network_cf")
+        .copied()
+        .unwrap_or(0);
+    assert_eq!(
+        latest_pending.len(),
+        metadata_latest_pending,
+        "Latest pending count mismatch: actual {} vs metadata {}",
+        latest_pending.len(),
+        metadata_latest_pending
+    );
+
+    let metadata_latest_proven = fixture
+        .metadata
+        .statistics
+        .entries_per_column_family
+        .get("latest_proven_certificate_per_network_cf")
+        .copied()
+        .unwrap_or(0);
+    assert_eq!(
+        latest_proven.len(),
+        metadata_latest_proven,
+        "Latest proven count mismatch: actual {} vs metadata {}",
+        latest_proven.len(),
+        metadata_latest_proven
+    );
+
+    println!("  ✅ All data counts match metadata statistics");
 
     println!("\n✅ Successfully reconstructed and validated all pending database data!");
     println!("   All structures match expected format and are internally consistent.");
@@ -1170,275 +1202,138 @@ fn test_reference_db_v1_read_pending_db() {
 fn test_reference_db_v1_read_network_info() {
     // Comprehensive test reading and reconstructing NetworkInfo data
     // This validates the structure generated in generate_state_db (step 7)
-    use std::collections::BTreeMap;
+    // Uses the NetworkInfoReader trait to read network info in a type-safe manner
+    use std::{collections::BTreeSet, sync::Arc};
 
     use agglayer_types::NetworkId;
 
     use crate::{
         columns::network_info::NetworkInfoColumn,
-        types::network_info::{
-            v0::{
-                network_info_value::Value as InfoValue, LatestPendingCertificateInfo,
-                SettledCertificate as NetworkInfoSettledCert, SettledClaim,
-            },
-            Key as NetworkInfoKey, Value as NetworkInfoValue,
-        },
+        storage::backup::BackupClient,
+        stores::{state::StateStore, NetworkInfoReader},
+        types::network_info::Key as NetworkInfoKey,
     };
 
     let fixture = TestFixture::new("netinfo");
     let state_db = fixture.open_state_db().expect("Failed to open state DB");
 
-    println!("=== Reconstructing NetworkInfo (Reverse of generate_state_db step 7) ===\n");
+    println!("=== Reading NetworkInfo using NetworkInfoReader trait ===\n");
 
-    // Structure to hold all network info per network
-    #[derive(Default)]
-    struct NetworkInfo {
-        network_type: Option<i32>,
-        settled_certificate: Option<NetworkInfoSettledCert>,
-        settled_claim: Option<SettledClaim>,
-        pending_certificate_info: Option<LatestPendingCertificateInfo>,
-    }
-
-    let mut network_info_map: BTreeMap<NetworkId, NetworkInfo> = BTreeMap::new();
+    // Collect all unique network IDs from the database
+    let mut network_ids = BTreeSet::new();
     let mut total_entries = 0;
-
-    // Read all NetworkInfo entries
-    println!("Reading network_info_cf...");
+    println!("Collecting network IDs from network_info_cf...");
     for key_result in state_db
         .keys::<NetworkInfoColumn>()
         .expect("Failed to iterate")
     {
         let key: NetworkInfoKey = key_result.expect("Failed to read key");
-        let value: NetworkInfoValue = state_db
-            .get::<NetworkInfoColumn>(&key)
-            .expect("Failed to read value")
-            .expect("Value not found");
-
-        let network_id = NetworkId::new(key.network_id);
-        let info = network_info_map.entry(network_id).or_default();
-
-        // Parse and store each value type
-        match value.value {
-            Some(InfoValue::NetworkType(nt)) => {
-                assert!(
-                    info.network_type.is_none(),
-                    "Duplicate NetworkType for network {}",
-                    network_id
-                );
-                info.network_type = Some(nt); // i32 enum value
-            }
-            Some(InfoValue::SettledCertificate(sc)) => {
-                assert!(
-                    info.settled_certificate.is_none(),
-                    "Duplicate SettledCertificate for network {}",
-                    network_id
-                );
-                // Structure can have Some or None fields depending on database version
-                // Just validate it deserializes correctly
-                info.settled_certificate = Some(sc);
-            }
-            Some(InfoValue::SettledClaim(claim)) => {
-                assert!(
-                    info.settled_claim.is_none(),
-                    "Duplicate SettledClaim for network {}",
-                    network_id
-                );
-                // Structure can have Some or None fields depending on database version
-                info.settled_claim = Some(claim);
-            }
-            Some(InfoValue::LatestPendingCertificateInfo(pending)) => {
-                assert!(
-                    info.pending_certificate_info.is_none(),
-                    "Duplicate LatestPendingCertificateInfo for network {}",
-                    network_id
-                );
-                // Structure can have Some or None fields depending on database version
-                info.pending_certificate_info = Some(pending);
-            }
-            None => {
-                panic!("NetworkInfo value should not be None");
-            }
-        }
-
+        network_ids.insert(NetworkId::new(key.network_id));
         total_entries += 1;
     }
 
     println!("   ✅ Read {} total NetworkInfo entries", total_entries);
-    println!(
-        "   ✅ Covering {} unique networks\n",
-        network_info_map.len()
-    );
+    println!("   ✅ Covering {} unique networks\n", network_ids.len());
 
-    // Validate and display reconstructed data
-    println!("=== Reconstructed NetworkInfo per Network ===");
-    for (network_id, info) in &network_info_map {
+    // Use NetworkInfoReader to read and validate each network
+    let state_store = StateStore::new(Arc::new(state_db), BackupClient::noop());
+
+    println!("=== Reading NetworkInfo per Network ===");
+    for network_id in &network_ids {
+        let network_info = state_store
+            .get_network_info(*network_id)
+            .expect("Failed to get network info");
+
         println!("\nNetwork {}:", network_id);
 
         // 1. NetworkType
-        if let Some(nt) = info.network_type {
-            let type_name = match nt {
-                0 => "UNSPECIFIED",
-                1 => "ECDSA",
-                2 => "GENERIC",
-                3 => "MULTISIG_ONLY",
-                4 => "MULTISIG_AND_AGGCHAIN_PROOF",
-                _ => "UNKNOWN",
-            };
-            println!("  ✅ NetworkType: {} ({})", nt, type_name);
-        } else {
-            println!("  ⚠️  Missing NetworkType");
-        }
+        println!("  ✅ NetworkType: {:?}", network_info.network_type);
 
-        // 2. SettledCertificate
-        if let Some(sc) = &info.settled_certificate {
-            let pp_root = sc
-                .pp_root
-                .as_ref()
-                .and_then(|r| {
-                    if r.root.is_empty() {
-                        None
-                    } else {
-                        Some(format!(
-                            "0x{}...",
-                            hex::encode(&r.root[..4.min(r.root.len())])
-                        ))
-                    }
-                })
-                .unwrap_or_else(|| "none".to_string());
-            let ler = sc
-                .ler
-                .as_ref()
-                .and_then(|l| {
-                    if l.root.is_empty() {
-                        None
-                    } else {
-                        Some(format!(
-                            "0x{}...",
-                            hex::encode(&l.root[..4.min(l.root.len())])
-                        ))
-                    }
-                })
-                .unwrap_or_else(|| "none".to_string());
-            let leaf_count = sc
-                .let_leaf_count
-                .as_ref()
-                .map(|c| c.settled_let_leaf_count)
-                .unwrap_or(0);
+        // 2. Settled Certificate
+        if let Some(cert_id) = network_info.settled_certificate_id {
+            let height = network_info
+                .settled_height
+                .map_or("none".to_string(), |h| h.to_string());
+            let ler = network_info
+                .settled_ler
+                .map_or("none".to_string(), |l| format!("{:?}", l));
+            let leaf_count = network_info
+                .settled_let_leaf_count
+                .map_or("none".to_string(), |c| c.to_string());
+            let pp_root = network_info
+                .settled_pp_root
+                .map_or("none".to_string(), |r| format!("{:?}", r));
+
             println!(
-                "  ✅ SettledCertificate: pp_root={}, ler={}, leaf_count={}",
-                pp_root, ler, leaf_count
+                "  ✅ SettledCertificate: cert_id={}, height={}, ler={}, leaf_count={}, pp_root={}",
+                cert_id, height, ler, leaf_count, pp_root
             );
         } else {
-            println!("  ⚠️  Missing SettledCertificate");
+            println!("  ⚠️  No SettledCertificate");
         }
 
         // 3. SettledClaim
-        if let Some(claim) = &info.settled_claim {
-            let global_index = claim
-                .global_index
-                .as_ref()
-                .and_then(|gi| {
-                    if gi.value.is_empty() {
-                        None
-                    } else {
-                        Some(format!(
-                            "0x{}...",
-                            hex::encode(&gi.value[..4.min(gi.value.len())])
-                        ))
-                    }
-                })
-                .unwrap_or_else(|| "none".to_string());
-            let bridge_exit = claim
-                .bridge_exit_hash
-                .as_ref()
-                .and_then(|beh| {
-                    if beh.bridge_exit_hash.is_empty() {
-                        None
-                    } else {
-                        Some(format!(
-                            "0x{}...",
-                            hex::encode(&beh.bridge_exit_hash[..4.min(beh.bridge_exit_hash.len())])
-                        ))
-                    }
-                })
-                .unwrap_or_else(|| "none".to_string());
+        if let Some(ref claim) = network_info.settled_claim {
             println!(
                 "  ✅ SettledClaim: global_index={}, bridge_exit_hash={}",
-                global_index, bridge_exit
+                claim.global_index, claim.bridge_exit_hash
             );
         } else {
-            println!("  ⚠️  Missing SettledClaim");
+            println!("  ⚠️  No SettledClaim");
         }
 
         // 4. LatestPendingCertificateInfo
-        if let Some(pending) = &info.pending_certificate_info {
-            let cert_id = pending
-                .id
-                .as_ref()
-                .and_then(|id| {
-                    if id.id.is_empty() {
-                        None
-                    } else {
-                        Some(format!(
-                            "0x{}...",
-                            hex::encode(&id.id[..4.min(id.id.len())])
-                        ))
-                    }
-                })
-                .unwrap_or_else(|| "none".to_string());
-            let height = pending.height.as_ref().map(|h| h.height).unwrap_or(0);
-            println!(
-                "  ✅ LatestPendingCertificateInfo: cert_id={}, height={}",
-                cert_id, height
-            );
+        if let Some(height) = network_info.latest_pending_height {
+            println!("  ✅ LatestPendingHeight: {}", height);
         } else {
-            println!("  ⚠️  Missing LatestPendingCertificateInfo");
+            println!("  ⚠️  No LatestPendingHeight");
         }
 
-        // Validate completeness: all networks should have all 4 info types
-        assert!(
-            info.network_type.is_some(),
-            "Network {} missing NetworkType",
+        // Validate completeness: all networks should have network type and settled data
+        assert_ne!(
+            network_info.network_type,
+            agglayer_types::NetworkType::Unspecified,
+            "Network {} has unspecified NetworkType",
             network_id
         );
         assert!(
-            info.settled_certificate.is_some(),
+            network_info.settled_certificate_id.is_some(),
             "Network {} missing SettledCertificate",
             network_id
         );
         assert!(
-            info.settled_claim.is_some(),
+            network_info.settled_claim.is_some(),
             "Network {} missing SettledClaim",
             network_id
         );
         assert!(
-            info.pending_certificate_info.is_some(),
-            "Network {} missing LatestPendingCertificateInfo",
+            network_info.latest_pending_height.is_some(),
+            "Network {} missing LatestPendingHeight",
             network_id
         );
     }
 
     // Final validation
     println!("\n=== Validation Summary ===");
-    println!("  Networks with complete info: {}", network_info_map.len());
+    println!("  Networks with complete info: {}", network_ids.len());
     println!("  Total entries: {}", total_entries);
     println!(
         "  Expected entries: {} (4 per network)",
-        network_info_map.len() * 4
+        network_ids.len() * 4
     );
 
     assert_eq!(
-        network_info_map.len(),
+        network_ids.len(),
         fixture.metadata.config.num_networks as usize,
         "Network count mismatch"
     );
     assert_eq!(
         total_entries,
-        network_info_map.len() * 4,
+        network_ids.len() * 4,
         "Should have exactly 4 info entries per network"
     );
 
-    println!("\n✅ Successfully reconstructed and validated all NetworkInfo data!");
+    println!("\n✅ Successfully read and validated all NetworkInfo data using NetworkInfoReader!");
     println!("   All networks have complete information (4 entries each).");
 }
 
@@ -1537,12 +1432,24 @@ fn test_reference_db_v1_read_epochs_db() {
 
     println!("   ✅ Reconstructed {} proofs", proofs.len());
     if !proofs.is_empty() {
+        // Assert that proofs exist only when metadata indicates proof generation was
+        // enabled
+        assert!(
+            fixture.metadata.config.generate_proofs,
+            "Found {} proofs in database, but metadata.config.generate_proofs is false",
+            proofs.len()
+        );
         println!(
             "   ✅ All proofs have corresponding certificates (validated {} mappings)",
             proofs.len()
         );
     } else {
-        println!("   ℹ️  No proofs generated (generate_proofs was disabled)");
+        // Assert that no proofs exist only when metadata indicates proof generation was
+        // disabled
+        assert!(
+            !fixture.metadata.config.generate_proofs,
+            "No proofs found in database, but metadata.config.generate_proofs is true"
+        );
     }
 
     // 3. Read and reconstruct PerEpochMetadata
@@ -1561,8 +1468,7 @@ fn test_reference_db_v1_read_epochs_db() {
             }
             Ok(None) => None,
             Err(e) => {
-                eprintln!("Failed to read SettlementTxHash: {:?}", e);
-                None
+                panic!("Failed to read SettlementTxHash: {:?}", e);
             }
         };
 
@@ -1577,8 +1483,7 @@ fn test_reference_db_v1_read_epochs_db() {
         }
         Ok(None) => None,
         Err(e) => {
-            eprintln!("Failed to read Packed: {:?}", e);
-            None
+            panic!("Failed to read Packed: {:?}", e);
         }
     };
 
@@ -1616,7 +1521,7 @@ fn test_reference_db_v1_read_epochs_db() {
         if indices.len() == expected_count {
             println!("   ✅ Certificate indices are contiguous");
         } else {
-            println!(
+            panic!(
                 "   ⚠️  Certificate indices have gaps ({} entries, expected {})",
                 indices.len(),
                 expected_count
@@ -1626,13 +1531,7 @@ fn test_reference_db_v1_read_epochs_db() {
 
     // Validate proofs match certificates if proofs are enabled
     if !proofs.is_empty() {
-        let proof_coverage = (proofs.len() as f64 / certificates.len() as f64) * 100.0;
-        println!(
-            "   ✅ Proof coverage: {:.1}% ({}/{})",
-            proof_coverage,
-            proofs.len(),
-            certificates.len()
-        );
+        assert_eq!(proofs.len(), certificates.len());
     }
 
     // Final validation summary
@@ -1786,14 +1685,14 @@ fn test_reference_db_v1_read_epochs_db() {
         );
         println!("  ✅ Settlement transaction hash is valid");
     } else {
-        println!("  ⚠️  Settlement transaction hash not set");
+        panic!("  ⚠️  Settlement transaction hash not set");
     }
 
     if let Some(packed) = is_packed {
         // Verify it's a boolean value (which it is by type)
         println!("  ✅ Packed status is valid: {}", packed);
     } else {
-        println!("  ⚠️  Packed status not set");
+        panic!("  ⚠️  Packed status not set");
     }
 
     // 7. Verify metadata entry count
@@ -1940,13 +1839,6 @@ fn test_reference_db_v1_read_debug_db() {
         println!("   ✅ No duplicate heights found per network");
     }
 
-    // Validate certificate IDs are unique (implicitly guaranteed by BTreeMap, but
-    // good to mention)
-    println!(
-        "   ✅ All {} certificate IDs are unique",
-        certificates.len()
-    );
-
     // Sample some certificates to show structure
     println!("\n=== Sample Certificates ===");
     for (cert_id, cert) in certificates.iter().take(3) {
@@ -1973,12 +1865,14 @@ fn test_reference_db_v1_read_debug_db() {
     );
 
     // Verify expected certificate count
-    if let Some(expected) = fixture
-        .metadata
-        .statistics
-        .entries_per_column_family
-        .get("debug_certificates")
     {
+        let expected = fixture
+            .metadata
+            .statistics
+            .entries_per_column_family
+            .get("debug_certificates")
+            .expect("Failed to get debug_certificates");
+
         assert_eq!(
             certificates.len(),
             *expected,
@@ -2013,18 +1907,12 @@ fn test_reference_db_v1_read_debug_db() {
     }
 
     // Verify all certificate IDs can be recomputed correctly
-    let mut id_mismatches = 0;
     for (stored_id, cert) in &certificates {
         let computed_id = cert.hash();
         if *stored_id != computed_id {
-            id_mismatches += 1;
+            panic!("Found certificate ID mismatch");
         }
     }
-    assert_eq!(
-        id_mismatches, 0,
-        "Found {} certificate ID mismatches",
-        id_mismatches
-    );
     println!("  ✅ All certificate IDs match their computed hashes");
 
     // Additional validation checks to ensure data integrity

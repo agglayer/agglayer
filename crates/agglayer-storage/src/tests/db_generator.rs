@@ -15,13 +15,13 @@ use std::path::Path;
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
     testutils::AggchainDataType, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, NetworkId, Proof,
+    CertificateStatus, Height, NetworkId, Proof,
 };
 use pessimistic_proof::{
     core::commitment::SignatureCommitmentVersion, local_exit_tree::LocalExitTree,
 };
 use rand::{Rng, SeedableRng};
-use strum::{EnumCount, IntoEnumIterator};
+use strum::IntoEnumIterator;
 
 use crate::{
     columns::{
@@ -43,9 +43,7 @@ use crate::{
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
-        local_exit_tree_per_network::{
-            Key as LetKey, KeyType as LetKeyType, LocalExitTreePerNetworkColumn, Value as LetValue,
-        },
+        local_exit_tree_per_network::LocalExitTreePerNetworkColumn,
         metadata::MetadataColumn,
         network_info::NetworkInfoColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
@@ -58,8 +56,7 @@ use crate::{
     },
     types::{
         network_info::{Key as NetworkInfoKey, Value as NetworkInfoValue},
-        MetadataKey, MetadataValue, PerEpochMetadataKey, PerEpochMetadataValue, SmtKey, SmtKeyType,
-        SmtValue,
+        MetadataKey, MetadataValue, PerEpochMetadataKey, PerEpochMetadataValue,
     },
 };
 
@@ -204,37 +201,22 @@ pub fn generate_state_db(
         for height in 0..config.certificates_per_network {
             let height = Height::from(height);
 
-            // Vary parameters based on height to create diverse test data
-            let num_bridge_exits = (height.as_u64() % 5) as usize; // 0-4 bridge exits
-
             // Use RNG with deterministic seed based on network and height for consistent
             // results
-            let mut param_rng = rand::rngs::StdRng::seed_from_u64(
-                config
-                    .seed
-                    .wrapping_add(network_id.to_u32() as u64)
-                    .wrapping_add(height.as_u64()),
-            );
+            let param_seed = config
+                .seed
+                .wrapping_add(network_id.to_u32() as u64)
+                .wrapping_add(height.as_u64());
+            let mut param_rng = rand::rngs::StdRng::seed_from_u64(param_seed);
 
-            // Generate aggchain_data_type using RNG - resilient to enum changes
-            let aggchain_data_type = match param_rng.random_range(0..AggchainDataType::COUNT) {
-                0 => AggchainDataType::Ecdsa,
-                1 => AggchainDataType::Generic,
-                2 => AggchainDataType::MultisigOnly {
-                    num_signers: param_rng.random_range(2..8),
-                },
-                _ => AggchainDataType::MultisigAndAggchainProof {
-                    num_signers: param_rng.random_range(3..10),
-                },
-            };
+            // Vary parameters based on height to create diverse test data
+            let num_bridge_exits = param_rng.random_range(0..5); // 0-4 bridge exits
 
-            // Generate version using RNG - resilient to enum changes
-            let version = match param_rng.random_range(0..SignatureCommitmentVersion::COUNT) {
-                0 => SignatureCommitmentVersion::V2,
-                1 => SignatureCommitmentVersion::V3,
-                2 => SignatureCommitmentVersion::V4,
-                _ => SignatureCommitmentVersion::V5,
-            };
+            // Generate aggchain_data_type using the generate_for_test function
+            let aggchain_data_type = AggchainDataType::generate_for_test(param_seed);
+
+            // Generate version using the generate_for_test function
+            let version = SignatureCommitmentVersion::generate_for_test(param_seed);
 
             let certificate = Certificate::new_for_test_custom(
                 network_id,
@@ -268,39 +250,34 @@ pub fn generate_state_db(
                 .or_insert(0) += 1;
 
             // 2. CertificateHeader: certificate_id -> header
-            // Set epoch_number and certificate_index based on height
-            // For testing purposes, we can use a simple mapping:
-            // - epoch_number increments every few certificates
-            // - certificate_index is the position within the epoch
-            let epoch_number_value = EpochNumber::new(height.as_u64() / CERTIFICATES_PER_EPOCH);
-            let certificate_index_value =
-                CertificateIndex::new(height.as_u64() % CERTIFICATES_PER_EPOCH);
-
-            let header = CertificateHeader {
+            let header = CertificateHeader::generate_for_test(
+                param_seed,
                 network_id,
                 height,
-                epoch_number: Some(epoch_number_value),
-                certificate_index: Some(certificate_index_value),
-                certificate_id: cert_id,
-                prev_local_exit_root: certificate.prev_local_exit_root,
-                new_local_exit_root: certificate.new_local_exit_root,
-                metadata: certificate.metadata,
-                status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
-            };
+                cert_id,
+                certificate.prev_local_exit_root,
+                certificate.new_local_exit_root,
+            );
             db.put::<CertificateHeaderColumn>(&cert_id, &header)?;
             *result
                 .entries_per_cf
                 .entry("certificate_header_cf".to_string())
                 .or_insert(0) += 1;
 
-            // 3. LatestSettledCertificatePerNetwork (only for the last certificate)
-            if height.as_u64() == config.certificates_per_network - 1 {
+            // 3. LatestSettledCertificatePerNetwork (only for the last certificate if it's
+            //    settled)
+            if height.as_u64() == config.certificates_per_network - 1
+                && matches!(header.status, CertificateStatus::Settled)
+            {
                 let settled_cert = SettledCertificate(
                     cert_id,
                     height,
-                    epoch_number_value,
-                    certificate_index_value,
+                    header
+                        .epoch_number
+                        .expect("Settled certificate should have epoch_number"),
+                    header
+                        .certificate_index
+                        .expect("Settled certificate should have certificate_index"),
                 );
                 db.put::<LatestSettledCertificatePerNetworkColumn>(&network_id, &settled_cert)?;
                 *result
@@ -311,41 +288,16 @@ pub fn generate_state_db(
         }
 
         // 4. LocalExitTree: Generate a small exit tree with a few leaves
+        let let_seed = config
+            .seed
+            .wrapping_add(network_id.to_u32() as u64)
+            .wrapping_add(2000);
         let num_leaves = rng.random_range(2..5);
-        let leaves_key = LetKey {
-            network_id: network_id.to_u32(),
-            key_type: LetKeyType::LeafCount,
-        };
-        db.put::<LocalExitTreePerNetworkColumn>(&leaves_key, &LetValue::LeafCount(num_leaves))?;
-        *result
-            .entries_per_cf
-            .entry("local_exit_tree_per_network_cf".to_string())
-            .or_insert(0) += 1;
-
-        for leaf_idx in 0..num_leaves {
-            let leaf_key = LetKey {
-                network_id: network_id.to_u32(),
-                key_type: LetKeyType::Leaf(leaf_idx),
-            };
-            let leaf_hash = rng.random::<[u8; 32]>();
-            db.put::<LocalExitTreePerNetworkColumn>(&leaf_key, &LetValue::Leaf(leaf_hash))?;
-            *result
-                .entries_per_cf
-                .entry("local_exit_tree_per_network_cf".to_string())
-                .or_insert(0) += 1;
-        }
-
-        // Add frontier nodes (simplified - just add a couple)
-        for layer in 0..2 {
-            let frontier_key = LetKey {
-                network_id: network_id.to_u32(),
-                key_type: LetKeyType::Frontier(layer),
-            };
-            let frontier_hash = [rng.random::<u8>(); 32];
-            db.put::<LocalExitTreePerNetworkColumn>(
-                &frontier_key,
-                &LetValue::Frontier(frontier_hash),
-            )?;
+        let let_entries = crate::types::testutils::generate_let_for_test(
+            let_seed, network_id, num_leaves, 2, // num_frontier_nodes
+        );
+        for (key, value) in let_entries {
+            db.put::<LocalExitTreePerNetworkColumn>(&key, &value)?;
             *result
                 .entries_per_cf
                 .entry("local_exit_tree_per_network_cf".to_string())
@@ -353,66 +305,39 @@ pub fn generate_state_db(
         }
 
         // 5. BalanceTree: Generate sparse merkle tree nodes
-        // Root node
-        let balance_root_key = SmtKey {
-            network_id: network_id.to_u32(),
-            key_type: SmtKeyType::Root,
-        };
-        let root_left = agglayer_types::Digest(rng.random::<[u8; 32]>());
-        let root_right = agglayer_types::Digest(rng.random::<[u8; 32]>());
-        db.put::<BalanceTreePerNetworkColumn>(
-            &balance_root_key,
-            &SmtValue::Node(root_left, root_right),
-        )?;
-        *result
-            .entries_per_cf
-            .entry("balance_tree_per_network_cf".to_string())
-            .or_insert(0) += 1;
-
-        // Add a few internal nodes
-        for _ in 0..3 {
-            let node_hash = agglayer_types::Digest(rng.random::<[u8; 32]>());
-            let node_key = SmtKey {
-                network_id: network_id.to_u32(),
-                key_type: SmtKeyType::Node(node_hash),
-            };
-            let left = agglayer_types::Digest(rng.random::<[u8; 32]>());
-            let right = agglayer_types::Digest(rng.random::<[u8; 32]>());
-            db.put::<BalanceTreePerNetworkColumn>(&node_key, &SmtValue::Node(left, right))?;
+        let balance_tree_seed = config.seed.wrapping_add(network_id.to_u32() as u64);
+        let balance_tree_entries = crate::types::testutils::generate_smt_for_test(
+            balance_tree_seed,
+            network_id,
+            3, // num_internal_nodes
+            1, // num_leaf_nodes
+        );
+        for (key, value) in balance_tree_entries {
+            db.put::<BalanceTreePerNetworkColumn>(&key, &value)?;
             *result
                 .entries_per_cf
                 .entry("balance_tree_per_network_cf".to_string())
                 .or_insert(0) += 1;
         }
 
-        // Add a leaf node
-        let leaf_hash = agglayer_types::Digest(rng.random::<[u8; 32]>());
-        let leaf_key = SmtKey {
-            network_id: network_id.to_u32(),
-            key_type: SmtKeyType::Node(leaf_hash),
-        };
-        let leaf_value = agglayer_types::Digest(rng.random::<[u8; 32]>());
-        db.put::<BalanceTreePerNetworkColumn>(&leaf_key, &SmtValue::Leaf(leaf_value))?;
-        *result
-            .entries_per_cf
-            .entry("balance_tree_per_network_cf".to_string())
-            .or_insert(0) += 1;
-
-        // 6. NullifierTree: Similar to balance tree
-        let nullifier_root_key = SmtKey {
-            network_id: network_id.to_u32(),
-            key_type: SmtKeyType::Root,
-        };
-        let root_left = agglayer_types::Digest(rng.random::<[u8; 32]>());
-        let root_right = agglayer_types::Digest(rng.random::<[u8; 32]>());
-        db.put::<NullifierTreePerNetworkColumn>(
-            &nullifier_root_key,
-            &SmtValue::Node(root_left, root_right),
-        )?;
-        *result
-            .entries_per_cf
-            .entry("nullifier_tree_per_network_cf".to_string())
-            .or_insert(0) += 1;
+        // 6. NullifierTree: Generate sparse merkle tree nodes
+        let nullifier_tree_seed = config
+            .seed
+            .wrapping_add(network_id.to_u32() as u64)
+            .wrapping_add(1000);
+        let nullifier_tree_entries = crate::types::testutils::generate_smt_for_test(
+            nullifier_tree_seed,
+            network_id,
+            3, // num_internal_nodes
+            1, // num_leaf_nodes
+        );
+        for (key, value) in nullifier_tree_entries {
+            db.put::<NullifierTreePerNetworkColumn>(&key, &value)?;
+            *result
+                .entries_per_cf
+                .entry("nullifier_tree_per_network_cf".to_string())
+                .or_insert(0) += 1;
+        }
 
         // 7. NetworkInfo: Store network information
 
@@ -585,34 +510,17 @@ pub fn generate_pending_db(
             // Vary parameters based on height
             let num_bridge_exits = ((height.as_u64() + 1) % 5) as usize;
 
-            // Use RNG with deterministic seed based on network and height for consistent
-            // results
-            let mut param_rng = rand::rngs::StdRng::seed_from_u64(
-                config
-                    .seed
-                    .wrapping_add(network_id.to_u32() as u64)
-                    .wrapping_add(height.as_u64()),
-            );
+            // Use deterministic seed based on network and height for consistent results
+            let param_seed = config
+                .seed
+                .wrapping_add(network_id.to_u32() as u64)
+                .wrapping_add(height.as_u64());
 
-            // Generate aggchain_data_type using RNG - resilient to enum changes
-            let aggchain_data_type = match param_rng.random_range(0..AggchainDataType::COUNT) {
-                0 => AggchainDataType::Ecdsa,
-                1 => AggchainDataType::Generic,
-                2 => AggchainDataType::MultisigOnly {
-                    num_signers: param_rng.random_range(2..8),
-                },
-                _ => AggchainDataType::MultisigAndAggchainProof {
-                    num_signers: param_rng.random_range(3..10),
-                },
-            };
+            // Generate aggchain_data_type using the generate_for_test function
+            let aggchain_data_type = AggchainDataType::generate_for_test(param_seed);
 
-            // Generate version using RNG - resilient to enum changes
-            let version = match param_rng.random_range(0..SignatureCommitmentVersion::COUNT) {
-                0 => SignatureCommitmentVersion::V2,
-                1 => SignatureCommitmentVersion::V3,
-                2 => SignatureCommitmentVersion::V4,
-                _ => SignatureCommitmentVersion::V5,
-            };
+            // Generate version using the generate_for_test function
+            let version = SignatureCommitmentVersion::generate_for_test(param_seed);
 
             let certificate = Certificate::new_for_test_custom(
                 *network_id,

@@ -5,6 +5,7 @@ use pessimistic_proof::{
     keccak::keccak256_combine,
     unified_bridge::{BridgeExit, LeafType, TokenInfo},
 };
+use strum::EnumCount;
 use unified_bridge::{
     ImportedBridgeExit, ImportedBridgeExitCommitmentValues, LocalExitTree, NetworkId,
 };
@@ -243,6 +244,27 @@ pub enum AggchainDataType {
     MultisigOnly { num_signers: usize },
     /// Multisig and aggchain proof with specified number of signers
     MultisigAndAggchainProof { num_signers: usize },
+}
+
+impl AggchainDataType {
+    /// Generate a random AggchainDataType for testing using the provided seed.
+    /// This function is resilient to changes in the enum variants.
+    pub fn generate_for_test(seed: u64) -> Self {
+        use rand::{Rng, SeedableRng};
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        match rng.random_range(0..Self::COUNT) {
+            0 => AggchainDataType::Ecdsa,
+            1 => AggchainDataType::Generic,
+            2 => AggchainDataType::MultisigOnly {
+                num_signers: rng.random_range(2..8),
+            },
+            3 => AggchainDataType::MultisigAndAggchainProof {
+                num_signers: rng.random_range(3..10),
+            },
+            _ => unreachable!("Invalid aggchain data type index"),
+        }
+    }
 }
 
 /// Empty ELF file for testing purposes.

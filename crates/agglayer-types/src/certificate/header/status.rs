@@ -59,3 +59,24 @@ impl CertificateStatus {
         }
     }
 }
+
+#[cfg(feature = "testutils")]
+impl CertificateStatus {
+    /// Generate a random CertificateStatus for testing using the provided seed.
+    ///
+    /// Note: This function excludes the `InError` variant for simplicity in
+    /// tests, as it requires constructing a `CertificateStatusError` which
+    /// is more complex. If you need to test error cases, construct them
+    /// explicitly.
+    pub fn generate_for_test(seed: u64) -> Self {
+        use rand::{Rng, SeedableRng};
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        match rng.random_range(0..4) {
+            0 => CertificateStatus::Pending,
+            1 => CertificateStatus::Proven,
+            2 => CertificateStatus::Candidate,
+            _ => CertificateStatus::Settled,
+        }
+    }
+}
