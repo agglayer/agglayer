@@ -293,9 +293,8 @@ pub fn generate_state_db(
             .wrapping_add(network_id.to_u32() as u64)
             .wrapping_add(2000);
         let num_leaves = rng.random_range(2..5);
-        let let_entries = crate::types::testutils::generate_let_for_test(
-            let_seed, network_id, num_leaves, 2, // num_frontier_nodes
-        );
+        let let_entries =
+            crate::types::testutils::generate_let_for_test(let_seed, network_id, num_leaves);
         for (key, value) in let_entries {
             db.put::<LocalExitTreePerNetworkColumn>(&key, &value)?;
             *result
@@ -309,8 +308,7 @@ pub fn generate_state_db(
         let balance_tree_entries = crate::types::testutils::generate_smt_for_test(
             balance_tree_seed,
             network_id,
-            3, // num_internal_nodes
-            1, // num_leaf_nodes
+            4, // num_leaves (will create 3 internal nodes + 1 root)
         );
         for (key, value) in balance_tree_entries {
             db.put::<BalanceTreePerNetworkColumn>(&key, &value)?;
@@ -328,8 +326,7 @@ pub fn generate_state_db(
         let nullifier_tree_entries = crate::types::testutils::generate_smt_for_test(
             nullifier_tree_seed,
             network_id,
-            3, // num_internal_nodes
-            1, // num_leaf_nodes
+            4, // num_leaves (will create 3 internal nodes + 1 root)
         );
         for (key, value) in nullifier_tree_entries {
             db.put::<NullifierTreePerNetworkColumn>(&key, &value)?;
