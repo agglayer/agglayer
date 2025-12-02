@@ -25,7 +25,7 @@ use crate::{
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
-    storage::{backup::BackupClient, epochs_db_cf_definitions, DB},
+    storage::{backup::BackupClient, DB},
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
@@ -48,6 +48,14 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
+    pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
+        DB::open_cf(path, crate::storage::epochs_db_cf_definitions())
+    }
+
+    pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
+        DB::open_cf_readonly(path, crate::storage::epochs_db_cf_definitions())
+    }
+
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
         epoch_number: EpochNumber,
@@ -56,10 +64,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
         backup_client: BackupClient,
     ) -> Result<Self, Error> {
-        let db = Arc::new(DB::open_cf(
-            &config.storage.epoch_db_path(epoch_number),
-            epochs_db_cf_definitions(),
-        )?);
+        let db = Arc::new(Self::init_db(&config.storage.epoch_db_path(epoch_number))?);
 
         Self::try_open_with_db(
             db,
@@ -80,9 +85,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        let db = Arc::new(DB::open_cf_readonly(
+        let db = Arc::new(Self::init_db_readonly(
             &config.storage.epoch_db_path(epoch_number),
-            epochs_db_cf_definitions(),
         )?);
 
         Self::try_open_with_db(

@@ -72,17 +72,6 @@ pub enum SignatureVerificationError {
     #[error("signature not provided")]
     SignatureMissing,
 
-    /// Extra Certificate signature is missing for the given network.
-    #[error("missing extra signature from {expected_signer} for the network {network_id}")]
-    MissingExtraSignature {
-        network_id: NetworkId,
-        expected_signer: Address,
-    },
-
-    /// The extra signature is invalid.
-    #[error("invalid extra signature: {0}")]
-    InvalidExtraSignature(#[source] SignerError),
-
     /// The pessimistic proof signature is invalid.
     #[error("invalid pessimistic proof signature: {0}")]
     InvalidPessimisticProofSignature(#[source] SignerError),
@@ -113,9 +102,6 @@ impl SignatureVerificationError {
         match e {
             agglayer_types::SignerError::Missing => Self::SignatureMissing,
             e @ agglayer_types::SignerError::Recovery(_) => Self::CouldNotRecoverCertSigner(e),
-            e @ agglayer_types::SignerError::InvalidExtraSignature { .. } => {
-                Self::InvalidExtraSignature(e)
-            }
             e @ agglayer_types::SignerError::InvalidPessimisticProofSignature { .. } => {
                 Self::InvalidPessimisticProofSignature(e)
             }
