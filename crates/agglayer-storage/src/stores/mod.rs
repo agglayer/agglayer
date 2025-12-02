@@ -7,7 +7,7 @@ pub use interfaces::{
     },
     writer::{
         DebugWriter, EpochStoreWriter, MetadataWriter, PendingCertificateWriter, PerEpochWriter,
-        StateWriter,
+        StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
 };
 

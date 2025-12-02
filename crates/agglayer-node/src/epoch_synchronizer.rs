@@ -130,13 +130,13 @@ mod tests {
     use agglayer_config::Config;
     use agglayer_storage::{
         columns::epochs::end_checkpoint::EndCheckpointColumn,
-        storage::{backup::BackupClient, epochs_db_cf_definitions},
+        storage::backup::BackupClient,
         stores::{
             epochs::EpochsStore, pending::PendingStore, state::StateStore,
             PendingCertificateWriter, StateWriter,
         },
         tests::{
-            mocks::{MockEpochsStore, MockPerEpochStore, MockStateStore},
+            mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
             TempDBDir,
         },
     };
@@ -146,6 +146,9 @@ mod tests {
     use mockall::{predicate::eq, Sequence};
 
     use super::*;
+
+    type PerEpochStore =
+        agglayer_storage::stores::per_epoch::PerEpochStore<MockPendingStore, MockStateStore>;
 
     #[tokio::test]
     async fn no_lse_no_previous_start_from_genesis() {
@@ -368,8 +371,7 @@ mod tests {
         expected_end_checkpoint.insert(network_2, Height::ZERO);
 
         let path_15 = config.storage.epochs_db_path.join("15");
-        let epoch_15 =
-            agglayer_storage::storage::DB::open_cf(&path_15, epochs_db_cf_definitions()).unwrap();
+        let epoch_15 = PerEpochStore::init_db(&path_15).unwrap();
 
         let mut expected_end_checkpoint_15 = expected_end_checkpoint.clone();
 
@@ -503,8 +505,7 @@ mod tests {
         expected_end_checkpoint.insert(network_2, Height::ZERO);
 
         let path_15 = config.storage.epochs_db_path.join("15");
-        let epoch_15 =
-            agglayer_storage::storage::DB::open_cf(&path_15, epochs_db_cf_definitions()).unwrap();
+        let epoch_15 = PerEpochStore::init_db(&path_15).unwrap();
 
         let mut expected_end_checkpoint_15 = expected_end_checkpoint.clone();
 

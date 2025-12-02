@@ -17,16 +17,16 @@ pub struct EnabledDebugStore {
 }
 
 impl DebugStore {
+    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBError> {
+        DB::open_cf(path, crate::storage::debug_db_cf_definitions())
+    }
+
     pub fn new(db: Arc<DB>) -> Self {
         Self::Enabled(EnabledDebugStore { db })
     }
 
     pub fn new_with_path(path: &Path) -> Result<Self, Error> {
-        let db = Arc::new(DB::open_cf(
-            path,
-            crate::storage::debug_db_cf_definitions(),
-        )?);
-
+        let db = Arc::new(Self::init_db(path)?);
         Ok(Self::new(db))
     }
 }
