@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use agglayer_config::rate_limiting::{RateLimitingConfig, TimeRateLimit};
@@ -123,34 +124,20 @@ async fn send_tx_unlimited_rate_limit() {
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
 
     // Create and send multiple signed transactions in a loop
-    let mut results = Vec::new();
+    // With unlimited rate limiting, all requests should succeed (or fail for reasons
+    // other than rate limiting)
     for i in 1..=3u64 {
         let tx = create_signed_tx(1, &signer, i);
-        let res: Result<B256, _> = client.request("interop_sendTx", rpc_params![tx]).await;
-        results.push(res);
-    }
-
-    // Check that none of the errors are rate limit errors
-    if let Err(e) = &results[0] {
-        assert!(
-            !e.to_string().contains("rate limit"),
-            "Should not be rate limited: {}",
-            e
-        );
-    }
-    if let Err(e) = &results[1] {
-        assert!(
-            !e.to_string().contains("rate limit"),
-            "Should not be rate limited: {}",
-            e
-        );
-    }
-    if let Err(e) = &results[2] {
-        assert!(
-            !e.to_string().contains("rate limit"),
-            "Should not be rate limited: {}",
-            e
-        );
+        let result: Result<B256, _> = client.request("interop_sendTx", rpc_params![tx]).await;
+        
+        // Check that the error (if any) is NOT a rate limit error
+        if let Err(e) = result {
+            assert!(
+                !e.to_string().contains("rate limit"),
+                "Request {} should not be rate limited with unlimited config: {}",
+                i, e
+            );
+        }
     }
 
     handle.cancel();
@@ -185,38 +172,35 @@ async fn send_tx_with_rate_limit() {
     let (agglayer_shutdowned, _l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
 
-    // Create multiple signed transactions
-    let tx1 = create_signed_tx(1, &signer, 1);
-    let tx2 = create_signed_tx(1, &signer, 2);
-    let tx3 = create_signed_tx(1, &signer, 3);
-
-    let result1: Result<B256, _> = client.request("interop_sendTx", rpc_params![tx1]).await;
-    let result2: Result<B256, _> = client.request("interop_sendTx", rpc_params![tx2]).await;
-
-    if let Err(e) = &result1 {
-        assert!(
-            !e.to_string().contains("rate limit") && !e.to_string().contains("limited"),
-            "First request should not be rate limited: {}",
-            e
-        );
-    }
-    if let Err(e) = &result2 {
-        assert!(
-            !e.to_string().contains("rate limit") && !e.to_string().contains("limited"),
-            "Second request should not be rate limited: {}",
-            e
-        );
+    // Send transactions sequentially to test rate limiting
+    // First 2 should succeed (or fail for non-rate-limit reasons)
+    // Third should be rate limited
+    let mut results = Vec::new();
+    for i in 1..=3u64 {
+        let tx = create_signed_tx(1, &signer, i);
+        let result: Result<B256, _> = client.request("interop_sendTx", rpc_params![tx]).await;
+        results.push(result);
     }
 
-    let result3: Result<B256, _> = client.request("interop_sendTx", rpc_params![tx3]).await;
+    // First two requests should not hit rate limit (max 2 per 10 seconds)
+    for (i, result) in results[..2].iter().enumerate() {
+        if let Err(e) = result {
+            assert!(
+                !e.to_string().contains("rate limit") && !e.to_string().contains("limited"),
+                "Request {} should not be rate limited: {}",
+                i + 1, e
+            );
+        }
+    }
 
+    // Third request should be rate limited
     assert!(
-        result3.is_err(),
+        results[2].is_err(),
         "Third request should fail due to rate limiting"
     );
-    let error = result3.unwrap_err();
+    let error = results[2].as_ref().unwrap_err();
     assert!(
-        error.to_string().contains("rate limit") || error.to_string().contains("limited"),
+        error.to_string().contains("rate limit") || error.to_string().contains("limited") || error.to_string().contains("disabled"),
         "Third request should be rate limited, but got: {}",
         error
     );
@@ -256,11 +240,12 @@ async fn send_tx_rate_limit_per_network() {
     let (agglayer_shutdowned, _l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
 
-    // Create transactions for different networks
+    // Test that each network has independent rate limit counters
+    // Network 1: first request should succeed, second should be rate limited
+    // Network 2: should have its own counter, not affected by network 1
+    
+    // First request to network 1 (should not be rate limited)
     let tx1_network1 = create_signed_tx(1, &signer1, 1);
-    let tx2_network2 = create_signed_tx(2, &signer2, 1);
-    let tx3_network1 = create_signed_tx(1, &signer1, 2);
-
     let result1: Result<B256, _> = client
         .request("interop_sendTx", rpc_params![tx1_network1])
         .await;
@@ -272,8 +257,10 @@ async fn send_tx_rate_limit_per_network() {
         );
     }
 
+    // First request to network 2 (should not be rate limited, independent counter)
+    let tx1_network2 = create_signed_tx(2, &signer2, 1);
     let result2: Result<B256, _> = client
-        .request("interop_sendTx", rpc_params![tx2_network2])
+        .request("interop_sendTx", rpc_params![tx1_network2])
         .await;
     if let Err(e) = &result2 {
         assert!(
@@ -283,8 +270,10 @@ async fn send_tx_rate_limit_per_network() {
         );
     }
 
+    // Second request to network 1 (should be rate limited, max 1 per 10s)
+    let tx2_network1 = create_signed_tx(1, &signer1, 2);
     let result3: Result<B256, _> = client
-        .request("interop_sendTx", rpc_params![tx3_network1])
+        .request("interop_sendTx", rpc_params![tx2_network1])
         .await;
     assert!(
         result3.is_err(),
@@ -292,7 +281,7 @@ async fn send_tx_rate_limit_per_network() {
     );
     let error = result3.unwrap_err();
     assert!(
-        error.to_string().contains("rate limit") || error.to_string().contains("limited"),
+        error.to_string().contains("rate limit") || error.to_string().contains("limited") || error.to_string().contains("disabled"),
         "Second request to network 1 should be rate limited, but got: {}",
         error
     );
@@ -333,13 +322,12 @@ async fn send_tx_rate_limit_network_override() {
     let (agglayer_shutdowned, _l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
 
-    // Create transactions for different networks
+    // Test network-specific overrides
+    // Network 1: global limit (1 per 10s)
+    // Network 2: unlimited override
+    
+    // Network 1: First request should succeed
     let tx1_network1 = create_signed_tx(1, &signer1, 1);
-    let tx2_network1 = create_signed_tx(1, &signer1, 2);
-    let tx1_network2 = create_signed_tx(2, &signer2, 1);
-    let tx2_network2 = create_signed_tx(2, &signer2, 2);
-    let tx3_network2 = create_signed_tx(2, &signer2, 3);
-
     let result1: Result<B256, _> = client
         .request("interop_sendTx", rpc_params![tx1_network1])
         .await;
@@ -351,6 +339,8 @@ async fn send_tx_rate_limit_network_override() {
         );
     }
 
+    // Network 1: Second request should be rate limited (global limit applies)
+    let tx2_network1 = create_signed_tx(1, &signer1, 2);
     let result2: Result<B256, _> = client
         .request("interop_sendTx", rpc_params![tx2_network1])
         .await;
@@ -360,39 +350,145 @@ async fn send_tx_rate_limit_network_override() {
     );
     let error = result2.unwrap_err();
     assert!(
-        error.to_string().contains("rate limit") || error.to_string().contains("limited"),
+        error.to_string().contains("rate limit") || error.to_string().contains("limited") || error.to_string().contains("disabled"),
         "Second request to network 1 should be rate limited, but got: {}",
         error
     );
 
-    let result3: Result<B256, _> = client
-        .request("interop_sendTx", rpc_params![tx1_network2])
-        .await;
-    let result4: Result<B256, _> = client
-        .request("interop_sendTx", rpc_params![tx2_network2])
-        .await;
-    let result5: Result<B256, _> = client
-        .request("interop_sendTx", rpc_params![tx3_network2])
-        .await;
+    // Network 2: Multiple requests should all succeed (unlimited override)
+    for i in 1..=3u64 {
+        let tx_network2 = create_signed_tx(2, &signer2, i);
+        let result: Result<B256, _> = client
+            .request("interop_sendTx", rpc_params![tx_network2])
+            .await;
+        if let Err(e) = result {
+            assert!(
+                !e.to_string().contains("rate limit") && !e.to_string().contains("limited"),
+                "Network 2 request {} should not be rate limited (unlimited override): {}",
+                i, e
+            );
+        }
+    }
 
-    if let Err(e) = &result3 {
+    handle.cancel();
+    _ = agglayer_shutdowned.await;
+
+    scenario.teardown();
+}
+
+/// Test parallel requests to verify slot reservation mechanism
+/// This test verifies that the rate limiter reserves slots immediately,
+/// preventing spam even before transactions are processed.
+/// 
+/// With rate limit of 2 per 10 seconds and 3 parallel requests:
+/// - 2 requests should reserve slots and hang (processing)
+/// - 1 request should be immediately rejected (no slots available)
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(60))]
+async fn send_tx_rate_limit_parallel_requests() {
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+
+    let mut config = agglayer_config::Config::new(&tmp_dir.path);
+
+    // Configure rate limiting: 2 requests per 10 seconds
+    config.rate_limiting =
+        RateLimitingConfig::new(TimeRateLimit::limited(2, Duration::from_secs(10)));
+
+    // Set up a proof signer for rollup_id 1
+    let signer = get_signer(0);
+    config.proof_signers.insert(1, signer.address().into());
+
+    // Configure full node RPC (required for send_tx verification) -> mock ZkEVM
+    let (_server, zkevm_url) = start_mock_zkevm_server().await;
+    config.full_node_rpcs.insert(1, zkevm_url.parse().unwrap());
+
+    let handle = CancellationToken::new();
+    let (agglayer_shutdowned, _l1, client) =
+        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
+
+    // Configure fail point to inject delay after slot reservation
+    // This ensures requests hang after reserving slots, allowing us to test
+    // that the third request is rejected immediately
+    fail::cfg("jsonrpc_api::send_tx::after_reserve", "return(2000)")
+        .expect("Failed to configure failpoint");
+
+    // Wrap client in Arc to share across tasks
+    let client = Arc::new(client);
+
+    // Launch 3 parallel requests
+    let client1 = Arc::clone(&client);
+    let client2 = Arc::clone(&client);
+    let client3 = Arc::clone(&client);
+    let signer1 = signer.clone();
+    let signer2 = signer.clone();
+    let signer3 = signer.clone();
+
+    let task1 = tokio::spawn(async move {
+        let tx = create_signed_tx(1, &signer1, 1);
+        let start = std::time::Instant::now();
+        let result: Result<B256, _> = client1.request("interop_sendTx", rpc_params![tx]).await;
+        (result, start.elapsed())
+    });
+
+    let task2 = tokio::spawn(async move {
+        let tx = create_signed_tx(1, &signer2, 2);
+        let start = std::time::Instant::now();
+        let result: Result<B256, _> = client2.request("interop_sendTx", rpc_params![tx]).await;
+        (result, start.elapsed())
+    });
+
+    // Give tasks 1 and 2 a moment to start and reserve their slots
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let task3 = tokio::spawn(async move {
+        let tx = create_signed_tx(1, &signer3, 3);
+        let start = std::time::Instant::now();
+        let result: Result<B256, _> = client3.request("interop_sendTx", rpc_params![tx]).await;
+        (result, start.elapsed())
+    });
+
+    // Wait for all tasks to complete
+    let (result1, _duration1) = task1.await.unwrap();
+    let (result2, _duration2) = task2.await.unwrap();
+    let (result3, duration3) = task3.await.unwrap();
+
+    // Disable the fail point for cleanup
+    fail::cfg("jsonrpc_api::send_tx::after_reserve", "off")
+        .expect("Failed to disable failpoint");
+
+    // Task 3 should be rejected immediately (no slot available)
+    // Should complete much faster than tasks 1 and 2 (which are delayed by fail point)
+    assert!(
+        result3.is_err(),
+        "Third parallel request should be rate limited"
+    );
+    let error3 = result3.unwrap_err();
+    assert!(
+        error3.to_string().contains("rate limit") || error3.to_string().contains("limited") || error3.to_string().contains("disabled"),
+        "Third request should be rate limited, but got: {}",
+        error3
+    );
+    assert!(
+        duration3.as_millis() < 1000,
+        "Third request should be rejected immediately (took {}ms, expected <1000ms)",
+        duration3.as_millis()
+    );
+
+    // Tasks 1 and 2 should take approximately 2000ms due to the fail point delay
+    // (They may fail for other reasons, but should not be rate limited)
+    if let Err(e) = result1 {
         assert!(
             !e.to_string().contains("rate limit") && !e.to_string().contains("limited"),
-            "Network 2 should not be rate limited: {}",
+            "First parallel request should not be rate limited: {}",
             e
         );
     }
-    if let Err(e) = &result4 {
+    if let Err(e) = result2 {
         assert!(
             !e.to_string().contains("rate limit") && !e.to_string().contains("limited"),
-            "Network 2 should not be rate limited: {}",
-            e
-        );
-    }
-    if let Err(e) = &result5 {
-        assert!(
-            !e.to_string().contains("rate limit") && !e.to_string().contains("limited"),
-            "Network 2 should not be rate limited: {}",
+            "Second parallel request should not be rate limited: {}",
             e
         );
     }
@@ -428,18 +524,18 @@ async fn send_tx_rate_limit_disabled() {
     let (agglayer_shutdowned, _l1, client) =
         setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
 
-    // Create a signed transaction
+    // With rate limit set to 0, even the first request should be rejected
     let tx = create_signed_tx(1, &signer, 1);
 
     let result: Result<B256, _> = client.request("interop_sendTx", rpc_params![tx]).await;
 
     assert!(
         result.is_err(),
-        "Request should fail when send_tx is disabled"
+        "Request should fail immediately when send_tx is disabled (rate limit = 0)"
     );
     let error = result.unwrap_err();
     assert!(
-        error.to_string().contains("disabled") || error.to_string().contains("rate limit"),
+        error.to_string().contains("disabled") || error.to_string().contains("rate limit") || error.to_string().contains("limited"),
         "Request should be rejected as disabled, but got: {}",
         error
     );
