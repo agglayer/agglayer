@@ -28,15 +28,15 @@ impl<'de> Deserialize<'de> for OutboundRpcConfig {
     where
         D: Deserializer<'de>,
     {
-        #[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
+        #[derive(Deserialize)]
         #[serde(rename = "rpc", rename_all = "kebab-case")]
-        pub struct Helper {
+        pub struct Intermediate {
             pub settle_tx: Option<OutboundRpcSettleConfig>,
             pub settle_cert: Option<OutboundRpcSettleConfig>,
             pub settle: Option<OutboundRpcSettleConfig>,
         }
 
-        let deserialized = Helper::deserialize(deserializer)?;
+        let deserialized = Intermediate::deserialize(deserializer)?;
 
         let (settle_tx, settle_cert) = match (
             deserialized.settle_tx,
@@ -50,7 +50,7 @@ impl<'de> Deserialize<'de> for OutboundRpcConfig {
             }
             _ => {
                 return Err(serde::de::Error::custom(
-                    "Either both 'settle-tx' and 'settle-cert' or 'settle' must be specified",
+                    "Either both ['settle-tx','settle-cert'] or 'settle' must be specified",
                 ));
             }
         };

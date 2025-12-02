@@ -62,8 +62,6 @@ pp-settlement-key-name = "pp-settlement-key-name-test"
 pp-settlement-key-version = 3
 tx-settlement-key-name = "tx-settlement-key-name-test"
 tx-settlement-key-version = 4
-key-name = "key-name-test"
-key-version = 2
 
 [telemetry]
 prometheus-addr = "0.0.0.0:3000"
@@ -81,4 +79,4 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
+db-path = "/Users/amassanet/w/agglayer/crates/agglayer-config/tests/fixtures/auth/storage"

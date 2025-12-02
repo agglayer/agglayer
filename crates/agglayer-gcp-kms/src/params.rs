@@ -42,7 +42,6 @@ fn from_env_or_conf<T>(
     env_key: &str,
     env_key_fallback: Option<&str>,
     config_value: &Option<T>,
-    config_value_fallback: &Option<T>,
 ) -> Result<T, Error>
 where
     T: FromStr + Clone + Display,
@@ -62,9 +61,6 @@ where
 
     if let Some(config_value) = config_value {
         return Ok(config_value.clone());
-    } else if let Some(config_value_fallback) = config_value_fallback {
-        warn!("Fallback KMS config env:{env_key}=>config:{config_value_fallback}");
-        return Ok(config_value_fallback.clone());
     }
 
     Err(Error::KmsConfig(env_key.to_string()))
@@ -74,32 +70,28 @@ impl TryFrom<&GcpKmsConfig> for KMSParameters {
     type Error = Error;
     fn try_from(config: &GcpKmsConfig) -> Result<Self, Self::Error> {
         // Get configuration values from environment variables or config
-        let project_id = from_env_or_conf(GOOGLE_PROJECT_ID, None, &config.project_id, &None)?;
-        let location = from_env_or_conf(GOOGLE_LOCATION, None, &config.location, &None)?;
-        let keyring_name = from_env_or_conf(GOOGLE_KEYRING, None, &config.keyring, &None)?;
+        let project_id = from_env_or_conf(GOOGLE_PROJECT_ID, None, &config.project_id)?;
+        let location = from_env_or_conf(GOOGLE_LOCATION, None, &config.location)?;
+        let keyring_name = from_env_or_conf(GOOGLE_KEYRING, None, &config.keyring)?;
         let key_name_pp_settlement = from_env_or_conf(
             GOOGLE_KEY_NAME_PP_SETTLEMENT,
             Some(GOOGLE_KEY_NAME_LEGACY),
             &config.pp_settlement_key_name,
-            &config.key_name,
         )?;
         let key_version_pp_settlement = from_env_or_conf(
             GOOGLE_KEY_VERSION_PP_SETTLEMENT,
             Some(GOOGLE_KEY_VERSION_LEGACY),
             &config.pp_settlement_key_version,
-            &config.key_version,
         )?;
         let key_name_tx_settlement = from_env_or_conf(
             GOOGLE_KEY_NAME_TX_SETTLEMENT,
             Some(GOOGLE_KEY_NAME_LEGACY),
             &config.tx_settlement_key_name,
-            &config.key_name,
         )?;
         let key_version_tx_settlement = from_env_or_conf(
             GOOGLE_KEY_VERSION_TX_SETTLEMENT,
             Some(GOOGLE_KEY_VERSION_LEGACY),
             &config.tx_settlement_key_version,
-            &config.key_version,
         )?;
 
         Ok(Self {
@@ -175,18 +167,15 @@ mod test {
             SetEnvGuard::new("GOOGLE_KEY_VERSION", unique.then_some("3")),
         ]
     }
-    fn set_config(unique: bool, distinct: bool) -> GcpKmsConfig {
-        let enabled = unique || distinct;
+    fn config() -> GcpKmsConfig {
         GcpKmsConfig {
-            project_id: enabled.then_some("conf_project_id".to_string()),
-            location: enabled.then_some("conf_location".to_string()),
-            keyring: enabled.then_some("conf_keyring".to_string()),
-            pp_settlement_key_name: distinct.then_some("conf_key_name_pp".to_string()),
-            pp_settlement_key_version: distinct.then_some(1),
-            tx_settlement_key_name: distinct.then_some("conf_key_name_tx".to_string()),
-            tx_settlement_key_version: distinct.then_some(2),
-            key_name: unique.then_some("conf_key_name".to_string()),
-            key_version: unique.then_some(3),
+            project_id: Some("conf_project_id".to_string()),
+            location: Some("conf_location".to_string()),
+            keyring: Some("conf_keyring".to_string()),
+            pp_settlement_key_name: Some("conf_key_name_pp".to_string()),
+            pp_settlement_key_version: Some(1),
+            tx_settlement_key_name: Some("conf_key_name_tx".to_string()),
+            tx_settlement_key_version: Some(2),
         }
     }
 
@@ -194,7 +183,7 @@ mod test {
     #[serial]
     fn test_disctinct_env_vars() {
         let _raii = set_env(false, true);
-        let config = set_config(true, true);
+        let config = config();
         let params = crate::KMSParameters::try_from(&config).unwrap();
         assert_eq!(params.project_id, "env_project_id");
         assert_eq!(params.location, "env_location");
@@ -209,7 +198,7 @@ mod test {
     #[serial]
     fn test_unique_env_vars() {
         let _raii = set_env(true, false);
-        let config = set_config(true, true);
+        let config = config();
         let params = crate::KMSParameters::try_from(&config).unwrap();
         assert_eq!(params.project_id, "env_project_id");
         assert_eq!(params.location, "env_location");
@@ -224,7 +213,7 @@ mod test {
     #[serial]
     fn test_distinct_config_vars() {
         let _raii = set_env(false, false);
-        let config = set_config(false, true);
+        let config = config();
         let params = crate::KMSParameters::try_from(&config).unwrap();
         assert_eq!(params.project_id, "conf_project_id");
         assert_eq!(params.location, "conf_location");
@@ -233,19 +222,5 @@ mod test {
         assert_eq!(params.key_version_pp_settlement, 1);
         assert_eq!(params.key_name_tx_settlement, "conf_key_name_tx");
         assert_eq!(params.key_version_tx_settlement, 2);
-    }
-    #[test]
-    #[serial]
-    fn test_unique_config_vars() {
-        let _raii = set_env(false, false);
-        let config = set_config(true, false);
-        let params = crate::KMSParameters::try_from(&config).unwrap();
-        assert_eq!(params.project_id, "conf_project_id");
-        assert_eq!(params.location, "conf_location");
-        assert_eq!(params.keyring_name, "conf_keyring");
-        assert_eq!(params.key_name_pp_settlement, "conf_key_name");
-        assert_eq!(params.key_version_pp_settlement, 3);
-        assert_eq!(params.key_name_tx_settlement, "conf_key_name");
-        assert_eq!(params.key_version_tx_settlement, 3);
     }
 }
