@@ -3,7 +3,7 @@ use std::time::Duration;
 use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{CertificateId, CertificateStatus};
 use fail::FailScenario;
-use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
+use integrations::{agglayer_setup::AgglayerSetup, wait_for_settlement_or_error};
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
@@ -25,7 +25,7 @@ async fn transaction_with_receipt_status_0(#[case] state: Forest) {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (_handle, _l1, client) = AgglayerSetup::default().setup_network(&tmp_dir.path).await;
 
     let withdrawals = vec![];
 
@@ -60,7 +60,7 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (_handle, _l1, client) = AgglayerSetup::default().setup_network(&tmp_dir.path).await;
 
     let withdrawals = vec![];
 
@@ -110,7 +110,7 @@ async fn transaction_without_receipt_status(#[case] state: Forest) {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (_handle, _l1, client) = AgglayerSetup::default().setup_network(&tmp_dir.path).await;
 
     let withdrawals = vec![];
 
@@ -150,7 +150,10 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
     config.outbound.rpc.settle.settlement_timeout = Duration::from_secs(10);
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, Some(config), None).await;
+    let (_handle, _l1, client) = AgglayerSetup::default()
+        .with_config(config)
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
 
@@ -203,7 +206,10 @@ async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
     config.outbound.rpc.settle.settlement_timeout = Duration::from_secs(10);
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, Some(config), None).await;
+    let (_handle, _l1, client) = AgglayerSetup::default()
+        .with_config(config)
+        .setup_network(&tmp_dir.path)
+        .await;
 
     let withdrawals = vec![];
 

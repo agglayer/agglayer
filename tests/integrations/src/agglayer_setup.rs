@@ -1,12 +1,13 @@
-use std::{path::Path, time::Duration};
+use std::{fs, io, path::Path, time::Duration};
 
-use agglayer_config::{log::LogLevel, Config};
+use agglayer_config::log::LogLevel;
 use agglayer_prover::fake::FakeProver;
 use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use pessimistic_proof::ELF;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
 
 use crate::l1_setup::{self, next_available_addr, L1Docker};
 
@@ -47,16 +48,59 @@ macro_rules! wait_for_settlement_or_error {
 
 pub async fn start_l1() -> L1Docker {
     let name = std::thread::current().name().unwrap().replace("::", "_");
-    let l1 = l1_setup::L1Docker::new(name).await;
+    let l1 = l1_setup::L1Docker::new(&name).await;
     tokio::time::sleep(Duration::from_secs(1)).await;
     l1
 }
 
-pub async fn start_agglayer(
+#[derive(Debug, Default)]
+pub struct AgglayerSetup {
+    config: Option<agglayer_config::Config>,
+    token: Option<CancellationToken>,
+    use_tls: bool,
+}
+
+impl AgglayerSetup {
+    pub fn with_config(mut self, config: agglayer_config::Config) -> Self {
+        self.config = Some(config);
+        self
+    }
+
+    pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
+        self.token = Some(token);
+        self
+    }
+
+    pub fn with_tls_enabled(mut self, use_tls: bool) -> Self {
+        self.use_tls = use_tls;
+        self
+    }
+
+    pub async fn start_agglayer(
+        self,
+        config_path: &Path,
+        l1: &L1Docker,
+    ) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
+        start_agglayer(config_path, l1, self.config, self.token, self.use_tls).await
+    }
+
+    pub async fn setup_network(
+        self,
+        tmp_dir: &Path,
+    ) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
+        let l1 = start_l1().await;
+        let (receiver, client, _token) = self.start_agglayer(tmp_dir, &l1).await;
+
+        (receiver, l1, client)
+    }
+}
+
+async fn start_agglayer(
     config_path: &Path,
     l1: &L1Docker,
     config: Option<agglayer_config::Config>,
     token: Option<CancellationToken>,
+    use_tls: bool,
 ) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
     let (shutdown, receiver) = oneshot::channel();
 
@@ -92,7 +136,7 @@ pub async fn start_agglayer(
 
     // Write the keystore content to a temporary file
     let keystore_content = get_test_keystore_content();
-    std::fs::write(&key_path, keystore_content).unwrap();
+    fs::write(&key_path, keystore_content).unwrap();
 
     // Configure authentication to use the keystore file
     config.auth = agglayer_config::AuthConfig::Local(agglayer_config::LocalConfig {
@@ -102,12 +146,25 @@ pub async fn start_agglayer(
         }],
     });
 
+    config.tls = Some(agglayer_config::TlsConfig {
+        certificate: dev_tls_certs::SERVER_CERT_PATH.into(),
+        key: dev_tls_certs::SERVER_KEY_PATH.into(),
+    });
+
     let grpc_addr = next_available_addr();
     let readrpc_addr = next_available_addr();
     let admin_addr = next_available_addr();
+    let readrpc_tls_addr = next_available_addr();
+    let admin_tls_addr = next_available_addr();
+
     config.rpc.grpc_port = grpc_addr.port().into();
     config.rpc.readrpc_port = readrpc_addr.port().into();
     config.rpc.admin_port = admin_addr.port().into();
+
+    if use_tls {
+        config.rpc.readrpc_tls_port = readrpc_tls_addr.port().into();
+        config.rpc.admin_tls_port = admin_tls_addr.port().into();
+    }
 
     config.telemetry.addr = next_available_addr();
     config.log.level = LogLevel::Debug;
@@ -123,26 +180,53 @@ pub async fn start_agglayer(
 
     let config_file = config_path.join("config.toml");
     let toml = toml::to_string_pretty(&config).unwrap();
-    std::fs::write(&config_file, toml).unwrap();
+    fs::write(&config_file, toml).unwrap();
 
     let graceful_shutdown_token = cancellation.clone();
     let handle = std::thread::spawn(move || {
-        if let Err(error) = agglayer_node::main(config_file, "test", Some(graceful_shutdown_token))
-        {
-            eprintln!("Error: {error}");
-        }
+        agglayer_node::main(config_file, "test", Some(graceful_shutdown_token))
+            .unwrap_or_else(|e| error!("Node failed: {e}"));
         _ = shutdown.send(());
     });
-    let url = format!("ws://{}/", config.readrpc_addr());
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    let url = if use_tls {
+        format!("wss://{readrpc_tls_addr}/")
+    } else {
+        format!("ws://{readrpc_addr}/")
+    };
+    info!("Connecting to {url}");
 
     let mut interval = tokio::time::interval(Duration::from_secs(10));
-    let mut max_attempts = 20;
+    let mut max_attempts = 4;
     let client = loop {
         if max_attempts == 0 {
-            panic!("Failed to connect to the server");
+            panic!("Failed to connect to the node RPC server {url}");
         }
         interval.tick().await;
-        if let Ok(client) = WsClientBuilder::default().build(&url).await {
+
+        let client_res = WsClientBuilder::default()
+            .with_custom_cert_store({
+                // Set up our testing certificate as a CA root.
+                let mut certs = rustls::RootCertStore::empty();
+                let cert_file = fs::File::open(dev_tls_certs::CA_CERT_PATH)
+                    .expect("Certificate file failed to open");
+                let mut cert_file = io::BufReader::new(cert_file);
+                for cert in rustls_pemfile::certs(&mut cert_file) {
+                    let cert = cert.expect("Malformed certificate");
+                    certs.add(cert).expect("Cannot add root certificate")
+                }
+                assert_eq!(certs.len(), 1);
+
+                jsonrpsee::ws_client::CustomCertStore::builder()
+                    .with_root_certificates(certs)
+                    .with_no_client_auth()
+            })
+            .build(&url)
+            .await
+            .inspect_err(|e| warn!("Client startup error: {e}."));
+
+        if let Ok(client) = client_res {
             break client;
         }
 
@@ -153,22 +237,12 @@ pub async fn start_agglayer(
         }
 
         max_attempts -= 1;
+        debug!("Client startup failed, {max_attempts} remaining attempts.");
     };
 
     assert!(!handle.is_finished());
 
     (receiver, client, cancellation)
-}
-
-pub async fn setup_network(
-    tmp_dir: &Path,
-    config: Option<Config>,
-    token: Option<CancellationToken>,
-) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
-    let l1 = start_l1().await;
-    let (receiver, client, _token) = start_agglayer(tmp_dir, &l1, config, token).await;
-
-    (receiver, l1, client)
 }
 
 pub fn get_signer(index: u32) -> PrivateKeySigner {

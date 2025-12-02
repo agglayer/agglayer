@@ -26,9 +26,12 @@ pin-project.workspace = true
 rand.workspace = true
 reqwest = "0.12.23"
 rstest.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
+test-log.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.17"
@@ -51,7 +54,6 @@ agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 agglayer-prover-config.workspace = true
+dev-tls-certs.workspace = true
 pessimistic-proof-test-suite.workspace = true
 pessimistic-proof.workspace = true
-
-test-log.workspace = true

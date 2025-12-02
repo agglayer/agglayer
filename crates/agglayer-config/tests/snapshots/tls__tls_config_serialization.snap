@@ -1,0 +1,7 @@
+---
+source: crates/agglayer-config/tests/tls.rs
+expression: config
+snapshot_kind: text
+---
+certificate = "/path/to/cert.pem"
+key = "/path/to/key.pem"
