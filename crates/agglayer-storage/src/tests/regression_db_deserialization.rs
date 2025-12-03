@@ -1336,7 +1336,7 @@ fn test_reference_db_v1_read_network_info() {
             .settled_let_leaf_count
             .unwrap_or_else(|| panic!("Network {} missing settled_let_leaf_count", network_id));
         assert!(
-            leaf_count >= 2 && leaf_count < 5,
+            (2..5).contains(&leaf_count),
             "Network {} has unexpected leaf_count {} (expected 2-4 based on generator)",
             network_id,
             leaf_count
