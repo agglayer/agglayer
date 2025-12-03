@@ -469,7 +469,7 @@ where
                     }
                 };
 
-            latest_settled_certificate.map(|cert| {
+            if let Some(cert) = latest_settled_certificate {
                 network_info.settled_certificate_id = Some(cert.certificate_id);
                 network_info.settled_height = Some(cert.height);
                 network_info.settled_ler = Some(cert.new_local_exit_root);
@@ -550,9 +550,7 @@ where
                             })?;
                     }
                 }
-
-                Ok(())
-            });
+            }
         }
 
         if network_info.latest_pending_height.is_none() {
