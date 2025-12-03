@@ -106,6 +106,8 @@ where
 
         let certificate_ids = self.state_store.get_certificate_ids_for_pp_root(&pp_root)?;
 
+        // Only the last certificate ID is relevant for the settlement tx hash; previous ones are
+        // considered to be aggregated into the last one.
         let Some(settled_certificate_id) = certificate_ids.last() else {
             return Err(Error::InternalError(format!(
                 "No settled certificate found for pp root: {pp_root:?}"
