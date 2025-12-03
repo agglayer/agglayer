@@ -87,7 +87,7 @@ Before working with the repository, you’ll need the following:
 
 You’ll need to submit a unique Ethereum address to Succinct for access to their proving network. To get access:
 
-1. Follow the instructions [here](https://docs.succinct.xyz/docs/generating-proofs/prover-network/key-setup) to use Foundry to generate a new private key or retrieve an existing one.
+1. Follow the instructions [here](https://docs.succinct.xyz/docs/sp1/prover-network/quickstart) to use Foundry to generate a new private key or retrieve an existing one.
 2. Apply for access for the public address associated with your private key to Succinct Network [here](https://docs.google.com/forms/d/e/1FAIpQLSd-X9uH7G0bvXH_kjptnQtNil8L4dumrVPpFE4t8Ci1XT1GaQ/viewform).
 
 ### Software Requirements
