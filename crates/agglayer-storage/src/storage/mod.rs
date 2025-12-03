@@ -57,7 +57,7 @@ pub struct DB {
 impl DB {
     /// Open a new RocksDB instance at the given path with initial column families and a
     /// possibility to migrate the database.
-    pub fn builder<'a>(
+    pub fn builder(
         path: &Path,
         cfs: impl IntoIterator<Item = ColumnFamilyDescriptor>,
     ) -> Result<Builder, DBOpenError> {

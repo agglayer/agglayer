@@ -83,7 +83,7 @@ fn unexpected_schema() -> Result<(), eyre::Error> {
         let db = RocksDB::open_cf(
             &opts,
             db_path,
-            &[rocksdb::DEFAULT_COLUMN_FAMILY_NAME, "unexpected_cf"],
+            [rocksdb::DEFAULT_COLUMN_FAMILY_NAME, "unexpected_cf"],
         )?;
         drop(db);
     }

@@ -37,7 +37,7 @@ impl Builder {
         }
     }
 
-    pub fn open<'a>(
+    pub fn open(
         path: &Path,
         cfs_v0: impl IntoIterator<Item = ColumnFamilyDescriptor>,
     ) -> Result<Self, DBOpenError> {
