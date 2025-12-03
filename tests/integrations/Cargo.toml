@@ -51,6 +51,3 @@ agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 pessimistic-proof-test-suite.workspace = true
 pessimistic-proof.workspace = true
-prover-config.workspace = true
-
-test-log.workspace = true
