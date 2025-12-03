@@ -45,10 +45,10 @@ fn max_rpc_request_size() {
 }
 
 #[test]
-fn extra_certificate_signers() {
-    let input = "./tests/fixtures/valide_config/extra_certificate_signers.toml";
+fn grpc_max_decoding_message_size() {
+    let input = "./tests/fixtures/valide_config/grpc_max_decoding_message_size.toml";
 
-    let config: Config = toml::from_str(&std::fs::read_to_string(input).unwrap()).unwrap();
+    let config = Config::try_load(Path::new(input)).unwrap();
 
     assert_toml_snapshot!(config, {
         ".storage.*" => insta::dynamic_redaction(|value, path| {
@@ -62,12 +62,5 @@ fn extra_certificate_signers() {
         }),
     });
 
-    assert_eq!(
-        *config
-            .extra_certificate_signer
-            .get(&1337)
-            .unwrap()
-            .into_alloy(),
-        alloy_primitives::address!("abcdefabcdefabcdefabcdefabcdefabcdefabcd").0
-    );
+    assert_eq!(config.grpc.max_decoding_message_size, 100 * 1024 * 1024);
 }

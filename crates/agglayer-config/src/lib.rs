@@ -125,14 +125,6 @@ pub struct Config {
 
     #[serde(default)]
     pub grpc: grpc::GrpcConfig,
-
-    /// Extra Certificate signer per network.
-    /// Signatures is expected to be performed on the same commitment as
-    /// the certificate signature, which is the V2 commitment for now.
-    #[serde(default)]
-    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub extra_certificate_signer: HashMap<u32, Address>,
 }
 
 impl Config {
@@ -188,7 +180,6 @@ impl Config {
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
-            extra_certificate_signer: Default::default(),
         }
     }
 

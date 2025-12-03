@@ -3,10 +3,7 @@ use std::{future::IntoFuture as _, net::SocketAddr, sync::Arc};
 use agglayer_config::Config;
 use agglayer_contracts::L1RpcClient;
 use agglayer_storage::{
-    storage::{
-        backup::BackupClient, debug_db_cf_definitions, pending_db_cf_definitions,
-        state_db_cf_definitions, DB,
-    },
+    storage::backup::BackupClient,
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
@@ -99,15 +96,9 @@ impl TestContext {
         let config = Arc::new(config);
 
         // Create the databases using the provided paths in the config
-        let state_db = Arc::new(
-            DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
-        );
-        let pending_db = Arc::new(
-            DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
-        );
-        let debug_db = Arc::new(
-            DB::open_cf(&config.storage.debug_db_path, debug_db_cf_definitions()).unwrap(),
-        );
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
+        let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 
         // Create stores using the provided databases
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
@@ -250,15 +241,9 @@ impl TestContext {
     pub async fn new_raw_rpc_with_config(config: Config) -> RawRpcContext {
         let config = Arc::new(config);
 
-        let state_db = Arc::new(
-            DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
-        );
-        let pending_db = Arc::new(
-            DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
-        );
-        let debug_db = Arc::new(
-            DB::open_cf(&config.storage.debug_db_path, debug_db_cf_definitions()).unwrap(),
-        );
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
+        let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
         let pending_store = Arc::new(PendingStore::new(pending_db));

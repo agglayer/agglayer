@@ -10,10 +10,7 @@ use agglayer_jsonrpc_api::{
 };
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
-    storage::{
-        backup::{BackupClient, BackupEngine},
-        DB,
-    },
+    storage::backup::{BackupClient, BackupEngine},
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         PerEpochReader as _,
@@ -89,14 +86,8 @@ impl Node {
         }
 
         // Initializing storage
-        let pending_db = Arc::new(DB::open_cf(
-            &config.storage.pending_db_path,
-            agglayer_storage::storage::pending_db_cf_definitions(),
-        )?);
-        let state_db = Arc::new(DB::open_cf(
-            &config.storage.state_db_path,
-            agglayer_storage::storage::state_db_cf_definitions(),
-        )?);
+        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path)?);
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path)?);
 
         // Initialize backup engine
         let backup_client = if let BackupConfig::Enabled {
