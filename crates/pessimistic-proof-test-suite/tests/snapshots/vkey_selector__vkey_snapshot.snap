@@ -4,5 +4,5 @@ expression: message
 ---
 # If this test fails, it means the PP vkey has changed.
 # When that happens, consider updating the selector by bumping the PP version.
-| PP_VKEY          | 0x00139b6c32b3748fae95a38c289d46c30730c3f900e3fff3ad6db2aa95aaa142 |
-| PP_VKEY_SELECTOR | 0x00000009                                                         |
+| PP_VKEY          | 0x0024b1cef4e8de0aa7025c370d00fdfb593156856cd6623cb1f1beee6518f734 |
+| PP_VKEY_SELECTOR | 0x0000000a                                                         |
