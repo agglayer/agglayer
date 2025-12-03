@@ -548,7 +548,7 @@ async fn test_certificate_orchestrator_can_stop() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
-        rollup_manager.clone(),
+        rollup_manager,
     )
     .expect("Unable to create orchestrator");
 
@@ -616,7 +616,7 @@ async fn test_collect_certificates() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
-        rollup_manager.clone(),
+        rollup_manager,
     )
     .expect("Unable to create orchestrator");
 
@@ -689,7 +689,7 @@ async fn test_collect_certificates_after_epoch() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
-        rollup_manager.clone(),
+        rollup_manager,
     )
     .expect("Unable to create orchestrator");
 
@@ -764,7 +764,7 @@ async fn test_collect_certificates_when_empty() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
-        rollup_manager.clone(),
+        rollup_manager,
     )
     .expect("Unable to create orchestrator");
 
