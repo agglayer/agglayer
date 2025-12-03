@@ -18,8 +18,9 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 url = { workspace = true, features = ["serde"] }
 
 agglayer-primitives.workspace = true
-agglayer-prover-config.workspace = true
 agglayer-types.workspace = true
+
+prover-config.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

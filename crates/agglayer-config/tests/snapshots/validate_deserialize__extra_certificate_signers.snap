@@ -1,5 +1,5 @@
 ---
-source: crates/agglayer-config/tests/backup.rs
+source: crates/agglayer-config/tests/validate_deserialize.rs
 expression: config
 ---
 prover-buffer-size = 100
@@ -66,15 +66,13 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
-
-[storage.backup]
-path = "./test/"
-state-max-backup-count = 100
-pending-max-backup-count = 100
+db-path = "./storage"
 
 [prover.network-prover]
 proving-timeout = "5m"
 sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
 
 [grpc]
+
+[extra-certificate-signer]
+1337 = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
