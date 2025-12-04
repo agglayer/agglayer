@@ -9,7 +9,7 @@ use crate::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
     },
-    storage::{backup::BackupClient, state_db_cf_definitions, DB},
+    storage::backup::BackupClient,
     stores::{state::StateStore, StateReader},
     tests::TempDBDir,
     types::network_info::v0::{DisabledBy, DisabledNetwork},
@@ -18,7 +18,7 @@ use crate::{
 #[test]
 fn can_retrieve_the_list_of_networks() {
     let tmp = TempDBDir::new();
-    let db = Arc::new(DB::open_cf(tmp.path.as_path(), state_db_cf_definitions()).unwrap());
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
 
     let store = StateStore::new(db.clone(), BackupClient::noop());
     db.put::<LatestSettledCertificatePerNetworkColumn>(

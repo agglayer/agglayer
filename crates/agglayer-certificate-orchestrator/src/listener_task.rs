@@ -5,7 +5,10 @@ use agglayer_contracts::{
     L1TransactionFetcher,
 };
 use agglayer_interop_types::PessimisticRoot;
-use agglayer_storage::stores::{MetadataReader, MetadataWriter, StateReader, StateWriter};
+use agglayer_storage::stores::{
+    MetadataReader, MetadataWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+    UpdateStatusToCandidate,
+};
 use agglayer_types::Digest;
 use alloy::{
     eips::BlockNumberOrTag,
@@ -117,7 +120,8 @@ where
         self.state_store.update_settlement_tx_hash(
             settled_certificate_id,
             tx_hash.into(),
-            false,
+            UpdateEvenIfAlreadyPresent::Yes,
+            UpdateStatusToCandidate::No,
         )?;
 
         self.state_store
