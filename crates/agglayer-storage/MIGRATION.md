@@ -72,10 +72,11 @@ DB::builder(db_path, &["data"])
     .create_cfs(&["data_v2"])?
     // Step 2: Migrate data (read from "data", write to "data_v2")
     .migrate(|db| {
-        for entry in db.iter::<OldColumn>() {
-            let (key, value) = entry?;
-            let transformed = transform(value);
-            db.put::<NewColumn>(&key, &transformed)?;
+        for key in db.keys::<OldColumn>() {
+            let key = key?;
+            let value = db.get::<OldColumn>(&key);
+            let (new_key, new_value) = transform(key, value);
+            db.put::<NewColumn>(&new_key, &new_value)?;
         }
         Ok(())
     })?
