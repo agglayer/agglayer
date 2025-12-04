@@ -104,8 +104,6 @@ impl Builder {
             step
         };
 
-        // TODO check db schema against the last record
-
         Self::new_internal(db, start_step)
             // Initialize migration record CF with step 0.
             .perform_step(|_| Ok(()))
@@ -126,7 +124,6 @@ impl Builder {
         options.create_missing_column_families(true);
 
         Ok(DB {
-            // TODO: use open_cf_descriptors
             rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, cfs)?,
             default_write_options: Some(Self::writeopts()),
         })
@@ -139,7 +136,6 @@ impl Builder {
         options.create_missing_column_families(true);
 
         Ok(DB {
-            // TODO: use open_cf_descriptors
             rocksdb: rocksdb::DB::open_cf(&options, path, cfs.iter().map(AsRef::as_ref))?,
             default_write_options: Some(Self::writeopts()),
         })
@@ -149,7 +145,6 @@ impl Builder {
         self,
         cfs: impl IntoIterator<Item = S>,
     ) -> Result<Self, DBOpenError> {
-        // TODO: Check cfs not already there
         Ok(self.perform_step(move |db| {
             for cf in cfs {
                 let cf = cf.as_ref();
@@ -167,7 +162,6 @@ impl Builder {
         self,
         cfs: impl IntoIterator<Item = S>,
     ) -> Result<Self, DBOpenError> {
-        // TODO: Check cfs actually exist
         Ok(self.perform_step(move |db| {
             for cf in cfs {
                 let cf = cf.as_ref();
@@ -229,7 +223,6 @@ impl Builder {
             step_fn(&mut self)?;
             self.db.put::<MigrationRecordColumn>(&self.step, &())?;
         } else {
-            // TODO Track expected schema and check at each step.
             debug!("Step already recorded, skipping");
         }
 
