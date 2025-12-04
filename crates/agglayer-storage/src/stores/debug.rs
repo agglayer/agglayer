@@ -17,7 +17,7 @@ pub struct EnabledDebugStore {
 }
 
 impl DebugStore {
-    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBError> {
+    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
         DB::open_cf(path, crate::storage::debug_db_cf_definitions())
     }
 
@@ -25,7 +25,7 @@ impl DebugStore {
         Self::Enabled(EnabledDebugStore { db })
     }
 
-    pub fn new_with_path(path: &Path) -> Result<Self, Error> {
+    pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
         let db = Arc::new(Self::init_db(path)?);
         Ok(Self::new(db))
     }

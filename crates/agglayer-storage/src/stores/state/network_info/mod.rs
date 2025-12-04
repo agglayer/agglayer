@@ -199,12 +199,12 @@ mod tests {
         },
     };
 
-    #[rstest]
+    #[test_log::test(rstest)]
     fn fetching_an_unexisting_network(network_id: NetworkId, store: StateStore) {
         store.get_network_info(network_id).unwrap();
     }
 
-    #[rstest]
+    #[test_log::test(rstest)]
     fn fetching_an_existing_network(network_id: NetworkId, store: StateStore) {
         store
             .db

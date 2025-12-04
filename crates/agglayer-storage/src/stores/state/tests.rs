@@ -71,7 +71,15 @@ pub(crate) fn network_id() -> NetworkId {
 
 #[fixture]
 pub(crate) fn store() -> StateStore {
+    let _ = test_log::tracing_subscriber::fmt()
+        .with_test_writer()
+        .with_env_filter(test_log::tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
+
+    tracing::info!("Setting up storage fixture");
+
     let tmp = TempDBDir::new();
+    tracing::debug!(path = ?tmp.path, "Temporary directory created");
     let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
 
     StateStore::new(db.clone(), BackupClient::noop())
