@@ -1,5 +1,6 @@
 use rocksdb::DB as RocksDB;
 
+use crate::storage::migration::migration_cf::MigrationRecordColumn;
 use crate::tests::TempDBDir;
 
 use super::super::{Builder, DBOpenError};
@@ -40,9 +41,13 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
 
     // Phase 1: Initialize database with valid migrations
     {
-        Builder::open_sample(db_path)?
+        let db = Builder::open_sample(db_path)?
             .sample_migrate_v0_v1()?
             .finalize(CFS_V1)?;
+
+        // Verify migration record contains 4 steps at the end of phase 1
+        let migration_record_count = db.keys::<MigrationRecordColumn>()?.count();
+        assert_eq!(migration_record_count, 4);
     }
 
     // Phase 2: Corrupt the migration record by introducing a gap
@@ -52,7 +57,7 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
             .finalize(CFS_V1)?;
 
         // Delete the migration record at step 1 to create a gap
-        db.delete::<crate::storage::migration::migration_cf::MigrationRecordColumn>(&1_u32)?;
+        db.delete::<MigrationRecordColumn>(&1_u32)?;
     }
 
     // Phase 3: Try to open - should fail with MigrationRecordGap
@@ -80,11 +85,7 @@ fn unexpected_schema() -> Result<(), eyre::Error> {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
-        let db = RocksDB::open_cf(
-            &opts,
-            db_path,
-            [rocksdb::DEFAULT_COLUMN_FAMILY_NAME, "unexpected_cf"],
-        )?;
+        let db = RocksDB::open_cf(&opts, db_path, ["unexpected_cf"])?;
         drop(db);
     }
 
