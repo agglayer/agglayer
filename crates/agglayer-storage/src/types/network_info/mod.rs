@@ -65,6 +65,20 @@ impl TryFrom<v0::NetworkType> for agglayer_types::NetworkType {
     }
 }
 
+impl From<agglayer_types::NetworkType> for v0::NetworkType {
+    fn from(value: agglayer_types::NetworkType) -> Self {
+        match value {
+            agglayer_types::NetworkType::Generic => NetworkType::Generic,
+            agglayer_types::NetworkType::Unspecified => NetworkType::Unspecified,
+            agglayer_types::NetworkType::Ecdsa => NetworkType::Ecdsa,
+            agglayer_types::NetworkType::MultisigOnly => NetworkType::MultisigOnly,
+            agglayer_types::NetworkType::MultisigAndAggchainProof => {
+                NetworkType::MultisigAndAggchainProof
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use strum::EnumCount;

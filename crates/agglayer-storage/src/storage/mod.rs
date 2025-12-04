@@ -8,7 +8,7 @@ use rocksdb::{
 
 use crate::columns::{Codec, ColumnSchema};
 
-mod cf_definitions;
+pub(crate) mod cf_definitions;
 pub(crate) mod iterators;
 
 pub mod backup;
