@@ -39,7 +39,7 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
-    // Phase 1: Initialize database with valid migrations
+    // Phase 1: Create a database with a corrupted migration record.
     {
         let db = Builder::open_sample(db_path)?
             .sample_migrate_v0_v1()?
@@ -48,19 +48,12 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
         // Verify migration record contains 4 steps at the end of phase 1
         let migration_record_count = db.keys::<MigrationRecordColumn>()?.count();
         assert_eq!(migration_record_count, 4);
-    }
-
-    // Phase 2: Corrupt the migration record by introducing a gap
-    {
-        let db = Builder::open_sample(db_path)?
-            .sample_migrate_v0_v1()?
-            .finalize(CFS_V1)?;
 
         // Delete the migration record at step 1 to create a gap
         db.delete::<MigrationRecordColumn>(&1_u32)?;
     }
 
-    // Phase 3: Try to open - should fail with MigrationRecordGap
+    // Phase 2: Try to open - should fail with MigrationRecordGap
     {
         let result = Builder::open_sample(db_path);
 
