@@ -6,7 +6,6 @@
 use std::{collections::HashMap, path::Path};
 
 use agglayer_primitives::Address;
-use agglayer_prover_config::GrpcConfig;
 use outbound::OutboundConfig;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
 use serde_with::DisplayFromStr;
@@ -15,13 +14,12 @@ use url::Url;
 
 pub use self::telemetry::TelemetryConfig;
 
-pub mod prover;
-
 pub(crate) const DEFAULT_IP: std::net::Ipv4Addr = std::net::Ipv4Addr::new(0, 0, 0, 0);
 
 pub(crate) mod auth;
 pub mod certificate_orchestrator;
 pub mod epoch;
+pub mod grpc;
 pub(crate) mod l1;
 pub(crate) mod l2;
 pub mod log;
@@ -42,7 +40,6 @@ pub use l2::L2;
 pub use log::Log;
 pub use multiplier::Multiplier;
 use port::{Port, PortDefaults};
-use prover::default_prover_entrypoint;
 pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
 
@@ -111,13 +108,12 @@ pub struct Config {
     #[serde(default)]
     pub storage: storage::StorageConfig,
 
-    /// AggLayer prover entrypoint.
-    #[serde(default = "default_prover_entrypoint")]
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub prover_entrypoint: String,
+    /// The prover config
+    #[serde(default)]
+    pub prover: prover_config::ProverType,
 
-    #[serde(default, skip_serializing_if = "crate::is_default")]
-    pub prover: agglayer_prover_config::ClientProverConfig,
+    #[serde(default = "default_prover_buffer_size")]
+    pub prover_buffer_size: usize,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "is_false")]
@@ -127,8 +123,8 @@ pub struct Config {
     #[serde(skip_serializing_if = "is_false")]
     pub mock_verifier: bool,
 
-    #[serde(default, skip_serializing_if = "crate::is_default")]
-    pub grpc: GrpcConfig,
+    #[serde(default)]
+    pub grpc: grpc::GrpcConfig,
 }
 
 impl Config {
@@ -177,8 +173,10 @@ impl Config {
             epoch: Default::default(),
             shutdown: Default::default(),
             certificate_orchestrator: Default::default(),
-            prover_entrypoint: default_prover_entrypoint(),
-            prover: Default::default(),
+            prover: prover_config::ProverType::NetworkProver(
+                prover_config::NetworkProverConfig::default(),
+            ),
+            prover_buffer_size: default_prover_buffer_size(),
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
@@ -257,6 +255,11 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
             .validate()
             .map_err(|e| serde::de::Error::custom(e.to_string()))
     }
+}
+
+/// Default prover buffer size.
+const fn default_prover_buffer_size() -> usize {
+    100
 }
 
 fn is_false(b: &bool) -> bool {

@@ -43,14 +43,6 @@ pub(crate) enum Commands {
         path: PathBuf,
     },
 
-    ProverConfig,
-
-    Prover {
-        /// The path to the configuration file.
-        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer-prover.toml", env = "PROVER_CONFIG_PATH")]
-        cfg: PathBuf,
-    },
-
     Vkey,
     VkeySelector,
 
