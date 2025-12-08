@@ -1,10 +1,9 @@
 use std::{path::Path, time::Duration};
 
 use agglayer_config::{log::LogLevel, Config};
-use agglayer_prover::fake::FakeProver;
 use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-use pessimistic_proof::ELF;
+use prover_config::{MockProverConfig, ProverType};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
@@ -68,23 +67,10 @@ pub async fn start_agglayer(
     .unwrap();
 
     let mut config = config.unwrap_or_else(|| agglayer_config::Config::new(config_path));
-    let prover_config = agglayer_prover_config::ProverConfig {
-        grpc_endpoint: next_available_addr(),
-        telemetry: agglayer_prover_config::TelemetryConfig {
-            addr: next_available_addr(),
-        },
-        ..Default::default()
-    };
 
-    // spawning fake prover as we don't want to hit SP1
-    let fake_prover = FakeProver::new(ELF).await.unwrap();
-    let endpoint = prover_config.grpc_endpoint;
+    config.prover = ProverType::MockProver(MockProverConfig::default());
 
-    config.prover_entrypoint = format!("http://{endpoint}");
     let cancellation = token.unwrap_or_default();
-    FakeProver::spawn_at(fake_prover, endpoint, cancellation.clone())
-        .await
-        .unwrap();
 
     // Create keystore file with embedded content for Docker compatibility
     let key_path = config_path.join("test_keystore.json");
