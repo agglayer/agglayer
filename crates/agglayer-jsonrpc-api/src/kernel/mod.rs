@@ -337,7 +337,25 @@ where
         let signed_tx_hash = format!("{}", signed_tx.hash());
         let pending_tx = self
             .verify_batches_trusted_aggregator(signed_tx)
-            .and_then(|call| async move {
+            .and_then(|mut call| async move {
+                // Adjust gas limit
+                if self.settlement_config.gas_multiplier_factor != 100 {
+                    // Adjust the gas limit based on the configuration.
+                    // Apply gas multiplier if it's not the default (100).
+                    // First estimate gas, then multiply by the factor.
+                    let gas_estimate = call.estimate_gas().await?;
+                    let adjusted_gas = (gas_estimate
+                        .saturating_mul(self.settlement_config.gas_multiplier_factor as u64))
+                        / 100;
+                    debug!(
+                        "Applying gas multiplier factor: {} for cert settlement. Estimated gas: \
+                         {}, Adjusted gas: {}",
+                        self.settlement_config.gas_multiplier_factor, gas_estimate, adjusted_gas
+                    );
+                    call = call.gas(adjusted_gas);
+                }
+
+                // Adjust gas price
                 let estimate = self.rpc.estimate_eip1559_fees().await?;
                 let adjusted = adjust_gas_estimate(&estimate, &self.gas_price_params);
 

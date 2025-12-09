@@ -179,13 +179,6 @@ impl Node {
         // or not depending on the configuration. If is the same signer
         // we share the nonce management too.
 
-        if config.outbound.rpc.settle_tx != OutboundRpcSettleConfig::default() {
-            warn!(
-                "Using non-default values for outbound settle_tx: {:?}",
-                config.outbound.rpc.settle_tx
-            );
-        }
-
         let (rpc_pp_settlement, rpc_tx_settlement) = {
             // We will use the same parameterization to create both providers.
             let fn_build_provider = |signer: ConfiguredSigner| {
