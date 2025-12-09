@@ -412,7 +412,7 @@ fn get_network_info_propagates_error_from_read_local_network_state() {
     state_store
         .expect_get_certificate_header()
         .with(eq(settled_certificate_id))
-        .return_once(move |_| Ok(Some(get_settled_header.clone())));
+        .returning(move |_| Ok(Some(get_settled_header.clone())));
 
     // get_proof -> pending: None
     pending_store.expect_get_proof().returning(|_| Ok(None));
@@ -498,7 +498,7 @@ fn get_network_info_propagates_error_from_get_latest_settled_claim() {
     state_store
         .expect_get_certificate_header()
         .with(eq(settled_certificate_id))
-        .return_once(move |_| Ok(Some(get_settled_header.clone())));
+        .returning(move |_| Ok(Some(get_settled_header.clone())));
 
     // Proof not found anywhere so we proceed to settled claim step
     pending_store.expect_get_proof().returning(|_| Ok(None));
