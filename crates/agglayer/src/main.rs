@@ -54,7 +54,7 @@ fn main() -> eyre::Result<()> {
             println!("0x{vkey_selector_hex}");
         }
 
-        cli::Commands::Backup(cli::Backup::List { config_path: cfg }) => {
+        cli::Commands::Backup(cli::Backup::List { cfg }) => {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
 
             if let BackupConfig::Enabled { path, .. } = cfg.storage.backup {
@@ -65,10 +65,7 @@ fn main() -> eyre::Result<()> {
             }
         }
 
-        cli::Commands::Backup(cli::Backup::Restore {
-            config_path: cfg,
-            db_versions,
-        }) => {
+        cli::Commands::Backup(cli::Backup::Restore { cfg, db_versions }) => {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
 
             if let BackupConfig::Enabled { ref path, .. } = cfg.storage.backup {
