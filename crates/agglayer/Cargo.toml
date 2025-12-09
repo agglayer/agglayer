@@ -10,6 +10,7 @@ dotenvy.workspace = true
 eyre.workspace = true
 hex.workspace = true
 serde_json.workspace = true
+sp1-sdk.workspace = true
 toml.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -17,10 +18,9 @@ tracing.workspace = true
 
 agglayer-config.workspace = true
 agglayer-node.workspace = true
-agglayer-prover-config.workspace = true
-agglayer-prover.workspace = true
 agglayer-storage.workspace = true
 pessimistic-proof.workspace = true
+prover-executor.workspace = true
 
 [dev-dependencies]
 assert_cmd = "2.0.14"

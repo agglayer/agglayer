@@ -6,17 +6,12 @@ dependencies = [
     "install-protoc-gen-prost-crate",
     "install-protoc-gen-tonic",
     "generate-proto-node",
-    "generate-proto-storage",
-    "generate-proto-prover"
+    "generate-proto-storage"
 ]
 
 [tasks.generate-proto-storage]
 command = "buf"
 args = ["generate", "--template", "buf.storage.gen.yaml", "--path", "proto/agglayer/storage"]
-
-[tasks.generate-proto-prover]
-command = "buf"
-args = ["generate", "--template", "buf.agglayer-prover.gen.yaml", "--path", "proto/agglayer/prover"]
 
 [tasks.generate-proto-node]
 command = "buf"

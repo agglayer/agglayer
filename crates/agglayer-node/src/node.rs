@@ -25,6 +25,7 @@ use alloy::{
 use eyre::Context as _;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tower::buffer::Buffer;
 use tracing::{debug, error, info, warn};
 
 use crate::epoch_synchronizer::EpochSynchronizer;
@@ -241,11 +242,17 @@ impl Node {
         );
         tracing::debug!("RollupManager created");
 
+        let (_vkey, prover_executor) =
+            prover_executor::Executor::create_prover(config.prover.clone(), pessimistic_proof::ELF)
+                .await?;
+
+        let prover_buffer = Buffer::new(prover_executor, config.prover_buffer_size);
+
         let certifier_client = CertifierClient::try_new(
-            config.prover_entrypoint.clone(),
             pending_store.clone(),
             Arc::clone(&rollup_manager),
             Arc::clone(&config),
+            prover_buffer,
         )
         .await?;
         info!("Certifier client created.");
