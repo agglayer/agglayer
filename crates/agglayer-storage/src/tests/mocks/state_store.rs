@@ -7,7 +7,10 @@ use mockall::mock;
 use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
-    stores::{MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter},
+    stores::{
+        MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    },
 };
 mock! {
     pub StateStore {}
@@ -35,7 +38,8 @@ mock! {
             &self,
             certificate_id: &CertificateId,
             tx_hash: SettlementTxHash,
-            force: bool,
+            force: UpdateEvenIfAlreadyPresent,
+            set_status: UpdateStatusToCandidate,
         ) -> Result<(), Error>;
 
         fn remove_settlement_tx_hash(
@@ -77,9 +81,18 @@ mock! {
             new_state: &LocalNetworkStateData,
             new_leaves: &[Digest],
         ) -> Result<(), Error>;
+
+        fn disable_network(
+            &self,
+            network_id: &NetworkId,
+            disabled_by: agglayer_types::network_info::DisabledBy,
+        ) -> Result<(), Error>;
+        fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error>;
     }
 
     impl StateReader for StateStore {
+        fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, Error>;
+        fn is_network_disabled(&self, network_id: &NetworkId) -> Result<bool, Error>;
         fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
 
         fn get_latest_settled_certificate_per_network(

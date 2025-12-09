@@ -10,10 +10,7 @@ use agglayer_jsonrpc_api::{
 };
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
-    storage::{
-        backup::{BackupClient, BackupEngine},
-        DB,
-    },
+    storage::backup::{BackupClient, BackupEngine},
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         PerEpochReader as _,
@@ -27,6 +24,7 @@ use alloy::{
 use eyre::Context as _;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tower::buffer::Buffer;
 use tracing::{debug, error, info, warn};
 
 use crate::epoch_synchronizer::EpochSynchronizer;
@@ -88,14 +86,8 @@ impl Node {
         }
 
         // Initializing storage
-        let pending_db = Arc::new(DB::open_cf(
-            &config.storage.pending_db_path,
-            agglayer_storage::storage::pending_db_cf_definitions(),
-        )?);
-        let state_db = Arc::new(DB::open_cf(
-            &config.storage.state_db_path,
-            agglayer_storage::storage::state_db_cf_definitions(),
-        )?);
+        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path)?);
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path)?);
 
         // Initialize backup engine
         let backup_client = if let BackupConfig::Enabled {
@@ -192,7 +184,7 @@ impl Node {
         let provider = ProviderBuilder::new()
             .with_simple_nonce_management()
             .wallet(wallet)
-            .on_client(
+            .connect_client(
                 alloy::rpc::client::RpcClient::builder()
                     .layer(crate::L1TraceLayer)
                     .http(config.l1.node_url.clone()),
@@ -219,11 +211,17 @@ impl Node {
         );
         tracing::debug!("RollupManager created");
 
+        let (_vkey, prover_executor) =
+            prover_executor::Executor::create_prover(config.prover.clone(), pessimistic_proof::ELF)
+                .await?;
+
+        let prover_buffer = Buffer::new(prover_executor, config.prover_buffer_size);
+
         let certifier_client = CertifierClient::try_new(
-            config.prover_entrypoint.clone(),
             pending_store.clone(),
             Arc::clone(&rollup_manager),
             Arc::clone(&config),
+            prover_buffer,
         )
         .await?;
         info!("Certifier client created.");

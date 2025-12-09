@@ -26,14 +26,14 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - uses: ./.github/actions/unit-test
 
   isolated-feature-checks:
     name: "Isolated feature checks"
     runs-on: ubuntu-latest-16-cores
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -49,7 +49,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Load image
         run: |
@@ -92,21 +92,22 @@ jobs:
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     needs:
       - docker-build-local
-    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@c6542462b631e97fe7d85d61d5e9c68a24ffaab6 # jhilliard/else-case
+    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@2cf50f9f92eff4fdf6b2555e62fac67d76f8f290 # test/agglayer-e2e-bridge-test
     secrets: inherit
     with:
       test-name: agglayer-bridging
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
-      kurtosis-cdk-ref: 22f15c90cf39af02fff77352716c541af7043e3c
+      kurtosis-cdk-ref: 17959f2f2735d8ed58d43412b413bda8056a1ce6
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: c6542462b631e97fe7d85d61d5e9c68a24ffaab6 # jhilliard/else-case
+      agglayer-e2e-ref: 2cf50f9f92eff4fdf6b2555e62fac67d76f8f290 # test/agglayer-e2e-bridge-test
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
             "deploy_optimism_rollup": true
           },
           "args": {
+            "aggkit_image": "ghcr.io/agglayer/aggkit:0.5.4",
             "consensus_contract_type": "pessimistic",
             "verbosity": "debug"
           }
@@ -131,7 +132,7 @@ jobs:
     name: ELF Checking
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Define source checksum
         run: |

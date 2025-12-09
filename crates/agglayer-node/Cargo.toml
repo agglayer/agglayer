@@ -49,6 +49,7 @@ agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 pessimistic-proof.workspace = true
+prover-executor.workspace = true
 
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "node-bindings"] }

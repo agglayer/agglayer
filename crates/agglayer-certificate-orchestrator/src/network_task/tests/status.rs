@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use agglayer_storage::{
-    stores::{PendingCertificateReader, PendingCertificateWriter, StateWriter},
+    stores::{
+        PendingCertificateReader, PendingCertificateWriter, StateWriter,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    },
     tests::TempDBDir,
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
@@ -318,7 +321,12 @@ async fn from_candidate_to_settle() {
 
     storage
         .state
-        .update_settlement_tx_hash(&certificate_id, SettlementTxHash::for_tests(), false)
+        .update_settlement_tx_hash(
+            &certificate_id,
+            SettlementTxHash::for_tests(),
+            UpdateEvenIfAlreadyPresent::No,
+            UpdateStatusToCandidate::Yes,
+        )
         .unwrap();
 
     certifier.expect_certify().never();
