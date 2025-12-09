@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use agglayer_storage::{
-    stores::{PendingCertificateReader, PendingCertificateWriter, StateWriter},
+    stores::{
+        PendingCertificateReader, PendingCertificateWriter, StateWriter,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    },
     tests::TempDBDir,
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
@@ -317,13 +320,18 @@ async fn from_candidate_to_settle() {
         .expect("Failed to insert certificate header");
 
     storage
-        .state
-        .update_settlement_tx_hash(&certificate_id, SettlementTxHash::for_tests())
+        .pending
+        .insert_settlement_tx_hash_for_certificate(&certificate_id, SettlementTxHash::for_tests())
         .unwrap();
 
     storage
-        .pending
-        .insert_settlement_tx_hash_for_certificate(&certificate_id, SettlementTxHash::for_tests())
+        .state
+        .update_settlement_tx_hash(
+            &certificate_id,
+            SettlementTxHash::for_tests(),
+            UpdateEvenIfAlreadyPresent::No,
+            UpdateStatusToCandidate::Yes,
+        )
         .unwrap();
 
     certifier.expect_certify().never();

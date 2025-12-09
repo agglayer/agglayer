@@ -5,6 +5,7 @@ use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
     PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+    UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
 use agglayer_types::{
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
@@ -274,8 +275,12 @@ where
         }
 
         info!(%settlement_tx_hash, "Certificate settlement transaction successfully settled on l1");
-        self.state_store
-            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash)?;
+        self.state_store.update_settlement_tx_hash(
+            &certificate_id,
+            settlement_tx_hash,
+            UpdateEvenIfAlreadyPresent::Yes,
+            UpdateStatusToCandidate::No,
+        )?;
 
         // Step 3: Add certificate to epoch with retries
         let mut max_retries = MAX_EPOCH_ASSIGNMENT_RETRIES;

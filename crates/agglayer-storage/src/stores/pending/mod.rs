@@ -29,16 +29,16 @@ pub struct PendingStore {
 }
 
 impl PendingStore {
+    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBError> {
+        DB::open_cf(path, crate::storage::pending_db_cf_definitions())
+    }
+
     pub fn new(db: Arc<DB>) -> Self {
         Self { db }
     }
-    pub fn new_with_path(path: &Path) -> Result<Self, Error> {
-        let db = Arc::new(DB::open_cf(
-            path,
-            crate::storage::pending_db_cf_definitions(),
-        )?);
 
-        Ok(Self::new(db))
+    pub fn new_with_path(path: &Path) -> Result<Self, Error> {
+        Ok(Self::new(Arc::new(Self::init_db(path)?)))
     }
 }
 

@@ -12,9 +12,9 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Address, Certificate,
-    CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId,
-    NetworkInfo, NetworkStatus, NetworkType, SettledClaim, Signature, U256,
+    aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
+    CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId, NetworkInfo,
+    NetworkStatus, NetworkType, SettledClaim, U256,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
@@ -881,42 +881,10 @@ where
         .map_err(SignatureVerificationError::from_signer_error)
     }
 
-    /// Verify the extra [`Certificate`] signature.
-    #[instrument(skip_all, level = "debug")]
-    pub(crate) fn verify_extra_cert_signature(
-        &self,
-        certificate: &Certificate,
-        extra_signer: Option<&Address>,
-        extra_signature: Option<Signature>,
-    ) -> Result<(), SignatureVerificationError> {
-        match (extra_signer, extra_signature) {
-            // Extra signature expected and provided
-            (Some(&expected_extra_signer), Some(extra_signature)) => certificate
-                .verify_extra_signature(expected_extra_signer, extra_signature)
-                .map_err(SignatureVerificationError::from_signer_error)?,
-            // Extra signature is expected but missing
-            (Some(&expected_signer), None) => {
-                return Err(SignatureVerificationError::MissingExtraSignature {
-                    network_id: certificate.network_id,
-                    expected_signer,
-                });
-            }
-            // Extra signature provided but not required
-            (None, Some(_)) => {
-                warn!("Unexpected extra signature provided");
-            }
-            // No extra signature provided nor required
-            (None, None) => {}
-        };
-
-        Ok(())
-    }
-
     #[instrument(skip(self, certificate), fields(hash, rollup_id = certificate.network_id.to_u32()), level = "info")]
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
-        extra_signature: Option<Signature>,
     ) -> Result<CertificateId, CertificateSubmissionError> {
         let hash = certificate.hash();
         let hash_string = hash.to_string();
@@ -929,22 +897,6 @@ where
             "Received certificate"
         );
         self.validate_pre_existing_certificate(&certificate).await?;
-
-        // Verify the extra certificate signature
-        self.verify_extra_cert_signature(
-            &certificate,
-            self.config()
-                .extra_certificate_signer
-                .get(&certificate.network_id.to_u32()),
-            extra_signature,
-        )
-        .map_err(|error| {
-            error!(
-                ?error,
-                "Failed to verify the extra signature for the certificate"
-            );
-            CertificateSubmissionError::SignatureError(error)
-        })?;
 
         // Verify the certificate signature
         self.verify_cert_signature(&certificate)

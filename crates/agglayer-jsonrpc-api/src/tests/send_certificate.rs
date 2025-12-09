@@ -2,7 +2,7 @@ use agglayer_config::Config;
 use agglayer_storage::{
     stores::{
         PendingCertificateReader as _, PendingCertificateWriter as _, StateReader as _,
-        StateWriter as _,
+        StateWriter as _, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
     tests::TempDBDir,
 };
@@ -165,6 +165,8 @@ async fn pending_certificate_in_error_force_push() {
         .update_settlement_tx_hash(
             &certificate_id,
             SettlementTxHash::from(Digest::from([1; 32])),
+            UpdateEvenIfAlreadyPresent::No,
+            UpdateStatusToCandidate::Yes,
         )
         .expect("unable to update settlement tx hash");
 
@@ -246,6 +248,8 @@ async fn pending_certificate_in_error_force_set_status() {
         .update_settlement_tx_hash(
             &certificate_id,
             SettlementTxHash::from(Digest::from([1; 32])),
+            UpdateEvenIfAlreadyPresent::No,
+            UpdateStatusToCandidate::Yes,
         )
         .expect("unable to update settlement tx hash");
 
@@ -287,11 +291,11 @@ async fn pending_certificate_in_error_force_set_status() {
     let res: Result<(), _> = context
         .admin_client
         .request(
-            "admin_forceSetCertificateStatus",
+            "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                CertificateStatus::Candidate,
-                false
+                "process-now=false",
+                "set-status,from=InError,to=Candidate"
             ],
         )
         .await;
@@ -311,12 +315,8 @@ async fn pending_certificate_in_error_force_set_status() {
     let res: Result<(), _> = context
         .admin_client
         .request(
-            "admin_forceSetCertificateStatus",
-            rpc_params![
-                pending_certificate.hash(),
-                CertificateStatus::Candidate,
-                true
-            ],
+            "admin_forceEditCertificate",
+            rpc_params![pending_certificate.hash(), "process-now=true"],
         )
         .await;
 
@@ -389,12 +389,12 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status(
     let res: Result<(), _> = context
         .admin_client
         .request(
-            "admin_forceSetCertificateStatus",
+            "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                CertificateStatus::Proven,
-                false,
-                Some(vec![fake_settlement_tx_hash])
+                "process-now=false",
+                "set-status,from=Candidate,to=Proven",
+                format!("set-settlement-tx-hash,from={fake_settlement_tx_hash},to=null")
             ],
         )
         .await;
@@ -421,6 +421,177 @@ async fn pending_certificate_in_error_with_settlement_tx_hash_force_set_status(
 }
 
 #[test_log::test(tokio::test)]
+async fn pending_certificate_in_error_with_settlement_tx_hash_admin_fixup_tx_hash() {
+    let path = TempDBDir::new();
+
+    let mut config = Config::new(&path.path);
+    config.debug_mode = true;
+
+    let mut context = TestContext::new_with_config(config).await;
+    let network_id = 1.into();
+
+    let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let certificate_id = pending_certificate.hash();
+
+    context
+        .state_store
+        .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
+        .expect("unable to insert pending certificate header");
+
+    let fake_settlement_tx_hash = SettlementTxHash::from(Digest::from([1; 32]));
+    let fake_settlement_tx_hash_2 = SettlementTxHash::from(Digest::from([2; 32]));
+    assert_ne!(fake_settlement_tx_hash, fake_settlement_tx_hash_2);
+
+    context
+        .state_store
+        .update_settlement_tx_hash(
+            &certificate_id,
+            fake_settlement_tx_hash,
+            UpdateEvenIfAlreadyPresent::No,
+            UpdateStatusToCandidate::Yes,
+        )
+        .expect("unable to update settlement tx hash");
+    context
+        .state_store
+        .update_certificate_header_status(
+            &certificate_id,
+            &CertificateStatus::InError {
+                error: Box::new(agglayer_types::CertificateStatusError::InternalError(
+                    "test".into(),
+                )),
+            },
+        )
+        .unwrap();
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash));
+    assert!(matches!(res.status, CertificateStatus::InError { .. }));
+
+    // InError -> Candidate, fixup tx hash
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceEditCertificate",
+            rpc_params![
+                pending_certificate.hash(),
+                "process-now=false",
+                "set-status,from=InError,to=Candidate",
+                format!(
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash},\
+                     to={fake_settlement_tx_hash_2}"
+                )
+            ],
+        )
+        .await;
+
+    assert!(res.is_ok());
+    assert!(context.certificate_receiver.try_recv().is_err());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash_2));
+    assert_eq!(res.status, CertificateStatus::Candidate);
+
+    // Candidate -> InError, fixup tx hash
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceEditCertificate",
+            rpc_params![
+                pending_certificate.hash(),
+                "process-now=false",
+                "set-status,from=Candidate,to=InError",
+                format!(
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash_2},\
+                     to={fake_settlement_tx_hash}"
+                )
+            ],
+        )
+        .await;
+
+    assert!(res.is_ok());
+    assert!(context.certificate_receiver.try_recv().is_err());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash));
+    assert!(matches!(res.status, CertificateStatus::InError { .. }));
+
+    // Candidate -> InError, fixup tx hash, but "from" status is wrong so nothing
+    // happens
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceEditCertificate",
+            rpc_params![
+                pending_certificate.hash(),
+                "process-now=false",
+                "set-status,from=Candidate,to=InError",
+                format!(
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash},\
+                     to={fake_settlement_tx_hash_2}"
+                )
+            ],
+        )
+        .await;
+
+    assert!(res.is_err());
+    assert!(context.certificate_receiver.try_recv().is_err());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash));
+    assert!(matches!(res.status, CertificateStatus::InError { .. }));
+
+    // InError -> Candidate, fixup tx hash, but "from" tx hash is wrong so nothing
+    // happens
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceEditCertificate",
+            rpc_params![
+                pending_certificate.hash(),
+                "process-now=false",
+                "set-status,from=InError,to=Candidate",
+                format!(
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash_2},\
+                     to={fake_settlement_tx_hash}"
+                )
+            ],
+        )
+        .await;
+
+    assert!(res.is_err());
+    assert!(context.certificate_receiver.try_recv().is_err());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash));
+    assert!(matches!(res.status, CertificateStatus::InError { .. }));
+}
+
+#[test_log::test(tokio::test)]
 async fn pending_certificate_settled_force_set_status() {
     let path = TempDBDir::new();
 
@@ -441,7 +612,12 @@ async fn pending_certificate_settled_force_set_status() {
     let fake_settlement_tx_hash = SettlementTxHash::from(Digest::from([1; 32]));
     context
         .state_store
-        .update_settlement_tx_hash(&certificate_id, fake_settlement_tx_hash)
+        .update_settlement_tx_hash(
+            &certificate_id,
+            fake_settlement_tx_hash,
+            UpdateEvenIfAlreadyPresent::No,
+            UpdateStatusToCandidate::Yes,
+        )
         .expect("unable to update settlement tx hash");
     context
         .state_store
@@ -460,12 +636,12 @@ async fn pending_certificate_settled_force_set_status() {
     let res: Result<(), _> = context
         .admin_client
         .request(
-            "admin_forceSetCertificateStatus",
+            "admin_forceEditCertificate",
             rpc_params![
                 pending_certificate.hash(),
-                CertificateStatus::Proven,
-                false,
-                Some(fake_settlement_tx_hash)
+                "process-now=false",
+                "set-status,from=Settled,to=Proven",
+                format!("set-settlement-tx-hash,from{fake_settlement_tx_hash},to=null")
             ],
         )
         .await;

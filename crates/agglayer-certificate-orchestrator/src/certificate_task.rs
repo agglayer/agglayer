@@ -291,6 +291,7 @@ where
                                         contract_settlement_tx_hash,
                                     );
                                 if let Err(error) = insert_result {
+                                    self.set_status(CertificateStatus::Candidate)?;
                                     error!(
                                         ?error,
                                         "Failed to insert certificate settlement tx hash to DB",
