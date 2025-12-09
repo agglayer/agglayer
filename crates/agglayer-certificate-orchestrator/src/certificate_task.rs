@@ -161,7 +161,11 @@ where
             CertificateStatus::Pending => self.process_from_pending().await,
             CertificateStatus::Proven => {
                 self.recompute_state().await?;
-                self.process_from_proven().await
+                if self.header.status == CertificateStatus::Candidate {
+                    self.process_from_candidate().await
+                } else {
+                    self.process_from_proven().await
+                }
             }
             CertificateStatus::Candidate => {
                 self.recompute_state().await?;
@@ -254,11 +258,12 @@ where
             let recomputed_from_contract: Option<Digest> = match result_latest_contract_pp_root {
                 Ok(Some((contract_pp_root, contract_settlement_tx_hash))) => {
                     // Try to recompute the state with the latest tx from contract.
+                    let mut recovered_state = state.clone();
                     match self
                         .certifier_client
                         .witness_generation(
                             &self.certificate,
-                            &mut state.clone(),
+                            &mut recovered_state,
                             Some(contract_settlement_tx_hash.into()),
                         )
                         .await
@@ -283,11 +288,17 @@ where
                                          database"
                                     );
                                 };
-                                // TODO refactor this function to not calculate witness_generation
-                                // twice in this function.
-                                // As this would be very rare scenario, we can leave it like this
-                                // for now.
-                                Some(contract_settlement_tx_hash.into())
+                                self.new_pp_root = Some(recomputed_output.new_pessimistic_root);
+                                self.send_to_network_task(
+                                    NetworkTaskMessage::CertificateExecuted {
+                                        height,
+                                        certificate_id,
+                                        new_state: recovered_state,
+                                    },
+                                )
+                                .await?;
+                                self.header.status = CertificateStatus::Candidate;
+                                return Ok(());
                             } else {
                                 warn!(
                                     certificate_settlement_tx_hash = ?self.header.settlement_tx_hash,
