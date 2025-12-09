@@ -1,0 +1,10 @@
+[auth.gcpkms]
+project-id = "project-id_test"
+location = "location-test"
+keyring = "keyring-test"
+key-name = "key-name-test"
+key-version = 2
+pp-settlement-key-name = "pp-settlement-key-name-test"
+pp-settlement-key-version = 3
+tx-settlement-key-name = "tx-settlement-key-name-test"
+tx-settlement-key-version = 4
