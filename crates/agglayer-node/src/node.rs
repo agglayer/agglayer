@@ -3,9 +3,7 @@ use std::{num::NonZeroU64, sync::Arc};
 use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
-use agglayer_config::{
-    outbound::OutboundRpcSettleConfig, storage::backup::BackupConfig, Config, Epoch,
-};
+use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,

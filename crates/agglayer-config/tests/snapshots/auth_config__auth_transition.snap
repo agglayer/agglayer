@@ -3,6 +3,7 @@ source: crates/agglayer-config/tests/auth_config.rs
 expression: config
 ---
 prover-entrypoint = "http://127.0.0.1:8080"
+prover-buffer-size = 100
 
 [full-node-rpcs]
 
@@ -80,3 +81,9 @@ input-backpressure-buffer-size = 1000
 
 [storage]
 db-path = "/home/runner/work/agglayer/agglayer/crates/agglayer-config/tests/fixtures/auth/storage"
+
+[prover.network-prover]
+proving-timeout = "5m"
+sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+
+[grpc]

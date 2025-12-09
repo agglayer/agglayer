@@ -80,3 +80,9 @@ input-backpressure-buffer-size = 1000
 
 [storage]
 db-path = "/home/runner/work/agglayer/agglayer/crates/agglayer-config/tests/fixtures/auth/storage"
+
+[prover.network-prover]
+proving-timeout = "5m"
+sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+
+[grpc]
