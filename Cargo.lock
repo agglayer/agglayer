@@ -87,7 +87,6 @@ dependencies = [
  "pessimistic-proof-test-suite",
  "prover-alloy",
  "prover-config",
- "prover-engine",
  "prover-executor",
  "reqwest",
  "rstest",
