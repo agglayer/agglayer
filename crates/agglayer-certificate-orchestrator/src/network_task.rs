@@ -1,7 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
 use agglayer_clock::ClockRef;
-use agglayer_interop_types::PessimisticRoot;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
@@ -404,12 +403,6 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier,
                         nonce_info, previous_tx_hashes, height, new_pp_root, .. }) => {
-
-                        // Associate the pp root with the certificate ID.
-                        self.state_store.add_certificate_id_for_pp_root(
-                            &PessimisticRoot::from(new_pp_root),
-                            &certificate_id,
-                        )?;
 
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
