@@ -177,8 +177,7 @@ async fn recover_after_invalid_transaction_in_history(#[case] state: Forest) {
     .expect("Failed to configure candidate_recorded failpoint");
 
     let mut config = agglayer_config::Config::new(&tmp_dir.path);
-    config.outbound.rpc.settle.confirmations = 10;
-    config.outbound.rpc.settle.settlement_timeout = Duration::from_secs(10);
+    config.outbound.rpc.settle_cert.confirmations = 10;
 
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) = setup_network(

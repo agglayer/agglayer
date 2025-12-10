@@ -146,8 +146,7 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
     .expect("Failed to configure failpoint");
 
     let mut config = agglayer_config::Config::new(&tmp_dir.path);
-    config.outbound.rpc.settle.confirmations = 50;
-    config.outbound.rpc.settle.settlement_timeout = Duration::from_secs(10);
+    config.outbound.rpc.settle_cert.confirmations = 50;
 
     // L1 is a RAII guard
     let (_handle, _l1, client) = setup_network(&tmp_dir.path, Some(config), None).await;
@@ -199,8 +198,7 @@ async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
     .expect("Failed to configure failpoint");
 
     let mut config = agglayer_config::Config::new(&tmp_dir.path);
-    config.outbound.rpc.settle.confirmations = 2;
-    config.outbound.rpc.settle.settlement_timeout = Duration::from_secs(10);
+    config.outbound.rpc.settle_cert.confirmations = 2;
 
     // L1 is a RAII guard
     let (_handle, _l1, client) = setup_network(&tmp_dir.path, Some(config), None).await;

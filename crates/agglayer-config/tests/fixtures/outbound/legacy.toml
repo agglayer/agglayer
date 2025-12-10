@@ -1,0 +1,10 @@
+[rpc.settle]
+max-retries = 5
+retry-interval = "10s"
+confirmations = 3
+gas-multiplier-factor = 120
+
+[rpc.settle.gas-price]
+multiplier = 1.5
+floor = "1gwei"
+ceiling = "123gwei"
