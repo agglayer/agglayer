@@ -28,20 +28,13 @@ send-tx = "unlimited"
 
 [rate-limiting.network]
 
-[outbound.rpc.settle-tx]
+[outbound.rpc.settle]
 max-retries = 30
 retry-interval = "10s"
 confirmations = 1
+settlement-timeout = "20m"
 
-[outbound.rpc.settle-tx.gas-price]
-ceiling = "100gwei"
-
-[outbound.rpc.settle-cert]
-max-retries = 30
-retry-interval = "10s"
-confirmations = 1
-
-[outbound.rpc.settle-cert.gas-price]
+[outbound.rpc.settle.gas-price]
 ceiling = "100gwei"
 
 [l1]
@@ -73,10 +66,13 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
+db-path = "./storage"
 
 [prover.network-prover]
 proving-timeout = "5m"
 sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
 
 [grpc]
+
+[extra-certificate-signer]
+1337 = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"

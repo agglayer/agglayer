@@ -2,7 +2,7 @@
 source: crates/agglayer-config/tests/backup.rs
 expression: config
 ---
-prover-entrypoint = "http://127.0.0.1:8080"
+prover-buffer-size = 100
 
 [full-node-rpcs]
 
@@ -28,13 +28,20 @@ send-tx = "unlimited"
 
 [rate-limiting.network]
 
-[outbound.rpc.settle]
+[outbound.rpc.settle-tx]
 max-retries = 30
 retry-interval = "10s"
 confirmations = 1
-settlement-timeout = "20m"
 
-[outbound.rpc.settle.gas-price]
+[outbound.rpc.settle-tx.gas-price]
+ceiling = "100gwei"
+
+[outbound.rpc.settle-cert]
+max-retries = 30
+retry-interval = "10s"
+confirmations = 1
+
+[outbound.rpc.settle-cert.gas-price]
 ceiling = "100gwei"
 
 [l1]
@@ -72,3 +79,9 @@ db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
 path = "./test/"
 state-max-backup-count = 100
 pending-max-backup-count = 100
+
+[prover.network-prover]
+proving-timeout = "5m"
+sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+
+[grpc]

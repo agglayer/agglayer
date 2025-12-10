@@ -8,7 +8,7 @@ use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
-use agglayer_signer::ConfiguredSigner;
+use agglayer_signer::{ConfiguredSigner, ConfiguredSigners};
 use agglayer_storage::{
     storage::backup::{BackupClient, BackupEngine},
     stores::{
@@ -18,12 +18,12 @@ use agglayer_storage::{
 };
 use alloy::{
     network::EthereumWallet,
-    providers::{ProviderBuilder, WsConnect},
-    signers::Signer,
+    providers::{ProviderBuilder, WalletProvider, WsConnect},
 };
 use eyre::Context as _;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tower::buffer::Buffer;
 use tracing::{debug, error, info, warn};
 
 use crate::epoch_synchronizer::EpochSynchronizer;
@@ -174,31 +174,61 @@ impl Node {
             current_epoch_store.get_epoch_number()
         );
 
-        let signer = ConfiguredSigner::new(config.clone()).await?;
-        let address = signer.address();
-        tracing::info!("Signer address: {:?}", address);
+        // Create RPC clients, note that they can be the same signer
+        // or not depending on the configuration. If is the same signer
+        // we share the nonce management too.
 
-        // Create a new L1 RPC provider with signer support and SimpleNonceManager
-        let wallet = EthereumWallet::from(signer);
-        let provider = ProviderBuilder::new()
-            .with_simple_nonce_management()
-            .wallet(wallet)
-            .connect_client(
-                alloy::rpc::client::RpcClient::builder()
-                    .layer(crate::L1TraceLayer)
-                    .http(config.l1.node_url.clone()),
+        let (rpc_pp_settlement, rpc_tx_settlement) = {
+            // We will use the same parameterization to create both providers.
+            let fn_build_provider = |signer: ConfiguredSigner| {
+                Arc::new(
+                    ProviderBuilder::new()
+                        .with_simple_nonce_management()
+                        .wallet(EthereumWallet::from(signer))
+                        .connect_client(
+                            alloy::rpc::client::RpcClient::builder()
+                                .layer(crate::L1TraceLayer)
+                                .http(config.l1.node_url.clone()),
+                        ),
+                )
+            };
+
+            let signers = ConfiguredSigners::new(&config).await?;
+            let provider_cert = fn_build_provider(signers.pp_settlement);
+
+            let provider_tx = if let Some(tx_settlement) = signers.tx_settlement {
+                fn_build_provider(tx_settlement)
+            } else {
+                warn!("Using the same provider for certificate and tx settlement");
+                provider_cert.clone()
+            };
+
+            tracing::info!(
+                "Cert signer address: {:?}",
+                // Note that because the signer always has at least one address,
+                // this iterator will always have at least one element.
+                provider_cert.signer_addresses().next().unwrap()
             );
-        let rpc = Arc::new(provider);
+            tracing::info!(
+                "Tx signer address: {:?}",
+                provider_tx.signer_addresses().next().unwrap()
+            );
+
+            (provider_cert, provider_tx)
+        };
 
         tracing::debug!("RPC provider created");
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
-                rpc.clone(),
-                PolygonRollupManager::new(config.l1.rollup_manager_contract.into(), (*rpc).clone()),
+                rpc_pp_settlement.clone(),
+                PolygonRollupManager::new(
+                    config.l1.rollup_manager_contract.into(),
+                    (*rpc_pp_settlement).clone(),
+                ),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
-                config.outbound.rpc.settle.gas_multiplier_factor,
+                config.outbound.rpc.settle_cert.gas_multiplier_factor,
                 {
-                    let gas_config = &config.outbound.rpc.settle.gas_price;
+                    let gas_config = &config.outbound.rpc.settle_cert.gas_price;
                     agglayer_contracts::GasPriceParams::new(
                         gas_config.multiplier.as_u64_per_1000(),
                         gas_config.floor..=gas_config.ceiling,
@@ -210,21 +240,27 @@ impl Node {
         );
         tracing::debug!("RollupManager created");
 
+        let (_vkey, prover_executor) =
+            prover_executor::Executor::create_prover(config.prover.clone(), pessimistic_proof::ELF)
+                .await?;
+
+        let prover_buffer = Buffer::new(prover_executor, config.prover_buffer_size);
+
         let certifier_client = CertifierClient::try_new(
-            config.prover_entrypoint.clone(),
             pending_store.clone(),
             Arc::clone(&rollup_manager),
             Arc::clone(&config),
+            prover_buffer,
         )
         .await?;
         info!("Certifier client created.");
 
         // Construct the core.
-        let core = Kernel::new(rpc.clone(), config.clone()).unwrap();
+        let core = Kernel::new(rpc_tx_settlement.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
         let epoch_packing_aggregator_task = RpcSettlementClient::new(
-            Arc::new(config.outbound.rpc.settle.clone()),
+            Arc::new(config.outbound.rpc.settle_cert.clone()),
             state_store.clone(),
             pending_store.clone(),
             Arc::clone(&rollup_manager),
