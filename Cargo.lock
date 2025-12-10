@@ -251,7 +251,9 @@ dependencies = [
  "eyre",
  "gcloud-sdk",
  "serde",
+ "serial_test",
  "thiserror 2.0.16",
+ "tracing",
 ]
 
 [[package]]

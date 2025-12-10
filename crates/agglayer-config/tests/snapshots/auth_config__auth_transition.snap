@@ -1,5 +1,5 @@
 ---
-source: crates/agglayer-config/tests/validate_deserialize.rs
+source: crates/agglayer-config/tests/auth_config.rs
 expression: config
 ---
 prover-buffer-size = 100
@@ -54,8 +54,14 @@ polygon-zkevm-global-exit-root-v2-contract = "0xb7f8bc63bbcad18155201308c8f3540b
 rpc-timeout = "45s"
 event-filter-block-range = 10000
 
-[auth.local]
-private-keys = []
+[auth.gcp-kms]
+project-id = "project-id_test"
+location = "location-test"
+keyring = "keyring-test"
+pp-settlement-key-name = "pp-settlement-key-name-test"
+pp-settlement-key-version = 3
+tx-settlement-key-name = "tx-settlement-key-name-test"
+tx-settlement-key-version = 4
 
 [telemetry]
 prometheus-addr = "0.0.0.0:3000"
@@ -73,7 +79,7 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
+db-path = "/home/runner/work/agglayer/agglayer/crates/agglayer-config/tests/fixtures/auth/storage"
 
 [prover.network-prover]
 proving-timeout = "5m"
