@@ -33,7 +33,12 @@ impl Runner {
     /// Convert inputs to stdin.
     pub fn prepare_stdin(state: &NetworkState, batch_header: &MultiBatchHeader) -> SP1Stdin {
         let mut stdin = SP1Stdin::new();
-        stdin.write(state);
+
+        // Use zero-copy serialization for NetworkState
+        let network_state_bytes = state.to_bytes_zero_copy();
+        stdin.write_vec(network_state_bytes);
+
+        // MultiBatchHeader still uses bincode for now
         stdin.write(batch_header);
         stdin
     }
