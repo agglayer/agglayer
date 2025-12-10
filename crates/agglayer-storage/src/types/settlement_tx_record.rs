@@ -35,16 +35,12 @@ impl TryFrom<v0::SettlementTxRecord> for SettlementTxRecord {
     fn try_from(proto: v0::SettlementTxRecord) -> Result<Self, Self::Error> {
         proto
             .tx_history
-            .ok_or_else(|| {
-                CodecError::ProtobufDeserialization(prost::DecodeError::new("Hash history missing"))
-            })?
+            .ok_or_else(|| CodecError::protobuf_decode_custom("Hash history missing"))?
             .hashes
             .into_iter()
             .map(|tx_hash| {
                 let hash_array: [u8; 32] = tx_hash.hash.as_ref().try_into().map_err(|_| {
-                    CodecError::ProtobufDeserialization(prost::DecodeError::new(
-                        "Invalid hash length: expected 32 bytes",
-                    ))
+                    CodecError::protobuf_decode_custom("Invalid hash length: expected 32 bytes")
                 })?;
                 Ok(SettlementTxHash::from(Digest::from(hash_array)))
             })

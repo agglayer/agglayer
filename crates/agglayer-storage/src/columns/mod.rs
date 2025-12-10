@@ -28,6 +28,12 @@ pub enum CodecError {
     UnableToWriteEncodedBytes(#[from] std::io::Error),
 }
 
+impl CodecError {
+    pub fn protobuf_decode_custom(msg: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self::ProtobufDeserialization(prost::DecodeError::new(msg))
+    }
+}
+
 pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
     bincode::default()
 }
@@ -60,8 +66,7 @@ pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
-pub const SETTLEMENT_TX_HASHES_PER_CERTIFICATE_CF: &str =
-    "settlement_tx_hashes_per_certificate_cf";
+pub const SETTLEMENT_TX_HASHES_PER_CERTIFICATE_CF: &str = "settlement_tx_hashes_per_certificate_cf";
 
 // debug CFs
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
