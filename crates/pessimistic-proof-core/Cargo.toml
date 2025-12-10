@@ -21,8 +21,8 @@ agglayer-tries.workspace = true
 unified-bridge.workspace = true
 
 alloy-primitives.workspace = true
-bytemuck = { version = "1.21", features = ["derive"] }
-static_assertions = "1.1"
+bytemuck.workspace = true
+static_assertions.workspace = true
 arbitrary = { workspace = true, optional = true }
 hex = "0.4.3"
 hex-literal = "0.4"
