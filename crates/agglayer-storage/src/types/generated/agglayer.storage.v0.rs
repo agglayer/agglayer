@@ -221,6 +221,7 @@ pub struct TxHashHistory {
 /// A settlement transaction hash.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SettlementTxHash {
+    /// The hash bytes.
     #[prost(bytes="bytes", tag="1")]
     pub hash: ::prost::bytes::Bytes,
 }
