@@ -20,5 +20,6 @@ message TxHashHistory {
 
 // A settlement transaction hash.
 message SettlementTxHash {
+  // The hash bytes.
   bytes hash = 1;
 }
