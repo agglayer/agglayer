@@ -8,12 +8,17 @@ message SettlementTxRecord {
   // Settlement transaction hash history.
   // Optional to differentiate between empty history and missing history,
   // which allows for easier field deprecation in the future.
-  TxHashHistory hashes = 1;
+  TxHashHistory tx_history = 1;
 }
 
 // Transaction hash history wrapper.
 message TxHashHistory {
   // Settlement transaction hashes, uniqued and in order of insertion.
   // Each hash represents a settlement transaction associated with a certificate.
-  repeated bytes hashes = 1;
+  repeated SettlementTxHash hashes = 1;
+}
+
+// A settlement transaction hash.
+message SettlementTxHash {
+  bytes hash = 1;
 }

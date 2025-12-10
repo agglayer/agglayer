@@ -208,14 +208,20 @@ pub struct SettlementTxRecord {
     /// Optional to differentiate between empty history and missing history,
     /// which allows for easier field deprecation in the future.
     #[prost(message, optional, tag="1")]
-    pub hashes: ::core::option::Option<TxHashHistory>,
+    pub tx_history: ::core::option::Option<TxHashHistory>,
 }
 /// Transaction hash history wrapper.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TxHashHistory {
     /// Settlement transaction hashes, uniqued and in order of insertion.
     /// Each hash represents a settlement transaction associated with a certificate.
-    #[prost(bytes="bytes", repeated, tag="1")]
-    pub hashes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
+    #[prost(message, repeated, tag="1")]
+    pub hashes: ::prost::alloc::vec::Vec<SettlementTxHash>,
+}
+/// A settlement transaction hash.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SettlementTxHash {
+    #[prost(bytes="bytes", tag="1")]
+    pub hash: ::prost::bytes::Bytes,
 }
 // @@protoc_insertion_point(module)

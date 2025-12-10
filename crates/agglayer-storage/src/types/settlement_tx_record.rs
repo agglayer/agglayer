@@ -1,7 +1,10 @@
 use std::io;
 
 use agglayer_types::{Digest, SettlementTxHash, SettlementTxRecord};
-use prost::{bytes::BytesMut, Message as _};
+use prost::{
+    bytes::{Bytes, BytesMut},
+    Message as _,
+};
 
 use crate::{
     columns::{Codec, CodecError},
@@ -12,11 +15,13 @@ use crate::{
 impl From<&SettlementTxRecord> for v0::SettlementTxRecord {
     fn from(record: &SettlementTxRecord) -> Self {
         v0::SettlementTxRecord {
-            hashes: Some(v0::TxHashHistory {
+            tx_history: Some(v0::TxHashHistory {
                 hashes: record
                     .hashes()
                     .iter()
-                    .map(|h| prost::bytes::Bytes::from(Digest::from(*h).to_vec()))
+                    .map(|h| v0::SettlementTxHash {
+                        hash: Bytes::from(Digest::from(*h).to_vec()),
+                    })
                     .collect(),
             }),
         }
@@ -29,14 +34,14 @@ impl TryFrom<v0::SettlementTxRecord> for SettlementTxRecord {
 
     fn try_from(proto: v0::SettlementTxRecord) -> Result<Self, Self::Error> {
         proto
-            .hashes
+            .tx_history
             .ok_or_else(|| {
                 CodecError::ProtobufDeserialization(prost::DecodeError::new("Hash history missing"))
             })?
             .hashes
             .into_iter()
-            .map(|bytes| {
-                let hash_array: [u8; 32] = bytes.as_ref().try_into().map_err(|_| {
+            .map(|tx_hash| {
+                let hash_array: [u8; 32] = tx_hash.hash.as_ref().try_into().map_err(|_| {
                     CodecError::ProtobufDeserialization(prost::DecodeError::new(
                         "Invalid hash length: expected 32 bytes",
                     ))
