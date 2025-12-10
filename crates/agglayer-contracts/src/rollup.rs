@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use agglayer_primitives::Address;
+use agglayer_types::SettlementTxHash;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     primitives::{TxHash, U256},
@@ -74,9 +75,9 @@ where
                 .map_err(|_| L1RpcError::CacheLockPoisoned)?;
             if let Some(&cached_root) = cache.get(&l1_leaf_count) {
                 trace!(
-                    "Retrieved cached L1 info root for leaf count {}: {}",
                     l1_leaf_count,
-                    alloy::primitives::B256::from(cached_root)
+                    cached_root = %alloy::primitives::B256::from(cached_root),
+                    "Retrieved cached L1 info root for leaf count",
                 );
                 return Ok(cached_root);
             }
@@ -89,7 +90,7 @@ where
         // Get first `UpdateL1InfoTreeV2` event for the given leaf count.
         // l1 leaf count increases over time for a network, when we filter by
         // `l1_leaf_count` we would not get provider limit.
-        debug!("Searching for UpdateL1InfoTreeV2 event with leaf count {l1_leaf_count}");
+        debug!(%l1_leaf_count, "Searching for UpdateL1InfoTreeV2 event with leaf count");
         let filter = Filter::new()
             .address(self.global_exit_root_manager_contract)
             .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
@@ -97,7 +98,7 @@ where
             .from_block(BlockNumberOrTag::Earliest);
         let events = self.rpc.get_logs(&filter).await.map_err(|error| {
             error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
-            L1RpcError::UpdateL1InfoTreeV2EventFailure(error.to_string())
+            L1RpcError::UpdateL1InfoTreeV2EventFailure(error.into())
         })?;
 
         // Extract event details using alloy's event decoding
@@ -118,11 +119,10 @@ where
             .ok_or(L1RpcError::UpdateL1InfoTreeV2EventNotFound)?;
 
         debug!(
-            "Retrieved UpdateL1InfoTreeV2 event from block {}. L1 info tree leaf count: {}, root: \
-             {}",
-            event_block_number,
-            l1_leaf_count,
-            alloy::primitives::B256::from(l1_info_root) // Use alloy's B256 instead of H256
+            %event_block_number,
+            %l1_leaf_count,
+            l1_info_root = %alloy::primitives::B256::from(l1_info_root), // Use alloy's B256 instead of H256
+            "Retrieved UpdateL1InfoTreeV2 event",
         );
 
         // Await for the related block to be finalized
@@ -249,15 +249,16 @@ where
         before_tx_hash: Option<TxHash>,
     ) -> Result<[u8; 32], L1RpcError> {
         let at_block = if let Some(tx_hash) = before_tx_hash {
+            let settlement_tx_hash = SettlementTxHash::from(tx_hash);
             let receipt = self
                 .rpc
                 .get_transaction_receipt(tx_hash)
                 .await
                 .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
-                    tx_hash: tx_hash.to_string(),
+                    tx_hash: settlement_tx_hash,
                     source: err.into(),
                 })?
-                .ok_or_else(|| L1RpcError::TransactionNotYetMined(tx_hash.to_string()))?;
+                .ok_or_else(|| L1RpcError::TransactionNotYetMined(settlement_tx_hash))?;
 
             if receipt.status() {
                 receipt

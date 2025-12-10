@@ -8,12 +8,12 @@ use rocksdb::{
 
 use crate::columns::{Codec, ColumnSchema};
 
-pub(crate) mod cf_definitions;
+mod cf_definitions;
 pub(crate) mod iterators;
 
 pub mod backup;
 
-pub use cf_definitions::{
+pub(crate) use cf_definitions::{
     debug::debug_db_cf_definitions, epochs::epochs_db_cf_definitions,
     pending::pending_db_cf_definitions, state::state_db_cf_definitions,
 };
@@ -45,7 +45,7 @@ pub enum BackupError {
     IO(#[from] std::io::Error),
 }
 
-/// A physical storage storage component with an active RocksDB.
+/// A physical storage component with an active RocksDB.
 pub struct DB {
     rocksdb: rocksdb::DB,
     default_write_options: Option<WriteOptions>,

@@ -18,6 +18,7 @@ tracing.workspace = true
 url.workspace = true
 
 agglayer-primitives.workspace = true
+agglayer-types.workspace = true
 prover-alloy.workspace = true
 
 [dev-dependencies]

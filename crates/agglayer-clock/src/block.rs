@@ -123,7 +123,7 @@ impl BlockClock<BlockProvider> {
         info!("Creating BlockClock with WebSocket connection");
 
         let client = ClientBuilder::default().pubsub(ws).await?;
-        let provider = ProviderBuilder::new().on_client(client);
+        let provider = ProviderBuilder::new().connect_client(client);
 
         // Mark connection as successful
         agglayer_telemetry::clock::record_connection_established();

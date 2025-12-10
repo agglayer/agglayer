@@ -138,7 +138,7 @@ async fn test_block_clock_starting_with_genesis() {
         .expect("Failed to connect to Anvil");
     let client: BlockProvider = ProviderBuilder::default()
         .with_recommended_fillers()
-        .on_client(client);
+        .connect_client(client);
 
     let test_client = client.clone();
     let mut subscribe = test_client.subscribe_blocks().await.unwrap().into_stream();

@@ -2,7 +2,10 @@ use std::{collections::HashSet, sync::Arc};
 
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
+    stores::{
+        PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    },
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
@@ -140,8 +143,8 @@ where
         // TODO: Hack to deal with Proven certificates in case the PP changed.
         // See https://github.com/agglayer/agglayer/pull/819#discussion_r2152193517 for the details
         // Note that we still have the problem, this is here only to mitigate a bit the
-        // issue When we finally make the storage refactoring, we should remove
-        // this
+        // issue. When we finally do the storage refactoring, we should remove
+        // this.
         if self.header.status == CertificateStatus::Proven {
             warn!(%certificate_id,
                 "Certificate is already proven but we do not have the new_state anymore... \
@@ -196,47 +199,45 @@ where
         debug!("Recomputing new state for already-proven certificate");
         // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
         // certificate header is not found on L1.
-        let settlement_tx_hash_missing_on_l1: bool =
-            if let Some(previous_tx_hash) = self.header.settlement_tx_hash {
-                let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
-                    oneshot::channel();
-                self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
-                    settlement_tx_hash: previous_tx_hash,
-                    certificate_id,
-                    tx_mined_notifier: request_is_settlement_tx_mined,
-                })
-                .await?;
-                let result_is_settlement_tx_mined =
-                    response_is_settlement_tx_mined.await.map_err(recv_err)?;
-                debug!(
-                    "Settlement tx {previous_tx_hash} existence on L1: \
-                     {result_is_settlement_tx_mined:?}"
-                );
-                match result_is_settlement_tx_mined {
-                    Ok(true) => false,  // We have fetched the receipt, tx status 1, tx exist on L1
-                    Ok(false) => false, // Tx found on l1, but with status 0 (reverted)
-                    Err(error) => {
-                        if error.to_string().contains("No transaction receipt found") {
-                            true
-                        } else {
-                            // Some error happened while checking the tx receipt on L1
-                            warn!(
-                                "Failed to check settlement tx {previous_tx_hash} existence on \
-                                 L1: {error}"
-                            );
-                            false
-                        }
-                    }
+        let settlement_tx_hash_missing_on_l1: bool = if let Some(previous_tx_hash) =
+            self.header.settlement_tx_hash
+        {
+            let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
+                oneshot::channel();
+            self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
+                settlement_tx_hash: previous_tx_hash,
+                certificate_id,
+                tx_mined_notifier: request_is_settlement_tx_mined,
+            })
+            .await?;
+
+            let result_is_settlement_tx_mined = response_is_settlement_tx_mined
+                .await
+                .map_err(recv_err)?
+                .inspect_err(|error| {
+                    // Some error happened while checking the tx receipt on L1
+                    warn!(
+                        ?error,
+                        settlement_tx_hash = %previous_tx_hash,
+                        "Failed to check settlement tx prior existence on L1",
+                    );
+                });
+            match result_is_settlement_tx_mined {
+                Ok(crate::TxReceiptStatus::TxSuccessful) | Ok(crate::TxReceiptStatus::TxFailed) => {
+                    false // We have fetched the receipt, tx exists on L1
                 }
-            } else {
-                // No settlement tx hash in the cert header, nothing to check
-                false
-            };
+                Ok(crate::TxReceiptStatus::NotFound) => true, // Tx not found on L1
+                Err(_error) => false,                         // If error happened we do nothing
+            }
+        } else {
+            // No settlement tx hash in the cert header, nothing to check
+            false
+        };
 
         if settlement_tx_hash_missing_on_l1 {
             warn!(
-                "Previous settlement tx hash is missing on L1, tx {:?}",
-                self.header.settlement_tx_hash
+                settlement_tx_hash = ?self.header.settlement_tx_hash,
+                "Previous settlement tx hash is missing on L1",
             );
 
             // If the settlement tx is not found on L1, we need to recover.
@@ -265,15 +266,16 @@ where
                         Ok((_, _, recomputed_output)) => {
                             if contract_pp_root == recomputed_output.new_pessimistic_root {
                                 info!(
+                                    %contract_settlement_tx_hash,
                                     "Certificate new pp root matches the latest settled pp root \
-                                     on L1, updating certificate settlement tx hash to \
-                                     {contract_settlement_tx_hash:?}"
+                                     on L1, updating certificate settlement tx hash to the one in contracts"
                                 );
                                 self.header.settlement_tx_hash = Some(contract_settlement_tx_hash);
                                 if let Err(error) = self.state_store.update_settlement_tx_hash(
                                     &certificate_id,
                                     contract_settlement_tx_hash,
-                                    true,
+                                    UpdateEvenIfAlreadyPresent::Yes,
+                                    UpdateStatusToCandidate::Yes,
                                 ) {
                                     error!(
                                         ?error,
@@ -288,20 +290,20 @@ where
                                 Some(contract_settlement_tx_hash.into())
                             } else {
                                 warn!(
-                                    "Certificate pp root with cert settlement tx {:?} does not \
-                                     match the latest settled pp root on L1 contract tx \
-                                     {contract_settlement_tx_hash}, moving certificate back to \
-                                     Proven",
-                                    self.header.settlement_tx_hash
+                                    certificate_settlement_tx_hash = ?self.header.settlement_tx_hash,
+                                    certificate_pp_root = %recomputed_output.new_pessimistic_root,
+                                    %contract_settlement_tx_hash,
+                                    %contract_pp_root,
+                                    "Certificate pp root does not match the latest settled pp root on L1 contract, moving certificate back to Proven",
                                 );
                                 None
                             }
                         }
                         Err(error) => {
                             warn!(
-                                "Failed to recompute the state with the latest contract tx \
-                                 {contract_settlement_tx_hash}: {error:?}, moving certificate \
-                                 back to Proven"
+                                %contract_settlement_tx_hash,
+                                ?error,
+                                "Failed to recompute the state with the latest contract tx, moving certificate back to Proven"
                             );
                             None
                         }
@@ -312,7 +314,7 @@ where
                     None
                 }
                 Err(error) => {
-                    error!("Failed to fetch latest pp root from contract: {error:?}");
+                    error!(?error, "Failed to fetch latest pp root from contract");
                     return Err(CertificateStatusError::SettlementError(format!(
                         "Cert settlement tx is missing from the l1, but failed to fetch latest pp \
                          root from contract: {error}"
@@ -322,39 +324,18 @@ where
 
             if recomputed_from_contract.is_none() {
                 // Tx not found on L1, and pp root from contract not matching,
-                // clean tx from cert header and move back to Proven
-                let previous_tx_hash = self.header.settlement_tx_hash;
-                error!(
-                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
-                );
-                self.header.settlement_tx_hash = None;
-                if let Err(error) = self.state_store.remove_settlement_tx_hash(&certificate_id) {
-                    error!(
-                        ?error,
-                        "Failed to remove tx_hash {previous_tx_hash:?} from database"
-                    );
-                };
-
-                self.header.status = CertificateStatus::Proven;
-                if let Err(error) = self.state_store.update_certificate_header_status(
-                    &self.header.certificate_id,
-                    &CertificateStatus::Proven,
-                ) {
-                    error!(?error, "Failed to update certificate status in database");
-                };
-
+                // Make the cert InError and wait for aggkit to resubmit it.
                 return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx {previous_tx_hash:?} not found on L1, moving certificate back \
-                     to Proven"
+                    "Settlement tx {:?} not found on L1, moving certificate back to Proven",
+                    self.header.settlement_tx_hash
                 )));
             }
-        };
+        }
 
         // Execute the witness generation to retrieve the new local network state
         let (_, _, output) = self
                 .certifier_client
-                .witness_generation(&self.certificate, &mut state,  self.header.settlement_tx_hash.map(Into::into))
+                .witness_generation(&self.certificate, &mut state, self.header.settlement_tx_hash.map(Digest::from))
                 .await
                 .map_err(|error| {
                     error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven certificate");
@@ -435,8 +416,10 @@ where
         }
 
         if self.previous_tx_hashes.len() > MAX_TX_RETRY {
-            error!(previous_tx_hashes=?self.previous_tx_hashes,
-                "More than 5 different settlement transactions submitted for the same certificate, something is wrong"
+            error!(
+                previous_tx_hashes = ?self.previous_tx_hashes,
+                max_retries = MAX_TX_RETRY,
+                "More settlement transactions submitted for the same certificate than allowed retries, something is wrong"
             );
             return Err(CertificateStatusError::SettlementError(format!(
                 "Too many different settlement transactions submitted for the same certificate: \
@@ -486,15 +469,27 @@ where
 
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
+
         self.header.settlement_tx_hash = Some(settlement_tx_hash);
-        self.state_store
-            .update_settlement_tx_hash(&certificate_id, settlement_tx_hash, true)?;
+        self.state_store.update_settlement_tx_hash(
+            &certificate_id,
+            settlement_tx_hash,
+            UpdateEvenIfAlreadyPresent::Yes,
+            UpdateStatusToCandidate::Yes,
+        )?;
         // No set_status: update_settlement_tx_hash already updates the status in the
         // database
         self.header.status = CertificateStatus::Candidate;
         debug!(
             settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
             "Submitted certificate for settlement"
+        );
+
+        #[cfg(feature = "testutils")]
+        testutils::inject_fail_points_after_proving(
+            &certificate_id,
+            &mut self.header,
+            &self.state_store,
         );
 
         self.process_from_candidate().await
@@ -549,6 +544,14 @@ where
                     "Retrying the settlement transaction after a timeout for certificate \
                      {certificate_id}"
                 );
+                // We should theoretically remove the settlement_tx_hash here. However, doing so
+                // would currently expose us to bugs: recompute_state checks for already-settled
+                // cert only if there's already a settlement_tx_hash.
+                // Considering fixing this would likely be relatively hard right now, we
+                // currently leave the settlement_tx_hash here. This is not by design, and as
+                // soon as the settlement logic is refactored properly, we can remove
+                // the settlement_tx_hash here. But the refactor will likely lead to this code
+                // disappearing anyway, so… :shrug:
                 self.set_status(CertificateStatus::Proven)?;
                 return Box::pin(self.process_from_proven()).await;
             }
@@ -560,10 +563,13 @@ where
                 self.state_store.update_settlement_tx_hash(
                     &certificate_id,
                     alternative_settlement_tx_hash,
-                    true,
+                    UpdateEvenIfAlreadyPresent::Yes,
+                    UpdateStatusToCandidate::Yes,
                 )?;
                 // No set_status: update_settlement_tx_hash already updates the status in the
                 // database
+                // Reprocess from Candidate, and not directly to Settled: we want to check the
+                // number of confirmations, and have not done that here yet.
                 self.header.status = CertificateStatus::Candidate;
                 return Box::pin(self.process_from_candidate()).await;
             }
@@ -617,4 +623,41 @@ fn recv_err(_: oneshot::error::RecvError) -> CertificateStatusError {
     CertificateStatusError::InternalError(
         "Failed to receive network task answer: sender dropped".into(),
     )
+}
+
+#[cfg(feature = "testutils")]
+mod testutils {
+    use agglayer_storage::stores::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate};
+
+    use super::*;
+
+    pub(crate) fn inject_fail_points_after_proving<StateStore: StateWriter>(
+        certificate_id: &agglayer_types::CertificateId,
+        header: &mut CertificateHeader,
+        state_store: &Arc<StateStore>,
+    ) {
+        // Fail point to inject invalid settlement tx hash
+        fail::eval(
+            "certificate_task::process_impl::invalid_settlement_tx_hash",
+            |_| {
+                // Write an unexistent tx hash to simulate the settlement tx not being found on
+                // L1
+                warn!("FAIL POINT ACTIVE: Injecting invalid settlement tx hash");
+                let unexistent_tx_hash = SettlementTxHash::new(Digest::from([21u8; 32]));
+                header.settlement_tx_hash = Some(unexistent_tx_hash);
+                state_store
+                    .update_settlement_tx_hash(
+                        certificate_id,
+                        unexistent_tx_hash,
+                        UpdateEvenIfAlreadyPresent::Yes,
+                        UpdateStatusToCandidate::Yes,
+                    )
+                    .expect("Valid tx hash update");
+                Some(())
+            },
+        );
+
+        // Fail point to record candidate and potentially shutdown
+        fail::fail_point!("certificate_task::process_impl::candidate_recorded");
+    }
 }

@@ -1,5 +1,5 @@
 ---
-source: crates/agglayer-config/tests/validate_deserialize.rs
+source: crates/agglayer-prover-config/tests/validate_deserialize.rs
 expression: config
 ---
 grpc-endpoint = "127.0.0.1:8080"

@@ -18,7 +18,8 @@ use agglayer_storage::{
     stores::{
         epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
         EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
-        PerEpochWriter, StateReader, StateWriter,
+        PerEpochWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+        UpdateStatusToCandidate,
     },
     tests::{
         mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
@@ -111,6 +112,16 @@ impl PerEpochWriter for DummyPendingStore {
 }
 
 impl StateReader for DummyPendingStore {
+    fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
+        Ok(Vec::new())
+    }
+    fn is_network_disabled(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<bool, agglayer_storage::error::Error> {
+        Ok(false)
+    }
+
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
         Ok(vec![])
     }
@@ -283,11 +294,25 @@ impl PendingCertificateWriter for DummyPendingStore {
 }
 
 impl StateWriter for DummyPendingStore {
+    fn disable_network(
+        &self,
+        _network_id: &NetworkId,
+        _disabled_by: agglayer_types::network_info::DisabledBy,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+    fn enable_network(
+        &self,
+        _network_id: &NetworkId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
     fn update_settlement_tx_hash(
         &self,
         _certificate_id: &CertificateId,
         _tx_hash: SettlementTxHash,
-        _force: bool,
+        _force: UpdateEvenIfAlreadyPresent,
+        _set_status: UpdateStatusToCandidate,
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
@@ -923,8 +948,8 @@ impl SettlementClient for Check {
     async fn fetch_last_settled_pp_root(
         &self,
         _network_id: NetworkId,
-    ) -> Result<(Option<[u8; 32]>, Option<SettlementTxHash>), Error> {
-        Ok((None, None))
+    ) -> Result<Option<([u8; 32], SettlementTxHash)>, Error> {
+        Ok(None)
     }
 
     async fn fetch_settlement_nonce(
@@ -937,8 +962,8 @@ impl SettlementClient for Check {
     async fn fetch_settlement_receipt_status(
         &self,
         _settlement_tx_hash: SettlementTxHash,
-    ) -> Result<bool, Error> {
-        Ok(true)
+    ) -> Result<crate::TxReceiptStatus, Error> {
+        Ok(crate::TxReceiptStatus::TxSuccessful)
     }
 }
 

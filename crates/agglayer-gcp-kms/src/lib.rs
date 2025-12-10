@@ -10,10 +10,14 @@ use gcloud_sdk::{
 use serde::Deserialize;
 
 pub(crate) mod error;
+pub(crate) mod params;
 pub(crate) mod signer;
 
 pub use error::Error;
 pub use signer::KmsSigner;
+use tracing::debug;
+
+use crate::params::KMSParameters;
 
 pub const GOOGLE_API_URL: &str = "https://cloudkms.googleapis.com";
 
@@ -23,6 +27,15 @@ pub struct KMS {
     chain_id: u64,
     /// The GCP KMS configuration.
     config: GcpKmsConfig,
+}
+
+#[derive(Debug)]
+pub struct KmsSigners {
+    // The signer for PP settlement.
+    pub pp_settlement: KmsSigner,
+    // The signer for transaction settlement, if not defined is expected
+    // that `pp_settlement` signer will be used.
+    pub tx_settlement: Option<KmsSigner>,
 }
 
 impl KMS {
@@ -54,39 +67,23 @@ impl KMS {
     /// This function will return an error if it fails to retrieve the required
     /// environment variables or if there is an issue creating the GCP KMS
     /// signer.
-    pub async fn gcp_kms_signer(&self) -> Result<KmsSigner, Error> {
-        let project_id = std::env::var("GOOGLE_PROJECT_ID").or_else(|_| {
-            self.config
-                .project_id
-                .clone()
-                .ok_or(Error::KmsConfig("GOOGLE_PROJECT_ID"))
-        })?;
-        let location = std::env::var("GOOGLE_LOCATION").or_else(|_| {
-            self.config
-                .location
-                .clone()
-                .ok_or(Error::KmsConfig("GOOGLE_LOCATION"))
-        })?;
-        let keyring_name = std::env::var("GOOGLE_KEYRING").or_else(|_| {
-            self.config
-                .keyring
-                .clone()
-                .ok_or(Error::KmsConfig("GOOGLE_KEYRING"))
-        })?;
-        let key_name = std::env::var("GOOGLE_KEY_NAME").or_else(|_| {
-            self.config
-                .key_name
-                .clone()
-                .ok_or(Error::KmsConfig("GOOGLE_KEY_NAME"))
-        })?;
-        let key_version: u64 = std::env::var("GOOGLE_KEY_VERSION")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .or(self.config.key_version)
-            .ok_or(Error::KmsConfig("GOOGLE_KEY_VERSION"))?;
+    pub async fn gcp_kms_signers(&self) -> Result<KmsSigners, Error> {
+        let params = KMSParameters::try_from(&self.config)?;
+        debug!("Using GCP KMS with parameters: {:?}", params);
 
-        let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring_name);
-        let specifier = KeySpecifier::new(keyring, &key_name, key_version);
+        // create KeySpecifier for both signers
+        let keyring =
+            GcpKeyRingRef::new(&params.project_id, &params.location, &params.keyring_name);
+        let pp_settlement_specifier = KeySpecifier::new(
+            keyring.clone(),
+            &params.key_name_pp_settlement,
+            params.key_version_pp_settlement,
+        );
+        let tx_settlement_specifier = KeySpecifier::new(
+            keyring,
+            &params.key_name_tx_settlement,
+            params.key_version_tx_settlement,
+        );
 
         // Create the GoogleApi client matching the type expected by GcpSigner
         let client =
@@ -99,12 +96,31 @@ impl KMS {
                 })?;
 
         // Use GcpSigner::new with the proper client type
-        let gcp_signer = GcpSigner::new(client, specifier, Some(self.chain_id))
-            .await
-            .map_err(|e| {
-                Error::KmsError(eyre::Error::new(e).wrap_err("Unable to create GcpSigner"))
-            })?;
+        let pp_settlement_gcp_signer =
+            GcpSigner::new(client.clone(), pp_settlement_specifier, Some(self.chain_id))
+                .await
+                .map_err(|e| {
+                    Error::KmsError(eyre::Error::new(e).wrap_err("Unable to create GcpSigner"))
+                })?;
 
-        Ok(KmsSigner::new(gcp_signer))
+        let is_the_same_key = params.key_name_pp_settlement == params.key_name_tx_settlement
+            && params.key_version_pp_settlement == params.key_version_tx_settlement;
+
+        let tx_settlement_gcp_signer = if is_the_same_key {
+            None
+        } else {
+            Some(
+                GcpSigner::new(client, tx_settlement_specifier, Some(self.chain_id))
+                    .await
+                    .map_err(|e| {
+                        Error::KmsError(eyre::Error::new(e).wrap_err("Unable to create GcpSigner"))
+                    })?,
+            )
+        };
+
+        Ok(KmsSigners {
+            pp_settlement: KmsSigner::new(pp_settlement_gcp_signer),
+            tx_settlement: tx_settlement_gcp_signer.map(KmsSigner::new),
+        })
     }
 }

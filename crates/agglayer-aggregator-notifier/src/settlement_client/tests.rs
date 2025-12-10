@@ -5,7 +5,7 @@ use agglayer_contracts::{L1RpcError, L1TransactionFetcher, Settler};
 use agglayer_storage::tests::mocks::{MockPendingStore, MockPerEpochStore, MockStateStore};
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Address, CertificateHeader, CertificateStatus,
-    Height, L1WitnessCtx, Metadata, PessimisticRootInput, Proof,
+    Height, L1WitnessCtx, Metadata, PessimisticRootInput, Proof, SettlementTxHash,
 };
 use alloy::{
     primitives::{Bytes, FixedBytes, TxHash},
@@ -47,7 +47,7 @@ mockall::mock! {
     impl L1TransactionFetcher for L1Rpc {
         type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
 
-        async fn fetch_transaction_receipt(&self, tx_hash: FixedBytes<32>) -> Result<TransactionReceipt, L1RpcError>;
+        async fn fetch_transaction_receipt(&self, tx_hash: SettlementTxHash) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as L1TransactionFetcher>::Provider;
     }
@@ -247,34 +247,22 @@ async fn test_fetch_last_settled_pp_root() {
             .fetch_last_settled_pp_root(network_id)
             .await
         {
-            Ok((pp_root_opt, tx_hash_opt)) => {
-                match (pp_root_opt, tx_hash_opt) {
-                    (Some(pp_root), Some(tx_hash)) => {
-                        tracing::info!(
-                            "Network {} has settled PP root: {} in tx: {}",
-                            network_id,
-                            FixedBytes::<32>::from(pp_root),
-                            tx_hash
-                        );
-                        // Verify that the root is not all zeros (which would indicate an invalid
-                        // result)
-                        assert_ne!(
-                            pp_root, [0u8; 32],
-                            "PP root should not be all zeros for network {network_id}",
-                        );
-                    }
-                    (None, None) => {
-                        tracing::info!("Network {} has no settled PP root yet", network_id);
-                    }
-                    _ => {
-                        tracing::warn!(
-                            "Network {} has inconsistent state: pp_root={:?}, tx_hash={:?}",
-                            network_id,
-                            pp_root_opt.map(FixedBytes::<32>::from),
-                            tx_hash_opt
-                        );
-                    }
-                }
+            Ok(Some((pp_root, tx_hash))) => {
+                tracing::info!(
+                    "Network {} has settled PP root: {} in tx: {}",
+                    network_id,
+                    FixedBytes::<32>::from(pp_root),
+                    tx_hash
+                );
+                // Verify that the root is not all zeros (which would indicate an invalid
+                // result)
+                assert_ne!(
+                    pp_root, [0u8; 32],
+                    "PP root should not be all zeros for network {network_id}",
+                );
+            }
+            Ok(None) => {
+                tracing::info!("Network {} has no settled PP root yet", network_id);
             }
             Err(error) => {
                 tracing::warn!(

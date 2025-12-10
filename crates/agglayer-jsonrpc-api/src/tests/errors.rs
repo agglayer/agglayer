@@ -97,8 +97,8 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
     "settle_io",
     SendTxError::Settlement(SettlementError::ProviderError(alloy::transports::RpcError::Transport(
         alloy::transports::TransportErrorKind::Custom("Settlement transport error".to_string().into())
-    ))
-))]
+    )))
+)]
 #[case(
     "settle_contract",
     SendTxError::Settlement(SettlementError::ContractError(ContractError::TransportError(
@@ -113,7 +113,7 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 )]
 #[case(
     "rate_disallowed",
-    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxDiabled {})
+    SendTxError::RateLimited(agglayer_rate_limiting::RateLimited::SendTxDisabled {})
 )]
 #[case(
     "rate_sendtx",
