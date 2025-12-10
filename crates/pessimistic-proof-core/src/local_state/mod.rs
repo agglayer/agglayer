@@ -5,6 +5,7 @@ use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
 use bytemuck::{Pod, Zeroable};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
+use static_assertions::{assert_eq_align, assert_eq_size};
 use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
 
 use crate::{
@@ -16,13 +17,21 @@ use crate::{
 
 pub mod commitment;
 
-// Compile-time size and alignment assertions for NetworkStateZeroCopy
-const _NETWORK_STATE_ZERO_COPY_SIZE: () = {
-    // 4 bytes (leaf_count) + 1024 bytes (frontier) + 32 bytes (balance_root) + 32
-    // bytes (nullifier_root) = 1092 bytes
-    assert!(core::mem::size_of::<NetworkStateZeroCopy>() == 1092);
-    assert!(core::mem::align_of::<NetworkStateZeroCopy>() == 4); // u32 alignment
-};
+// Endianness guard: NetworkStateZeroCopy wire format assumes little-endian
+// targets. SP1 zkVM guest is RV32 little-endian; this prevents silent
+// corruption on exotic hosts.
+#[cfg(target_endian = "big")]
+compile_error!("NetworkStateZeroCopy wire format assumes little-endian targets");
+
+/// Expected size of NetworkStateZeroCopy in bytes.
+/// 4 bytes (leaf_count) + 1024 bytes (frontier) + 32 bytes (balance_root) + 32
+/// bytes (nullifier_root) = 1092 bytes
+pub const NETWORK_STATE_ZERO_COPY_SIZE: usize = 1092;
+
+// Compile-time size and alignment assertions using static_assertions for better
+// error messages
+assert_eq_size!(NetworkStateZeroCopy, [u8; NETWORK_STATE_ZERO_COPY_SIZE]);
+assert_eq_align!(NetworkStateZeroCopy, u32); // u32 alignment
 
 /// Zero-copy representation of NetworkState for safe transmute.
 /// This struct has a stable C-compatible memory layout.

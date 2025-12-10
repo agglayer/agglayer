@@ -10,7 +10,14 @@ pub fn main() {
     // Read NetworkState using zero-copy deserialization
     let network_state_bytes = sp1_zkvm::io::read_vec();
     let initial_state = NetworkState::try_from(network_state_bytes.as_slice())
-        .expect("Failed to deserialize NetworkState");
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to deserialize NetworkState: {:?}, input length: {}, expected: {}",
+                e,
+                network_state_bytes.len(),
+                pessimistic_proof_core::NETWORK_STATE_ZERO_COPY_SIZE
+            )
+        });
 
     // MultiBatchHeader still uses bincode for now
     let batch_header = sp1_zkvm::io::read::<MultiBatchHeader>();
