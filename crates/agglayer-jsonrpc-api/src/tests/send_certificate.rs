@@ -244,12 +244,10 @@ async fn pending_certificate_in_error_force_set_status() {
         .expect("unable to insert pending certificate header");
 
     context
-        .state_store
-        .update_settlement_tx_hash(
+        .pending_store
+        .insert_settlement_tx_hash_for_certificate(
             &certificate_id,
             SettlementTxHash::from(Digest::from([1; 32])),
-            UpdateEvenIfAlreadyPresent::No,
-            UpdateStatusToCandidate::Yes,
         )
         .expect("unable to update settlement tx hash");
 
@@ -309,8 +307,19 @@ async fn pending_certificate_in_error_force_set_status() {
         .unwrap()
         .unwrap();
 
-    assert!(res.settlement_tx_hash.is_some());
     assert_eq!(res.status, CertificateStatus::Candidate);
+    assert!(res.settlement_tx_hash.is_none());
+
+    {
+        let settlement_hashes = context
+            .pending_store
+            .get_settlement_tx_hashes_for_certificate(certificate_id)
+            .unwrap();
+        assert_eq!(
+            settlement_hashes.hashes(),
+            &[SettlementTxHash::from(Digest::from([1; 32]))],
+        );
+    }
 
     let res: Result<(), _> = context
         .admin_client
@@ -331,8 +340,15 @@ async fn pending_certificate_in_error_force_set_status() {
         .get_certificate_header(&certificate_id)
         .unwrap()
         .unwrap();
+    assert!(res.settlement_tx_hash.is_none());
 
-    assert!(res.settlement_tx_hash.is_some());
+    {
+        let settlement_hashes = context
+            .pending_store
+            .get_settlement_tx_hashes_for_certificate(certificate_id)
+            .unwrap();
+        assert!(settlement_hashes.len() > 0);
+    }
     assert_eq!(res.status, CertificateStatus::Candidate);
 }
 
