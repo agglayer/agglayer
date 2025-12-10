@@ -460,7 +460,6 @@ where
                                 &certificate_id,
                                 settlement_tx_hash,
                                 agglayer_storage::stores::UpdateEvenIfAlreadyPresent::Yes,
-                                agglayer_storage::stores::UpdateStatusToCandidate::No,
                             )
                             .map_err(|error| {
                                 error!(?error, "Failed to update settlement tx hash");

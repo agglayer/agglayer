@@ -2,8 +2,7 @@ use std::time::Duration;
 
 use agglayer_storage::{
     stores::{
-        PendingCertificateReader, PendingCertificateWriter, StateWriter,
-        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        PendingCertificateReader, PendingCertificateWriter, StateWriter, UpdateEvenIfAlreadyPresent,
     },
     tests::TempDBDir,
 };
@@ -330,7 +329,6 @@ async fn from_candidate_to_settle() {
             &certificate_id,
             SettlementTxHash::for_tests(),
             UpdateEvenIfAlreadyPresent::No,
-            UpdateStatusToCandidate::Yes,
         )
         .unwrap();
 

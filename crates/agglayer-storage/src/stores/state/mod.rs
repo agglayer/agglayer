@@ -37,7 +37,7 @@ use crate::{
         backup::{BackupClient, BackupRequest},
         DB,
     },
-    stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
+    stores::interfaces::writer::UpdateEvenIfAlreadyPresent,
     types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
 };
 
@@ -96,7 +96,6 @@ impl StateWriter for StateStore {
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
         force: UpdateEvenIfAlreadyPresent,
-        set_status: UpdateStatusToCandidate,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
@@ -122,9 +121,6 @@ impl StateWriter for StateStore {
             }
 
             certificate_header.settlement_tx_hash = Some(tx_hash);
-            if set_status == UpdateStatusToCandidate::Yes {
-                certificate_header.status = CertificateStatus::Candidate;
-            }
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;

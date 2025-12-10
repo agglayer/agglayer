@@ -5,7 +5,7 @@ use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
     PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
-    UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    UpdateEvenIfAlreadyPresent,
 };
 use agglayer_types::{
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
@@ -279,7 +279,6 @@ where
             &certificate_id,
             settlement_tx_hash,
             UpdateEvenIfAlreadyPresent::Yes,
-            UpdateStatusToCandidate::No,
         )?;
 
         // Step 3: Add certificate to epoch with retries

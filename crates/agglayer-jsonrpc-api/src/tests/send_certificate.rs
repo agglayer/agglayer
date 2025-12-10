@@ -2,7 +2,7 @@ use agglayer_config::Config;
 use agglayer_storage::{
     stores::{
         PendingCertificateReader as _, PendingCertificateWriter as _, StateReader as _,
-        StateWriter as _, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        StateWriter as _, UpdateEvenIfAlreadyPresent,
     },
     tests::TempDBDir,
 };
@@ -687,7 +687,6 @@ async fn pending_certificate_settled_force_set_status() {
             &certificate_id,
             fake_settlement_tx_hash,
             UpdateEvenIfAlreadyPresent::No,
-            UpdateStatusToCandidate::Yes,
         )
         .expect("unable to update settlement tx hash");
 
