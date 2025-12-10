@@ -1,7 +1,8 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use agglayer_primitives::{ruint::UintTryFrom, Hashable, U256, U512};
+use agglayer_primitives::{ruint::UintTryFrom, Digest, Hashable, U256, U512};
 use agglayer_tries::roots::{LocalBalanceRoot, LocalNullifierRoot};
+use bytemuck::{Pod, Zeroable};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
 use unified_bridge::{Error, LocalExitTree, NetworkId, L1_ETH};
@@ -14,6 +15,90 @@ use crate::{
 };
 
 pub mod commitment;
+
+// Compile-time size and alignment assertions for NetworkStateZeroCopy
+const _NETWORK_STATE_ZERO_COPY_SIZE: () = {
+    // 4 bytes (leaf_count) + 1024 bytes (frontier) + 32 bytes (balance_root) + 32 bytes
+    // (nullifier_root) = 1092 bytes
+    assert!(core::mem::size_of::<NetworkStateZeroCopy>() == 1092);
+    assert!(core::mem::align_of::<NetworkStateZeroCopy>() == 4); // u32 alignment
+};
+
+/// Zero-copy representation of NetworkState for safe transmute.
+/// This struct has a stable C-compatible memory layout.
+///
+/// # Memory Layout
+/// - `exit_tree_leaf_count`: 4 bytes (u32)
+/// - `exit_tree_frontier`: 1024 bytes (32 x 32-byte hashes)
+/// - `balance_tree_root`: 32 bytes
+/// - `nullifier_tree_root`: 32 bytes
+/// - Total: 1092 bytes
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct NetworkStateZeroCopy {
+    /// Leaf count of the exit tree (u32)
+    pub exit_tree_leaf_count: u32,
+    /// Frontier of the exit tree (32 * 32 = 1024 bytes)
+    pub exit_tree_frontier: [[u8; 32]; 32],
+    /// Root of the balance tree (32 bytes)
+    pub balance_tree_root: [u8; 32],
+    /// Root of the nullifier tree (32 bytes)
+    pub nullifier_tree_root: [u8; 32],
+}
+
+impl From<&NetworkState> for NetworkStateZeroCopy {
+    fn from(state: &NetworkState) -> Self {
+        Self {
+            exit_tree_leaf_count: state.exit_tree.leaf_count,
+            exit_tree_frontier: state.exit_tree.frontier().map(|h| h.0),
+            balance_tree_root: state.balance_tree.root.0,
+            nullifier_tree_root: state.nullifier_tree.root.0,
+        }
+    }
+}
+
+impl From<&NetworkStateZeroCopy> for NetworkState {
+    fn from(zero_copy: &NetworkStateZeroCopy) -> Self {
+        let exit_tree = LocalExitTree::from_parts(
+            zero_copy.exit_tree_leaf_count,
+            zero_copy.exit_tree_frontier.map(Digest),
+        );
+
+        let balance_tree = LocalBalanceTree {
+            root: Digest(zero_copy.balance_tree_root),
+        };
+
+        let nullifier_tree = NullifierTree {
+            root: Digest(zero_copy.nullifier_tree_root),
+        };
+
+        NetworkState {
+            exit_tree,
+            balance_tree,
+            nullifier_tree,
+        }
+    }
+}
+
+impl NetworkStateZeroCopy {
+    /// Safely deserialize from bytes using bytemuck.
+    pub fn from_bytes(data: &[u8]) -> Result<&Self, bytemuck::PodCastError> {
+        if data.len() != core::mem::size_of::<Self>() {
+            return Err(bytemuck::PodCastError::SizeMismatch);
+        }
+        bytemuck::try_from_bytes(data)
+    }
+
+    /// Convert this struct to a byte slice.
+    pub fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
+
+    /// Convert this struct to an owned byte vector.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.as_bytes().to_vec()
+    }
+}
 
 /// State representation of one network without the leaves, taken as input by
 /// the prover.
@@ -28,7 +113,21 @@ pub struct NetworkState {
     pub nullifier_tree: NullifierTree,
 }
 
+impl TryFrom<&[u8]> for NetworkState {
+    type Error = bytemuck::PodCastError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        let zero_copy = NetworkStateZeroCopy::from_bytes(data)?;
+        Ok(Self::from(zero_copy))
+    }
+}
+
 impl NetworkState {
+    /// Serialize to zero-copy bytes.
+    /// This creates a byte representation that can be safely transmuted back.
+    pub fn to_bytes_zero_copy(&self) -> Vec<u8> {
+        NetworkStateZeroCopy::from(self).to_bytes()
+    }
     /// Returns the roots.
     pub fn get_state_commitment(&self) -> StateCommitment {
         StateCommitment {
@@ -173,5 +272,117 @@ impl NetworkState {
         }
 
         Ok(self.get_state_commitment())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_zero_copy_size_and_alignment() {
+        // Verify size: 4 + 1024 + 32 + 32 = 1092 bytes
+        assert_eq!(core::mem::size_of::<NetworkStateZeroCopy>(), 1092);
+        // Verify alignment: u32 alignment (4 bytes)
+        assert_eq!(core::mem::align_of::<NetworkStateZeroCopy>(), 4);
+    }
+
+    #[test]
+    fn test_zero_copy_roundtrip() {
+        let state = NetworkState {
+            exit_tree: LocalExitTree::from_parts(42, [[1u8; 32].into(); 32]),
+            balance_tree: LocalBalanceTree {
+                root: Digest([0xAAu8; 32]),
+            },
+            nullifier_tree: NullifierTree {
+                root: Digest([0xBBu8; 32]),
+            },
+        };
+
+        let bytes = state.to_bytes_zero_copy();
+        assert_eq!(bytes.len(), core::mem::size_of::<NetworkStateZeroCopy>());
+
+        let deserialized = NetworkState::try_from(bytes.as_slice())
+            .expect("Zero-copy deserialization should succeed");
+
+        assert_eq!(state.exit_tree.leaf_count, deserialized.exit_tree.leaf_count);
+        assert_eq!(state.balance_tree.root, deserialized.balance_tree.root);
+        assert_eq!(state.nullifier_tree.root, deserialized.nullifier_tree.root);
+    }
+
+    #[test]
+    fn test_zero_copy_with_varying_data() {
+        // Test with different leaf counts
+        for leaf_count in [0, 1, 100, u32::MAX] {
+            let state = NetworkState {
+                exit_tree: LocalExitTree::from_parts(leaf_count, [[0u8; 32].into(); 32]),
+                balance_tree: LocalBalanceTree {
+                    root: Digest([0u8; 32]),
+                },
+                nullifier_tree: NullifierTree {
+                    root: Digest([0u8; 32]),
+                },
+            };
+
+            let bytes = state.to_bytes_zero_copy();
+            let deserialized = NetworkState::try_from(bytes.as_slice()).unwrap();
+            assert_eq!(state.exit_tree.leaf_count, deserialized.exit_tree.leaf_count);
+        }
+    }
+
+    #[test]
+    fn test_zero_copy_invalid_input() {
+        let state = NetworkState {
+            exit_tree: LocalExitTree::new(),
+            balance_tree: LocalBalanceTree {
+                root: Digest([1u8; 32]),
+            },
+            nullifier_tree: NullifierTree {
+                root: Digest([2u8; 32]),
+            },
+        };
+        let bytes = state.to_bytes_zero_copy();
+
+        // Test wrong size (too small)
+        let too_small = &bytes[..bytes.len() - 1];
+        assert!(NetworkState::try_from(too_small).is_err());
+
+        // Test wrong size (too large)
+        let mut too_large = bytes.clone();
+        too_large.push(0);
+        assert!(NetworkState::try_from(too_large.as_slice()).is_err());
+
+        // Test empty data
+        assert!(NetworkState::try_from([].as_slice()).is_err());
+    }
+
+    #[test]
+    fn test_zero_copy_preserves_frontier() {
+        // Create state with distinct frontier values
+        let mut frontier = [[0u8; 32]; 32];
+        for (i, f) in frontier.iter_mut().enumerate() {
+            f[0] = i as u8;
+            f[31] = (31 - i) as u8;
+        }
+
+        let state = NetworkState {
+            exit_tree: LocalExitTree::from_parts(123, frontier.map(Digest)),
+            balance_tree: LocalBalanceTree {
+                root: Digest([0xCCu8; 32]),
+            },
+            nullifier_tree: NullifierTree {
+                root: Digest([0xDDu8; 32]),
+            },
+        };
+
+        let bytes = state.to_bytes_zero_copy();
+        let deserialized = NetworkState::try_from(bytes.as_slice()).unwrap();
+
+        // Verify frontier is preserved
+        let original_frontier = state.exit_tree.frontier();
+        let deserialized_frontier = deserialized.exit_tree.frontier();
+        for i in 0..32 {
+            assert_eq!(original_frontier[i], deserialized_frontier[i]);
+        }
     }
 }
