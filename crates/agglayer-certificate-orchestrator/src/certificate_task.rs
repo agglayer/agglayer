@@ -548,10 +548,8 @@ where
             })?;
 
             debug!(
-                "Pre check prev txhash {settlement_tx_hash}: {:?}",
-                self.state_store
-                    .get_certificate_header(&certificate_id)
-                    .map(|h| h.map(|h| h.status))
+                %settlement_tx_hash,
+                "Pre check prev txhash {settlement_tx_hash}",
             );
 
             if processed_tx_hashes.contains(&settlement_tx_hash) {

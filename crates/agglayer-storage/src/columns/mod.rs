@@ -60,7 +60,7 @@ pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
-pub const SETTLEMENT_TX_HASHSES_PER_CERTIFICATE_CF: &str =
+pub const SETTLEMENT_TX_HASHES_PER_CERTIFICATE_CF: &str =
     "settlement_tx_hashes_per_certificate_cf";
 
 // debug CFs
