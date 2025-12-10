@@ -42,7 +42,7 @@ assert_eq_align!(NetworkStateZeroCopy, u32); // u32 alignment
 /// - `balance_tree_root`: 32 bytes
 /// - `nullifier_tree_root`: 32 bytes
 /// - Total: 1092 bytes
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct NetworkStateZeroCopy {
     /// Leaf count of the exit tree (u32)
