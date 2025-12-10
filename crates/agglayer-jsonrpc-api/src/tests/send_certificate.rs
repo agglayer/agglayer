@@ -361,7 +361,7 @@ async fn pending_certificate_in_error_force_set_status() {
             .pending_store
             .get_settlement_tx_hashes_for_certificate(certificate_id)
             .unwrap();
-        assert!(settlement_hashes.len() > 0);
+        assert!(!settlement_hashes.is_empty());
     }
     assert_eq!(res.status, CertificateStatus::Candidate);
 }
