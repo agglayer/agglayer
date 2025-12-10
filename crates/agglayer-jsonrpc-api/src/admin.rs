@@ -3,7 +3,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    StateWriter,
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
@@ -409,11 +409,26 @@ where
                     }
                 }
                 Operation::SetSettlementTxHash { from, to: _ } => {
-                    if &header.settlement_tx_hash != from {
+                    let current_hashes = self
+                        .pending_store
+                        .get_settlement_tx_hashes_for_certificate(certificate_id)
+                        .map_err(|error| {
+                            error!(?error, "Failed to get settlement tx hashes");
+                            Error::internal("Unable to get settlement tx hashes")
+                        })?;
+
+                    // Check if the 'from' hash exists in the list
+                    let hash_exists = match from {
+                        Some(from_hash) => current_hashes.hashes().contains(from_hash),
+                        None => current_hashes.is_empty(),
+                    };
+
+                    if !hash_exists {
                         return Err(Error::InvalidArgument(format!(
-                            "Current settlement_tx_hash ({:?}) does not match expected 'from' \
-                             settlement_tx_hash ({:?})",
-                            header.settlement_tx_hash, from
+                            "Current settlement_tx_hashes in pending store ({:?}) do not contain \
+                             expected 'from' settlement_tx_hash ({:?})",
+                            current_hashes.hashes(),
+                            from
                         )));
                     }
                 }
@@ -424,6 +439,34 @@ where
         for operation in operations {
             match operation {
                 Operation::SetStatus { from: _, to } => {
+                    if to == CertificateStatus::Settled {
+                        // TODO transfer settlement tx hash to the header
+                        let settlement_tx_hash = self
+                            .pending_store
+                            .get_settlement_tx_hashes_for_certificate(certificate_id)
+                            .map_err(|error| {
+                                error!(?error, "Failed to get settlement tx hashes");
+                                Error::internal("Unable to get settlement tx hashes")
+                            })?
+                            .hashes()
+                            .last()
+                            .copied()
+                            .ok_or_else(|| {
+                                error!("Cannot move to settled without settlement tx");
+                                Error::internal("Cannot move to settled without settlement tx")
+                            })?;
+                        self.state
+                            .update_settlement_tx_hash(
+                                &certificate_id,
+                                settlement_tx_hash,
+                                agglayer_storage::stores::UpdateEvenIfAlreadyPresent::Yes,
+                                agglayer_storage::stores::UpdateStatusToCandidate::No,
+                            )
+                            .map_err(|error| {
+                                error!(?error, "Failed to update settlement tx hash");
+                                Error::internal("Failed to update settlement tx hash")
+                            })?;
+                    }
                     self.state
                         .update_certificate_header_status(&certificate_id, &to)
                         .map_err(|error| {
@@ -431,28 +474,30 @@ where
                             Error::internal("Unable to update certificate status")
                         })?;
                 }
-                Operation::SetSettlementTxHash {
-                    from: _,
-                    to: Some(to),
-                } => {
-                    self.state
-                        .update_settlement_tx_hash(
+                Operation::SetSettlementTxHash { from, to } => {
+                    // For non-settled certificates, update the pending store
+                    self.pending_store
+                        .update_settlement_tx_hashes_for_certificate(
                             &certificate_id,
-                            to,
-                            UpdateEvenIfAlreadyPresent::Yes,
-                            UpdateStatusToCandidate::No,
+                            |mut record| {
+                                // Remove the old hash if specified
+                                if let Some(from_hash) = from {
+                                    record.retain(|h| h != &from_hash);
+                                }
+                                // Insert the new hash
+                                if let Some(to) = to {
+                                    record.insert(to);
+                                }
+                                Ok(record)
+                            },
                         )
                         .map_err(|error| {
-                            error!(?error, ?to, "Failed to update settlement_tx_hash");
+                            error!(
+                                ?error,
+                                ?to,
+                                "Failed to update settlement_tx_hash in pending store"
+                            );
                             Error::internal("Unable to update settlement_tx_hash")
-                        })?;
-                }
-                Operation::SetSettlementTxHash { from: _, to: None } => {
-                    self.state
-                        .remove_settlement_tx_hash(&certificate_id)
-                        .map_err(|error| {
-                            error!(?error, "Failed to remove settlement_tx_hash");
-                            Error::internal("Unable to remove settlement_tx_hash")
                         })?;
                 }
             }

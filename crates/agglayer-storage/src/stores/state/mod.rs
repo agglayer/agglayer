@@ -102,36 +102,35 @@ impl StateWriter for StateStore {
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
+            // Check if we're trying to overwrite an existing hash
             if let Some(existing_hash) = certificate_header.settlement_tx_hash {
                 warn!(%existing_hash, "Overwriting an existing settlement tx hash");
-                if certificate_header.settlement_tx_hash.is_some()
-                    && force != UpdateEvenIfAlreadyPresent::Yes
-                {
+                if force != UpdateEvenIfAlreadyPresent::Yes {
                     return Err(Error::UnprocessedAction(
                         "Tried to update settlement tx hash for a certificate that already has a \
                      settlement tx hash"
                             .to_string(),
                     ));
                 }
+            }
 
-                if certificate_header.status == CertificateStatus::Settled {
-                    return Err(Error::UnprocessedAction(
+            if certificate_header.status == CertificateStatus::Settled {
+                return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that is already settled"
                         .to_string(),
                 ));
-                }
+            }
 
-                certificate_header.settlement_tx_hash = Some(tx_hash);
-                if set_status == UpdateStatusToCandidate::Yes {
-                    certificate_header.status = CertificateStatus::Candidate;
-                }
+            certificate_header.settlement_tx_hash = Some(tx_hash);
+            if set_status == UpdateStatusToCandidate::Yes {
+                certificate_header.status = CertificateStatus::Candidate;
+            }
 
-                self.db
-                    .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
 
-                if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-                    warn!(%error, "Unable to trigger backup for the state database");
-                }
+            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+                warn!(%error, "Unable to trigger backup for the state database");
             }
         } else {
             info!("Certificate header not found");
