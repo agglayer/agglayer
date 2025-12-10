@@ -18,8 +18,8 @@ pub mod commitment;
 
 // Compile-time size and alignment assertions for NetworkStateZeroCopy
 const _NETWORK_STATE_ZERO_COPY_SIZE: () = {
-    // 4 bytes (leaf_count) + 1024 bytes (frontier) + 32 bytes (balance_root) + 32 bytes
-    // (nullifier_root) = 1092 bytes
+    // 4 bytes (leaf_count) + 1024 bytes (frontier) + 32 bytes (balance_root) + 32
+    // bytes (nullifier_root) = 1092 bytes
     assert!(core::mem::size_of::<NetworkStateZeroCopy>() == 1092);
     assert!(core::mem::align_of::<NetworkStateZeroCopy>() == 4); // u32 alignment
 };
@@ -305,7 +305,10 @@ mod tests {
         let deserialized = NetworkState::try_from(bytes.as_slice())
             .expect("Zero-copy deserialization should succeed");
 
-        assert_eq!(state.exit_tree.leaf_count, deserialized.exit_tree.leaf_count);
+        assert_eq!(
+            state.exit_tree.leaf_count,
+            deserialized.exit_tree.leaf_count
+        );
         assert_eq!(state.balance_tree.root, deserialized.balance_tree.root);
         assert_eq!(state.nullifier_tree.root, deserialized.nullifier_tree.root);
     }
@@ -326,7 +329,10 @@ mod tests {
 
             let bytes = state.to_bytes_zero_copy();
             let deserialized = NetworkState::try_from(bytes.as_slice()).unwrap();
-            assert_eq!(state.exit_tree.leaf_count, deserialized.exit_tree.leaf_count);
+            assert_eq!(
+                state.exit_tree.leaf_count,
+                deserialized.exit_tree.leaf_count
+            );
         }
     }
 
