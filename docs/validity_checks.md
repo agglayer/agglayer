@@ -5,7 +5,7 @@ These are verified either on the agglayer, or in the PP, or both.
 
 This document summarizes what is verified and where.
 
-The PP has a public input called `aggchain_hash`. As of the version 0.3.5, all paths are now `consensus type 1`.
+The PP has a public input called `aggchain_hash`. As of version 0.3.5, all paths are now `consensus type 1`.
 
 Each case corresponds to what the chain may submit to the agglayer.
 
@@ -17,9 +17,9 @@ Each case corresponds to what the chain may submit to the agglayer.
 
 Notes:
 
-- Case 1 corresponds to all chains with a simple ecdsa performed by the trusted sequencer.
+- Case 1 corresponds to all chains with a simple ECDSA performed by the trusted sequencer.
   - For each of them, the signer is registered in the L1 as a multisig 1-of-1.
-- Katana fits in the case 3
+- Katana fits in case 3
   - Single signer is registered in the L1 as a multisig 1-of-1.
   - Agglayer and PP verify this multisig alongside the FEP aggchain proof.
 

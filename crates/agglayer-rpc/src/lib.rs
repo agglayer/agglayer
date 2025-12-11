@@ -227,7 +227,7 @@ where
                             return Ok(Some(certificate));
                         }
                         _ => {
-                            debug!("Certificate {certificate_id} not found in debug store");
+                            debug!("Certificate {certificate_id} not found in epoch store");
                         }
                     }
                 }
