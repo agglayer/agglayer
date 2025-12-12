@@ -27,7 +27,7 @@ pub use id::CertificateId;
 pub use index::CertificateIndex;
 pub use metadata::Metadata;
 #[cfg(feature = "testutils")]
-pub use testutils::{compute_signature_info, EMPTY_ELF};
+pub use testutils::{compute_signature_info, AggchainDataType, EMPTY_ELF};
 
 /// Represents the data submitted by the chains to the AggLayer.
 ///

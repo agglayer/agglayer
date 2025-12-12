@@ -5,6 +5,7 @@ use prost::{bytes::BytesMut, Message as _};
 use crate::columns::Codec;
 
 pub type Value = super::generated::agglayer::storage::v0::DisabledNetwork;
+pub use super::generated::agglayer::storage::v0::DisabledBy;
 
 impl Codec for Value {
     fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {

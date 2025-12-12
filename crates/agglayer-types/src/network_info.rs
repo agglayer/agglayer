@@ -31,7 +31,7 @@ pub enum DisabledBy {
 }
 
 // The aggchain type of network
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum_macros::EnumCount)]
 pub enum NetworkType {
     Unspecified = 0,
     /// ECDSA-based network type.
@@ -53,6 +53,29 @@ impl From<&aggchain_proof::AggchainData> for NetworkType {
             aggchain_proof::AggchainData::MultisigAndAggchainProof { .. } => {
                 NetworkType::MultisigAndAggchainProof
             }
+        }
+    }
+}
+
+#[cfg(feature = "testutils")]
+impl NetworkType {
+    /// Generate a random NetworkType for testing using the provided seed.
+    /// This function is resilient to changes in the enum variants.
+    /// It excludes Unspecified as that shouldn't be used in normal test
+    /// scenarios.
+    pub fn generate_for_test(seed: u64) -> Self {
+        use rand::{Rng, SeedableRng};
+        use strum::EnumCount;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        // We have COUNT variants total, but exclude Unspecified (first variant)
+        // So we generate a random index from 1 to COUNT-1
+        match rng.random_range(1..Self::COUNT) {
+            1 => NetworkType::Ecdsa,
+            2 => NetworkType::Generic,
+            3 => NetworkType::MultisigOnly,
+            4 => NetworkType::MultisigAndAggchainProof,
+            _ => unreachable!("Invalid network type index"),
         }
     }
 }

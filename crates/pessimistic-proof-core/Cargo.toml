@@ -27,6 +27,8 @@ hex-literal = "0.4"
 tracing = "0.1.41"
 serde = { version = "1", features = ["derive"] }
 serde_with = { version = "3" }
+strum.workspace = true
+strum_macros.workspace = true
 thiserror = "2.0.16"
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0", features = [
     "keccak",

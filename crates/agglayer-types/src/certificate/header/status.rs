@@ -2,7 +2,9 @@ use std::fmt;
 
 use crate::CertificateStatusError;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, strum_macros::EnumCount,
+)]
 pub enum CertificateStatus {
     /// Received certificate from the network, nothing checked yet.
     ///
@@ -56,6 +58,45 @@ impl CertificateStatus {
     pub fn error(err: CertificateStatusError) -> Self {
         CertificateStatus::InError {
             error: Box::new(err),
+        }
+    }
+}
+
+#[cfg(feature = "testutils")]
+impl CertificateStatus {
+    /// Generate a random CertificateStatus for testing using the provided seed.
+    ///
+    /// Note: This function excludes the `InError` variant for simplicity in
+    /// tests, as it requires constructing a `CertificateStatusError` which
+    /// is more complex. If you need to test error cases, construct them
+    /// explicitly.
+    pub fn generate_for_test(seed: u64) -> Self {
+        use rand::{Rng, SeedableRng};
+        use strum::EnumCount;
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        // Total enum variants count (derived from strum::EnumCount)
+        const EXPECTED_VARIANTS: usize = 5;
+        // Test variants count (excluding InError for simplicity)
+        const TEST_VARIANTS: u32 = 4;
+
+        // Ensure we have the expected number of enum variants
+        assert_eq!(
+            Self::COUNT,
+            EXPECTED_VARIANTS,
+            "CertificateStatus variant count mismatch: expected {}, got {}. Update \
+             generate_for_test if variants changed.",
+            EXPECTED_VARIANTS,
+            Self::COUNT
+        );
+
+        match rng.random_range(0..TEST_VARIANTS) {
+            0 => CertificateStatus::Pending,
+            1 => CertificateStatus::Proven,
+            2 => CertificateStatus::Candidate,
+            3 => CertificateStatus::Settled,
+            _ => unreachable!("random_range(0..{}) can only produce 0-3", TEST_VARIANTS),
         }
     }
 }
