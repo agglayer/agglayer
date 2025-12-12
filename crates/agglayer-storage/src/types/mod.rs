@@ -52,6 +52,7 @@ pub enum SmtValue {
 }
 
 crate::columns::impl_codec_using_bincode_for!(
+    (),
     u64,
     u32,
     CertificateId,

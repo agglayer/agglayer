@@ -35,11 +35,13 @@ mockall = { workspace = true, optional = true }
 [dev-dependencies]
 criterion.workspace = true
 alloy-primitives.workspace = true
+fail = { workspace = true, features = ["failpoints"] }
 insta.workspace = true
 rand.workspace = true
 rstest.workspace = true
 serde-reflection.workspace = true
 sp1-sdk.workspace = true
+test-log.workspace = true
 tokio.workspace = true
 
 agglayer-types = { workspace = true, features = ["testutils"] }
