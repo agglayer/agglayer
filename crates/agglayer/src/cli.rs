@@ -55,13 +55,13 @@ pub(crate) enum Backup {
     /// List all backups.
     List {
         #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
-        config_path: PathBuf,
+        cfg: PathBuf,
     },
 
     /// Restore from a backup.
     Restore {
         #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
-        config_path: PathBuf,
+        cfg: PathBuf,
         #[arg(value_parser = parse_db_kind_version)]
         db_versions: Vec<(DbKind, u32)>,
     },
