@@ -40,7 +40,6 @@ impl Clock for TimeClock {
             block_per_epoch: self.epoch_duration.clone(),
         };
 
-        // Spawn the Clock task directly
         tokio::spawn(async move {
             self.run(sender, cancellation_token).await;
         });
@@ -75,11 +74,11 @@ impl TimeClock {
     ) {
         let mut interval = interval_at(Instant::now(), Duration::from_secs(1));
 
-        // Compute the current Block height and Epoch number
-        let current_block = self.update_block_height();
-        let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
+        let epoch_len = self.epoch_duration.get();
 
-        // Use compare_exchange to ensure the initial current_epoch is 0
+        let current_block = self.update_block_height();
+        let current_epoch = Self::calculate_epoch_number(current_block, epoch_len);
+
         if let Err(stored_value) = self.current_epoch.compare_exchange(
             0,
             current_epoch,
@@ -107,18 +106,12 @@ impl TimeClock {
                 }
                 _ = interval.tick() => {
 
-                    // Increase the Block height by 1.
-                    // The `fetch_add` method returns the previous value, so we need to add 1 to it
-                    // to get the current Block height.
                     if let Some(current_block) = self
                         .current_block
                             .fetch_add(1, Ordering::Release)
                             .checked_add(1)
                     {
-                        // If the current Block height is a multiple of the Epoch duration,
-                        // the current Epoch has ended. In this case, we need to update the
-                        // new Epoch number and send an `EpochEnded` event to the subscribers.
-                        if current_block % *self.epoch_duration == 0 {
+                        if current_block % epoch_len == 0 {
                             match self.update_epoch_number() {
                                 Ok(epoch_ended) => {
                                     if let Err(error) = sender.send(Event::EpochEnded(epoch_ended)) {
@@ -172,7 +165,8 @@ impl TimeClock {
     fn update_epoch_number(&mut self) -> Result<EpochNumber, (EpochNumber, EpochNumber)> {
         let current_block = self.current_block.load(Ordering::Acquire);
 
-        let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
+        let epoch_len = self.epoch_duration.get();
+        let current_epoch = Self::calculate_epoch_number(current_block, epoch_len);
         let expected_epoch = current_epoch.saturating_sub(1);
 
         match self.current_epoch.compare_exchange(
@@ -290,7 +284,6 @@ mod tests {
         _ = futures::poll!(&mut fut);
         assert_eq!(recv.try_recv(), Ok(Event::EpochEnded(EpochNumber::new(15))));
 
-        // Overflow the block height on next poll
         blocks.store(u64::MAX - 1, std::sync::atomic::Ordering::SeqCst);
 
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
