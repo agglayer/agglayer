@@ -1,5 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
+use agglayer_interop_types::PessimisticRoot;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
@@ -344,6 +345,13 @@ where
         debug!("Recomputing new state completed");
 
         self.new_pp_root = Some(output.new_pessimistic_root);
+
+        // Associate the pp root with the certificate ID.
+        self.state_store.add_certificate_id_for_pp_root(
+            &PessimisticRoot::from(output.new_pessimistic_root),
+            &certificate_id,
+        )?;
+
         // Send the new state to the network task
         // TODO: Once we update the storage we'll have to remove this! It wouldn't be
         // valid if we had multiple certificates inflight. Thankfully, until
@@ -392,6 +400,12 @@ where
         // Record the certification success
         self.set_status(CertificateStatus::Proven)?;
         self.new_pp_root = Some(certifier_output.new_pp_root);
+
+        // Associate the pp root with the certificate ID.
+        self.state_store.add_certificate_id_for_pp_root(
+            &PessimisticRoot::from(certifier_output.new_pp_root),
+            &certificate_id,
+        )?;
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -430,6 +444,15 @@ where
 
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
+        let new_pp_root = self
+            .new_pp_root
+            .ok_or(CertificateStatusError::InternalError(
+                "CertificateTask::process_from_proven called without a pp_root".into(),
+            ))?;
+
+        // Associate the pp root with the certificate ID.
+        self.state_store
+            .add_certificate_id_for_pp_root(&PessimisticRoot::from(new_pp_root), &certificate_id)?;
 
         debug!(
             "Submitting certificate for settlement, previous nonce is {:?}",
@@ -441,11 +464,7 @@ where
             certificate_id,
             nonce_info: self.nonce_info.clone(),
             previous_tx_hashes: self.previous_tx_hashes.clone(),
-            new_pp_root: self
-                .new_pp_root
-                .ok_or(CertificateStatusError::InternalError(
-                    "CertificateTask::process_from_proven called without a pp_root".into(),
-                ))?,
+            new_pp_root,
             settlement_submitted_notifier,
         })
         .await?;
@@ -520,6 +539,10 @@ where
             %settlement_tx_hash,
             "Waiting for certificate settlement to complete"
         );
+
+        // Associate the pp root with the certificate ID.
+        self.state_store
+            .add_certificate_id_for_pp_root(&PessimisticRoot::from(new_pp_root), &certificate_id)?;
         let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
             height,

@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 
 use agglayer_types::{
+    primitives::alloy_primitives::BlockNumber,
     Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
     LocalNetworkStateData, NetworkId, Proof,
 };
+use agglayer_tries::roots::PessimisticRoot;
 
 use crate::{
     columns::{
@@ -71,6 +73,8 @@ pub trait PendingCertificateReader: Send + Sync {
 pub trait MetadataReader: Send + Sync {
     /// Get the latest settled epoch.
     fn get_latest_settled_epoch(&self) -> Result<Option<EpochNumber>, Error>;
+    /// Get the latest certificate settling block.
+    fn get_latest_block_that_settled_any_cert(&self) -> Result<Option<BlockNumber>, Error>;
 }
 
 pub trait StateReader: Send + Sync {
@@ -105,6 +109,12 @@ pub trait StateReader: Send + Sync {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error>;
+
+    /// Get the certificate IDs for a given pp root.
+    fn get_certificate_ids_for_pp_root(
+        &self,
+        pp_root: &PessimisticRoot,
+    ) -> Result<Vec<CertificateId>, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {
