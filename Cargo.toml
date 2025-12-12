@@ -70,6 +70,10 @@ sp1-primitives = "=5.2.2"
 sp1-prover = "=5.2.2"
 sp1-zkvm = { version = "=5.2.2", default-features = false }
 
+# Zero-copy dependencies (pinned for host/guest coherence)
+bytemuck = { version = "=1.23.2", features = ["derive"] }
+static_assertions = "1.1"
+
 # Core dependencies
 alloy = { version = "1.0.42", features = ["full", "json-rpc"] }
 alloy-primitives = { version = "1.4.1", features = ["serde", "k256"] }
