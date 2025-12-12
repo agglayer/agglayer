@@ -268,8 +268,8 @@ where
     /// method on the rollup manager contract for a given [`SignedTx`].
     ///
     /// Note that this does not actually invoke the function, but rather
-    /// constructs a [`FunctionCall`] that can be used to create a dry-run
-    /// or send a transaction.
+    /// constructs a `CallBuilder` (alias `VerifyBatchesBuilder<RpcProvider>`)
+    /// that can be used to create a dry-run or send a transaction.
     #[instrument(skip(self), level = "debug")]
     pub(crate) async fn verify_batches_trusted_aggregator(
         &self,
