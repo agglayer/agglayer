@@ -149,12 +149,12 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                             expected_start_checkpoint
                         } else if checkpoint != expected_start_checkpoint {
                             warn!(
-                                "Start checkpoint doesn't match the expected one, using the one from \
-                                 the DB"
+                                "Start checkpoint doesn't match the expected one; refusing to open epoch \
+                                 due to inconsistent state",
                             );
                             return Err(Error::Unexpected(
-                                "Start checkpoint doesn't match the expected one, using the one from \
-                                 the DB"
+                                "Start checkpoint doesn't match the expected one; inconsistent epoch \
+                                 state in DB"
                                     .to_string(),
                             ))?;
                         } else {
