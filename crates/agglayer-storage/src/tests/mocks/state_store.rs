@@ -9,7 +9,7 @@ use crate::{
     error::Error,
     stores::{
         MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter,
-        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        UpdateEvenIfAlreadyPresent,
     },
 };
 mock! {
@@ -39,7 +39,6 @@ mock! {
             certificate_id: &CertificateId,
             tx_hash: SettlementTxHash,
             force: UpdateEvenIfAlreadyPresent,
-            set_status: UpdateStatusToCandidate,
         ) -> Result<(), Error>;
 
         fn remove_settlement_tx_hash(

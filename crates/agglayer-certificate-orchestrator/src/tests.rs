@@ -19,7 +19,6 @@ use agglayer_storage::{
         epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
         EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
         PerEpochWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
-        UpdateStatusToCandidate,
     },
     tests::{
         mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
@@ -29,6 +28,7 @@ use agglayer_storage::{
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    SettlementTxRecord,
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
@@ -59,6 +59,7 @@ pub(crate) struct DummyPendingStore {
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
     pub(crate) latest_proven_certificate_per_network:
         RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
+    pub(crate) settlement_tx_hashes: RwLock<BTreeMap<CertificateId, SettlementTxRecord>>,
     pub(crate) is_packed: bool,
 }
 
@@ -291,6 +292,44 @@ impl PendingCertificateWriter for DummyPendingStore {
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
+
+    fn insert_settlement_tx_hash_for_certificate(
+        &self,
+        certificate_id: &CertificateId,
+        tx_hash: SettlementTxHash,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        self.settlement_tx_hashes
+            .write()
+            .unwrap()
+            .entry(*certificate_id)
+            .or_default()
+            .insert(tx_hash);
+        Ok(())
+    }
+
+    fn update_settlement_tx_hashes_for_certificate<'a, F>(
+        &'a self,
+        certificate_id: &CertificateId,
+        f: F,
+    ) -> Result<(), agglayer_storage::error::Error>
+    where
+        F: FnOnce(SettlementTxRecord) -> Result<SettlementTxRecord, String> + 'a,
+    {
+        use std::collections::btree_map::Entry;
+
+        use agglayer_storage::error::Error;
+
+        let mut hashes = self.settlement_tx_hashes.write().unwrap();
+        match hashes.entry(*certificate_id) {
+            Entry::Vacant(_) => Err(Error::UnprocessedAction(String::from("empty"))),
+            Entry::Occupied(hashes) => {
+                let new_hashes = f(hashes.get().clone())
+                    .map_err(|_| Error::UnprocessedAction(String::from("f failed")))?;
+                *hashes.into_mut() = new_hashes;
+                Ok(())
+            }
+        }
+    }
 }
 
 impl StateWriter for DummyPendingStore {
@@ -312,7 +351,6 @@ impl StateWriter for DummyPendingStore {
         _certificate_id: &CertificateId,
         _tx_hash: SettlementTxHash,
         _force: UpdateEvenIfAlreadyPresent,
-        _set_status: UpdateStatusToCandidate,
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
     }
@@ -473,6 +511,19 @@ impl PendingCertificateReader for DummyPendingStore {
         let lock = self.proofs.read().unwrap();
 
         Ok(keys.iter().map(|key| lock.get(key).cloned()).collect())
+    }
+
+    fn get_settlement_tx_hashes_for_certificate(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<SettlementTxRecord, agglayer_storage::error::Error> {
+        Ok(self
+            .settlement_tx_hashes
+            .read()
+            .unwrap()
+            .get(&certificate_id)
+            .cloned()
+            .unwrap_or_default())
     }
 }
 

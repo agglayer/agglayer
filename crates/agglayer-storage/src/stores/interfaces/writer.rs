@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    SettlementTxRecord,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -42,11 +43,6 @@ pub enum UpdateEvenIfAlreadyPresent {
     No,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UpdateStatusToCandidate {
-    Yes,
-    No,
-}
 
 pub trait StateWriter: Send + Sync {
     fn disable_network(
@@ -62,7 +58,6 @@ pub trait StateWriter: Send + Sync {
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
         force: UpdateEvenIfAlreadyPresent,
-        set_status: UpdateStatusToCandidate,
     ) -> Result<(), Error>;
 
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error>;
@@ -138,4 +133,18 @@ pub trait PendingCertificateWriter: Send + Sync {
         height: &Height,
         certificate_id: &CertificateId,
     ) -> Result<(), Error>;
+
+    fn insert_settlement_tx_hash_for_certificate(
+        &self,
+        certificate_id: &CertificateId,
+        tx_hash: SettlementTxHash,
+    ) -> Result<(), Error>;
+
+    fn update_settlement_tx_hashes_for_certificate<'a, F>(
+        &'a self,
+        certificate_id: &CertificateId,
+        f: F,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce(SettlementTxRecord) -> Result<SettlementTxRecord, String> + 'a;
 }
