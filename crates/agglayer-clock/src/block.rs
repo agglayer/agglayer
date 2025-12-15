@@ -103,6 +103,11 @@ impl<P> BlockClock<P> {
     fn calculate_block_number(&self, from_block: u64) -> u64 {
         from_block.saturating_sub(self.genesis_block)
     }
+
+    /// Calculate an Epoch number based on a Block number.
+    fn calculate_epoch_number(from_block: u64, epoch_duration: NonZeroU64) -> u64 {
+        from_block / epoch_duration
+    }
 }
 
 impl BlockClock<BlockProvider> {

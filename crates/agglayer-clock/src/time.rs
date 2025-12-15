@@ -141,6 +141,11 @@ impl TimeClock {
             0,
         ) as u64
     }
+
+    /// Calculate an Epoch number based on a Block number.
+    fn calculate_epoch_number(from_block: u64, epoch_duration: NonZeroU64) -> u64 {
+        from_block / epoch_duration
+    }
 }
 
 #[cfg(test)]
@@ -243,5 +248,4 @@ mod tests {
 
         assert!(token.is_cancelled());
     }
-
 }
