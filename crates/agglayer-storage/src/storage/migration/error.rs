@@ -14,7 +14,7 @@ pub enum DBOpenError {
     UnexpectedSchema,
 
     #[error("Default column family is not empty")]
-    DefaultCFNotEmpty,
+    DefaultCfNotEmpty,
 
     #[error("Migration record gap detected at step {0}")]
     MigrationRecordGap(u32),
@@ -22,7 +22,8 @@ pub enum DBOpenError {
     #[error(
         "Fewer migration steps declared in the code than recorded in database \
          (declared: {declared}, recorded: {recorded}). This indicates existing migration steps \
-         were removed from the code, which is not allowed."
+         were removed from the code, or an older version of agglayer-node is being used, \
+         which is not allowed."
     )]
     FewerStepsDeclared { declared: u32, recorded: u32 },
 }

@@ -10,11 +10,10 @@ use crate::{
 
 mod error;
 mod migration_cf;
-mod record;
 
 pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 use migration_cf::MigrationRecordColumn;
-use record::MigrationRecord;
+use crate::types::migration::MigrationRecord;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
@@ -88,7 +87,7 @@ impl Builder {
             let mut default_cf_iter = db.rocksdb.iterator(rocksdb::IteratorMode::Start);
             let default_cf_has_data = default_cf_iter.next().is_some();
             if default_cf_has_data {
-                return Err(DBOpenError::DefaultCFNotEmpty);
+                return Err(DBOpenError::DefaultCfNotEmpty);
             }
         }
 
@@ -184,7 +183,7 @@ impl Builder {
 
     pub fn finalize<'a>(
         self,
-        expected_schema: impl IntoIterator<Item = &'a str>,
+        _expected_schema: impl IntoIterator<Item = &'a str>,
     ) -> Result<DB, DBOpenError> {
         if self.step < self.start_step {
             return Err(DBOpenError::FewerStepsDeclared {
@@ -192,12 +191,6 @@ impl Builder {
                 recorded: self.start_step,
             });
         }
-
-        let expected_schema: BTreeSet<_> = expected_schema.into_iter().collect();
-        warn!(
-            ?expected_schema,
-            "Expected database schema checking not yet implemented"
-        );
 
         Ok(self.db)
     }
@@ -221,7 +214,8 @@ impl Builder {
         if step >= self.start_step {
             info!("Running migration step {step}");
             step_fn(&mut self)?;
-            self.db.put::<MigrationRecordColumn>(&self.step, &())?;
+            self.db
+                .put::<MigrationRecordColumn>(&self.step, &MigrationRecord::default())?;
         } else {
             debug!("Step already recorded, skipping");
         }
