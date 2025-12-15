@@ -14,7 +14,7 @@ pub enum DBOpenError {
     UnexpectedSchema,
 
     #[error("Default column family is not empty")]
-    DefaultCFNotEmpty,
+    DefaultCfNotEmpty,
 
     #[error("Migration record gap detected at step {0}")]
     MigrationRecordGap(u32),

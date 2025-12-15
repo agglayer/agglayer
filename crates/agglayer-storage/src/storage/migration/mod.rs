@@ -88,7 +88,7 @@ impl Builder {
             let mut default_cf_iter = db.rocksdb.iterator(rocksdb::IteratorMode::Start);
             let default_cf_has_data = default_cf_iter.next().is_some();
             if default_cf_has_data {
-                return Err(DBOpenError::DefaultCFNotEmpty);
+                return Err(DBOpenError::DefaultCfNotEmpty);
             }
         }
 

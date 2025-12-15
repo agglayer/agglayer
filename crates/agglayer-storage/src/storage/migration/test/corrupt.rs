@@ -25,7 +25,7 @@ fn default_cf_not_empty() -> Result<(), eyre::Error> {
         let result = Builder::open_sample(db_path);
 
         match result {
-            Err(DBOpenError::DefaultCFNotEmpty) => (),
+            Err(DBOpenError::DefaultCfNotEmpty) => (),
             Err(other) => panic!("Expected DefaultCFNotEmpty error, got: {other:?}"),
             Ok(_) => panic!("Expected DefaultCFNotEmpty error, but open succeeded"),
         }
