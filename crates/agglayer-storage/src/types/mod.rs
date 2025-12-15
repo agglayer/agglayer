@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 mod certificate;
 pub(crate) mod disabled_network;
 mod generated;
+pub(crate) mod migration;
 pub(crate) mod network_info;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,7 +53,6 @@ pub enum SmtValue {
 }
 
 crate::columns::impl_codec_using_bincode_for!(
-    (),
     u64,
     u32,
     CertificateId,

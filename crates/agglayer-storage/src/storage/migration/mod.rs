@@ -10,11 +10,10 @@ use crate::{
 
 mod error;
 mod migration_cf;
-mod record;
 
 pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 use migration_cf::MigrationRecordColumn;
-use record::MigrationRecord;
+use crate::types::migration::MigrationRecord;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
@@ -215,7 +214,8 @@ impl Builder {
         if step >= self.start_step {
             info!("Running migration step {step}");
             step_fn(&mut self)?;
-            self.db.put::<MigrationRecordColumn>(&self.step, &())?;
+            self.db
+                .put::<MigrationRecordColumn>(&self.step, &MigrationRecord::default())?;
         } else {
             debug!("Step already recorded, skipping");
         }

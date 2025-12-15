@@ -39,6 +39,10 @@ impl DisabledBy {
         }
     }
 }
+/// Migration record for tracking database migration state.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct MigrationRecord {
+}
 /// All the possible values that can be stored in the network info.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NetworkInfoValue {
