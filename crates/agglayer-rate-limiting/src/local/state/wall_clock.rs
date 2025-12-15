@@ -1,6 +1,6 @@
 use std::{num::NonZeroU32, time::Duration};
 
-use serde_with::{serde_as, DurationSeconds};
+use serde_with::DurationSeconds;
 use tokio::time::Instant;
 
 /// An error indicating the request has been rate limited.
