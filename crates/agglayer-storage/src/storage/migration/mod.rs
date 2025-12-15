@@ -184,7 +184,7 @@ impl Builder {
 
     pub fn finalize<'a>(
         self,
-        expected_schema: impl IntoIterator<Item = &'a str>,
+        _expected_schema: impl IntoIterator<Item = &'a str>,
     ) -> Result<DB, DBOpenError> {
         if self.step < self.start_step {
             return Err(DBOpenError::FewerStepsDeclared {
@@ -192,12 +192,6 @@ impl Builder {
                 recorded: self.start_step,
             });
         }
-
-        let expected_schema: BTreeSet<_> = expected_schema.into_iter().collect();
-        warn!(
-            ?expected_schema,
-            "Expected database schema checking not yet implemented"
-        );
 
         Ok(self.db)
     }
