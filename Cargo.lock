@@ -108,7 +108,7 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#e4b50e5a1699a84931abea63b2113fc538e086a4"
 dependencies = [
  "bincode",
  "serde",
@@ -219,7 +219,7 @@ dependencies = [
 [[package]]
 name = "agglayer-elf-build"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#e4b50e5a1699a84931abea63b2113fc538e086a4"
 dependencies = [
  "cargo_metadata",
  "clap",
@@ -322,7 +322,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#e4b50e5a1699a84931abea63b2113fc538e086a4"
 dependencies = [
  "agglayer-interop-grpc-types",
  "agglayer-interop-types",
@@ -331,7 +331,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#e4b50e5a1699a84931abea63b2113fc538e086a4"
 dependencies = [
  "agglayer-interop-types",
  "bincode",
@@ -345,7 +345,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#e4b50e5a1699a84931abea63b2113fc538e086a4"
 dependencies = [
  "agglayer-bincode",
  "agglayer-primitives 0.12.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt)",
@@ -484,7 +484,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#e4b50e5a1699a84931abea63b2113fc538e086a4"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -638,7 +638,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#e4b50e5a1699a84931abea63b2113fc538e086a4"
 dependencies = [
  "agglayer-primitives 0.12.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt)",
  "hex",
@@ -10209,7 +10209,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#e4b50e5a1699a84931abea63b2113fc538e086a4"
 dependencies = [
  "agglayer-primitives 0.12.0 (git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt)",
  "agglayer-tries",
