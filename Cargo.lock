@@ -72,7 +72,7 @@ dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-storage",
  "agglayer-types",
  "alloy",
@@ -108,8 +108,6 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf2a8f2dc49e16c8ffbb6c216f00e52fd3174f0998d4fee093070a844ca6179"
 dependencies = [
  "bincode",
  "serde",
@@ -173,7 +171,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-types",
  "alloy-primitives",
  "dirs 6.0.0",
@@ -199,7 +197,7 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-types",
  "alloy",
  "async-trait",
@@ -220,8 +218,6 @@ dependencies = [
 [[package]]
 name = "agglayer-elf-build"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4167bda473bfa7066c8211904e3a8728d2e76fa35a4a7928c86d9645d9a4b416"
 dependencies = [
  "cargo_metadata",
  "clap",
@@ -235,7 +231,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59ad2bb020cf0880e20de7a3e41520c28a633d5ee3edde63ef137da14b8330b8"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "alloy",
  "async-trait",
  "eyre",
@@ -324,8 +320,6 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30cc6c12f18d97d58cb93c05a9b31668f5ba1245f70f64735e0615533b37bf95"
 dependencies = [
  "agglayer-interop-grpc-types",
  "agglayer-interop-types",
@@ -334,8 +328,6 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0756742ba20c02b6a8a811364ddb7b7575b01d9df7e29fda08229b64bad40ba"
 dependencies = [
  "agglayer-interop-types",
  "bincode",
@@ -349,11 +341,9 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f188098850486ce56f8fadebd3701c95fd812dc0263e51981415b4b446adf01"
 dependencies = [
  "agglayer-bincode",
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-tries",
  "arbitrary",
  "bincode",
@@ -413,6 +403,7 @@ dependencies = [
  "tracing",
  "tracing-capture",
  "tracing-subscriber",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -473,16 +464,29 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1269279b919d3816744296381de30b2ff31de7a1649988d2014e6efee0694541"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
  "byteorder",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "hex",
  "k256",
  "rand 0.9.2",
+ "serde",
+ "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "agglayer-primitives"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1269279b919d3816744296381de30b2ff31de7a1649988d2014e6efee0694541"
+dependencies = [
+ "alloy-primitives",
+ "byteorder",
+ "derive_more 2.1.0",
+ "hex",
+ "k256",
  "serde",
  "tiny-keccak 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -507,7 +511,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-interop",
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-rate-limiting",
  "agglayer-storage",
  "agglayer-tries",
@@ -534,7 +538,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-signer-local",
  "async-trait",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "rstest",
  "thiserror 2.0.16",
  "tokio",
@@ -567,6 +571,8 @@ dependencies = [
  "rstest",
  "serde",
  "serde-reflection",
+ "serde_json",
+ "serde_with",
  "sp1-sdk",
  "strum 0.27.2",
  "strum_macros 0.27.2",
@@ -626,10 +632,8 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7b73707fbcb1be8be636437969b3f2af904f95b8f4ecfd6e88808bd6097c921"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "hex",
  "serde",
  "serde_with",
@@ -642,13 +646,13 @@ version = "0.1.0"
 dependencies = [
  "agglayer-bincode",
  "agglayer-interop-types",
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-tries",
  "agglayer-types",
  "alloy",
  "arbitrary",
  "criterion",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "hex",
  "pessimistic-proof",
  "rand 0.9.2",
@@ -767,7 +771,7 @@ dependencies = [
  "auto_impl",
  "borsh",
  "c-kzg",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "either",
  "k256",
  "once_cell",
@@ -899,7 +903,7 @@ dependencies = [
  "auto_impl",
  "borsh",
  "c-kzg",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "either",
  "serde",
  "serde_with",
@@ -981,7 +985,7 @@ dependencies = [
  "alloy-sol-types",
  "async-trait",
  "auto_impl",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "futures-utils-wasm",
  "serde",
  "serde_json",
@@ -1033,7 +1037,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "const-hex",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "foldhash 0.2.0",
  "hashbrown 0.16.0",
  "indexmap 2.12.0",
@@ -1215,7 +1219,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01731601ea631bd825c652a225701ab466c09457f446b8d8129368a095389c5d"
 dependencies = [
  "alloy-primitives",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "serde",
  "serde_with",
 ]
@@ -1231,7 +1235,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "rand 0.8.5",
  "serde",
  "strum 0.27.2",
@@ -1449,7 +1453,7 @@ dependencies = [
  "alloy-json-rpc",
  "auto_impl",
  "base64 0.22.1",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "futures",
  "futures-utils-wasm",
  "parking_lot",
@@ -1525,7 +1529,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "arrayvec",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "nybbles",
  "serde",
  "smallvec",
@@ -3039,9 +3043,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.51"
+version = "4.5.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c26d721170e0295f191a69bd9a1f93efcdb0aff38684b61ab5750468972e5f5"
+checksum = "c9e340e012a1bf4935f5282ed1436d1489548e8f72308207ea5df0e23d2d03f8"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -3049,9 +3053,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.51"
+version = "4.5.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75835f0c7bf681bfd05abe44e965760fea999a5286c6eb2d59883634fd02011a"
+checksum = "d76b5d13eaa18c901fd2f7fca939fefe3a0727a953561fefdf3b2922b8569d00"
 dependencies = [
  "anstream",
  "anstyle",
@@ -3260,9 +3264,9 @@ checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 
 [[package]]
 name = "convert_case"
-version = "0.7.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -3694,11 +3698,11 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+checksum = "10b768e943bed7bf2cab53df09f4bc34bfd217cdb57d971e769874c9a6710618"
 dependencies = [
- "derive_more-impl 2.0.1",
+ "derive_more-impl 2.1.0",
 ]
 
 [[package]]
@@ -3714,13 +3718,14 @@ dependencies = [
 
 [[package]]
 name = "derive_more-impl"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+checksum = "6d286bfdaf75e988b4a78e013ecd79c581e06399ab53fbacd2d916c2f904f30b"
 dependencies = [
  "convert_case",
  "proc-macro2",
  "quote",
+ "rustc_version 0.4.1",
  "syn 2.0.106",
  "unicode-xid",
 ]
@@ -3886,7 +3891,7 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-tries",
  "k256",
  "serde",
@@ -6740,7 +6745,7 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "agglayer-elf-build",
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-tries",
  "arbitrary",
  "color-eyre",
@@ -6766,7 +6771,7 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-bincode",
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-tries",
  "alloy",
  "alloy-primitives",
@@ -7298,7 +7303,7 @@ dependencies = [
  "agglayer-evm-client",
  "alloy",
  "async-trait",
- "derive_more 2.0.1",
+ "derive_more 2.1.0",
  "educe",
  "eyre",
  "ff 0.13.1",
@@ -8390,14 +8395,15 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.143"
+version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d401abef1d108fbd9cbaebc3e46611f4b1021f714a0597a71f41ee463f5f4a5a"
+checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
 dependencies = [
  "itoa",
  "memchr",
  "ryu",
  "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -8442,9 +8448,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.14.0"
+version = "3.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2c45cd61fefa9db6f254525d46e392b852e0e61d9a1fd36e5bd183450a556d5"
+checksum = "4fa237f2807440d238e0364a218270b98f767a00d3dada77b1c53ae88940e2e7"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -8453,8 +8459,7 @@ dependencies = [
  "indexmap 2.12.0",
  "schemars 0.9.0",
  "schemars 1.0.4",
- "serde",
- "serde_derive",
+ "serde_core",
  "serde_json",
  "serde_with_macros",
  "time",
@@ -8462,11 +8467,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.14.0"
+version = "3.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de90945e6565ce0d9a25098082ed4ee4002e047cb59892c318d66821e14bb30f"
+checksum = "52a8e3ca0ca629121f70ab50f95249e5a6f925cc0f6ffe8256c45b728875706c"
 dependencies = [
- "darling 0.20.11",
+ "darling 0.21.3",
  "proc-macro2",
  "quote",
  "syn 2.0.106",
@@ -10197,10 +10202,8 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d177b4f163ec0ad929fc6b85dc3d3f4417876deababed62e20acee97a340f2d"
 dependencies = [
- "agglayer-primitives",
+ "agglayer-primitives 0.12.0",
  "agglayer-tries",
  "arbitrary",
  "hex-literal 1.1.0",

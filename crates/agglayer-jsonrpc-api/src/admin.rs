@@ -14,6 +14,7 @@ use serde::Deserialize as _;
 use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::{error, info, instrument, warn};
+use unified_bridge::TokenInfo;
 
 use super::error::RpcResult;
 use crate::{error::Error, rpc_middleware, JsonRpcService};
@@ -29,6 +30,13 @@ pub enum ProcessNow {
 
 #[rpc(server, namespace = "admin")]
 pub(crate) trait AdminAgglayer {
+    #[method(name = "getTokenBalance")]
+    async fn get_token_balance(
+        &self,
+        network_id: NetworkId,
+        token_info: Option<TokenInfo>,
+    ) -> RpcResult<Vec<unified_bridge::TokenBalanceEntry>>;
+
     #[method(name = "getCertificate")]
     async fn get_certificate(
         &self,
@@ -191,6 +199,37 @@ where
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
+    #[instrument(skip(self), level = "debug")]
+    async fn get_token_balance(
+        &self,
+        network_id: NetworkId,
+        token_info: Option<TokenInfo>,
+    ) -> RpcResult<Vec<unified_bridge::TokenBalanceEntry>> {
+        let Some(balance_tree) = self
+            .state
+            .read_local_network_state(network_id)
+            .map_err(|error| {
+                error!(?error, "Failed to read the balance tree");
+                Error::internal("Unable to read the balance tree")
+            })?
+            .map(|s| unified_bridge::BalanceTree(s.balance_tree))
+        else {
+            return Ok(vec![]); // empty balances, not an error
+        };
+
+        // get the balance of a given token, or return all of them
+        let balances = if let Some(token_info) = token_info {
+            vec![balance_tree.get_balance(token_info)]
+        } else {
+            balance_tree.get_all_balances().map_err(|error| {
+                error!(?error, "Failed to get all balances");
+                Error::internal("Unable to get all balances")
+            })?
+        };
+
+        Ok(balances)
+    }
+
     #[instrument(skip(self), fields(hash), level = "debug")]
     async fn get_certificate(
         &self,

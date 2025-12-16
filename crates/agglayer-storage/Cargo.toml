@@ -39,6 +39,8 @@ insta.workspace = true
 rand.workspace = true
 rstest.workspace = true
 serde-reflection.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
 sp1-sdk.workspace = true
 tokio.workspace = true
 
