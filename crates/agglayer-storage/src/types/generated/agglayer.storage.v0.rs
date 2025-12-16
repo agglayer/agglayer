@@ -302,11 +302,13 @@ pub struct SettlementJob {
 /// Transaction result.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TxResult {
+    /// Transaction result.
     #[prost(oneof="tx_result::Result", tags="1, 2, 3")]
     pub result: ::core::option::Option<tx_result::Result>,
 }
 /// Nested message and enum types in `TxResult`.
 pub mod tx_result {
+    /// Transaction result.
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Result {
         /// Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
@@ -357,6 +359,7 @@ pub struct AttemptSequenceNumber {
     #[prost(uint64, tag="1")]
     pub number: u64,
 }
+/// Contents of the settlement attempts CF.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SettlementAttempt {
     /// Sender wallet.
@@ -388,6 +391,7 @@ pub struct SettlementNonce {
     #[prost(message, repeated, tag="2")]
     pub attempt_sequence_numbers: ::prost::alloc::vec::Vec<AttemptSequenceNumber>,
 }
+/// Type of client error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ClientErrorType {
@@ -416,13 +420,16 @@ impl ClientErrorType {
         }
     }
 }
+/// On-chain outcome of the contract call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ContractCallOutcome {
+    /// Unspecified outcome. This should never be used.
+    Unspecified = 0,
     /// The call was successful.
-    Success = 0,
+    Success = 1,
     /// The call reverted.
-    Reverted = 1,
+    Reverted = 2,
 }
 impl ContractCallOutcome {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -431,6 +438,7 @@ impl ContractCallOutcome {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
+            Self::Unspecified => "CONTRACT_CALL_OUTCOME_UNSPECIFIED",
             Self::Success => "CONTRACT_CALL_OUTCOME_SUCCESS",
             Self::Reverted => "CONTRACT_CALL_OUTCOME_REVERTED",
         }
@@ -438,6 +446,7 @@ impl ContractCallOutcome {
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
+            "CONTRACT_CALL_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
             "CONTRACT_CALL_OUTCOME_SUCCESS" => Some(Self::Success),
             "CONTRACT_CALL_OUTCOME_REVERTED" => Some(Self::Reverted),
             _ => None,
