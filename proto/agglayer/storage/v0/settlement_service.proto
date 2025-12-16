@@ -55,6 +55,7 @@ message SettlementJob {
 
 // Transaction result.
 message TxResult {
+  // Transaction result.
   oneof result {
     // Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
     ClientError client_error = 1;
@@ -76,6 +77,7 @@ message ClientError {
   string error_message = 2;
 }
 
+// Type of client error.
 enum ClientErrorType {
   // Unspecified error type.
   CLIENT_ERROR_TYPE_UNSPECIFIED = 0;
@@ -93,12 +95,16 @@ message ContractCallResult {
   bytes metadata = 2;
 }
 
+// On-chain outcome of the contract call.
 enum ContractCallOutcome {
+  // Unspecified outcome. This should never be used.
+  CONTRACT_CALL_OUTCOME_UNSPECIFIED = 0;
+
   // The call was successful.
-  CONTRACT_CALL_OUTCOME_SUCCESS = 0;
+  CONTRACT_CALL_OUTCOME_SUCCESS = 1;
 
   // The call reverted.
-  CONTRACT_CALL_OUTCOME_REVERTED = 1;
+  CONTRACT_CALL_OUTCOME_REVERTED = 2;
 }
 
 // Result indicating that the transaction's previous result was reorganized out of the chain.
@@ -116,6 +122,7 @@ message AttemptSequenceNumber {
   uint64 number = 1;
 }
 
+// Contents of the settlement attempts CF.
 message SettlementAttempt {
   // Sender wallet.
   Address sender_wallet = 1;
