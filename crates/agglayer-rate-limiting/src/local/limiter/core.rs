@@ -37,6 +37,7 @@ impl<S: RawState> RateLimiterCore<S> {
     /// Reserve a rate limiting slot.
     pub fn reserve(&mut self, time: S::Instant) -> Result<SlotTracker, S::LimitedInfo> {
         let occupancy = self.query(time);
+        debug_assert!(occupancy <= self.state.max_events());
 
         if occupancy < self.state.max_events() {
             self.reserved += 1;
