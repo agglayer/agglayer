@@ -45,13 +45,13 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = { path = "../interop/crates/agglayer-bincode" }
-agglayer-interop = { path = "../interop/crates/agglayer-interop" }
-agglayer-interop-types = { path = "../interop/crates/agglayer-interop-types" }
-agglayer-elf-build = { path = "../interop/crates/agglayer-elf-build" }
-agglayer-primitives = { path = "../interop/crates/agglayer-primitives" }
-agglayer-tries = { path = "../interop/crates/agglayer-tries" }
-unified-bridge = { path = "../interop/crates/unified-bridge" }
+agglayer-bincode = { git = "https://github.com/agglayer/interop.git", branch = "feat/expose-lbt" }
+agglayer-interop = { git = "https://github.com/agglayer/interop.git", branch = "feat/expose-lbt" }
+agglayer-interop-types = { git = "https://github.com/agglayer/interop.git", branch = "feat/expose-lbt" }
+agglayer-elf-build = { git = "https://github.com/agglayer/interop.git", branch = "feat/expose-lbt" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", branch = "feat/expose-lbt" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", branch = "feat/expose-lbt" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", branch = "feat/expose-lbt" }
 
 # Provers
 prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
