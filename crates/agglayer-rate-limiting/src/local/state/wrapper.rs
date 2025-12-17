@@ -48,7 +48,7 @@ impl<S: RawState> State<S> {
     }
 
     /// Get non-modifying access to the underlying raw state.
-    #[allow(dead_code)]
+    #[cfg(feature = "testutils")]
     pub fn raw(&self) -> &S {
         &self.raw
     }
