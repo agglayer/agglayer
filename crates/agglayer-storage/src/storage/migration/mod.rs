@@ -11,9 +11,9 @@ use crate::{
 mod error;
 mod migration_cf;
 
+use crate::types::migration::MigrationRecord;
 pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 use migration_cf::MigrationRecordColumn;
-use crate::types::migration::MigrationRecord;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
@@ -140,19 +140,32 @@ impl Builder {
         })
     }
 
-    pub fn create_cfs<S: AsRef<str>>(
+    pub fn add_cfs<S: AsRef<str>>(
         self,
         cfs: impl IntoIterator<Item = S>,
+        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails>,
     ) -> Result<Self, DBOpenError> {
         Ok(self.perform_step(move |db| {
+            // Create the columns first.
             for cf in cfs {
                 let cf = cf.as_ref();
+
+                if db.cf_exists(cf) {
+                    warn!("Column family {cf:?} already exists, dropping to create a fresh one");
+                    db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
+                }
+
                 debug!("Creating column family {cf:?}");
                 db.db
                     .rocksdb
                     .create_cf(cf, &rocksdb::Options::default())
                     .map_err(DBError::from)?;
             }
+
+            // Use the provided closure to populate it with data.
+            debug!("Populating new column families with data");
+            migrate_fn(&mut db.db)?;
+
             Ok(())
         })?)
     }
@@ -164,20 +177,16 @@ impl Builder {
         Ok(self.perform_step(move |db| {
             for cf in cfs {
                 let cf = cf.as_ref();
-                debug!("Dropping column family {cf:?}");
-                db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
-            }
-            Ok(())
-        })?)
-    }
 
-    pub fn migrate(
-        self,
-        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBOpenError> {
-        Ok(self.perform_step(move |db| {
-            debug!("Running a custom migration step");
-            migrate_fn(&mut db.db)
+                if db.cf_exists(cf) {
+                    debug!("Dropping column family {cf:?}");
+                    db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
+                } else {
+                    warn!("Asked to remove a non-existing column family {cf:?}");
+                }
+            }
+
+            Ok(())
         })?)
     }
 
@@ -222,6 +231,10 @@ impl Builder {
 
         self.step += 1;
         Ok(self)
+    }
+
+    fn cf_exists(&self, cf: &str) -> bool {
+        self.db.rocksdb.cf_handle(cf).is_some()
     }
 }
 

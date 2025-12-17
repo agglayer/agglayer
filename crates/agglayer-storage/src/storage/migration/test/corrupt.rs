@@ -47,7 +47,7 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
 
         // Verify migration record contains 4 steps at the end of phase 1
         let migration_record_count = db.keys::<MigrationRecordColumn>()?.count();
-        assert_eq!(migration_record_count, 4);
+        assert_eq!(migration_record_count, 3);
 
         // Delete the migration record at step 1 to create a gap
         db.delete::<MigrationRecordColumn>(&1_u32)?;

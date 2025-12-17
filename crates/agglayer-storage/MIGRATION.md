@@ -14,9 +14,8 @@ use agglayer_storage::storage::DB;
 // Initialize builder with path and initial schema
 let db = DB::builder(db_path, initial_schema)?
     // Apply migration steps
-    .create_cfs(&["new_cf_1", "new_cf_2"])?
-    .migrate(|db| {
-        // Migration logic here
+    .add_cfs(&["new_cf_1", "new_cf_2"], |db| {
+        // Migration logic here to populate new CFs
         Ok(())
     })?
     .drop_cfs(&["old_cf_1", "old_cf_2"])?
@@ -36,13 +35,12 @@ DB::builder(db_path, &["cf_v0_1", "cf_v0_2"])
 
 ### Migration Steps
 
-Migrations consist of a sequence of three operation types:
+Migrations consist of a sequence of two operation types:
 
-- `.create_cfs(&[...cfs])`: Create new column families
-- `.migrate(|db| { ... })`: Perform data transformation
+- `.add_cfs(&[...cfs], |db| { ... })`: Create new column families and populate them with data
 - `.drop_cfs(&[...cfs])`: Remove old column families
 
-These steps are tracked individually, allowing recovery from partial migrations.
+Each step is tracked individually, allowing recovery from partial migrations.
 
 ### Step Immutability
 
@@ -58,9 +56,8 @@ This ensures that existing databases can migrate forward correctly, as the syste
 
 Follow this pattern to ensure idempotency:
 
-1. **Create** new column families
-2. **Migrate** by writing only to the new column families (read from old, write to new)
-3. **Drop** old column families
+1. **Add** new column families and populate them (read from old, write to new)
+2. **Drop** old column families
 
 Avoid modifying values in place, as this makes recovery from interruptions difficult.
 
@@ -68,19 +65,18 @@ Example:
 
 ```rust
 DB::builder(db_path, &["data"])
-    // Step 1: Create new CF with transformed schema
-    .create_cfs(&["data_v2"])?
-    // Step 2: Migrate data (read from "data", write to "data_v2")
-    .migrate(|db| {
-        for key in db.keys::<OldColumn>() {
+    // Step 1: Create new CF and migrate data
+    .add_cfs(&["data_v2"], |db| {
+        // Read from "data", write to "data_v2"
+        for key in db.keys::<OldColumn>()? {
             let key = key?;
-            let value = db.get::<OldColumn>(&key);
+            let value = db.get::<OldColumn>(&key)?;
             let (new_key, new_value) = transform(key, value);
             db.put::<NewColumn>(&new_key, &new_value)?;
         }
         Ok(())
     })?
-    // Step 3: Remove old CF
+    // Step 2: Remove old CF
     .drop_cfs(&["data"])?
     .finalize(&["data_v2"])?
 ```
@@ -103,6 +99,7 @@ The system automatically tracks completed migration steps in an internal column 
 
 1. **Test migrations thoroughly** with representative data before release
 2. **Keep steps small** to minimize interruption impact
-3. **Write idempotent migrations** following the create-migrate-drop pattern
+3. **Write idempotent migrations** following the add-drop pattern
 4. **Never modify released steps** - always append new steps
 5. **Use final schema validation** to catch mistakes early
+6. **Write only to new CFs** in the migration function - read from old, write to new
