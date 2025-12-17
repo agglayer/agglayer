@@ -10,7 +10,7 @@ use agglayer_storage::{
 };
 use agglayer_types::EpochNumber;
 use tokio::sync::broadcast::error::TryRecvError;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub(crate) struct EpochSynchronizer {}
 
@@ -20,6 +20,7 @@ impl EpochSynchronizer {
         mut opened_epoch: EpochsStore::PerEpochStore,
         mut current_epoch_number: EpochNumber,
         mut epoch_stream: tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
+        clock_ref: ClockRef,
     ) -> eyre::Result<EpochsStore::PerEpochStore>
     where
         EpochsStore: EpochStoreWriter,
@@ -57,10 +58,15 @@ impl EpochSynchronizer {
                     eyre::bail!("Epoch stream closed during epoch synchronization");
                 }
                 Err(TryRecvError::Lagged(n)) => {
-                    debug!(
-                        "Epoch stream lagged on {} EpochEnded update during epoch synchronization",
-                        n
+                    let updated_epoch = clock_ref.current_epoch();
+                    warn!(
+                        skipped_events = n,
+                        old_current_epoch = current_epoch_number.as_u64(),
+                        new_current_epoch = updated_epoch.as_u64(),
+                        "Epoch stream lagged during synchronization, updating current epoch from \
+                         clock"
                     );
+                    current_epoch_number = updated_epoch;
                 }
                 Err(TryRecvError::Empty) => {
                     // We don't care about empty stream during epoch
@@ -119,6 +125,7 @@ impl EpochSynchronizer {
             opened_epoch,
             current_epoch_number,
             epoch_stream,
+            clock_ref,
         )
     }
 }
