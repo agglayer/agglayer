@@ -31,7 +31,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "agglayer-bincode"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#4e2b4cb82e3852746c04fda7de199d3385163232"
 dependencies = [
  "bincode",
  "serde",
@@ -40,7 +40,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#4e2b4cb82e3852746c04fda7de199d3385163232"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -54,7 +54,7 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#4e2b4cb82e3852746c04fda7de199d3385163232"
 dependencies = [
  "agglayer-primitives",
  "hex",
@@ -4208,7 +4208,7 @@ dependencies = [
 
 [[package]]
 name = "pessimistic-proof-program"
-version = "9.0.0"
+version = "10.0.0"
 dependencies = [
  "pessimistic-proof-core",
  "sp1-cli",
@@ -6792,7 +6792,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 [[package]]
 name = "unified-bridge"
 version = "0.12.0"
-source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#645faaba9e0eed81eca69b2f02fe7495c89deba5"
+source = "git+https://github.com/agglayer/interop.git?branch=feat%2Fexpose-lbt#4e2b4cb82e3852746c04fda7de199d3385163232"
 dependencies = [
  "agglayer-primitives",
  "agglayer-tries",

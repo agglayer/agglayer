@@ -1,9 +1,9 @@
 use agglayer_storage::stores::StateWriter;
 use agglayer_types::{Digest, LocalNetworkStateData, U256};
 use jsonrpsee::{core::client::ClientT, rpc_params};
-use unified_bridge::{NetworkId, TokenBalanceEntry, TokenInfo, L1_ETH};
+use unified_bridge::{NetworkId, TokenInfo, L1_ETH};
 
-use crate::testutils::TestContext;
+use crate::{admin::TokenBalanceEntry, testutils::TestContext};
 
 #[test_log::test(tokio::test)]
 async fn admin_get_token_balance() {
@@ -44,7 +44,7 @@ async fn admin_get_token_balance() {
         .unwrap();
 
     // returns only the requested token balance
-    let payload: Vec<unified_bridge::TokenBalanceEntry> = context
+    let payload: Vec<TokenBalanceEntry> = context
         .admin_client
         .request(
             "admin_getTokenBalance",
@@ -69,7 +69,7 @@ async fn admin_get_token_balance() {
     assert_eq!(single_entry.amount, expected_entry.amount);
 
     // returns all the balances because None TokenInfo provided
-    let payload: Vec<unified_bridge::TokenBalanceEntry> = context
+    let payload: Vec<TokenBalanceEntry> = context
         .admin_client
         .request(
             "admin_getTokenBalance",

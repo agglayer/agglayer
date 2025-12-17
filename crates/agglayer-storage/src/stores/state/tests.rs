@@ -10,7 +10,6 @@ use pessimistic_proof::{
         commitment::{PessimisticRootCommitmentVersion, SignatureCommitmentVersion},
         generate_pessimistic_proof,
     },
-    unified_bridge::{self},
     LocalNetworkState,
 };
 use rstest::{fixture, rstest};
@@ -241,11 +240,6 @@ fn can_read(network_id: NetworkId, store: StateStore) {
 
     // read state
     let after_going_through_disk = store.read_local_network_state(network_id).unwrap().unwrap();
-
-    let balance_tree = unified_bridge::BalanceTree(after_going_through_disk.balance_tree.clone());
-    let entries = balance_tree.get_all_balances().unwrap();
-
-    println!("{}", serde_json::to_string_pretty(&entries).unwrap());
 
     info!(
         "after DB | root: {}, nb nodes: {}",

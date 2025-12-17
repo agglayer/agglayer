@@ -5,12 +5,14 @@ use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
+use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
-    Height, NetworkId, SettlementTxHash,
+    Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
+    CertificateStatusError, Digest, Height, NetworkId, SettlementTxHash, U256,
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
-use serde::Deserialize as _;
+use pessimistic_proof::local_balance_tree::BalanceTree;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::{error, info, instrument, warn};
@@ -28,6 +30,34 @@ pub enum ProcessNow {
     False,
 }
 
+use serde_with::{serde_as, DisplayFromStr};
+
+/// Token balance entry structure in order to display the balance tree values.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenBalanceEntry {
+    pub origin_network: NetworkId,
+    pub origin_token_address: Address,
+    #[serde_as(as = "DisplayFromStr")]
+    pub amount: U256,
+}
+
+impl From<(SmtPath<192>, Digest)> for TokenBalanceEntry {
+    fn from((path, leaf_value): (SmtPath<192>, Digest)) -> Self {
+        let TokenInfo {
+            origin_network,
+            origin_token_address,
+        } = TokenInfo::from_bits(&path.as_bits());
+
+        Self {
+            origin_network,
+            origin_token_address,
+            amount: U256::from_be_bytes(*leaf_value.as_bytes()),
+        }
+    }
+}
+
 #[rpc(server, namespace = "admin")]
 pub(crate) trait AdminAgglayer {
     #[method(name = "getTokenBalance")]
@@ -35,7 +65,7 @@ pub(crate) trait AdminAgglayer {
         &self,
         network_id: NetworkId,
         token_info: Option<TokenInfo>,
-    ) -> RpcResult<Vec<unified_bridge::TokenBalanceEntry>>;
+    ) -> RpcResult<Vec<TokenBalanceEntry>>;
 
     #[method(name = "getCertificate")]
     async fn get_certificate(
@@ -204,7 +234,7 @@ where
         &self,
         network_id: NetworkId,
         token_info: Option<TokenInfo>,
-    ) -> RpcResult<Vec<unified_bridge::TokenBalanceEntry>> {
+    ) -> RpcResult<Vec<TokenBalanceEntry>> {
         let Some(balance_tree) = self
             .state
             .read_local_network_state(network_id)
@@ -212,19 +242,29 @@ where
                 error!(?error, "Failed to read the balance tree");
                 Error::internal("Unable to read the balance tree")
             })?
-            .map(|s| unified_bridge::BalanceTree(s.balance_tree))
+            .map(|s| BalanceTree(s.balance_tree))
         else {
             return Ok(vec![]); // empty balances, not an error
         };
 
         // get the balance of a given token, or return all of them
-        let balances = if let Some(token_info) = token_info {
-            vec![balance_tree.get_balance(token_info)]
+        let balances: Vec<TokenBalanceEntry> = if let Some(token_info) = token_info {
+            let amount = balance_tree.get_balance(token_info);
+            vec![TokenBalanceEntry {
+                origin_network: token_info.origin_network,
+                origin_token_address: token_info.origin_token_address,
+                amount,
+            }]
         } else {
-            balance_tree.get_all_balances().map_err(|error| {
-                error!(?error, "Failed to get all balances");
-                Error::internal("Unable to get all balances")
-            })?
+            balance_tree
+                .get_all_balances()
+                .map_err(|error| {
+                    error!(?error, "Failed to get all balances");
+                    Error::internal("Unable to get all balances")
+                })?
+                .into_iter()
+                .map(TokenBalanceEntry::from)
+                .collect()
         };
 
         Ok(balances)
