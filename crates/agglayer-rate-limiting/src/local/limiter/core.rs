@@ -57,6 +57,7 @@ impl<S: RawState> RateLimiterCore<S> {
 
     /// Record a rate limiting event.
     pub fn record(&mut self, time: S::Instant, slot: SlotTracker) {
+        debug_assert!(self.state.raw().query() < self.state.max_events());
         self.state.record(time);
         self.release(slot);
     }
