@@ -8,12 +8,14 @@ use crate::{
     storage::{DBError, DB},
 };
 
+mod access;
 mod error;
 mod migration_cf;
 
 use crate::types::migration::MigrationRecord;
 pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 use migration_cf::MigrationRecordColumn;
+pub use access::DbAccess;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
@@ -150,16 +152,16 @@ impl Builder {
     /// This is a migration step that creates column families and runs the
     /// provided migration function to populate them. The migration function
     /// should only write into the newly created column families.
-    pub fn add_cfs<S: AsRef<str>>(
+    pub fn add_cfs<'a>(
         self,
-        cfs: impl IntoIterator<Item = S>,
-        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails>,
+        cfs: impl IntoIterator<Item = &'a str>,
+        migrate_fn: impl FnOnce(&DbAccess) -> Result<(), DBMigrationErrorDetails>,
     ) -> Result<Self, DBOpenError> {
+        let cfs: BTreeSet<_> = cfs.into_iter().collect();
+
         Ok(self.perform_step(move |db| {
             // Create the columns first.
-            for cf in cfs {
-                let cf = cf.as_ref();
-
+            for cf in &cfs {
                 if db.cf_exists(cf) {
                     warn!("Column family {cf:?} already exists, dropping to create a fresh one");
                     db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
@@ -174,7 +176,8 @@ impl Builder {
 
             // Use the provided closure to populate it with data.
             debug!("Populating new column families with data");
-            migrate_fn(&mut db.db)?;
+            let access = DbAccess::new(&db.db, &cfs);
+            migrate_fn(&access)?;
 
             Ok(())
         })?)
