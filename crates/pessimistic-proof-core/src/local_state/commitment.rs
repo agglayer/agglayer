@@ -105,7 +105,7 @@ impl PessimisticRootCommitmentValues {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, strum_macros::EnumCount)]
 pub enum SignatureCommitmentVersion {
     /// Legacy commitment for the signature.
     V2,
@@ -115,6 +115,26 @@ pub enum SignatureCommitmentVersion {
     V4,
     /// Add the certificate id.
     V5,
+}
+
+#[cfg(feature = "testutils")]
+impl SignatureCommitmentVersion {
+    /// Generate a random SignatureCommitmentVersion for testing using the
+    /// provided seed. This function is resilient to changes in the enum
+    /// variants.
+    pub fn generate_for_test(seed: u64) -> Self {
+        use rand::{Rng, SeedableRng};
+        use strum::EnumCount;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        match rng.random_range(0..Self::COUNT) {
+            0 => SignatureCommitmentVersion::V2,
+            1 => SignatureCommitmentVersion::V3,
+            2 => SignatureCommitmentVersion::V4,
+            3 => SignatureCommitmentVersion::V5,
+            _ => unreachable!("Invalid signature commitment version index"),
+        }
+    }
 }
 
 /// The values which compose the signature.
