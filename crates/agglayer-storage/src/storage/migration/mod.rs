@@ -36,6 +36,11 @@ impl Builder {
         }
     }
 
+    /// Opens a database at the given path with migration tracking.
+    ///
+    /// This method initializes or opens an existing database with the provided
+    /// initial schema (v0). It automatically sets up migration tracking and
+    /// validates the database schema.
     pub fn open(
         path: &Path,
         cfs_v0: impl IntoIterator<Item = ColumnFamilyDescriptor>,
@@ -140,6 +145,11 @@ impl Builder {
         })
     }
 
+    /// Creates new column families and populates them with data.
+    ///
+    /// This is a migration step that creates column families and runs the
+    /// provided migration function to populate them. The migration function
+    /// should only write into the newly created column families.
     pub fn add_cfs<S: AsRef<str>>(
         self,
         cfs: impl IntoIterator<Item = S>,
@@ -170,6 +180,7 @@ impl Builder {
         })?)
     }
 
+    /// Removes old column families from the database.
     pub fn drop_cfs<S: AsRef<str>>(
         self,
         cfs: impl IntoIterator<Item = S>,
@@ -190,6 +201,10 @@ impl Builder {
         })?)
     }
 
+    /// Completes the migration process and returns the database.
+    ///
+    /// This method validates that all declared migration steps have been
+    /// executed and returns the fully migrated database ready for use.
     pub fn finalize<'a>(
         self,
         _expected_schema: impl IntoIterator<Item = &'a str>,
