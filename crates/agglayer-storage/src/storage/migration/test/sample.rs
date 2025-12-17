@@ -112,69 +112,65 @@ impl Builder {
     }
 
     pub fn sample_migrate_v0_v1(self) -> Result<Self, DBOpenError> {
-        // Create the new V1 column family
-        self.create_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME])?
-            // Migrate data from V0 to V1
-            .migrate(|db| {
-                // Iterate over all V0 entries
-                for key in db.keys::<NetworkInfoV0Column>()? {
-                    let key = key?;
-                    migration_failpoint()?;
-                    if let Some(v0_value) = db.get::<NetworkInfoV0Column>(&key)? {
-                        // Transform V0 to V1 (widen num_failures to u64, add is_cool field)
-                        let v1_value = NetworkInfoV1 {
-                            height: v0_value.height,
-                            num_beans: v0_value.num_beans,
-                            num_failures: v0_value.num_failures as u64,
-                            is_cool: v0_value.num_beans > 100, // Networks with >100 beans are cool
-                        };
-                        db.put::<NetworkInfoV1Column>(&key, &v1_value)?;
-                    }
-                }
+        // Create and populate the new V1 column family
+        self.add_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME], |db| {
+            // Iterate over all V0 entries
+            for key in db.keys::<NetworkInfoV0Column>()? {
+                let key = key?;
                 migration_failpoint()?;
-                Ok(())
-            })?
-            // Drop the old V0 column family
-            .drop_cfs([NetworkInfoV0Column::COLUMN_FAMILY_NAME])
+                if let Some(v0_value) = db.get::<NetworkInfoV0Column>(&key)? {
+                    // Transform V0 to V1 (widen num_failures to u64, add is_cool field)
+                    let v1_value = NetworkInfoV1 {
+                        height: v0_value.height,
+                        num_beans: v0_value.num_beans,
+                        num_failures: v0_value.num_failures as u64,
+                        is_cool: v0_value.num_beans > 100, // Networks with >100 beans are cool
+                    };
+                    db.put::<NetworkInfoV1Column>(&key, &v1_value)?;
+                }
+            }
+            migration_failpoint()?;
+            Ok(())
+        })?
+        // Drop the old V0 column family
+        .drop_cfs([NetworkInfoV0Column::COLUMN_FAMILY_NAME])
     }
 
     pub fn sample_migrate_v1_v2(self) -> Result<Self, DBOpenError> {
-        // Create the new V2 column families (cool and uncool)
-        self.create_cfs(CFS_V2)?
-            // Migrate data from V1 to V2
-            .migrate(|db| {
-                // Iterate over all V1 entries
-                for key in db.keys::<NetworkInfoV1Column>()? {
-                    let network_id = key?;
-                    migration_failpoint()?;
-                    if let Some(v1_value) = db.get::<NetworkInfoV1Column>(&network_id)? {
-                        // Create a V2 key with network_id and height from V1
-                        let v2_key = KeyV2 {
-                            network_id,
-                            height: v1_value.height,
-                        };
+        // Create and populate the new V2 column families (cool and uncool)
+        self.add_cfs(CFS_V2, |db| {
+            // Iterate over all V1 entries
+            for key in db.keys::<NetworkInfoV1Column>()? {
+                let network_id = key?;
+                migration_failpoint()?;
+                if let Some(v1_value) = db.get::<NetworkInfoV1Column>(&network_id)? {
+                    // Create a V2 key with network_id and height from V1
+                    let v2_key = KeyV2 {
+                        network_id,
+                        height: v1_value.height,
+                    };
 
-                        // Split based on is_cool flag
-                        if v1_value.is_cool {
-                            let v2_cool = NetworkInfoV2Cool {
-                                num_beans: v1_value.num_beans,
-                                sunglasses: true, // Cool networks wear sunglasses by default
-                            };
-                            db.put::<NetworkInfoV2CoolColumn>(&v2_key, &v2_cool)?;
-                        } else {
-                            let v2_uncool = NetworkInfoV2Uncool {
-                                num_beans: v1_value.num_beans,
-                                num_failures: v1_value.num_failures,
-                            };
-                            db.put::<NetworkInfoV2UncoolColumn>(&v2_key, &v2_uncool)?;
-                        }
+                    // Split based on is_cool flag
+                    if v1_value.is_cool {
+                        let v2_cool = NetworkInfoV2Cool {
+                            num_beans: v1_value.num_beans,
+                            sunglasses: true, // Cool networks wear sunglasses by default
+                        };
+                        db.put::<NetworkInfoV2CoolColumn>(&v2_key, &v2_cool)?;
+                    } else {
+                        let v2_uncool = NetworkInfoV2Uncool {
+                            num_beans: v1_value.num_beans,
+                            num_failures: v1_value.num_failures,
+                        };
+                        db.put::<NetworkInfoV2UncoolColumn>(&v2_key, &v2_uncool)?;
                     }
                 }
-                migration_failpoint()?;
-                Ok(())
-            })?
-            // Drop the old V1 column family
-            .drop_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME])
+            }
+            migration_failpoint()?;
+            Ok(())
+        })?
+        // Drop the old V1 column family
+        .drop_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME])
     }
 }
 
