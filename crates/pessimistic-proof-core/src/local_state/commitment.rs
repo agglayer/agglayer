@@ -44,6 +44,9 @@ pub struct PessimisticRootCommitmentValues {
     pub origin_network: NetworkId,
 }
 
+#[deprecated(
+    note = "Unused internal helper; construct PessimisticRootCommitmentValues explicitly instead."
+)]
 impl From<&ConstrainedValues> for PessimisticRootCommitmentValues {
     fn from(value: &ConstrainedValues) -> Self {
         Self {
