@@ -9,5 +9,5 @@ pub const CFS: [&str; 4] = [
 
 /// Definitions for the column families in the pending queue storage.
 pub fn pending_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    super::default_db_cf_definitions(&CFS)
+    crate::storage::default_db_cf_definitions(&CFS)
 }

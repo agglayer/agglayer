@@ -336,6 +336,7 @@ impl BackupReport {
         }
     }
 }
+
 impl BackupReport {
     pub fn get_state(&self) -> &[BackupEngineInfo] {
         self.state.as_slice()

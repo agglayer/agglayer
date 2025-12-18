@@ -29,6 +29,8 @@ use crate::{
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
+mod cf_definitions;
+
 #[cfg(test)]
 mod tests;
 
@@ -49,11 +51,11 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, crate::storage::epochs_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::epochs_db_cf_definitions())
     }
 
     pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
-        DB::open_cf_readonly(path, crate::storage::epochs_db_cf_definitions())
+        DB::open_cf_readonly(path, cf_definitions::epochs_db_cf_definitions())
     }
 
     #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]

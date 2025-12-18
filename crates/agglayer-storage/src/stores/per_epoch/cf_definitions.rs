@@ -14,7 +14,7 @@ const CHECKPOINTS: [&str; 2] = [
 
 /// Definitions for the column families in the epochs storage.
 pub fn epochs_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    let mut vec = super::default_db_cf_definitions(&CFS);
+    let mut vec = crate::storage::default_db_cf_definitions(&CFS);
 
     let mut cfg = rocksdb::Options::default();
 

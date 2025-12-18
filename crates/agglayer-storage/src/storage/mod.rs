@@ -8,18 +8,25 @@ use rocksdb::{
 
 use crate::columns::{Codec, ColumnSchema};
 
-mod cf_definitions;
 pub(crate) mod iterators;
 mod migration;
 
 pub mod backup;
 
-pub(crate) use cf_definitions::{
-    debug::debug_db_cf_definitions, epochs::epochs_db_cf_definitions,
-    pending::pending_db_cf_definitions, state::state_db_cf_definitions,
-};
-
 pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+
+pub(crate) fn default_db_cf_definitions(cfs: &[&'static str]) -> Vec<ColumnFamilyDescriptor> {
+    cfs.iter()
+        .map(|cf| {
+            let mut cfg = rocksdb::Options::default();
+
+            cfg.set_compression_type(rocksdb::DBCompressionType::Lz4);
+            cfg.create_if_missing(true);
+
+            ColumnFamilyDescriptor::new(*cf, cfg)
+        })
+        .collect()
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
