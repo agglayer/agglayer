@@ -4,7 +4,6 @@ use std::{
     option::Option,
     result::Result,
     sync::{atomic::AtomicU64, Arc, RwLock},
-    task::Poll,
 };
 
 use agglayer_clock::ClockRef;
@@ -32,7 +31,6 @@ use agglayer_types::{
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
-use futures_util::poll;
 use mocks::{MockCertifier, MockL1Rpc};
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
@@ -47,7 +45,12 @@ use crate::{
     CertifierResult, Error, NonceInfo,
 };
 
-pub(crate) mod mocks;
+#[cfg(test)]
+use std::task::Poll;
+#[cfg(test)]
+use futures_util::poll;
+
+pub mod mocks;
 
 #[allow(dead_code)]
 #[derive(Default)]

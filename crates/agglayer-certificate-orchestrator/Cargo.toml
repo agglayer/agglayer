@@ -9,9 +9,12 @@ workspace = true
 [features]
 default = []
 testutils = [
+    "dep:agglayer-primitives",
     "dep:agglayer-test-suite",
     "dep:fail",
     "dep:mockall",
+    "dep:rstest",
+    "dep:test-log",
     "agglayer-clock/testutils",
     "agglayer-config/testutils",
     "agglayer-storage/testutils",
@@ -44,13 +47,15 @@ agglayer-types.workspace = true
 pessimistic-proof.workspace = true
 
 # Optional dependencies
+agglayer-primitives = { workspace = true, optional = true }
 mockall = { workspace = true, optional = true }
+rstest = { workspace = true, optional = true }
+test-log = { workspace = true, optional = true }
 
 [dev-dependencies]
 agglayer-certificate-orchestrator = { workspace = true, features = [
     "testutils",
 ] }
-agglayer-primitives.workspace = true
 
 async-trait.workspace = true
 alloy.workspace = true

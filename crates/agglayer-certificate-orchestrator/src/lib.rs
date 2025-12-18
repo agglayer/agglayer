@@ -37,8 +37,8 @@ mod listener_task;
 mod network_task;
 mod settlement_client;
 
-#[cfg(test)]
-mod tests;
+#[cfg(any(test, feature = "testutils"))]
+pub mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
 pub use error::{CertificationError, Error, PreCertificationError};

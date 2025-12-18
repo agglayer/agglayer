@@ -4,6 +4,7 @@ use agglayer_types::{Height, LocalNetworkStateData, NetworkId, SettlementTxHash}
 use alloy::{
     network::Ethereum,
     primitives::{Bytes, TxHash},
+    providers::PendingTransactionBuilder,
     rpc::types::TransactionReceipt,
 };
 use mockall::mock;
@@ -79,5 +80,21 @@ mock! {
         async fn fetch_transaction_receipt(&self, tx_hash: SettlementTxHash) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as agglayer_contracts::L1TransactionFetcher>::Provider;
+    }
+
+    #[async_trait::async_trait]
+    impl agglayer_contracts::Settler for L1Rpc {
+        fn decode_contract_revert(error: &alloy::contract::Error) -> Option<String>;
+
+        async fn verify_pessimistic_trusted_aggregator(
+            &self,
+            rollup_id: u32,
+            l_1_info_tree_leaf_count: u32,
+            new_local_exit_root: [u8; 32],
+            new_pessimistic_root: [u8; 32],
+            proof: Bytes,
+            custom_chain_data: Bytes,
+            nonce: Option<(u64, u128, Option<u128>)>
+        ) -> Result<PendingTransactionBuilder<Ethereum>, alloy::contract::Error>;
     }
 }
