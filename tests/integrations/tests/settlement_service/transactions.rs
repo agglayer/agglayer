@@ -66,9 +66,7 @@ async fn deconstruct_reconstruct_transaction(#[case] state: Forest) {
         .connect_http(reqwest::Url::parse(&l1.rpc).unwrap());
 
     // PolygonRollupManager contract address from the test setup
-    let rollup_manager_address: Address = TEST_ROLLUP_MANAGER_ADDRESS
-        .parse()
-        .unwrap();
+    let rollup_manager_address: Address = TEST_ROLLUP_MANAGER_ADDRESS.parse().unwrap();
 
     // Create contract instance
     let rollup_manager = PolygonRollupManager::new(rollup_manager_address, provider);
@@ -83,35 +81,22 @@ async fn deconstruct_reconstruct_transaction(#[case] state: Forest) {
     // MANUALLY CRAFT THE verifyPessimisticTrustedAggregator CALL
     // instead of using interop_sendCertificate RPC
 
-    // Prepare the arguments for verifyPessimisticTrustedAggregator
+    // Prepare the arguments for verifyPessimisticTrustedAggregator.
+    // For testing purposes, we'll use dummy/placeholder values for some parameters.
+    // In a real scenario, these would come from the actual proof generation.
     let rollup_id: u32 = certificate.network_id.to_u32();
-    // Use 0 as the default L1 info tree leaf count
     let l_1_info_tree_leaf_count: u32 = certificate.l1_info_tree_leaf_count.unwrap_or(0);
     let new_local_exit_root: FixedBytes<32> =
         FixedBytes::from_slice(certificate.new_local_exit_root.as_ref());
-
-    // For testing purposes, we'll use dummy/placeholder values for some parameters.
-    // In a real scenario, these would come from the actual proof generation.
     let new_pessimistic_root: FixedBytes<32> = FixedBytes::from([0u8; 32]); // Placeholder
     let proof: Bytes = Bytes::from(vec![0u8; 64]); // Placeholder proof (minimum size)
     let custom_chain_data: Bytes = Bytes::from(certificate.custom_chain_data.clone());
 
-    info!("Building verifyPessimisticTrustedAggregator transaction with parameters:");
-    info!("  rollup_id: {}", rollup_id);
-    info!("  l_1_info_tree_leaf_count: {}", l_1_info_tree_leaf_count);
-    info!(
-        "  new_local_exit_root: 0x{}",
-        hex::encode(new_local_exit_root)
-    );
-    info!(
-        "  new_pessimistic_root: 0x{}",
-        hex::encode(new_pessimistic_root)
-    );
-    info!("  proof length: {} bytes", proof.len());
-    info!(
-        "  custom_chain_data length: {} bytes",
-        custom_chain_data.len()
-    );
+    info!(%rollup_id, %l_1_info_tree_leaf_count, new_local_exit_root=format!("0x{}", hex::encode(new_local_exit_root)),
+        new_pessimistic_root=format!("0x{}", hex::encode(new_pessimistic_root)),
+        proof_len=proof.len(),
+        custom_chain_data_len=custom_chain_data.len(),
+        "Building verifyPessimisticTrustedAggregator transaction");
 
     // Create the transaction call, set various parameters
     // Gas fees: max_fee_per_gas = 1000 gwei, max_priority_fee_per_gas = 100 gwei
@@ -142,18 +127,6 @@ async fn deconstruct_reconstruct_transaction(#[case] state: Forest) {
         .gas_limit(1_000_000)
         .max_fee_per_gas(1_000_000_000_000) // 1000 gwei
         .max_priority_fee_per_gas(100_000_000_000); // 100 gwei
-
-    // Compare the key transaction fields
-    info!("Comparing transaction fields:");
-    info!("  Original calldata length: {} bytes", original_calldata.len());
-    info!("  Reconstructed calldata length: {} bytes", reconstructed_tx_call.input.input().map(|i| i.len()).unwrap_or(0));
-    info!("  Original address: {:?}", original_address);
-    info!("  Reconstructed address: {:?}", reconstructed_tx_call.to);
-    info!("  Original value: {}", original_value);
-    info!("  Reconstructed value: {:?}", reconstructed_tx_call.value);
-    info!("  Gas limit: {:?}", reconstructed_tx_call.gas);
-    info!("  Max fee per gas: {:?}", reconstructed_tx_call.max_fee_per_gas);
-    info!("  Max priority fee per gas: {:?}", reconstructed_tx_call.max_priority_fee_per_gas);
 
     // Verify that the calldata matches
     assert_eq!(
