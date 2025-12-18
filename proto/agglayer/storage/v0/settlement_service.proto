@@ -59,7 +59,7 @@ message SettlementJob {
 // Transaction result.
 message TxResult {
   // Transaction result.
-  oneof result {
+  oneof tx_result {
     // Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
     ClientError client_error = 1;
 

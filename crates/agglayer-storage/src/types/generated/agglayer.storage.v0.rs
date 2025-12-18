@@ -306,14 +306,14 @@ pub struct SettlementJob {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TxResult {
     /// Transaction result.
-    #[prost(oneof="tx_result::Result", tags="1, 2, 3")]
-    pub result: ::core::option::Option<tx_result::Result>,
+    #[prost(oneof="tx_result::TxResult", tags="1, 2, 3")]
+    pub tx_result: ::core::option::Option<tx_result::TxResult>,
 }
 /// Nested message and enum types in `TxResult`.
 pub mod tx_result {
     /// Transaction result.
     #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Result {
+    pub enum TxResult {
         /// Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
         #[prost(message, tag="1")]
         ClientError(super::ClientError),
