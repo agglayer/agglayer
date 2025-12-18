@@ -44,21 +44,6 @@ pub struct PessimisticRootCommitmentValues {
     pub origin_network: NetworkId,
 }
 
-#[deprecated(
-    note = "Unused internal helper; construct PessimisticRootCommitmentValues explicitly instead."
-)]
-impl From<&ConstrainedValues> for PessimisticRootCommitmentValues {
-    fn from(value: &ConstrainedValues) -> Self {
-        Self {
-            balance_root: value.initial_state_commitment.balance_root,
-            nullifier_root: value.initial_state_commitment.nullifier_root,
-            ler_leaf_count: value.initial_state_commitment.ler_leaf_count,
-            height: value.height,
-            origin_network: value.origin_network,
-        }
-    }
-}
-
 impl PessimisticRootCommitmentValues {
     /// Infer the version of the provided settled pessimistic root.
     pub fn infer_settled_pp_root_version(
