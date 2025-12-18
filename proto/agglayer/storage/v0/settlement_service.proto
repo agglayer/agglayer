@@ -34,23 +34,26 @@ message SettlementJob {
   // Number of confirmations to wait for.
   uint32 num_confirmations = 5;
 
+  // Gas limit for each settlement attempt.
+  Uint128 gas_limit = 6;
+
   // Ceiling for max fee per gas.
-  Uint128 max_fee_per_gas_ceiling = 6;
+  Uint128 max_fee_per_gas_ceiling = 7;
 
   // Floor for max fee per gas.
-  Uint128 max_fee_per_gas_floor = 7;
+  Uint128 max_fee_per_gas_floor = 8;
 
   // Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-  uint32 max_fee_per_gas_increase_percents = 8;
+  uint32 max_fee_per_gas_increase_percents = 9;
 
   // Ceiling for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_ceiling = 9;
+  Uint128 max_priority_fee_per_gas_ceiling = 10;
 
   // Floor for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_floor = 10;
+  Uint128 max_priority_fee_per_gas_floor = 11;
 
   // Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-  uint32 max_priority_fee_per_gas_increase_percents = 11;
+  uint32 max_priority_fee_per_gas_increase_percents = 12;
 }
 
 // Transaction result.
@@ -82,8 +85,11 @@ enum ClientErrorType {
   // Unspecified error type.
   CLIENT_ERROR_TYPE_UNSPECIFIED = 0;
 
-  // Network error.
-  CLIENT_ERROR_TYPE_NETWORK_ERROR = 1;
+  // Transient error (e.g., network issue, temporary RPC unavailability).
+  CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
+
+  // Permanent error (e.g., we have no private key for the wallet listed in there).
+  CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
 }
 
 // Result for a successfully-executed contract call.
@@ -130,17 +136,20 @@ message SettlementAttempt {
   // Nonce reserved for the transaction.
   Nonce nonce = 2;
 
-  // Gas price parameters used for this attempt.
-  Uint128 max_fee_per_gas = 3;
+  // Gas limit used for this attempt.
+  Uint128 gas_limit = 3;
 
   // Gas price parameters used for this attempt.
-  Uint128 max_priority_fee_per_gas = 4;
+  Uint128 max_fee_per_gas = 4;
+
+  // Gas price parameters used for this attempt.
+  Uint128 max_priority_fee_per_gas = 5;
 
   // Hash of the submitted transaction.
-  TxHash tx_hash = 5;
+  TxHash tx_hash = 6;
 
   // Result of the attempt, if available.
-  TxResult result = 6;
+  TxResult result = 7;
 }
 
 // Contents of the settlement nonces CF.

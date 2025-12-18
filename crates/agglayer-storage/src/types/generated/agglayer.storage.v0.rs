@@ -280,23 +280,26 @@ pub struct SettlementJob {
     /// Number of confirmations to wait for.
     #[prost(uint32, tag="5")]
     pub num_confirmations: u32,
-    /// Ceiling for max fee per gas.
+    /// Gas limit for each settlement attempt.
     #[prost(message, optional, tag="6")]
+    pub gas_limit: ::core::option::Option<Uint128>,
+    /// Ceiling for max fee per gas.
+    #[prost(message, optional, tag="7")]
     pub max_fee_per_gas_ceiling: ::core::option::Option<Uint128>,
     /// Floor for max fee per gas.
-    #[prost(message, optional, tag="7")]
+    #[prost(message, optional, tag="8")]
     pub max_fee_per_gas_floor: ::core::option::Option<Uint128>,
     /// Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-    #[prost(uint32, tag="8")]
+    #[prost(uint32, tag="9")]
     pub max_fee_per_gas_increase_percents: u32,
     /// Ceiling for max priority fee per gas.
-    #[prost(message, optional, tag="9")]
+    #[prost(message, optional, tag="10")]
     pub max_priority_fee_per_gas_ceiling: ::core::option::Option<Uint128>,
     /// Floor for max priority fee per gas.
-    #[prost(message, optional, tag="10")]
+    #[prost(message, optional, tag="11")]
     pub max_priority_fee_per_gas_floor: ::core::option::Option<Uint128>,
     /// Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-    #[prost(uint32, tag="11")]
+    #[prost(uint32, tag="12")]
     pub max_priority_fee_per_gas_increase_percents: u32,
 }
 /// Transaction result.
@@ -368,17 +371,20 @@ pub struct SettlementAttempt {
     /// Nonce reserved for the transaction.
     #[prost(message, optional, tag="2")]
     pub nonce: ::core::option::Option<Nonce>,
-    /// Gas price parameters used for this attempt.
+    /// Gas limit used for this attempt.
     #[prost(message, optional, tag="3")]
-    pub max_fee_per_gas: ::core::option::Option<Uint128>,
+    pub gas_limit: ::core::option::Option<Uint128>,
     /// Gas price parameters used for this attempt.
     #[prost(message, optional, tag="4")]
+    pub max_fee_per_gas: ::core::option::Option<Uint128>,
+    /// Gas price parameters used for this attempt.
+    #[prost(message, optional, tag="5")]
     pub max_priority_fee_per_gas: ::core::option::Option<Uint128>,
     /// Hash of the submitted transaction.
-    #[prost(message, optional, tag="5")]
+    #[prost(message, optional, tag="6")]
     pub tx_hash: ::core::option::Option<TxHash>,
     /// Result of the attempt, if available.
-    #[prost(message, optional, tag="6")]
+    #[prost(message, optional, tag="7")]
     pub result: ::core::option::Option<TxResult>,
 }
 /// Contents of the settlement nonces CF.
@@ -397,8 +403,10 @@ pub struct SettlementNonce {
 pub enum ClientErrorType {
     /// Unspecified error type.
     Unspecified = 0,
-    /// Network error.
-    NetworkError = 1,
+    /// Transient error (e.g., network issue, temporary RPC unavailability).
+    UnspecifiedTransient = 1,
+    /// Permanent error (e.g., we have no private key for the wallet listed in there).
+    UnspecifiedPermanent = 2,
 }
 impl ClientErrorType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -408,14 +416,16 @@ impl ClientErrorType {
     pub fn as_str_name(&self) -> &'static str {
         match self {
             Self::Unspecified => "CLIENT_ERROR_TYPE_UNSPECIFIED",
-            Self::NetworkError => "CLIENT_ERROR_TYPE_NETWORK_ERROR",
+            Self::UnspecifiedTransient => "CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT",
+            Self::UnspecifiedPermanent => "CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
             "CLIENT_ERROR_TYPE_UNSPECIFIED" => Some(Self::Unspecified),
-            "CLIENT_ERROR_TYPE_NETWORK_ERROR" => Some(Self::NetworkError),
+            "CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT" => Some(Self::UnspecifiedTransient),
+            "CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT" => Some(Self::UnspecifiedPermanent),
             _ => None,
         }
     }
