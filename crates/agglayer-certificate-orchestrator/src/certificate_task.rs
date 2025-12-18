@@ -450,10 +450,6 @@ where
                 "CertificateTask::process_from_proven called without a pp_root".into(),
             ))?;
 
-        // Associate the pp root with the certificate ID.
-        self.state_store
-            .add_certificate_id_for_pp_root(&PessimisticRoot::from(new_pp_root), &certificate_id)?;
-
         debug!(
             "Submitting certificate for settlement, previous nonce is {:?}",
             self.nonce_info
@@ -540,9 +536,6 @@ where
             "Waiting for certificate settlement to complete"
         );
 
-        // Associate the pp root with the certificate ID.
-        self.state_store
-            .add_certificate_id_for_pp_root(&PessimisticRoot::from(new_pp_root), &certificate_id)?;
         let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
             height,
