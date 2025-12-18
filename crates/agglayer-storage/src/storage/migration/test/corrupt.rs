@@ -115,8 +115,7 @@ fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
             .add_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME], |db| {
                 // This should FAIL - trying to write to old CF during migration
                 let v0_value = &DATA_V0[1].1;
-                db.put::<NetworkInfoV0Column>(&NetworkId::new(42), v0_value)?;
-                Ok(())
+                db.put::<NetworkInfoV0Column>(&NetworkId::new(42), v0_value)
             });
 
         match result {
