@@ -11,15 +11,7 @@ fn empty_rpcs() {
     let config = Config::try_load(Path::new(input)).unwrap();
 
     assert_toml_snapshot!(config, {
-        ".storage.*" => insta::dynamic_redaction(|value, path| {
-            if path.to_string() != "storage.db-path" {
-                if let insta::internals::Content::String(path) = value {
-                    return insta::internals::Content::String(path.replace(Path::new("./").canonicalize().unwrap().to_str().unwrap(), "/tmp/agglayer"));
-                }
-            }
-
-            value
-        }),
+        ".storage.*" => agglayer_config::redact_storage_path(),
     });
 }
 
@@ -30,15 +22,7 @@ fn max_rpc_request_size() {
     let config = Config::try_load(Path::new(input)).unwrap();
 
     assert_toml_snapshot!(config, {
-        ".storage.*" => insta::dynamic_redaction(|value, path| {
-            if path.to_string() != "storage.db-path" {
-                if let insta::internals::Content::String(path) = value {
-                    return insta::internals::Content::String(path.replace(Path::new("./").canonicalize().unwrap().to_str().unwrap(), "/tmp/agglayer"));
-                }
-            }
-
-            value
-        }),
+        ".storage.*" => agglayer_config::redact_storage_path(),
     });
 
     assert_eq!(config.rpc.max_request_body_size, 100 * 1024 * 1024);
@@ -51,15 +35,7 @@ fn grpc_max_decoding_message_size() {
     let config = Config::try_load(Path::new(input)).unwrap();
 
     assert_toml_snapshot!(config, {
-        ".storage.*" => insta::dynamic_redaction(|value, path| {
-            if path.to_string() != "storage.db-path" {
-                if let insta::internals::Content::String(path) = value {
-                    return insta::internals::Content::String(path.replace(Path::new("./").canonicalize().unwrap().to_str().unwrap(), "/tmp/agglayer"));
-                }
-            }
-
-            value
-        }),
+        ".storage.*" => agglayer_config::redact_storage_path(),
     });
 
     assert_eq!(config.grpc.max_decoding_message_size, 100 * 1024 * 1024);
