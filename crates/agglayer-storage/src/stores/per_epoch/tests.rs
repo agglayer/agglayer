@@ -11,6 +11,7 @@ use rstest::{fixture, rstest};
 use tracing::info;
 
 use crate::stores::{PendingCertificateWriter as _, PerEpochReader as _, StateReader};
+use crate::{backup::BackupClient, stores::interfaces::writer::StateWriter};
 use crate::{
     error::Error,
     stores::{
@@ -19,7 +20,6 @@ use crate::{
     },
     tests::TempDBDir,
 };
-use crate::{backup::BackupClient, stores::interfaces::writer::StateWriter};
 
 #[fixture]
 fn store() -> PerEpochStore<PendingStore, StateStore> {

@@ -1,4 +1,6 @@
-use agglayer_types::{CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, Metadata};
+use agglayer_types::{
+    CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, Metadata,
+};
 
 use super::Key;
 use crate::schema::Codec as _;

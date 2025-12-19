@@ -16,11 +16,11 @@ use rstest::{fixture, rstest};
 use tracing::info;
 
 use crate::{
+    backup::BackupClient,
     columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     error::Error,
-    backup::BackupClient,
     stores::{state::StateStore, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };

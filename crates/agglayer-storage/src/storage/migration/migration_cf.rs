@@ -11,4 +11,3 @@ impl ColumnSchema for MigrationRecordColumn {
 
     const COLUMN_FAMILY_NAME: &'static str = MIGRATION_RECORD_CF;
 }
-
