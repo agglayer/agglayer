@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+// Represents a 128-bit unsigned integer.
+message Uint128 {
+  // Value (encoded in big-endian format).
+  bytes value = 1;
+}
+
+// Represents a 256-bit unsigned integer.
+message Uint256 {
+  // Value (encoded in big-endian format).
+  bytes value = 1;
+}
+
+// Represents an Ethereum address.
+message Address {
+  // Ethereum address (20 bytes).
+  bytes address = 1;
+}
+
+// Represents an Ethereum nonce.
+message Nonce {
+  // Nonce value.
+  uint64 nonce = 1;
+}
+
+// Represents Ethereum transaction calldata.
+message Calldata {
+  // Calldata bytes.
+  bytes data = 1;
+}
+
+// Represents an Ethereum value (256-bit unsigned integer).
+message EthValue {
+  // Value.
+  Uint256 value = 1;
+}
+
+// Transaction hash.
+message TxHash {
+  // Hash bytes.
+  bytes hash = 1;
+}
+
+// Block hash
+message BlockHash {
+  // Hash bytes.
+  bytes hash = 1;
+}
