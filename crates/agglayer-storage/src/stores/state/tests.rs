@@ -3,7 +3,7 @@ use std::sync::Arc;
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, primitives::Hashable as _, Certificate,
     CertificateId, CertificateIndex, Digest, EpochNumber, Height, L1WitnessCtx,
-    LocalNetworkStateData, NetworkId, PessimisticRootInput,
+    LocalNetworkStateData, NetworkId, PessimisticRootInput, SettlementBlockNumber,
 };
 use pessimistic_proof::{
     core::{
@@ -42,6 +42,7 @@ fn can_retrieve_list_of_network() {
             Height::ZERO,
             EpochNumber::ZERO,
             CertificateIndex::ZERO,
+            SettlementBlockNumber::new(100),
         ),
     )
     .expect("Unable to put certificate into storage");

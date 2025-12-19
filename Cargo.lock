@@ -124,6 +124,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-storage",
+ "agglayer-telemetry 0.1.0",
  "agglayer-test-suite",
  "agglayer-types",
  "alloy",

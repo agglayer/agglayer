@@ -171,6 +171,7 @@ where
                 warn!("Built a CertificateTask for a certificate that is already settled");
                 Ok(())
             }
+            CertificateStatus::Finalized => Ok(()),
             CertificateStatus::InError { error } => {
                 warn!(error = ?eyre::Error::from(error.clone()), "Certificate is already in error");
                 Err(*error.clone())
@@ -531,9 +532,9 @@ where
         .await?;
 
         let settlement_complete_result = settlement_complete.await.map_err(recv_err)?;
-        let (epoch_number, certificate_index) = match settlement_complete_result {
-            CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
-                (epoch_number, certificate_index)
+        let (epoch_number, certificate_index, block_number) = match settlement_complete_result {
+            CertificateSettlementResult::Settled(epoch_number, certificate_index, block_number) => {
+                (epoch_number, certificate_index, block_number)
             }
             CertificateSettlementResult::Error(error) => {
                 return Err(error);
@@ -575,8 +576,15 @@ where
             }
         };
 
-        let settled_certificate =
-            SettledCertificate(certificate_id, height, epoch_number, certificate_index);
+        let settled_certificate = SettledCertificate(
+            certificate_id,
+            height,
+            epoch_number,
+            certificate_index,
+            block_number,
+        );
+
+        // ADRIA0
         self.set_status(CertificateStatus::Settled)?;
         debug!(
             ?settlement_tx_hash,
@@ -599,6 +607,7 @@ where
         Ok(())
     }
 
+    //[ADRIA0]
     fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
         self.state_store
             .update_certificate_header_status(&self.header.certificate_id, &status)?;

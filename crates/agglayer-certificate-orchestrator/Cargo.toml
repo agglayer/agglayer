@@ -39,6 +39,7 @@ agglayer-config = { workspace = true, optional = true }
 agglayer-contracts.workspace = true
 agglayer-storage.workspace = true
 agglayer-test-suite = { workspace = true, optional = true }
+agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 pessimistic-proof.workspace = true
 

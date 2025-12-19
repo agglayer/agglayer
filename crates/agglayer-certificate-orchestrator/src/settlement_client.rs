@@ -1,4 +1,7 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, NetworkId, SettlementTxHash};
+use agglayer_types::{
+    CertificateId, CertificateIndex, EpochNumber, NetworkId, SettlementBlockNumber,
+    SettlementTxHash,
+};
 
 use crate::Error;
 
@@ -42,7 +45,7 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
         &self,
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error>;
+    ) -> Result<(EpochNumber, CertificateIndex, SettlementBlockNumber), Error>;
 
     /// Returns a reference to the provider for direct L1 queries.
     fn get_provider(&self) -> &Self::Provider;

@@ -1,6 +1,6 @@
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementBlockNumber, SettlementTxHash,
 };
 use mockall::mock;
 
@@ -72,7 +72,8 @@ mock! {
             height: &Height,
             certificate_id: &CertificateId,
             epoch_number: &EpochNumber,
-            certificate_index: &agglayer_types::CertificateIndex
+            certificate_index: &agglayer_types::CertificateIndex,
+            block_number: SettlementBlockNumber
         ) -> Result<(), Error>;
 
         fn write_local_network_state(

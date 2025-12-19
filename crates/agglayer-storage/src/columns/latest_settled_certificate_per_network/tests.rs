@@ -1,4 +1,6 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height, NetworkId};
+use agglayer_types::{
+    CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, SettlementBlockNumber,
+};
 
 use super::{Key, SettledCertificate};
 use crate::columns::Codec as _;
@@ -16,7 +18,13 @@ fn can_parse_key() {
 
 #[test]
 fn can_parse_value() {
-    let value = SettledCertificate(CertificateId::new([1; 32].into()), Height::new(10), EpochNumber::new(21), CertificateIndex::ZERO);
+    let value = SettledCertificate(
+        CertificateId::new([1; 32].into()),
+        Height::new(10),
+        EpochNumber::new(21),
+        CertificateIndex::ZERO,
+        SettlementBlockNumber::ZERO,
+    );
 
     let encoded = value.encode().expect("Unable to encode value");
 

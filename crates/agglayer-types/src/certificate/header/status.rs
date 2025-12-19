@@ -38,6 +38,9 @@ pub enum CertificateStatus {
 
     /// Transaction to settle the certificate was completed successfully on L1.
     Settled,
+
+    /// Transaction to settle the certificate was finalized.
+    Finalized,
 }
 
 impl fmt::Display for CertificateStatus {
@@ -48,6 +51,7 @@ impl fmt::Display for CertificateStatus {
             CertificateStatus::Candidate => write!(f, "Candidate"),
             CertificateStatus::InError { error } => write!(f, "InError: {error}"),
             CertificateStatus::Settled => write!(f, "Settled"),
+            CertificateStatus::Finalized => write!(f, "Finalized"),
         }
     }
 }

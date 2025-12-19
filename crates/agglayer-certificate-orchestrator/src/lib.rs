@@ -31,6 +31,7 @@ use tracing::{debug, error, warn};
 mod certificate_task;
 mod certifier;
 mod error;
+mod finalization_task;
 mod network_task;
 mod settlement_client;
 
@@ -222,6 +223,16 @@ where
             state_store,
         )?;
 
+        // Spawn a process to update certificates to finalized state
+        tokio::spawn(finalization_task::certificate_finalization_update_task::<
+            StateStore,
+            Sc,
+        >(
+            orchestrator.state_store.clone(),
+            orchestrator.settlement_client.clone(),
+            orchestrator.cancellation_token.clone(),
+        ));
+
         // Try to spawn the certifier tasks for the next height of each network
         for ProvenCertificate(_, network_id, _height) in
             pending_store.get_current_proven_height()?
@@ -261,6 +272,7 @@ where
 
         let (sender, receiver) =
             mpsc::channel(Self::DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE);
+
         let task = NetworkTask::new(
             self.pending_store.clone(),
             self.state_store.clone(),

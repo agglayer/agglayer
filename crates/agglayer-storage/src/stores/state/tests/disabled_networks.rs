@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::SystemTime};
 
-use agglayer_types::EpochNumber;
+use agglayer_types::{EpochNumber, SettlementBlockNumber};
 
 use crate::{
     columns::{
@@ -28,6 +28,7 @@ fn can_retrieve_the_list_of_networks() {
             agglayer_types::Height::ZERO,
             EpochNumber::ZERO,
             agglayer_types::CertificateIndex::ZERO,
+            SettlementBlockNumber::new(100),
         ),
     )
     .expect("Unable to put latest settled certificate into storage");

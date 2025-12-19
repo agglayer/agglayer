@@ -91,6 +91,28 @@ pub mod prover {
     }
 }
 
+pub mod mainnet_rpc {
+    use lazy_static::lazy_static;
+    use opentelemetry::global;
+
+    use crate::constant::AGGLAYER_MAINNET_RPC_SCOPE_NAME;
+
+    lazy_static! {
+        // Counter for connection errors
+        pub static ref CONNECTION_ERRORS: opentelemetry::metrics::Counter<u64> =
+            global::meter(AGGLAYER_MAINNET_RPC_SCOPE_NAME)
+                .u64_counter("mainnet_rpc_error")
+                .with_description("Errors querying mainnet rpc")
+                .build();
+    }
+
+    /// Helper function to record connection lost
+    #[inline]
+    pub fn record_connection_error() {
+        CONNECTION_ERRORS.add(1, &[]);
+    }
+}
+
 pub struct ServerBuilder {}
 
 #[buildstructor::buildstructor]

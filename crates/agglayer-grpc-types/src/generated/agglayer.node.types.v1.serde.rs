@@ -651,6 +651,7 @@ impl serde::Serialize for CertificateStatus {
             Self::Candidate => "CERTIFICATE_STATUS_CANDIDATE",
             Self::InError => "CERTIFICATE_STATUS_IN_ERROR",
             Self::Settled => "CERTIFICATE_STATUS_SETTLED",
+            Self::Finalized => "CERTIFICATE_STATUS_FINALIZED",
         };
         serializer.serialize_str(variant)
     }
@@ -668,6 +669,7 @@ impl<'de> serde::Deserialize<'de> for CertificateStatus {
             "CERTIFICATE_STATUS_CANDIDATE",
             "CERTIFICATE_STATUS_IN_ERROR",
             "CERTIFICATE_STATUS_SETTLED",
+            "CERTIFICATE_STATUS_FINALIZED",
         ];
 
         struct GeneratedVisitor;
@@ -714,6 +716,7 @@ impl<'de> serde::Deserialize<'de> for CertificateStatus {
                     "CERTIFICATE_STATUS_CANDIDATE" => Ok(CertificateStatus::Candidate),
                     "CERTIFICATE_STATUS_IN_ERROR" => Ok(CertificateStatus::InError),
                     "CERTIFICATE_STATUS_SETTLED" => Ok(CertificateStatus::Settled),
+                    "CERTIFICATE_STATUS_FINALIZED" => Ok(CertificateStatus::Finalized),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

@@ -28,7 +28,8 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
+    SettlementBlockNumber, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
@@ -154,7 +155,13 @@ impl StateReader for DummyPendingStore {
             .map(|(network_id, (height, id))| {
                 Ok((
                     *network_id,
-                    SettledCertificate(*id, *height, EpochNumber::ZERO, CertificateIndex::ZERO),
+                    SettledCertificate(
+                        *id,
+                        *height,
+                        EpochNumber::ZERO,
+                        CertificateIndex::ZERO,
+                        SettlementBlockNumber::ZERO,
+                    ),
                 ))
             })
             .collect()
@@ -386,6 +393,7 @@ impl StateWriter for DummyPendingStore {
         _certificate_id: &CertificateId,
         _epoch_number: &EpochNumber,
         _certificate_index: &CertificateIndex,
+        _block_number: SettlementBlockNumber,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -937,8 +945,12 @@ impl SettlementClient for Check {
         &self,
         _settlement_tx_hash: SettlementTxHash,
         _certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
+    ) -> Result<(EpochNumber, CertificateIndex, SettlementBlockNumber), Error> {
+        Ok((
+            EpochNumber::ZERO,
+            CertificateIndex::ZERO,
+            SettlementBlockNumber::ZERO,
+        ))
     }
 
     fn get_provider(&self) -> &Self::Provider {
