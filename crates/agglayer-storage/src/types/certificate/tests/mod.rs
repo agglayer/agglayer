@@ -1,5 +1,3 @@
-use super::*;
-use crate::schema::Codec;
 use agglayer_types::{
     aggchain_proof::{Proof, SP1StarkWithContext},
     bincode, U256,
@@ -7,6 +5,9 @@ use agglayer_types::{
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
+
+use super::*;
+use crate::schema::Codec;
 
 mod header;
 mod status;

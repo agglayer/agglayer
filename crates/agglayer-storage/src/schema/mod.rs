@@ -4,7 +4,6 @@ mod column;
 pub(crate) use codec::impl_codec_using_bincode_for;
 pub use codec::{bincode_codec, Codec, CodecError};
 pub use column::ColumnSchema;
-
 use rocksdb::ColumnFamilyDescriptor;
 
 pub(crate) fn default_db_cf_definitions(cfs: &[&'static str]) -> Vec<ColumnFamilyDescriptor> {

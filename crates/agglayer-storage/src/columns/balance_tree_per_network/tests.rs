@@ -1,7 +1,9 @@
 use agglayer_types::Digest;
 
-use crate::schema::Codec as _;
-use crate::types::{SmtKey, SmtKeyType};
+use crate::{
+    schema::Codec as _,
+    types::{SmtKey, SmtKeyType},
+};
 
 #[test]
 fn can_serialize_a_root_key() {

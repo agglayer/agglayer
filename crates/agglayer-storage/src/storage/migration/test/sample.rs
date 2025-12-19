@@ -4,8 +4,10 @@ use std::path::Path;
 
 use agglayer_types::{Height, NetworkId};
 
-use crate::schema::ColumnSchema;
-use crate::storage::{Builder, DBMigrationErrorDetails, DBOpenError};
+use crate::{
+    schema::ColumnSchema,
+    storage::{Builder, DBMigrationErrorDetails, DBOpenError},
+};
 
 pub type KeyV0 = NetworkId;
 
