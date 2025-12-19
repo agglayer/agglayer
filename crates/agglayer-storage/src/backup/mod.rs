@@ -15,7 +15,11 @@ use tokio::sync;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use super::storage::{BackupError, DB};
+use crate::storage::DB;
+
+mod error;
+
+pub use error::BackupError;
 
 /// Request to create a new backup.
 pub struct BackupRequest {
