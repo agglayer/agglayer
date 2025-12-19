@@ -62,7 +62,7 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 }
 
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(240))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
@@ -91,7 +91,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     cancellation_token.cancel();
     _ = agglayer_shutdowned.await;
 
-    println!("Node killed for the first time, recovering...");
+    tracing::info!("Node killed for the first time, recovering...");
 
     let cancellation_token = CancellationToken::new();
     let (agglayer_shutdowned, client, _) =
@@ -123,7 +123,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     _ = agglayer_shutdowned.await;
 
-    println!("Node killed for the second time, recovering...");
+    tracing::info!("Node killed for the second time, recovering...");
 
     fail::cfg(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
@@ -134,19 +134,20 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     tokio::time::sleep(Duration::from_secs(30)).await;
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
-    println!("Node recovered, waiting for settlement...");
+    tracing::info!("Node recovered, waiting for settlement...");
 
     let result = wait_for_settlement_or_error!(client, certificate2_id).await;
+    tracing::info!("Second settlement result: {result:?}");
     assert!(matches!(result.status, CertificateStatus::Settled));
 
     scenario.teardown();
 }
 
 #[rstest]
-#[tokio::test]
-#[timeout(Duration::from_secs(120))]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(150))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
-async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
+async fn recover_after_invalid_transaction_in_history(#[case] state: Forest) {
     // Submit a certificate, inject an invalid tx hash in the header, then shutdown
     // node. Recover on startup and verify the node can detect and recover from
     // the invalid hash.
@@ -198,7 +199,7 @@ async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
 
     _ = agglayer_shutdowned.await;
 
-    println!("Node killed after invalid hash injection, recovering...");
+    tracing::info!("Node killed after invalid hash injection, recovering...");
 
     // Turn off all failpoints
     fail::cfg(
@@ -213,7 +214,7 @@ async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
     tokio::time::sleep(Duration::from_secs(30)).await;
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
-    println!("Node recovered, waiting for settlement...");
+    tracing::info!("Node recovered, waiting for settlement...");
 
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
     assert!(matches!(result.status, CertificateStatus::Settled));

@@ -305,21 +305,23 @@ where
                 }
                 Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
                     info!(
-                        hash = certificate_id.to_string(),
-                        "Received a certificate event for {certificate_id} at height {height}"
+                        %certificate_id, %height,
+                        "Received a certificate event for {certificate_id}"
                     );
 
                     if matches!(
                         self.latest_settled,
                         Some(SettledCertificate(settled_id, _, _, _)) if settled_id == certificate_id)
                     {
+                        warn!(%certificate_id, "Duplicate submission");
                         return Ok(());
                     }
 
                     if *next_expected_height != height {
                         warn!(
-                            hash = certificate_id.to_string(),
-                            "Received a certificate event for the wrong height");
+                            %certificate_id, %next_expected_height, %height,
+                            "Received a certificate event for the wrong height"
+                        );
 
                         return Ok(());
                     }

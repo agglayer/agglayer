@@ -1,6 +1,8 @@
 use std::{path::Path, sync::Arc};
 
-use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateId, Height, NetworkId, Proof, SettlementTxHash, SettlementTxRecord,
+};
 use rocksdb::{Direction, ReadOptions};
 
 use super::{PendingCertificateReader, PendingCertificateWriter};
@@ -14,6 +16,7 @@ use crate::{
         },
         pending_queue::{PendingQueueColumn, PendingQueueKey},
         proof_per_certificate::ProofPerCertificateColumn,
+        settlement_tx_hashes_per_certificate::SettlementTxHashesPerCertificateColumn,
     },
     error::Error,
     storage::DB,
@@ -119,6 +122,47 @@ impl PendingCertificateWriter for PendingStore {
             &ProvenCertificate(*certificate_id, *network_id, *height),
         )?)
     }
+
+    fn insert_settlement_tx_hash_for_certificate(
+        &self,
+        certificate_id: &CertificateId,
+        tx_hash: SettlementTxHash,
+    ) -> Result<(), Error> {
+        let mut record = self
+            .db
+            .get::<SettlementTxHashesPerCertificateColumn>(certificate_id)?
+            .unwrap_or_default();
+
+        record.insert(tx_hash);
+
+        Ok(self
+            .db
+            .put::<SettlementTxHashesPerCertificateColumn>(certificate_id, &record)?)
+    }
+
+    fn update_settlement_tx_hashes_for_certificate<'a, F>(
+        &'a self,
+        certificate_id: &CertificateId,
+        f: F,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce(SettlementTxRecord) -> Result<SettlementTxRecord, String> + 'a,
+    {
+        let record = self
+            .db
+            .get::<SettlementTxHashesPerCertificateColumn>(certificate_id)?
+            .ok_or_else(|| {
+                Error::UnprocessedAction(format!(
+                    "No settlement tx hash record found for certificate {certificate_id}"
+                ))
+            })?;
+
+        let updated_record = f(record).map_err(Error::UnprocessedAction)?;
+
+        Ok(self
+            .db
+            .put::<SettlementTxHashesPerCertificateColumn>(certificate_id, &updated_record)?)
+    }
 }
 
 impl PendingCertificateReader for PendingStore {
@@ -188,5 +232,16 @@ impl PendingCertificateReader for PendingStore {
         Ok(self
             .db
             .multi_get::<ProofPerCertificateColumn>(keys.iter().copied())?)
+    }
+
+    fn get_settlement_tx_hashes_for_certificate(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<SettlementTxRecord, Error> {
+        let result = self
+            .db
+            .get::<SettlementTxHashesPerCertificateColumn>(&certificate_id)?
+            .unwrap_or_default();
+        Ok(result)
     }
 }

@@ -10,7 +10,7 @@ use agglayer_storage::{
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateStatus, L1WitnessCtx,
-    Metadata, PessimisticRootInput,
+    Metadata, PessimisticRootInput, SettlementTxRecord,
 };
 use mockall::predicate::{always, eq, in_iter};
 use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
@@ -29,7 +29,7 @@ const SETTLEMENT_TX_HASH_1: SettlementTxHash = SettlementTxHash::new(Digest([1; 
 const SETTLEMENT_TX_HASH_2: SettlementTxHash = SettlementTxHash::new(Digest([2; 32]));
 
 #[rstest]
-#[tokio::test]
+#[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(1))]
 async fn start_from_zero() {
     let mut pending = MockPendingStore::new();
@@ -107,10 +107,34 @@ async fn start_from_zero() {
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
         .returning(|_, _, _| Ok(()));
 
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(SettlementTxRecord::new()));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok([SettlementTxHash::for_tests()].into_iter().collect()));
+
     state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     settlement_client
@@ -130,12 +154,6 @@ async fn start_from_zero() {
                 previous_max_priority_fee_per_gas: None,
             }))
         });
-
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id && *t == SettlementTxHash::for_tests())
-        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -321,10 +339,34 @@ async fn one_per_epoch() {
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
         .returning(|_, _, _| Ok(()));
 
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(SettlementTxRecord::new()));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok([SettlementTxHash::for_tests()].into_iter().collect()));
+
     state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     settlement_client
@@ -344,12 +386,6 @@ async fn one_per_epoch() {
                 previous_max_priority_fee_per_gas: None,
             }))
         });
-
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id && *t == SettlementTxHash::for_tests())
-        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -579,6 +615,30 @@ async fn retries() {
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id2))
         .returning(|_, _, _| Ok(()));
 
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(SettlementTxRecord::new()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|_| Ok(SettlementTxRecord::new()));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id2), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|_| Ok([SettlementTxHash::for_tests()].into_iter().collect()));
+
     state
         .expect_update_certificate_header_status()
         .once()
@@ -589,6 +649,12 @@ async fn retries() {
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id2), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id2), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     state
@@ -634,12 +700,6 @@ async fn retries() {
                 previous_max_priority_fee_per_gas: None,
             }))
         });
-
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SettlementTxHash::for_tests())
-        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -844,6 +904,42 @@ async fn changing_epoch_triggers_certify() {
         .with(eq(network_id), eq(Height::new(1)), eq(certificate_id2))
         .returning(|_, _, _| Ok(()));
 
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(SettlementTxRecord::new()));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok([SETTLEMENT_TX_HASH_1].into_iter().collect()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|_| Ok(SettlementTxRecord::new()));
+
+    pending
+        .expect_insert_settlement_tx_hash_for_certificate()
+        .once()
+        .with(eq(certificate_id2), always())
+        .returning(|_, _| Ok(()));
+
+    pending
+        .expect_get_settlement_tx_hashes_for_certificate()
+        .once()
+        .with(eq(certificate_id2))
+        .returning(|_| Ok([SETTLEMENT_TX_HASH_2].into_iter().collect()));
+
     state
         .expect_update_certificate_header_status()
         .once()
@@ -853,7 +949,19 @@ async fn changing_epoch_triggers_certify() {
     state
         .expect_update_certificate_header_status()
         .once()
+        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
         .with(eq(certificate_id2), eq(CertificateStatus::Proven))
+        .returning(|_, _| Ok(()));
+
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id2), eq(CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
     settlement_client
@@ -874,12 +982,6 @@ async fn changing_epoch_triggers_certify() {
             }))
         });
 
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
-        .returning(|_, _, _, _| Ok(()));
-
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
@@ -897,12 +999,6 @@ async fn changing_epoch_triggers_certify() {
                 previous_max_priority_fee_per_gas: None,
             }))
         });
-
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_2)
-        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()

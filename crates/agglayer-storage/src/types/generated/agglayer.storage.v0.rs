@@ -204,4 +204,29 @@ impl NetworkType {
         }
     }
 }
+/// Record of settlement transaction hashes for a certificate.
+/// Stores hashes in the order of insertion with automatic deduplication.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SettlementTxRecord {
+    /// Settlement transaction hash history.
+    /// Optional to differentiate between empty history and missing history,
+    /// which allows for easier field deprecation in the future.
+    #[prost(message, optional, tag="1")]
+    pub tx_history: ::core::option::Option<TxHashHistory>,
+}
+/// Transaction hash history wrapper.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TxHashHistory {
+    /// Settlement transaction hashes, uniqued and in order of insertion.
+    /// Each hash represents a settlement transaction associated with a certificate.
+    #[prost(message, repeated, tag="1")]
+    pub hashes: ::prost::alloc::vec::Vec<SettlementTxHash>,
+}
+/// A settlement transaction hash.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SettlementTxHash {
+    /// The hash bytes.
+    #[prost(bytes="bytes", tag="1")]
+    pub hash: ::prost::bytes::Bytes,
+}
 // @@protoc_insertion_point(module)

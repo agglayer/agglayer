@@ -12,9 +12,9 @@ pub enum CodecError {
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     CertificateEmpty,
 
-    #[error(r#"Unrecognized certificate storage format version {version}.
+    #[error(r#"Unrecognized storage format version {version}.
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    BadCertificateVersion { version: u8 },
+    BadVersion { version: u8 },
 
     #[error(r#"Serialization error: {0}
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
@@ -24,11 +24,14 @@ pub enum CodecError {
            This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     ProtobufDeserialization(#[from] prost::DecodeError),
 
-    #[error(r#"Invalid enum variant {0}"#)]
-    InvalidEnumVariant(String),
-
     #[error(r#"Unable to write encoded bytes: {0}"#)]
     UnableToWriteEncodedBytes(#[from] std::io::Error),
+}
+
+impl CodecError {
+    pub fn protobuf_decode_custom(msg: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self::ProtobufDeserialization(prost::DecodeError::new(msg))
+    }
 }
 
 pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
@@ -63,6 +66,7 @@ pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
+pub const SETTLEMENT_TX_HASHES_PER_CERTIFICATE_CF: &str = "settlement_tx_hashes_per_certificate_cf";
 
 // debug CFs
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
@@ -115,6 +119,7 @@ pub(crate) mod disabled_networks;
 pub(crate) mod local_exit_tree_per_network;
 pub(crate) mod network_info;
 pub(crate) mod nullifier_tree_per_network;
+pub(crate) mod settlement_tx_hashes_per_certificate;
 
 // Pending
 pub(crate) mod pending_queue;

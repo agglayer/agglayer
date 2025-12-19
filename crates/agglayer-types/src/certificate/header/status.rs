@@ -2,7 +2,9 @@ use std::fmt;
 
 use crate::CertificateStatusError;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, derive_more::IsVariant,
+)]
 pub enum CertificateStatus {
     /// Received certificate from the network, nothing checked yet.
     ///
