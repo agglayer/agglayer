@@ -173,6 +173,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
+ "agglayer-config",
  "agglayer-primitives",
  "agglayer-types",
  "alloy-primitives",
