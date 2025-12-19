@@ -14,7 +14,6 @@ mod record;
 
 pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 use migration_cf::MigrationRecordColumn;
-
 use record::MigrationRecord;
 
 /// Database builder taking care of database migrations.

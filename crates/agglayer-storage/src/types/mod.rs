@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 mod certificate;
 pub(crate) mod disabled_network;
 pub mod generated; // TODO: remove "pub" once implementation of storage is completed
-pub(crate) mod migration;
 pub(crate) mod network_info;
 
 #[derive(Debug, Serialize, Deserialize)]
