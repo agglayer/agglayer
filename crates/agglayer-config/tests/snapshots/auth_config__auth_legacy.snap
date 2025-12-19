@@ -1,6 +1,7 @@
 ---
 source: crates/agglayer-config/tests/auth_config.rs
 expression: config
+snapshot_kind: text
 ---
 prover-buffer-size = 100
 
@@ -79,7 +80,7 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/home/runner/work/agglayer/agglayer/crates/agglayer-config/tests/fixtures/auth/storage"
+db-path = "/tmp/agglayer/tests/fixtures/auth/storage"
 
 [prover.network-prover]
 proving-timeout = "5m"

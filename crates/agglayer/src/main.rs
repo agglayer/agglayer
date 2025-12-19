@@ -38,9 +38,7 @@ fn main() -> eyre::Result<()> {
                 .enable_all()
                 .build()?
                 .block_on(async move {
-                    let vkey_hex = compute_program_vkey(ELF)
-                        .await
-                        .context("Failed to compute program vkey");
+                    let vkey_hex = compute_program_vkey(ELF).await;
                     match vkey_hex {
                         Ok(vkey_hex) => println!("{vkey_hex}"),
                         Err(error) => eprintln!("{error:?}"),
