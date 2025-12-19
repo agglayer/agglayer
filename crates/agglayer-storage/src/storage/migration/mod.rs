@@ -10,11 +10,12 @@ use crate::{
 
 mod error;
 mod migration_cf;
+mod record;
 
 pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 use migration_cf::MigrationRecordColumn;
 
-use crate::types::migration::MigrationRecord;
+use record::MigrationRecord;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
