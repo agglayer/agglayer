@@ -249,6 +249,13 @@ pub struct TxHash {
     #[prost(bytes="bytes", tag="1")]
     pub hash: ::prost::bytes::Bytes,
 }
+/// Block hash
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BlockHash {
+    /// Hash bytes.
+    #[prost(bytes="bytes", tag="1")]
+    pub hash: ::prost::bytes::Bytes,
+}
 /// Settlement job ID.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SettlementJobId {
@@ -344,6 +351,9 @@ pub struct ContractCallResult {
     /// Additional metadata about the call outcome.
     #[prost(bytes="bytes", tag="2")]
     pub metadata: ::prost::bytes::Bytes,
+    /// Block number where the transaction was included.
+    #[prost(message, optional, tag="3")]
+    pub block_hash: ::core::option::Option<BlockHash>,
 }
 /// Result indicating that the transaction's previous result was reorganized out of the chain.
 #[derive(Clone, PartialEq, ::prost::Message)]

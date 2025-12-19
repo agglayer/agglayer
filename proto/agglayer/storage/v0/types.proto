@@ -43,3 +43,9 @@ message TxHash {
   // Hash bytes.
   bytes hash = 1;
 }
+
+// Block hash
+message BlockHash {
+  // Hash bytes.
+  bytes hash = 1;
+}

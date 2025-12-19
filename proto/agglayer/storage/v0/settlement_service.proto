@@ -99,6 +99,9 @@ message ContractCallResult {
 
   // Additional metadata about the call outcome.
   bytes metadata = 2;
+
+  // Block number where the transaction was included.
+  BlockHash block_hash = 3;
 }
 
 // On-chain outcome of the contract call.
