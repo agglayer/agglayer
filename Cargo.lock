@@ -175,6 +175,7 @@ dependencies = [
 name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
+ "agglayer-config",
  "agglayer-primitives",
  "agglayer-types",
  "alloy-primitives",
@@ -555,6 +556,7 @@ dependencies = [
  "chrono",
  "criterion",
  "eyre",
+ "fail",
  "hex",
  "insta",
  "mockall",
@@ -572,6 +574,7 @@ dependencies = [
  "sp1-sdk",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "test-log",
  "thiserror 2.0.16",
  "tokio",
  "tokio-util",
