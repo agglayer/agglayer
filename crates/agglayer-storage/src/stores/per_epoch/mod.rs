@@ -19,13 +19,14 @@ use super::{
     PendingCertificateWriter, PerEpochWriter, StateReader, StateWriter,
 };
 use crate::{
+    backup::BackupClient,
     columns::epochs::{
         certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
         metadata::PerEpochMetadataColumn, proofs::ProofPerIndexColumn,
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
-    storage::{backup::BackupClient, DB},
+    storage::DB,
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
@@ -449,12 +450,9 @@ where
             &PerEpochMetadataValue::Packed(true),
         )?;
 
-        if let Err(error) = self
-            .backup_client
-            .backup(crate::storage::backup::BackupRequest {
-                epoch_db: Some((self.db.clone(), *self.epoch_number)),
-            })
-        {
+        if let Err(error) = self.backup_client.backup(crate::backup::BackupRequest {
+            epoch_db: Some((self.db.clone(), *self.epoch_number)),
+        }) {
             error!("Couldn't trigger the backup of the epoch DB: {}", error);
         }
 

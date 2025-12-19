@@ -15,7 +15,7 @@ use tokio::sync;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use super::{BackupError, DB};
+use super::storage::{BackupError, DB};
 
 /// Request to create a new backup.
 pub struct BackupRequest {
@@ -143,7 +143,7 @@ impl BackupEngine {
                     error!("Failed to open backup engine for epoch db: {:?}", error);
                 }
                 Ok(mut engine) => {
-                    if let Err(error) = engine.create_new_backup_flush(&db.rocksdb, true) {
+                    if let Err(error) = engine.create_new_backup_flush(db.raw_rocksdb(), true) {
                         error!("Failed to create backup for epoch db: {:?}", error);
                     }
                 }
@@ -151,7 +151,7 @@ impl BackupEngine {
         } else {
             if let Err(error) = self
                 .state_engine
-                .create_new_backup_flush(&self.state_db.rocksdb, true)
+                .create_new_backup_flush(self.state_db.raw_rocksdb(), true)
             {
                 error!("Failed to create backup for state db: {:?}", error);
             }
@@ -165,7 +165,7 @@ impl BackupEngine {
 
             if let Err(error) = self
                 .pending_engine
-                .create_new_backup_flush(&self.pending_db.rocksdb, true)
+                .create_new_backup_flush(self.pending_db.raw_rocksdb(), true)
             {
                 error!("Failed to create backup for pending db: {:?}", error);
             }

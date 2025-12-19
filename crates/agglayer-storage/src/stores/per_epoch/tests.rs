@@ -19,7 +19,7 @@ use crate::{
     },
     tests::TempDBDir,
 };
-use crate::{storage::backup::BackupClient, stores::interfaces::writer::StateWriter};
+use crate::{backup::BackupClient, stores::interfaces::writer::StateWriter};
 
 #[fixture]
 fn store() -> PerEpochStore<PendingStore, StateStore> {

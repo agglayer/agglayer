@@ -11,7 +11,7 @@ use super::{
     EpochStoreWriter, MetadataWriter, PendingCertificateReader, PendingCertificateWriter,
     StateReader, StateWriter,
 };
-use crate::{error::Error, storage::backup::BackupClient};
+use crate::{error::Error, backup::BackupClient};
 
 pub struct EpochsStore<PendingStore, StateStore> {
     config: Arc<agglayer_config::Config>,

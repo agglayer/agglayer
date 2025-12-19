@@ -11,8 +11,6 @@ use crate::columns::{Codec, ColumnSchema};
 pub(crate) mod iterators;
 mod migration;
 
-pub mod backup;
-
 pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 
 pub(crate) fn default_db_cf_definitions(cfs: &[&'static str]) -> Vec<ColumnFamilyDescriptor> {
@@ -252,5 +250,9 @@ impl DB {
 
         let write_options = self.write_options()?;
         Ok(self.rocksdb.delete_cf_opt(&cf, key, write_options)?)
+    }
+
+    pub(crate) fn raw_rocksdb(&self) -> &rocksdb::DB {
+        &self.rocksdb
     }
 }

@@ -4,6 +4,9 @@ pub mod storage;
 // Logical store
 #[rustfmt::skip]
 pub mod stores;
+// Backups
+#[rustfmt::skip]
+pub mod backup;
 
 #[macro_use]
 #[rustfmt::skip]

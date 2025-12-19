@@ -20,7 +20,7 @@ use crate::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     error::Error,
-    storage::backup::BackupClient,
+    backup::BackupClient,
     stores::{state::StateStore, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };
