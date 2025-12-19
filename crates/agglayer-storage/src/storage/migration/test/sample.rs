@@ -4,7 +4,7 @@ use std::path::Path;
 
 use agglayer_types::{Height, NetworkId};
 
-use crate::columns::ColumnSchema;
+use crate::schema::ColumnSchema;
 use crate::storage::{Builder, DBMigrationErrorDetails, DBOpenError};
 
 pub type KeyV0 = NetworkId;
@@ -44,7 +44,7 @@ pub struct NetworkInfoV2Uncool {
     num_failures: u64,
 }
 
-crate::columns::impl_codec_using_bincode_for! {
+crate::schema::impl_codec_using_bincode_for! {
     NetworkInfoV0,
     NetworkInfoV1,
     KeyV2,

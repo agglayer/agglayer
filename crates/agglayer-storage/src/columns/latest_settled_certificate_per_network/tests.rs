@@ -1,7 +1,7 @@
 use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height, NetworkId};
 
 use super::{Key, SettledCertificate};
-use crate::columns::Codec as _;
+use crate::schema::Codec as _;
 
 #[test]
 fn can_parse_key() {

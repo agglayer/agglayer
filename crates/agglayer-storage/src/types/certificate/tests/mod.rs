@@ -1,5 +1,5 @@
 use super::*;
-use crate::columns::Codec;
+use crate::schema::Codec;
 use agglayer_types::{
     aggchain_proof::{Proof, SP1StarkWithContext},
     bincode, U256,

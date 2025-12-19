@@ -2,7 +2,7 @@ use agglayer_types::{CertificateStatus, CertificateStatusError, Digest, NetworkI
 use alloy_primitives::Bytes;
 use pessimistic_proof::{error::ProofVerificationError, ProofError};
 
-use crate::columns::bincode_codec;
+use crate::schema::bincode_codec;
 
 type Cse = CertificateStatusError;
 type Pve = ProofVerificationError;

@@ -1,6 +1,6 @@
 use agglayer_types::Digest;
 
-use crate::columns::Codec as _;
+use crate::schema::Codec as _;
 use crate::types::{SmtKey, SmtKeyType};
 
 #[test]

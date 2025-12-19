@@ -1,6 +1,6 @@
 use agglayer_types::NetworkId;
 
-use super::ColumnSchema;
+use crate::schema::ColumnSchema;
 use crate::columns::DISABLED_NETWORKS_CF;
 
 /// Column family containing the disabled networks.

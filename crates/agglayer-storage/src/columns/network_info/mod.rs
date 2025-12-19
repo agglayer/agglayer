@@ -1,4 +1,4 @@
-use super::ColumnSchema;
+use crate::schema::ColumnSchema;
 use crate::columns::NETWORK_INFO_CF;
 
 /// Column family that store network information.

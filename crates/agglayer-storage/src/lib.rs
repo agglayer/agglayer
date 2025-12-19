@@ -1,21 +1,17 @@
-// Physical storage
-#[rustfmt::skip]
+// Domain-agnostic modules.
+pub mod schema;
 pub mod storage;
-// Logical store
-#[rustfmt::skip]
 pub mod stores;
-// Backups
-#[rustfmt::skip]
+
+// Backups.
 pub mod backup;
 
+// Domain-specific modules.
 #[macro_use]
-#[rustfmt::skip]
 pub mod columns;
-#[rustfmt::skip]
 pub mod error;
-
-#[rustfmt::skip]
 pub mod types;
 
-#[cfg(any(test, feature = "testutils"))]
+// Testing.
+#[cfg(feature = "testutils")]
 pub mod tests;

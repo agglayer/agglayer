@@ -4,7 +4,7 @@ use rocksdb::ColumnFamilyDescriptor;
 use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    columns::ColumnSchema,
+    schema::ColumnSchema,
     storage::{DBError, DB},
 };
 
