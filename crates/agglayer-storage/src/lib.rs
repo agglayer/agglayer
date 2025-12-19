@@ -1,7 +1,6 @@
 // Domain-agnostic modules.
 pub mod schema;
 pub mod storage;
-pub mod stores;
 
 // Backups.
 pub mod backup;
@@ -10,6 +9,7 @@ pub mod backup;
 #[macro_use]
 pub mod columns;
 pub mod error;
+pub mod stores;
 pub mod types;
 
 // Testing.
