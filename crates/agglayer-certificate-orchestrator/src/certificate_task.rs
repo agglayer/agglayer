@@ -607,7 +607,6 @@ where
         Ok(())
     }
 
-    //[ADRIA0]
     fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
         self.state_store
             .update_certificate_header_status(&self.header.certificate_id, &status)?;

@@ -26,13 +26,15 @@ use agglayer_storage::{
         TempDBDir,
     },
 };
+use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, Metadata, NetworkId, Proof,
     SettlementBlockNumber, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
+use mockall::predicate;
 use mocks::MockCertifier;
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
@@ -42,6 +44,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
+    finalization_task::finalize_settled_certificates,
     settlement_client::{MockProvider, MockSettlementClient, SettlementClient},
     CertificateInput, CertificateOrchestrator, CertificationError, Certifier, CertifierOutput,
     CertifierResult, Error, NonceInfo,
@@ -758,6 +761,80 @@ async fn test_collect_certificates_when_empty() {
     let _poll = poll!(&mut orchestrator);
 
     assert!(check_receiver.recv().await.is_some());
+}
+
+#[tokio::test]
+async fn test_update_non_finalized_certificates() {
+    use CertificateStatus::*;
+
+    let settled_cert = |store: &mut MockStateStore, net, cert, block, status: CertificateStatus| {
+        store
+            .expect_get_latest_settled_certificate_per_network()
+            .with(predicate::eq(net))
+            .returning(move |_| {
+                Ok(Some((
+                    net,
+                    SettledCertificate(
+                        cert,
+                        Height::new(1),
+                        EpochNumber::new(1),
+                        CertificateIndex::new(1),
+                        SettlementBlockNumber::new(block),
+                    ),
+                )))
+            });
+        store
+            .expect_get_certificate_header()
+            .with(predicate::eq(cert))
+            .returning(move |_| {
+                Ok(Some(CertificateHeader {
+                    network_id: net,
+                    height: Height::new(0),
+                    epoch_number: Some(EpochNumber::default()),
+                    certificate_index: Some(CertificateIndex::default()),
+                    certificate_id: cert,
+                    prev_local_exit_root: LocalExitRoot::default(),
+                    new_local_exit_root: LocalExitRoot::default(),
+                    metadata: Metadata::default(),
+                    status: status.clone(),
+                    settlement_tx_hash: Some(SettlementTxHash::for_tests()),
+                }))
+            });
+    };
+    let expect_finalized_update = |store: &mut MockStateStore, cert: CertificateId| {
+        store
+            .expect_update_certificate_header_status()
+            .with(
+                predicate::eq(cert),
+                predicate::eq(CertificateStatus::Finalized),
+            )
+            .once()
+            .returning(|_, _| Ok(()));
+    };
+
+    let mut store = MockStateStore::new();
+
+    let nets = [1, 2, 3, 4].map(NetworkId::new);
+    let certs = [1, 2, 3, 4].map(|n| {
+        let mut digest = [0u8; 32];
+        digest[31] = n;
+        CertificateId::new(Digest::from(digest))
+    });
+
+    store
+        .expect_get_active_networks()
+        .returning(move || Ok(nets.to_vec()));
+
+    settled_cert(&mut store, nets[0], certs[0], 98, Finalized);
+    settled_cert(&mut store, nets[1], certs[1], 99, Settled);
+    expect_finalized_update(&mut store, certs[1]);
+    settled_cert(&mut store, nets[2], certs[2], 100, Settled);
+    expect_finalized_update(&mut store, certs[2]);
+    settled_cert(&mut store, nets[3], certs[3], 101, Settled);
+
+    let result = finalize_settled_certificates(&Arc::new(store), 100);
+
+    assert!(result.is_ok());
 }
 
 #[fixture]

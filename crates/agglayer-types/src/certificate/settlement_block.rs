@@ -21,17 +21,13 @@ pub struct SettlementBlockNumber(u64);
 impl SettlementBlockNumber {
     pub const ZERO: SettlementBlockNumber = SettlementBlockNumber::new(0);
 
-    pub const fn as_u64(&self) -> u64 {
-        self.0
-    }
-
     pub const fn new(block_no: BlockNumber) -> SettlementBlockNumber {
         SettlementBlockNumber(block_no)
     }
 }
 
-impl Into<BlockNumber> for SettlementBlockNumber {
-    fn into(self) -> BlockNumber {
-        self.0
+impl From<SettlementBlockNumber> for BlockNumber {
+    fn from(block: SettlementBlockNumber) -> Self {
+        block.0
     }
 }

@@ -252,7 +252,6 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
-    //[ADRIA0]
     fn update_certificate_header_status(
         &self,
         certificate_id: &CertificateId,
