@@ -222,7 +222,7 @@ pub enum ConfigurationError {
     DeserializationError(#[from] toml::de::Error),
 }
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(feature = "testutils")]
 impl Config {
     pub fn new_for_test() -> Self {
         Config::new(Path::new("/tmp/agglayer"))
@@ -268,4 +268,19 @@ fn is_false(b: &bool) -> bool {
 
 pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     *t == Default::default()
+}
+
+#[cfg(feature = "testutils")]
+pub fn redact_storage_path() -> insta::internals::Redaction {
+    use insta::internals::Content;
+    insta::dynamic_redaction(|value, path| {
+        if path.to_string() != "storage.db-path" {
+            if let Content::String(path) = value {
+                let cur_dir = Path::new("./").canonicalize().unwrap();
+                return Content::String(path.replace(cur_dir.to_str().unwrap(), "/tmp/agglayer"));
+            }
+        }
+
+        value
+    })
 }
