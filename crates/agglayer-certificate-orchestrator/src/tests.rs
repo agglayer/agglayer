@@ -46,9 +46,9 @@ use crate::{
 };
 
 #[cfg(test)]
-use std::task::Poll;
-#[cfg(test)]
 use futures_util::poll;
+#[cfg(test)]
+use std::task::Poll;
 
 pub mod mocks;
 
