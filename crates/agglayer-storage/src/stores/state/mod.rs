@@ -53,7 +53,7 @@ pub struct StateStore {
 mod network_info;
 
 impl StateStore {
-    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBError> {
+    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
         DB::open_cf(path, crate::storage::state_db_cf_definitions())
     }
 
@@ -61,7 +61,7 @@ impl StateStore {
         Self { db, backup_client }
     }
 
-    pub fn new_with_path(path: &Path, backup_client: BackupClient) -> Result<Self, Error> {
+    pub fn new_with_path(path: &Path, backup_client: BackupClient) -> Result<Self, crate::storage::DBOpenError> {
         let db = Arc::new(Self::init_db(path)?);
         Ok(Self { db, backup_client })
     }

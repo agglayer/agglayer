@@ -43,7 +43,7 @@ pub struct LocalConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[cfg_attr(any(test, feature = "testutils"), derive(Default))]
+#[cfg_attr(feature = "testutils", derive(Default))]
 pub struct PrivateKey {
     #[serde(alias = "Path")]
     pub path: PathBuf,
@@ -56,7 +56,7 @@ pub struct PrivateKey {
 /// It includes kms config.
 #[serde_as]
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(any(test, feature = "testutils"), derive(Default))]
+#[cfg_attr(feature = "testutils", derive(Default))]
 #[serde(rename_all = "kebab-case")]
 pub struct GcpKmsConfig {
     /// The GCP project ID to use.
@@ -106,7 +106,7 @@ impl<'de> Deserialize<'de> for GcpKmsConfig {
     {
         #[serde_as]
         #[derive(Deserialize)]
-        #[cfg_attr(any(test, feature = "testutils"), derive(Default))]
+        #[cfg_attr(feature = "testutils", derive(Default))]
         #[serde(rename_all = "kebab-case")]
         pub struct Intermediate {
             #[serde(alias = "ProjectId")]
