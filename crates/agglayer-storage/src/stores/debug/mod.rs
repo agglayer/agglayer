@@ -5,6 +5,8 @@ use agglayer_types::{Certificate, CertificateId};
 use super::interfaces::{reader::DebugReader, writer::DebugWriter};
 use crate::{columns::debug_certificates::DebugCertificatesColumn, error::Error, storage::DB};
 
+mod cf_definitions;
+
 pub enum DebugStore {
     Enabled(EnabledDebugStore),
     Disabled,
@@ -18,7 +20,7 @@ pub struct EnabledDebugStore {
 
 impl DebugStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, crate::storage::debug_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::debug_db_cf_definitions())
     }
 
     pub fn new(db: Arc<DB>) -> Self {

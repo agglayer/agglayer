@@ -14,5 +14,5 @@ pub const CFS: [&str; 9] = [
 
 /// Definitions for the column families in the state storage.
 pub fn state_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    super::default_db_cf_definitions(&CFS)
+    crate::schema::default_db_cf_definitions(&CFS)
 }
