@@ -140,8 +140,8 @@ mod tests {
 
     use agglayer_config::Config;
     use agglayer_storage::{
-        backup::BackupClient,
         columns::epochs::end_checkpoint::EndCheckpointColumn,
+        storage::backup::BackupClient,
         stores::{
             epochs::EpochsStore, pending::PendingStore, state::StateStore,
             PendingCertificateWriter, StateWriter,
@@ -678,7 +678,7 @@ mod tests {
         // Create a broadcast channel with a very small buffer (size 1) to simulate lag
         // When many events are sent, the receiver will lag behind
         let (sender, _receiver) = tokio::sync::broadcast::channel(1);
-        
+
         // Start with clock at epoch 12, but we'll update it to 15 during the test
         // to simulate the clock advancing while synchronization is happening
         let current_block = Arc::new(AtomicU64::new(12));
@@ -705,11 +705,11 @@ mod tests {
                 let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(12)));
                 let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(13)));
                 let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(14)));
-                
+
                 // Update the clock to epoch 15 to simulate clock advancing
                 // This ensures that when lag is detected, clock_ref.current_epoch() returns 15
                 current_block.store(15, Ordering::SeqCst);
-                
+
                 let mut mock = MockPerEpochStore::new();
                 mock.expect_get_epoch_number().returning(move || epoch);
                 mock.expect_start_packing().once().returning(|| Ok(()));
@@ -751,7 +751,8 @@ mod tests {
                 .await
                 .unwrap();
 
-        // Should synchronize to epoch 15 (the current epoch from clock after lag is handled)
+        // Should synchronize to epoch 15 (the current epoch from clock after lag is
+        // handled)
         assert_eq!(result.get_epoch_number(), EpochNumber::new(15));
     }
 }
