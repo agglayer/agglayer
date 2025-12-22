@@ -10,6 +10,7 @@ mod certificate;
 pub(crate) mod disabled_network;
 mod generated;
 pub(crate) mod network_info;
+pub(crate) mod pp_root_to_certificate_ids;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {

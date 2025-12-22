@@ -42,6 +42,7 @@ pub const BALANCE_TREE_PER_NETWORK_CF: &str = "balance_tree_per_network_cf";
 pub const LOCAL_EXIT_TREE_PER_NETWORK_CF: &str = "local_exit_tree_per_network_cf";
 pub const NETWORK_INFO_CF: &str = "network_info_cf";
 pub const DISABLED_NETWORKS_CF: &str = "disabled_networks_cf";
+pub const PP_ROOT_TO_CERTIFICATE_IDS_CF: &str = "pp_root_to_certificate_ids_cf";
 
 // Metadata CFs
 pub const CERTIFICATE_HEADER_CF: &str = "certificate_header_cf";
@@ -52,7 +53,6 @@ pub const LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF: &str =
 pub const LATEST_PENDING_CERTIFICATE_PER_NETWORK_CF: &str =
     "latest_pending_certificate_per_network_cf";
 pub const METADATA_CF: &str = "metadata_cf";
-pub const PP_ROOT_TO_CERTIFICATE_IDS_CF: &str = "pp_root_to_certificate_ids_cf";
 
 // epochs related CFs
 pub const PER_EPOCH_CERTIFICATES_CF: &str = "per_epoch_certificates_cf";
