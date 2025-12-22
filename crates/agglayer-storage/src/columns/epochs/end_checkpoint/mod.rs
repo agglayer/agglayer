@@ -11,7 +11,7 @@ use crate::columns::PER_EPOCH_END_CHECKPOINT_CF;
 /// | `NetworkId` | `Height` |
 pub struct EndCheckpointColumn;
 
-impl crate::columns::ColumnSchema for EndCheckpointColumn {
+impl crate::schema::ColumnSchema for EndCheckpointColumn {
     type Key = NetworkId;
     type Value = Height;
 

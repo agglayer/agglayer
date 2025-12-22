@@ -9,7 +9,7 @@ use agglayer_grpc_server::node::v1::configuration_service_server::ConfigurationS
 use agglayer_grpc_types::node::{types::v1, v1::GetEpochConfigurationRequest};
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
-    storage::backup::BackupClient,
+    backup::BackupClient,
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };

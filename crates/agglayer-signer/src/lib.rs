@@ -152,11 +152,8 @@ impl Signer for ConfiguredSigner {
             ConfiguredSigner::Local(wallet) => {
                 wallet.set_chain_id(chain_id);
             }
-            ConfiguredSigner::Kms(_signer) => {
-                // KMS signer doesn't support mutable chain ID changes in the
-                // current implementation This is a limitation
-                // of the KmsSigner wrapper
-                panic!("KMS signer doesn't support mutable chain ID changes");
+            ConfiguredSigner::Kms(signer) => {
+                signer.set_chain_id(chain_id);
             }
         }
     }

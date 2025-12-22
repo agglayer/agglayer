@@ -1,10 +1,10 @@
 use rocksdb::DB as RocksDB;
 
-use crate::storage::migration::migration_cf::MigrationRecordColumn;
-use crate::tests::TempDBDir;
-
-use super::super::{Builder, DBOpenError};
-use super::sample::*;
+use super::{
+    super::{Builder, DBOpenError},
+    sample::*,
+};
+use crate::{storage::migration::migration_cf::MigrationRecordColumn, tests::TempDBDir};
 
 #[test_log::test]
 fn default_cf_not_empty() -> Result<(), eyre::Error> {
