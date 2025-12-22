@@ -30,9 +30,12 @@ agglayer-types.workspace = true
 agglayer-tries.workspace = true
 pessimistic-proof.workspace = true
 
+flate2 = { workspace = true, optional = true }
 mockall = { workspace = true, optional = true }
+tar = { workspace = true, optional = true }
 
 [dev-dependencies]
+clap.workspace = true
 criterion.workspace = true
 alloy-primitives.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
@@ -43,6 +46,7 @@ serde-reflection.workspace = true
 sp1-sdk.workspace = true
 test-log.workspace = true
 tokio.workspace = true
+tracing-subscriber.workspace = true
 
 agglayer-types = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite.workspace = true
@@ -55,4 +59,4 @@ harness = false
 required-features = ["testutils"]
 
 [features]
-testutils = ["rand", "mockall", "agglayer-types/testutils"]
+testutils = ["flate2", "rand", "mockall", "tar", "agglayer-types/testutils"]
