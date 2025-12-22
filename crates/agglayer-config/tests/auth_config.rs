@@ -21,7 +21,9 @@ fn auth_legacy() {
     assert_eq!(gkms.tx_settlement_key_name, Some("key-name-test".into()));
     assert_eq!(gkms.tx_settlement_key_version, Some(2));
 
-    assert_toml_snapshot!(config);
+    assert_toml_snapshot!(config, {
+        ".storage.*" => agglayer_config::redact_storage_path(),
+    });
 }
 
 #[test]
@@ -48,7 +50,9 @@ fn auth_transition() {
     );
     assert_eq!(gkms.tx_settlement_key_version, Some(4));
 
-    assert_toml_snapshot!(config);
+    assert_toml_snapshot!(config, {
+        ".storage.*" => agglayer_config::redact_storage_path(),
+    });
 }
 
 #[test]
@@ -75,5 +79,7 @@ fn auth_update() {
     );
     assert_eq!(gkms.tx_settlement_key_version, Some(4));
 
-    assert_toml_snapshot!(config);
+    assert_toml_snapshot!(config, {
+        ".storage.*" => agglayer_config::redact_storage_path(),
+    });
 }
