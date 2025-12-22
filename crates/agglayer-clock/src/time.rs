@@ -97,7 +97,7 @@ impl TimeClock {
                         if current_block % *self.epoch_duration == 0 {
                             // Calculate the epoch that just ended (current_block / epoch_duration - 1)
                             let epoch_ended = EpochNumber::new(
-                                Self::calculate_epoch_number(current_block, *self.epoch_duration)
+                                <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration)
                                     .saturating_sub(1)
                             );
                             if let Err(error) = sender.send(Event::EpochEnded(epoch_ended)) {
@@ -140,11 +140,6 @@ impl TimeClock {
                 .num_seconds(),
             0,
         ) as u64
-    }
-
-    /// Calculate an Epoch number based on a Block number.
-    fn calculate_epoch_number(from_block: u64, epoch_duration: NonZeroU64) -> u64 {
-        from_block / epoch_duration
     }
 }
 
