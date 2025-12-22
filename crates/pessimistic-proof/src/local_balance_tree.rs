@@ -50,8 +50,8 @@ impl BalanceTree {
     /// Returns all the non-zero token balance contained in this balance tree.
     pub fn get_all_balances(
         &self,
-    ) -> Result<Vec<(SmtPath<LOCAL_BALANCE_TREE_DEPTH>, Digest)>, SmtError> {
-        Ok(self.0.entries()?.into_iter().collect())
+    ) -> Result<impl Iterator<Item = (SmtPath<LOCAL_BALANCE_TREE_DEPTH>, Digest)>, SmtError> {
+        Ok(self.0.entries()?.into_iter())
     }
 
     /// Returns the balance for the given [`TokenInfo`].

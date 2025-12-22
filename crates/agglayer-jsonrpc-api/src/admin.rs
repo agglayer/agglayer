@@ -58,6 +58,12 @@ impl From<(SmtPath<192>, Digest)> for TokenBalanceEntry {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTokenBalanceResponse {
+    pub balances: Vec<TokenBalanceEntry>,
+}
+
 #[rpc(server, namespace = "admin")]
 pub(crate) trait AdminAgglayer {
     #[method(name = "getTokenBalance")]
@@ -65,7 +71,7 @@ pub(crate) trait AdminAgglayer {
         &self,
         network_id: NetworkId,
         token_info: Option<TokenInfo>,
-    ) -> RpcResult<Vec<TokenBalanceEntry>>;
+    ) -> RpcResult<GetTokenBalanceResponse>;
 
     #[method(name = "getCertificate")]
     async fn get_certificate(
@@ -234,7 +240,7 @@ where
         &self,
         network_id: NetworkId,
         token_info: Option<TokenInfo>,
-    ) -> RpcResult<Vec<TokenBalanceEntry>> {
+    ) -> RpcResult<GetTokenBalanceResponse> {
         let Some(balance_tree) = self
             .state
             .read_local_network_state(network_id)
@@ -244,7 +250,7 @@ where
             })?
             .map(|s| BalanceTree(s.balance_tree))
         else {
-            return Ok(vec![]); // empty balances, not an error
+            return Ok(GetTokenBalanceResponse { balances: vec![] }); // empty balances, not an error
         };
 
         // get the balance of a given token, or return all of them
@@ -262,12 +268,11 @@ where
                     error!(?error, "Failed to get all balances");
                     Error::internal("Unable to get all balances")
                 })?
-                .into_iter()
                 .map(TokenBalanceEntry::from)
                 .collect()
         };
 
-        Ok(balances)
+        Ok(GetTokenBalanceResponse { balances })
     }
 
     #[instrument(skip(self), fields(hash), level = "debug")]
