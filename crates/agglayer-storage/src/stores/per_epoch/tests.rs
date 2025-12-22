@@ -4,22 +4,25 @@ use std::{
 };
 
 use agglayer_config::Config;
-use agglayer_types::{Certificate, CertificateIndex, CertificateStatus, EpochNumber};
-use agglayer_types::{Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateIndex, CertificateStatus, EpochNumber, Height, NetworkId, Proof,
+};
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};
 use tracing::info;
 
-use crate::stores::{PendingCertificateWriter as _, PerEpochReader as _, StateReader};
 use crate::{
+    backup::BackupClient,
     error::Error,
     stores::{
-        interfaces::writer::PerEpochWriter, pending::PendingStore, per_epoch::PerEpochStore,
+        interfaces::writer::{PerEpochWriter, StateWriter},
+        pending::PendingStore,
+        per_epoch::PerEpochStore,
         state::StateStore,
+        PendingCertificateWriter as _, PerEpochReader as _, StateReader,
     },
     tests::TempDBDir,
 };
-use crate::{storage::backup::BackupClient, stores::interfaces::writer::StateWriter};
 
 #[fixture]
 fn store() -> PerEpochStore<PendingStore, StateStore> {

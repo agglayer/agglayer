@@ -10,7 +10,7 @@ use agglayer_jsonrpc_api::{
 };
 use agglayer_signer::{ConfiguredSigner, ConfiguredSigners};
 use agglayer_storage::{
-    storage::backup::{BackupClient, BackupEngine},
+    backup::{BackupClient, BackupEngine},
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         PerEpochReader as _,
