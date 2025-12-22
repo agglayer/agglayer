@@ -1,4 +1,6 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height, NetworkId};
+use agglayer_types::{
+    CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, SettlementBlockNumber,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{ColumnSchema, LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF};
@@ -23,6 +25,7 @@ pub struct SettledCertificate(
     pub Height,
     pub EpochNumber,
     pub CertificateIndex,
+    pub SettlementBlockNumber,
 );
 
 pub type Key = NetworkId;

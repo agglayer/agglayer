@@ -18,6 +18,7 @@ mod height;
 mod id;
 mod index;
 mod metadata;
+mod settlement_block;
 #[cfg(feature = "testutils")]
 mod testutils;
 
@@ -26,6 +27,7 @@ pub use height::Height;
 pub use id::CertificateId;
 pub use index::CertificateIndex;
 pub use metadata::Metadata;
+pub use settlement_block::SettlementBlockNumber;
 #[cfg(feature = "testutils")]
 pub use testutils::{compute_signature_info, EMPTY_ELF};
 

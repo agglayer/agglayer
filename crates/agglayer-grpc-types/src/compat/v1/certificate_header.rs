@@ -22,6 +22,7 @@ impl From<CertificateHeader> for v1::CertificateHeader {
                 (v1::CertificateStatus::InError, Some((*error).into()))
             }
             CertificateStatus::Settled => (v1::CertificateStatus::Settled, None),
+            CertificateStatus::Finalized => (v1::CertificateStatus::Finalized, None),
         };
         v1::CertificateHeader {
             network_id: value.network_id.into(),

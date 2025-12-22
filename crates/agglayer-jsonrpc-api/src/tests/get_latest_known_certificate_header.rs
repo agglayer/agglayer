@@ -7,6 +7,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    SettlementBlockNumber,
 };
 use insta::assert_snapshot;
 use jsonrpsee::{core::client::ClientT, rpc_params};
@@ -47,6 +48,7 @@ async fn returns_the_pending_certificate_header() {
             &settled_certificate.hash(),
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
+            SettlementBlockNumber::ZERO,
         )
         .expect("unable to set latest settled certificate");
 
@@ -129,6 +131,7 @@ async fn returns_the_proven_certificate_header() {
             &settled_certificate.hash(),
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
+            SettlementBlockNumber::ZERO,
         )
         .expect("unable to set latest settled certificate");
     context
@@ -208,6 +211,7 @@ async fn returns_the_settled_certificate_header() {
             &settled_certificate.hash(),
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
+            SettlementBlockNumber::ZERO,
         )
         .expect("unable to set latest settled certificate");
 
@@ -332,6 +336,7 @@ async fn returns_the_highest_height() {
             &settled_certificate.hash(),
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
+            SettlementBlockNumber::ZERO,
         )
         .expect("unable to set latest settled certificate");
 
@@ -423,6 +428,7 @@ async fn returns_the_settled_one_at_same_height() {
             &settled_certificate.hash(),
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
+            SettlementBlockNumber::ZERO,
         )
         .expect("unable to set latest settled certificate");
 

@@ -40,6 +40,7 @@ impl From<AgglayerCertificateStatus> for v1::CertificateStatus {
             AgglayerCertificateStatus::Candidate => v1::CertificateStatus::Candidate,
             AgglayerCertificateStatus::InError { .. } => v1::CertificateStatus::InError,
             AgglayerCertificateStatus::Settled => v1::CertificateStatus::Settled,
+            AgglayerCertificateStatus::Finalized => v1::CertificateStatus::Finalized,
         }
     }
 }

@@ -45,6 +45,8 @@ enum CertificateStatus {
   CERTIFICATE_STATUS_IN_ERROR = 4;
   // Certificate is settled.
   CERTIFICATE_STATUS_SETTLED = 5;
+  // Certificate is finalized.
+  CERTIFICATE_STATUS_FINALIZED = 6;
 }
 
 // Certificate status error type.

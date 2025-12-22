@@ -11,7 +11,7 @@ use agglayer_storage::{
     storage::backup::BackupClient,
     stores::{state::StateStore, StateReader as _},
 };
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height};
+use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height, SettlementBlockNumber};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::Rng;
 
@@ -49,6 +49,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
                     Height::ZERO,
                     EpochNumber::ZERO,
                     CertificateIndex::new(u64::from(i - 1)),
+                    SettlementBlockNumber::ZERO,
                 ),
             )
             .expect("Unable to put certificate into storage");

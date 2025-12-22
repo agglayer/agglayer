@@ -8,7 +8,7 @@ use agglayer_storage::stores::{
 };
 use agglayer_types::{
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
-    ExecutionMode, Proof, SettlementTxHash, U256,
+    ExecutionMode, Proof, SettlementBlockNumber, SettlementTxHash, U256,
 };
 use alloy::{
     eips::BlockNumberOrTag, providers::Provider, rpc::types::TransactionReceipt,
@@ -243,7 +243,7 @@ where
         &self,
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error> {
+    ) -> Result<(EpochNumber, CertificateIndex, SettlementBlockNumber), Error> {
         info!(%settlement_tx_hash, "Waiting for settlement of tx {settlement_tx_hash}");
 
         // Apply timeout fail point if they are active for integration testing
@@ -261,6 +261,13 @@ where
         if !receipt.inner.tx_type().is_eip1559() {
             warn!(tx = %settlement_tx_hash, "Settlement tx is not eip1559.");
         }
+
+        let Some(block_number) = receipt.block_number else {
+            // should never happen due wait_for_transaction_receipt postcond, anyway
+            return Err(Error::InternalError(
+                "Failed to extract block number from receipt.".into(),
+            ));
+        };
 
         // Apply fail points if they are active for integration testing
         #[cfg(feature = "testutils")]
@@ -315,7 +322,7 @@ where
             }
         };
 
-        Ok((epoch_number, certificate_index))
+        Ok((epoch_number, certificate_index, block_number.into()))
     }
 }
 
@@ -325,6 +332,7 @@ where
     RollupManagerRpc: L1TransactionFetcher,
 {
     /// Wait for transaction receipt with configurable retries and intervals
+    /// PostCondition: if success, TransactionReceipt.block_number is Some
     async fn wait_for_transaction_receipt(
         &self,
         settlement_tx_hash: SettlementTxHash,
@@ -520,7 +528,7 @@ where
         &self,
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error> {
+    ) -> Result<(EpochNumber, CertificateIndex, SettlementBlockNumber), Error> {
         self.wait_for_settlement(settlement_tx_hash, certificate_id)
             .await
     }

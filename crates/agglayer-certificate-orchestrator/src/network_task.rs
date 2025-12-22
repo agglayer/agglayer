@@ -8,7 +8,7 @@ use agglayer_storage::{
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
     CertificateId, CertificateIndex, CertificateStatusError, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId, SettlementTxHash,
+    LocalNetworkStateData, NetworkId, SettlementBlockNumber, SettlementTxHash,
 };
 use pessimistic_proof::{
     core::commitment::PessimisticRootCommitmentVersion, local_state::StateCommitment,
@@ -117,7 +117,7 @@ pub enum NetworkTaskMessage {
 
 #[derive(Debug)]
 pub enum CertificateSettlementResult {
-    Settled(EpochNumber, CertificateIndex),
+    Settled(EpochNumber, CertificateIndex, SettlementBlockNumber),
     TimeoutError,
     Error(CertificateStatusError),
     SettledThroughOtherTx(SettlementTxHash),
@@ -223,7 +223,7 @@ where
             .map(|(_network_id, settled)| settled);
 
         let mut next_expected_height =
-            if let Some(SettledCertificate(_, current_height, epoch, _)) = latest_settled {
+            if let Some(SettledCertificate(_, current_height, epoch, _, _)) = latest_settled {
                 debug!("Current network height is {}", current_height);
                 if epoch == current_epoch {
                     debug!("Already settled for the epoch {current_epoch}");
@@ -284,7 +284,7 @@ where
                                 return Ok(());
                             }
                             match self.latest_settled {
-                                Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
+                                Some(SettledCertificate(_, _, epoch, _, _)) if epoch == current_epoch => {
                                     warn!("Network {network_id} is at capacity for the epoch {current_epoch}");
                                     return Ok(());
                                 },
@@ -311,7 +311,7 @@ where
 
                     if matches!(
                         self.latest_settled,
-                        Some(SettledCertificate(settled_id, _, _, _)) if settled_id == certificate_id)
+                        Some(SettledCertificate(settled_id, _, _, _, _)) if settled_id == certificate_id)
                     {
                         return Ok(());
                     }
@@ -491,9 +491,9 @@ where
                             .await;
 
                         let result = match result {
-                            Ok((epoch, index)) => {
+                            Ok((epoch, index, block_number)) => {
                                 // Certificate has been settled.
-                                CertificateSettlementResult::Settled(epoch, index)
+                                CertificateSettlementResult::Settled(epoch, index, block_number)
                             }
                             Err(Error::PendingTransactionTimeout { settlement_tx_hash, .. }) => {
                                 match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {
@@ -546,6 +546,7 @@ where
                         self.at_capacity_for_epoch = true;
                         let epoch_number = settled_certificate.2;
                         let certificate_index = settled_certificate.3;
+                        let block_number = settled_certificate.4;
                         self.latest_settled = Some(settled_certificate);
                         next_expected_height.increment();
                         debug!(%certificate_id, "Certification process completed");
@@ -579,6 +580,7 @@ where
                                 &certificate_id,
                                 &epoch_number,
                                 &certificate_index,
+                                block_number,
                             )
                             .map_err(|e| Error::PersistenceError { certificate_id, error: e.to_string() })?;
 

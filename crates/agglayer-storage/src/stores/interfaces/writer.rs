@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof,
+    SettlementBlockNumber, SettlementTxHash,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -93,6 +94,7 @@ pub trait StateWriter: Send + Sync {
         certificate_id: &CertificateId,
         epoch_number: &EpochNumber,
         certificate_index: &CertificateIndex,
+        block_number: SettlementBlockNumber,
     ) -> Result<(), Error>;
 
     fn write_local_network_state(

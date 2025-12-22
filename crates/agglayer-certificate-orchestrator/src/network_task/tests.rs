@@ -141,7 +141,13 @@ async fn start_from_zero() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
+        .returning(move |_, _| {
+            Ok((
+                EpochNumber::ZERO,
+                CertificateIndex::ZERO,
+                SettlementBlockNumber::ZERO,
+            ))
+        });
 
     state
         .expect_update_certificate_header_status()
@@ -158,8 +164,9 @@ async fn start_from_zero() {
             eq(certificate_id),
             eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
+            eq(SettlementBlockNumber::ZERO),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -355,7 +362,13 @@ async fn one_per_epoch() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
+        .returning(move |_, _| {
+            Ok((
+                EpochNumber::ZERO,
+                CertificateIndex::ZERO,
+                SettlementBlockNumber::ZERO,
+            ))
+        });
 
     state
         .expect_update_certificate_header_status()
@@ -372,8 +385,9 @@ async fn one_per_epoch() {
             eq(certificate_id),
             eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
+            eq(SettlementBlockNumber::ZERO),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -645,7 +659,13 @@ async fn retries() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
+        .returning(move |_, _| {
+            Ok((
+                EpochNumber::ZERO,
+                CertificateIndex::ZERO,
+                SettlementBlockNumber::ZERO,
+            ))
+        });
 
     state
         .expect_update_certificate_header_status()
@@ -662,8 +682,9 @@ async fn retries() {
             eq(certificate_id2),
             eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
+            eq(SettlementBlockNumber::ZERO),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -908,7 +929,13 @@ async fn changing_epoch_triggers_certify() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
+        .returning(move |_, _| {
+            Ok((
+                EpochNumber::ZERO,
+                CertificateIndex::ZERO,
+                SettlementBlockNumber::ZERO,
+            ))
+        });
 
     state
         .expect_update_certificate_header_status()
@@ -925,14 +952,21 @@ async fn changing_epoch_triggers_certify() {
             eq(certificate_id),
             eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
+            eq(SettlementBlockNumber::ZERO),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::new(1), CertificateIndex::ZERO)));
+        .returning(move |_, _| {
+            Ok((
+                EpochNumber::new(1),
+                CertificateIndex::ZERO,
+                SettlementBlockNumber::ZERO,
+            ))
+        });
 
     state
         .expect_update_certificate_header_status()
@@ -949,8 +983,9 @@ async fn changing_epoch_triggers_certify() {
             eq(certificate_id2),
             eq(EpochNumber::new(1)),
             eq(CertificateIndex::ZERO),
+            eq(SettlementBlockNumber::ZERO),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -1260,13 +1295,25 @@ async fn process_next_certificate() {
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
+        .returning(move |_, _| {
+            Ok((
+                EpochNumber::ZERO,
+                CertificateIndex::ZERO,
+                SettlementBlockNumber::ZERO,
+            ))
+        });
 
     settlement_client
         .expect_wait_for_settlement()
         .once()
         .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::new(1), CertificateIndex::ZERO)));
+        .returning(move |_, _| {
+            Ok((
+                EpochNumber::new(1),
+                CertificateIndex::ZERO,
+                SettlementBlockNumber::ZERO,
+            ))
+        });
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),

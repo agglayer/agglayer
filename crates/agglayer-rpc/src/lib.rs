@@ -114,7 +114,7 @@ where
             .state
             .get_latest_settled_certificate_per_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
-            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+            .map(|(_, SettledCertificate(id, height, _, _, _))| (id, height));
 
         let proven_certificate_id_and_height = self
             .pending_store
@@ -162,7 +162,7 @@ where
             .state
             .get_latest_settled_certificate_per_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
-            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+            .map(|(_, SettledCertificate(id, height, _, _, _))| (id, height));
 
         let certificate_id = std::cmp::max_by_key(
             proven_certificate_id_and_height,
@@ -250,7 +250,7 @@ where
             .get_latest_settled_certificate_per_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate id: {e}"))?
         {
-            Some((_, SettledCertificate(id, _, _, _))) => id,
+            Some((_, SettledCertificate(id, _, _, _, _))) => id,
             None => return Ok(None),
         };
 
@@ -277,6 +277,7 @@ where
                 | CertificateStatus::Candidate
                 | CertificateStatus::InError { .. } => Some(header),
                 CertificateStatus::Settled => None,
+                CertificateStatus::Finalized => None,
             })
     }
 

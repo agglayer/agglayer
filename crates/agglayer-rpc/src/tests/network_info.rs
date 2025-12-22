@@ -9,7 +9,7 @@ use agglayer_storage::{
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateHeader, CertificateIndex,
     Digest, EpochNumber, Height, L1WitnessCtx, Metadata, NetworkId, NetworkInfo,
-    PessimisticRootInput,
+    PessimisticRootInput, SettlementBlockNumber,
 };
 use alloy::providers::{
     mock::{Asserter, MockTransport},
@@ -238,6 +238,7 @@ fn pending_certificate_defined() {
                     0.into(),
                     0.into(),
                     CertificateIndex::new(0),
+                    SettlementBlockNumber::ZERO,
                 ),
             )))
         });

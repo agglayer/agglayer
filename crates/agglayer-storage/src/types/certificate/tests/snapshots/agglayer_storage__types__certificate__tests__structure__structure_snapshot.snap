@@ -46,6 +46,9 @@ expression: "&registry"
       },
       "4": {
         "Settled": "UNIT"
+      },
+      "5": {
+        "Finalized": "UNIT"
       }
     }
   },
