@@ -48,7 +48,7 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
-    pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
+    pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
         DB::open_cf(path, crate::storage::epochs_db_cf_definitions())
     }
 
@@ -56,6 +56,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         DB::open_cf_readonly(path, crate::storage::epochs_db_cf_definitions())
     }
 
+    #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
         epoch_number: EpochNumber,
@@ -64,7 +65,10 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
         backup_client: BackupClient,
     ) -> Result<Self, Error> {
-        let db = Arc::new(Self::init_db(&config.storage.epoch_db_path(epoch_number))?);
+        let db = Arc::new(
+            Self::init_db(&config.storage.epoch_db_path(epoch_number))
+                .map_err(Error::DBOpenError)?,
+        );
 
         Self::try_open_with_db(
             db,
@@ -79,6 +83,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
 
     /// Open a PerEpochStore in read-only mode to prevent concurrency issues.
     /// This is useful for operations that only need to read data from the database.
+    #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
     pub fn try_open_readonly(
         config: Arc<agglayer_config::Config>,
         epoch_number: EpochNumber,
@@ -144,12 +149,12 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                             expected_start_checkpoint
                         } else if checkpoint != expected_start_checkpoint {
                             warn!(
-                                "Start checkpoint doesn't match the expected one, using the one from \
-                                 the DB"
+                                "Start checkpoint doesn't match the expected one; refusing to open epoch \
+                                 due to inconsistent state",
                             );
                             return Err(Error::Unexpected(
-                                "Start checkpoint doesn't match the expected one, using the one from \
-                                 the DB"
+                                "Start checkpoint doesn't match the expected one; inconsistent epoch \
+                                 state in DB"
                                     .to_string(),
                             ))?;
                         } else {
