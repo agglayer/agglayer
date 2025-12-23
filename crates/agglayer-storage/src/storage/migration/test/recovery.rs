@@ -1,6 +1,5 @@
-use crate::{storage::migration::Builder, tests::TempDBDir};
-
 use super::sample::*;
+use crate::{storage::migration::Builder, tests::TempDBDir};
 
 #[rstest::rstest]
 #[test_log::test]

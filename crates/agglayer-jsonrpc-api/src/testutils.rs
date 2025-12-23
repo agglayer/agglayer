@@ -3,7 +3,7 @@ use std::{future::IntoFuture as _, net::SocketAddr, sync::Arc};
 use agglayer_config::Config;
 use agglayer_contracts::L1RpcClient;
 use agglayer_storage::{
-    storage::backup::BackupClient,
+    backup::BackupClient,
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
