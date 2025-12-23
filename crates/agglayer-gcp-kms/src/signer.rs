@@ -24,6 +24,10 @@ impl KmsSigner {
         Self { signer }
     }
 
+    pub fn set_chain_id(&mut self, chain_id: Option<u64>) {
+        self.signer.set_chain_id(chain_id);
+    }
+
     /// Signs a message using the internal signer, this method can fail if the
     /// signer fails to create the digest.
     pub async fn sign_message<S: Send + Sync + AsRef<[u8]>>(
@@ -64,11 +68,6 @@ impl KmsSigner {
         self.signer = self.signer.with_chain_id(Some(chain_id.into()));
         self
     }
-
-    /// Sets the chain ID on this signer (mutable version).
-    pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
-        self.signer = self.signer.clone().with_chain_id(chain_id);
-    }
 }
 
 /// Implementation of alloy's [`Signer`] trait for [`KmsSigner`].
@@ -99,7 +98,7 @@ impl Signer for KmsSigner {
     }
 
     fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
-        self.set_chain_id(chain_id);
+        self.signer.set_chain_id(chain_id);
     }
 }
 
