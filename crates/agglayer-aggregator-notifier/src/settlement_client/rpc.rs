@@ -246,12 +246,28 @@ where
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         info!(%settlement_tx_hash, "Waiting for settlement of tx {settlement_tx_hash}");
 
-        // Apply timeout fail point if they are active for integration testing
+        // Check if receipt is already available before applying timeout fail point.
+        // If the receipt is available, the transaction is already mined, so we should
+        // skip the fail point to avoid false timeouts for alternative settlement
+        // transactions.
+        let receipt_already_available = self
+            .l1_rpc
+            .fetch_transaction_receipt(settlement_tx_hash)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
+
+        // Apply timeout fail point if they are active for integration testing.
+        // Skip if receipt is already available to avoid false timeouts for
+        // already-mined transactions.
         #[cfg(feature = "testutils")]
-        testutils::inject_settle_certificate_timeout_fail_points(
-            certificate_id,
-            settlement_tx_hash,
-        )?;
+        if !receipt_already_available {
+            testutils::inject_settle_certificate_timeout_fail_points(
+                certificate_id,
+                settlement_tx_hash,
+            )?;
+        }
 
         // Step 1: Wait for transaction receipt with retries
         let receipt = self
