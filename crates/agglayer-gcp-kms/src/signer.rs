@@ -72,35 +72,6 @@ impl KmsSigner {
 /// Implementation of alloy's [`Signer`] trait for [`KmsSigner`].
 ///
 /// This allows the KmsSigner to be used anywhere an alloy Signer is expected.
-#[async_trait]
-impl Signer for KmsSigner {
-    async fn sign_hash(&self, hash: &B256) -> Result<Signature, alloy::signers::Error> {
-        self.signer
-            .sign_hash(hash)
-            .await
-            .map_err(alloy::signers::Error::other)
-    }
-
-    async fn sign_message(&self, message: &[u8]) -> Result<Signature, alloy::signers::Error> {
-        self.signer
-            .sign_message(message)
-            .await
-            .map_err(alloy::signers::Error::other)
-    }
-
-    fn address(&self) -> Address {
-        alloy::signers::Signer::address(&self.signer)
-    }
-
-    fn chain_id(&self) -> Option<ChainId> {
-        self.signer.chain_id()
-    }
-
-    fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
-        self.signer.set_chain_id(chain_id);
-    }    
-}
-
 /// Implementation of alloy's [`TxSigner`] trait for [`KmsSigner`].
 ///
 /// This allows the KmsSigner to be used for transaction signing with the
