@@ -19,11 +19,10 @@ pub struct KmsSigner {
 }
 
 impl KmsSigner {
-    /// Creates a new [`KmsSigner`] instance.
     pub fn new(signer: GcpSigner) -> Self {
         Self { signer }
     }
-    
+
     /// Signs a message using the internal signer, this method can fail if the
     /// signer fails to create the digest.
     pub async fn sign_message<S: Send + Sync + AsRef<[u8]>>(
@@ -70,7 +69,6 @@ impl KmsSigner {
         self.signer = self.signer.clone().with_chain_id(chain_id);
     }
 }
-
 /// Implementation of alloy's [`Signer`] trait for [`KmsSigner`].
 ///
 /// This allows the KmsSigner to be used anywhere an alloy Signer is expected.

@@ -121,6 +121,6 @@ impl KMS {
         Ok(KmsSigners {
             pp_settlement: KmsSigner::new(pp_settlement_gcp_signer),
             tx_settlement: tx_settlement_gcp_signer.map(KmsSigner::new),
-        })
+        })        
     }
 }
