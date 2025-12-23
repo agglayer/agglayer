@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use tracing::error;
 
 use crate::{
-    columns::ColumnSchema,
+    schema::ColumnSchema,
     storage::{iterators::KeysIterator, migration::DBMigrationErrorDetails as Error, DB},
 };
 

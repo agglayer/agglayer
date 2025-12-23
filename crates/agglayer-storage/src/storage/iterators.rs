@@ -1,7 +1,7 @@
 use tracing::debug;
 
 use super::DBError;
-use crate::columns::{Codec as _, ColumnSchema};
+use crate::schema::{Codec as _, ColumnSchema};
 
 /// The status of the iterator.
 enum IteratorStatus {

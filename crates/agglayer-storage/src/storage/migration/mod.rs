@@ -4,18 +4,19 @@ use rocksdb::ColumnFamilyDescriptor;
 use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    columns::ColumnSchema,
+    schema::ColumnSchema,
     storage::{DBError, DB},
 };
 
 mod access;
 mod error;
 mod migration_cf;
+mod record;
 
-use crate::types::migration::MigrationRecord;
+pub use access::DbAccess;
 pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 use migration_cf::MigrationRecordColumn;
-pub use access::DbAccess;
+use record::MigrationRecord;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
@@ -89,8 +90,8 @@ impl Builder {
         };
 
         {
-            // Check the default CF is empty. If not, it is an indication that the database file is
-            // being used for something else.
+            // Check the default CF is empty. If not, it is an indication that the database
+            // file is being used for something else.
             let mut default_cf_iter = db.rocksdb.iterator(rocksdb::IteratorMode::Start);
             let default_cf_has_data = default_cf_iter.next().is_some();
             if default_cf_has_data {

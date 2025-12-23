@@ -2,11 +2,12 @@ use agglayer_types::NetworkId;
 use rocksdb::DB as RocksDB;
 
 use crate::{
-    columns::ColumnSchema, storage::migration::migration_cf::MigrationRecordColumn,
+    schema::ColumnSchema,
+    storage::migration::migration_cf::MigrationRecordColumn,
+    storage::migration::{Builder, DBOpenError},
     tests::TempDBDir,
 };
 
-use super::super::{Builder, DBOpenError};
 use super::sample::*;
 
 #[test_log::test]
@@ -111,12 +112,14 @@ fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
 
     // Phase 2: Try to migrate but write to the old (read-only) CF
     {
-        let result = Builder::open_sample(db_path)?
-            .add_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME], |db| {
+        let result = Builder::open_sample(db_path)?.add_cfs(
+            [NetworkInfoV1Column::COLUMN_FAMILY_NAME],
+            |db| {
                 // This should FAIL - trying to write to old CF during migration
                 let v0_value = &DATA_V0[1].1;
                 db.put::<NetworkInfoV0Column>(&NetworkId::new(42), v0_value)
-            });
+            },
+        );
 
         match result {
             Err(DBOpenError::Migration(migration_err)) => {
