@@ -1,14 +1,12 @@
 use agglayer_types::NetworkId;
 use rocksdb::DB as RocksDB;
 
+use super::sample::*;
 use crate::{
     schema::ColumnSchema,
-    storage::migration::migration_cf::MigrationRecordColumn,
-    storage::migration::{Builder, DBOpenError},
+    storage::migration::{migration_cf::MigrationRecordColumn, Builder, DBOpenError},
     tests::TempDBDir,
 };
-
-use super::sample::*;
 
 #[test_log::test]
 fn default_cf_not_empty() -> Result<(), eyre::Error> {
