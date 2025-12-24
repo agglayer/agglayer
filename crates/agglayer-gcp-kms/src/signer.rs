@@ -24,10 +24,6 @@ impl KmsSigner {
         Self { signer }
     }
 
-    pub fn set_chain_id(&mut self, chain_id: Option<u64>) {
-        self.signer.set_chain_id(chain_id);
-    }
-
     /// Signs a message using the internal signer, this method can fail if the
     /// signer fails to create the digest.
     pub async fn sign_message<S: Send + Sync + AsRef<[u8]>>(
