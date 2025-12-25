@@ -10,7 +10,7 @@ pub mod local_state;
 pub mod multi_batch_header;
 pub mod nullifier_tree;
 
-pub use local_state::NetworkState;
+pub use local_state::{NetworkState, NETWORK_STATE_ZERO_COPY_SIZE};
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
 pub const PESSIMISTIC_PROOF_PROGRAM_SELECTOR: [u8; 4] =

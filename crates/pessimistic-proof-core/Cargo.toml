@@ -21,6 +21,8 @@ agglayer-tries.workspace = true
 unified-bridge.workspace = true
 
 alloy-primitives.workspace = true
+bytemuck.workspace = true
+static_assertions.workspace = true
 arbitrary = { workspace = true, optional = true }
 hex = "0.4.3"
 hex-literal = "0.4"

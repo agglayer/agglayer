@@ -1,8 +1,9 @@
 ---
 source: crates/pessimistic-proof-test-suite/tests/vkey_selector.rs
 expression: message
+snapshot_kind: text
 ---
 # If this test fails, it means the PP vkey has changed.
 # When that happens, consider updating the selector by bumping the PP version.
-| PP_VKEY          | 0x00139b6c32b3748fae95a38c289d46c30730c3f900e3fff3ad6db2aa95aaa142 |
+| PP_VKEY          | 0x00cd138dda1987841deb3f8ffaa7bbd5d615b905bd83c6e38332d2723cf283d4 |
 | PP_VKEY_SELECTOR | 0x00000009                                                         |
