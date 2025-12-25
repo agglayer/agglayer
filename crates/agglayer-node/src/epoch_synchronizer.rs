@@ -140,8 +140,8 @@ mod tests {
 
     use agglayer_config::Config;
     use agglayer_storage::{
+        backup::BackupClient,
         columns::epochs::end_checkpoint::EndCheckpointColumn,
-        storage::backup::BackupClient,
         stores::{
             epochs::EpochsStore, pending::PendingStore, state::StateStore,
             PendingCertificateWriter, StateWriter,
