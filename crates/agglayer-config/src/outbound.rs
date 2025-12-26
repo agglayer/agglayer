@@ -9,6 +9,7 @@ use crate::Multiplier;
 /// Outbound configuration.
 #[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename = "outbound", rename_all = "kebab-case")]
+#[deprecated(since = "0.5.0", note = "Please use settlement service configuration instead")]
 pub struct OutboundConfig {
     pub rpc: OutboundRpcConfig,
 }
@@ -17,6 +18,7 @@ pub struct OutboundConfig {
 /// clients and their RPC calls.
 #[derive(Serialize, Default, Debug, PartialEq, Eq)]
 #[serde(rename = "rpc", rename_all = "kebab-case")]
+#[deprecated(since = "0.5.0", note = "Please use settlement service configuration instead")]
 pub struct OutboundRpcConfig {
     /// Outbound configuration of the RPC settle function call.
     pub settle_tx: OutboundRpcSettleConfig,
@@ -67,6 +69,7 @@ impl<'de> Deserialize<'de> for OutboundRpcConfig {
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename = "settle", rename_all = "kebab-case")]
+#[deprecated(since = "0.5.0", note = "Please use 'SettlementTransactionConfig' instead")]
 pub struct OutboundRpcSettleConfig {
     /// Maximum number of retries for the transaction.
     #[serde(default = "default_rpc_retries")]
