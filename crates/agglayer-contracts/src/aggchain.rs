@@ -72,7 +72,9 @@ where
         &self,
         rollup_address: Address,
     ) -> Result<(Vec<Address>, usize), L1RpcError> {
-        let signers = AggchainBase::new(rollup_address.into(), self.rpc.clone())
+        let client = AggchainBase::new(rollup_address.into(), self.rpc.clone());
+
+        let signers = client
             .getAggchainSigners()
             .call()
             .await
@@ -80,7 +82,7 @@ where
             .map_err(L1RpcError::MultisigSignersFetchFailed)?;
 
         let threshold: usize = {
-            let threshold_u256: U256 = AggchainBase::new(rollup_address.into(), self.rpc.clone())
+            let threshold_u256: U256 = client
                 .getThreshold()
                 .call()
                 .await
