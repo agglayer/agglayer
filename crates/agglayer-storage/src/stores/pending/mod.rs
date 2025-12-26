@@ -73,13 +73,10 @@ impl PendingCertificateWriter for PendingStore {
             self.get_latest_pending_certificate_for_network(&network_id)?
         {
             if latest_height > height {
-                // TODO: This is technically not Candidate error,
-                return Err(Error::CertificateCandidateError(
-                    crate::error::CertificateCandidateError::UnexpectedHeight(
-                        network_id,
-                        height,
-                        latest_height,
-                    ),
+                return Err(Error::InvalidPendingHeight(
+                    network_id,
+                    height,
+                    latest_height,
                 ));
             }
         }
