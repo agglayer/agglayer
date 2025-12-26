@@ -20,7 +20,7 @@ pub struct Payload {
 
 impl Payload {
     pub fn aggchain_vkey_from_proof(&self) -> SP1VerifyingKey {
-        let crate::aggchain_proof::Proof::SP1Stark(sp1_reduce_proof) = &self.proof;
+        let Proof::SP1Stark(sp1_reduce_proof) = &self.proof;
         sp1_reduce_proof.vkey.clone()
     }
 }
