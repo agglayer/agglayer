@@ -287,8 +287,15 @@ where
         } else {
             info!("Successfully generated and verified the p-proof!");
 
-            // TODO: Check if the key already exists
-            pending_store.insert_generated_proof(&certificate_id, &proof)?;
+            // Check if proof already exists to avoid overwriting without notice
+            if let Some(_existing_proof) = pending_store.get_proof(certificate_id)? {
+                warn!(
+                    %certificate_id,
+                    "Proof already exists for certificate, skipping insertion to avoid overwrite"
+                );
+            } else {
+                pending_store.insert_generated_proof(&certificate_id, &proof)?;
+            }
 
             // Prune the SMTs of the state
             state
