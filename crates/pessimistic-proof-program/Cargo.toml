@@ -6,10 +6,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 pessimistic-proof-core = { path = "../pessimistic-proof-core", default-features = false }
-sp1-zkvm = { version = "=5.2.2", features = ["verify"] }
+sp1-zkvm = { version = "=5.2.4", features = ["verify"] }
 
 [build-dependencies]
-sp1-cli = "=5.2.2"
+sp1-cli = "=5.2.4"
 
 [profile.release]
 panic = "abort"
