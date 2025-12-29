@@ -13,8 +13,9 @@ use crate::Multiplier;
 ///
 /// # Variants
 ///
-/// - **Immediate**: Transaction is considered settled after the specified number
-///   of `confirmations` blocks. Provides fastest settlement but lower security.
+/// - **Immediate**: Transaction is considered settled after the specified
+///   number of `confirmations` blocks. Provides fastest settlement but lower
+///   security.
 /// - **Justified**: Transaction is considered settled when the block containing
 ///   it has been justified by Ethereum's Casper FFG finality gadget.
 /// - **Finalized**: Transaction is considered settled only when the block has
@@ -47,14 +48,16 @@ pub enum Finality {
     /// **Security**: Very strong. Reversing a justified block would require
     /// a significant portion of validators to be slashed.
     ///
-    /// **Time**: Typically up to ~7 minutes on mainnet. Worst case scenario 12-13 minutes.
+    /// **Time**: Typically up to ~7 minutes on mainnet. Worst case scenario
+    /// 12-13 minutes.
     #[default]
     Justified,
 
     /// Transaction is considered settled only when the containing block has
     /// been finalized by Casper FFG.
     ///
-    /// **Time**: Typically between 7-13 minutes on mainnet. Worst case scenario ~19 minutes.
+    /// **Time**: Typically between 7-13 minutes on mainnet. Worst case scenario
+    /// ~19 minutes.
     Finalized,
 }
 
@@ -67,8 +70,8 @@ pub enum Finality {
 /// # Variants
 ///
 /// - **Linear**: Retries are attempted at fixed intervals defined by
-///   `tx_retry_interval`. For example, with a 10-second interval, retries
-///   occur at: 0s, 10s, 20s, 30s, etc.
+///   `tx_retry_interval`. For example, with a 10-second interval, retries occur
+///   at: 0s, 10s, 20s, 30s, etc.
 ///
 /// # Future Extensions
 ///
@@ -76,6 +79,7 @@ pub enum Finality {
 /// - **Exponential**: Exponential backoff with increasing intervals
 /// - **Jittered**: Random jitter to avoid thundering herd issues
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
 pub enum TxRetryPolicy {
     /// Linear retry policy with fixed intervals between attempts.
     ///
@@ -88,7 +92,7 @@ pub enum TxRetryPolicy {
 
 /// The settlement transaction configuration.
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct SettlementTransactionConfig {
     /// Maximum number of retries for the transaction.
@@ -146,11 +150,28 @@ pub struct SettlementTransactionConfig {
     pub gas_price_ceiling: u128,
 }
 
+impl Default for SettlementTransactionConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: default_rpc_max_retries(),
+            tx_retry_policy: default_rpc_retry_policy(),
+            tx_retry_interval: default_tx_retry_interval(),
+            confirmations: default_rpc_confirmations(),
+            finality: Finality::default(),
+            gas_multiplier_factor: Multiplier::default(),
+            gas_limit: default_gas_limit(),
+            gas_price_multiplier_factor: Multiplier::default(),
+            gas_price_floor: 0,
+            gas_price_ceiling: default_gas_price_ceiling(),
+        }
+    }
+}
+
 /// The settlement service configuration.
 ///
-/// Contains service-wide configuration options for the Agglayer settlement service.
-/// This configuration is separate from transaction-specific settings and focuses
-/// on overall service behavior and integration points.
+/// Contains service-wide configuration options for the Agglayer settlement
+/// service. This configuration is separate from transaction-specific settings
+/// and focuses on overall service behavior and integration points.
 ///
 /// # Future Configuration Options
 ///
@@ -183,14 +204,13 @@ pub struct SettlementServiceConfig {
     // This structure should only have settlement service specific values.
 }
 
-
 /// The Agglayer settlement configuration.
 ///
-/// This configuration controls how the Agglayer settlement service interacts with
-/// the L1 blockchain for settling certificates and validium transactions. It provides
-/// separate transaction configurations for certificate settlements and validium
-/// settlements, allowing fine-grained control over gas prices, retries, and
-/// confirmation requirements.
+/// This configuration controls how the Agglayer settlement service interacts
+/// with the L1 blockchain for settling certificates and validium transactions.
+/// It provides separate transaction configurations for certificate settlements
+/// and validium settlements, allowing fine-grained control over gas prices,
+/// retries, and confirmation requirements.
 ///
 /// # Configuration Structure
 ///
@@ -212,15 +232,9 @@ pub struct SettlementServiceConfig {
 /// confirmations = 32
 /// finality = "finalized"
 /// gas-limit = 60000000
+/// gas-multiplier-factor = 1.1
+/// gas-price-multiplier-factor = 1.2
 /// gas-price-ceiling = "100gwei"
-///
-/// [settlement.certificate-tx-config.gas-multiplier-factor]
-/// numerator = 11
-/// denominator = 10
-///
-/// [settlement.certificate-tx-config.gas-price-multiplier-factor]
-/// numerator = 12
-/// denominator = 10
 ///
 /// [settlement.validium-tx-config]
 /// max-retries = 512
@@ -228,6 +242,7 @@ pub struct SettlementServiceConfig {
 /// confirmations = 16
 /// finality = "justified"
 /// gas-limit = 30000000
+/// gas-multiplier-factor = 1.05
 /// gas-price-floor = "1gwei"
 /// gas-price-ceiling = "50gwei"
 /// ```
@@ -265,7 +280,7 @@ pub struct SettlementConfig {
     /// This controls how certificates (proofs of state transitions) are
     /// submitted to the L1 settlement layer.
     #[serde(default)]
-    certificate_tx_config: SettlementTransactionConfig,
+    pub certificate_tx_config: SettlementTransactionConfig,
 
     /// Configuration for validium settlement transactions.
     ///
@@ -273,14 +288,14 @@ pub struct SettlementConfig {
     /// are submitted to the L1 settlement layer. Validium transactions may
     /// have different gas and retry requirements than certificate transactions.
     #[serde(default)]
-    validium_tx_config: SettlementTransactionConfig,
+    pub validium_tx_config: SettlementTransactionConfig,
 
     /// General settlement service configuration.
     ///
     /// Contains service-wide settings that apply to the overall settlement
     /// service operation (beyond individual transaction parameters).
     #[serde(default)]
-    settlement_service_config: SettlementServiceConfig,
+    pub settlement_service_config: SettlementServiceConfig,
 }
 
 /// Default number of retries for the transaction.
