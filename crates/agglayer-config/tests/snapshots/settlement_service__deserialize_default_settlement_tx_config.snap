@@ -1,0 +1,11 @@
+---
+source: crates/agglayer-config/tests/settlement_service.rs
+expression: config
+---
+max-retries = 1024
+tx-retry-policy = "linear"
+tx-retry-interval = "10s"
+confirmations = 32
+finality = "justified"
+gas-limit = "0x3938700"
+gas-price-ceiling = "100gwei"

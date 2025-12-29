@@ -1,0 +1,11 @@
+# Custom validium settlement configuration with immediate finality
+max-retries = 512
+tx-retry-interval = "5s"
+confirmations = 16
+finality = "immediate"
+gas-limit = "0x1c9c380"
+gas-multiplier-factor = 1.05
+gas-price-multiplier-factor = 1.1
+gas-price-ceiling = "50gwei"
+gas-price-floor = "1gwei"
+
