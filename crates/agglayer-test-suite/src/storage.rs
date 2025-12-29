@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_storage::{
-    storage::backup::BackupClient,
+    backup::BackupClient,
     stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
 };
 

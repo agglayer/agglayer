@@ -2,7 +2,7 @@ use std::io;
 
 use prost::{bytes::BytesMut, Message as _};
 
-use crate::{columns::Codec, types::generated::agglayer::storage::v0};
+use crate::{schema::Codec, types::generated::agglayer::storage::v0};
 
 /// Metadata recorded about each migration step performed.
 ///
@@ -25,7 +25,7 @@ impl From<v0::MigrationRecord> for MigrationRecord {
 }
 
 impl Codec for MigrationRecord {
-    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
+    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::schema::CodecError> {
         let proto: v0::MigrationRecord = self.into();
         let len = proto.encoded_len();
 
@@ -39,7 +39,7 @@ impl Codec for MigrationRecord {
         Ok(())
     }
 
-    fn decode(buf: &[u8]) -> Result<Self, crate::columns::CodecError> {
+    fn decode(buf: &[u8]) -> Result<Self, crate::schema::CodecError> {
         let proto = <v0::MigrationRecord as prost::Message>::decode(buf)?;
         Ok(proto.into())
     }

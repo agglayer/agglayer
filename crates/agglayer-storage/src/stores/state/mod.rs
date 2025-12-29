@@ -20,6 +20,7 @@ use tracing::{info, warn};
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
+    backup::{BackupClient, BackupRequest},
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
@@ -30,16 +31,16 @@ use crate::{
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
-        ColumnSchema,
     },
     error::Error,
-    storage::{
-        backup::{BackupClient, BackupRequest},
-        DB,
-    },
+    schema::ColumnSchema,
+    storage::DB,
     stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
     types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
 };
+
+mod cf_definitions;
+mod network_info;
 
 #[cfg(test)]
 mod tests;
@@ -50,18 +51,19 @@ pub struct StateStore {
     backup_client: BackupClient,
 }
 
-mod network_info;
-
 impl StateStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, crate::storage::state_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::state_db_cf_definitions())
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
         Self { db, backup_client }
     }
 
-    pub fn new_with_path(path: &Path, backup_client: BackupClient) -> Result<Self, crate::storage::DBOpenError> {
+    pub fn new_with_path(
+        path: &Path,
+        backup_client: BackupClient,
+    ) -> Result<Self, crate::storage::DBOpenError> {
         let db = Arc::new(Self::init_db(path)?);
         Ok(Self { db, backup_client })
     }

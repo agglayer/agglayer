@@ -2,7 +2,7 @@ use agglayer_types::{CertificateStatus, CertificateStatusError, Digest, NetworkI
 use alloy_primitives::Bytes;
 use pessimistic_proof::{error::ProofVerificationError, ProofError};
 
-use crate::columns::bincode_codec;
+use crate::schema::bincode_codec;
 
 type Cse = CertificateStatusError;
 type Pve = ProofVerificationError;
@@ -49,8 +49,8 @@ fn ver_err(error: ProofVerificationError) -> CertificateStatus {
 #[case("err-l1", err(Cse::L1InfoRootNotFound(0xabcd)))]
 fn encoding(#[case] name: &'static str, #[case] status: CertificateStatus) {
     // Check for changes in encoding of certificate status.
-    // Reordering arms in the status enum causes the storage encoding to change, causing
-    // compatibility issues.
+    // Reordering arms in the status enum causes the storage encoding to change,
+    // causing compatibility issues.
 
     let bytes = Bytes::from(bincode_codec().serialize(&status).unwrap());
     insta::assert_snapshot!(name, bytes);

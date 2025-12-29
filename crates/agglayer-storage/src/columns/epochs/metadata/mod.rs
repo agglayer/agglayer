@@ -9,7 +9,7 @@ use crate::columns::PER_EPOCH_METADATA_CF;
 /// | `PerEpochMetadataKey` | `PerEpochMetadataValue` |
 pub struct PerEpochMetadataColumn;
 
-impl crate::columns::ColumnSchema for PerEpochMetadataColumn {
+impl crate::schema::ColumnSchema for PerEpochMetadataColumn {
     type Key = crate::types::PerEpochMetadataKey;
     type Value = crate::types::PerEpochMetadataValue;
 
