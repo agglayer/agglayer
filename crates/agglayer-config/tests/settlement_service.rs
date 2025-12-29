@@ -1,9 +1,7 @@
 use std::time::Duration;
 
 use agglayer_config::{
-    settlement_service::{
-        Finality, SettlementConfig, SettlementTransactionConfig, TxRetryPolicy,
-    },
+    settlement_service::{Finality, SettlementConfig, SettlementTransactionConfig, TxRetryPolicy},
     Multiplier,
 };
 use agglayer_primitives::U256;
