@@ -47,7 +47,10 @@ pub enum Error {
     #[error("Smt node not found")]
     SmtNodeNotFound,
 
-    #[error("Invalid pending certificate height for network {0}: attempted to insert height {1}, but latest pending height is {2}")]
+    #[error(
+        "Invalid pending certificate height for network {0}: attempted to insert height {1}, but \
+         latest pending height is {2}"
+    )]
     InvalidPendingHeight(NetworkId, Height, Height),
 }
 
