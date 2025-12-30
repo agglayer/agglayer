@@ -14,14 +14,14 @@ fn deserialize_default_settlement_tx_config() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     // Assert default values
-    assert_eq!(config.max_retries, 1024);
+    assert_eq!(config.max_retries, 16384);
     assert_eq!(config.tx_retry_interval, Duration::from_secs(10));
     assert_eq!(config.confirmations, 32);
     assert_eq!(config.finality, Finality::Justified);
     assert_eq!(config.gas_limit, U256::from(60_000_000_u64));
     assert_eq!(config.gas_price_ceiling, 100_000_000_000_u128);
     assert_eq!(config.gas_price_floor, 0);
-    assert_eq!(config.gas_multiplier_factor, Multiplier::default());
+    assert_eq!(config.gas_limit_multiplier_factor, Multiplier::default());
     assert_eq!(config.gas_price_multiplier_factor, Multiplier::default());
 
     assert_toml_snapshot!(config);
@@ -43,7 +43,7 @@ fn deserialize_custom_config_1() {
     assert_eq!(config.gas_price_floor, 5_000_000_000_u128);
 
     // Assert multipliers
-    assert_eq!(config.gas_multiplier_factor.as_f64(), 1.1);
+    assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.1);
     assert_eq!(config.gas_price_multiplier_factor.as_f64(), 1.2);
 
     assert_toml_snapshot!(config);
@@ -65,7 +65,7 @@ fn deserialize_custom_config_2() {
     assert_eq!(config.gas_price_floor, 1_000_000_000_u128);
 
     // Assert multipliers
-    assert_eq!(config.gas_multiplier_factor.as_f64(), 1.05);
+    assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.05);
     assert_eq!(config.gas_price_multiplier_factor.as_f64(), 1.1);
 
     assert_toml_snapshot!(config);
@@ -96,7 +96,10 @@ fn deserialize_full_settlement_config() {
 
     // Assert certificate multipliers
     assert_eq!(
-        config.certificate_tx_config.gas_multiplier_factor.as_f64(),
+        config
+            .certificate_tx_config
+            .gas_limit_multiplier_factor
+            .as_f64(),
         1.1
     );
     assert_eq!(
@@ -130,7 +133,10 @@ fn deserialize_full_settlement_config() {
 
     // Assert validium multipliers
     assert_eq!(
-        config.validium_tx_config.gas_multiplier_factor.as_f64(),
+        config
+            .validium_tx_config
+            .gas_limit_multiplier_factor
+            .as_f64(),
         1.05
     );
 
@@ -185,7 +191,7 @@ fn test_settlement_transaction_config_defaults() {
     let config = SettlementTransactionConfig::default();
 
     // Test retry configuration
-    assert_eq!(config.max_retries, 1024);
+    assert_eq!(config.max_retries, 16384);
     assert_eq!(config.tx_retry_policy, TxRetryPolicy::Linear);
     assert_eq!(config.tx_retry_interval, Duration::from_secs(10));
 
@@ -194,7 +200,7 @@ fn test_settlement_transaction_config_defaults() {
     assert_eq!(config.finality, Finality::Justified);
 
     // Test gas configuration
-    assert_eq!(config.gas_multiplier_factor.as_f64(), 1.0);
+    assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.0);
     assert_eq!(config.gas_limit, U256::from(60_000_000_u64));
     assert_eq!(config.gas_price_multiplier_factor.as_f64(), 1.0);
     assert_eq!(config.gas_price_floor, 0_u128);
