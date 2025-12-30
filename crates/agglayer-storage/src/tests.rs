@@ -1,7 +1,7 @@
 use std::{
     env::temp_dir,
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -46,22 +46,6 @@ impl Drop for TempDBDir {
     fn drop(&mut self) {
         _ = fs::remove_dir_all(&self.path);
     }
-}
-
-/// Helper to extract tarball and return path to extracted directory
-pub fn extract_tarball(tarball_path: &Path, extract_to: &Path) -> Result<(), eyre::Error> {
-    use flate2::read::GzDecoder;
-    use tar::Archive;
-
-    fs::create_dir_all(extract_to)?;
-
-    let file = fs::File::open(tarball_path)?;
-    let decompressor = GzDecoder::new(file);
-    let mut archive = Archive::new(decompressor);
-
-    archive.unpack(extract_to)?;
-
-    Ok(())
 }
 
 #[cfg(test)]

@@ -10,7 +10,7 @@ use crate::{
     stores::{
         debug::DebugStore, pending::PendingStore, per_epoch::PerEpochStore, state::StateStore,
     },
-    tests::{extract_tarball, TempDBDir},
+    tests::TempDBDir,
 };
 
 fn extract_tmp_db(tarball_name: impl AsRef<Path>) -> TempDBDir {
@@ -18,7 +18,7 @@ fn extract_tmp_db(tarball_name: impl AsRef<Path>) -> TempDBDir {
     let tarball_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src/tests/db")
         .join(tarball_name);
-    extract_tarball(tarball_path.as_path(), &dir.path).unwrap();
+    agglayer_utils::tarball::extract_tarball(tarball_path.as_path(), &dir.path).unwrap();
     dir
 }
 

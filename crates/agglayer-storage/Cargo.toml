@@ -28,11 +28,10 @@ tracing.workspace = true
 agglayer-config.workspace = true
 agglayer-types.workspace = true
 agglayer-tries.workspace = true
+agglayer-utils = { workspace = true, optional = true }
 pessimistic-proof.workspace = true
 
-flate2 = { workspace = true, optional = true }
 mockall = { workspace = true, optional = true }
-tar = { workspace = true, optional = true }
 
 [dev-dependencies]
 clap.workspace = true
@@ -59,4 +58,4 @@ harness = false
 required-features = ["testutils"]
 
 [features]
-testutils = ["flate2", "rand", "mockall", "tar", "agglayer-types/testutils"]
+testutils = ["agglayer-utils", "rand", "mockall", "agglayer-types/testutils"]

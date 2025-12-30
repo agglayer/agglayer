@@ -550,13 +550,13 @@ dependencies = [
  "agglayer-storage",
  "agglayer-tries",
  "agglayer-types",
+ "agglayer-utils",
  "alloy-primitives",
  "chrono",
  "clap",
  "criterion",
  "eyre",
  "fail",
- "flate2",
  "hex",
  "insta",
  "mockall",
@@ -574,7 +574,6 @@ dependencies = [
  "sp1-sdk",
  "strum 0.27.2",
  "strum_macros 0.27.2",
- "tar",
  "test-log",
  "thiserror 2.0.16",
  "tokio",
@@ -674,6 +673,9 @@ dependencies = [
 name = "agglayer-utils"
 version = "0.1.0"
 dependencies = [
+ "eyre",
+ "flate2",
+ "tar",
  "tracing",
 ]
 
