@@ -5,7 +5,7 @@ tx-retry-interval = "15s"
 confirmations = 64
 finality = "finalized"
 gas-limit = "0x5f5e100"
-gas-multiplier-factor = 1.1
+gas-limit-multiplier-factor = 1.1
 gas-price-multiplier-factor = 1.2
 gas-price-ceiling = "200gwei"
 
@@ -15,7 +15,7 @@ tx-retry-interval = "5s"
 confirmations = 16
 finality = "immediate"
 gas-limit = "0x1c9c380"
-gas-multiplier-factor = 1.05
+gas-limit-multiplier-factor = 1.05
 gas-price-floor = "2gwei"
 gas-price-ceiling = "50gwei"
 

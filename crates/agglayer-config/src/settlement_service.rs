@@ -11,16 +11,6 @@ use crate::Multiplier;
 /// Defines when a transaction should be considered settled on the Ethereum
 /// network, determining the security guarantees for the settlement operation.
 ///
-/// # Variants
-///
-/// - **Immediate**: Transaction is considered settled after the specified
-///   number of `confirmations` blocks. Provides fastest settlement but lower
-///   security.
-/// - **Justified**: Transaction is considered settled when the block containing
-///   it has been justified by Ethereum's Casper FFG finality gadget.
-/// - **Finalized**: Transaction is considered settled only when the block has
-///   been finalized by Casper FFG, providing the strongest security guarantee.
-///
 /// # Example
 ///
 /// ```toml
@@ -67,14 +57,6 @@ pub enum Finality {
 /// The retry policy works in conjunction with `tx_retry_interval` to determine
 /// the timing between retry attempts.
 ///
-/// # Variants
-///
-/// - **Linear**: Retries are attempted at fixed intervals defined by
-///   `tx_retry_interval`. For example, with a 10-second interval, retries occur
-///   at: 0s, 10s, 20s, 30s, etc.
-///
-/// # Future Extensions
-///
 /// Future versions may include additional policies such as:
 /// - **Exponential**: Exponential backoff with increasing intervals
 /// - **Jittered**: Random jitter to avoid thundering herd issues
@@ -100,7 +82,7 @@ pub struct SettlementTransactionConfig {
     #[serde(default = "default_rpc_max_retries")]
     pub max_retries: usize,
 
-    /// Retry approach for the transaction.
+    /// Retry policy/approach for the transaction.
     #[serde(default = "default_rpc_retry_policy")]
     pub tx_retry_policy: TxRetryPolicy,
 
@@ -112,18 +94,18 @@ pub struct SettlementTransactionConfig {
 
     /// Number of block confirmations required for
     /// the transaction to resolve a receipt.
-    #[serde(default = "default_rpc_confirmations")]
+    #[serde(default = "default_confirmations")]
     pub confirmations: usize,
 
     /// Finality level required for the transaction to be considered settled.
     #[serde(default)]
     pub finality: Finality,
 
-    /// Gas multiplier factor for the transaction.
+    /// Gas limit multiplier factor for the transaction.
     /// The gas is calculated as follows:
     /// `gas = estimated_gas * gas_multiplier_factor`
     #[serde(default, skip_serializing_if = "crate::is_default")]
-    pub gas_multiplier_factor: Multiplier,
+    pub gas_limit_multiplier_factor: Multiplier,
 
     /// Gas limit for the transaction.
     #[serde(default = "default_gas_limit")]
@@ -132,12 +114,13 @@ pub struct SettlementTransactionConfig {
     /// Gas price multiplier for the transaction.
     /// The gas price is calculated as follows:
     /// `gas_price = estimate_gas_price * gas_price_multiplier_factor`
+    /// Used for both EIP1559 fee and priority fee.
     #[serde(default, skip_serializing_if = "crate::is_default")]
     pub gas_price_multiplier_factor: Multiplier,
 
     /// Minimum gas price floor (in wei) for the transaction.
     /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei".
-    /// Use for both EIP1559 fee and priority fee.
+    /// Used for both EIP1559 fee and priority fee.
     #[serde(default, skip_serializing_if = "crate::is_default")]
     #[serde_as(as = "crate::with::EthAmount")]
     pub gas_price_floor: u128,
@@ -156,9 +139,9 @@ impl Default for SettlementTransactionConfig {
             max_retries: default_rpc_max_retries(),
             tx_retry_policy: default_rpc_retry_policy(),
             tx_retry_interval: default_tx_retry_interval(),
-            confirmations: default_rpc_confirmations(),
+            confirmations: default_confirmations(),
             finality: Finality::default(),
-            gas_multiplier_factor: Multiplier::default(),
+            gas_limit_multiplier_factor: Multiplier::default(),
             gas_limit: default_gas_limit(),
             gas_price_multiplier_factor: Multiplier::default(),
             gas_price_floor: 0,
@@ -300,7 +283,7 @@ pub struct SettlementConfig {
 
 /// Default number of retries for the transaction.
 const fn default_rpc_max_retries() -> usize {
-    1024
+    16 * 1024
 }
 
 /// Default interval for the polling of the transaction.
@@ -314,7 +297,7 @@ const fn default_rpc_retry_policy() -> TxRetryPolicy {
 
 /// Default number of confirmations required
 /// for the transaction to resolve a receipt.
-const fn default_rpc_confirmations() -> usize {
+const fn default_confirmations() -> usize {
     32
 }
 

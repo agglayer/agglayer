@@ -7,7 +7,7 @@ use tracing::warn;
 use crate::Multiplier;
 
 /// Outbound configuration.
-/// After introduction of the`agglayer-settlement-service`, OutboundConfig
+/// After introduction of the `agglayer-settlement-service`, `OutboundConfig`
 /// will be deprecated and removed.
 #[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename = "outbound", rename_all = "kebab-case")]

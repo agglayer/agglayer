@@ -2,7 +2,7 @@
 source: crates/agglayer-config/tests/settlement_service.rs
 expression: config
 ---
-max-retries = 1024
+max-retries = 16384
 tx-retry-policy = "linear"
 tx-retry-interval = "10s"
 confirmations = 32
