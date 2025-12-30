@@ -526,6 +526,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-settlement-service"
+version = "0.1.0"
+dependencies = [
+ "agglayer-config",
+]
+
+[[package]]
 name = "agglayer-signer"
 version = "0.1.0"
 dependencies = [
