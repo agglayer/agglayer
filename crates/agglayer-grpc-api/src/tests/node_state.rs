@@ -5,7 +5,7 @@ use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateServiceS
 use agglayer_grpc_types::node::v1::GetCertificateHeaderRequest;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
-    storage::backup::BackupClient,
+    backup::BackupClient,
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         StateWriter as _,

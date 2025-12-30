@@ -11,7 +11,7 @@ use crate::columns::PER_EPOCH_CERTIFICATES_CF;
 /// | `CertificateIndex` | `Certificate` |
 pub struct CertificatePerIndexColumn;
 
-impl crate::columns::ColumnSchema for CertificatePerIndexColumn {
+impl crate::schema::ColumnSchema for CertificatePerIndexColumn {
     type Key = CertificateIndex;
     type Value = Certificate;
 

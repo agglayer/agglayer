@@ -30,7 +30,7 @@ use pessimistic_proof::unified_bridge::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::columns::{bincode_codec, CodecError};
+use crate::schema::{bincode_codec, CodecError};
 
 /// A unit type serializing to a constant byte representing the storage version.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq)]
@@ -343,7 +343,7 @@ fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
     Ok(bincode_codec().deserialize::<T>(bytes)?.into())
 }
 
-impl crate::columns::Codec for Certificate {
+impl crate::schema::Codec for Certificate {
     fn encode_into<W: std::io::Write>(&self, writer: W) -> Result<(), CodecError> {
         Ok(bincode_codec().serialize_into(writer, &CurrentCertificate::from(self))?)
     }
