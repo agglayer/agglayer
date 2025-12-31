@@ -1,14 +1,14 @@
 use thiserror::Error;
 
-use crate::storage::DBError;
+use crate::storage::DbError;
 
 #[derive(Debug, Error)]
-pub enum DBOpenError {
+pub enum DbOpenError {
     #[error(transparent)]
-    Migration(#[from] DBMigrationError),
+    Migration(#[from] DbMigrationError),
 
     #[error(transparent)]
-    Database(#[from] DBError),
+    Database(#[from] DbError),
 
     #[error("Unexpected database schema")]
     UnexpectedSchema,
@@ -29,16 +29,16 @@ pub enum DBOpenError {
 
 #[derive(Debug, Error)]
 #[error("Migration failed at step {step}")]
-pub struct DBMigrationError {
+pub struct DbMigrationError {
     pub step: u32,
     #[source]
-    pub details: DBMigrationErrorDetails,
+    pub details: DbMigrationErrorDetails,
 }
 
 #[derive(Debug, Error)]
-pub enum DBMigrationErrorDetails {
+pub enum DbMigrationErrorDetails {
     #[error(transparent)]
-    Database(#[from] DBError),
+    Database(#[from] DbError),
 
     #[error("Writing in a read-only column family {0:?}")]
     WritingReadOnlyCf(String),

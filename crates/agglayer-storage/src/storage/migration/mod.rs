@@ -5,7 +5,7 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::{
     schema::ColumnSchema,
-    storage::{DBError, DB},
+    storage::{Db, DbError},
 };
 
 mod access;
@@ -14,14 +14,14 @@ mod migration_cf;
 mod record;
 
 pub use access::DbAccess;
-pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use error::{DbMigrationError, DbMigrationErrorDetails, DbOpenError};
 use migration_cf::MigrationRecordColumn;
 use record::MigrationRecord;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
     // The database itself.
-    db: DB,
+    db: Db,
 
     // The number of the current/next migration step.
     step: u32,
@@ -31,7 +31,7 @@ pub struct Builder {
 }
 
 impl Builder {
-    fn new_internal(db: DB, start_step: u32) -> Self {
+    fn new_internal(db: Db, start_step: u32) -> Self {
         Self {
             db,
             step: 0,
@@ -47,7 +47,7 @@ impl Builder {
     pub fn open(
         path: &Path,
         cfs_v0: impl IntoIterator<Item = ColumnFamilyDescriptor>,
-    ) -> Result<Self, DBOpenError> {
+    ) -> Result<Self, DbOpenError> {
         debug!("Preparing database for initialization and migration");
         let desc_v0: Vec<_> = cfs_v0.into_iter().collect();
         let cfs_v0: BTreeSet<_> = desc_v0.iter().map(|d| d.name()).collect();
@@ -86,7 +86,7 @@ impl Builder {
             Self::open_rocksdb_existing(path, &cfs)?
         } else {
             // Unexpected schema.
-            return Err(DBOpenError::UnexpectedSchema);
+            return Err(DbOpenError::UnexpectedSchema);
         };
 
         {
@@ -95,7 +95,7 @@ impl Builder {
             let mut default_cf_iter = db.rocksdb.iterator(rocksdb::IteratorMode::Start);
             let default_cf_has_data = default_cf_iter.next().is_some();
             if default_cf_has_data {
-                return Err(DBOpenError::DefaultCfNotEmpty);
+                return Err(DbOpenError::DefaultCfNotEmpty);
             }
         }
 
@@ -104,7 +104,7 @@ impl Builder {
             let mut step = 0_u32;
             for stored_step in db.keys::<MigrationRecordColumn>()? {
                 if stored_step? != step {
-                    return Err(DBOpenError::MigrationRecordGap(step));
+                    return Err(DbOpenError::MigrationRecordGap(step));
                 }
                 step += 1;
             }
@@ -114,7 +114,7 @@ impl Builder {
         Self::new_internal(db, start_step)
             // Initialize migration record CF with step 0.
             .perform_step(|_| Ok(()))
-            .map_err(DBOpenError::Migration)
+            .map_err(DbOpenError::Migration)
     }
 
     fn writeopts() -> rocksdb::WriteOptions {
@@ -123,26 +123,26 @@ impl Builder {
         writeopts
     }
 
-    fn open_rocksdb_fresh(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
+    fn open_rocksdb_fresh(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<Db, DbError> {
         debug!("Opening fresh database");
 
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         options.create_missing_column_families(true);
 
-        Ok(DB {
+        Ok(Db {
             rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, cfs)?,
             default_write_options: Some(Self::writeopts()),
         })
     }
 
-    fn open_rocksdb_existing(path: &Path, cfs: &BTreeSet<impl AsRef<str>>) -> Result<DB, DBError> {
+    fn open_rocksdb_existing(path: &Path, cfs: &BTreeSet<impl AsRef<str>>) -> Result<Db, DbError> {
         debug!("Opening existing database");
 
         let mut options = rocksdb::Options::default();
         options.create_missing_column_families(true);
 
-        Ok(DB {
+        Ok(Db {
             rocksdb: rocksdb::DB::open_cf(&options, path, cfs.iter().map(AsRef::as_ref))?,
             default_write_options: Some(Self::writeopts()),
         })
@@ -156,23 +156,22 @@ impl Builder {
     pub fn add_cfs<'a>(
         self,
         cfs: impl IntoIterator<Item = &'a str>,
-        migrate_fn: impl FnOnce(&DbAccess) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBOpenError> {
+        migrate_fn: impl FnOnce(&DbAccess) -> Result<(), DbMigrationErrorDetails>,
+    ) -> Result<Self, DbOpenError> {
         let cfs: BTreeSet<_> = cfs.into_iter().collect();
-
         Ok(self.perform_step(move |db| {
             // Create the columns first.
             for cf in &cfs {
                 if db.cf_exists(cf) {
                     warn!("Column family {cf:?} already exists, dropping to create a fresh one");
-                    db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
+                    db.db.rocksdb.drop_cf(cf).map_err(DbError::from)?;
                 }
 
                 debug!("Creating column family {cf:?}");
                 db.db
                     .rocksdb
                     .create_cf(cf, &rocksdb::Options::default())
-                    .map_err(DBError::from)?;
+                    .map_err(DbError::from)?;
             }
 
             // Use the provided closure to populate it with data.
@@ -188,14 +187,14 @@ impl Builder {
     pub fn drop_cfs<S: AsRef<str>>(
         self,
         cfs: impl IntoIterator<Item = S>,
-    ) -> Result<Self, DBOpenError> {
+    ) -> Result<Self, DbOpenError> {
         Ok(self.perform_step(move |db| {
             for cf in cfs {
                 let cf = cf.as_ref();
 
                 if db.cf_exists(cf) {
                     debug!("Dropping column family {cf:?}");
-                    db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
+                    db.db.rocksdb.drop_cf(cf).map_err(DbError::from)?;
                 } else {
                     warn!("Asked to remove a non-existing column family {cf:?}");
                 }
@@ -212,9 +211,9 @@ impl Builder {
     pub fn finalize<'a>(
         self,
         _expected_schema: impl IntoIterator<Item = &'a str>,
-    ) -> Result<DB, DBOpenError> {
+    ) -> Result<Db, DbOpenError> {
         if self.step < self.start_step {
-            return Err(DBOpenError::FewerStepsDeclared {
+            return Err(DbOpenError::FewerStepsDeclared {
                 declared: self.step,
                 recorded: self.start_step,
             });
@@ -225,18 +224,18 @@ impl Builder {
 
     fn perform_step(
         self,
-        step_fn: impl FnOnce(&mut Self) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBMigrationError> {
+        step_fn: impl FnOnce(&mut Self) -> Result<(), DbMigrationErrorDetails>,
+    ) -> Result<Self, DbMigrationError> {
         let step = self.step;
         self.perform_step_impl(step_fn)
-            .map_err(|details| DBMigrationError { step, details })
+            .map_err(|details| DbMigrationError { step, details })
     }
 
     #[instrument(skip(self, step_fn), fields(step = self.step))]
     fn perform_step_impl(
         mut self,
-        step_fn: impl FnOnce(&mut Self) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBMigrationErrorDetails> {
+        step_fn: impl FnOnce(&mut Self) -> Result<(), DbMigrationErrorDetails>,
+    ) -> Result<Self, DbMigrationErrorDetails> {
         let step = self.step;
 
         if step >= self.start_step {

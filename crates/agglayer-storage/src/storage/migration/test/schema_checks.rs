@@ -1,6 +1,6 @@
 use super::sample::*;
 use crate::{
-    storage::{Builder, DBOpenError},
+    storage::{Builder, DbOpenError},
     tests::TempDBDir,
 };
 
@@ -25,7 +25,7 @@ fn fewer_steps_declared_than_recorded() -> Result<(), eyre::Error> {
             .finalize(CFS_V1);
 
         match result {
-            Err(DBOpenError::FewerStepsDeclared { declared, recorded }) => {
+            Err(DbOpenError::FewerStepsDeclared { declared, recorded }) => {
                 assert!(
                     declared < recorded,
                     "Declared steps should be less than recorded steps"

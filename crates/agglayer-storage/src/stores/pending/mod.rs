@@ -16,7 +16,7 @@ use crate::{
         proof_per_certificate::ProofPerCertificateColumn,
     },
     error::Error,
-    storage::DB,
+    storage::Db,
 };
 
 mod cf_definitions;
@@ -24,19 +24,19 @@ mod cf_definitions;
 /// A logical store for pending.
 #[derive(Clone)]
 pub struct PendingStore {
-    db: Arc<DB>,
+    db: Arc<Db>,
 }
 
 impl PendingStore {
-    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::pending_db_cf_definitions())
+    pub fn init_db(path: &Path) -> Result<Db, crate::storage::DbOpenError> {
+        Db::open_cf(path, cf_definitions::pending_db_cf_definitions())
     }
 
-    pub fn new(db: Arc<DB>) -> Self {
+    pub fn new(db: Arc<Db>) -> Self {
         Self { db }
     }
 
-    pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
+    pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DbOpenError> {
         Ok(Self::new(Arc::new(Self::init_db(path)?)))
     }
 }

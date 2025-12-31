@@ -3,7 +3,7 @@ use std::{path::Path, sync::Arc};
 use agglayer_types::{Certificate, CertificateId};
 
 use super::interfaces::{reader::DebugReader, writer::DebugWriter};
-use crate::{columns::debug_certificates::DebugCertificatesColumn, error::Error, storage::DB};
+use crate::{columns::debug_certificates::DebugCertificatesColumn, error::Error, storage::Db};
 
 mod cf_definitions;
 
@@ -15,19 +15,19 @@ pub enum DebugStore {
 /// A logical store for debug.
 #[derive(Clone)]
 pub struct EnabledDebugStore {
-    db: Arc<DB>,
+    db: Arc<Db>,
 }
 
 impl DebugStore {
-    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::debug_db_cf_definitions())
+    pub fn init_db(path: &Path) -> Result<Db, crate::storage::DbOpenError> {
+        Db::open_cf(path, cf_definitions::debug_db_cf_definitions())
     }
 
-    pub fn new(db: Arc<DB>) -> Self {
+    pub fn new(db: Arc<Db>) -> Self {
         Self::Enabled(EnabledDebugStore { db })
     }
 
-    pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
+    pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DbOpenError> {
         let db = Arc::new(Self::init_db(path)?);
         Ok(Self::new(db))
     }

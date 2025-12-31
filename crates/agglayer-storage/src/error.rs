@@ -1,14 +1,14 @@
 use agglayer_types::{CertificateId, CertificateStatusError, EpochNumber, Height, NetworkId};
 
-use crate::storage::{DBError, DBOpenError};
+use crate::storage::{DbError, DbOpenError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("DB error: {0}")]
-    DBError(#[from] DBError),
+    DbError(#[from] DbError),
 
     #[error("DB open error: {0}")]
-    DBOpenError(DBOpenError),
+    DbOpenError(DbOpenError),
 
     #[error(r#"An unexpected error occurred: {0}
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]

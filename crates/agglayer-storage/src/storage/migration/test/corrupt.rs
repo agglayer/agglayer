@@ -4,7 +4,7 @@ use rocksdb::DB as RocksDB;
 use super::sample::*;
 use crate::{
     schema::ColumnSchema,
-    storage::migration::{migration_cf::MigrationRecordColumn, Builder, DBOpenError},
+    storage::migration::{migration_cf::MigrationRecordColumn, Builder, DbOpenError},
     tests::TempDBDir,
 };
 
@@ -27,7 +27,7 @@ fn default_cf_not_empty() -> Result<(), eyre::Error> {
         let result = Builder::open_sample(db_path);
 
         match result {
-            Err(DBOpenError::DefaultCfNotEmpty) => (),
+            Err(DbOpenError::DefaultCfNotEmpty) => (),
             Err(other) => panic!("Expected DefaultCFNotEmpty error, got: {other:?}"),
             Ok(_) => panic!("Expected DefaultCFNotEmpty error, but open succeeded"),
         }
@@ -60,7 +60,7 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
         let result = Builder::open_sample(db_path);
 
         match result {
-            Err(DBOpenError::MigrationRecordGap(step)) => {
+            Err(DbOpenError::MigrationRecordGap(step)) => {
                 assert_eq!(step, 1, "Gap should be detected at step 1");
             }
             other => panic!("Expected MigrationRecordGap error, got: {other:?}"),
@@ -89,7 +89,7 @@ fn unexpected_schema() -> Result<(), eyre::Error> {
         let result = Builder::open_sample(db_path);
 
         match result {
-            Err(DBOpenError::UnexpectedSchema) => (),
+            Err(DbOpenError::UnexpectedSchema) => (),
             other => panic!("Expected UnexpectedSchema error, got: {other:?}"),
         }
     }
@@ -120,10 +120,10 @@ fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
         );
 
         match result {
-            Err(DBOpenError::Migration(migration_err)) => {
+            Err(DbOpenError::Migration(migration_err)) => {
                 // Check that the error is WritingReadOnlyCf
                 match migration_err.details {
-                    crate::storage::DBMigrationErrorDetails::WritingReadOnlyCf(cf) => {
+                    crate::storage::DbMigrationErrorDetails::WritingReadOnlyCf(cf) => {
                         assert_eq!(NetworkInfoV0Column::COLUMN_FAMILY_NAME, cf);
                     }
                     err => panic!("Unexpected error {err:?}"),
