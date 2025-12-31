@@ -4,7 +4,7 @@ use rocksdb::ColumnFamilyDescriptor;
 use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    schema::ColumnSchema,
+    schema::{ColumnDescriptor, ColumnSchema},
     storage::{DBError, DB},
 };
 
@@ -42,12 +42,9 @@ impl Builder {
     /// This method initializes or opens an existing database with the provided
     /// initial schema (v0). It automatically sets up migration tracking and
     /// validates the database schema.
-    pub fn open(
-        path: &Path,
-        cfs_v0: impl IntoIterator<Item = ColumnFamilyDescriptor>,
-    ) -> Result<Self, DBOpenError> {
+    pub fn open(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
         debug!("Preparing database for initialization and migration");
-        let desc_v0: Vec<_> = cfs_v0.into_iter().collect();
+        let desc_v0: Vec<_> = cfs_v0.iter().map(|cd| cd.to_rocksdb_descriptor()).collect();
         let cfs_v0: BTreeSet<_> = desc_v0.iter().map(|d| d.name()).collect();
 
         // Try to extract the current database schema.
@@ -151,15 +148,16 @@ impl Builder {
     /// This is a migration step that creates column families and runs the
     /// provided migration function to populate them. The migration function
     /// should only write into the newly created column families.
-    pub fn add_cfs<S: AsRef<str>>(
+    pub fn add_cfs(
         self,
-        cfs: impl IntoIterator<Item = S>,
+        cfs: &[ColumnDescriptor],
         migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails>,
     ) -> Result<Self, DBOpenError> {
         Ok(self.perform_step(move |db| {
             // Create the columns first.
-            for cf in cfs {
-                let cf = cf.as_ref();
+            for descriptor in cfs {
+                let cf = descriptor.name();
+                let opts = descriptor.options().to_rocksdb_options();
 
                 if db.cf_exists(cf) {
                     warn!("Column family {cf:?} already exists, dropping to create a fresh one");
@@ -167,10 +165,7 @@ impl Builder {
                 }
 
                 debug!("Creating column family {cf:?}");
-                db.db
-                    .rocksdb
-                    .create_cf(cf, &rocksdb::Options::default())
-                    .map_err(DBError::from)?;
+                db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
             }
 
             // Use the provided closure to populate it with data.
@@ -182,13 +177,10 @@ impl Builder {
     }
 
     /// Removes old column families from the database.
-    pub fn drop_cfs<S: AsRef<str>>(
-        self,
-        cfs: impl IntoIterator<Item = S>,
-    ) -> Result<Self, DBOpenError> {
+    pub fn drop_cfs(self, cfs: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
         Ok(self.perform_step(move |db| {
-            for cf in cfs {
-                let cf = cf.as_ref();
+            for descriptor in cfs {
+                let cf = descriptor.name();
 
                 if db.cf_exists(cf) {
                     debug!("Dropping column family {cf:?}");
@@ -206,10 +198,7 @@ impl Builder {
     ///
     /// This method validates that all declared migration steps have been
     /// executed and returns the fully migrated database ready for use.
-    pub fn finalize<'a>(
-        self,
-        _expected_schema: impl IntoIterator<Item = &'a str>,
-    ) -> Result<DB, DBOpenError> {
+    pub fn finalize(self, _expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
         if self.step < self.start_step {
             return Err(DBOpenError::FewerStepsDeclared {
                 declared: self.step,
