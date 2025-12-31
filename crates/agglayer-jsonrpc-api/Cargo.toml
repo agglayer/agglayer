@@ -11,7 +11,10 @@ agglayer-rate-limiting.workspace = true
 agglayer-rpc.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
+agglayer-tries.workspace = true
 agglayer-types.workspace = true
+pessimistic-proof.workspace = true
+unified-bridge.workspace = true
 
 alloy.workspace = true
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
