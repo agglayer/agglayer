@@ -15,7 +15,7 @@ use tokio::sync;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::storage::DB;
+use crate::storage::Db;
 
 mod error;
 
@@ -24,7 +24,7 @@ pub use error::BackupError;
 /// Request to create a new backup.
 pub struct BackupRequest {
     /// Optional epoch db to backup.
-    pub epoch_db: Option<(Arc<DB>, EpochNumber)>,
+    pub epoch_db: Option<(Arc<Db>, EpochNumber)>,
 }
 
 struct BackupEngineConfig {
@@ -82,8 +82,8 @@ pub struct BackupEngine {
     env: rocksdb::Env,
     pending_engine: RocksBackupEngine,
     state_engine: RocksBackupEngine,
-    state_db: Arc<DB>,
-    pending_db: Arc<DB>,
+    state_db: Arc<Db>,
+    pending_db: Arc<Db>,
     config: BackupEngineConfig,
     backup_request: sync::mpsc::Receiver<BackupRequest>,
     state_max_backup_number: usize,
@@ -96,8 +96,8 @@ impl BackupEngine {
     /// backups.
     pub fn new(
         path: &Path,
-        state_db: Arc<DB>,
-        pending_db: Arc<DB>,
+        state_db: Arc<Db>,
+        pending_db: Arc<Db>,
         state_max_backup_number: usize,
         pending_max_backup_number: usize,
         cancellation_token: CancellationToken,
