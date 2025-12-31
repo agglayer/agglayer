@@ -34,7 +34,7 @@ use crate::{
     },
     error::Error,
     schema::ColumnSchema,
-    storage::DB,
+    storage::Db,
     stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
     types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
 };
@@ -47,23 +47,23 @@ mod tests;
 
 /// A logical store for the state.
 pub struct StateStore {
-    db: Arc<DB>,
+    db: Arc<Db>,
     backup_client: BackupClient,
 }
 
 impl StateStore {
-    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::state_db_cf_definitions())
+    pub fn init_db(path: &Path) -> Result<Db, crate::storage::DbOpenError> {
+        Db::open_cf(path, cf_definitions::state_db_cf_definitions())
     }
 
-    pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
+    pub fn new(db: Arc<Db>, backup_client: BackupClient) -> Self {
         Self { db, backup_client }
     }
 
     pub fn new_with_path(
         path: &Path,
         backup_client: BackupClient,
-    ) -> Result<Self, crate::storage::DBOpenError> {
+    ) -> Result<Self, crate::storage::DbOpenError> {
         let db = Arc::new(Self::init_db(path)?);
         Ok(Self { db, backup_client })
     }

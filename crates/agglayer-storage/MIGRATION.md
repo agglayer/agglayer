@@ -9,10 +9,10 @@ Database migration happens during storage initialization and may take some time,
 The `Builder` type provides a fluent API for defining and executing database migrations:
 
 ```rust
-use agglayer_storage::storage::DB;
+use agglayer_storage::storage::Db;
 
 // Initialize builder with path and initial schema
-let db = DB::builder(db_path, initial_schema)?
+let db = Db::builder(db_path, initial_schema)?
     // Apply migration steps
     .add_cfs(&["new_cf_1", "new_cf_2"], |db| {
         // Migration logic here to populate new CFs
@@ -27,10 +27,10 @@ For concrete examples, see the `test::sample` module implementations such as `sa
 
 ### Initial Schema
 
-The DB builder is initialized with the very first version schema. This represents the baseline state from which all migrations are applied:
+The Db builder is initialized with the very first version schema. This represents the baseline state from which all migrations are applied:
 
 ```rust
-DB::builder(db_path, &["cf_v0_1", "cf_v0_2"])
+Db::builder(db_path, &["cf_v0_1", "cf_v0_2"])
 ```
 
 ### Migration Steps
@@ -64,7 +64,7 @@ Avoid modifying values in place, as this makes recovery from interruptions diffi
 Example:
 
 ```rust
-DB::builder(db_path, &["data"])
+Db::builder(db_path, &["data"])
     // Step 1: Create new CF and migrate data
     .add_cfs(&["data_v2"], |db| {
         // Read from "data", write to "data_v2"

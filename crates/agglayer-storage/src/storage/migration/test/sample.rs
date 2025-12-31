@@ -6,7 +6,7 @@ use agglayer_types::{Height, NetworkId};
 
 use crate::{
     schema::ColumnSchema,
-    storage::{Builder, DBMigrationErrorDetails, DBOpenError},
+    storage::{Builder, DbMigrationErrorDetails, DbOpenError},
 };
 
 pub type KeyV0 = NetworkId;
@@ -104,7 +104,7 @@ pub const CFS_V2: [&str; 2] = [
 ];
 
 impl Builder {
-    pub fn open_sample(path: &Path) -> Result<Self, DBOpenError> {
+    pub fn open_sample(path: &Path) -> Result<Self, DbOpenError> {
         Self::open(
             path,
             CFS_V0.map(|name| {
@@ -113,7 +113,7 @@ impl Builder {
         )
     }
 
-    pub fn sample_migrate_v0_v1(self) -> Result<Self, DBOpenError> {
+    pub fn sample_migrate_v0_v1(self) -> Result<Self, DbOpenError> {
         // Create and populate the new V1 column family
         self.add_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME], |db| {
             // Iterate over all V0 entries
@@ -138,7 +138,7 @@ impl Builder {
         .drop_cfs([NetworkInfoV0Column::COLUMN_FAMILY_NAME])
     }
 
-    pub fn sample_migrate_v1_v2(self) -> Result<Self, DBOpenError> {
+    pub fn sample_migrate_v1_v2(self) -> Result<Self, DbOpenError> {
         // Create and populate the new V2 column families (cool and uncool)
         self.add_cfs(CFS_V2, |db| {
             // Iterate over all V1 entries
@@ -176,11 +176,11 @@ impl Builder {
     }
 }
 
-fn migration_failpoint() -> Result<(), DBMigrationErrorDetails> {
+fn migration_failpoint() -> Result<(), DbMigrationErrorDetails> {
     // Failpoint for testing partial migration recovery
     fail::fail_point!("sample_migrate", |ret| {
         ret.map_or(Ok(()), |s| {
-            Err(DBMigrationErrorDetails::Custom(eyre::eyre!(
+            Err(DbMigrationErrorDetails::Custom(eyre::eyre!(
                 "failpoint triggered: {s}"
             )))
         })

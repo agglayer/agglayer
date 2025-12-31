@@ -26,7 +26,7 @@ use crate::{
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
-    storage::DB,
+    storage::Db,
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
@@ -40,7 +40,7 @@ const MAX_CERTIFICATE_PER_EPOCH: u64 = 1;
 /// A logical store for an Epoch.
 pub struct PerEpochStore<PendingStore, StateStore> {
     pub epoch_number: Arc<EpochNumber>,
-    db: Arc<DB>,
+    db: Arc<Db>,
     pending_store: Arc<PendingStore>,
     state_store: Arc<StateStore>,
     next_certificate_index: AtomicU64,
@@ -51,12 +51,12 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
-    pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::epochs_db_cf_definitions())
+    pub fn init_db(path: &std::path::Path) -> Result<Db, crate::storage::DbOpenError> {
+        Db::open_cf(path, cf_definitions::epochs_db_cf_definitions())
     }
 
-    pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
-        DB::open_cf_readonly(path, cf_definitions::epochs_db_cf_definitions())
+    pub fn init_db_readonly(path: &std::path::Path) -> Result<Db, crate::storage::DbError> {
+        Db::open_cf_readonly(path, cf_definitions::epochs_db_cf_definitions())
     }
 
     #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
@@ -70,7 +70,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     ) -> Result<Self, Error> {
         let db = Arc::new(
             Self::init_db(&config.storage.epoch_db_path(epoch_number))
-                .map_err(Error::DBOpenError)?,
+                .map_err(Error::DbOpenError)?,
         );
 
         Self::try_open_with_db(
@@ -111,7 +111,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
 
     /// Common initialization logic for both read-write and read-only modes
     fn try_open_with_db(
-        db: Arc<DB>,
+        db: Arc<Db>,
         epoch_number: EpochNumber,
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
