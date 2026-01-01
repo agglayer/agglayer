@@ -20,7 +20,7 @@ pub struct EnabledDebugStore {
 
 impl DebugStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::debug_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::DEBUG_DB)
     }
 
     pub fn new(db: Arc<DB>) -> Self {

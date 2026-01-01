@@ -1,8 +1,36 @@
-use super::Codec;
+use super::{options::ColumnOptions, Codec};
 
 pub trait ColumnSchema {
     type Key: Codec;
     type Value: Codec;
 
     const COLUMN_FAMILY_NAME: &'static str;
+
+    const COLUMN_OPTIONS: ColumnOptions = ColumnOptions::DEFAULT;
+}
+
+pub struct ColumnDescriptor {
+    name: &'static str,
+    options: &'static ColumnOptions,
+}
+
+impl ColumnDescriptor {
+    pub const fn new<C: ColumnSchema>() -> Self {
+        Self {
+            name: C::COLUMN_FAMILY_NAME,
+            options: &C::COLUMN_OPTIONS,
+        }
+    }
+
+    pub const fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub const fn options(&self) -> &'static ColumnOptions {
+        self.options
+    }
+
+    pub fn to_rocksdb_descriptor(&self) -> rocksdb::ColumnFamilyDescriptor {
+        rocksdb::ColumnFamilyDescriptor::new(self.name, self.options.to_rocksdb_options())
+    }
 }
