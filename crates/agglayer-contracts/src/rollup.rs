@@ -137,7 +137,7 @@ where
 
                     finalized_block_number = self
                         .rpc
-                        .get_block(BlockId::Number(BlockNumberOrTag::Finalized))
+                        .get_block(BlockId::Number(BlockNumberOrTag::Safe))
                         .await
                         .ok()
                         .flatten()
