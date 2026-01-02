@@ -4,8 +4,6 @@ use agglayer_config::storage::backup::BackupConfig;
 use clap::Parser;
 use cli::Cli;
 use eyre::Context as _;
-use pessimistic_proof::ELF;
-use sp1_sdk::HashableKey as _;
 
 mod cli;
 
