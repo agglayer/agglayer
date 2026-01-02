@@ -481,5 +481,8 @@ async fn returns_the_settled_one_at_same_height() {
     let json = serde_json::from_str::<serde_json::Value>(&response).unwrap();
     let json = serde_json::to_string_pretty(&json).unwrap();
 
-    assert_snapshot!("get_latest_known_certificate_header__settled_at_same_height", json);
+    assert_snapshot!(
+        "get_latest_known_certificate_header__settled_at_same_height",
+        json
+    );
 }
