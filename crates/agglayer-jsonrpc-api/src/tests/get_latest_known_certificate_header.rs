@@ -98,7 +98,7 @@ async fn returns_the_pending_certificate_header() {
     let json = serde_json::from_str::<serde_json::Value>(&response).unwrap();
     let json = serde_json::to_string_pretty(&json).unwrap();
 
-    assert_snapshot!("get_latest_known_certificate_header::pending", json);
+    assert_snapshot!("get_latest_known_certificate_header__pending", json);
 }
 
 #[test_log::test(tokio::test)]
@@ -182,7 +182,7 @@ async fn returns_the_proven_certificate_header() {
     let json = serde_json::from_str::<serde_json::Value>(&response).unwrap();
     let json = serde_json::to_string_pretty(&json).unwrap();
 
-    assert_snapshot!("get_latest_known_certificate_header::proven", json);
+    assert_snapshot!("get_latest_known_certificate_header__proven", json);
 }
 
 #[test_log::test(tokio::test)]
@@ -252,7 +252,7 @@ async fn returns_the_settled_certificate_header() {
     let json = serde_json::to_string_pretty(&json).unwrap();
 
     assert_snapshot!(
-        "get_latest_known_certificate_header::settled_certificate",
+        "get_latest_known_certificate_header__settled_certificate",
         json
     );
 }
@@ -299,7 +299,7 @@ async fn returns_no_certificate_header() {
     let json = serde_json::to_string_pretty(&json).unwrap();
 
     assert_snapshot!(
-        "get_latest_known_certificate_header::no_certificate_header",
+        "get_latest_known_certificate_header__no_certificate_header",
         json
     );
 }
@@ -381,7 +381,7 @@ async fn returns_the_highest_height() {
     let json = serde_json::from_str::<serde_json::Value>(&response).unwrap();
     let json = serde_json::to_string_pretty(&json).unwrap();
 
-    assert_snapshot!("get_latest_known_certificate_header::highest_height", json);
+    assert_snapshot!("get_latest_known_certificate_header__highest_height", json);
 }
 
 #[test_log::test(tokio::test)]
@@ -481,5 +481,5 @@ async fn returns_the_settled_one_at_same_height() {
     let json = serde_json::from_str::<serde_json::Value>(&response).unwrap();
     let json = serde_json::to_string_pretty(&json).unwrap();
 
-    assert_snapshot!("get_latest_known_certificate_header::highest_height", json);
+    assert_snapshot!("get_latest_known_certificate_header__settled_at_same_height", json);
 }
