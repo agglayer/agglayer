@@ -26,7 +26,7 @@ pub struct TimeClock {
     genesis: DateTime<Utc>,
     current_block: Arc<AtomicU64>,
     epoch_duration: Arc<NonZeroU64>,
-    current_epoch: Arc<AtomicU64>,
+    current_epoch: AtomicU64,
 }
 
 #[async_trait::async_trait]
@@ -63,7 +63,7 @@ impl TimeClock {
             genesis,
             current_block: Arc::new(AtomicU64::new(0)),
             epoch_duration: Arc::new(epoch_duration),
-            current_epoch: Arc::new(AtomicU64::new(0)),
+            current_epoch: AtomicU64::new(0),
         }
     }
 
