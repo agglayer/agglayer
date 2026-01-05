@@ -2,7 +2,7 @@
 source: crates/agglayer-config/tests/settlement_service.rs
 expression: config
 ---
-[certificate-tx-config]
+[pessimistic-proof-tx-config]
 max-retries = 2048
 tx-retry-policy = "linear"
 tx-retry-interval = "15s"

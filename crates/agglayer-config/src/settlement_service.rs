@@ -14,7 +14,7 @@ use crate::Multiplier;
 /// # Example
 ///
 /// ```toml
-/// [settlement.certificate-tx-config]
+/// [settlement.pessimistic-proof-tx-config]
 /// confirmations = 16
 /// finality = "justified"
 ///
@@ -33,9 +33,9 @@ pub enum Finality {
     Immediate,
 
     /// Transaction is considered settled when the containing block has been
-    /// justified by Casper FFG.
+    /// justified, ie. considered "safe."
     ///
-    /// **Security**: Very strong. Reversing a justified block would require
+    /// **Security**: Very strong. Reversing a safe block would require
     /// a significant portion of validators to be slashed.
     ///
     /// **Time**: Typically up to ~7 minutes on mainnet. Worst case scenario
@@ -44,7 +44,7 @@ pub enum Finality {
     Justified,
 
     /// Transaction is considered settled only when the containing block has
-    /// been finalized by Casper FFG.
+    /// been fully finalized.
     ///
     /// **Time**: Typically between 7-13 minutes on mainnet. Worst case scenario
     /// ~19 minutes.
@@ -156,21 +156,8 @@ impl Default for SettlementTransactionConfig {
 /// service. This configuration is separate from transaction-specific settings
 /// and focuses on overall service behavior and integration points.
 ///
-/// # Future Configuration Options
-///
 /// This structure is designed to hold settlement service-specific values that
-/// are not related to individual transactions. The service relies on other
-/// configuration sources for:
-///
-/// - **L1 Provider**: RPC connection to the L1 blockchain
-/// - **Agglayer Contracts**: Smart contract addresses and ABIs
-/// - **Transaction Signer**: Private keys or KMS configuration for signing
-///
-/// Future additions to this configuration may include:
-/// - Service health check intervals
-/// - Monitoring and metrics endpoints
-/// - Settlement batching strategies
-/// - Emergency shutdown conditions
+/// are not related to individual transactions.
 ///
 /// # Example TOML Configuration
 ///
@@ -182,9 +169,11 @@ impl Default for SettlementTransactionConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct SettlementServiceConfig {
-    // todo: settlement service will use L1 provider, agglayer contracts,
+    // TODO: settlement service will use L1 provider, agglayer contracts,
     // transaction signer etc. already configured on other places.
     // This structure should only have settlement service specific values.
+    // Is there any? If not we can remove this struct, but let's keep it for
+    // now to help parallelize work.
 }
 
 /// The Agglayer settlement configuration.
@@ -209,7 +198,7 @@ pub struct SettlementServiceConfig {
 ///
 /// ```toml
 /// [settlement]
-/// [settlement.certificate-tx-config]
+/// [settlement.pessimistic-proof-tx-config]
 /// max-retries = 1024
 /// tx-retry-interval = "10s"
 /// confirmations = 32
@@ -245,6 +234,8 @@ pub struct SettlementServiceConfig {
 /// )
 /// ```
 ///
+/// Each retry can increase the price by the multiplier factor.
+///
 /// # Security Considerations
 ///
 /// - **Finality Level**: Choose the appropriate finality level based on
@@ -263,7 +254,7 @@ pub struct SettlementConfig {
     /// This controls how certificates (proofs of state transitions) are
     /// submitted to the L1 settlement layer.
     #[serde(default)]
-    pub certificate_tx_config: SettlementTransactionConfig,
+    pub pessimistic_proof_tx_config: SettlementTransactionConfig,
 
     /// Configuration for validium settlement transactions.
     ///
