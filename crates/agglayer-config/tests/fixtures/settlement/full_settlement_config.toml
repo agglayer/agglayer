@@ -1,5 +1,5 @@
 # Full settlement configuration with both certificate and validium configs
-[certificate-tx-config]
+[pessimistic-proof-tx-config]
 max-retries = 2048
 tx-retry-interval = "15s"
 confirmations = 64

@@ -78,33 +78,36 @@ fn deserialize_full_settlement_config() {
     let config: SettlementConfig = toml::from_str(&content).unwrap();
 
     // Assert certificate config
-    assert_eq!(config.certificate_tx_config.max_retries, 2048);
+    assert_eq!(config.pessimistic_proof_tx_config.max_retries, 2048);
     assert_eq!(
-        config.certificate_tx_config.tx_retry_interval,
+        config.pessimistic_proof_tx_config.tx_retry_interval,
         Duration::from_secs(15)
     );
-    assert_eq!(config.certificate_tx_config.confirmations, 64);
-    assert_eq!(config.certificate_tx_config.finality, Finality::Finalized);
+    assert_eq!(config.pessimistic_proof_tx_config.confirmations, 64);
     assert_eq!(
-        config.certificate_tx_config.gas_limit,
+        config.pessimistic_proof_tx_config.finality,
+        Finality::Finalized
+    );
+    assert_eq!(
+        config.pessimistic_proof_tx_config.gas_limit,
         U256::from(100_000_000_u64)
     );
     assert_eq!(
-        config.certificate_tx_config.gas_price_ceiling,
+        config.pessimistic_proof_tx_config.gas_price_ceiling,
         200_000_000_000_u128
     );
 
     // Assert certificate multipliers
     assert_eq!(
         config
-            .certificate_tx_config
+            .pessimistic_proof_tx_config
             .gas_limit_multiplier_factor
             .as_f64(),
         1.1
     );
     assert_eq!(
         config
-            .certificate_tx_config
+            .pessimistic_proof_tx_config
             .gas_price_multiplier_factor
             .as_f64(),
         1.2
