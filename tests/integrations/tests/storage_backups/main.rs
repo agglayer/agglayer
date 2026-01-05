@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use agglayer_config::storage::backup::BackupConfig;
-use agglayer_storage::{storage::backup::BackupEngine, tests::TempDBDir};
+use agglayer_storage::{backup::BackupEngine, tests::TempDBDir};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
 use futures::FutureExt;

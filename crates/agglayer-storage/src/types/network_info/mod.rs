@@ -6,7 +6,7 @@ use strum::IntoEnumIterator;
 
 pub use super::generated::agglayer::storage::v0;
 use crate::{
-    columns::Codec,
+    schema::{Codec, CodecError},
     types::network_info::v0::{
         network_info_value::{self, ValueDiscriminants},
         NetworkType,
@@ -31,7 +31,7 @@ impl Key {
 pub type Value = super::generated::agglayer::storage::v0::NetworkInfoValue;
 
 impl Codec for Value {
-    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
+    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), CodecError> {
         let len = self.encoded_len();
 
         let mut buf = BytesMut::new();
@@ -44,13 +44,13 @@ impl Codec for Value {
         Ok(())
     }
 
-    fn decode(buf: &[u8]) -> Result<Self, crate::columns::CodecError> {
+    fn decode(buf: &[u8]) -> Result<Self, CodecError> {
         <Value as prost::Message>::decode(buf).map_err(Into::into)
     }
 }
 
 impl TryFrom<v0::NetworkType> for agglayer_types::NetworkType {
-    type Error = crate::columns::CodecError;
+    type Error = CodecError;
 
     fn try_from(value: v0::NetworkType) -> Result<Self, Self::Error> {
         match value {

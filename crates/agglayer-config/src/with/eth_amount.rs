@@ -89,6 +89,23 @@ mod tests {
     #[case("1ETH", Ok(1_000_000_000_000_000_000))]
     #[case("100GWEI", Ok(100_000_000_000))]
     #[case("1000WEI", Ok(1_000))]
+    // Edge cases: zero values (used in production)
+    #[case("0gwei", Ok(0))]
+    #[case("0wei", Ok(0))]
+    #[case("0eth", Ok(0))]
+    // Edge cases: empty string and invalid inputs
+    #[case("", Err(()))]
+    // Edge cases: very large numbers
+    #[case("340282366920938463463374607431768211455wei", Ok(u128::MAX))]
+    // Edge cases: invalid units
+    #[case("100xyz", Err(()))]
+    #[case("1invalid", Err(()))]
+    // Edge cases: leading spaces
+    #[case(" 1gwei", Err(()))]
+    #[case(" 100wei", Err(()))]
+    // Edge cases: multiple spaces (alloy's parse_units handles this)
+    #[case("100  gwei", Ok(100_000_000_000))]
+    #[case("1  eth", Ok(1_000_000_000_000_000_000))]
     fn deserialize(#[case] amount_str: &str, #[case] amount: Result<u128, ()>) {
         let toml_val: toml::Value = toml!(amount = amount_str).into();
         let config = TestConfig::from_toml(toml_val);
