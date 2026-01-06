@@ -1,10 +1,9 @@
 # Custom settlement configuration with finalized finality
 max-retries = 2048
-tx-retry-interval = "15s"
-tx-retry-policy = "linear"
+retry-on-transient-failure.initial-interval = "15s"
 confirmations = 64
-finality = "finalized"
-gas-limit = "0x5f5e100"
+finality = "FinalizedBlock"
+gas-limit-ceiling = "0x5f5e100"
 gas-limit-multiplier-factor = 1.1
 gas-price-multiplier-factor = 1.2
 gas-price-ceiling = "200gwei"

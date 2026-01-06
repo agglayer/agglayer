@@ -1,4 +1,4 @@
 # Configuration with justified finality (default)
 confirmations = 32
-finality = "justified"
+finality = "SafeBlock"
 
