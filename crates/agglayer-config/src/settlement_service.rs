@@ -16,24 +16,23 @@ use crate::Multiplier;
 /// ```toml
 /// [settlement.pessimistic-proof-tx-config]
 /// confirmations = 16
-/// finality = "justified"
+/// finality = "SafeBlock"
 ///
 /// [settlement.validium-tx-config]
 /// confirmations = 6
-/// finality = "immediate"  # Faster settlement for validium data
+/// finality = "LatestBlock"  # Faster settlement for validium data
 /// ```
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
 pub enum Finality {
     /// Transaction is considered settled immediately after the specified
     /// number of confirmation blocks.
     ///
     /// **Security**: Vulnerable to chain reorganizations beyond the
     /// confirmation count.
-    Immediate,
+    LatestBlock,
 
     /// Transaction is considered settled when the containing block has been
-    /// justified, ie. considered "safe."
+    /// considered "safe."
     ///
     /// **Security**: Very strong. Reversing a safe block would require
     /// a significant portion of validators to be slashed.
@@ -41,35 +40,43 @@ pub enum Finality {
     /// **Time**: Typically up to ~7 minutes on mainnet. Worst case scenario
     /// 12-13 minutes.
     #[default]
-    Justified,
+    SafeBlock,
 
     /// Transaction is considered settled only when the containing block has
     /// been fully finalized.
     ///
     /// **Time**: Typically between 7-13 minutes on mainnet. Worst case scenario
     /// ~19 minutes.
-    Finalized,
+    FinalizedBlock,
 }
 
 /// Transaction retry policy for failed or pending settlement transactions.
 ///
 /// Defines the strategy used when retrying failed or pending transactions.
-/// The retry policy works in conjunction with `tx_retry_interval` to determine
-/// the timing between retry attempts.
 ///
 /// Future versions may include additional policies such as:
 /// - **Exponential**: Exponential backoff with increasing intervals
 /// - **Jittered**: Random jitter to avoid thundering herd issues
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
-pub enum TxRetryPolicy {
-    /// Linear retry policy with fixed intervals between attempts.
-    ///
-    /// This is the default and recommended policy for most use cases.
-    /// It provides predictable retry behavior and works well with the
-    /// settlement service's transaction monitoring.
-    #[default]
-    Linear,
+pub struct TxRetryPolicy {
+    /// Initial retry interval.
+    #[serde(with = "crate::with::HumanDuration")]
+    pub initial_interval: Duration,
+
+    /// Interval multiplier for each subsequent retry.
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    pub interval_multiplier_factor: Multiplier,
+
+    /// Maximum interval between retries.
+    #[serde(default = "default_max_interval")]
+    #[serde(with = "crate::with::HumanDuration")]
+    pub max_interval: Duration,
+
+    /// Jitter factor to add randomness to retry intervals.
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde(with = "crate::with::HumanDuration")]
+    pub jitter: Duration,
 }
 
 /// The settlement transaction configuration.
@@ -82,15 +89,13 @@ pub struct SettlementTransactionConfig {
     #[serde(default = "default_rpc_max_retries")]
     pub max_retries: usize,
 
-    /// Retry policy/approach for the transaction.
-    #[serde(default = "default_rpc_retry_policy")]
-    pub tx_retry_policy: TxRetryPolicy,
+    /// Retry policy for the transaction when there is a transient failure.
+    #[serde(default = "default_transient_rpc_retry_policy")]
+    pub retry_on_transient_failure: TxRetryPolicy,
 
-    /// Retry interval.
-    /// Used together with `tx_retry_policy`.
-    #[serde(default = "default_tx_retry_interval")]
-    #[serde(with = "crate::with::HumanDuration")]
-    pub tx_retry_interval: Duration,
+    /// Retry policy for the transaction when it is not included on L1.
+    #[serde(default = "default_non_inclusion_rpc_retry_policy")]
+    pub retry_on_not_included_on_l1: TxRetryPolicy,
 
     /// Number of block confirmations required for
     /// the transaction to resolve a receipt.
@@ -107,9 +112,9 @@ pub struct SettlementTransactionConfig {
     #[serde(default, skip_serializing_if = "crate::is_default")]
     pub gas_limit_multiplier_factor: Multiplier,
 
-    /// Gas limit for the transaction.
-    #[serde(default = "default_gas_limit")]
-    pub gas_limit: U256,
+    /// Ceiling for the gas limit for the transaction.
+    #[serde(default = "default_gas_limit_ceiling")]
+    pub gas_limit_ceiling: U256,
 
     /// Gas price multiplier for the transaction.
     /// The gas price is calculated as follows:
@@ -137,12 +142,12 @@ impl Default for SettlementTransactionConfig {
     fn default() -> Self {
         Self {
             max_retries: default_rpc_max_retries(),
-            tx_retry_policy: default_rpc_retry_policy(),
-            tx_retry_interval: default_tx_retry_interval(),
+            retry_on_transient_failure: default_transient_rpc_retry_policy(),
+            retry_on_not_included_on_l1: default_non_inclusion_rpc_retry_policy(),
             confirmations: default_confirmations(),
             finality: Finality::default(),
             gas_limit_multiplier_factor: Multiplier::default(),
-            gas_limit: default_gas_limit(),
+            gas_limit_ceiling: default_gas_limit_ceiling(),
             gas_price_multiplier_factor: Multiplier::default(),
             gas_price_floor: 0,
             gas_price_ceiling: default_gas_price_ceiling(),
@@ -272,18 +277,31 @@ pub struct SettlementConfig {
     pub settlement_service_config: SettlementServiceConfig,
 }
 
-/// Default number of retries for the transaction.
 const fn default_rpc_max_retries() -> usize {
     16 * 1024
 }
 
-/// Default interval for the polling of the transaction.
-const fn default_tx_retry_interval() -> Duration {
-    Duration::from_secs(10)
+const fn default_max_interval() -> Duration {
+    Duration::from_secs(60 * 60 * 24 * 36525) // effectively infinite: ~100
+                                              // years
 }
 
-const fn default_rpc_retry_policy() -> TxRetryPolicy {
-    TxRetryPolicy::Linear
+const fn default_transient_rpc_retry_policy() -> TxRetryPolicy {
+    TxRetryPolicy {
+        initial_interval: Duration::from_secs(10),
+        interval_multiplier_factor: Multiplier::from_u64_per_1000(1500),
+        max_interval: Duration::from_secs(120),
+        jitter: Duration::from_secs(1),
+    }
+}
+
+const fn default_non_inclusion_rpc_retry_policy() -> TxRetryPolicy {
+    TxRetryPolicy {
+        initial_interval: Duration::from_secs(60),
+        interval_multiplier_factor: Multiplier::from_u64_per_1000(2000),
+        max_interval: Duration::from_secs(600),
+        jitter: Duration::from_secs(10),
+    }
 }
 
 /// Default number of confirmations required
@@ -292,7 +310,7 @@ const fn default_confirmations() -> usize {
     32
 }
 
-fn default_gas_limit() -> U256 {
+fn default_gas_limit_ceiling() -> U256 {
     U256::from(60_000_000_u64)
 }
 

@@ -3,12 +3,20 @@ source: crates/agglayer-config/tests/settlement_service.rs
 expression: config
 ---
 max-retries = 2048
-tx-retry-policy = "linear"
-tx-retry-interval = "15s"
 confirmations = 64
-finality = "finalized"
+finality = "FinalizedBlock"
 gas-limit-multiplier-factor = 1.1
-gas-limit = "0x5f5e100"
+gas-limit-ceiling = "0x5f5e100"
 gas-price-multiplier-factor = 1.2
 gas-price-floor = "5gwei"
 gas-price-ceiling = "200gwei"
+
+[retry-on-transient-failure]
+initial-interval = "15s"
+max-interval = "100years"
+
+[retry-on-not-included-on-l1]
+initial-interval = "1m"
+interval-multiplier-factor = 2.0
+max-interval = "10m"
+jitter = "10s"

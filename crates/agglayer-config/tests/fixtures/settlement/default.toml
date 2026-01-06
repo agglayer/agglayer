@@ -1,10 +1,9 @@
 # Default settlement transaction configuration
 max-retries = 16384
-tx-retry-interval = "10s"
-tx-retry-policy = "linear"
+retry-on-transient-failure.initial-interval = "10s"
 confirmations = 32
-finality = "justified"
-gas-limit = "0x3938700"
+finality = "SafeBlock"
+gas-limit-ceiling = "0x3938700"
 gas-limit-multiplier-factor = 1.0
 gas-price-multiplier-factor = 1.0
 gas-price-ceiling = "100gwei"
