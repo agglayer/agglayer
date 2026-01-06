@@ -7,7 +7,12 @@ license.workspace = true
 [dependencies]
 agglayer-config.workspace = true
 
-[dev-dependencies]
+alloy.workspace = true
+eyre.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+ulid.workspace = true
 
 [lints]
 workspace = true
