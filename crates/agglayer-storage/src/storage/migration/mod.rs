@@ -1,10 +1,10 @@
 use std::{collections::BTreeSet, path::Path};
 
 use rocksdb::ColumnFamilyDescriptor;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info};
 
 pub use self::error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
-use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord};
+use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord, step::MigrationStep};
 use crate::{
     schema::{ColumnDescriptor, ColumnSchema},
     storage::{DBError, DB},
@@ -13,25 +13,26 @@ use crate::{
 mod error;
 mod migration_cf;
 mod record;
+mod step;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
     // The database itself.
     db: DB,
 
-    // The number of the current/next migration step.
-    step: u32,
-
     // The step number where migration should start.
     start_step: u32,
+
+    // Collected migration steps to be executed in finalize().
+    steps: Vec<MigrationStep>,
 }
 
 impl Builder {
     fn new_internal(db: DB, start_step: u32) -> Self {
         Self {
             db,
-            step: 0,
             start_step,
+            steps: Vec::new(),
         }
     }
 
@@ -101,10 +102,8 @@ impl Builder {
             step
         };
 
-        Self::new_internal(db, start_step)
-            // Initialize migration record CF with step 0.
-            .perform_step(|_| Ok(()))
-            .map_err(DBOpenError::Migration)
+        // Add step 0 (Initialize) to the steps list, but don't execute yet.
+        Ok(Self::new_internal(db, start_step).add_step(MigrationStep::Initialize))
     }
 
     fn writeopts() -> rocksdb::WriteOptions {
@@ -146,109 +145,80 @@ impl Builder {
     pub fn add_cfs(
         self,
         cfs: &[ColumnDescriptor],
-        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails>,
+        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'static,
     ) -> Result<Self, DBOpenError> {
-        Ok(self.perform_step(move |db| {
-            // Create the columns first.
-            for descriptor in cfs {
-                let cf = descriptor.name();
-                let opts = descriptor.options().to_rocksdb_options();
-
-                if db.cf_exists(cf) {
-                    warn!("Column family {cf:?} already exists, dropping to create a fresh one");
-                    db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
-                }
-
-                debug!("Creating column family {cf:?}");
-                db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
-            }
-
-            // Use the provided closure to populate it with data.
-            debug!("Populating new column families with data");
-            migrate_fn(&mut db.db)?;
-
-            Ok(())
-        })?)
+        Ok(self.add_step(MigrationStep::AddColumnFamilies {
+            cfs: cfs.to_vec(),
+            migrate_fn: Box::new(migrate_fn),
+        }))
     }
 
     /// Removes old column families from the database.
     pub fn drop_cfs(self, cfs: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
-        Ok(self.perform_step(move |db| {
-            for descriptor in cfs {
-                let cf = descriptor.name();
-
-                if db.cf_exists(cf) {
-                    debug!("Dropping column family {cf:?}");
-                    db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
-                } else {
-                    warn!("Asked to remove a non-existing column family {cf:?}");
-                }
-            }
-
-            Ok(())
-        })?)
+        Ok(self.add_step(MigrationStep::DropColumnFamilies { cfs: cfs.to_vec() }))
     }
 
     /// Completes the migration process and returns the database.
     ///
-    /// This method validates that all declared migration steps have been
-    /// executed and returns the fully migrated database ready for use.
-    pub fn finalize(self, _expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
-        if self.step < self.start_step {
+    /// This method validates migration steps, executes all collected steps,
+    /// and returns the fully migrated database ready for use.
+    pub fn finalize(mut self, _expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
+        // Validate that we have at least as many declared steps as recorded steps
+        let declared_steps = self.steps.len() as u32;
+        if declared_steps < self.start_step {
             return Err(DBOpenError::FewerStepsDeclared {
-                declared: self.step,
+                declared: declared_steps,
                 recorded: self.start_step,
             });
+        }
+
+        // Execute all collected steps
+        let start_step = self.start_step as usize;
+
+        if start_step > 0 {
+            debug!("Skipping {start_step} already-recorded migration steps");
+        }
+
+        // Take ownership of steps to iterate through them
+        let steps = std::mem::take(&mut self.steps);
+
+        // Execute steps that need to run
+        for (step_no, step) in steps.into_iter().enumerate().skip(start_step) {
+            let step_no = step_no as u32;
+
+            let span = tracing::debug_span!("Storage migration step", %step_no);
+            let _span_guard = span.enter();
+
+            // Execute the step
+            info!("Running storage migration step {step_no}");
+            step.execute(&mut self)
+                .map_err(|details| DBMigrationError { step_no, details })?;
+
+            // Record the step in migration record
+            debug!("Recording the completion of migration step {step_no}");
+            self.db
+                .put::<MigrationRecordColumn>(&step_no, &MigrationRecord::default())?;
         }
 
         Ok(self.db)
     }
 
-    fn perform_step(
-        self,
-        step_fn: impl FnOnce(&mut Self) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBMigrationError> {
-        let step = self.step;
-        self.perform_step_impl(step_fn)
-            .map_err(|details| DBMigrationError { step, details })
-    }
-
-    #[instrument(skip(self, step_fn), fields(step = self.step))]
-    fn perform_step_impl(
-        mut self,
-        step_fn: impl FnOnce(&mut Self) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBMigrationErrorDetails> {
-        let step = self.step;
-
-        if step >= self.start_step {
-            info!("Running migration step {step}");
-            step_fn(&mut self)?;
-            self.db
-                .put::<MigrationRecordColumn>(&self.step, &MigrationRecord::default())?;
-        } else {
-            debug!("Step already recorded, skipping");
-        }
-
-        self.step += 1;
-        Ok(self)
-    }
-
     fn cf_exists(&self, cf: &str) -> bool {
         self.db.rocksdb.cf_handle(cf).is_some()
+    }
+
+    /// Helper method to add a migration step to the list.
+    fn add_step(mut self, migration_step: MigrationStep) -> Self {
+        self.steps.push(migration_step);
+        self
     }
 }
 
 impl std::fmt::Debug for Builder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            db: _,
-            step,
-            start_step,
-        } = self;
-
         f.debug_struct("Builder")
-            .field("step", step)
-            .field("start_step", start_step)
+            .field("start_step", &self.start_step)
+            .field("steps", &self.steps)
             .finish()
     }
 }
