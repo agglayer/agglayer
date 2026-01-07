@@ -1,10 +1,10 @@
 use std::{collections::BTreeSet, path::Path};
 
 use rocksdb::ColumnFamilyDescriptor;
-use tracing::{debug, info};
+use tracing::{debug, info, instrument, warn};
 
 pub use self::error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
-use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord, step::MigrationStep};
+use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord};
 use crate::{
     schema::{ColumnDescriptor, ColumnSchema},
     storage::{DBError, DB},
