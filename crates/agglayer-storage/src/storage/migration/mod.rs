@@ -16,7 +16,7 @@ mod record;
 mod step;
 
 /// Database builder taking care of database migrations.
-pub struct Builder {
+pub struct Builder<'a> {
     // The database itself.
     db: DB,
 
@@ -24,10 +24,10 @@ pub struct Builder {
     start_step: u32,
 
     // Collected migration steps to be executed in finalize().
-    steps: Vec<MigrationStep>,
+    steps: Vec<MigrationStep<'a>>,
 }
 
-impl Builder {
+impl<'a> Builder<'a> {
     fn new_internal(db: DB, start_step: u32) -> Self {
         Self {
             db,
@@ -144,18 +144,16 @@ impl Builder {
     /// should only write into the newly created column families.
     pub fn add_cfs(
         self,
-        cfs: &[ColumnDescriptor],
+        cfs: &'a [ColumnDescriptor],
         migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'static,
     ) -> Result<Self, DBOpenError> {
-        Ok(self.add_step(MigrationStep::AddColumnFamilies {
-            cfs: cfs.to_vec(),
-            migrate_fn: Box::new(migrate_fn),
-        }))
+        let migrate_fn = Box::new(migrate_fn);
+        Ok(self.add_step(MigrationStep::AddColumnFamilies { cfs, migrate_fn }))
     }
 
     /// Removes old column families from the database.
-    pub fn drop_cfs(self, cfs: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
-        Ok(self.add_step(MigrationStep::DropColumnFamilies { cfs: cfs.to_vec() }))
+    pub fn drop_cfs(self, cfs: &'a [ColumnDescriptor]) -> Result<Self, DBOpenError> {
+        Ok(self.add_step(MigrationStep::DropColumnFamilies { cfs }))
     }
 
     /// Completes the migration process and returns the database.
@@ -208,13 +206,13 @@ impl Builder {
     }
 
     /// Helper method to add a migration step to the list.
-    fn add_step(mut self, migration_step: MigrationStep) -> Self {
+    fn add_step(mut self, migration_step: MigrationStep<'a>) -> Self {
         self.steps.push(migration_step);
         self
     }
 }
 
-impl std::fmt::Debug for Builder {
+impl std::fmt::Debug for Builder<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Builder")
             .field("start_step", &self.start_step)

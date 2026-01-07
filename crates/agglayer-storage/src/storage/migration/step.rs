@@ -8,21 +8,21 @@ use crate::{
 use super::{error::DBMigrationErrorDetails, Builder};
 
 /// Represents a single migration step to be executed.
-pub enum MigrationStep {
+pub enum MigrationStep<'a> {
     /// Initialize migration tracking (step 0).
     Initialize,
 
     /// Add column families and populate them with data.
     AddColumnFamilies {
-        cfs: Vec<ColumnDescriptor>,
-        migrate_fn: Box<dyn FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails>>,
+        cfs: &'a [ColumnDescriptor],
+        migrate_fn: Box<dyn FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'a>,
     },
 
     /// Drop column families from the database.
-    DropColumnFamilies { cfs: Vec<ColumnDescriptor> },
+    DropColumnFamilies { cfs: &'a [ColumnDescriptor] },
 }
 
-impl std::fmt::Debug for MigrationStep {
+impl std::fmt::Debug for MigrationStep<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Initialize => f.debug_struct("Initialize").finish(),
@@ -39,7 +39,7 @@ impl std::fmt::Debug for MigrationStep {
     }
 }
 
-impl MigrationStep {
+impl MigrationStep<'_> {
     /// Execute this migration step, modifying the database as needed.
     pub fn execute(
         self,

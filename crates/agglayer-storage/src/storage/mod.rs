@@ -36,7 +36,7 @@ pub struct DB {
 impl DB {
     /// Open a new RocksDB instance at the given path with initial column
     /// families and a possibility to migrate the database.
-    pub fn builder(path: &Path, cfs: &[ColumnDescriptor]) -> Result<Builder, DBOpenError> {
+    pub fn builder<'a>(path: &Path, cfs: &[ColumnDescriptor]) -> Result<Builder<'a>, DBOpenError> {
         Builder::open(path, cfs)
     }
 

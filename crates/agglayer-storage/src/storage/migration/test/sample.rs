@@ -103,7 +103,7 @@ pub const CFS_V2: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<NetworkInfoV2UncoolColumn>(),
 ];
 
-impl Builder {
+impl Builder<'_> {
     pub fn open_sample(path: &Path) -> Result<Self, DBOpenError> {
         let cfs = [ColumnDescriptor::new::<NetworkInfoV0Column>()];
         Self::open(path, &cfs)
