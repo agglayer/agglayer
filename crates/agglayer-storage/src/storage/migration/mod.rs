@@ -103,7 +103,7 @@ impl<'a> Builder<'a> {
         };
 
         // Add step 0 (Initialize) to the steps list, but don't execute yet.
-        Ok(Self::new_internal(db, start_step).add_step(MigrationStep::Initialize))
+        Ok(Self::new_internal(db, start_step).add_step(MigrationStep::initialize()))
     }
 
     fn writeopts() -> rocksdb::WriteOptions {
@@ -148,12 +148,12 @@ impl<'a> Builder<'a> {
         migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'a,
     ) -> Result<Self, DBOpenError> {
         let migrate_fn = Box::new(migrate_fn);
-        Ok(self.add_step(MigrationStep::AddColumnFamilies { cfs, migrate_fn }))
+        Ok(self.add_step(MigrationStep::add_column_families(cfs, migrate_fn)))
     }
 
     /// Removes old column families from the database.
     pub fn drop_cfs(self, cfs: &'a [ColumnDescriptor]) -> Result<Self, DBOpenError> {
-        Ok(self.add_step(MigrationStep::DropColumnFamilies { cfs }))
+        Ok(self.add_step(MigrationStep::drop_column_families(cfs)))
     }
 
     /// Completes the migration process and returns the database.
