@@ -382,14 +382,12 @@ impl StateWriter for StateStore {
         pp_root: &PessimisticRoot,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        let mut certificate_ids = self.db.get::<PpRootToCertificateIdsColumn>(pp_root)?
-            .map(|v| v.0)
+        let pp_root = (*pp_root).into();
+        let mut certificate_ids = self.db.get::<PpRootToCertificateIdsColumn>(&pp_root)?
             .unwrap_or_default();
-        certificate_ids.push(*certificate_id);
-        Ok(self.db.put::<PpRootToCertificateIdsColumn>(
-            pp_root,
-            &crate::columns::pp_root_to_certificate_ids::Value(certificate_ids),
-        )?)
+        certificate_ids.push((*certificate_id).into());
+        self.db.put::<PpRootToCertificateIdsColumn>(&pp_root, &certificate_ids)?;
+        Ok(())
     }
 }
 
@@ -658,10 +656,15 @@ impl StateReader for StateStore {
         &self,
         pp_root: &PessimisticRoot,
     ) -> Result<Vec<CertificateId>, Error> {
-        Ok(self.db.get::<PpRootToCertificateIdsColumn>(pp_root)?
-            .map(|v| v.0)
-            .unwrap_or_default()
-        )
+        if let Some(certificate_ids) = self.db.get::<PpRootToCertificateIdsColumn>(&(*pp_root).into())? {
+            let certificate_ids = certificate_ids
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<CertificateId>, _>>()
+                .map_err(|e| Error::Unexpected(e.to_string()))?;
+            return Ok(certificate_ids);
+        }
+        Ok(Vec::new())
     }
 }
 

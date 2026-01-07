@@ -1,10 +1,14 @@
 use std::io;
 
-use prost::{bytes::BytesMut, Message};
+use agglayer_primitives::B256;
+use agglayer_tries::roots::PessimisticRoot;
+use agglayer_types::{CertificateId, Digest};
+use prost::{Message, bytes::{Bytes, BytesMut}};
 
+pub use super::generated::agglayer::storage::v0;
 use crate::columns::Codec;
 
-pub type Key = super::generated::agglayer::storage::v0::SettledPessimisticProofRoot;
+pub type Key = v0::SettledPessimisticProofRoot;
 
 impl Codec for Key {
     fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
@@ -25,7 +29,15 @@ impl Codec for Key {
     }
 }
 
-pub type Value = Vec<super::generated::agglayer::storage::v0::SettledCertificateId>;
+impl From<PessimisticRoot> for Key {
+    fn from(value: PessimisticRoot) -> Self {
+        Self {
+            root: Bytes::from(B256::from(value).to_vec()),
+        }
+    }
+}
+
+pub type Value = Vec<v0::SettledCertificateId>;
 
 impl Codec for Value {
     fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
@@ -91,5 +103,22 @@ impl Codec for Value {
         }
 
         Ok(result)
+    }
+}
+
+impl From<CertificateId> for v0::SettledCertificateId {
+    fn from(value: CertificateId) -> Self {
+        Self {
+            id: Bytes::from(value.to_vec()),
+        }
+    }
+}
+
+impl TryFrom<v0::SettledCertificateId> for CertificateId {
+    type Error = std::array::TryFromSliceError;
+
+    fn try_from(value: v0::SettledCertificateId) -> Result<Self, Self::Error> {
+        let fixed_bytes = B256::try_from(value.id.to_vec().as_slice())?;
+        Ok(CertificateId::from(Digest::from(fixed_bytes)))
     }
 }

@@ -26,6 +26,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 agglayer-config.workspace = true
+agglayer-primitives.workspace = true
 agglayer-types.workspace = true
 agglayer-tries.workspace = true
 pessimistic-proof.workspace = true
