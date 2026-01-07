@@ -4,14 +4,14 @@ use serde::{Deserialize, Serialize};
 use super::{ColumnSchema, LATEST_PROVEN_CERTIFICATE_PER_NETWORK_CF};
 
 /// Column family for the latest proven certificate per network.
-/// The key is the network_id and the value is the certificateID and
-/// the height.
+/// The key is the network_id and the value is a `ProvenCertificate`
+/// containing the certificate ID, the network ID and the height.
 ///
 /// ## Column definition
 ///
-/// | key         | value                       |
-/// | --          | --                          |
-/// | `NetworkId` | (`CertificateId`, `Height`) |
+/// | key         | value                                    |
+/// | --          | --                                       |
+/// | `NetworkId` | (`CertificateId`, `NetworkId`, `Height`) |
 pub struct LatestProvenCertificatePerNetworkColumn;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
