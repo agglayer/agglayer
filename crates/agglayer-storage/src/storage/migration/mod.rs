@@ -3,7 +3,10 @@ use std::{collections::BTreeSet, path::Path};
 use rocksdb::ColumnFamilyDescriptor;
 use tracing::{debug, info};
 
-pub use self::error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use self::{
+    error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError},
+    step::MigrateFn,
+};
 use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord, step::MigrationStep};
 use crate::{
     schema::{ColumnDescriptor, ColumnSchema},
@@ -142,12 +145,11 @@ impl<'a> Builder<'a> {
     /// This is a migration step that creates column families and runs the
     /// provided migration function to populate them. The migration function
     /// should only write into the newly created column families.
-    pub fn add_cfs(
+    pub fn add_cfs<F: MigrateFn + 'a>(
         self,
         cfs: &'a [ColumnDescriptor],
-        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'a,
+        migrate_fn: F,
     ) -> Result<Self, DBOpenError> {
-        let migrate_fn = Box::new(migrate_fn);
         Ok(self.add_step(MigrationStep::add_cfs(cfs, migrate_fn)))
     }
 

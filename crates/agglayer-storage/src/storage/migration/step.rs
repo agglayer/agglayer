@@ -7,6 +7,11 @@ use crate::{
 
 use super::{error::DBMigrationErrorDetails, Builder};
 
+/// Trait alias for migration functions that populate column families with data.
+pub trait MigrateFn: FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> {}
+
+impl<F> MigrateFn for F where F: FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> {}
+
 /// Initialize migration tracking (step 0).
 pub struct Initialize;
 
@@ -17,7 +22,7 @@ impl std::fmt::Debug for Initialize {
 }
 
 impl Initialize {
-    pub(super) fn execute(self, _builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
+    pub fn execute(self, _builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
         // No-op: step 0 is just for tracking initialization
         Ok(())
     }
@@ -26,7 +31,7 @@ impl Initialize {
 /// Add column families and populate them with data.
 pub struct AddColumnFamilies<'a> {
     pub cfs: &'a [ColumnDescriptor],
-    pub migrate_fn: Box<dyn FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'a>,
+    pub migrate_fn: Box<dyn MigrateFn + 'a>,
 }
 
 impl std::fmt::Debug for AddColumnFamilies<'_> {
@@ -39,7 +44,7 @@ impl std::fmt::Debug for AddColumnFamilies<'_> {
 }
 
 impl AddColumnFamilies<'_> {
-    pub(super) fn execute(self, builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
+    pub fn execute(self, builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
         // Create the column families first
         for descriptor in self.cfs {
             let cf = descriptor.name();
@@ -80,7 +85,7 @@ impl std::fmt::Debug for DropColumnFamilies<'_> {
 }
 
 impl DropColumnFamilies<'_> {
-    pub(super) fn execute(self, builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
+    pub fn execute(self, builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
         for descriptor in self.cfs {
             let cf = descriptor.name();
 
@@ -119,25 +124,23 @@ impl std::fmt::Debug for MigrationStep<'_> {
 
 impl<'a> MigrationStep<'a> {
     /// Creates an Initialize migration step.
-    pub(super) fn initialize() -> Self {
+    pub fn initialize() -> Self {
         MigrationStep::Initialize(Initialize)
     }
 
     /// Creates an AddColumnFamilies migration step.
-    pub(super) fn add_cfs(
-        cfs: &'a [ColumnDescriptor],
-        migrate_fn: Box<dyn FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'a>,
-    ) -> Self {
+    pub fn add_cfs<F: MigrateFn + 'a>(cfs: &'a [ColumnDescriptor], migrate_fn: F) -> Self {
+        let migrate_fn = Box::new(migrate_fn);
         MigrationStep::AddColumnFamilies(AddColumnFamilies { cfs, migrate_fn })
     }
 
     /// Creates a DropColumnFamilies migration step.
-    pub(super) fn drop_cfs(cfs: &'a [ColumnDescriptor]) -> Self {
+    pub fn drop_cfs(cfs: &'a [ColumnDescriptor]) -> Self {
         MigrationStep::DropColumnFamilies(DropColumnFamilies { cfs })
     }
 
     /// Execute this migration step, modifying the database as needed.
-    pub(super) fn execute(self, builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
+    pub fn execute(self, builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
         match self {
             MigrationStep::Initialize(step) => step.execute(builder),
             MigrationStep::AddColumnFamilies(step) => step.execute(builder),

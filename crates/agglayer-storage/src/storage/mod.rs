@@ -10,7 +10,7 @@ use crate::schema::{Codec, ColumnDescriptor, ColumnSchema};
 pub(crate) mod iterators;
 mod migration;
 
-pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError, MigrateFn};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
