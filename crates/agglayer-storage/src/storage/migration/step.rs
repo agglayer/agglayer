@@ -46,9 +46,7 @@ impl AddColumnFamilies<'_> {
             let opts = descriptor.options().to_rocksdb_options();
 
             if builder.cf_exists(cf) {
-                warn!(
-                    "Column family {cf:?} already exists, dropping to create a fresh one"
-                );
+                warn!("Column family {cf:?} already exists, dropping to create a fresh one");
                 builder.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
             }
 
@@ -126,7 +124,7 @@ impl<'a> MigrationStep<'a> {
     }
 
     /// Creates an AddColumnFamilies migration step.
-    pub(super) fn add_column_families(
+    pub(super) fn add_cfs(
         cfs: &'a [ColumnDescriptor],
         migrate_fn: Box<dyn FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'a>,
     ) -> Self {
@@ -134,15 +132,12 @@ impl<'a> MigrationStep<'a> {
     }
 
     /// Creates a DropColumnFamilies migration step.
-    pub(super) fn drop_column_families(cfs: &'a [ColumnDescriptor]) -> Self {
+    pub(super) fn drop_cfs(cfs: &'a [ColumnDescriptor]) -> Self {
         MigrationStep::DropColumnFamilies(DropColumnFamilies { cfs })
     }
 
     /// Execute this migration step, modifying the database as needed.
-    pub(super) fn execute(
-        self,
-        builder: &mut Builder,
-    ) -> Result<(), DBMigrationErrorDetails> {
+    pub(super) fn execute(self, builder: &mut Builder) -> Result<(), DBMigrationErrorDetails> {
         match self {
             MigrationStep::Initialize(step) => step.execute(builder),
             MigrationStep::AddColumnFamilies(step) => step.execute(builder),
