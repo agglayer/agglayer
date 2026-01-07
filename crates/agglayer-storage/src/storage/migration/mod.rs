@@ -1,8 +1,10 @@
 use std::{collections::BTreeSet, path::Path};
 
 use rocksdb::ColumnFamilyDescriptor;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info};
 
+pub use self::error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord, step::MigrationStep};
 use crate::{
     schema::{ColumnDescriptor, ColumnSchema},
     storage::{DBError, DB},
@@ -11,10 +13,6 @@ use crate::{
 mod error;
 mod migration_cf;
 mod record;
-
-pub use error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
-use migration_cf::MigrationRecordColumn;
-use record::MigrationRecord;
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
@@ -66,10 +64,7 @@ impl Builder {
         let db = if cfs_db.is_empty() {
             // We are initializing a new database.
             let mut cfs = desc_v0;
-            cfs.push(ColumnFamilyDescriptor::new(
-                MigrationRecordColumn::COLUMN_FAMILY_NAME,
-                rocksdb::Options::default(),
-            ));
+            cfs.push(ColumnDescriptor::new::<MigrationRecordColumn>().to_rocksdb_descriptor());
             Self::open_rocksdb_fresh(path, cfs)?
         } else if cfs_db.contains(MigrationRecordColumn::COLUMN_FAMILY_NAME) {
             // Move on to migration as usual.
