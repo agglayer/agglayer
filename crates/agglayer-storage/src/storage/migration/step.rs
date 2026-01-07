@@ -1,11 +1,10 @@
 use tracing::{debug, warn};
 
+use super::{Builder, DBMigrationErrorDetails};
 use crate::{
     schema::ColumnDescriptor,
     storage::{DBError, DB},
 };
-
-use super::{error::DBMigrationErrorDetails, Builder};
 
 /// Trait alias for migration functions that populate column families with data.
 pub trait MigrateFn: FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> {}
