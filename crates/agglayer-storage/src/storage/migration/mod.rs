@@ -145,7 +145,7 @@ impl<'a> Builder<'a> {
     pub fn add_cfs(
         self,
         cfs: &'a [ColumnDescriptor],
-        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'static,
+        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> + 'a,
     ) -> Result<Self, DBOpenError> {
         let migrate_fn = Box::new(migrate_fn);
         Ok(self.add_step(MigrationStep::AddColumnFamilies { cfs, migrate_fn }))
