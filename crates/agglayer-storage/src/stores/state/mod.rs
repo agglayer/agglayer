@@ -7,9 +7,7 @@ use std::{
 
 use agglayer_tries::{node::Node, roots::PessimisticRoot, smt::Smt};
 use agglayer_types::{
-    primitives::{
-        alloy_primitives::BlockNumber, Digest,
-    },
+    primitives::{alloy_primitives::BlockNumber, Digest},
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
     EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
@@ -397,10 +395,13 @@ impl StateWriter for StateStore {
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
         let pp_root = (*pp_root).into();
-        let mut certificate_ids = self.db.get::<PpRootToCertificateIdsColumn>(&pp_root)?
+        let mut certificate_ids = self
+            .db
+            .get::<PpRootToCertificateIdsColumn>(&pp_root)?
             .unwrap_or_default();
         certificate_ids.push((*certificate_id).into());
-        self.db.put::<PpRootToCertificateIdsColumn>(&pp_root, &certificate_ids)?;
+        self.db
+            .put::<PpRootToCertificateIdsColumn>(&pp_root, &certificate_ids)?;
         Ok(())
     }
 }
@@ -670,7 +671,10 @@ impl StateReader for StateStore {
         &self,
         pp_root: &PessimisticRoot,
     ) -> Result<Vec<CertificateId>, Error> {
-        if let Some(certificate_ids) = self.db.get::<PpRootToCertificateIdsColumn>(&(*pp_root).into())? {
+        if let Some(certificate_ids) = self
+            .db
+            .get::<PpRootToCertificateIdsColumn>(&(*pp_root).into())?
+        {
             let certificate_ids = certificate_ids
                 .into_iter()
                 .map(TryInto::try_into)
@@ -699,7 +703,9 @@ impl MetadataWriter for StateStore {
     }
 
     fn set_latest_block_that_settled_any_cert(&self, value: BlockNumber) -> Result<(), Error> {
-        if let Some(latest_block_that_settled_any_cert) = self.get_latest_block_that_settled_any_cert()? {
+        if let Some(latest_block_that_settled_any_cert) =
+            self.get_latest_block_that_settled_any_cert()?
+        {
             if latest_block_that_settled_any_cert >= value {
                 warn!(
                     "Tried to set a lower value for latest certificate settling block: \
@@ -736,7 +742,10 @@ impl MetadataReader for StateStore {
     }
 
     fn get_latest_block_that_settled_any_cert(&self) -> Result<Option<BlockNumber>, Error> {
-        match self.db.get::<MetadataColumn>(&MetadataKey::LatestBlockThatSettledAnyCert)? {
+        match self
+            .db
+            .get::<MetadataColumn>(&MetadataKey::LatestBlockThatSettledAnyCert)?
+        {
             Some(MetadataValue::LatestBlockThatSettledAnyCert(value)) => Ok(Some(value)),
             None => Ok(None),
             _ => Err(Error::Unexpected(

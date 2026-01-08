@@ -1,13 +1,11 @@
 use std::collections::BTreeMap;
 
+use agglayer_tries::roots::PessimisticRoot;
 use agglayer_types::{
-    primitives::{
-        alloy_primitives::BlockNumber, Digest,
-    },
+    primitives::{alloy_primitives::BlockNumber, Digest},
     Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, ExecutionMode,
     Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
-use agglayer_tries::roots::PessimisticRoot;
 
 use crate::{error::Error, stores::PerEpochReader};
 

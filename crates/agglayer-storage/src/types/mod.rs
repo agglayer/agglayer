@@ -1,7 +1,5 @@
 use agglayer_types::{
-    primitives::{
-        alloy_primitives::BlockNumber, Digest,
-    },
+    primitives::{alloy_primitives::BlockNumber, Digest},
     CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};

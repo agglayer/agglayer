@@ -3,7 +3,10 @@ use std::io;
 use agglayer_primitives::B256;
 use agglayer_tries::roots::PessimisticRoot;
 use agglayer_types::{CertificateId, Digest};
-use prost::{Message, bytes::{Bytes, BytesMut}};
+use prost::{
+    bytes::{Bytes, BytesMut},
+    Message,
+};
 
 pub use super::generated::agglayer::storage::v0;
 use crate::columns::Codec;
@@ -50,7 +53,7 @@ impl Codec for Value {
             let mut buf = BytesMut::new();
             buf.reserve(len);
             <super::generated::agglayer::storage::v0::SettledCertificateId as prost::Message>::encode(item, &mut buf)?;
-            
+
             // Write length prefix as u32 (little-endian)
             writer.write_all(&(len as u32).to_le_bytes())?;
             writer.write_all(&buf)?;

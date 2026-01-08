@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
 
-use agglayer_types::{
-    primitives::alloy_primitives::BlockNumber,
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId, Proof,
-};
 use agglayer_tries::roots::PessimisticRoot;
+use agglayer_types::{
+    primitives::alloy_primitives::BlockNumber, Certificate, CertificateHeader, CertificateId,
+    CertificateIndex, EpochNumber, Height, LocalNetworkStateData, NetworkId, Proof,
+};
 
 use crate::{
     columns::{
