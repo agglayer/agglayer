@@ -34,15 +34,9 @@ pub struct DB {
 }
 
 impl DB {
-    /// Open a new RocksDB instance at the given path with initial column
-    /// families and a possibility to migrate the database.
-    pub fn builder<'a>(path: &Path, cfs: &[ColumnDescriptor]) -> Result<Builder<'a>, DBOpenError> {
-        Builder::open(path, cfs)
-    }
-
     /// Open a new RocksDB instance at the given path with some column families.
     pub fn open_cf(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
-        Builder::open(path, cfs)?.finalize(cfs)
+        Builder::new(cfs).finalize(cfs)?.open(path)?.migrate()
     }
 
     /// Open a RocksDB instance in read-only mode at the given path with some

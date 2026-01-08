@@ -19,7 +19,10 @@ fn partial_migration(
 
     // Phase 1: Initialize V0 database with data
     {
-        let db = Builder::open_sample(db_path)?.finalize(CFS_V0)?;
+        let db = Builder::sample_builder()
+            .finalize(CFS_V0)?
+            .open(db_path)?
+            .migrate()?;
 
         // Insert V0 data
         for (key, value) in &DATA_V0 {
@@ -36,9 +39,11 @@ fn partial_migration(
         .expect("Failed to configure failpoint");
 
         let result = std::panic::catch_unwind(|| {
-            Builder::open_sample(db_path)?
+            Builder::sample_builder()
                 .sample_migrate_v0_v1()?
-                .finalize(CFS_V1)
+                .finalize(CFS_V1)?
+                .open(db_path)?
+                .migrate()
         });
 
         match result {
@@ -52,9 +57,11 @@ fn partial_migration(
     {
         fail::cfg("sample_migrate", "off").expect("Failed to disable failpoint");
 
-        let db = Builder::open_sample(db_path)?
+        let db = Builder::sample_builder()
             .sample_migrate_v0_v1()?
-            .finalize(CFS_V1)?;
+            .finalize(CFS_V1)?
+            .open(db_path)?
+            .migrate()?;
 
         // Verify all V1 data is correct (should be the migrated V0 data)
         for (key, expected_value) in &DATA_V1[..DATA_V1_NEW_START] {

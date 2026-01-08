@@ -18,35 +18,54 @@ mod migration_cf;
 mod record;
 mod step;
 
-/// Database builder taking care of database migrations.
-pub struct Builder<'a> {
-    // The database itself.
-    db: DB,
-
-    // The step number where migration should start.
-    start_step: u32,
-
-    // Collected migration steps to be executed in finalize().
+/// Complete migration specification with initial schema, final schema, and steps.
+///
+/// This type represents a fully declared migration plan that has not yet been
+/// applied to a database. It can be inspected, passed around, or serialized
+/// before opening the database.
+#[derive(Debug)]
+pub struct MigrationPlan<'a> {
+    initial_schema: &'a [ColumnDescriptor],
+    #[allow(dead_code)] // Reserved for future validation
+    final_schema: &'a [ColumnDescriptor],
     steps: Vec<MigrationStep<'a>>,
 }
 
-impl<'a> Builder<'a> {
-    fn new_internal(db: DB, start_step: u32) -> Self {
-        Self {
-            db,
-            start_step,
-            steps: Vec::new(),
-        }
+impl<'a> MigrationPlan<'a> {
+    /// Opens and validates the database, returning a Migrator ready for migration.
+    pub fn open(self, path: &Path) -> Result<Migrator<'a>, DBOpenError> {
+        Migrator::open(path, self)
     }
+}
 
-    /// Opens a database at the given path with migration tracking.
-    ///
-    /// This method initializes or opens an existing database with the provided
-    /// initial schema (v0). It automatically sets up migration tracking and
-    /// validates the database schema.
-    pub fn open(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
+/// Database migrator that holds an opened database and executes migration steps.
+///
+/// Created by `MigrationPlan::open()`, this type represents a validated database
+/// ready for migration. Call `migrate()` to execute all pending steps.
+pub struct Migrator<'a> {
+    db: DB,
+    start_step: u32,
+    steps: Vec<MigrationStep<'a>>,
+}
+
+impl std::fmt::Debug for Migrator<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Migrator")
+            .field("start_step", &self.start_step)
+            .field("steps", &self.steps)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'a> Migrator<'a> {
+    /// Opens the database and validates the migration plan.
+    pub fn open(path: &Path, plan: MigrationPlan<'a>) -> Result<Self, DBOpenError> {
         debug!("Preparing database for initialization and migration");
-        let desc_v0: Vec<_> = cfs_v0.iter().map(|cd| cd.to_rocksdb_descriptor()).collect();
+        let desc_v0: Vec<_> = plan
+            .initial_schema
+            .iter()
+            .map(|cd| cd.to_rocksdb_descriptor())
+            .collect();
         let cfs_v0: BTreeSet<_> = desc_v0.iter().map(|d| d.name()).collect();
 
         // Try to extract the current database schema.
@@ -105,8 +124,25 @@ impl<'a> Builder<'a> {
             step
         };
 
-        // Add step 0 (Initialize) to the steps list, but don't execute yet.
-        Ok(Self::new_internal(db, start_step).add_step(MigrationStep::initialize()))
+        // Validate that we have enough steps declared for the recorded migrations
+        let declared_steps = plan.steps.len() as u32;
+        if declared_steps < start_step {
+            return Err(DBOpenError::FewerStepsDeclared {
+                declared: declared_steps,
+                recorded: start_step,
+            });
+        }
+
+        Ok(Migrator {
+            db,
+            start_step,
+            steps: plan.steps,
+        })
+    }
+
+    /// Helper to check if a column family exists in the database.
+    pub(crate) fn cf_exists(&self, cf: &str) -> bool {
+        self.db.rocksdb.cf_handle(cf).is_some()
     }
 
     fn writeopts() -> rocksdb::WriteOptions {
@@ -140,6 +176,59 @@ impl<'a> Builder<'a> {
         })
     }
 
+    /// Executes all pending migration steps and returns the migrated database.
+    pub fn migrate(mut self) -> Result<DB, DBOpenError> {
+        let start_step = self.start_step as usize;
+
+        if start_step > 0 {
+            debug!("Skipping {start_step} already-recorded migration steps");
+        }
+
+        let steps = std::mem::take(&mut self.steps);
+
+        for (step_no, step) in steps.into_iter().enumerate().skip(start_step) {
+            let step_no = step_no as u32;
+            info!("Running migration step {step_no}");
+
+            // Execute step (modify DB)
+            step.execute(&mut self)
+                .map_err(|details| DBMigrationError { step_no, details })?;
+
+            // Record step completion
+            self.db
+                .put::<MigrationRecordColumn>(&step_no, &MigrationRecord::default())?;
+        }
+
+        Ok(self.db)
+    }
+}
+
+/// Database builder for declaring migration steps.
+///
+/// This type collects migration steps without opening the database.
+/// Call `finalize()` to complete the declaration and get a `MigrationPlan`.
+#[derive(Debug)]
+pub struct Builder<'a> {
+    // Initial database schema (v0).
+    initial_schema: &'a [ColumnDescriptor],
+
+    // Collected migration steps to be executed later.
+    steps: Vec<MigrationStep<'a>>,
+}
+
+impl<'a> Builder<'a> {
+    /// Creates a new migration builder with the initial database schema.
+    ///
+    /// This constructor does not open the database - it only declares the
+    /// initial schema. Use `add_cfs()` and `drop_cfs()` to add migration steps,
+    /// then call `finalize()` to complete the declaration.
+    pub fn new(initial_schema: &'a [ColumnDescriptor]) -> Self {
+        Self {
+            initial_schema,
+            steps: vec![MigrationStep::initialize()],
+        }
+    }
+
     /// Creates new column families and populates them with data.
     ///
     /// This is a migration step that creates column families and runs the
@@ -158,68 +247,23 @@ impl<'a> Builder<'a> {
         Ok(self.add_step(MigrationStep::drop_cfs(cfs)))
     }
 
-    /// Completes the migration process and returns the database.
+    /// Completes the declaration and creates a migration plan.
     ///
-    /// This method validates migration steps, executes all collected steps,
-    /// and returns the fully migrated database ready for use.
-    pub fn finalize(mut self, _expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
-        // Validate that we have at least as many declared steps as recorded steps
-        let declared_steps = self.steps.len() as u32;
-        if declared_steps < self.start_step {
-            return Err(DBOpenError::FewerStepsDeclared {
-                declared: declared_steps,
-                recorded: self.start_step,
-            });
-        }
-
-        // Execute all collected steps
-        let start_step = self.start_step as usize;
-
-        if start_step > 0 {
-            debug!("Skipping {start_step} already-recorded migration steps");
-        }
-
-        // Take ownership of steps to iterate through them
-        let steps = std::mem::take(&mut self.steps);
-
-        // Execute steps that need to run
-        for (step_no, step) in steps.into_iter().enumerate().skip(start_step) {
-            let step_no = step_no as u32;
-
-            let span = tracing::debug_span!("Storage migration step", %step_no);
-            let _span_guard = span.enter();
-
-            // Execute the step
-            info!("Running storage migration step {step_no}");
-            step.execute(&mut self)
-                .map_err(|details| DBMigrationError { step_no, details })?;
-
-            // Record the step in migration record
-            debug!("Recording the completion of migration step {step_no}");
-            self.db
-                .put::<MigrationRecordColumn>(&step_no, &MigrationRecord::default())?;
-        }
-
-        Ok(self.db)
-    }
-
-    fn cf_exists(&self, cf: &str) -> bool {
-        self.db.rocksdb.cf_handle(cf).is_some()
+    /// This method packages the initial schema, collected steps, and final schema
+    /// into a `MigrationPlan`. Call `open()` on the plan to open and validate the
+    /// database, then `migrate()` to execute the migration.
+    pub fn finalize(self, final_schema: &'a [ColumnDescriptor]) -> Result<MigrationPlan<'a>, DBOpenError> {
+        Ok(MigrationPlan {
+            initial_schema: self.initial_schema,
+            final_schema,
+            steps: self.steps,
+        })
     }
 
     /// Helper method to add a migration step to the list.
     fn add_step(mut self, migration_step: MigrationStep<'a>) -> Self {
         self.steps.push(migration_step);
         self
-    }
-}
-
-impl std::fmt::Debug for Builder<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Builder")
-            .field("start_step", &self.start_step)
-            .field("steps", &self.steps)
-            .finish()
     }
 }
 
