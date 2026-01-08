@@ -9,12 +9,12 @@ use prost::{
 };
 
 pub use super::generated::agglayer::storage::v0;
-use crate::columns::Codec;
+use crate::schema::{Codec, CodecError};
 
 pub type Key = v0::SettledPessimisticProofRoot;
 
 impl Codec for Key {
-    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
+    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), CodecError> {
         let len = self.encoded_len();
 
         let mut buf = BytesMut::new();
@@ -27,7 +27,7 @@ impl Codec for Key {
         Ok(())
     }
 
-    fn decode(buf: &[u8]) -> Result<Self, crate::columns::CodecError> {
+    fn decode(buf: &[u8]) -> Result<Self, CodecError> {
         <Key as prost::Message>::decode(buf).map_err(Into::into)
     }
 }
@@ -43,7 +43,7 @@ impl From<PessimisticRoot> for Key {
 pub type Value = Vec<v0::SettledCertificateId>;
 
 impl Codec for Value {
-    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
+    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), CodecError> {
         // Write the length as u32 (little-endian)
         writer.write_all(&(self.len() as u32).to_le_bytes())?;
 
@@ -62,9 +62,9 @@ impl Codec for Value {
         Ok(())
     }
 
-    fn decode(buf: &[u8]) -> Result<Self, crate::columns::CodecError> {
+    fn decode(buf: &[u8]) -> Result<Self, CodecError> {
         if buf.len() < 4 {
-            return Err(crate::columns::CodecError::ProtobufDeserialization(
+            return Err(CodecError::ProtobufDeserialization(
                 prost::DecodeError::new("buffer too short for length prefix"),
             ));
         }
@@ -77,7 +77,7 @@ impl Codec for Value {
         // Decode each item (length-delimited)
         for _ in 0..len {
             if offset + 4 > buf.len() {
-                return Err(crate::columns::CodecError::ProtobufDeserialization(
+                return Err(CodecError::ProtobufDeserialization(
                     prost::DecodeError::new("unexpected end of buffer"),
                 ));
             }
@@ -92,7 +92,7 @@ impl Codec for Value {
             offset += 4;
 
             if offset + item_len > buf.len() {
-                return Err(crate::columns::CodecError::ProtobufDeserialization(
+                return Err(CodecError::ProtobufDeserialization(
                     prost::DecodeError::new("buffer too short for item"),
                 ));
             }

@@ -42,6 +42,7 @@ pub(crate) mod disabled_networks;
 pub(crate) mod local_exit_tree_per_network;
 pub(crate) mod network_info;
 pub(crate) mod nullifier_tree_per_network;
+pub(crate) mod pp_root_to_certificate_ids;
 
 // Pending
 pub(crate) mod pending_queue;
@@ -53,7 +54,6 @@ pub mod latest_pending_certificate_per_network;
 pub mod latest_proven_certificate_per_network;
 pub mod latest_settled_certificate_per_network;
 pub(crate) mod metadata;
-pub(crate) mod pp_root_to_certificate_ids;
 
 // Debug
 pub(crate) mod debug_certificates;
