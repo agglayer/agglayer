@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use agglayer_primitives::U256;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use serde_with::{serde_as, serde_conv};
 
 use crate::Multiplier;
 
@@ -57,32 +57,113 @@ pub enum Finality {
 /// Future versions may include additional policies such as:
 /// - **Exponential**: Exponential backoff with increasing intervals
 /// - **Jittered**: Random jitter to avoid thundering herd issues
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct TxRetryPolicy {
+#[serde_as]
+pub struct ConfigTxRetryPolicy {
     /// Initial retry interval.
-    #[serde(with = "crate::with::HumanDuration")]
-    pub initial_interval: Duration,
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde_as(as = "Option<HumanDuration>")]
+    initial_interval: Option<Duration>,
 
     /// Interval multiplier for each subsequent retry.
     #[serde(default, skip_serializing_if = "crate::is_default")]
-    pub interval_multiplier_factor: Multiplier,
+    interval_multiplier_factor: Option<Multiplier>,
 
     /// Maximum interval between retries.
-    #[serde(default = "default_max_interval")]
-    #[serde(with = "crate::with::HumanDuration")]
-    pub max_interval: Duration,
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde_as(as = "Option<HumanDuration>")]
+    max_interval: Option<Duration>,
 
     /// Jitter factor to add randomness to retry intervals.
     #[serde(default, skip_serializing_if = "crate::is_default")]
-    #[serde(with = "crate::with::HumanDuration")]
+    #[serde_as(as = "Option<HumanDuration>")]
+    jitter: Option<Duration>,
+}
+
+impl From<&TxRetryPolicy> for ConfigTxRetryPolicy {
+    fn from(value: &TxRetryPolicy) -> Self {
+        ConfigTxRetryPolicy {
+            initial_interval: Some(value.initial_interval),
+            interval_multiplier_factor: Some(value.interval_multiplier_factor),
+            max_interval: Some(value.max_interval),
+            jitter: Some(value.jitter),
+        }
+    }
+}
+
+serde_conv!(pub TransientRetryPolicy, TxRetryPolicy, TransientRetryPolicyImpl::new, TransientRetryPolicyImpl::get);
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct TransientRetryPolicyImpl(ConfigTxRetryPolicy);
+
+impl TransientRetryPolicyImpl {
+    fn new(value: &TxRetryPolicy) -> Self {
+        TransientRetryPolicyImpl(ConfigTxRetryPolicy::from(value))
+    }
+
+    pub fn get(self) -> Result<TxRetryPolicy, std::convert::Infallible> {
+        Ok(TxRetryPolicy {
+            initial_interval: self.0.initial_interval.unwrap_or(Duration::from_secs(10)),
+            interval_multiplier_factor: self
+                .0
+                .interval_multiplier_factor
+                .unwrap_or(Multiplier::from_u64_per_1000(1500)),
+            max_interval: self.0.max_interval.unwrap_or(Duration::from_secs(120)),
+            jitter: self.0.jitter.unwrap_or(Duration::from_secs(1)),
+        })
+    }
+}
+
+serde_conv!(pub NonInclusionRetryPolicy, TxRetryPolicy, NonInclusionRetryPolicyImpl::new, NonInclusionRetryPolicyImpl::get);
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct NonInclusionRetryPolicyImpl(ConfigTxRetryPolicy);
+
+impl NonInclusionRetryPolicyImpl {
+    fn new(value: &TxRetryPolicy) -> Self {
+        NonInclusionRetryPolicyImpl(ConfigTxRetryPolicy::from(value))
+    }
+
+    pub fn get(self) -> Result<TxRetryPolicy, std::convert::Infallible> {
+        Ok(TxRetryPolicy {
+            initial_interval: self.0.initial_interval.unwrap_or(Duration::from_secs(60)),
+            interval_multiplier_factor: self
+                .0
+                .interval_multiplier_factor
+                .unwrap_or(Multiplier::from_u64_per_1000(2000)),
+            max_interval: self.0.max_interval.unwrap_or(Duration::from_secs(600)),
+            jitter: self.0.jitter.unwrap_or(Duration::from_secs(10)),
+        })
+    }
+}
+
+/// Transaction retry policy for failed or pending settlement transactions.
+///
+/// Defines the strategy used when retrying failed or pending transactions.
+///
+/// Future versions may include additional policies such as:
+/// - **Exponential**: Exponential backoff with increasing intervals
+/// - **Jittered**: Random jitter to avoid thundering herd issues
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
+pub struct TxRetryPolicy {
+    /// Initial retry interval.
+    pub initial_interval: Duration,
+
+    /// Interval multiplier for each subsequent retry.
+    pub interval_multiplier_factor: Multiplier,
+
+    /// Maximum interval between retries.
+    pub max_interval: Duration,
+
+    /// Jitter factor to add randomness to retry intervals.
     pub jitter: Duration,
 }
 
 /// The settlement transaction configuration.
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+#[serde_as]
 pub struct SettlementTransactionConfig {
     /// Maximum number of retries for the transaction.
     /// Expected to be a big number.
@@ -90,11 +171,13 @@ pub struct SettlementTransactionConfig {
     pub max_retries: usize,
 
     /// Retry policy for the transaction when there is a transient failure.
-    #[serde(default = "default_transient_rpc_retry_policy")]
+    #[serde(default)]
+    #[serde_as(as = "TransientRetryPolicy")]
     pub retry_on_transient_failure: TxRetryPolicy,
 
     /// Retry policy for the transaction when it is not included on L1.
-    #[serde(default = "default_non_inclusion_rpc_retry_policy")]
+    #[serde(default)]
+    #[serde_as(as = "NonInclusionRetryPolicy")]
     pub retry_on_not_included_on_l1: TxRetryPolicy,
 
     /// Number of block confirmations required for
@@ -142,8 +225,13 @@ impl Default for SettlementTransactionConfig {
     fn default() -> Self {
         Self {
             max_retries: default_rpc_max_retries(),
-            retry_on_transient_failure: default_transient_rpc_retry_policy(),
-            retry_on_not_included_on_l1: default_non_inclusion_rpc_retry_policy(),
+            retry_on_transient_failure: TransientRetryPolicyImpl(ConfigTxRetryPolicy::default())
+                .get()
+                .unwrap(),
+            retry_on_not_included_on_l1:
+                NonInclusionRetryPolicyImpl(ConfigTxRetryPolicy::default())
+                    .get()
+                    .unwrap(),
             confirmations: default_confirmations(),
             finality: Finality::default(),
             gas_limit_multiplier_factor: Multiplier::default(),
@@ -279,29 +367,6 @@ pub struct SettlementConfig {
 
 const fn default_rpc_max_retries() -> usize {
     16 * 1024
-}
-
-const fn default_max_interval() -> Duration {
-    Duration::from_secs(60 * 60 * 24 * 36525) // effectively infinite: ~100
-                                              // years
-}
-
-const fn default_transient_rpc_retry_policy() -> TxRetryPolicy {
-    TxRetryPolicy {
-        initial_interval: Duration::from_secs(10),
-        interval_multiplier_factor: Multiplier::from_u64_per_1000(1500),
-        max_interval: Duration::from_secs(120),
-        jitter: Duration::from_secs(1),
-    }
-}
-
-const fn default_non_inclusion_rpc_retry_policy() -> TxRetryPolicy {
-    TxRetryPolicy {
-        initial_interval: Duration::from_secs(60),
-        interval_multiplier_factor: Multiplier::from_u64_per_1000(2000),
-        max_interval: Duration::from_secs(600),
-        jitter: Duration::from_secs(10),
-    }
 }
 
 /// Default number of confirmations required
