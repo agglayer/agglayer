@@ -96,7 +96,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
     ) -> eyre::Result<()> {
-        // This fail_point is use to make the verification pass or fail
+        // This fail_point is used to make the verification pass or fail
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
             |_| {

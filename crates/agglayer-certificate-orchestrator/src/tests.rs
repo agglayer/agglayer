@@ -10,11 +10,11 @@ use agglayer_clock::ClockRef;
 use agglayer_config::Config;
 use agglayer_interop_types::PessimisticRoot;
 use agglayer_storage::{
+    backup::BackupClient,
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
-    storage::backup::BackupClient,
     stores::{
         epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
         EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
