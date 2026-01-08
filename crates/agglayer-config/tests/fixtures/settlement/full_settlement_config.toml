@@ -1,22 +1,22 @@
 # Full settlement configuration with both certificate and validium configs
 [pessimistic-proof-tx-config]
-max-retries = 2048
+max-expected-retries = 2048
 retry-on-transient-failure.initial-interval = "15s"
 retry-on-transient-failure.multiplier = 2.5
 retry-on-transient-failure.max-interval = "2m"
 retry-on-transient-failure.jitter = "1m"
 confirmations = 64
-finality = "FinalizedBlock"
+settlement-policy = "FinalizedBlock"
 gas-limit-ceiling = "0x5f5e100"
 gas-limit-multiplier-factor = 1.1
 gas-price-multiplier-factor = 1.2
 gas-price-ceiling = "200gwei"
 
 [validium-tx-config]
-max-retries = 512
+max-expected-retries = 512
 retry-on-transient-failure.initial-interval = "5s"
 confirmations = 16
-finality = "LatestBlock"
+settlement-policy = "LatestBlock"
 gas-limit-ceiling = "0x1c9c380"
 gas-limit-multiplier-factor = 1.05
 gas-price-floor = "2gwei"

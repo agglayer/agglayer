@@ -4,7 +4,7 @@ use agglayer_primitives::U256;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, serde_conv};
 
-use crate::Multiplier;
+use crate::{with::HumanDuration, Multiplier};
 
 /// Finality level for settlement transactions on Ethereum.
 ///
@@ -45,9 +45,9 @@ pub enum SettlementPolicy {
 /// Future versions may include additional policies such as:
 /// - **Exponential**: Exponential backoff with increasing intervals
 /// - **Jittered**: Random jitter to avoid thundering herd issues
+#[serde_as]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
-#[serde_as]
 pub struct ConfigTxRetryPolicy {
     /// Initial retry interval.
     #[serde(default, skip_serializing_if = "crate::is_default")]
@@ -148,10 +148,26 @@ pub struct TxRetryPolicy {
     pub jitter: Duration,
 }
 
+impl TxRetryPolicy {
+    /// Default retry policy for transient failures.
+    pub fn default_on_transient_failure() -> Self {
+        TransientRetryPolicyImpl(ConfigTxRetryPolicy::default())
+            .get()
+            .unwrap()
+    }
+
+    /// Default retry policy for non-inclusion on L1.
+    pub fn default_non_inclusion_on_l1() -> Self {
+        NonInclusionRetryPolicyImpl(ConfigTxRetryPolicy::default())
+            .get()
+            .unwrap()
+    }
+}
+
 /// The settlement transaction configuration.
+#[serde_as]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-#[serde_as]
 pub struct SettlementTransactionConfig {
     /// Maximum number of retries for the transaction.
     /// Expected to be a big number.
@@ -159,12 +175,12 @@ pub struct SettlementTransactionConfig {
     pub max_expected_retries: usize,
 
     /// Retry policy for the transaction when there is a transient failure.
-    #[serde(default)]
+    #[serde(default = "TxRetryPolicy::default_on_transient_failure")]
     #[serde_as(as = "TransientRetryPolicy")]
     pub retry_on_transient_failure: TxRetryPolicy,
 
     /// Retry policy for the transaction when it is not included on L1.
-    #[serde(default)]
+    #[serde(default = "TxRetryPolicy::default_non_inclusion_on_l1")]
     #[serde_as(as = "NonInclusionRetryPolicy")]
     pub retry_on_not_included_on_l1: TxRetryPolicy,
 

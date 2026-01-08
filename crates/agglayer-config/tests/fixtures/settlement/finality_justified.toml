@@ -1,4 +1,3 @@
 # Configuration with justified finality (default)
 confirmations = 32
-finality = "SafeBlock"
-
+settlement-policy = "SafeBlock"

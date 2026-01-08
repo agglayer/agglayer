@@ -170,7 +170,7 @@ fn deserialize_full_settlement_config() {
 #[test]
 fn test_finality_immediate() {
     let toml = r#"
-        finality = "LatestBlock"
+        settlement-policy = "LatestBlock"
     "#;
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
@@ -193,7 +193,7 @@ fn test_finality_justified() {
 #[test]
 fn test_finality_finalized() {
     let toml = r#"
-        finality = "FinalizedBlock"
+        settlement-policy = "FinalizedBlock"
     "#;
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
