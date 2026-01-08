@@ -1,11 +1,12 @@
 use std::{sync::OnceLock, time::SystemTime};
 
 use agglayer_config::Multiplier;
+use agglayer_types::SettlementTxHash;
 use alloy::primitives::{Address, BlockHash, Bytes, U128, U256};
 use tokio::sync::mpsc;
 use ulid::Ulid;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettlementJob {
     contract_address: Address,
     calldata: Bytes,
@@ -21,39 +22,41 @@ pub struct SettlementJob {
     max_priority_fee_per_gas_multiplier: Multiplier,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SettlementJobResult {
     ClientError(ClientError),
-    ContractCallResult(ContractCallResult),
-    ReorganizedResult(ReorganizedResult),
+    ContractCall(ContractCallResult),
+    Reorganized(ReorganizedResult),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClientError {
     pub kind: ClientErrorType,
     pub message: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClientErrorType {
     Transient,
     Permanent,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContractCallResult {
     pub outcome: ContractCallOutcome,
     pub metadata: Bytes,
     pub block_hash: BlockHash,
+    pub block_number: u64,
+    pub tx_hash: SettlementTxHash,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ContractCallOutcome {
     Success,
     Revert,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReorganizedResult {
     pub reorg_detection_time: SystemTime,
     pub previous_result: Box<SettlementJobResult>,

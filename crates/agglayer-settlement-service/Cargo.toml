@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 agglayer-config.workspace = true
+agglayer-types.workspace = true
 
 alloy.workspace = true
 eyre.workspace = true

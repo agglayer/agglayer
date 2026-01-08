@@ -10,6 +10,8 @@ use crate::settlement_task::{
     SettlementJob, SettlementJobResult, SettlementTask, TaskAdminCommand,
 };
 
+const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
+
 pub enum ServiceAdminCommand {
     TaskCommand {
         job_id: Ulid,
@@ -19,10 +21,23 @@ pub enum ServiceAdminCommand {
 
 pub struct SettlementService {
     admin_command_senders: Arc<Mutex<HashMap<Ulid, mpsc::Sender<TaskAdminCommand>>>>,
-    result_watchers: Arc<Mutex<HashMap<Ulid, SettlementJobWatcher>>>,
+    result_watchers: Arc<Mutex<HashMap<Ulid, watch::Receiver<Option<SettlementJobResult>>>>>,
 }
 
-pub type SettlementJobWatcher = watch::Receiver<Option<SettlementJobResult>>;
+pub struct SettlementJobWatcher {
+    watcher: watch::Receiver<Option<SettlementJobResult>>,
+    job_id: Ulid,
+}
+
+impl SettlementJobWatcher {
+    pub fn watcher(&mut self) -> &mut watch::Receiver<Option<SettlementJobResult>> {
+        &mut self.watcher
+    }
+
+    pub fn job_id(&self) -> Ulid {
+        self.job_id
+    }
+}
 
 pub enum RetrievedSettlementResult {
     Pending(SettlementJobWatcher),
@@ -102,8 +117,8 @@ impl SettlementService {
     pub async fn request_new_settlement(
         &self,
         job: SettlementJob,
-    ) -> eyre::Result<(Ulid, SettlementJobWatcher)> {
-        let (admin_sender, admin_receiver) = mpsc::channel(10);
+    ) -> eyre::Result<SettlementJobWatcher> {
+        let (admin_sender, admin_receiver) = mpsc::channel(ADMIN_CHANNEL_BUFFER_SIZE);
         let (result_sender, result_receiver) = watch::channel(None);
         let (job_id, mut task) = SettlementTask::create(job, admin_receiver).await?;
         self.admin_command_senders
@@ -124,7 +139,10 @@ impl SettlementService {
                 );
             }
         });
-        Ok((job_id, result_receiver))
+        Ok(SettlementJobWatcher {
+            watcher: result_receiver,
+            job_id,
+        })
     }
 
     #[tracing::instrument(skip(self))]
@@ -134,7 +152,10 @@ impl SettlementService {
     ) -> eyre::Result<RetrievedSettlementResult> {
         if let Some(watcher) = self.result_watchers.lock().await.get(&job_id) {
             return match watcher.borrow().as_ref() {
-                None => Ok(RetrievedSettlementResult::Pending(watcher.clone())),
+                None => Ok(RetrievedSettlementResult::Pending(SettlementJobWatcher {
+                    job_id,
+                    watcher: watcher.clone(),
+                })),
                 Some(result) => Ok(RetrievedSettlementResult::Completed(result.clone())),
             };
         }

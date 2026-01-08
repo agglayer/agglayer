@@ -530,6 +530,7 @@ name = "agglayer-settlement-service"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-types",
  "alloy",
  "eyre",
  "tokio",
