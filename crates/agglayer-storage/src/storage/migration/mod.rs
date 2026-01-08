@@ -18,30 +18,28 @@ mod migration_cf;
 mod record;
 mod step;
 
-/// Complete migration specification with initial schema, final schema, and steps.
-///
-/// This type represents a fully declared migration plan that has not yet been
-/// applied to a database. It can be inspected, passed around, or serialized
-/// before opening the database.
+/// Complete migration specification.
 #[derive(Debug)]
 pub struct MigrationPlan<'a> {
+    // Initial database schema.
     initial_schema: &'a [ColumnDescriptor],
-    #[allow(dead_code)] // Reserved for future validation
-    final_schema: &'a [ColumnDescriptor],
+
+    // The sequence of migration steps.
     steps: Vec<MigrationStep<'a>>,
+
+    // Final schema, reserved for future use.
+    #[expect(unused)]
+    final_schema: &'a [ColumnDescriptor],
 }
 
 impl<'a> MigrationPlan<'a> {
-    /// Opens and validates the database, returning a Migrator ready for migration.
+    /// Opens and validates the database, returning a [Migrator].
     pub fn open(self, path: &Path) -> Result<Migrator<'a>, DBOpenError> {
         Migrator::open(path, self)
     }
 }
 
-/// Database migrator that holds an opened database and executes migration steps.
-///
-/// Created by `MigrationPlan::open()`, this type represents a validated database
-/// ready for migration. Call `migrate()` to execute all pending steps.
+/// Database migrator that holds an open database and executes migration steps.
 pub struct Migrator<'a> {
     db: DB,
     start_step: u32,
@@ -203,10 +201,7 @@ impl<'a> Migrator<'a> {
     }
 }
 
-/// Database builder for declaring migration steps.
-///
-/// This type collects migration steps without opening the database.
-/// Call `finalize()` to complete the declaration and get a `MigrationPlan`.
+/// Builder for declaring database migration steps.
 #[derive(Debug)]
 pub struct Builder<'a> {
     // Initial database schema (v0).
@@ -218,10 +213,6 @@ pub struct Builder<'a> {
 
 impl<'a> Builder<'a> {
     /// Creates a new migration builder with the initial database schema.
-    ///
-    /// This constructor does not open the database - it only declares the
-    /// initial schema. Use `add_cfs()` and `drop_cfs()` to add migration steps,
-    /// then call `finalize()` to complete the declaration.
     pub fn new(initial_schema: &'a [ColumnDescriptor]) -> Self {
         Self {
             initial_schema,
@@ -248,11 +239,10 @@ impl<'a> Builder<'a> {
     }
 
     /// Completes the declaration and creates a migration plan.
-    ///
-    /// This method packages the initial schema, collected steps, and final schema
-    /// into a `MigrationPlan`. Call `open()` on the plan to open and validate the
-    /// database, then `migrate()` to execute the migration.
-    pub fn finalize(self, final_schema: &'a [ColumnDescriptor]) -> Result<MigrationPlan<'a>, DBOpenError> {
+    pub fn finalize(
+        self,
+        final_schema: &'a [ColumnDescriptor],
+    ) -> Result<MigrationPlan<'a>, DBOpenError> {
         Ok(MigrationPlan {
             initial_schema: self.initial_schema,
             final_schema,
