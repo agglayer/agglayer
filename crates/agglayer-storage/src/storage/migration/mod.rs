@@ -203,6 +203,11 @@ impl<'a> Builder<'a> {
         Ok(self.db)
     }
 
+    /// Check if there are migration steps to perform.
+    pub fn migration_needed(&self) -> bool {
+        self.steps.len() > self.start_step as usize
+    }
+
     fn cf_exists(&self, cf: &str) -> bool {
         self.db.rocksdb.cf_handle(cf).is_some()
     }
