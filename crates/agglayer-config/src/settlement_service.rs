@@ -10,20 +10,8 @@ use crate::Multiplier;
 ///
 /// Defines when a transaction should be considered settled on the Ethereum
 /// network, determining the security guarantees for the settlement operation.
-///
-/// # Example
-///
-/// ```toml
-/// [settlement.pessimistic-proof-tx-config]
-/// confirmations = 16
-/// finality = "SafeBlock"
-///
-/// [settlement.validium-tx-config]
-/// confirmations = 6
-/// finality = "LatestBlock"  # Faster settlement for validium data
-/// ```
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
-pub enum Finality {
+pub enum SettlementPolicy {
     /// Transaction is considered settled immediately after the specified
     /// number of confirmation blocks.
     ///
@@ -167,8 +155,8 @@ pub struct TxRetryPolicy {
 pub struct SettlementTransactionConfig {
     /// Maximum number of retries for the transaction.
     /// Expected to be a big number.
-    #[serde(default = "default_rpc_max_retries")]
-    pub max_retries: usize,
+    #[serde(default = "default_rpc_max_expected_retries")]
+    pub max_expected_retries: usize,
 
     /// Retry policy for the transaction when there is a transient failure.
     #[serde(default)]
@@ -187,7 +175,7 @@ pub struct SettlementTransactionConfig {
 
     /// Finality level required for the transaction to be considered settled.
     #[serde(default)]
-    pub finality: Finality,
+    pub settlement_policy: SettlementPolicy,
 
     /// Gas limit multiplier factor for the transaction.
     /// The gas is calculated as follows:
@@ -224,7 +212,7 @@ pub struct SettlementTransactionConfig {
 impl Default for SettlementTransactionConfig {
     fn default() -> Self {
         Self {
-            max_retries: default_rpc_max_retries(),
+            max_expected_retries: default_rpc_max_expected_retries(),
             retry_on_transient_failure: TransientRetryPolicyImpl(ConfigTxRetryPolicy::default())
                 .get()
                 .unwrap(),
@@ -233,7 +221,7 @@ impl Default for SettlementTransactionConfig {
                     .get()
                     .unwrap(),
             confirmations: default_confirmations(),
-            finality: Finality::default(),
+            settlement_policy: SettlementPolicy::default(),
             gas_limit_multiplier_factor: Multiplier::default(),
             gas_limit_ceiling: default_gas_limit_ceiling(),
             gas_price_multiplier_factor: Multiplier::default(),
@@ -251,14 +239,6 @@ impl Default for SettlementTransactionConfig {
 ///
 /// This structure is designed to hold settlement service-specific values that
 /// are not related to individual transactions.
-///
-/// # Example TOML Configuration
-///
-/// ```toml
-/// [settlement.settlement-service-config]
-/// # Currently no service-specific fields
-/// # Future fields will be added here as the service evolves
-/// ```
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct SettlementServiceConfig {
@@ -287,31 +267,6 @@ pub struct SettlementServiceConfig {
 ///   validium data (off-chain data availability).
 /// - **Settlement Service Config**: General settlement service configuration.
 ///
-/// # Example TOML Configuration
-///
-/// ```toml
-/// [settlement]
-/// [settlement.pessimistic-proof-tx-config]
-/// max-retries = 1024
-/// tx-retry-interval = "10s"
-/// confirmations = 32
-/// finality = "finalized"
-/// gas-limit = 60000000
-/// gas-multiplier-factor = 1.1
-/// gas-price-multiplier-factor = 1.2
-/// gas-price-ceiling = "100gwei"
-///
-/// [settlement.validium-tx-config]
-/// max-retries = 512
-/// tx-retry-interval = "5s"
-/// confirmations = 16
-/// finality = "justified"
-/// gas-limit = 30000000
-/// gas-multiplier-factor = 1.05
-/// gas-price-floor = "1gwei"
-/// gas-price-ceiling = "50gwei"
-/// ```
-///
 /// # Gas Price Configuration
 ///
 /// Gas prices can be specified with units for readability:
@@ -331,7 +286,7 @@ pub struct SettlementServiceConfig {
 ///
 /// # Security Considerations
 ///
-/// - **Finality Level**: Choose the appropriate finality level based on
+/// - **Settlement policy**: Choose the appropriate finality level based on
 ///   security requirements.
 /// - **Gas Price Ceiling**: Acts as a safety mechanism to prevent excessive
 ///   transaction costs during network congestion.
@@ -365,7 +320,7 @@ pub struct SettlementConfig {
     pub settlement_service_config: SettlementServiceConfig,
 }
 
-const fn default_rpc_max_retries() -> usize {
+const fn default_rpc_max_expected_retries() -> usize {
     16 * 1024
 }
 

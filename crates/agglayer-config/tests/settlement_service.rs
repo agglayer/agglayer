@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use agglayer_config::{
-    settlement_service::{Finality, SettlementConfig, SettlementTransactionConfig},
+    settlement_service::{SettlementConfig, SettlementPolicy, SettlementTransactionConfig},
     Multiplier,
 };
 use agglayer_primitives::U256;
@@ -14,13 +14,13 @@ fn deserialize_default_settlement_tx_config() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     // Assert default values
-    assert_eq!(config.max_retries, 16384);
+    assert_eq!(config.max_expected_retries, 16384);
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(10)
     );
     assert_eq!(config.confirmations, 32);
-    assert_eq!(config.finality, Finality::SafeBlock);
+    assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
     assert_eq!(config.gas_limit_ceiling, U256::from(60_000_000_u64));
     assert_eq!(config.gas_price_ceiling, 100_000_000_000_u128);
     assert_eq!(config.gas_price_floor, 0);
@@ -37,13 +37,13 @@ fn deserialize_custom_config_1() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     // Assert custom certificate values
-    assert_eq!(config.max_retries, 2048);
+    assert_eq!(config.max_expected_retries, 2048);
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(15)
     );
     assert_eq!(config.confirmations, 64);
-    assert_eq!(config.finality, Finality::FinalizedBlock);
+    assert_eq!(config.settlement_policy, SettlementPolicy::FinalizedBlock);
     assert_eq!(config.gas_limit_ceiling, U256::from(100_000_000_u64));
     assert_eq!(config.gas_price_ceiling, 200_000_000_000_u128);
     assert_eq!(config.gas_price_floor, 5_000_000_000_u128);
@@ -62,13 +62,13 @@ fn deserialize_custom_config_2() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     // Assert custom validium values
-    assert_eq!(config.max_retries, 512);
+    assert_eq!(config.max_expected_retries, 512);
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(5)
     );
     assert_eq!(config.confirmations, 16);
-    assert_eq!(config.finality, Finality::LatestBlock);
+    assert_eq!(config.settlement_policy, SettlementPolicy::LatestBlock);
     assert_eq!(config.gas_limit_ceiling, U256::from(30_000_000_u64));
     assert_eq!(config.gas_price_ceiling, 50_000_000_000_u128);
     assert_eq!(config.gas_price_floor, 1_000_000_000_u128);
@@ -87,7 +87,10 @@ fn deserialize_full_settlement_config() {
     let config: SettlementConfig = toml::from_str(&content).unwrap();
 
     // Assert certificate config
-    assert_eq!(config.pessimistic_proof_tx_config.max_retries, 2048);
+    assert_eq!(
+        config.pessimistic_proof_tx_config.max_expected_retries,
+        2048
+    );
     assert_eq!(
         config
             .pessimistic_proof_tx_config
@@ -97,8 +100,8 @@ fn deserialize_full_settlement_config() {
     );
     assert_eq!(config.pessimistic_proof_tx_config.confirmations, 64);
     assert_eq!(
-        config.pessimistic_proof_tx_config.finality,
-        Finality::FinalizedBlock
+        config.pessimistic_proof_tx_config.settlement_policy,
+        SettlementPolicy::FinalizedBlock
     );
     assert_eq!(
         config.pessimistic_proof_tx_config.gas_limit_ceiling,
@@ -126,7 +129,7 @@ fn deserialize_full_settlement_config() {
     );
 
     // Assert validium config
-    assert_eq!(config.validium_tx_config.max_retries, 512);
+    assert_eq!(config.validium_tx_config.max_expected_retries, 512);
     assert_eq!(
         config
             .validium_tx_config
@@ -135,7 +138,10 @@ fn deserialize_full_settlement_config() {
         Duration::from_secs(5)
     );
     assert_eq!(config.validium_tx_config.confirmations, 16);
-    assert_eq!(config.validium_tx_config.finality, Finality::LatestBlock);
+    assert_eq!(
+        config.validium_tx_config.settlement_policy,
+        SettlementPolicy::LatestBlock
+    );
     assert_eq!(
         config.validium_tx_config.gas_limit_ceiling,
         U256::from(30_000_000_u64)
@@ -169,7 +175,7 @@ fn test_finality_immediate() {
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
 
-    assert_eq!(config.finality, Finality::LatestBlock);
+    assert_eq!(config.settlement_policy, SettlementPolicy::LatestBlock);
 }
 
 #[test]
@@ -178,7 +184,7 @@ fn test_finality_justified() {
     let content = std::fs::read_to_string(input).unwrap();
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
-    assert_eq!(config.finality, Finality::SafeBlock);
+    assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
     assert_eq!(config.confirmations, 32);
 
     assert_toml_snapshot!(config);
@@ -192,7 +198,7 @@ fn test_finality_finalized() {
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
 
-    assert_eq!(config.finality, Finality::FinalizedBlock);
+    assert_eq!(config.settlement_policy, SettlementPolicy::FinalizedBlock);
 }
 
 #[test]
@@ -201,7 +207,7 @@ fn test_finality_default_is_justified() {
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
 
-    assert_eq!(config.finality, Finality::SafeBlock);
+    assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
 }
 
 #[test]
@@ -209,7 +215,7 @@ fn test_settlement_transaction_config_defaults() {
     let config = SettlementTransactionConfig::default();
 
     // Test retry configuration
-    assert_eq!(config.max_retries, 16384);
+    assert_eq!(config.max_expected_retries, 16384);
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(10)
@@ -217,7 +223,7 @@ fn test_settlement_transaction_config_defaults() {
 
     // Test confirmation and finality
     assert_eq!(config.confirmations, 32);
-    assert_eq!(config.finality, Finality::SafeBlock);
+    assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
 
     // Test gas configuration
     assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.0);
