@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use eyre::Context;
-use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+use rand::{seq::SliceRandom, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 use rocksdb::{IteratorMode, Options, DB};
 use tracing::{debug, info, instrument};
 
@@ -55,7 +56,7 @@ fn run(input: &Path, output: &Path, sample_size: usize, seed: u64) -> eyre::Resu
     info!(?input, ?output, %sample_size, %seed, "Running...");
 
     // Initialize RNG with seed for deterministic sampling
-    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
 
     // List all column families in the input database
     let (options, cf_descriptors) = Options::load_latest(
@@ -102,7 +103,7 @@ fn sample_column_family(
     output_db: &DB,
     cf_name: &str,
     sample_size: usize,
-    rng: &mut StdRng,
+    rng: &mut ChaCha8Rng,
 ) -> eyre::Result<()> {
     info!("Sampling column family {cf_name:?}");
 
