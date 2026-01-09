@@ -98,10 +98,19 @@ message ContractCallResult {
   ContractCallOutcome outcome = 1;
 
   // Additional metadata about the call outcome.
+  //
+  // This will be either the success outcome or the raw revert reason.
+  // At this stage we cannot parse this further, due to not knowing which ABI was used.
   bytes metadata = 2;
 
-  // Block number where the transaction was included.
+  // Block hash where the transaction was included.
   BlockHash block_hash = 3;
+
+  // Block number where the transaction was included.
+  BlockNumber block_number = 4;
+
+  // Transaction hash of the settlement transaction.
+  TxHash tx_hash = 5;
 }
 
 // On-chain outcome of the contract call.
