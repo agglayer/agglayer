@@ -140,6 +140,8 @@ where
             TxStatusError::StatusCheck(error)
         })?;
 
+        let receipt = receipt.ok_or_else(|| TxStatusError::TxNotFound { hash })?;
+
         let current_block = self
             .kernel
             .current_l1_block_height()
@@ -148,8 +150,6 @@ where
                 error!(?error, "Failed to get current L1 block");
                 TxStatusError::L1BlockRetrieval(error)
             })?;
-
-        let receipt = receipt.ok_or_else(|| TxStatusError::TxNotFound { hash })?;
 
         let status = match receipt.block_number {
             Some(block_number) if block_number < current_block => TxStatus::Done,
