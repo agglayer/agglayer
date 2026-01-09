@@ -4204,7 +4204,6 @@ dependencies = [
  "serde_with",
  "sp1-zkvm",
  "thiserror 2.0.16",
- "tiny-keccak",
  "toml 0.9.8",
  "tracing",
  "unified-bridge",
