@@ -32,6 +32,6 @@ impl ColumnDescriptor {
     }
 
     pub fn to_rocksdb_descriptor(&self) -> rocksdb::ColumnFamilyDescriptor {
-        rocksdb::ColumnFamilyDescriptor::new(self.name, self.options.to_rocksdb_options())
+        rocksdb::ColumnFamilyDescriptor::new(self.name, self.options.into())
     }
 }

@@ -156,7 +156,7 @@ impl Builder {
             // Create the columns first.
             for descriptor in cfs {
                 let cf = descriptor.name();
-                let opts = descriptor.options().to_rocksdb_options();
+                let opts = descriptor.options().into();
 
                 if db.cf_exists(cf) {
                     warn!("Column family {cf:?} already exists, dropping to create a fresh one");
