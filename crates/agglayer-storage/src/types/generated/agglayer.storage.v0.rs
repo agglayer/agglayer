@@ -260,6 +260,13 @@ pub struct BlockHash {
     #[prost(bytes="bytes", tag="1")]
     pub hash: ::prost::bytes::Bytes,
 }
+/// Block number.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct BlockNumber {
+    /// Block number.
+    #[prost(uint64, tag="1")]
+    pub number: u64,
+}
 /// Settlement job ID.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SettlementJobId {
@@ -353,11 +360,20 @@ pub struct ContractCallResult {
     #[prost(enumeration="ContractCallOutcome", tag="1")]
     pub outcome: i32,
     /// Additional metadata about the call outcome.
+    ///
+    /// This will be either the success outcome or the raw revert reason.
+    /// At this stage we cannot parse this further, due to not knowing which ABI was used.
     #[prost(bytes="bytes", tag="2")]
     pub metadata: ::prost::bytes::Bytes,
-    /// Block number where the transaction was included.
+    /// Block hash where the transaction was included.
     #[prost(message, optional, tag="3")]
     pub block_hash: ::core::option::Option<BlockHash>,
+    /// Block number where the transaction was included.
+    #[prost(message, optional, tag="4")]
+    pub block_number: ::core::option::Option<BlockNumber>,
+    /// Transaction hash of the settlement transaction.
+    #[prost(message, optional, tag="5")]
+    pub tx_hash: ::core::option::Option<TxHash>,
 }
 /// Result indicating that the transaction's previous result was reorganized out of the chain.
 #[derive(Clone, PartialEq, ::prost::Message)]
