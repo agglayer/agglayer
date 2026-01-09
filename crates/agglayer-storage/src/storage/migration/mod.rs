@@ -1,13 +1,15 @@
 use std::{collections::BTreeSet, path::Path};
 
 use rocksdb::ColumnFamilyDescriptor;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info};
 
 pub use self::{
     access::DbAccess,
     error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError},
+    plan::{Builder, MigrationPlan},
+    step::MigrateFn,
 };
-use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord};
+use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord, step::MigrationStep};
 use crate::{
     schema::{ColumnDescriptor, ColumnSchema},
     storage::{DBError, DB},
@@ -16,37 +18,35 @@ use crate::{
 mod access;
 mod error;
 mod migration_cf;
+mod plan;
 mod record;
+mod step;
 
-/// Database builder taking care of database migrations.
-pub struct Builder {
-    // The database itself.
+/// Database migrator that holds an open database and executes migration steps.
+pub struct Migrator<'a> {
     db: DB,
-
-    // The number of the current/next migration step.
-    step: u32,
-
-    // The step number where migration should start.
     start_step: u32,
+    steps: Vec<MigrationStep<'a>>,
 }
 
-impl Builder {
-    fn new_internal(db: DB, start_step: u32) -> Self {
-        Self {
-            db,
-            step: 0,
-            start_step,
-        }
+impl std::fmt::Debug for Migrator<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Migrator")
+            .field("start_step", &self.start_step)
+            .field("steps", &self.steps)
+            .finish_non_exhaustive()
     }
+}
 
-    /// Opens a database at the given path with migration tracking.
-    ///
-    /// This method initializes or opens an existing database with the provided
-    /// initial schema (v0). It automatically sets up migration tracking and
-    /// validates the database schema.
-    pub fn open(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
+impl<'a> Migrator<'a> {
+    /// Opens the database and validates the migration plan.
+    pub fn open(path: &Path, plan: MigrationPlan<'a>) -> Result<Self, DBOpenError> {
         debug!("Preparing database for initialization and migration");
-        let desc_v0: Vec<_> = cfs_v0.iter().map(|cd| cd.to_rocksdb_descriptor()).collect();
+        let desc_v0: Vec<_> = plan
+            .initial_schema
+            .iter()
+            .map(|cd| cd.to_rocksdb_descriptor())
+            .collect();
         let cfs_v0: BTreeSet<_> = desc_v0.iter().map(|d| d.name()).collect();
 
         // Try to extract the current database schema.
@@ -105,10 +105,25 @@ impl Builder {
             step
         };
 
-        Self::new_internal(db, start_step)
-            // Initialize migration record CF with step 0.
-            .perform_step(|_| Ok(()))
-            .map_err(DBOpenError::Migration)
+        // Validate that we have enough steps declared for the recorded migrations
+        let declared_steps = plan.steps.len() as u32;
+        if declared_steps < start_step {
+            return Err(DBOpenError::FewerStepsDeclared {
+                declared: declared_steps,
+                recorded: start_step,
+            });
+        }
+
+        Ok(Migrator {
+            db,
+            start_step,
+            steps: plan.steps,
+        })
+    }
+
+    /// Helper to check if a column family exists in the database.
+    pub(crate) fn cf_exists(&self, cf: &str) -> bool {
+        self.db.rocksdb.cf_handle(cf).is_some()
     }
 
     fn writeopts() -> rocksdb::WriteOptions {
@@ -142,119 +157,30 @@ impl Builder {
         })
     }
 
-    /// Creates new column families and populates them with data.
-    ///
-    /// This is a migration step that creates column families and runs the
-    /// provided migration function to populate them. The migration function
-    /// should only write into the newly created column families.
-    pub fn add_cfs(
-        self,
-        cfs: &[ColumnDescriptor],
-        migrate_fn: impl FnOnce(&DbAccess) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBOpenError> {
-        Ok(self.perform_step(move |db| {
-            // Create the columns first.
-            for descriptor in cfs {
-                let cf = descriptor.name();
-                let opts = descriptor.options().into();
+    /// Executes all pending migration steps and returns the migrated database.
+    pub fn migrate(mut self) -> Result<DB, DBOpenError> {
+        let start_step = self.start_step as usize;
 
-                if db.cf_exists(cf) {
-                    warn!("Column family {cf:?} already exists, dropping to create a fresh one");
-                    db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
-                }
+        if start_step > 0 {
+            debug!("Skipping {start_step} already-recorded migration steps");
+        }
 
-                debug!("Creating column family {cf:?}");
-                db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
-            }
+        let steps = std::mem::take(&mut self.steps);
 
-            // Use the provided closure to populate it with data.
-            debug!("Populating new column families with data");
-            let access = DbAccess::new(&db.db, cfs);
-            migrate_fn(&access)?;
+        for (step_no, step) in steps.into_iter().enumerate().skip(start_step) {
+            let step_no = step_no as u32;
+            info!("Running migration step {step_no}");
 
-            Ok(())
-        })?)
-    }
+            // Execute step (modify DB)
+            step.execute(&mut self)
+                .map_err(|details| DBMigrationError { step_no, details })?;
 
-    /// Removes old column families from the database.
-    pub fn drop_cfs(self, cfs: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
-        Ok(self.perform_step(move |db| {
-            for descriptor in cfs {
-                let cf = descriptor.name();
-
-                if db.cf_exists(cf) {
-                    debug!("Dropping column family {cf:?}");
-                    db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
-                } else {
-                    warn!("Asked to remove a non-existing column family {cf:?}");
-                }
-            }
-
-            Ok(())
-        })?)
-    }
-
-    /// Completes the migration process and returns the database.
-    ///
-    /// This method validates that all declared migration steps have been
-    /// executed and returns the fully migrated database ready for use.
-    pub fn finalize(self, _expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
-        if self.step < self.start_step {
-            return Err(DBOpenError::FewerStepsDeclared {
-                declared: self.step,
-                recorded: self.start_step,
-            });
+            // Record step completion
+            self.db
+                .put::<MigrationRecordColumn>(&step_no, &MigrationRecord::default())?;
         }
 
         Ok(self.db)
-    }
-
-    fn perform_step(
-        self,
-        step_fn: impl FnOnce(&mut Self) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBMigrationError> {
-        let step = self.step;
-        self.perform_step_impl(step_fn)
-            .map_err(|details| DBMigrationError { step, details })
-    }
-
-    #[instrument(skip(self, step_fn), fields(step = self.step))]
-    fn perform_step_impl(
-        mut self,
-        step_fn: impl FnOnce(&mut Self) -> Result<(), DBMigrationErrorDetails>,
-    ) -> Result<Self, DBMigrationErrorDetails> {
-        let step = self.step;
-
-        if step >= self.start_step {
-            info!("Running migration step {step}");
-            step_fn(&mut self)?;
-            self.db
-                .put::<MigrationRecordColumn>(&self.step, &MigrationRecord::default())?;
-        } else {
-            debug!("Step already recorded, skipping");
-        }
-
-        self.step += 1;
-        Ok(self)
-    }
-
-    fn cf_exists(&self, cf: &str) -> bool {
-        self.db.rocksdb.cf_handle(cf).is_some()
-    }
-}
-
-impl std::fmt::Debug for Builder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            db: _,
-            step,
-            start_step,
-        } = self;
-
-        f.debug_struct("Builder")
-            .field("step", step)
-            .field("start_step", start_step)
-            .finish()
     }
 }
 

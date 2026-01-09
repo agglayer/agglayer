@@ -10,7 +10,7 @@ use crate::schema::{Codec, ColumnDescriptor, ColumnSchema};
 pub(crate) mod iterators;
 mod migration;
 
-pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError, MigrateFn};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
@@ -34,15 +34,14 @@ pub struct DB {
 }
 
 impl DB {
-    /// Open a new RocksDB instance at the given path with initial column
-    /// families and a possibility to migrate the database.
-    pub fn builder(path: &Path, cfs: &[ColumnDescriptor]) -> Result<Builder, DBOpenError> {
-        Builder::open(path, cfs)
+    /// Create a migration builder with the initial database schema.
+    pub fn builder(initial_schema: &[ColumnDescriptor]) -> Builder<'_> {
+        Builder::new(initial_schema)
     }
 
     /// Open a new RocksDB instance at the given path with some column families.
     pub fn open_cf(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
-        Builder::open(path, cfs)?.finalize(cfs)
+        Self::builder(cfs).finalize(cfs)?.open(path)?.migrate()
     }
 
     /// Open a RocksDB instance in read-only mode at the given path with some
