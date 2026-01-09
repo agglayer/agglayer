@@ -20,6 +20,12 @@ impl ColumnCompressionType {
     }
 }
 
+impl From<ColumnCompressionType> for rocksdb::DBCompressionType {
+    fn from(value: ColumnCompressionType) -> Self {
+        value.to_rocksdb_compression_type()
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
 pub enum PrefixExtractor {
     /// Rocksdb default.
@@ -57,8 +63,14 @@ impl ColumnOptions {
 
     pub fn to_rocksdb_options(&self) -> rocksdb::Options {
         let mut opts = rocksdb::Options::default();
-        opts.set_compression_type(self.compression.to_rocksdb_compression_type());
+        opts.set_compression_type(self.compression.into());
         self.prefix_extractor.apply_to_rocksdb_options(&mut opts);
         opts
+    }
+}
+
+impl From<&ColumnOptions> for rocksdb::Options {
+    fn from(value: &ColumnOptions) -> Self {
+        value.to_rocksdb_options()
     }
 }

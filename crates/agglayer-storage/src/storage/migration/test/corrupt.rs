@@ -1,10 +1,12 @@
+use agglayer_types::NetworkId;
 use rocksdb::DB as RocksDB;
 
-use super::{
-    super::{Builder, DBOpenError},
-    sample::*,
+use super::sample::*;
+use crate::{
+    schema::{ColumnDescriptor, ColumnSchema},
+    storage::migration::{migration_cf::MigrationRecordColumn, Builder, DBOpenError},
+    tests::TempDBDir,
 };
-use crate::{storage::migration::migration_cf::MigrationRecordColumn, tests::TempDBDir};
 
 #[test_log::test]
 fn default_cf_not_empty() -> Result<(), eyre::Error> {
@@ -97,6 +99,50 @@ fn unexpected_schema() -> Result<(), eyre::Error> {
         match result {
             Err(DBOpenError::UnexpectedSchema) => (),
             other => panic!("Expected UnexpectedSchema error, got: {other:?}"),
+        }
+    }
+
+    Ok(())
+}
+
+#[test_log::test]
+fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
+    let temp_dir = TempDBDir::new();
+    let db_path = &temp_dir.path;
+
+    // Phase 1: Initialize database with V0 schema and add some data
+    {
+        let db = Builder::sample_builder()
+            .finalize(CFS_V0)?
+            .open(db_path)?
+            .migrate()?;
+        db.put::<NetworkInfoV0Column>(&NetworkId::new(42), &DATA_V0[0].1)?;
+    }
+
+    // Phase 2: Try to migrate but write to the old (read-only) CF
+    {
+        let result = Builder::sample_builder()
+            .add_cfs(&[ColumnDescriptor::new::<NetworkInfoV1Column>()], |db| {
+                // This should FAIL - trying to write to old CF during migration
+                let v0_value = &DATA_V0[1].1;
+                db.put::<NetworkInfoV0Column>(&NetworkId::new(42), v0_value)
+            })?
+            .finalize(CFS_V1)?
+            .open(db_path)?
+            .migrate();
+
+        match result {
+            Err(DBOpenError::Migration(migration_err)) => {
+                // Check that the error is WritingReadOnlyCf
+                match migration_err.details {
+                    crate::storage::DBMigrationErrorDetails::WritingReadOnlyCf(cf) => {
+                        assert_eq!(NetworkInfoV0Column::COLUMN_FAMILY_NAME, cf);
+                    }
+                    err => panic!("Unexpected error {err:?}"),
+                }
+            }
+            Err(err) => panic!("Unexpected error {err:?}"),
+            Ok(_) => panic!("Expected error"),
         }
     }
 

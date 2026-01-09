@@ -1,15 +1,12 @@
 use tracing::{debug, warn};
 
-use super::{DBMigrationErrorDetails, Migrator};
-use crate::{
-    schema::ColumnDescriptor,
-    storage::{DBError, DB},
-};
+use super::{DBMigrationErrorDetails, DbAccess, Migrator};
+use crate::{schema::ColumnDescriptor, storage::DBError};
 
 /// Trait alias for migration functions that populate column families with data.
-pub trait MigrateFn: FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> {}
+pub trait MigrateFn: FnOnce(&DbAccess) -> Result<(), DBMigrationErrorDetails> {}
 
-impl<F> MigrateFn for F where F: FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails> {}
+impl<F> MigrateFn for F where F: FnOnce(&DbAccess) -> Result<(), DBMigrationErrorDetails> {}
 
 /// Initialize migration tracking (step 0).
 #[derive(Debug)]
@@ -58,7 +55,8 @@ impl AddColumnFamilies<'_> {
 
         // Use the provided closure to populate it with data
         debug!("Populating new column families with data");
-        (self.migrate_fn)(&mut migrator.db)?;
+        let access = DbAccess::new(&migrator.db, self.cfs);
+        (self.migrate_fn)(&access)?;
 
         Ok(())
     }

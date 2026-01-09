@@ -4,6 +4,7 @@ use rocksdb::ColumnFamilyDescriptor;
 use tracing::{debug, info};
 
 pub use self::{
+    access::DbAccess,
     error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError},
     plan::{Builder, MigrationPlan},
     step::MigrateFn,
@@ -14,6 +15,7 @@ use crate::{
     storage::{DBError, DB},
 };
 
+mod access;
 mod error;
 mod migration_cf;
 mod plan;
