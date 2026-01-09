@@ -169,7 +169,7 @@ impl Builder {
 
             // Use the provided closure to populate it with data.
             debug!("Populating new column families with data");
-            let access = DbAccess::new(&db.db, &cfs);
+            let access = DbAccess::new(&db.db, cfs);
             migrate_fn(&access)?;
 
             Ok(())

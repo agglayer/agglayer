@@ -18,7 +18,7 @@ impl<'a> DbAccess<'a> {
 
     fn is_writable<C: ColumnSchema>(&self) -> bool {
         let mut iter = self.writable.iter();
-        iter.find(|d| d.name() == C::COLUMN_FAMILY_NAME).is_some()
+        iter.any(|d| d.name() == C::COLUMN_FAMILY_NAME)
     }
 
     /// Try to get the value for the given key.
