@@ -3,13 +3,17 @@ use std::{collections::BTreeSet, path::Path};
 use rocksdb::ColumnFamilyDescriptor;
 use tracing::{debug, info, instrument, warn};
 
-pub use self::error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use self::{
+    access::DbAccess,
+    error::{DBMigrationError, DBMigrationErrorDetails, DBOpenError},
+};
 use self::{migration_cf::MigrationRecordColumn, record::MigrationRecord};
 use crate::{
     schema::{ColumnDescriptor, ColumnSchema},
     storage::{DBError, DB},
 };
 
+mod access;
 mod error;
 mod migration_cf;
 mod record;
@@ -146,7 +150,7 @@ impl Builder {
     pub fn add_cfs(
         self,
         cfs: &[ColumnDescriptor],
-        migrate_fn: impl FnOnce(&mut DB) -> Result<(), DBMigrationErrorDetails>,
+        migrate_fn: impl FnOnce(&DbAccess) -> Result<(), DBMigrationErrorDetails>,
     ) -> Result<Self, DBOpenError> {
         Ok(self.perform_step(move |db| {
             // Create the columns first.
@@ -165,7 +169,8 @@ impl Builder {
 
             // Use the provided closure to populate it with data.
             debug!("Populating new column families with data");
-            migrate_fn(&mut db.db)?;
+            let access = DbAccess::new(&db.db, &cfs);
+            migrate_fn(&access)?;
 
             Ok(())
         })?)
