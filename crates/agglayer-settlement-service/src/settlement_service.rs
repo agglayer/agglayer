@@ -1,6 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::SettlementServiceConfig;
+use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -12,13 +13,9 @@ use crate::settlement_task::{
 
 const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 
-pub enum ServiceAdminCommand {
-    TaskCommand {
-        job_id: Ulid,
-        command: TaskAdminCommand,
-    },
-}
-
+/// The Settlement Service is responsible for managing settlement jobs and
+/// answering settlement result requests.
+#[derive(Clone)]
 pub struct SettlementService {
     admin_command_senders: Arc<Mutex<HashMap<Ulid, mpsc::Sender<TaskAdminCommand>>>>,
     result_watchers: Arc<Mutex<HashMap<Ulid, watch::Receiver<Option<SettlementJobResult>>>>>,
@@ -47,52 +44,18 @@ pub enum RetrievedSettlementResult {
 impl SettlementService {
     pub async fn start(
         _config: SettlementServiceConfig,
-        admin_commands: mpsc::Receiver<ServiceAdminCommand>,
         cancellation_token: CancellationToken,
     ) -> eyre::Result<Self> {
         let this = Self {
             admin_command_senders: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
         };
-        tokio::task::spawn(Self::admin_command_proxy(
-            admin_commands,
-            this.admin_command_senders.clone(),
-        ));
         tokio::task::spawn(Self::cancellation_token_proxy(
             cancellation_token,
             this.admin_command_senders.clone(),
         ));
         // TODO: load all pending settlements from rocksdb and run them
         Ok(this)
-    }
-
-    #[tracing::instrument(skip_all)]
-    async fn admin_command_proxy(
-        mut admin_commands: mpsc::Receiver<ServiceAdminCommand>,
-        senders: Arc<Mutex<HashMap<Ulid, mpsc::Sender<TaskAdminCommand>>>>,
-    ) {
-        while let Some(command) = admin_commands.recv().await {
-            match command {
-                ServiceAdminCommand::TaskCommand { job_id, command } => {
-                    let senders = senders.lock().await;
-                    let sender = match senders.get(&job_id) {
-                        Some(sender) => sender,
-                        None => {
-                            error!(?job_id, "No admin command sender found for settlement task");
-                            continue;
-                        }
-                    };
-                    if let Err(error) = sender.try_send(command) {
-                        error!(
-                            ?error,
-                            ?job_id,
-                            "Failed to forward admin command to settlement task, did it already \
-                             complete?"
-                        );
-                    }
-                }
-            }
-        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -111,6 +74,34 @@ impl SettlementService {
                 );
             }
         }
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn admin_task(&self, job_id: Ulid, command: TaskAdminCommand) -> eyre::Result<()> {
+        let senders = self.admin_command_senders.lock().await;
+        let Some(sender) = senders.get(&job_id) else {
+            return Err(eyre::eyre!(
+                "No admin command sender found for settlement task {job_id}"
+            ));
+        };
+        sender.try_send(command).wrap_err_with(|| {
+            format!(
+                "Failed to forward admin command to settlement task {job_id}, did it already \
+                 complete?"
+            )
+        })?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    pub async fn admin_abort_task(&self, job_id: Ulid) -> eyre::Result<()> {
+        self.admin_task(job_id, TaskAdminCommand::Abort).await
+    }
+
+    #[tracing::instrument(skip_all)]
+    pub async fn admin_reload_and_restart_task(&self, job_id: Ulid) -> eyre::Result<()> {
+        self.admin_task(job_id, TaskAdminCommand::ReloadAndRestart)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -161,5 +152,75 @@ impl SettlementService {
         }
         // TODO: check rocksdb for completed settlement job results
         todo!()
+    }
+}
+
+pub struct RequestNewSettlement(pub SettlementJob);
+
+impl tower::Service<RequestNewSettlement> for SettlementService {
+    type Response = SettlementJobWatcher;
+    type Error = eyre::Error;
+    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: RequestNewSettlement) -> Self::Future {
+        let this = self.clone();
+        Box::pin(async move { this.request_new_settlement(req.0).await })
+    }
+}
+
+pub struct RetrieveSettlementResult(pub Ulid);
+
+impl tower::Service<RetrieveSettlementResult> for SettlementService {
+    type Response = RetrievedSettlementResult;
+    type Error = eyre::Error;
+    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: RetrieveSettlementResult) -> Self::Future {
+        let this = self.clone();
+        Box::pin(async move { this.retrieve_settlement_result(req.0).await })
+    }
+}
+
+pub enum AdminCommand {
+    AbortTask(Ulid),
+    ReloadAndRestartTask(Ulid),
+}
+
+impl tower::Service<AdminCommand> for SettlementService {
+    type Response = ();
+    type Error = eyre::Error;
+    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: AdminCommand) -> Self::Future {
+        let this = self.clone();
+        Box::pin(async move {
+            match req {
+                AdminCommand::AbortTask(job_id) => this.admin_abort_task(job_id).await,
+                AdminCommand::ReloadAndRestartTask(job_id) => {
+                    this.admin_reload_and_restart_task(job_id).await
+                }
+            }
+        })
     }
 }
