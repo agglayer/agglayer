@@ -8,7 +8,7 @@ use agglayer_storage::{
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
     CertificateId, CertificateIndex, CertificateStatusError, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId, SettlementTxHash,
+    LocalNetworkStateData, NetworkId, SettlementJobId, SettlementTxHash,
 };
 use pessimistic_proof::{
     core::commitment::PessimisticRootCommitmentVersion, local_state::StateCommitment,
@@ -68,7 +68,7 @@ pub enum NetworkTaskMessage {
         previous_tx_hashes: HashSet<SettlementTxHash>,
         new_pp_root: Digest,
         settlement_submitted_notifier:
-            oneshot::Sender<Result<(SettlementTxHash, Option<NonceInfo>), CertificateStatusError>>,
+            oneshot::Sender<Result<SettlementSubmissionResult, CertificateStatusError>>,
     },
 
     /// Notify the network task that a certificate is waiting for settlement to
@@ -79,7 +79,7 @@ pub enum NetworkTaskMessage {
     CertificateWaitingForSettlement {
         height: Height,
         certificate_id: CertificateId,
-        settlement_tx_hash: SettlementTxHash,
+        settlement_job_id: SettlementJobId,
         settlement_complete_notifier: oneshot::Sender<CertificateSettlementResult>,
         new_pp_root: Digest,
     },
@@ -115,9 +115,18 @@ pub enum NetworkTaskMessage {
     },
 }
 
+/// Result of settlement submission. Can be either a new job ID or an already-settled transaction hash.
+#[derive(Debug)]
+pub enum SettlementSubmissionResult {
+    /// New settlement job was created with the given job ID.
+    NewJob(SettlementJobId, Option<NonceInfo>),
+    /// Certificate was already settled through the given transaction hash.
+    AlreadySettled(SettlementTxHash),
+}
+
 #[derive(Debug)]
 pub enum CertificateSettlementResult {
-    Settled(EpochNumber, CertificateIndex),
+    Settled(SettlementTxHash, EpochNumber, CertificateIndex),
     TimeoutError,
     Error(CertificateStatusError),
     SettledThroughOtherTx(SettlementTxHash),
@@ -411,42 +420,40 @@ where
                             .submit_certificate_settlement(certificate_id, nonce_info)
                             .await;
 
-                        // Get the nonce of the tx.
-                        let mut result: Result<(SettlementTxHash, Option<NonceInfo>), Error> = match result {
-                            Ok(settlement_tx_hash) => {
-                                match self.settlement_client.fetch_settlement_nonce(settlement_tx_hash).await {
-                                    Ok(nonce) => {
-                                        Ok((settlement_tx_hash, nonce))
-                                    }
-                                    Err(err) => {
-                                        error!(%certificate_id,
-                                            "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
-                                         Ok((settlement_tx_hash, None))
-                                    }
-                                }
+                        // Get the nonce of the tx (we need to get it from the job result later).
+                        // For now, we return the job_id without nonce info.
+                        let mut result: Result<SettlementSubmissionResult, Error> = match result {
+                            Ok(settlement_job_id) => {
+                                // TODO: Get nonce from settlement job when settlement service is fully integrated
+                                Ok(SettlementSubmissionResult::NewJob(settlement_job_id, None))
                             }
                             Err(err) => Err(err),
                         };
 
                         // If the error in the sending transaction happened for whatever reason,
                         // check if maybe the certificate has been settled through some other previous transaction.
+                        // Note: When we find that a certificate is already settled, we can't return a SettlementJobId
+                        // because there's no job for an already-settled transaction. Instead, we need to handle this
+                        // case differently - the certificate_task will need to check for already-settled certificates
+                        // and update the settlement_tx_hash directly.
                         if let Err(err) = &result {
                             error!(%certificate_id, "Error submitting settlement transaction for certificate at height {height}: {err:?}");
+                            // Check previous transactions to see if certificate was already settled
                             for previous_tx_hash in previous_tx_hashes {
                                 match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
                                     Ok(crate::TxReceiptStatus::TxSuccessful) => {
-                                        // Transaction is mined, but we haven't known that, return it for further processing.
+                                        // Transaction is mined, but we haven't known that.
+                                        // Return AlreadySettled result instead of a job ID.
                                         info!(%certificate_id,
                                             "Certificate for new height: {height} has been settled on L1 through previous transaction {previous_tx_hash}");
-                                        result = Ok((previous_tx_hash, None));
+                                        result = Ok(SettlementSubmissionResult::AlreadySettled(previous_tx_hash));
                                         break;
                                     }
                                     Ok(crate::TxReceiptStatus::TxFailed) => {
-                                        // Transaction is mined with status 0 (reverted). Return it for further processing.
+                                        // Transaction is mined with status 0 (reverted).
                                         warn!(%certificate_id,
                                             "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
-                                        result = Ok((previous_tx_hash, None));
-                                        break;
+                                        // Continue with original error
                                     }
                                     Ok(crate::TxReceiptStatus::NotFound) => {
                                         debug!(%certificate_id,
@@ -461,15 +468,17 @@ where
 
                             // In the case we have lost the previous tx hashes (e.g. agglayer crashed),
                             // we can still check the latest pp root on L1.
-                            if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
-                               if latest_pp_root == new_pp_root {
-                                   // Certificate has been settled through some other previous transaction.
-                                   info!(%certificate_id,
-                                       "Certificate for new height: {height} has been previously settled on \
-                                       L1 through other transaction {latest_pp_root_tx_hash}, \
-                                       hence unable to send settlement transaction");
-                                   result = Ok((latest_pp_root_tx_hash, None));
-                               }
+                            if let Err(_) = &result {
+                                if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
+                                   if latest_pp_root == new_pp_root {
+                                       // Certificate has been settled through some other previous transaction.
+                                       info!(%certificate_id,
+                                           "Certificate for new height: {height} has been previously settled on \
+                                           L1 through other transaction {latest_pp_root_tx_hash}, \
+                                           hence unable to send settlement transaction");
+                                       result = Ok(SettlementSubmissionResult::AlreadySettled(latest_pp_root_tx_hash));
+                                   }
+                                }
                             }
                         }
 
@@ -481,19 +490,19 @@ where
                         fail::fail_point!("network_task::make_progress::settlement_submitted");
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier,
+                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_job_id, settlement_complete_notifier,
                         height, new_pp_root, ..}) => {
                         let height = height.as_u64();
                         // See comment on CertificateReadyForSettlement.
                         let result = self
                             .settlement_client
-                            .wait_for_settlement(settlement_tx_hash, certificate_id)
+                            .wait_for_settlement(settlement_job_id, certificate_id)
                             .await;
 
                         let result = match result {
-                            Ok((epoch, index)) => {
+                            Ok((settlement_tx_hash, epoch, index)) => {
                                 // Certificate has been settled.
-                                CertificateSettlementResult::Settled(epoch, index)
+                                CertificateSettlementResult::Settled(settlement_tx_hash, epoch, index)
                             }
                             Err(Error::PendingTransactionTimeout { settlement_tx_hash, .. }) => {
                                 match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {

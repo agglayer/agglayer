@@ -2,9 +2,11 @@ use crate::{
     CertificateId, CertificateIndex, EpochNumber, Height, LocalExitRoot, Metadata, NetworkId,
 };
 
+mod settlement_job_id;
 mod settlement_tx_hash;
 mod status;
 
+pub use settlement_job_id::SettlementJobId;
 pub use settlement_tx_hash::SettlementTxHash;
 pub use status::CertificateStatus;
 
@@ -19,5 +21,9 @@ pub struct CertificateHeader {
     pub new_local_exit_root: LocalExitRoot,
     pub metadata: Metadata,
     pub status: CertificateStatus,
+    /// Settlement job ID used to track settlement until marked as Settled.
+    /// Once settled, this is cleared and settlement_tx_hash is set.
+    pub settlement_job_id: Option<SettlementJobId>,
+    /// Settlement transaction hash. Only set when certificate is marked as Settled.
     pub settlement_tx_hash: Option<SettlementTxHash>,
 }

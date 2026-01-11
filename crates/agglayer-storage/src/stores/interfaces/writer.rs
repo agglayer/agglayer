@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementJobId,
+    SettlementTxHash,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -57,6 +58,17 @@ pub trait StateWriter: Send + Sync {
 
     fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error>;
 
+    /// Update settlement job ID. Used when settlement is submitted but not yet settled.
+    fn update_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+        job_id: SettlementJobId,
+        force: UpdateEvenIfAlreadyPresent,
+        set_status: UpdateStatusToCandidate,
+    ) -> Result<(), Error>;
+
+    /// Update settlement transaction hash. Used when certificate is marked as Settled.
+    /// This should clear the settlement_job_id and set the settlement_tx_hash.
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,

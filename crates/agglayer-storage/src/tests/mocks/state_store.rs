@@ -1,6 +1,6 @@
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementJobId, SettlementTxHash,
 };
 use mockall::mock;
 
@@ -34,6 +34,14 @@ mock! {
     }
 
     impl StateWriter for StateStore {
+        fn update_settlement_job_id(
+            &self,
+            certificate_id: &CertificateId,
+            job_id: SettlementJobId,
+            force: UpdateEvenIfAlreadyPresent,
+            set_status: UpdateStatusToCandidate,
+        ) -> Result<(), Error>;
+
         fn update_settlement_tx_hash(
             &self,
             certificate_id: &CertificateId,

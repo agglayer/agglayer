@@ -56,6 +56,7 @@ fn transient_network_info() {
         new_local_exit_root: pending_certificate.new_local_exit_root,
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Pending,
+        settlement_job_id: None,
         settlement_tx_hash: None,
     };
 
@@ -186,6 +187,7 @@ fn pending_certificate_defined() {
         new_local_exit_root: pending_certificate.new_local_exit_root,
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Pending,
+        settlement_job_id: None,
         settlement_tx_hash: None,
     };
 
