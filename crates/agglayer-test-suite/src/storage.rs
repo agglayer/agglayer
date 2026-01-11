@@ -14,11 +14,11 @@ pub struct StorageContext {
 
 impl StorageContext {
     pub fn new_with_config(config: Arc<Config>) -> Self {
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
-        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
-
-        let state = Arc::new(StateStore::new(state_db, BackupClient::noop()));
-        let pending = Arc::new(PendingStore::new(pending_db));
+        let state = Arc::new(
+            StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+        );
+        let pending =
+            Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
         let debug = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap())
         } else {
