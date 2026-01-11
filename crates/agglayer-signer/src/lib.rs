@@ -185,6 +185,23 @@ impl TxSigner<Signature> for ConfiguredSigner {
 }
 
 impl ConfiguredSigner {
+    /// Signs a transaction using a local signer.
+    ///
+    /// This helper method clones the transaction internally to match the
+    /// behavior of `KmsSigner::sign_transaction`, ensuring consistent API
+    /// across both signer types.
+    async fn sign_transaction_local(
+        wallet: &PrivateKeySigner,
+        tx: &TypedTransaction,
+    ) -> Result<Signature, Error> {
+        // Convert the TypedTransaction to a mutable dyn SignableTransaction
+        let mut tx_clone = tx.clone();
+        wallet
+            .sign_transaction(&mut tx_clone)
+            .await
+            .map_err(Error::Signer)
+    }
+
     /// Signs a transaction using the appropriate signer.
     ///
     /// This method provides transaction signing functionality that delegates
@@ -192,13 +209,7 @@ impl ConfiguredSigner {
     #[inline]
     pub async fn sign_transaction_typed(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
         match self {
-            ConfiguredSigner::Local(wallet) => {
-                let mut tx_clone = tx.clone();
-                wallet
-                    .sign_transaction(&mut tx_clone)
-                    .await
-                    .map_err(Error::Signer)
-            }
+            ConfiguredSigner::Local(wallet) => Self::sign_transaction_local(wallet, tx).await,
             ConfiguredSigner::Kms(signer) => {
                 signer.sign_transaction(tx).await.map_err(Error::GcpKms)
             }
