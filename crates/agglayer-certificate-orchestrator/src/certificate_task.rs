@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
-    network_task::{CertificateSettlementResult, NetworkTaskMessage},
+    network_task::{CertificateSettlementResult, NetworkTaskMessage, SettlementSubmissionResult},
     Certifier, Error, NonceInfo,
 };
 
@@ -450,49 +450,63 @@ where
         })
         .await?;
 
-        let (settlement_tx_hash, nonce_info) = settlement_submitted.await.map_err(recv_err)??;
+        let submission_result = settlement_submitted.await.map_err(recv_err)??;
+        
+        match submission_result {
+            SettlementSubmissionResult::NewJob(settlement_job_id, nonce_info) => {
+                // Keep the nonce and previous fees for future use (e.g., retries)
+                if let Some(nonce_info) = nonce_info {
+                    debug!("Settlement job {settlement_job_id} submitted with nonce {nonce_info:?}");
+                    self.nonce_info = Some(nonce_info);
+                }
 
-        if self.previous_tx_hashes.insert(settlement_tx_hash) {
-            debug!(
-                "Certificate settlement transactions list: {:?}",
-                self.previous_tx_hashes
-            );
-        } else {
-            warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
+                #[cfg(feature = "testutils")]
+                fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
+
+                self.header.settlement_job_id = Some(settlement_job_id);
+                self.state_store.update_settlement_job_id(
+                    &certificate_id,
+                    settlement_job_id,
+                    UpdateEvenIfAlreadyPresent::Yes,
+                    UpdateStatusToCandidate::Yes,
+                )?;
+                // No set_status: update_settlement_job_id already updates the status in the
+                // database
+                self.header.status = CertificateStatus::Candidate;
+                debug!(
+                    settlement_job_id = %settlement_job_id,
+                    "Submitted certificate for settlement"
+                );
+
+                #[cfg(feature = "testutils")]
+                testutils::inject_fail_points_after_proving(
+                    &certificate_id,
+                    &mut self.header,
+                    &self.state_store,
+                );
+
+                self.process_from_candidate().await
+            }
+            SettlementSubmissionResult::AlreadySettled(settlement_tx_hash) => {
+                // Certificate was already settled through another transaction.
+                // Clear settlement_job_id and set settlement_tx_hash directly.
+                info!(
+                    "Certificate already settled through transaction {settlement_tx_hash}, updating directly"
+                );
+                self.header.settlement_job_id = None;
+                self.header.settlement_tx_hash = Some(settlement_tx_hash);
+                self.state_store.update_settlement_tx_hash(
+                    &certificate_id,
+                    settlement_tx_hash,
+                    UpdateEvenIfAlreadyPresent::Yes,
+                    UpdateStatusToCandidate::Yes,
+                )?;
+                self.header.status = CertificateStatus::Candidate;
+                // Reprocess from Candidate to wait for confirmations
+                self.process_from_candidate().await
+            }
         }
 
-        // Keep the nonce and previous fees for future use (e.g., retries)
-        if let Some(nonce_info) = nonce_info {
-            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce_info:?}");
-            self.nonce_info = Some(nonce_info);
-        }
-
-        #[cfg(feature = "testutils")]
-        fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
-
-        self.header.settlement_tx_hash = Some(settlement_tx_hash);
-        self.state_store.update_settlement_tx_hash(
-            &certificate_id,
-            settlement_tx_hash,
-            UpdateEvenIfAlreadyPresent::Yes,
-            UpdateStatusToCandidate::Yes,
-        )?;
-        // No set_status: update_settlement_tx_hash already updates the status in the
-        // database
-        self.header.status = CertificateStatus::Candidate;
-        debug!(
-            settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
-            "Submitted certificate for settlement"
-        );
-
-        #[cfg(feature = "testutils")]
-        testutils::inject_fail_points_after_proving(
-            &certificate_id,
-            &mut self.header,
-            &self.state_store,
-        );
-
-        self.process_from_candidate().await
     }
 
     async fn process_from_candidate(&mut self) -> Result<(), CertificateStatusError> {
@@ -511,29 +525,29 @@ where
                 "CertificateTask::process_from_candidate called without a pp_root".into(),
             ))?;
 
-        let settlement_tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
+        let settlement_job_id = self.header.settlement_job_id.ok_or_else(|| {
             CertificateStatusError::SettlementError(
-                "Candidate certificate header has no settlement tx hash".into(),
+                "Candidate certificate header has no settlement job ID".into(),
             )
         })?;
         debug!(
-            %settlement_tx_hash,
+            %settlement_job_id,
             "Waiting for certificate settlement to complete"
         );
         let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
         self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
             height,
             certificate_id,
-            settlement_tx_hash,
+            settlement_job_id,
             settlement_complete_notifier,
             new_pp_root,
         })
         .await?;
 
         let settlement_complete_result = settlement_complete.await.map_err(recv_err)?;
-        let (epoch_number, certificate_index) = match settlement_complete_result {
-            CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
-                (epoch_number, certificate_index)
+        let (settlement_tx_hash, epoch_number, certificate_index) = match settlement_complete_result {
+            CertificateSettlementResult::Settled(settlement_tx_hash, epoch_number, certificate_index) => {
+                (settlement_tx_hash, epoch_number, certificate_index)
             }
             CertificateSettlementResult::Error(error) => {
                 return Err(error);
@@ -559,6 +573,8 @@ where
                 info!(
                     "Process alternative settlement transaction {alternative_settlement_tx_hash}"
                 );
+                // Clear settlement_job_id and set settlement_tx_hash for alternative tx
+                self.header.settlement_job_id = None;
                 self.header.settlement_tx_hash = Some(alternative_settlement_tx_hash);
                 self.state_store.update_settlement_tx_hash(
                     &certificate_id,
@@ -574,6 +590,16 @@ where
                 return Box::pin(self.process_from_candidate()).await;
             }
         };
+
+        // When marked as Settled, clear settlement_job_id and set settlement_tx_hash
+        self.header.settlement_job_id = None;
+        self.header.settlement_tx_hash = Some(settlement_tx_hash);
+        self.state_store.update_settlement_tx_hash(
+            &certificate_id,
+            settlement_tx_hash,
+            UpdateEvenIfAlreadyPresent::Yes,
+            UpdateStatusToCandidate::No, // Status will be set to Settled below
+        )?;
 
         let settled_certificate =
             SettledCertificate(certificate_id, height, epoch_number, certificate_index);

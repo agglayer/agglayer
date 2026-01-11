@@ -15,6 +15,7 @@ fn bench_parse_certificate_header(c: &mut Criterion) {
             new_local_exit_root: LocalExitRoot::default(),
             metadata: Metadata::default(),
             status: CertificateStatus::Pending,
+            settlement_job_id: None,
             settlement_tx_hash: None,
         })
         .unwrap();

@@ -1,4 +1,6 @@
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, NetworkId, SettlementTxHash};
+use agglayer_types::{
+    CertificateId, CertificateIndex, EpochNumber, NetworkId, SettlementJobId, SettlementTxHash,
+};
 
 use crate::Error;
 
@@ -34,15 +36,15 @@ pub trait SettlementClient: Unpin + Send + Sync + 'static {
         &self,
         certificate_id: CertificateId,
         nonce: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error>;
+    ) -> Result<SettlementJobId, Error>;
 
-    /// Watch for the transaction to be mined and update the certificate
-    /// accordingly.
+    /// Watch for the settlement job to complete and return the settlement transaction hash
+    /// along with epoch and index.
     async fn wait_for_settlement(
         &self,
-        settlement_tx_hash: SettlementTxHash,
+        settlement_job_id: SettlementJobId,
         certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error>;
+    ) -> Result<(SettlementTxHash, EpochNumber, CertificateIndex), Error>;
 
     /// Returns a reference to the provider for direct L1 queries.
     fn get_provider(&self) -> &Self::Provider;

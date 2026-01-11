@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use agglayer_certificate_orchestrator::{Error, NonceInfo, SettlementClient, TxReceiptStatus};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
@@ -8,7 +8,7 @@ use agglayer_storage::stores::{
 };
 use agglayer_types::{
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
-    ExecutionMode, Proof, SettlementTxHash, U256,
+    ExecutionMode, Proof, SettlementJobId, SettlementTxHash, U256,
 };
 use alloy::{
     eips::BlockNumberOrTag, providers::Provider, rpc::types::TransactionReceipt,
@@ -17,19 +17,24 @@ use alloy::{
 use arc_swap::ArcSwap;
 use eyre::eyre;
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
+use ulid::Ulid;
 
 const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 /// Rpc-based settlement client for L1 certificate settlement.
 /// Using alloy client to interact with the L1 rollup manager contract.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
     config: Arc<OutboundRpcSettleConfig>,
     l1_rpc: Arc<RollupManagerRpc>,
     current_epoch: Arc<ArcSwap<PerEpochStore>>,
+    /// Mapping from settlement job ID to transaction hash.
+    /// This is a temporary solution until the settlement service is fully integrated.
+    job_id_to_tx_hash: Arc<Mutex<HashMap<SettlementJobId, SettlementTxHash>>>,
 }
 
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
@@ -49,6 +54,7 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
             state_store,
             pending_store,
             current_epoch,
+            job_id_to_tx_hash: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -66,7 +72,7 @@ where
         &self,
         certificate_id: CertificateId,
         nonce_info: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error> {
+    ) -> Result<SettlementJobId, Error> {
         // Step 1: Get certificate header and validate
         let (network_id, height) = if let Some(CertificateHeader {
             status,
@@ -226,9 +232,17 @@ where
 
         // Get the transaction hash from the pending transaction
         let tx_hash = *pending_tx.tx_hash();
-        info!("Settlement transaction hash: {}", tx_hash);
+        let settlement_tx_hash = SettlementTxHash::from(tx_hash);
+        info!("Settlement transaction hash: {}", settlement_tx_hash);
 
-        Ok(SettlementTxHash::from(tx_hash))
+        // Generate a settlement job ID and store the mapping
+        let job_id = SettlementJobId::new(Ulid::new());
+        self.job_id_to_tx_hash
+            .lock()
+            .await
+            .insert(job_id, settlement_tx_hash);
+
+        Ok(job_id)
     }
 }
 
@@ -238,13 +252,26 @@ where
     RollupManagerRpc: L1TransactionFetcher,
     PerEpochStore: PerEpochWriter + PerEpochReader,
 {
-    #[tracing::instrument(skip(self), fields(%settlement_tx_hash, %certificate_id))]
+    #[tracing::instrument(skip(self), fields(%settlement_job_id, %certificate_id))]
     async fn wait_for_settlement(
         &self,
-        settlement_tx_hash: SettlementTxHash,
+        settlement_job_id: SettlementJobId,
         certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        info!(%settlement_tx_hash, "Waiting for settlement of tx {settlement_tx_hash}");
+    ) -> Result<(SettlementTxHash, EpochNumber, CertificateIndex), Error> {
+        info!(%settlement_job_id, "Waiting for settlement of job {settlement_job_id}");
+
+        // Look up the transaction hash from the job ID
+        let settlement_tx_hash = self
+            .job_id_to_tx_hash
+            .lock()
+            .await
+            .get(&settlement_job_id)
+            .copied()
+            .ok_or_else(|| Error::InternalError(format!(
+                "Settlement job ID {settlement_job_id} not found"
+            )))?;
+
+        info!(%settlement_tx_hash, "Found settlement tx hash for job {settlement_job_id}");
 
         // Apply timeout fail point if they are active for integration testing
         #[cfg(feature = "testutils")]
@@ -315,7 +342,7 @@ where
             }
         };
 
-        Ok((epoch_number, certificate_index))
+        Ok((settlement_tx_hash, epoch_number, certificate_index))
     }
 }
 
@@ -511,17 +538,17 @@ where
         &self,
         certificate_id: CertificateId,
         nonce_info: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error> {
+    ) -> Result<SettlementJobId, Error> {
         self.submit_certificate_settlement(certificate_id, nonce_info)
             .await
     }
 
     async fn wait_for_settlement(
         &self,
-        settlement_tx_hash: SettlementTxHash,
+        settlement_job_id: SettlementJobId,
         certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        self.wait_for_settlement(settlement_tx_hash, certificate_id)
+    ) -> Result<(SettlementTxHash, EpochNumber, CertificateIndex), Error> {
+        self.wait_for_settlement(settlement_job_id, certificate_id)
             .await
     }
 

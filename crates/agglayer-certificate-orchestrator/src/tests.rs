@@ -28,6 +28,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
+    SettlementJobId,
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
@@ -355,6 +356,7 @@ impl StateWriter for DummyPendingStore {
                 new_local_exit_root: certificate.new_local_exit_root,
                 status,
                 metadata: certificate.metadata,
+                settlement_job_id: None,
                 settlement_tx_hash: None,
             },
         );
@@ -927,18 +929,23 @@ impl SettlementClient for Check {
         &self,
         _certificate_id: CertificateId,
         _nonce_info: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error> {
-        Ok(SettlementTxHash::for_tests())
+    ) -> Result<SettlementJobId, Error> {
+        use ulid::Ulid;
+        Ok(SettlementJobId::new(Ulid::new()))
     }
 
-    /// Watch for the transaction to be mined and update the certificate
-    /// accordingly
+    /// Watch for the settlement job to complete and return the settlement transaction hash
+    /// along with epoch and index.
     async fn wait_for_settlement(
         &self,
-        _settlement_tx_hash: SettlementTxHash,
+        _settlement_job_id: SettlementJobId,
         _certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
+    ) -> Result<(SettlementTxHash, EpochNumber, CertificateIndex), Error> {
+        Ok((
+            SettlementTxHash::for_tests(),
+            EpochNumber::ZERO,
+            CertificateIndex::ZERO,
+        ))
     }
 
     fn get_provider(&self) -> &Self::Provider {

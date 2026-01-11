@@ -21,7 +21,7 @@ mod metadata;
 #[cfg(feature = "testutils")]
 mod testutils;
 
-pub use header::{CertificateHeader, CertificateStatus, SettlementTxHash};
+pub use header::{CertificateHeader, CertificateStatus, SettlementJobId, SettlementTxHash};
 pub use height::Height;
 pub use id::CertificateId;
 pub use index::CertificateIndex;
