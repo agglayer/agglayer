@@ -18,7 +18,7 @@ pub(crate) struct Cli {
 pub(crate) enum Commands {
     Run {
         /// The path to the configuration file.
-        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
+        #[arg(long = "config-path", alias = "cfg", short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
         cfg: PathBuf,
     },
 
@@ -54,14 +54,14 @@ pub(crate) enum Commands {
 pub(crate) enum Backup {
     /// List all backups.
     List {
-        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
-        config_path: PathBuf,
+        #[arg(long = "config-path", alias = "cfg", short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
+        cfg: PathBuf,
     },
 
     /// Restore from a backup.
     Restore {
-        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
-        config_path: PathBuf,
+        #[arg(long = "config-path", alias = "cfg", short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "CONFIG_PATH")]
+        cfg: PathBuf,
         #[arg(value_parser = parse_db_kind_version)]
         db_versions: Vec<(DbKind, u32)>,
     },
