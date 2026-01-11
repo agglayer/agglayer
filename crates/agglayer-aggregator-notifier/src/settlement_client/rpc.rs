@@ -1,20 +1,21 @@
 use std::{sync::Arc, time::Duration};
 
-use agglayer_certificate_orchestrator::{Error, SettlementClient};
+use agglayer_certificate_orchestrator::{Error, NonceInfo, SettlementClient, TxReceiptStatus};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
     PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
-    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, EpochNumber,
-    ExecutionMode, Proof, SettlementTxHash,
+    CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
+    ExecutionMode, Proof, SettlementTxHash, U256,
 };
 use alloy::{
-    providers::{PendingTransactionConfig, Provider},
-    rpc::types::TransactionReceipt,
+    eips::BlockNumberOrTag, providers::Provider, rpc::types::TransactionReceipt,
+    signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
 use arc_swap::ArcSwap;
+use eyre::eyre;
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
 use tracing::{debug, error, info, instrument, warn};
 
@@ -64,6 +65,7 @@ where
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
+        nonce_info: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error> {
         // Step 1: Get certificate header and validate
         let (network_id, height) = if let Some(CertificateHeader {
@@ -192,6 +194,13 @@ where
                 *output.new_pessimistic_root,
                 proof_with_selector.into(),
                 certificate.custom_chain_data.into(),
+                nonce_info.map(|n| {
+                    (
+                        n.nonce,
+                        n.previous_max_fee_per_gas,
+                        n.previous_max_priority_fee_per_gas,
+                    )
+                }),
             )
             .await
         {
@@ -200,18 +209,17 @@ where
                 pending_tx
             }
             Err(error) => {
-                let error_str = RollupManagerRpc::decode_contract_revert(&error)
+                // TODO: Differentiate between different error types, check if decoding works
+                // properly for custom errors as well.
+                let error_decoded = RollupManagerRpc::decode_contract_revert(&error)
                     .unwrap_or_else(|| error.to_string());
+                let error_message = error.to_string();
 
-                error!(
-                    error_code = %error,
-                    error = error_str,
-                    "Failed to settle certificate"
-                );
+                error!(error_message, error_decoded, "Failed to settle certificate");
 
                 return Err(Error::SettlementError {
                     certificate_id,
-                    error: error_str,
+                    error: format!("Message: {error_message}\nDecoded error: {error_decoded}"),
                 });
             }
         };
@@ -238,10 +246,21 @@ where
     ) -> Result<(EpochNumber, CertificateIndex), Error> {
         info!(%settlement_tx_hash, "Waiting for settlement of tx {settlement_tx_hash}");
 
+        // Apply timeout fail point if they are active for integration testing
+        #[cfg(feature = "testutils")]
+        testutils::inject_settle_certificate_timeout_fail_points(
+            certificate_id,
+            settlement_tx_hash,
+        )?;
+
         // Step 1: Wait for transaction receipt with retries
         let receipt = self
             .wait_for_transaction_receipt(settlement_tx_hash, certificate_id)
             .await?;
+
+        if !receipt.inner.tx_type().is_eip1559() {
+            warn!(tx = %settlement_tx_hash, "Settlement tx is not eip1559.");
+        }
 
         // Apply fail points if they are active for integration testing
         #[cfg(feature = "testutils")]
@@ -311,59 +330,169 @@ where
         settlement_tx_hash: SettlementTxHash,
         certificate_id: CertificateId,
     ) -> Result<TransactionReceipt, Error> {
-        let tx_hash = settlement_tx_hash.into();
         let timeout = self
             .config
             .retry_interval
             .mul_f64(self.config.max_retries as f64);
-        let pending_tx_config = PendingTransactionConfig::new(tx_hash)
-            .with_required_confirmations(self.config.confirmations as u64)
-            .with_timeout(Some(timeout));
 
-        let pending_tx = self
-            .l1_rpc
-            .get_provider()
-            .watch_pending_transaction(pending_tx_config)
-            .await
-            .map_err(|e| Error::SettlementError {
-                certificate_id,
-                error: format!("Failed to watch pending settlement transaction: {e}"),
-            })?;
+        debug!(
+            ?timeout,
+            max_retries = self.config.max_retries,
+            retry_interval = ?self.config.retry_interval,
+            "Waiting for transaction receipt",
+        );
 
-        match pending_tx.await {
-            Ok(confirmed_tx_hash) => {
-                info!(%settlement_tx_hash, "Transaction confirmed, fetching receipt");
-                // Now fetch the actual transaction receipt using the confirmed hash
-                self.l1_rpc
-                    .fetch_transaction_receipt(confirmed_tx_hash)
-                    .await
-                    .map_err(|error| {
-                        error!(
-                            ?error,
-                            %settlement_tx_hash,
-                            "Failed to fetch settlement transaction receipt"
+        for attempt in 0..=self.config.max_retries {
+            match self
+                .l1_rpc
+                .fetch_transaction_receipt(settlement_tx_hash)
+                .await
+            {
+                Ok(Some(receipt)) => {
+                    info!(attempt, "Successfully fetched transaction receipt");
+
+                    // Wait for the required number of confirmations
+                    if self.config.confirmations > 0 {
+                        let receipt_block = receipt.block_number.ok_or_else(|| {
+                            error!(%settlement_tx_hash, "Transaction receipt has no block number");
+                            Error::SettlementError {
+                                certificate_id,
+                                error: "Transaction receipt has no block number".to_string(),
+                            }
+                        })?;
+
+                        debug!(
+                            receipt_block,
+                            required_confirmations = self.config.confirmations,
+                            "Waiting for block confirmations"
                         );
 
-                        Error::SettlementError {
-                            certificate_id,
-                            error: format!(
-                                "Failed to fetch settlement transaction receipt: {error}"
-                            ),
+                        // Wait until we have the required number of confirmations
+                        for confirmation_attempt in attempt..=self.config.max_retries {
+                            match self.l1_rpc.get_provider().get_block_number().await {
+                                Ok(current_block) => {
+                                    let confirmations = current_block
+                                        .saturating_sub(receipt_block)
+                                        .saturating_add(1);
+                                    if confirmations >= self.config.confirmations as u64 {
+                                        info!(
+                                            confirmations,
+                                            required_confirmations = self.config.confirmations,
+                                            current_block,
+                                            "Transaction confirmed with required confirmations"
+                                        );
+                                        return Ok(receipt);
+                                    } else {
+                                        debug!(
+                                            confirmations,
+                                            required_confirmations = self.config.confirmations,
+                                            "Waiting for more confirmations, sleeping"
+                                        );
+                                        tokio::time::sleep(self.config.retry_interval).await;
+                                    }
+                                }
+                                Err(error) => {
+                                    if confirmation_attempt <= self.config.max_retries {
+                                        warn!(
+                                            ?error,
+                                            "Failed to get current block number, retrying"
+                                        );
+                                        tokio::time::sleep(self.config.retry_interval).await;
+                                        continue;
+                                    } else {
+                                        error!(
+                                            ?error,
+                                            "Failed to get current block number after maximum \
+                                             retries"
+                                        );
+                                        return Err(Error::SettlementError {
+                                            certificate_id,
+                                            error: format!(
+                                                "Failed to get current block number while waiting \
+                                                 for confirmations of tx {settlement_tx_hash}: \
+                                                 {error}"
+                                            ),
+                                        });
+                                    }
+                                }
+                            }
                         }
-                    })
-            }
-            Err(error) => {
-                error!(
-                    ?error,
-                    %settlement_tx_hash,
-                    "Failed to wait for the pending settlement transaction confirmation"
-                );
-                Err(Error::SettlementError {
-                    certificate_id,
-                    error: error.to_string(),
-                })
+
+                        // Timeout waiting for confirmations
+                        error!(
+                            ?timeout,
+                            "Timeout while waiting for transaction confirmations"
+                        );
+                        return Err(Error::PendingTransactionTimeout {
+                            certificate_id,
+                            settlement_tx_hash,
+                            source: eyre!(
+                                "Timeout while waiting for transaction confirmations for tx \
+                                 {settlement_tx_hash} after {timeout:?}"
+                            ),
+                        });
+                    } else {
+                        // No confirmations required, return immediately
+                        return Ok(receipt);
+                    }
+                }
+                Ok(None) => {
+                    // Transaction not yet included in a block, continue retrying
+                    if attempt <= self.config.max_retries {
+                        debug!(
+                            %settlement_tx_hash,
+                            next_attempt = attempt + 1,
+                            max_retries = self.config.max_retries,
+                            retry_interval = ?self.config.retry_interval,
+                            "Transaction receipt not found yet, retrying after {:?}",
+                            self.config.retry_interval
+                        );
+                        tokio::time::sleep(self.config.retry_interval).await;
+                        continue;
+                    } else {
+                        // Max retries reached
+                        error!(
+                            %settlement_tx_hash,
+                            ?timeout,
+                            "Timeout while waiting the pending settlement transaction"
+                        );
+                        return Err(Error::PendingTransactionTimeout {
+                            certificate_id,
+                            settlement_tx_hash,
+                            source: eyre!(
+                                "Timeout while waiting for the pending settlement transaction \
+                                 {timeout:?}"
+                            ),
+                        });
+                    }
+                }
+                Err(error) => {
+                    // Other error (e.g., network issue, RPC error)
+                    error!(?error, "Error watching the pending settlement transaction");
+                    return Err(Error::SettlementError {
+                        certificate_id,
+                        error: format!(
+                            "Error while waiting for the pending settlement transaction tx \
+                             {settlement_tx_hash}: {error}"
+                        ),
+                    });
+                }
             }
         }
+
+        // This should not be reached, but added for completeness
+        error!(
+            ?timeout,
+            "Unexpected timeout while watching the pending settlement transaction"
+        );
+        Err(Error::PendingTransactionTimeout {
+            certificate_id,
+            settlement_tx_hash,
+            source: eyre!(
+                "Unexpected timeout while watching the pending settlement transaction after \
+                 {timeout:?}"
+            ),
+        })
     }
 }
 
@@ -376,13 +505,15 @@ where
     RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
-    type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
+    type Provider = <RollupManagerRpc as L1TransactionFetcher>::Provider;
 
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
+        nonce_info: Option<NonceInfo>,
     ) -> Result<SettlementTxHash, Error> {
-        self.submit_certificate_settlement(certificate_id).await
+        self.submit_certificate_settlement(certificate_id, nonce_info)
+            .await
     }
 
     async fn wait_for_settlement(
@@ -393,11 +524,188 @@ where
         self.wait_for_settlement(settlement_tx_hash, certificate_id)
             .await
     }
+
+    fn get_provider(&self) -> &Self::Provider {
+        self.l1_rpc.get_provider()
+    }
+
+    /// Queries the L1 for the latest `VerifyPessimisticStateTransition` event
+    /// for the given `network_id` and returns its `newPessimisticRoot`
+    /// along with the transaction receipt of the transaction that has
+    /// caused it.
+    async fn fetch_last_settled_pp_root(
+        &self,
+        network_id: agglayer_types::NetworkId,
+    ) -> Result<Option<([u8; 32], SettlementTxHash)>, Error> {
+        use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
+        use alloy::{providers::Provider, sol_types::SolEvent};
+
+        // Create a filter for the latest VerifyPessimisticStateTransition event for
+        // this `network_id`. Using from_block Latest ensures we only get recent
+        // events.
+        let rollup_address = self.l1_rpc.get_rollup_manager_address();
+
+        let latest_network_block = self
+            .l1_rpc
+            .get_provider()
+            .get_block_number()
+            .await
+            .map_err(|error| {
+                error!(?error, "Failed to get the latest block number");
+                Error::L1CommunicationError(Box::new(
+                    agglayer_contracts::L1RpcError::FailedToQueryEvents(error.into()),
+                ))
+            })?
+            .as_u64();
+        let mut events = Vec::new();
+        let mut end_block = latest_network_block;
+        while events.is_empty() && end_block > 0 {
+            // start_block, end_block are inclusive
+            let start_block =
+                end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range() - 1);
+            let filter = alloy::rpc::types::Filter::new()
+                .address(rollup_address.into_alloy())
+                .event_signature(VerifyPessimisticStateTransition::SIGNATURE_HASH)
+                .topic1(U256::from(network_id.to_u32()))
+                .from_block(BlockNumberOrTag::Number(start_block))
+                .to_block(BlockNumberOrTag::Number(end_block));
+
+            // Fetch the logs through from the network.
+            events = self
+                .l1_rpc
+                .get_provider()
+                .get_logs(&filter)
+                .await
+                .map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to fetch VerifyPessimisticStateTransition logs"
+                    );
+                    Error::L1CommunicationError(Box::new(
+                        agglayer_contracts::L1RpcError::FailedToQueryEvents(error.into()),
+                    ))
+                })?;
+
+            end_block = end_block.saturating_sub(self.l1_rpc.get_event_filter_block_range());
+        }
+
+        // Get the most recent event (last in the list) and extract its new pessimistic
+        // root.
+        let result = events.iter().rev().find_map(|log| {
+            let latest_pp_root =
+                VerifyPessimisticStateTransition::decode_log(&log.clone().into()).ok();
+            let tx_hash = log.transaction_hash.map(Digest::from);
+            match (
+                latest_pp_root.map(|val| <[u8; 32]>::from(val.newPessimisticRoot)),
+                tx_hash,
+            ) {
+                (Some(pp_root), Some(tx_hash)) => Some((pp_root, SettlementTxHash::new(tx_hash))),
+                _ => None,
+            }
+        });
+
+        Ok(match result {
+            Some((pp_root, tx_hash)) => {
+                debug!(
+                    %network_id,
+                    latest_pp_root = %Digest(pp_root),
+                    %tx_hash,
+                    "Retrieved latest VerifyPessimisticStateTransition event",
+                );
+                Some((pp_root, tx_hash))
+            }
+            None => {
+                debug!(
+                    %network_id,
+                    "No VerifyPessimisticStateTransition events found for network",
+                );
+                None
+            }
+        })
+    }
+
+    async fn fetch_settlement_receipt_status(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<TxReceiptStatus, Error> {
+        match self
+            .l1_rpc
+            .fetch_transaction_receipt(settlement_tx_hash)
+            .await
+        {
+            Ok(Some(receipt)) => {
+                debug!(
+                    %settlement_tx_hash,
+                    ?receipt,
+                    "Fetched receipt for settlement tx",
+                );
+                if receipt.status() {
+                    Ok(TxReceiptStatus::TxSuccessful)
+                } else {
+                    Ok(TxReceiptStatus::TxFailed)
+                }
+            }
+            Ok(None) => {
+                warn!(%settlement_tx_hash, "No receipt found for settlement tx");
+                Ok(TxReceiptStatus::NotFound)
+            }
+            Err(error) => Err(Error::SettlementTransactionFetchReceiptError {
+                tx_hash: settlement_tx_hash,
+                error: Box::new(error),
+            }),
+        }
+    }
+
+    /// Returns the nonce for a settlement tx.
+    async fn fetch_settlement_nonce(
+        &self,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<Option<NonceInfo>, Error> {
+        // First, get the transaction to extract the nonce.
+        let nonce_info = match self
+            .l1_rpc
+            .get_provider()
+            .get_transaction_by_hash(settlement_tx_hash.into())
+            .await
+            .map_err(|e| {
+                Error::L1CommunicationError(Box::new(
+                    agglayer_contracts::L1RpcError::UnableToGetTransaction {
+                        tx_hash: settlement_tx_hash,
+                        source: e.into(),
+                    },
+                ))
+            })? {
+            Some(tx) => {
+                // Extract nonce from the inner transaction envelope.
+                // The inner field derefs to the transaction type which implements the
+                // Transaction trait.
+                use alloy::consensus::Transaction as _;
+                NonceInfo {
+                    nonce: tx.inner.nonce(),
+                    previous_max_fee_per_gas: tx.inner.max_fee_per_gas(),
+                    previous_max_priority_fee_per_gas: tx.inner.max_priority_fee_per_gas(),
+                }
+            }
+            None => {
+                warn!(%settlement_tx_hash, "Settlement tx not found on L1");
+                return Err(Error::L1CommunicationError(Box::new(
+                    agglayer_contracts::L1RpcError::UnableToGetTransaction {
+                        tx_hash: settlement_tx_hash,
+                        source: eyre::eyre!(
+                            "Settlement tx not found on L1 for tx: {settlement_tx_hash}"
+                        ),
+                    },
+                )));
+            }
+        };
+
+        Ok(Some(nonce_info))
+    }
 }
 
 #[cfg(feature = "testutils")]
 mod testutils {
-    use agglayer_types::CertificateId;
+    use agglayer_types::{CertificateId, SettlementTxHash};
     use tracing::warn;
 
     use super::Error;
@@ -436,6 +744,29 @@ mod testutils {
         }
 
         fail::fail_point!("notifier::packer::settle_certificate::receipt_future_ended");
+
+        Ok(())
+    }
+
+    #[cfg(feature = "testutils")]
+    pub(crate) fn inject_settle_certificate_timeout_fail_points(
+        certificate_id: CertificateId,
+        settlement_tx_hash: SettlementTxHash,
+    ) -> Result<(), Error> {
+        // Check if fail points are active and log warnings
+        if fail::eval(
+            "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+            |_| true,
+        )
+        .unwrap_or(false)
+        {
+            warn!("FAIL POINT ACTIVE: Simulating pending transaction timeout");
+            return Err(Error::PendingTransactionTimeout {
+                certificate_id,
+                settlement_tx_hash,
+                source: eyre::eyre!("Pending transaction timeout (simulated via fail point)"),
+            });
+        }
 
         Ok(())
     }

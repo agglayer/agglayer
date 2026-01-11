@@ -47,8 +47,6 @@ pub struct BlockClock<P> {
     block_height: Arc<AtomicU64>,
     /// The Epoch duration in Blocks.
     epoch_duration: Arc<NonZeroU64>,
-    /// The current local Epoch number.
-    current_epoch: Arc<AtomicU64>,
     /// The last seen block number.
     latest_seen_block: u64,
 }
@@ -97,7 +95,6 @@ impl<P> BlockClock<P> {
             genesis_block,
             block_height: Arc::new(AtomicU64::new(0)),
             epoch_duration: Arc::new(epoch_duration),
-            current_epoch: Arc::new(AtomicU64::new(0)),
             latest_seen_block: 0,
         }
     }
@@ -123,7 +120,7 @@ impl BlockClock<BlockProvider> {
         info!("Creating BlockClock with WebSocket connection");
 
         let client = ClientBuilder::default().pubsub(ws).await?;
-        let provider = ProviderBuilder::new().on_client(client);
+        let provider = ProviderBuilder::new().connect_client(client);
 
         // Mark connection as successful
         agglayer_telemetry::clock::record_connection_established();
@@ -142,8 +139,6 @@ pub enum BlockClockError {
     BlockHeightAlreadySet(u64),
     #[error("Failed to set the current block height, already set to: {0}")]
     SetBlockHeight(u64),
-    #[error("Failed to set the current Epoch number: previous={0}, expected={1}")]
-    SetEpochNumber(EpochNumber, EpochNumber),
     #[error("Failed to notify the start of the Clock task")]
     UnableToNotifyStart,
     #[error("Transport initialization: {0}")]
@@ -224,13 +219,14 @@ where
             Ordering::Relaxed,
         ) {
             Ok(0) => {
-                let current_epoch = self.current_epoch.load(Ordering::Acquire);
+                // Calculate epoch on demand
+                let current_epoch =
+                    <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration);
                 info!(
                     initial_block_height = current_block,
                     initial_epoch = current_epoch,
                     "Initialized block clock state"
                 );
-                self.reinitialize_epoch_number(current_block);
 
                 // Update initial metrics
                 agglayer_telemetry::clock::record_current_block_height(current_block);
@@ -353,69 +349,30 @@ where
             agglayer_telemetry::clock::record_current_block_height(current_block);
 
             // If the current Block height is a multiple of the Epoch duration, the current
-            // Epoch has ended. In this case, we need to update the new Epoch number and
+            // Epoch has ended. In this case, we calculate the epoch number on demand and
             // send an `EpochEnded` event to the subscribers.
             if current_block % *self.epoch_duration == 0 {
-                match self.update_epoch_number(current_block) {
-                    Err((previous, expected)) => {
-                        return Err(BlockClockError::SetEpochNumber(previous, expected));
-                    }
-                    Ok(epoch_ended) => {
-                        info!(
-                            finished_epoch_number = epoch_ended.as_u64(),
-                            block_height = current_block,
-                            epoch_duration = self.epoch_duration.get(),
-                            "Epoch ended, broadcasting event"
-                        );
+                // Calculate the epoch that just ended (current_block / epoch_duration - 1)
+                let epoch_ended = EpochNumber::new(
+                    <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration)
+                        .saturating_sub(1),
+                );
 
-                        // Record new current epoch (the epoch we just entered)
-                        agglayer_telemetry::clock::record_current_epoch(epoch_ended.as_u64() + 1);
+                info!(
+                    finished_epoch_number = epoch_ended.as_u64(),
+                    block_height = current_block,
+                    epoch_duration = self.epoch_duration.get(),
+                    "Epoch ended, broadcasting event"
+                );
 
-                        _ = sender.send(Event::EpochEnded(epoch_ended));
-                    }
-                }
+                // Record new current epoch (the epoch we just entered)
+                agglayer_telemetry::clock::record_current_epoch(epoch_ended.as_u64() + 1);
+
+                _ = sender.send(Event::EpochEnded(epoch_ended));
             }
         }
 
         Ok(())
-    }
-
-    /// Reinitialize the current Epoch number based on the current Block height.
-    fn reinitialize_epoch_number(&mut self, current_block: u64) {
-        let current_epoch =
-            <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration);
-        self.current_epoch.store(current_epoch, Ordering::SeqCst);
-    }
-
-    /// Updates the current Epoch of this [`BlockClock`].
-    ///
-    /// This method is used to update the current Epoch number based on the
-    /// Block height and the Epoch duration.
-    ///
-    /// To define the current Epoch number, the Epoch duration divides the Block
-    /// height.
-    fn update_epoch_number(
-        &mut self,
-        current_block: u64,
-    ) -> Result<EpochNumber, (EpochNumber, EpochNumber)> {
-        let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
-        let expected_epoch = current_epoch.saturating_sub(1);
-
-        #[cfg(feature = "testutils")]
-        {
-            // Overwrite the current_epoch to simulate an overflow,
-            fail::fail_point!("block_clock::BlockClock::update_epoch_number::overwrite_epoch");
-        }
-
-        match self.current_epoch.compare_exchange(
-            expected_epoch,
-            current_epoch,
-            Ordering::Acquire,
-            Ordering::Relaxed,
-        ) {
-            Ok(previous) => Ok(EpochNumber::new(previous)),
-            Err(stored) => Err((EpochNumber::new(stored), EpochNumber::new(expected_epoch))),
-        }
     }
 }
 

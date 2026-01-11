@@ -10,12 +10,12 @@ use crate::ProofError;
 /// id and 160 for token address).
 pub const LOCAL_BALANCE_TREE_DEPTH: usize = 192;
 
-/// A commitment to the set of per-network nullifier trees maintained by the
+/// A commitment to the set of per-network local balance trees maintained by the
 /// local network
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalBalanceTree {
-    /// The Merkle Root of the nullifier tree
+    /// The Merkle Root of the local balance tree
     #[serde_as(as = "_")]
     pub root: Digest,
 }

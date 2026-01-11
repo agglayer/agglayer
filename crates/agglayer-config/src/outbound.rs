@@ -1,7 +1,10 @@
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::serde_as;
+use tracing::warn;
+
+use crate::Multiplier;
 
 /// Outbound configuration.
 #[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
@@ -12,11 +15,51 @@ pub struct OutboundConfig {
 
 /// Outbound RPC configuration that is used to configure the outbound RPC
 /// clients and their RPC calls.
-#[derive(Serialize, Default, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Serialize, Default, Debug, PartialEq, Eq)]
 #[serde(rename = "rpc", rename_all = "kebab-case")]
 pub struct OutboundRpcConfig {
     /// Outbound configuration of the RPC settle function call.
-    pub settle: OutboundRpcSettleConfig,
+    pub settle_tx: OutboundRpcSettleConfig,
+    pub settle_cert: OutboundRpcSettleConfig,
+}
+
+impl<'de> Deserialize<'de> for OutboundRpcConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename = "rpc", rename_all = "kebab-case")]
+        pub struct Intermediate {
+            pub settle_tx: Option<OutboundRpcSettleConfig>,
+            pub settle_cert: Option<OutboundRpcSettleConfig>,
+            pub settle: Option<OutboundRpcSettleConfig>,
+        }
+
+        let deserialized = Intermediate::deserialize(deserializer)?;
+
+        let (settle_tx, settle_cert) = match (
+            deserialized.settle_tx,
+            deserialized.settle_cert,
+            deserialized.settle,
+        ) {
+            (Some(tx), Some(cert), _) => (tx, cert),
+            (None, None, Some(settle)) => {
+                warn!("'settle' is deprecated. Please use 'settle-tx' and 'settle-cert' instead.");
+                (settle.clone(), settle)
+            }
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "Either both ['settle-tx','settle-cert'] or 'settle' must be specified",
+                ));
+            }
+        };
+
+        Ok(OutboundRpcConfig {
+            settle_tx,
+            settle_cert,
+        })
+    }
 }
 
 /// Outbound RPC settle configuration that is used to configure the outbound
@@ -39,12 +82,6 @@ pub struct OutboundRpcSettleConfig {
     #[serde(default = "default_rpc_confirmations")]
     pub confirmations: usize,
 
-    /// Timeout for the submission of the settlement transaction to L1,
-    /// including the required number of confirmations.
-    #[serde(default = "default_settlement_timeout")]
-    #[serde(with = "crate::with::HumanDuration")]
-    pub settlement_timeout: Duration,
-
     /// Gas multiplier factor for the transaction.
     /// The gas is calculated as follows:
     /// `gas = estimate_gas * (gas_multiplier / 100)
@@ -53,6 +90,10 @@ pub struct OutboundRpcSettleConfig {
         skip_serializing_if = "same_as_default_gas_multiplier_factor"
     )]
     pub gas_multiplier_factor: u32,
+
+    /// Gas price configuration.
+    #[serde(default)]
+    pub gas_price: GasPriceConfig,
 }
 
 impl Default for OutboundRpcSettleConfig {
@@ -61,8 +102,42 @@ impl Default for OutboundRpcSettleConfig {
             max_retries: default_rpc_retries(),
             retry_interval: default_rpc_retry_interval(),
             confirmations: default_rpc_confirmations(),
-            settlement_timeout: default_settlement_timeout(),
             gas_multiplier_factor: default_gas_multiplier_factor(),
+            gas_price: GasPriceConfig::default(),
+        }
+    }
+}
+
+/// Gas price configuration for settlement transactions.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct GasPriceConfig {
+    /// Gas price multiplier for the transaction.
+    /// The gas price is calculated as follows:
+    /// `gas_price = estimate_gas_price * multiplier`
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    pub multiplier: Multiplier,
+
+    /// Minimum gas price floor (in wei) for the transaction.
+    /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei"
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde_as(as = "crate::with::EthAmount")]
+    pub floor: u128,
+
+    /// Maximum gas price ceiling (in wei) for the transaction.
+    /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
+    #[serde(default = "default_gas_price_ceiling")]
+    #[serde_as(as = "crate::with::EthAmount")]
+    pub ceiling: u128,
+}
+
+impl Default for GasPriceConfig {
+    fn default() -> Self {
+        GasPriceConfig {
+            multiplier: Multiplier::default(),
+            floor: 0,
+            ceiling: default_gas_price_ceiling(),
         }
     }
 }
@@ -78,12 +153,12 @@ const fn same_as_default_gas_multiplier_factor(v: &u32) -> bool {
 
 /// Default number of retries for the transaction.
 const fn default_rpc_retries() -> usize {
-    3
+    30
 }
 
 /// Default interval for the polling of the transaction.
 const fn default_rpc_retry_interval() -> Duration {
-    Duration::from_secs(7)
+    Duration::from_secs(10)
 }
 
 /// Default number of confirmations required for the transaction to resolve a
@@ -92,9 +167,10 @@ const fn default_rpc_confirmations() -> usize {
     1
 }
 
-/// Default timeout for settlement transaction submission and confirmation.
-const fn default_settlement_timeout() -> Duration {
-    Duration::from_secs(20 * 60)
+/// Default gas price ceiling for the transaction.
+const fn default_gas_price_ceiling() -> u128 {
+    // 100 gwei
+    100_000_000_000_u128
 }
 
 #[cfg(test)]
@@ -105,6 +181,7 @@ mod tests {
         use crate::outbound::OutboundConfig;
 
         #[test]
+        #[allow(deprecated)]
         fn expected_namespace() {
             #[derive(Debug, Deserialize)]
             struct DummyContainer {
@@ -112,13 +189,18 @@ mod tests {
             }
 
             let toml = r#"
-                [outbound.rpc.settle]
+                [outbound.rpc.settle-tx]
                 max-retries = 10
+                [outbound.rpc.settle-cert]
+                max-retries = 11
+                [outbound.rpc.settle]
+                max-retries = 12
                 "#;
 
             let config = toml::from_str::<DummyContainer>(toml).unwrap();
 
-            assert_eq!(config.outbound.rpc.settle.max_retries, 10);
+            assert_eq!(config.outbound.rpc.settle_tx.max_retries, 10);
+            assert_eq!(config.outbound.rpc.settle_cert.max_retries, 11);
         }
 
         mod rpc {
@@ -134,8 +216,8 @@ mod tests {
 
                     let config = toml::from_str::<OutboundRpcSettleConfig>(toml).unwrap();
 
-                    assert_eq!(config.max_retries, 3);
-                    assert_eq!(config.retry_interval, Duration::from_secs(7));
+                    assert_eq!(config.max_retries, 30);
+                    assert_eq!(config.retry_interval, Duration::from_secs(10));
                     assert_eq!(config.confirmations, 1);
                 }
 

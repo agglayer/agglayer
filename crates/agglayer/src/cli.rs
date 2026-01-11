@@ -34,21 +34,13 @@ pub(crate) enum Commands {
     },
 
     ValidateConfig {
-        /// The path to the agglayer dir.
+        /// The path to the configuration file.
         #[arg(
             long,
             short,
-            value_hint = ValueHint::DirPath,
+            value_hint = ValueHint::FilePath,
         )]
         path: PathBuf,
-    },
-
-    ProverConfig,
-
-    Prover {
-        /// The path to the configuration file.
-        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer-prover.toml", env = "PROVER_CONFIG_PATH")]
-        cfg: PathBuf,
     },
 
     Vkey,

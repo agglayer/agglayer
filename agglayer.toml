@@ -22,11 +22,15 @@ send-tx = "unlimited"
 
 [rate-limiting.network]
 
-[outbound.rpc.settle]
+[outbound.rpc.settle-tx]
 max-retries = 3
 retry-interval = "7s"
 confirmations = 1
-settlement-timeout = "20m"
+
+[outbound.rpc.settle-cert]
+max-retries = 3
+retry-interval = "7s"
+confirmations = 1
 
 [l1]
 chain-id = 1337
@@ -57,4 +61,3 @@ input-backpressure-buffer-size = 1000
 
 [storage]
 db-path = "/Users/spaitrault/work/polygon/agglayer/storage"
-

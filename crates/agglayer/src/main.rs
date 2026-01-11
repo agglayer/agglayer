@@ -5,6 +5,7 @@ use clap::Parser;
 use cli::Cli;
 use eyre::Context as _;
 use pessimistic_proof::ELF;
+use sp1_sdk::HashableKey as _;
 
 mod cli;
 
@@ -15,12 +16,6 @@ fn main() -> eyre::Result<()> {
 
     match cli.cmd {
         cli::Commands::Run { cfg } => agglayer_node::main(cfg, &version(), None)?,
-        cli::Commands::Prover { cfg } => agglayer_prover::main(cfg, &version(), ELF)?,
-        cli::Commands::ProverConfig => println!(
-            "{}",
-            toml::to_string_pretty(&agglayer_prover_config::ProverConfig::default())
-                .context("Failed to serialize ProverConfig to TOML")?
-        ),
         cli::Commands::Config { base_dir } => println!(
             "{}",
             toml::to_string_pretty(&agglayer_config::Config::new(&base_dir))
@@ -43,9 +38,7 @@ fn main() -> eyre::Result<()> {
                 .enable_all()
                 .build()?
                 .block_on(async move {
-                    let vkey_hex = agglayer_prover::compute_program_vkey(ELF)
-                        .await
-                        .context("Failed to compute program vkey");
+                    let vkey_hex = compute_program_vkey(ELF).await;
                     match vkey_hex {
                         Ok(vkey_hex) => println!("{vkey_hex}"),
                         Err(error) => eprintln!("{error:?}"),
@@ -63,7 +56,7 @@ fn main() -> eyre::Result<()> {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
 
             if let BackupConfig::Enabled { path, .. } = cfg.storage.backup {
-                match agglayer_storage::storage::backup::BackupEngine::list_backups(&path) {
+                match agglayer_storage::backup::BackupEngine::list_backups(&path) {
                     Ok(result) => println!("{}", serde_json::to_string(&result).unwrap()),
                     Err(error) => eprintln!("{error}"),
                 }
@@ -80,7 +73,7 @@ fn main() -> eyre::Result<()> {
                 for (db_kind, version) in db_versions {
                     let (db_path, backup_path) = db_kind.create_paths(&cfg, path);
 
-                    agglayer_storage::storage::backup::BackupEngine::restore_at(
+                    agglayer_storage::backup::BackupEngine::restore_at(
                         &backup_path,
                         &db_path,
                         version,
@@ -102,4 +95,11 @@ pub fn version() -> String {
     let git_describe = env!("VERGEN_GIT_DESCRIBE");
     let timestamp = env!("VERGEN_GIT_COMMIT_TIMESTAMP");
     format!("{pkg_name} ({git_describe}) [git commit timestamp: {timestamp}]")
+}
+
+pub async fn compute_program_vkey(program: &'static [u8]) -> eyre::Result<String> {
+    let vkey = prover_executor::Executor::compute_program_vkey(program)
+        .await
+        .context("Failed to compute program vkey")?;
+    Ok(vkey.bytes32())
 }

@@ -87,6 +87,7 @@ async fn start_from_zero() {
                 height: Height::ZERO,
                 new_state,
                 network: network_id,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -115,14 +116,26 @@ async fn start_from_zero() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t| *i == certificate_id && *t == SettlementTxHash::for_tests())
-        .returning(|_, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id && *t == SettlementTxHash::for_tests())
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -272,6 +285,7 @@ async fn one_per_epoch() {
                 height: Height::ZERO,
                 new_state,
                 network: network_id,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -295,6 +309,7 @@ async fn one_per_epoch() {
                 height: Height::new(1),
                 new_state,
                 network: network_id,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -315,14 +330,26 @@ async fn one_per_epoch() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
+
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t| *i == certificate_id && *t == SettlementTxHash::for_tests())
-        .returning(|_, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id && *t == SettlementTxHash::for_tests())
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -496,12 +523,14 @@ async fn retries() {
         height: Height::ZERO,
         new_state: LocalNetworkStateData::default(),
         network: network_id,
+        new_pp_root: Digest::ZERO,
     });
     responses.push_back(crate::CertifierOutput {
         certificate: certificate2.clone(),
         height: Height::ZERO,
         new_state: LocalNetworkStateData::default(),
         network: network_id,
+        new_pp_root: Digest::ZERO,
     });
     let response_certifier = Arc::new(Mutex::new(responses));
 
@@ -532,6 +561,7 @@ async fn retries() {
                 height: Height::new(1),
                 new_state,
                 network: network_id,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -576,21 +606,40 @@ async fn retries() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Err(Error::InternalError(String::new())));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Err(Error::InternalError(String::new())));
+
+    // Mock fetch_last_settled_pp_root for the first certificate (retry scenario)
+    settlement_client
+        .expect_fetch_last_settled_pp_root()
+        .once()
+        .with(eq(network_id))
+        .returning(|_| Ok(None));
 
     // Second one (retry) is passing
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id2)
-        .returning(|_| Ok(SettlementTxHash::for_tests()));
+        .withf(move |i, _| *i == certificate_id2)
+        .returning(|_, _| Ok(SettlementTxHash::for_tests()));
+
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SettlementTxHash::for_tests()))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t| *i == certificate_id2 && *t == SettlementTxHash::for_tests())
-        .returning(|_, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SettlementTxHash::for_tests())
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -761,6 +810,7 @@ async fn changing_epoch_triggers_certify() {
                 height: Height::ZERO,
                 new_state,
                 network: network_id,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -776,6 +826,7 @@ async fn changing_epoch_triggers_certify() {
                 height: Height::new(1),
                 new_state,
                 network: network_id,
+                new_pp_root: Digest::ZERO,
             };
 
             Ok(result)
@@ -808,26 +859,50 @@ async fn changing_epoch_triggers_certify() {
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SETTLEMENT_TX_HASH_1));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
+
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SETTLEMENT_TX_HASH_1))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
-        .returning(|_, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id2)
-        .returning(move |_| Ok(SETTLEMENT_TX_HASH_2));
+        .withf(move |i, _| *i == certificate_id2)
+        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
+
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SETTLEMENT_TX_HASH_2))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 2,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     state
         .expect_update_settlement_tx_hash()
         .once()
-        .withf(move |i, t| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_2)
-        .returning(|_, _| Ok(()));
+        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_2)
+        .returning(|_, _, _, _| Ok(()));
 
     settlement_client
         .expect_wait_for_settlement()
@@ -1141,20 +1216,45 @@ async fn process_next_certificate() {
                 height,
                 new_state,
                 network,
+                new_pp_root: Digest::ZERO,
             })
         });
 
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id)
-        .returning(move |_| Ok(SETTLEMENT_TX_HASH_1));
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
+
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SETTLEMENT_TX_HASH_1))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 1,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     settlement_client
         .expect_submit_certificate_settlement()
         .once()
-        .withf(move |i| *i == certificate_id2)
-        .returning(move |_| Ok(SETTLEMENT_TX_HASH_2));
+        .withf(move |i, _| *i == certificate_id2)
+        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
+
+    settlement_client
+        .expect_fetch_settlement_nonce()
+        .once()
+        .with(eq(SETTLEMENT_TX_HASH_2))
+        .returning(|_| {
+            Ok(Some(NonceInfo {
+                nonce: 2,
+                previous_max_fee_per_gas: 0,
+                previous_max_priority_fee_per_gas: None,
+            }))
+        });
 
     settlement_client
         .expect_wait_for_settlement()

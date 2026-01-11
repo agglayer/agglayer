@@ -1,4 +1,7 @@
-use std::{path::PathBuf, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Address, Certificate, L1WitnessCtx, NetworkId,
@@ -40,7 +43,7 @@ struct PPGenArgs {
     sample_path: Option<PathBuf>,
 }
 
-fn get_events(n: usize, path: Option<PathBuf>) -> Vec<(TokenInfo, U256)> {
+fn get_events(n: usize, path: Option<impl AsRef<Path>>) -> Vec<(TokenInfo, U256)> {
     if let Some(p) = path {
         data::sample_bridge_exits(p)
             .cycle()
@@ -65,8 +68,8 @@ pub fn main() {
 
     let old_state = state.state_b.clone();
 
-    let bridge_exits = get_events(args.n_exits, args.sample_path.clone());
-    let imported_bridge_exits = get_events(args.n_imported_exits, args.sample_path);
+    let bridge_exits = get_events(args.n_exits, args.sample_path.as_ref());
+    let imported_bridge_exits = get_events(args.n_imported_exits, args.sample_path.as_ref());
 
     let certificate = state.apply_events(&imported_bridge_exits, &bridge_exits);
 

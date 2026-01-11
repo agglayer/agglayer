@@ -1,9 +1,8 @@
 ---
 source: crates/agglayer-config/tests/validate_deserialize.rs
 expression: config
-snapshot_kind: text
 ---
-prover-entrypoint = "http://127.0.0.1:8080"
+prover-buffer-size = 100
 
 [full-node-rpcs]
 
@@ -30,11 +29,21 @@ send-tx = "unlimited"
 
 [rate-limiting.network]
 
-[outbound.rpc.settle]
-max-retries = 3
-retry-interval = "7s"
+[outbound.rpc.settle-tx]
+max-retries = 30
+retry-interval = "10s"
 confirmations = 1
-settlement-timeout = "20m"
+
+[outbound.rpc.settle-tx.gas-price]
+ceiling = "100gwei"
+
+[outbound.rpc.settle-cert]
+max-retries = 30
+retry-interval = "10s"
+confirmations = 1
+
+[outbound.rpc.settle-cert.gas-price]
+ceiling = "100gwei"
 
 [l1]
 chain-id = 1337
@@ -44,6 +53,7 @@ connect-attempt-timeout = "3s"
 rollup-manager-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
 polygon-zkevm-global-exit-root-v2-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
 rpc-timeout = "45s"
+event-filter-block-range = 10000
 
 [auth.local]
 private-keys = []
@@ -65,3 +75,9 @@ input-backpressure-buffer-size = 1000
 
 [storage]
 db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
+
+[prover.network-prover]
+proving-timeout = "5m"
+sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+
+[grpc]

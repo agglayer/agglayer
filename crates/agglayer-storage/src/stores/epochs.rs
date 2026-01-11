@@ -7,11 +7,11 @@ use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, Network
 use parking_lot::RwLock;
 
 use super::{
-    per_epoch::PerEpochStore, EpochStoreReader, EpochStoreWriter, MetadataWriter,
-    PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
-    interfaces::reader::PerEpochReader,
+    interfaces::reader::PerEpochReader, per_epoch::PerEpochStore, EpochStoreReader,
+    EpochStoreWriter, MetadataWriter, PendingCertificateReader, PendingCertificateWriter,
+    StateReader, StateWriter,
 };
-use crate::{error::Error, storage::backup::BackupClient};
+use crate::{backup::BackupClient, error::Error};
 
 pub struct EpochsStore<PendingStore, StateStore> {
     config: Arc<agglayer_config::Config>,
@@ -49,7 +49,10 @@ where
     StateStore: StateWriter + StateReader + MetadataWriter,
 {
     type PerEpochStore = PerEpochStore<PendingStore, StateStore>;
-    fn open(&self, epoch_number: EpochNumber) -> Result<PerEpochStore<PendingStore, StateStore>, Error> {
+    fn open(
+        &self,
+        epoch_number: EpochNumber,
+    ) -> Result<PerEpochStore<PendingStore, StateStore>, Error> {
         PerEpochStore::try_open(
             self.config.clone(),
             epoch_number,
@@ -78,8 +81,8 @@ where
 
 impl<PendingStore, StateStore> EpochStoreReader for EpochsStore<PendingStore, StateStore>
 where
-    PendingStore: PendingCertificateReader + PendingCertificateWriter,
-    StateStore: StateWriter + MetadataWriter + StateReader,
+    PendingStore: PendingCertificateReader,
+    StateStore: StateReader,
 {
     fn get_certificate(
         &self,
@@ -102,7 +105,14 @@ where
         epoch_number: EpochNumber,
         index: CertificateIndex,
     ) -> Result<Option<agglayer_types::Proof>, Error> {
-        let per_epoch_store = self.open(epoch_number)?;
+        // Use readonly access to prevent concurrency issues when multiple processes
+        // are accessing the database
+        let per_epoch_store = PerEpochStore::try_open_readonly(
+            self.config.clone(),
+            epoch_number,
+            self.pending_store.clone(),
+            self.state_store.clone(),
+        )?;
         per_epoch_store.get_proof_at_index(index)
     }
 }

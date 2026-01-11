@@ -12,9 +12,9 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Address, Certificate,
-    CertificateHeader, CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId,
-    NetworkInfo, NetworkStatus, NetworkType, SettledClaim, Signature, U256,
+    aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
+    CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId, NetworkInfo,
+    NetworkStatus, NetworkType, SettledClaim, U256,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
@@ -227,7 +227,7 @@ where
                             return Ok(Some(certificate));
                         }
                         _ => {
-                            debug!("Certificate {certificate_id} not found in debug store");
+                            debug!("Certificate {certificate_id} not found in epoch store");
                         }
                     }
                 }
@@ -430,6 +430,7 @@ where
 
     /// Assemble the current information of the specified network from
     /// the data in various sources.
+    #[instrument(skip(self))]
     pub fn get_network_info(
         &self,
         network_id: NetworkId,
@@ -468,7 +469,7 @@ where
                     }
                 };
 
-            latest_settled_certificate.map(|cert| {
+            if let Some(cert) = latest_settled_certificate {
                 network_info.settled_certificate_id = Some(cert.certificate_id);
                 network_info.settled_height = Some(cert.height);
                 network_info.settled_ler = Some(cert.new_local_exit_root);
@@ -549,9 +550,7 @@ where
                             })?;
                     }
                 }
-
-                Ok(())
-            });
+            }
         }
 
         if network_info.latest_pending_height.is_none() {
@@ -630,7 +629,25 @@ where
             }
         }
 
+        let network_is_disabled = self
+            .state
+            .is_network_disabled(&network_id)
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to check if network {network_id} is disabled in storage"
+                );
+                GetNetworkInfoError::InternalError {
+                    network_id,
+                    source: error.into(),
+                }
+            })?;
+
         match network_info.latest_pending_status {
+            _ if network_is_disabled => {
+                // If the network is disabled in storage, mark it as disabled
+                network_info.network_status = NetworkStatus::Disabled;
+            }
             None => {
                 // No pending certificate means the network status is unknown
                 network_info.network_status = NetworkStatus::Unknown;
@@ -708,7 +725,7 @@ where
                     Some(tx_hash) => {
                         let l1_transaction = self
                             .l1_rpc_provider
-                            .fetch_transaction_receipt(tx_hash.into())
+                            .fetch_transaction_receipt(tx_hash)
                             .await
                             .map_err(|error| {
                                 warn!(
@@ -716,6 +733,22 @@ where
                                     pre_existing_certificate_id, error
                                 );
 
+                                CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                    reason: error.to_string(),
+                                    height: certificate.height,
+                                    network_id: certificate.network_id,
+                                    stored_certificate_id: pre_existing_certificate_id,
+                                    replacement_certificate_id: new_certificate_id,
+                                    source: Some(error),
+                                }
+                            })?
+                            .ok_or_else(|| {
+                                let error =
+                                    agglayer_contracts::L1RpcError::TransactionNotYetMined(tx_hash);
+                                warn!(
+                                    "Failed to fetch transaction receipt for certificate \
+                                     {pre_existing_certificate_id}: {error}"
+                                );
                                 CertificateSubmissionError::UnableToReplacePendingCertificate {
                                     reason: error.to_string(),
                                     height: certificate.height,
@@ -773,7 +806,7 @@ where
 
     /// Verify that the signer of the given [`Certificate`] is the trusted
     /// sequencer for the rollup id it specified.
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self, cert), fields(certificate_id = %cert.hash()), level = "debug")]
     pub(crate) async fn verify_cert_signature(
         &self,
         cert: &Certificate,
@@ -841,42 +874,10 @@ where
         .map_err(SignatureVerificationError::from_signer_error)
     }
 
-    /// Verify the extra [`Certificate`] signature.
-    #[instrument(skip_all, level = "debug")]
-    pub(crate) fn verify_extra_cert_signature(
-        &self,
-        certificate: &Certificate,
-        extra_signer: Option<&Address>,
-        extra_signature: Option<Signature>,
-    ) -> Result<(), SignatureVerificationError> {
-        match (extra_signer, extra_signature) {
-            // Extra signature expected and provided
-            (Some(&expected_extra_signer), Some(extra_signature)) => certificate
-                .verify_extra_signature(expected_extra_signer, extra_signature)
-                .map_err(SignatureVerificationError::from_signer_error)?,
-            // Extra signature is expected but missing
-            (Some(&expected_signer), None) => {
-                return Err(SignatureVerificationError::MissingExtraSignature {
-                    network_id: certificate.network_id,
-                    expected_signer,
-                });
-            }
-            // Extra signature provided but not required
-            (None, Some(_)) => {
-                warn!("Unexpected extra signature provided");
-            }
-            // No extra signature provided nor required
-            (None, None) => {}
-        };
-
-        Ok(())
-    }
-
     #[instrument(skip(self, certificate), fields(hash, rollup_id = certificate.network_id.to_u32()), level = "info")]
     pub async fn send_certificate(
         &self,
         certificate: Certificate,
-        extra_signature: Option<Signature>,
     ) -> Result<CertificateId, CertificateSubmissionError> {
         let hash = certificate.hash();
         let hash_string = hash.to_string();
@@ -887,22 +888,6 @@ where
             "Received certificate {hash} for rollup {} at height {}", certificate.network_id.to_u32(), certificate.height
         );
         self.validate_pre_existing_certificate(&certificate).await?;
-
-        // Verify the extra certificate signature
-        self.verify_extra_cert_signature(
-            &certificate,
-            self.config()
-                .extra_certificate_signer
-                .get(&certificate.network_id.to_u32()),
-            extra_signature,
-        )
-        .map_err(|error| {
-            error!(
-                ?error,
-                "Failed to verify the extra signature for the certificate"
-            );
-            CertificateSubmissionError::SignatureError(error)
-        })?;
 
         // Verify the certificate signature
         self.verify_cert_signature(&certificate)
@@ -950,7 +935,6 @@ where
 pub enum TxStatus {
     Done,
     Pending,
-    NotFound,
 }
 
 impl TxStatus {
@@ -958,7 +942,6 @@ impl TxStatus {
         match self {
             TxStatus::Done => "done",
             TxStatus::Pending => "pending",
-            TxStatus::NotFound => "not found",
         }
     }
 }

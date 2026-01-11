@@ -9,17 +9,15 @@ use agglayer_grpc_server::node::v1::configuration_service_server::ConfigurationS
 use agglayer_grpc_types::node::{types::v1, v1::GetEpochConfigurationRequest};
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
-    storage::backup::BackupClient,
+    backup::BackupClient,
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
 use agglayer_types::EpochNumber;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
-use tonic::{
-    transport::{server::TcpIncoming, Channel, Server},
-    Code,
-};
+use tonic::{transport::Channel, Code};
 use tonic_types::StatusExt as _;
+use tower::ServiceExt as _;
 
 use crate::configuration_service::ConfigurationServer;
 
@@ -125,13 +123,15 @@ async fn start_server_with_configuration_service(
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let incoming =
-        TcpIncoming::from_listener(listener, true, Some(Duration::from_secs(1))).unwrap();
+
+    let app = axum::Router::new().route_service(
+        "/agglayer.node.v1.ConfigurationService/{*rest}",
+        svc.map_request(|r: http::Request<axum::body::Body>| r.map(tonic::body::Body::new)),
+    );
 
     let jh = tokio::spawn(async move {
-        Server::builder()
-            .add_service(svc)
-            .serve_with_incoming_shutdown(incoming, async { drop(rx.await) })
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async { drop(rx.await) })
             .await
             .unwrap();
     });

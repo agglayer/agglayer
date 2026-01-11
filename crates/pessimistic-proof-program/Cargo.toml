@@ -1,15 +1,15 @@
 [package]
 name = "pessimistic-proof-program"
-version = "8.0.0"
+version = "9.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 pessimistic-proof-core = { path = "../pessimistic-proof-core", default-features = false }
-sp1-zkvm = { version = "=5.0.0", features = ["verify"] }
+sp1-zkvm = { version = "=5.2.4", features = ["verify"] }
 
 [build-dependencies]
-sp1-cli = "=5.0.0"
+sp1-cli = "=5.2.4"
 
 [profile.release]
 panic = "abort"

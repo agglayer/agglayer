@@ -61,7 +61,7 @@ The crates and their functions within the Agglayer repo are as follows:
 
 | Crate                                                                          | Description                                                                                                                                                                                                                                                                                                                                                        |
 | ---                                                                            | ---                                                                                                                                                                                                                                                                                                                                                                |
-| [agglayer-aggregator-notifier](/crates/agglayer-aggregator-notifier)           | Contains implementations for [Certifier](crates/agglayer-certificate-orchestrator/src/certifier.rs#L29) which applies new [Certificate](crates/agglayer-types/src/lib.rs#245) on top of an existing state and computes the proof, as well as [EpochPacker](crates/agglayer-certificate-orchestrator/src/epoch_packer.rs#14), which handles the packing of an epoch |
+| [agglayer-aggregator-notifier](/crates/agglayer-aggregator-notifier)           | Contains implementations for [Certifier](crates/agglayer-certificate-orchestrator/src/certifier.rs#L29) which applies new [Certificate](crates/agglayer-types/src/certificate/mod.rs#L48) on top of an existing state and computes the proof, as well as [EpochPacker](crates/agglayer-certificate-orchestrator/src/epoch_packer.rs#14), which handles the packing of an epoch |
 | [agglayer-certificate-orchestrator](/crates/agglayer-certificate-orchestrator) | Manages the orchestration and handling of certificates; also handles `current_epoch`, which allows non-orchestrators to push a proven certificate                                                                                                                                                                                                                  |
 | [agglayer-clock](/crates/agglayer-clock)                                       | Defines the pace of the Agglayer in terms of epoch with support for two clocks: time (for testing) and block (for listening for L1 blocks)                                                                                                                                                                                                                         |
 | [agglayer-config](/crates/agglayer-config)                                     | Manages configuration settings and parameters for Agglayer components                                                                                                                                                                                                                                                                                              |
@@ -87,7 +87,7 @@ Before working with the repository, you’ll need the following:
 
 You’ll need to submit a unique Ethereum address to Succinct for access to their proving network. To get access:
 
-1. Follow the instructions [here](https://docs.succinct.xyz/docs/generating-proofs/prover-network/key-setup) to use Foundry to generate a new private key or retrieve an existing one.
+1. Follow the instructions [here](https://docs.succinct.xyz/docs/sp1/prover-network/quickstart) to use Foundry to generate a new private key or retrieve an existing one.
 2. Apply for access for the public address associated with your private key to Succinct Network [here](https://docs.google.com/forms/d/e/1FAIpQLSd-X9uH7G0bvXH_kjptnQtNil8L4dumrVPpFE4t8Ci1XT1GaQ/viewform).
 
 ### Software Requirements
@@ -221,7 +221,7 @@ Finally, `--no-fail-fast` is useful to start the integration tests and then come
 
 ## Development
 
-Contributions are very welcomed, the guidelines are currently not available (WIP)
+Contributions are very welcome, the guidelines are currently not available (WIP)
 
 ## Support
 

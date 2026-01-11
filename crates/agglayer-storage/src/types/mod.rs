@@ -5,7 +5,8 @@ use agglayer_types::{
 use serde::{Deserialize, Serialize};
 
 mod certificate;
-mod generated;
+pub(crate) mod disabled_network;
+pub mod generated; // TODO: remove "pub" once implementation of storage is completed
 pub(crate) mod network_info;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -50,7 +51,7 @@ pub enum SmtValue {
     Leaf(Digest),
 }
 
-crate::columns::impl_codec_using_bincode_for!(
+crate::schema::impl_codec_using_bincode_for!(
     u64,
     u32,
     CertificateId,
