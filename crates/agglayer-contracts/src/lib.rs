@@ -261,18 +261,20 @@ where
                         String::from("Event InitL1InfoRootMap not found"),
                     ))?;
 
+            // Clone once for both logging and decoding since into() requires ownership
+            let log = first_log.clone();
+
             info!(
                 "Found InitL1InfoRootMap event on block {:?}",
-                first_log.block_number
+                log.block_number
             );
 
             // Decode the log using alloy's generated event type
-            let decoded_event =
-                InitL1InfoRootMap::decode_log(&first_log.clone().into()).map_err(|_| {
-                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(String::from(
-                        "Failed to decode InitL1InfoRootMap event",
-                    ))
-                })?;
+            let decoded_event = InitL1InfoRootMap::decode_log(&log.into()).map_err(|_| {
+                L1RpcInitializationError::InitL1InfoRootMapEventNotFound(String::from(
+                    "Failed to decode InitL1InfoRootMap event",
+                ))
+            })?;
 
             let l1_leaf_count = decoded_event.leafCount;
             let l1_info_root: [u8; 32] = decoded_event.currentL1InfoRoot.into();
