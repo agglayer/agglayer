@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_storage::{
-    storage::{backup::BackupClient, pending_db_cf_definitions, state_db_cf_definitions, DB},
+    backup::BackupClient,
     stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
 };
 
@@ -14,12 +14,8 @@ pub struct StorageContext {
 
 impl StorageContext {
     pub fn new_with_config(config: Arc<Config>) -> Self {
-        let state_db = Arc::new(
-            DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
-        );
-        let pending_db = Arc::new(
-            DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
-        );
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
 
         let state = Arc::new(StateStore::new(state_db, BackupClient::noop()));
         let pending = Arc::new(PendingStore::new(pending_db));

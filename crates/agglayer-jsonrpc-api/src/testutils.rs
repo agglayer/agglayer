@@ -3,10 +3,7 @@ use std::{future::IntoFuture as _, net::SocketAddr, sync::Arc};
 use agglayer_config::Config;
 use agglayer_contracts::L1RpcClient;
 use agglayer_storage::{
-    storage::{
-        backup::BackupClient, debug_db_cf_definitions, pending_db_cf_definitions,
-        state_db_cf_definitions, DB,
-    },
+    backup::BackupClient,
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
@@ -85,7 +82,7 @@ impl TestContext {
         // Create a mock provider for the default case
         let asserter = Asserter::new();
         let _transport = MockTransport::new(asserter.clone());
-        let mock_provider = ProviderBuilder::new().on_mocked_client(asserter);
+        let mock_provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
         Self::new_with_provider(config, mock_provider).await
     }
@@ -99,15 +96,9 @@ impl TestContext {
         let config = Arc::new(config);
 
         // Create the databases using the provided paths in the config
-        let state_db = Arc::new(
-            DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
-        );
-        let pending_db = Arc::new(
-            DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
-        );
-        let debug_db = Arc::new(
-            DB::open_cf(&config.storage.debug_db_path, debug_db_cf_definitions()).unwrap(),
-        );
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
+        let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 
         // Create stores using the provided databases
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
@@ -129,7 +120,7 @@ impl TestContext {
 
         // Create AgglayerService (V0Rpc service) with the provider
         let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(real_provider.clone(), config.clone()),
+            crate::kernel::Kernel::new(real_provider.clone(), config.clone()).unwrap(),
         ));
 
         // Create a real epoch store for testing
@@ -223,6 +214,8 @@ impl TestContext {
             Address::ZERO.into(), // Use real L1 info tree address in non-test environments
             (0u32, [0u8; 32]),    // Use real default L1 info tree entry in non-test environments
             100,                  // Default gas multiplier factor
+            agglayer_contracts::GasPriceParams::default(), // Default gas price parameters
+            10000,
         )
     }
 
@@ -248,15 +241,9 @@ impl TestContext {
     pub async fn new_raw_rpc_with_config(config: Config) -> RawRpcContext {
         let config = Arc::new(config);
 
-        let state_db = Arc::new(
-            DB::open_cf(&config.storage.state_db_path, state_db_cf_definitions()).unwrap(),
-        );
-        let pending_db = Arc::new(
-            DB::open_cf(&config.storage.pending_db_path, pending_db_cf_definitions()).unwrap(),
-        );
-        let debug_db = Arc::new(
-            DB::open_cf(&config.storage.debug_db_path, debug_db_cf_definitions()).unwrap(),
-        );
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
+        let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 
         let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
         let pending_store = Arc::new(PendingStore::new(pending_db));
@@ -267,7 +254,7 @@ impl TestContext {
         let _transport = MockTransport::new(asserter.clone());
 
         // Build the provider with the mock transport
-        let mock_provider = ProviderBuilder::new().on_mocked_client(asserter);
+        let mock_provider = ProviderBuilder::new().connect_mocked_client(asserter);
 
         // Create L1RpcClient with mock provider
         let l1_rpc_client = Self::create_l1_rpc_client(Arc::new(mock_provider.clone()));
@@ -277,7 +264,7 @@ impl TestContext {
 
         // Create AgglayerService (V0Rpc service)
         let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()),
+            crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()).unwrap(),
         ));
 
         // Create a real epoch store for testing

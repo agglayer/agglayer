@@ -19,15 +19,18 @@ use super::{
     PendingCertificateWriter, PerEpochWriter, StateReader, StateWriter,
 };
 use crate::{
+    backup::BackupClient,
     columns::epochs::{
         certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
         metadata::PerEpochMetadataColumn, proofs::ProofPerIndexColumn,
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
-    storage::{backup::BackupClient, epochs_db_cf_definitions, DB},
+    storage::DB,
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
+
+mod cf_definitions;
 
 #[cfg(test)]
 mod tests;
@@ -48,7 +51,15 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 }
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
+    pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
+        DB::open_cf(path, cf_definitions::epochs_db_cf_definitions())
+    }
 
+    pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
+        DB::open_cf_readonly(path, cf_definitions::epochs_db_cf_definitions())
+    }
+
+    #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
         epoch_number: EpochNumber,
@@ -57,10 +68,11 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         optional_start_checkpoint: Option<BTreeMap<NetworkId, Height>>,
         backup_client: BackupClient,
     ) -> Result<Self, Error> {
+        let db = Arc::new(
+            Self::init_db(&config.storage.epoch_db_path(epoch_number))
+                .map_err(Error::DBOpenError)?,
+        );
 
-
-        let db = Arc::new(DB::open_cf(&config.storage.epoch_db_path(epoch_number), epochs_db_cf_definitions())?);
-        
         Self::try_open_with_db(
             db,
             epoch_number,
@@ -73,24 +85,27 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     }
 
     /// Open a PerEpochStore in read-only mode to prevent concurrency issues.
-    /// This is useful for operations that only need to read data from the database.
+    /// This is useful for operations that only need to read data from the
+    /// database.
+    #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
     pub fn try_open_readonly(
         config: Arc<agglayer_config::Config>,
         epoch_number: EpochNumber,
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        
-        let db = Arc::new(DB::open_cf_readonly(&config.storage.epoch_db_path(epoch_number), epochs_db_cf_definitions())?);
-        
+        let db = Arc::new(Self::init_db_readonly(
+            &config.storage.epoch_db_path(epoch_number),
+        )?);
+
         Self::try_open_with_db(
             db,
             epoch_number,
             pending_store,
             state_store,
-            None, // No start checkpoint for readonly
+            None,                 // No start checkpoint for readonly
             BackupClient::noop(), // No backup needed for readonly access
-            true, // readonly mode
+            true,                 // readonly mode
         )
     }
 
@@ -104,7 +119,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         backup_client: BackupClient,
         readonly: bool,
     ) -> Result<Self, Error> {
-        // Check if the epoch is already packed, if no value is found, the epoch is not packed
+        // Check if the epoch is already packed, if no value is found, the epoch is not
+        // packed
         let packed = db
             .get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::Packed)?
             .map(|value| match value {
@@ -138,12 +154,12 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                             expected_start_checkpoint
                         } else if checkpoint != expected_start_checkpoint {
                             warn!(
-                                "Start checkpoint doesn't match the expected one, using the one from \
-                                 the DB"
+                                "Start checkpoint doesn't match the expected one; refusing to \
+                                 open epoch due to inconsistent state",
                             );
                             return Err(Error::Unexpected(
-                                "Start checkpoint doesn't match the expected one, using the one from \
-                                 the DB"
+                                "Start checkpoint doesn't match the expected one; inconsistent \
+                                 epoch state in DB"
                                     .to_string(),
                             ))?;
                         } else {
@@ -191,7 +207,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 if checkpoint.is_empty() {
                     if next_certificate_index.load(Ordering::Relaxed) != 0 {
                         return Err(Error::Unexpected(
-                            "End checkpoint is empty, but there are certificates in the DB".to_string(),
+                            "End checkpoint is empty, but there are certificates in the DB"
+                                .to_string(),
                         ))?;
                     }
 
@@ -319,7 +336,9 @@ where
             }
             // If the network is found in the end checkpoint and the height is 0,
             // this is an invalid certificate candidate and the operation should fail.
-            (Some(_start_height), Entry::Occupied(ref current_height)) if height == Height::ZERO => {
+            (Some(_start_height), Entry::Occupied(ref current_height))
+                if height == Height::ZERO =>
+            {
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
                     height,
@@ -371,7 +390,8 @@ where
                 )
             })?;
 
-        let certificate_index = CertificateIndex::new(self.next_certificate_index.fetch_add(1, Ordering::SeqCst));
+        let certificate_index =
+            CertificateIndex::new(self.next_certificate_index.fetch_add(1, Ordering::SeqCst));
 
         // TODO: all of this need to be batched
 
@@ -432,12 +452,9 @@ where
             &PerEpochMetadataValue::Packed(true),
         )?;
 
-        if let Err(error) = self
-            .backup_client
-            .backup(crate::storage::backup::BackupRequest {
-                epoch_db: Some((self.db.clone(), *self.epoch_number)),
-            })
-        {
+        if let Err(error) = self.backup_client.backup(crate::backup::BackupRequest {
+            epoch_db: Some((self.db.clone(), *self.epoch_number)),
+        }) {
             error!("Couldn't trigger the backup of the epoch DB: {}", error);
         }
 

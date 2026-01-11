@@ -37,7 +37,7 @@ pub const IMPORTED_BRIDGE_EXIT_COMMITMENT_VERSION: ImportedBridgeExitCommitmentV
 #[derive(Clone, Error, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProofError {
     // Note: The following arms are no longer generated but may be present in
-    //       storage having been produced by an alder version of the node.
+    //       storage having been produced by an older version of the node.
     #[error("Invalid previous local exit root. declared: {declared}, computed: {computed}")]
     InvalidPreviousLocalExitRoot { declared: Digest, computed: Digest },
     #[error("Invalid previous balance root. declared: {declared}, computed: {computed}")]

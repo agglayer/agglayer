@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use agglayer_primitives::Address;
+use agglayer_types::SettlementTxHash;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     primitives::{TxHash, U256},
@@ -10,7 +11,7 @@ use alloy::{
 };
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 use crate::{
     contracts::{PolygonRollupManager::RollupDataReturnV2, PolygonZkEvm},
@@ -49,6 +50,10 @@ pub trait RollupContract {
     async fn get_verifier_type(&self, rollup_id: u32) -> Result<VerifierType, L1RpcError>;
 
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
+
+    fn get_rollup_manager_address(&self) -> Address;
+
+    fn get_event_filter_block_range(&self) -> u64;
 }
 
 #[async_trait::async_trait]
@@ -62,22 +67,39 @@ where
     }
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
+        // Check if we already have this l1_info_root cached
+        {
+            let cache = self
+                .l1_info_roots
+                .read()
+                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
+            if let Some(&cached_root) = cache.get(&l1_leaf_count) {
+                trace!(
+                    l1_leaf_count,
+                    cached_root = %alloy::primitives::B256::from(cached_root),
+                    "Retrieved cached L1 info root for leaf count",
+                );
+                return Ok(cached_root);
+            }
+        }
+
         use alloy::sol_types::SolEvent;
 
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2;
 
-        // Get `UpdateL1InfoTreeV2` event for the given leaf count from the latest block
+        // Get first `UpdateL1InfoTreeV2` event for the given leaf count.
+        // l1 leaf count increases over time for a network, when we filter by
+        // `l1_leaf_count` we would not get provider limit.
+        debug!(%l1_leaf_count, "Searching for UpdateL1InfoTreeV2 event with leaf count");
         let filter = Filter::new()
-            .address(self.l1_info_tree)
+            .address(self.global_exit_root_manager_contract)
             .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
             .topic1(U256::from(l1_leaf_count))
             .from_block(BlockNumberOrTag::Earliest);
-
-        let events = self
-            .rpc
-            .get_logs(&filter)
-            .await
-            .map_err(|e| L1RpcError::UpdateL1InfoTreeV2EventFailure(e.to_string()))?;
+        let events = self.rpc.get_logs(&filter).await.map_err(|error| {
+            error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
+            L1RpcError::UpdateL1InfoTreeV2EventFailure(error.into())
+        })?;
 
         // Extract event details using alloy's event decoding
         let (l1_info_root, event_block_number, event_block_hash) = events
@@ -97,11 +119,10 @@ where
             .ok_or(L1RpcError::UpdateL1InfoTreeV2EventNotFound)?;
 
         debug!(
-            "Retrieved UpdateL1InfoTreeV2 event from block {}. L1 info tree leaf count: {}, root: \
-             {}",
-            event_block_number,
-            l1_leaf_count,
-            alloy::primitives::B256::from(l1_info_root) // Use alloy's B256 instead of H256
+            %event_block_number,
+            %l1_leaf_count,
+            l1_info_root = %alloy::primitives::B256::from(l1_info_root), // Use alloy's B256 instead of H256
+            "Retrieved UpdateL1InfoTreeV2 event",
         );
 
         // Await for the related block to be finalized
@@ -168,6 +189,15 @@ where
             })??;
         }
 
+        // Cache the retrieved l1_info_root for future use
+        {
+            let mut cache = self
+                .l1_info_roots
+                .write()
+                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
+            cache.insert(l1_leaf_count, l1_info_root);
+        }
+
         Ok(l1_info_root)
     }
 
@@ -219,12 +249,16 @@ where
         before_tx_hash: Option<TxHash>,
     ) -> Result<[u8; 32], L1RpcError> {
         let at_block = if let Some(tx_hash) = before_tx_hash {
+            let settlement_tx_hash = SettlementTxHash::from(tx_hash);
             let receipt = self
                 .rpc
                 .get_transaction_receipt(tx_hash)
                 .await
-                .map_err(|_| L1RpcError::UnableToFetchTransactionReceipt(tx_hash.to_string()))?
-                .ok_or_else(|| L1RpcError::TransactionReceiptNotFound(tx_hash.to_string()))?;
+                .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
+                    tx_hash: settlement_tx_hash,
+                    source: err.into(),
+                })?
+                .ok_or_else(|| L1RpcError::TransactionNotYetMined(settlement_tx_hash))?;
 
             if receipt.status() {
                 receipt
@@ -262,5 +296,13 @@ where
 
         Ok(VerifierType::from_u8(rollup_data.rollupVerifierType)
             .ok_or(L1RpcError::VerifierTypeRetrievalFailed)?)
+    }
+
+    fn get_rollup_manager_address(&self) -> Address {
+        (*self.inner.address()).into()
+    }
+
+    fn get_event_filter_block_range(&self) -> u64 {
+        self.event_filter_block_range
     }
 }

@@ -4,21 +4,25 @@ use std::{
 };
 
 use agglayer_config::Config;
-use agglayer_types::{Certificate, CertificateIndex, CertificateStatus, EpochNumber};
-use agglayer_types::{Height, NetworkId, Proof};
+use agglayer_types::{
+    Certificate, CertificateIndex, CertificateStatus, EpochNumber, Height, NetworkId, Proof,
+};
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};
+use tracing::info;
 
-use crate::stores::{PendingCertificateWriter as _, PerEpochReader as _, StateReader};
 use crate::{
+    backup::BackupClient,
     error::Error,
     stores::{
-        interfaces::writer::PerEpochWriter, pending::PendingStore, per_epoch::PerEpochStore,
+        interfaces::writer::{PerEpochWriter, StateWriter},
+        pending::PendingStore,
+        per_epoch::PerEpochStore,
         state::StateStore,
+        PendingCertificateWriter as _, PerEpochReader as _, StateReader,
     },
     tests::TempDBDir,
 };
-use crate::{storage::backup::BackupClient, stores::interfaces::writer::StateWriter};
 
 #[fixture]
 fn store() -> PerEpochStore<PendingStore, StateStore> {
@@ -31,7 +35,15 @@ fn store() -> PerEpochStore<PendingStore, StateStore> {
     );
 
     let backup_client = BackupClient::noop();
-    PerEpochStore::try_open(config, EpochNumber::ZERO, pending_store, state_store, None, backup_client).unwrap()
+    PerEpochStore::try_open(
+        config,
+        EpochNumber::ZERO,
+        pending_store,
+        state_store,
+        None,
+        backup_client,
+    )
+    .unwrap()
 }
 
 #[rstest]
@@ -193,7 +205,9 @@ fn adding_multiple_certificates(
     mut store: PerEpochStore<PendingStore, StateStore>,
     #[case] start_checkpoint: StartCheckpointState,
     #[case] end_checkpoint: EndCheckpointState,
-    #[case] mut expected_results: VecDeque<impl FnOnce(Result<(EpochNumber, CertificateIndex), Error>) -> bool>,
+    #[case] mut expected_results: VecDeque<
+        impl FnOnce(Result<(EpochNumber, CertificateIndex), Error>) -> bool,
+    >,
     #[case] mut height: Height,
 ) {
     use agglayer_types::Certificate;
@@ -224,13 +238,15 @@ fn adding_multiple_certificates(
         assert!(
             expected_result(
                 store.add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
-            ), "{network}:{height} failed to pass the test");
+            ),
+            "{network}:{height} failed to pass the test"
+        );
 
         height.increment();
     }
 }
 
-#[rstest]
+#[test_log::test(rstest)]
 fn adding_certificate_and_restart() {
     let tmp = TempDBDir::new();
     let config = Arc::new(Config::new(&tmp.path));
@@ -240,6 +256,7 @@ fn adding_certificate_and_restart() {
         StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
     );
 
+    info!("Opening the epoch store for the first time");
     let backup_client = BackupClient::noop();
     let store = PerEpochStore::try_open(
         config.clone(),
@@ -275,12 +292,21 @@ fn adding_certificate_and_restart() {
         store
             .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
             .is_ok(),
-        "{network}:{height} failed to pass the test");
+        "{network}:{height} failed to pass the test"
+    );
 
     drop(store);
 
-    let store = PerEpochStore::try_open(config, EpochNumber::ZERO, pending_store, state_store, None, backup_client)
-        .unwrap();
+    info!("Opening the epoch store for the second time");
+    let store = PerEpochStore::try_open(
+        config,
+        EpochNumber::ZERO,
+        pending_store,
+        state_store,
+        None,
+        backup_client,
+    )
+    .unwrap();
 
     let network = 2.into();
     let height = Height::ZERO;
@@ -306,9 +332,13 @@ fn adding_certificate_and_restart() {
         store
             .add_certificate(certificate.hash(), agglayer_types::ExecutionMode::Default)
             .is_ok(),
-        "{network}:{height} failed to pass the test");
+        "{network}:{height} failed to pass the test"
+    );
 
-    let first = store.get_certificate_at_index(CertificateIndex::ZERO).unwrap().unwrap();
+    let first = store
+        .get_certificate_at_index(CertificateIndex::ZERO)
+        .unwrap()
+        .unwrap();
     assert!(
         first.network_id == 1.into(),
         "Network ID mismatch {} != {}",
@@ -316,7 +346,10 @@ fn adding_certificate_and_restart() {
         1
     );
 
-    let second = store.get_certificate_at_index(CertificateIndex::new(1)).unwrap().unwrap();
+    let second = store
+        .get_certificate_at_index(CertificateIndex::new(1))
+        .unwrap()
+        .unwrap();
     assert!(
         second.network_id == 2.into(),
         "Network ID mismatch {} != {}",
@@ -380,5 +413,8 @@ fn can_retrieve_proof_at_index() {
 
     // Verify that retrieving proof at non-existent index returns None
     let non_existent_proof = store.get_proof_at_index(CertificateIndex::new(1)).unwrap();
-    assert!(non_existent_proof.is_none(), "Should return None for non-existent index");
+    assert!(
+        non_existent_proof.is_none(),
+        "Should return None for non-existent index"
+    );
 }

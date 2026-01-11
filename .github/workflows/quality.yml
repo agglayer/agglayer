@@ -10,6 +10,10 @@ on:
   merge_group:
   workflow_dispatch:
 
+# Default permissions (individual jobs can override as needed)
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -23,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@nightly
@@ -40,7 +44,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -66,7 +70,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@nightly
@@ -83,3 +87,19 @@ jobs:
 
       - name: Run format
         run: cargo make ci-format
+
+  udeps:
+    name: Check for unused dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install udeps
+        run: cargo install cargo-udeps --locked
+
+      - name: Run udeps
+        run: cargo +nightly udeps --workspace --all-targets

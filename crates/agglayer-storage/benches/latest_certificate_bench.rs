@@ -5,10 +5,10 @@ use std::{
 };
 
 use agglayer_storage::{
+    backup::BackupClient,
     columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
-    storage::{backup::BackupClient, state_db_cf_definitions, DB},
     stores::{state::StateStore, StateReader as _},
 };
 use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height};
@@ -39,7 +39,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
     fn run(dir_path: std::path::PathBuf, expected: u32) -> Duration {
         std::fs::remove_dir_all(dir_path.clone()).unwrap();
 
-        let db = Arc::new(DB::open_cf(dir_path.as_path(), state_db_cf_definitions()).unwrap());
+        let db = Arc::new(StateStore::init_db(dir_path.as_path()).unwrap());
 
         for i in 1..=expected {
             db.put::<LatestSettledCertificatePerNetworkColumn>(

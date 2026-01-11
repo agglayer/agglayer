@@ -51,7 +51,7 @@ impl EpochSynchronizer {
 
             match epoch_stream.try_recv() {
                 Ok(agglayer_clock::Event::EpochEnded(n)) => {
-                    current_epoch_number = n;
+                    current_epoch_number = n.next();
                 }
                 Err(TryRecvError::Closed) => {
                     eyre::bail!("Epoch stream closed during epoch synchronization");
@@ -129,14 +129,14 @@ mod tests {
 
     use agglayer_config::Config;
     use agglayer_storage::{
+        backup::BackupClient,
         columns::epochs::end_checkpoint::EndCheckpointColumn,
-        storage::{backup::BackupClient, epochs_db_cf_definitions},
         stores::{
             epochs::EpochsStore, pending::PendingStore, state::StateStore,
             PendingCertificateWriter, StateWriter,
         },
         tests::{
-            mocks::{MockEpochsStore, MockPerEpochStore, MockStateStore},
+            mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
             TempDBDir,
         },
     };
@@ -146,6 +146,9 @@ mod tests {
     use mockall::{predicate::eq, Sequence};
 
     use super::*;
+
+    type PerEpochStore =
+        agglayer_storage::stores::per_epoch::PerEpochStore<MockPendingStore, MockStateStore>;
 
     #[tokio::test]
     async fn no_lse_no_previous_start_from_genesis() {
@@ -368,8 +371,7 @@ mod tests {
         expected_end_checkpoint.insert(network_2, Height::ZERO);
 
         let path_15 = config.storage.epochs_db_path.join("15");
-        let epoch_15 =
-            agglayer_storage::storage::DB::open_cf(&path_15, epochs_db_cf_definitions()).unwrap();
+        let epoch_15 = PerEpochStore::init_db(&path_15).unwrap();
 
         let mut expected_end_checkpoint_15 = expected_end_checkpoint.clone();
 
@@ -503,8 +505,7 @@ mod tests {
         expected_end_checkpoint.insert(network_2, Height::ZERO);
 
         let path_15 = config.storage.epochs_db_path.join("15");
-        let epoch_15 =
-            agglayer_storage::storage::DB::open_cf(&path_15, epochs_db_cf_definitions()).unwrap();
+        let epoch_15 = PerEpochStore::init_db(&path_15).unwrap();
 
         let mut expected_end_checkpoint_15 = expected_end_checkpoint.clone();
 
@@ -550,5 +551,93 @@ mod tests {
             state_store.get_latest_settled_epoch().unwrap(),
             Some(EpochNumber::new(14))
         );
+    }
+
+    #[tokio::test]
+    async fn handles_epoch_ended_event_during_walk() {
+        let mut state_store = MockStateStore::new();
+        state_store
+            .expect_get_latest_settled_epoch()
+            .once()
+            .returning(|| Ok(Some(EpochNumber::new(10))));
+
+        let mut epochs_store = MockEpochsStore::new();
+
+        epochs_store
+            .expect_open()
+            .once()
+            .with(eq(EpochNumber::new(10)))
+            .return_once(|epoch| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .returning(BTreeMap::new);
+                Ok(mock)
+            });
+
+        let (sender, _receiver) = tokio::sync::broadcast::channel(8);
+        let current_block = AtomicU64::new(12);
+        let clock_ref = ClockRef::new(
+            sender.clone(),
+            Arc::new(current_block),
+            Arc::new(NonZeroU64::new(1).unwrap()),
+        );
+
+        let mut seq = Sequence::new();
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(11)), eq(BTreeMap::new()))
+            .return_once(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        let sender_clone = sender.clone();
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(12)), eq(BTreeMap::new()))
+            .return_once(move |epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(epoch));
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(13)), eq(BTreeMap::new()))
+            .return_once(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().never().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .never()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        let result =
+            EpochSynchronizer::start(Arc::new(state_store), Arc::new(epochs_store), clock_ref)
+                .await
+                .unwrap();
+
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(13));
     }
 }

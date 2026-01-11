@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     path::Path,
     sync::Arc,
+    time::SystemTime,
 };
 
 use agglayer_tries::{node::Node, smt::Smt};
@@ -19,6 +20,7 @@ use tracing::{info, warn};
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
+    backup::{BackupClient, BackupRequest},
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
@@ -29,15 +31,16 @@ use crate::{
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
-        ColumnSchema,
     },
     error::Error,
-    storage::{
-        backup::{BackupClient, BackupRequest},
-        DB,
-    },
+    schema::ColumnSchema,
+    storage::DB,
+    stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
     types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
 };
+
+mod cf_definitions;
+mod network_info;
 
 #[cfg(test)]
 mod tests;
@@ -48,34 +51,61 @@ pub struct StateStore {
     backup_client: BackupClient,
 }
 
-mod network_info;
-
 impl StateStore {
+    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
+        DB::open_cf(path, cf_definitions::state_db_cf_definitions())
+    }
+
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
         Self { db, backup_client }
     }
 
-    pub fn new_with_path(path: &Path, backup_client: BackupClient) -> Result<Self, Error> {
-        let db = Arc::new(DB::open_cf(
-            path,
-            crate::storage::state_db_cf_definitions(),
-        )?);
-
+    pub fn new_with_path(
+        path: &Path,
+        backup_client: BackupClient,
+    ) -> Result<Self, crate::storage::DBOpenError> {
+        let db = Arc::new(Self::init_db(path)?);
         Ok(Self { db, backup_client })
     }
 }
 
 impl StateWriter for StateStore {
+    fn disable_network(
+        &self,
+        network_id: &NetworkId,
+        disabled_by: agglayer_types::network_info::DisabledBy,
+    ) -> Result<(), Error> {
+        Ok(self
+            .db
+            .put::<crate::columns::disabled_networks::DisabledNetworksColumn>(
+                network_id,
+                &crate::types::network_info::v0::DisabledNetwork {
+                    disabled_at: Some(SystemTime::now().into()),
+                    disabled_by: disabled_by as i32,
+                },
+            )?)
+    }
+
+    fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error> {
+        Ok(self
+            .db
+            .delete::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)?)
+    }
+
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
         tx_hash: SettlementTxHash,
+        force: UpdateEvenIfAlreadyPresent,
+        set_status: UpdateStatusToCandidate,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hash.is_some() {
+            if certificate_header.settlement_tx_hash.is_some()
+                && force != UpdateEvenIfAlreadyPresent::Yes
+            {
                 return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that already has a \
                      settlement tx hash"
@@ -91,7 +121,9 @@ impl StateWriter for StateStore {
             }
 
             certificate_header.settlement_tx_hash = Some(tx_hash);
-            certificate_header.status = CertificateStatus::Candidate;
+            if set_status == UpdateStatusToCandidate::Yes {
+                certificate_header.status = CertificateStatus::Candidate;
+            }
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
@@ -113,10 +145,7 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
-    fn remove_settlement_tx_hash(
-        &self,
-        certificate_id: &CertificateId,
-    ) -> Result<(), Error> {
+    fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
@@ -137,7 +166,6 @@ impl StateWriter for StateStore {
             }
 
             certificate_header.settlement_tx_hash = None;
-            certificate_header.status = CertificateStatus::Proven;
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
@@ -504,6 +532,14 @@ impl StateStore {
 }
 
 impl StateReader for StateStore {
+    fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, Error> {
+        Ok(self
+            .db
+            .keys::<crate::columns::disabled_networks::DisabledNetworksColumn>()?
+            .filter_map(|v| v.ok())
+            .collect())
+    }
+
     /// Get the active networks.
     /// Meaning, the networks that have at least one submitted certificate.
     ///
@@ -514,10 +550,19 @@ impl StateReader for StateStore {
     /// small. This function is only called once when the node starts.
     /// Benchmark: `last_certificate_bench.rs`
     fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error> {
+        let disabled_networks = self
+            .db
+            .keys::<crate::columns::disabled_networks::DisabledNetworksColumn>()?
+            .filter_map(|v| v.ok())
+            .collect::<BTreeSet<NetworkId>>();
+
         Ok(self
             .db
             .keys::<LatestSettledCertificatePerNetworkColumn>()?
-            .filter_map(|v| v.ok())
+            .filter_map(|v| {
+                v.ok()
+                    .filter(|network_id| !disabled_networks.contains(network_id))
+            })
             .collect())
     }
 
@@ -595,6 +640,13 @@ impl StateReader for StateStore {
             }
             _ => Err(Error::InconsistentState { network_id }),
         }
+    }
+
+    fn is_network_disabled(&self, network_id: &NetworkId) -> Result<bool, Error> {
+        Ok(self
+            .db
+            .get::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)
+            .map(|v| v.is_some())?)
     }
 }
 

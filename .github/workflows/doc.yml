@@ -21,7 +21,7 @@ jobs:
     if: github.event.action != 'closed'
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -47,7 +47,7 @@ jobs:
   deploy-gh-pages:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       pages: write
       id-token: write
@@ -75,14 +75,14 @@ jobs:
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers
     needs: build
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
       issues: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Download documentation artifact
         uses: actions/download-artifact@v5
@@ -91,9 +91,9 @@ jobs:
           path: docs
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install Wrangler
         run: npm install -g wrangler
@@ -145,16 +145,16 @@ jobs:
 
   cleanup-cloudflare:
     name: Cleanup Cloudflare deployment
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install Wrangler
         run: npm install -g wrangler

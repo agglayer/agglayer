@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
+    error::Error as StorageError,
     tests::mocks::{MockDebugStore, MockEpochsStore, MockPendingStore, MockStateStore},
 };
 use agglayer_types::{
@@ -31,6 +32,11 @@ fn transient_network_info() {
         .expect_get_network_info()
         .with(eq(NETWORK_1))
         .return_once(|_network_id| Ok(DEFAULT_NETWORK_INFO));
+
+    state_store
+        .expect_is_network_disabled()
+        .with(eq(NETWORK_1))
+        .return_once(|_network_id| Ok(false));
 
     state_store
         .expect_get_latest_settled_certificate_per_network()
@@ -88,7 +94,7 @@ fn transient_network_info() {
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,
@@ -126,6 +132,12 @@ fn pending_certificate_defined() {
         .expect_get_network_info()
         .with(eq(NETWORK_1))
         .return_once(|_network_id| Ok(DEFAULT_NETWORK_INFO));
+
+    state_store
+        .expect_is_network_disabled()
+        .with(eq(NETWORK_1))
+        .return_once(|_network_id| Ok(false));
+
     let settled_certificate = Certificate::new_for_test(NETWORK_1, 0.into());
     let settled_certificate_id = settled_certificate.hash();
     let settled_certificate_header = CertificateHeader {
@@ -245,7 +257,7 @@ fn pending_certificate_defined() {
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,
@@ -307,10 +319,16 @@ fn pending_certificate_defined_with_network_info() {
         .expect_get_network_info()
         .with(eq(NETWORK_1))
         .return_once(move |_| Ok(get_network_info.clone()));
+
+    state_store
+        .expect_is_network_disabled()
+        .with(eq(NETWORK_1))
+        .return_once(|_network_id| Ok(false));
+
     // Create a mock provider for the default case
     let asserter = Asserter::new();
     let _transport = MockTransport::new(asserter.clone());
-    let l1_rpc_provider = Arc::new(ProviderBuilder::new().on_mocked_client(asserter));
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
 
     let service = crate::AgglayerService::new(
         certificate_sender,
@@ -340,4 +358,189 @@ fn pending_certificate_defined_with_network_info() {
         Some(agglayer_types::CertificateStatus::Pending)
     );
     assert_eq!(info.latest_pending_height, Some(11.into()));
+}
+
+#[test]
+fn get_network_info_propagates_error_from_read_local_network_state() {
+    let certificate_sender = tokio::sync::mpsc::channel(1).0;
+
+    let mut pending_store = MockPendingStore::new();
+    let mut state_store = MockStateStore::new();
+    let mut epochs_store = MockEpochsStore::new();
+    let debug_store = MockDebugStore::new();
+    let config = Arc::new(Config::default());
+
+    // Base network info (no settled data yet)
+    state_store
+        .expect_get_network_info()
+        .with(eq(NETWORK_1))
+        .return_once(|_| Ok(DEFAULT_NETWORK_INFO));
+
+    // Latest settled certificate exists
+    let settled_certificate = Certificate::new_for_test(NETWORK_1, 0.into());
+    let settled_certificate_id = settled_certificate.hash();
+    let settled_certificate_header = CertificateHeader {
+        network_id: NETWORK_1,
+        height: 0.into(),
+        epoch_number: Some(0.into()),
+        certificate_index: Some(CertificateIndex::new(0)),
+        certificate_id: settled_certificate_id,
+        prev_local_exit_root: settled_certificate.prev_local_exit_root,
+        new_local_exit_root: settled_certificate.new_local_exit_root,
+        metadata: Metadata::DEFAULT,
+        status: agglayer_types::CertificateStatus::Settled,
+        settlement_tx_hash: Some(Digest::ZERO.into()),
+    };
+
+    state_store
+        .expect_get_latest_settled_certificate_per_network()
+        .with(eq(NETWORK_1))
+        .returning(move |_| {
+            Ok(Some((
+                NETWORK_1,
+                SettledCertificate(
+                    settled_certificate_id,
+                    0.into(),
+                    0.into(),
+                    CertificateIndex::new(0),
+                ),
+            )))
+        });
+
+    // Fetching header
+    let get_settled_header = settled_certificate_header.clone();
+    state_store
+        .expect_get_certificate_header()
+        .with(eq(settled_certificate_id))
+        .returning(move |_| Ok(Some(get_settled_header.clone())));
+
+    // get_proof -> pending: None
+    pending_store.expect_get_proof().returning(|_| Ok(None));
+
+    // get_proof -> epochs: None
+    epochs_store.expect_get_proof().returning(|_, _| Ok(None));
+
+    // read_local_network_state should error and be propagated
+    state_store
+        .expect_read_local_network_state()
+        .with(eq(NETWORK_1))
+        .return_once(|_| Err(StorageError::Unexpected("boom".into())));
+
+    // Create a mock provider
+    let asserter = Asserter::new();
+    let _transport = MockTransport::new(asserter.clone());
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
+
+    let service = crate::AgglayerService::new(
+        certificate_sender,
+        Arc::new(pending_store),
+        Arc::new(state_store),
+        Arc::new(debug_store),
+        Arc::new(epochs_store),
+        config,
+        l1_rpc_provider,
+    );
+
+    let res = service.get_network_info(NETWORK_1);
+    assert!(matches!(
+        res,
+        Err(crate::error::GetNetworkInfoError::InternalError { .. })
+    ));
+}
+
+#[test]
+fn get_network_info_propagates_error_from_get_latest_settled_claim() {
+    let certificate_sender = tokio::sync::mpsc::channel(1).0;
+
+    let mut pending_store = MockPendingStore::new();
+    let mut state_store = MockStateStore::new();
+    let mut epochs_store = MockEpochsStore::new();
+    let debug_store = MockDebugStore::new();
+    let config = Arc::new(Config::default());
+
+    state_store
+        .expect_get_network_info()
+        .with(eq(NETWORK_1))
+        .return_once(|_| Ok(DEFAULT_NETWORK_INFO));
+
+    let settled_certificate = Certificate::new_for_test(NETWORK_1, 0.into());
+    let settled_certificate_id = settled_certificate.hash();
+    let settled_certificate_header = CertificateHeader {
+        network_id: NETWORK_1,
+        height: 0.into(),
+        epoch_number: Some(0.into()),
+        certificate_index: Some(CertificateIndex::new(0)),
+        certificate_id: settled_certificate_id,
+        prev_local_exit_root: settled_certificate.prev_local_exit_root,
+        new_local_exit_root: settled_certificate.new_local_exit_root,
+        metadata: Metadata::DEFAULT,
+        status: agglayer_types::CertificateStatus::Settled,
+        settlement_tx_hash: Some(Digest::ZERO.into()),
+    };
+
+    state_store
+        .expect_get_latest_settled_certificate_per_network()
+        .with(eq(NETWORK_1))
+        .returning(move |_| {
+            Ok(Some((
+                NETWORK_1,
+                SettledCertificate(
+                    settled_certificate_id,
+                    0.into(),
+                    0.into(),
+                    CertificateIndex::new(0),
+                ),
+            )))
+        });
+
+    // Header by id (used by get_proof fallback)
+    let get_settled_header = settled_certificate_header.clone();
+    state_store
+        .expect_get_certificate_header()
+        .with(eq(settled_certificate_id))
+        .returning(move |_| Ok(Some(get_settled_header.clone())));
+
+    // Proof not found anywhere so we proceed to settled claim step
+    pending_store.expect_get_proof().returning(|_| Ok(None));
+    epochs_store.expect_get_proof().returning(|_, _| Ok(None));
+
+    // read_local_network_state returns Ok(None) to skip leaf count path
+    state_store
+        .expect_read_local_network_state()
+        .with(eq(NETWORK_1))
+        .return_once(|_| Ok(None));
+
+    // Header by cursor for settled height
+    let cursor_header = settled_certificate_header.clone();
+    state_store
+        .expect_get_certificate_header_by_cursor()
+        .with(eq(NETWORK_1), eq(Height::new(0)))
+        .return_once(move |_, _| Ok(Some(cursor_header.clone())));
+
+    // epochs_store.get_certificate errors -> should propagate as InternalError
+    epochs_store
+        .expect_get_certificate()
+        .with(eq(EpochNumber::new(0)), eq(CertificateIndex::new(0)))
+        .return_once(|_, _| Err(StorageError::Unexpected("ep err".into())));
+
+    // Create a mock provider
+    let asserter = Asserter::new();
+    let _transport = MockTransport::new(asserter.clone());
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
+
+    let service = crate::AgglayerService::new(
+        certificate_sender,
+        Arc::new(pending_store),
+        Arc::new(state_store),
+        Arc::new(debug_store),
+        Arc::new(epochs_store),
+        config,
+        l1_rpc_provider,
+    );
+
+    let res = service.get_network_info(NETWORK_1);
+    assert!(matches!(
+        res,
+        Err(crate::error::GetNetworkInfoError::InternalError { .. })
+    ));
 }
