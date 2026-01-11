@@ -1,6 +1,6 @@
 use tracing::debug;
 
-use super::DBError;
+use super::DbError;
 use crate::schema::{Codec as _, ColumnSchema};
 
 /// The status of the iterator.
@@ -37,7 +37,7 @@ impl<'a, C: ColumnSchema> KeysIterator<'a, C> {
 }
 
 impl<C: ColumnSchema> Iterator for KeysIterator<'_, C> {
-    type Item = Result<C::Key, DBError>;
+    type Item = Result<C::Key, DbError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.status {
@@ -74,7 +74,7 @@ pub struct ColumnIterator<'a, C: ColumnSchema> {
     _phantom: std::marker::PhantomData<C>,
 }
 
-type KeyValueResult<K, V> = Result<Option<(K, V)>, DBError>;
+type KeyValueResult<K, V> = Result<Option<(K, V)>, DbError>;
 
 impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
     pub(crate) fn new(iter: rocksdb::DBRawIterator<'a>, direction: rocksdb::Direction) -> Self {
@@ -107,7 +107,7 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 
     /// Seeks for the first key (binary equal to or greater)
     #[allow(unused)]
-    pub fn seek(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
+    pub fn seek(&mut self, seek_key: &C::Key) -> Result<(), DbError> {
         let key = seek_key.encode()?;
         self.iter.seek(&key);
 
@@ -116,7 +116,7 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 
     /// Seeks for the last key (binary equal to or less)
     #[allow(unused)]
-    pub fn seek_for_prev(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
+    pub fn seek_for_prev(&mut self, seek_key: &C::Key) -> Result<(), DbError> {
         let key = seek_key.encode()?;
         self.iter.seek_for_prev(&key);
 
@@ -125,7 +125,7 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 }
 
 impl<C: ColumnSchema> Iterator for ColumnIterator<'_, C> {
-    type Item = Result<(C::Key, C::Value), DBError>;
+    type Item = Result<(C::Key, C::Value), DbError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.status {
