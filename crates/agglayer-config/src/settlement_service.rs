@@ -33,9 +33,6 @@ pub enum SettlementPolicy {
     ///
     /// **Security**: Vulnerable to chain reorganizations beyond the
     /// confirmation count.
-    ///
-    /// The `confirmations` field specifies how many blocks must be mined
-    /// after the transaction's block before it is considered settled.
     LatestBlock {
         /// Number of block confirmations required for the transaction
         /// to be considered settled.
