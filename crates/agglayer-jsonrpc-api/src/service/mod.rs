@@ -132,15 +132,18 @@ where
     pub async fn get_tx_status(&self, hash: B256) -> Result<TxStatus, TxStatusError> {
         debug!("Received request to get transaction status for l1 tx hash {hash}");
 
-        let receipt = self.kernel.check_tx_status(hash).await.map_err(|error| {
-            error!(
-                ?error,
-                "Failed to get transaction status for l1 tx hash {hash}"
-            );
-            TxStatusError::StatusCheck(error)
-        })?;
-
-        let receipt = receipt.ok_or_else(|| TxStatusError::TxNotFound { hash })?;
+        let receipt = self
+            .kernel
+            .check_tx_status(hash)
+            .await
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to get transaction status for l1 tx hash {hash}"
+                );
+                TxStatusError::StatusCheck(error)
+            })?
+            .ok_or_else(|| TxStatusError::TxNotFound { hash })?;
 
         let current_block = self
             .kernel
