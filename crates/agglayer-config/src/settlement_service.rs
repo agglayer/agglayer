@@ -41,17 +41,11 @@ pub enum SettlementPolicy {
     FinalizedBlock,
 }
 
-/// Transaction retry policy for failed or pending settlement transactions.
-///
-/// Defines the strategy used when retrying failed or pending transactions.
-///
-/// Future versions may include additional policies such as:
-/// - **Exponential**: Exponential backoff with increasing intervals
-/// - **Jittered**: Random jitter to avoid thundering herd issues
+/// Transaction retry policy.
 #[serde_as]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct ConfigTxRetryPolicy {
+struct ConfigTxRetryPolicy {
     /// Initial retry interval.
     #[serde(default, skip_serializing_if = "crate::is_default")]
     #[serde_as(as = "Option<HumanDuration>")]
