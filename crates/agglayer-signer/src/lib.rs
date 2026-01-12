@@ -186,10 +186,6 @@ impl TxSigner<Signature> for ConfiguredSigner {
 
 impl ConfiguredSigner {
     /// Signs a transaction using a local signer.
-    ///
-    /// This helper method clones the transaction internally to match the
-    /// behavior of `KmsSigner::sign_transaction`, ensuring consistent API
-    /// across both signer types.
     async fn sign_transaction_local(
         wallet: &PrivateKeySigner,
         tx: &TypedTransaction,
