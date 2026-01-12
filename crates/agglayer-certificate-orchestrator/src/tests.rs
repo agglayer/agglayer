@@ -1,3 +1,5 @@
+#[cfg(test)]
+use std::task::Poll;
 use std::{
     collections::BTreeMap,
     num::NonZeroU64,
@@ -31,6 +33,8 @@ use agglayer_types::{
     EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
+#[cfg(test)]
+use futures_util::poll;
 use mocks::{MockCertifier, MockL1Rpc};
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
@@ -44,11 +48,6 @@ use crate::{
     CertificateInput, CertificateOrchestrator, CertificationError, Certifier, CertifierOutput,
     CertifierResult, Error, NonceInfo,
 };
-
-#[cfg(test)]
-use futures_util::poll;
-#[cfg(test)]
-use std::task::Poll;
 
 pub mod mocks;
 

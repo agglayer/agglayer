@@ -750,7 +750,7 @@ impl MetadataReader for StateStore {
             None => Ok(None),
             _ => Err(Error::Unexpected(
                 "Wrong value type decoded, was expecting LastCertificateSettlingBlock, decoded \
-                    another type"
+                 another type"
                     .to_string(),
             )),
         }

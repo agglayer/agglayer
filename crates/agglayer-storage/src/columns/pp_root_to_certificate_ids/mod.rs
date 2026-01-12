@@ -1,6 +1,5 @@
-use crate::types::pp_root_to_certificate_ids::{Key, Value};
-
 use super::{ColumnSchema, PP_ROOT_TO_CERTIFICATE_IDS_CF};
+use crate::types::pp_root_to_certificate_ids::{Key, Value};
 
 /// Column family for the pp root to certificate ID mapping.
 ///
