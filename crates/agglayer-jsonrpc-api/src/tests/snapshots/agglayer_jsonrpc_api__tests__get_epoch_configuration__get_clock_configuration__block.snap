@@ -1,6 +1,7 @@
 ---
-source: crates/agglayer-node/src/rpc/tests/get_epoch_configuration.rs
+source: crates/agglayer-jsonrpc-api/src/tests/get_epoch_configuration.rs
 expression: json
+snapshot_kind: text
 ---
 {
   "id": 0,
