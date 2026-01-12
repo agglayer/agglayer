@@ -13,6 +13,19 @@ use crate::{with::HumanDuration, Multiplier};
 ///
 /// This matches the `latest`, `safe`, and `finalized` block concepts from
 /// Ethereum clients, exposed over the JSON-RPC API.
+///
+/// # Configuration Examples
+///
+/// ```toml
+/// # Using LatestBlock with confirmations:
+/// settlement-policy = { LatestBlock = { confirmations = 16 } }
+///
+/// # Using SafeBlock (default):
+/// settlement-policy = "SafeBlock"
+///
+/// # Using FinalizedBlock:
+/// settlement-policy = "FinalizedBlock"
+/// ```
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub enum SettlementPolicy {
     /// Transaction is considered settled immediately after the specified
@@ -20,7 +33,15 @@ pub enum SettlementPolicy {
     ///
     /// **Security**: Vulnerable to chain reorganizations beyond the
     /// confirmation count.
-    LatestBlock,
+    ///
+    /// The `confirmations` field specifies how many blocks must be mined
+    /// after the transaction's block before it is considered settled.
+    LatestBlock {
+        /// Number of block confirmations required for the transaction
+        /// to be considered settled.
+        #[serde(default = "default_confirmations")]
+        confirmations: usize,
+    },
 
     /// Transaction is considered settled when the containing block has been
     /// considered "safe."
@@ -39,6 +60,20 @@ pub enum SettlementPolicy {
     /// **Time**: Typically between 7-13 minutes on mainnet. Worst case scenario
     /// ~19 minutes.
     FinalizedBlock,
+}
+
+impl SettlementPolicy {
+    /// Returns the number of confirmations required for the policy.
+    ///
+    /// - For `LatestBlock`, returns the configured confirmation count.
+    /// - For `SafeBlock` and `FinalizedBlock`, returns `None` as these policies
+    ///   rely on Ethereum's built-in finality mechanisms.
+    pub fn confirmations(&self) -> Option<usize> {
+        match self {
+            SettlementPolicy::LatestBlock { confirmations } => Some(*confirmations),
+            SettlementPolicy::SafeBlock | SettlementPolicy::FinalizedBlock => None,
+        }
+    }
 }
 
 /// Transaction retry policy.
@@ -181,12 +216,11 @@ pub struct SettlementTransactionConfig {
     #[serde_as(as = "NonInclusionRetryPolicy")]
     pub retry_on_not_included_on_l1: TxRetryPolicy,
 
-    /// Number of block confirmations required for
-    /// the transaction to resolve a receipt.
-    #[serde(default = "default_confirmations")]
-    pub confirmations: usize,
-
     /// Finality level required for the transaction to be considered settled.
+    ///
+    /// For `LatestBlock` policy, this also includes the number of
+    /// confirmations. For `SafeBlock` and `FinalizedBlock`, confirmations
+    /// are not applicable.
     #[serde(default)]
     pub settlement_policy: SettlementPolicy,
 
@@ -233,7 +267,6 @@ impl Default for SettlementTransactionConfig {
                 NonInclusionRetryPolicyImpl(ConfigTxRetryPolicy::default())
                     .get()
                     .unwrap(),
-            confirmations: default_confirmations(),
             settlement_policy: SettlementPolicy::default(),
             gas_limit_multiplier_factor: Multiplier::default(),
             gas_limit_ceiling: default_gas_limit_ceiling(),

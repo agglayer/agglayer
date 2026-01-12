@@ -3,7 +3,6 @@ source: crates/agglayer-config/tests/settlement_service.rs
 expression: config
 ---
 max-expected-retries = 2048
-confirmations = 64
 settlement-policy = "FinalizedBlock"
 gas-limit-multiplier-factor = 1.1
 gas-limit-ceiling = "0x5f5e100"
