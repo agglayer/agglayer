@@ -18,14 +18,14 @@ impl<const TREE_DEPTH: usize> TryFrom<&LocalExitTreeData<TREE_DEPTH>>
     /// representation.
     ///
     /// The frontier is a compact representation of a Merkle tree that stores
-    /// only the "right siblings" needed to reconstruct the root. For an
-    /// incremental tree with `n` leaves, the frontier contains the right
-    /// sibling of each odd-indexed node along the path from the last leaf
+    /// only the rightmost non-empty nodes needed to reconstruct the root. For an
+    /// incremental tree with `n` leaves, the frontier contains the left
+    /// sibling of each odd-indexed (right child) node along the path from the last leaf
     /// to the root.
     ///
     /// The algorithm traverses the path from the last leaf (`leaf_count`)
-    /// upward to the root, collecting right siblings at each level where
-    /// the current node is a left child (i.e., when `index & 1 == 1`).
+    /// upward to the root, collecting left siblings at each level where
+    /// the current node is a right child (i.e., when `index & 1 == 1`).
     fn try_from(data: &LocalExitTreeData<TREE_DEPTH>) -> Result<Self, Self::Error> {
         let leaf_count = data.layers[0].len();
         let mut frontier = [Digest::default(); TREE_DEPTH];
@@ -36,8 +36,8 @@ impl<const TREE_DEPTH: usize> TryFrom<&LocalExitTreeData<TREE_DEPTH>>
             if height >= TREE_DEPTH {
                 return Err(LocalExitTreeError::FrontierIndexOutOfBounds);
             }
-            // If the current node is a left child (odd index), store its right sibling
-            // in the frontier. The right sibling is at index ^ 1 (flips the LSB).
+            // If the current node is a right child (odd index), store its left sibling
+            // in the frontier. The left sibling is at index ^ 1 (flips the LSB).
             if index & 1 == 1 {
                 frontier[height] = data.get(height, index ^ 1)?;
             }
