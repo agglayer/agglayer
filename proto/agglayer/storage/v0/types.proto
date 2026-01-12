@@ -49,3 +49,9 @@ message BlockHash {
   // Hash bytes.
   bytes hash = 1;
 }
+
+// Block number.
+message BlockNumber {
+  // Block number.
+  uint64 number = 1;
+}
