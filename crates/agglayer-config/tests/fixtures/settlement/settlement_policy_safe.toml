@@ -1,0 +1,3 @@
+# Configuration with settlement policy of "SafeBlock+32"
+confirmations = 32
+settlement-policy = "SafeBlock"
