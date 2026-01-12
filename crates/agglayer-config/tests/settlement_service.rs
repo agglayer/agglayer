@@ -179,8 +179,8 @@ fn test_finality_immediate() {
 }
 
 #[test]
-fn test_finality_justified() {
-    let input = "./tests/fixtures/settlement/finality_justified.toml";
+fn test_settlement_policy_safe() {
+    let input = "./tests/fixtures/settlement/settlement_policy_safe.toml";
     let content = std::fs::read_to_string(input).unwrap();
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 

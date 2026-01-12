@@ -6,10 +6,13 @@ use serde_with::{serde_as, serde_conv};
 
 use crate::{with::HumanDuration, Multiplier};
 
-/// Finality level for settlement transactions on Ethereum.
+/// Policy for considering the transactions as settled on Ethereum.
 ///
 /// Defines when a transaction should be considered settled on the Ethereum
 /// network, determining the security guarantees for the settlement operation.
+///
+/// This matches the `latest`, `safe`, and `finalized` block concepts from
+/// Ethereum clients, exposed over the JSON-RPC API.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub enum SettlementPolicy {
     /// Transaction is considered settled immediately after the specified
@@ -315,8 +318,8 @@ pub struct SettlementServiceConfig {
 pub struct SettlementConfig {
     /// Configuration for certificate settlement transactions.
     ///
-    /// This controls how certificates (proofs of state transitions) are
-    /// submitted to the L1 settlement layer.
+    /// This controls how pessimistic proofs (proofs of state transitions for
+    /// certificates) are submitted to the L1 settlement layer.
     #[serde(default)]
     pub pessimistic_proof_tx_config: SettlementTransactionConfig,
 
