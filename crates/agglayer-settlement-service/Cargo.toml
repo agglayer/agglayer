@@ -1,0 +1,20 @@
+[package]
+name = "agglayer-settlement-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agglayer-config.workspace = true
+agglayer-types.workspace = true
+
+alloy.workspace = true
+eyre.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tower.workspace = true
+tracing.workspace = true
+ulid.workspace = true
+
+[lints]
+workspace = true

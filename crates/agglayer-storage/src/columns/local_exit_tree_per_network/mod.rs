@@ -33,7 +33,7 @@ pub enum Value {
     Frontier([u8; 32]),
 }
 
-crate::columns::impl_codec_using_bincode_for!(Key, Value);
+crate::schema::impl_codec_using_bincode_for!(Key, Value);
 
 impl ColumnSchema for LocalExitTreePerNetworkColumn {
     type Key = Key;

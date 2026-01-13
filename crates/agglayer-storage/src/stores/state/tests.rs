@@ -16,11 +16,11 @@ use rstest::{fixture, rstest};
 use tracing::info;
 
 use crate::{
+    backup::BackupClient,
     columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     error::Error,
-    storage::backup::BackupClient,
     stores::{state::StateStore, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };
@@ -314,7 +314,7 @@ fn import_native_tokens() {
 #[case("n15-cert_h2")]
 #[case("n15-cert_h3")]
 fn certificate_serialization(#[case] cert_name: &str) {
-    use crate::columns::Codec;
+    use crate::schema::Codec;
 
     let certificate = data::load_certificate(&format!("{cert_name}.json"));
     let encoded = certificate.encode().unwrap();

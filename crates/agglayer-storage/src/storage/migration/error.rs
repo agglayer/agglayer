@@ -20,10 +20,9 @@ pub enum DBOpenError {
     MigrationRecordGap(u32),
 
     #[error(
-        "Fewer migration steps declared in the code than recorded in database \
-         (declared: {declared}, recorded: {recorded}). This indicates existing migration steps \
-         were removed from the code, or an older version of agglayer-node is being used, \
-         which is not allowed."
+        "Fewer migration steps declared in the code than recorded in database (declared: \
+         {declared}, recorded: {recorded}). This indicates existing migration steps were removed \
+         from the code, or an older version of agglayer-node is being used, which is not allowed."
     )]
     FewerStepsDeclared { declared: u32, recorded: u32 },
 }
@@ -40,6 +39,9 @@ pub struct DBMigrationError {
 pub enum DBMigrationErrorDetails {
     #[error(transparent)]
     Database(#[from] DBError),
+
+    #[error("Writing in a read-only column family {0:?}")]
+    WritingReadOnlyCf(String),
 
     #[error("Custom migration error")]
     Custom(#[source] eyre::Error),
