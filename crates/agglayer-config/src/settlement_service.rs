@@ -28,7 +28,7 @@ pub enum SettlementPolicy {
     LatestBlock {
         /// Number of block confirmations required for the transaction
         /// to be considered settled.
-        #[serde(default = "default_confirmations")]
+        #[serde(default = "default_latest_block_confirmations")]
         confirmations: usize,
     },
 
@@ -106,7 +106,7 @@ impl<'de> Deserialize<'de> for SettlementPolicy {
                     "latest-block" => {
                         // Support "latest-block" without confirmations, use default
                         Ok(SettlementPolicy::LatestBlock {
-                            confirmations: default_confirmations(),
+                            confirmations: default_latest_block_confirmations(),
                         })
                     }
                     _ => Err(E::custom(format!(
@@ -124,7 +124,7 @@ impl<'de> Deserialize<'de> for SettlementPolicy {
                 #[derive(Deserialize)]
                 #[serde(rename_all = "kebab-case")]
                 struct LatestBlockConfig {
-                    #[serde(default = "default_confirmations")]
+                    #[serde(default = "default_latest_block_confirmations")]
                     confirmations: usize,
                 }
 
@@ -458,8 +458,8 @@ const fn default_rpc_max_expected_retries() -> usize {
 
 /// Default number of confirmations required
 /// for the transaction to resolve a receipt.
-const fn default_confirmations() -> usize {
-    32
+const fn default_latest_block_confirmations() -> usize {
+    0
 }
 
 fn default_gas_limit_ceiling() -> U256 {

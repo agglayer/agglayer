@@ -207,9 +207,9 @@ fn test_finality_immediate_default_confirmations() {
 
     assert_eq!(
         config.settlement_policy,
-        SettlementPolicy::LatestBlock { confirmations: 32 }
+        SettlementPolicy::LatestBlock { confirmations: 0 }
     );
-    assert_eq!(config.settlement_policy.confirmations(), Some(32));
+    assert_eq!(config.settlement_policy.confirmations(), Some(0));
 }
 
 #[test]
@@ -239,9 +239,9 @@ fn test_finality_immediate_compact_syntax_default() {
 
     assert_eq!(
         config.settlement_policy,
-        SettlementPolicy::LatestBlock { confirmations: 32 }
+        SettlementPolicy::LatestBlock { confirmations: 0 }
     );
-    assert_eq!(config.settlement_policy.confirmations(), Some(32));
+    assert_eq!(config.settlement_policy.confirmations(), Some(0));
 }
 
 #[test]
