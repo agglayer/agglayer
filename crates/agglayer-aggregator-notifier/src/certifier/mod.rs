@@ -353,7 +353,7 @@ where
         .map_err(|e| CertificationError::InternalError(e.to_string()))?
         .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
-        // Check if the certificate multisig hash matches the one stored in L1
+        // Check if the certificate aggchain hash matches the one stored in L1
 
         if matches!(certificate.aggchain_data, AggchainData::MultisigOnly { .. })
             || matches!(
