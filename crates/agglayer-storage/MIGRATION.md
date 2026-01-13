@@ -29,8 +29,9 @@ const DROPPED_CFS: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<OldCf2Column>(),
 ];
 
-// 1. Declaration: Define migration steps (no side effects)
-let db = DB::builder(initial_schema)
+// Initialize builder with path and initial schema
+let db = DB::builder(db_path, initial_schema)?
+    // Apply migration steps
     .add_cfs(ADDED_CFS, |db| {
         // Migration logic here to populate new CFs
         Ok(())

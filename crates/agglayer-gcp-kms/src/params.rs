@@ -181,7 +181,7 @@ mod test {
 
     #[test]
     #[serial]
-    fn test_disctinct_env_vars() {
+    fn test_distinct_env_vars() {
         let _raii = set_env(false, true);
         let config = config();
         let params = crate::KMSParameters::try_from(&config).unwrap();
