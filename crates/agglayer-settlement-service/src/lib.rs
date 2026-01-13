@@ -8,6 +8,7 @@
 
 #![allow(dead_code)] // TODO remove after settlement service is integrated in the rest of the app
 
+mod helpers;
 pub mod settlement_service;
 mod settlement_task;
 
