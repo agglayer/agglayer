@@ -35,13 +35,13 @@ pub struct DB {
 
 impl DB {
     /// Create a migration builder with the initial database schema.
-    pub fn builder(initial_schema: &[ColumnDescriptor]) -> Builder<'_> {
+    pub fn builder(initial_schema: &[ColumnDescriptor]) -> Result<Builder<'_>, DBOpenError> {
         Builder::new(initial_schema)
     }
 
     /// Open a new RocksDB instance at the given path with some column families.
     pub fn open_cf(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
-        Self::builder(cfs).finalize(cfs)?.open(path)?.migrate()
+        Self::builder(cfs)?.finalize(cfs)?.open(path)?.migrate()
     }
 
     /// Open a RocksDB instance in read-only mode at the given path with some
