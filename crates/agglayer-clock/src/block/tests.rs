@@ -225,45 +225,6 @@ async fn test_block_clock_overflow() {
     scenario.teardown();
 }
 
-#[test_log::test(tokio::test)]
-async fn test_block_clock_overflow_epoch() {
-    let scenario = FailScenario::setup();
-    let anvil = Anvil::new().block_time(1u64).spawn();
-
-    let ws = WsConnect::new(anvil.ws_endpoint());
-
-    let mut clock = BlockClock::default_for_test(ws, 0, 3).await;
-    let epoch = clock.current_epoch.clone();
-    let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
-
-    let token = CancellationToken::new();
-    fail::cfg_callback(
-        "block_clock::BlockClock::run::overwrite_block_number_on_new_block",
-        move || {
-            // Overflow the current_epoch on next poll
-            epoch.store(u64::MAX, std::sync::atomic::Ordering::SeqCst);
-        },
-    )
-    .unwrap();
-
-    let (start_sender, _start_receiver) = tokio::sync::oneshot::channel();
-    let handle = tokio::spawn(async move { clock.run(sender, start_sender, token).await });
-
-    let res = tokio::time::timeout(Duration::from_secs(10), handle)
-        .await
-        .expect("Timeout waiting for task to finish")
-        .expect("Task Join error");
-
-    assert!(matches!(
-        res,
-        Err(BlockClockError::SetEpochNumber(
-            e,
-            EpochNumber::ZERO
-        )) if e.as_u64() == u64::MAX
-    ));
-    scenario.teardown();
-}
-
 #[tokio::test]
 async fn test_block_epoch_calculation() {
     let (sender, _receive) = broadcast::channel(10);

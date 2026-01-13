@@ -121,11 +121,6 @@ impl<'a> Migrator<'a> {
         })
     }
 
-    /// Helper to check if a column family exists in the database.
-    pub(crate) fn cf_exists(&self, cf: &str) -> bool {
-        self.db.rocksdb.cf_handle(cf).is_some()
-    }
-
     fn writeopts() -> rocksdb::WriteOptions {
         let mut writeopts = rocksdb::WriteOptions::default();
         writeopts.set_sync(true);
@@ -158,29 +153,32 @@ impl<'a> Migrator<'a> {
     }
 
     /// Executes all pending migration steps and returns the migrated database.
-    pub fn migrate(mut self) -> Result<DB, DBOpenError> {
-        let start_step = self.start_step as usize;
+    pub fn migrate(self) -> Result<DB, DBOpenError> {
+        let Migrator {
+            mut db,
+            start_step,
+            steps,
+        } = self;
+
+        let start_step = start_step as usize;
 
         if start_step > 0 {
             debug!("Skipping {start_step} already-recorded migration steps");
         }
-
-        let steps = std::mem::take(&mut self.steps);
 
         for (step_no, step) in steps.into_iter().enumerate().skip(start_step) {
             let step_no = step_no as u32;
             info!("Running migration step {step_no}");
 
             // Execute step (modify DB)
-            step.execute(&mut self)
+            step.execute(&mut db)
                 .map_err(|details| DBMigrationError { step_no, details })?;
 
             // Record step completion
-            self.db
-                .put::<MigrationRecordColumn>(&step_no, &MigrationRecord::default())?;
+            db.put::<MigrationRecordColumn>(&step_no, &MigrationRecord::default())?;
         }
 
-        Ok(self.db)
+        Ok(db)
     }
 }
 
