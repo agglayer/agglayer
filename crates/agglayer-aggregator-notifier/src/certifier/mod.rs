@@ -368,7 +368,7 @@ where
                 .await
                 .map_err(CertificationError::RollupContractAddressNotFound)?;
 
-            let l1_hash = self
+            let l1_aggchain_hash = self
                 .l1_rpc
                 .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
                 .await
@@ -376,9 +376,9 @@ where
                 .into();
 
             let computed_aggchain_hash = multi_batch_header.aggchain_data.aggchain_hash();
-            if l1_hash != computed_aggchain_hash {
+            if l1_aggchain_hash != computed_aggchain_hash {
                 return Err(CertificationError::AggchainHashMismatch {
-                    from_l1: l1_hash,
+                    from_l1: l1_aggchain_hash,
                     from_certificate: computed_aggchain_hash,
                 });
             }
