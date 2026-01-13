@@ -213,6 +213,38 @@ fn test_finality_immediate_default_confirmations() {
 }
 
 #[test]
+fn test_finality_immediate_compact_syntax() {
+    // Test the compact "latest-block/N" syntax
+    let toml = r#"
+        settlement-policy = "latest-block/10"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 10 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(10));
+}
+
+#[test]
+fn test_finality_immediate_compact_syntax_default() {
+    // Test "latest-block" without confirmations uses default
+    let toml = r#"
+        settlement-policy = "latest-block"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 32 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(32));
+}
+
+#[test]
 fn test_settlement_policy_safe() {
     let input = "./tests/fixtures/settlement/settlement_policy_safe.toml";
     let content = std::fs::read_to_string(input).unwrap();

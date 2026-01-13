@@ -13,7 +13,7 @@ use crate::{with::HumanDuration, Multiplier};
 ///
 /// This matches the `latest`, `safe`, and `finalized` block concepts from
 /// Ethereum clients, exposed over the JSON-RPC API.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum SettlementPolicy {
     /// Transaction is considered settled immediately after the specified
@@ -21,6 +21,10 @@ pub enum SettlementPolicy {
     ///
     /// **Security**: Vulnerable to chain reorganizations beyond the
     /// confirmation count.
+    ///
+    /// Can be configured as:
+    /// - `"latest-block/N"` where N is the number of confirmations
+    /// - `{ latest-block = { confirmations = N } }`
     LatestBlock {
         /// Number of block confirmations required for the transaction
         /// to be considered settled.
@@ -58,6 +62,103 @@ impl SettlementPolicy {
             SettlementPolicy::LatestBlock { confirmations } => Some(*confirmations),
             SettlementPolicy::SafeBlock | SettlementPolicy::FinalizedBlock => None,
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for SettlementPolicy {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use std::fmt;
+
+        use serde::de::{self, MapAccess, Visitor};
+
+        struct SettlementPolicyVisitor;
+
+        impl<'de> Visitor<'de> for SettlementPolicyVisitor {
+            type Value = SettlementPolicy;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str(
+                    "a settlement policy: \"safe-block\", \"finalized-block\", \
+                     \"latest-block/N\", or a table with policy details",
+                )
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<SettlementPolicy, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    "safe-block" => Ok(SettlementPolicy::SafeBlock),
+                    "finalized-block" => Ok(SettlementPolicy::FinalizedBlock),
+                    s if s.starts_with("latest-block/") => {
+                        let confirmations_str = s.strip_prefix("latest-block/").unwrap();
+                        let confirmations = confirmations_str.parse::<usize>().map_err(|_| {
+                            E::custom(format!(
+                                "invalid confirmations value '{}' in 'latest-block/N'",
+                                confirmations_str
+                            ))
+                        })?;
+                        Ok(SettlementPolicy::LatestBlock { confirmations })
+                    }
+                    "latest-block" => {
+                        // Support "latest-block" without confirmations, use default
+                        Ok(SettlementPolicy::LatestBlock {
+                            confirmations: default_confirmations(),
+                        })
+                    }
+                    _ => Err(E::custom(format!(
+                        "unknown settlement policy '{}', expected 'safe-block', \
+                         'finalized-block', 'latest-block', or 'latest-block/N'",
+                        value
+                    ))),
+                }
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<SettlementPolicy, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                #[derive(Deserialize)]
+                #[serde(rename_all = "kebab-case")]
+                struct LatestBlockConfig {
+                    #[serde(default = "default_confirmations")]
+                    confirmations: usize,
+                }
+
+                let key: String = map
+                    .next_key()?
+                    .ok_or_else(|| de::Error::custom("expected a policy key"))?;
+
+                match key.as_str() {
+                    "safe-block" => {
+                        // Consume the value (should be empty or unit)
+                        let _: Option<()> = map.next_value().ok();
+                        Ok(SettlementPolicy::SafeBlock)
+                    }
+                    "finalized-block" => {
+                        // Consume the value (should be empty or unit)
+                        let _: Option<()> = map.next_value().ok();
+                        Ok(SettlementPolicy::FinalizedBlock)
+                    }
+                    "latest-block" => {
+                        let config: LatestBlockConfig = map.next_value()?;
+                        Ok(SettlementPolicy::LatestBlock {
+                            confirmations: config.confirmations,
+                        })
+                    }
+                    _ => Err(de::Error::custom(format!(
+                        "unknown settlement policy '{}', expected 'safe-block', \
+                         'finalized-block', or 'latest-block'",
+                        key
+                    ))),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(SettlementPolicyVisitor)
     }
 }
 
