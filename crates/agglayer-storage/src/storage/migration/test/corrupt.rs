@@ -3,7 +3,7 @@ use rocksdb::DB as RocksDB;
 
 use super::sample::*;
 use crate::{
-    schema::ColumnSchema,
+    schema::{ColumnDescriptor, ColumnSchema},
     storage::migration::{migration_cf::MigrationRecordColumn, Builder, DBOpenError},
     tests::TempDBDir,
 };
@@ -111,7 +111,7 @@ fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
     // Phase 2: Try to migrate but write to the old (read-only) CF
     {
         let result = Builder::open_sample(db_path)?.add_cfs(
-            [NetworkInfoV1Column::COLUMN_FAMILY_NAME],
+            &[ColumnDescriptor::new::<NetworkInfoV1Column>()],
             |db| {
                 // This should FAIL - trying to write to old CF during migration
                 let v0_value = &DATA_V0[1].1;
