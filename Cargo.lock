@@ -530,6 +530,7 @@ dependencies = [
  "agglayer-types",
  "alloy",
  "eyre",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-util",
  "tower 0.4.13",
