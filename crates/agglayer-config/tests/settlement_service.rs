@@ -183,7 +183,7 @@ fn deserialize_full_settlement_config() {
 fn test_finality_immediate() {
     // Test with explicit confirmations
     let toml = r#"
-        [settlement-policy.LatestBlock]
+        [settlement-policy.latest-block]
         confirmations = 10
     "#;
 
@@ -200,7 +200,7 @@ fn test_finality_immediate() {
 fn test_finality_immediate_default_confirmations() {
     // Test with default confirmations (when not specified)
     let toml = r#"
-        settlement-policy = { LatestBlock = {} }
+        settlement-policy = { latest-block = {} }
     "#;
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
@@ -227,7 +227,7 @@ fn test_settlement_policy_safe() {
 #[test]
 fn test_finality_finalized() {
     let toml = r#"
-        settlement-policy = "FinalizedBlock"
+        settlement-policy = "finalized-block"
     "#;
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();

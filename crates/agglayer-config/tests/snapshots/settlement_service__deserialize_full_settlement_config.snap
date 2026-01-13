@@ -4,7 +4,7 @@ expression: config
 ---
 [pessimistic-proof-tx-config]
 max-expected-retries = 2048
-settlement-policy = "FinalizedBlock"
+settlement-policy = "finalized-block"
 gas-limit-multiplier-factor = 1.1
 gas-limit-ceiling = "0x5f5e100"
 gas-price-multiplier-factor = 1.2
@@ -41,7 +41,7 @@ interval-multiplier-factor = 2.0
 max-interval = "10m"
 jitter = "10s"
 
-[validium-tx-config.settlement-policy.LatestBlock]
+[validium-tx-config.settlement-policy.latest-block]
 confirmations = 16
 
 [settlement-service-config]

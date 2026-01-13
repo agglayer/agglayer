@@ -13,20 +13,8 @@ use crate::{with::HumanDuration, Multiplier};
 ///
 /// This matches the `latest`, `safe`, and `finalized` block concepts from
 /// Ethereum clients, exposed over the JSON-RPC API.
-///
-/// # Configuration Examples
-///
-/// ```toml
-/// # Using LatestBlock with confirmations:
-/// settlement-policy = { LatestBlock = { confirmations = 16 } }
-///
-/// # Using SafeBlock (default):
-/// settlement-policy = "SafeBlock"
-///
-/// # Using FinalizedBlock:
-/// settlement-policy = "FinalizedBlock"
-/// ```
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
 pub enum SettlementPolicy {
     /// Transaction is considered settled immediately after the specified
     /// number of confirmation blocks.

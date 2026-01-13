@@ -5,7 +5,7 @@ retry-on-transient-failure.initial-interval = "15s"
 retry-on-transient-failure.multiplier = 2.5
 retry-on-transient-failure.max-interval = "2m"
 retry-on-transient-failure.jitter = "1m"
-settlement-policy = "FinalizedBlock"
+settlement-policy = "finalized-block"
 gas-limit-ceiling = "0x5f5e100"
 gas-limit-multiplier-factor = 1.1
 gas-price-multiplier-factor = 1.2
@@ -19,7 +19,7 @@ gas-limit-multiplier-factor = 1.05
 gas-price-floor = "2gwei"
 gas-price-ceiling = "50gwei"
 
-[validium-tx-config.settlement-policy.LatestBlock]
+[validium-tx-config.settlement-policy.latest-block]
 confirmations = 16
 
 [settlement-service-config]

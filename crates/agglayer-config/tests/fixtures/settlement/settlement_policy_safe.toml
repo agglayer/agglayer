@@ -1,2 +1,2 @@
 # Configuration with settlement policy of "SafeBlock"
-settlement-policy = "SafeBlock"
+settlement-policy = "safe-block"

@@ -7,6 +7,6 @@ gas-price-multiplier-factor = 1.1
 gas-price-ceiling = "50gwei"
 gas-price-floor = "1gwei"
 
-[settlement-policy.LatestBlock]
+[settlement-policy.latest-block]
 confirmations = 16
 
