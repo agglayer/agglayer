@@ -76,6 +76,11 @@ impl DB {
             .ok_or(DBError::ColumnFamilyNotFound)
     }
 
+    /// Check if a column family exists in the database.
+    pub(crate) fn cf_exists(&self, cf: &str) -> bool {
+        self.rocksdb.cf_handle(cf).is_some()
+    }
+
     /// Try to get the value for the given key.
     pub fn get<C: ColumnSchema>(&self, key: &C::Key) -> Result<Option<C::Value>, DBError> {
         let key = key.encode()?;

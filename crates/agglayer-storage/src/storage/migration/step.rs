@@ -1,7 +1,10 @@
 use tracing::{debug, warn};
 
-use super::{DBMigrationErrorDetails, DbAccess, Migrator};
-use crate::{schema::ColumnDescriptor, storage::DBError};
+use super::{DBMigrationErrorDetails, DbAccess};
+use crate::{
+    schema::ColumnDescriptor,
+    storage::{DBError, DB},
+};
 
 /// Trait alias for migration functions that populate column families with data.
 pub trait MigrateFn: FnOnce(&DbAccess) -> Result<(), DBMigrationErrorDetails> {}
@@ -13,7 +16,7 @@ impl<F> MigrateFn for F where F: FnOnce(&DbAccess) -> Result<(), DBMigrationErro
 pub struct Initialize;
 
 impl Initialize {
-    pub fn execute(self, _migrator: &mut Migrator) -> Result<(), DBMigrationErrorDetails> {
+    pub fn execute(self, _db: &mut DB) -> Result<(), DBMigrationErrorDetails> {
         // No-op: step 0 is just for tracking initialization
         Ok(())
     }
@@ -34,28 +37,24 @@ impl std::fmt::Debug for AddColumnFamilies<'_> {
 }
 
 impl AddColumnFamilies<'_> {
-    pub fn execute(self, migrator: &mut Migrator) -> Result<(), DBMigrationErrorDetails> {
+    pub fn execute(self, db: &mut DB) -> Result<(), DBMigrationErrorDetails> {
         // Create the column families first
         for descriptor in self.cfs {
             let cf = descriptor.name();
             let opts = descriptor.options().to_rocksdb_options();
 
-            if migrator.cf_exists(cf) {
+            if db.cf_exists(cf) {
                 warn!("Column family {cf:?} already exists, dropping to create a fresh one");
-                migrator.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
+                db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
             }
 
             debug!("Creating column family {cf:?}");
-            migrator
-                .db
-                .rocksdb
-                .create_cf(cf, &opts)
-                .map_err(DBError::from)?;
+            db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
         }
 
         // Use the provided closure to populate it with data
         debug!("Populating new column families with data");
-        let access = DbAccess::new(&migrator.db, self.cfs);
+        let access = DbAccess::new(db, self.cfs);
         (self.migrate_fn)(&access)?;
 
         Ok(())
@@ -69,13 +68,13 @@ pub struct DropColumnFamilies<'a> {
 }
 
 impl DropColumnFamilies<'_> {
-    pub fn execute(self, migrator: &mut Migrator) -> Result<(), DBMigrationErrorDetails> {
+    pub fn execute(self, db: &mut DB) -> Result<(), DBMigrationErrorDetails> {
         for descriptor in self.cfs {
             let cf = descriptor.name();
 
-            if migrator.cf_exists(cf) {
+            if db.cf_exists(cf) {
                 debug!("Dropping column family {cf:?}");
-                migrator.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
+                db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
             } else {
                 warn!("Asked to remove a non-existing column family {cf:?}");
             }
@@ -115,11 +114,11 @@ impl<'a> MigrationStep<'a> {
     }
 
     /// Execute this migration step, modifying the database as needed.
-    pub fn execute(self, migrator: &mut Migrator) -> Result<(), DBMigrationErrorDetails> {
+    pub fn execute(self, db: &mut DB) -> Result<(), DBMigrationErrorDetails> {
         match self {
-            MigrationStep::Initialize(step) => step.execute(migrator),
-            MigrationStep::AddColumnFamilies(step) => step.execute(migrator),
-            MigrationStep::DropColumnFamilies(step) => step.execute(migrator),
+            MigrationStep::Initialize(step) => step.execute(db),
+            MigrationStep::AddColumnFamilies(step) => step.execute(db),
+            MigrationStep::DropColumnFamilies(step) => step.execute(db),
         }
     }
 }
