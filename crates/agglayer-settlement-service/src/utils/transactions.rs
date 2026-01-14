@@ -118,7 +118,7 @@ where
     if confirmations > 0 {
         let receipt_block = tx_receipt.block_number.ok_or_else(|| {
             error!("Tx {tx_hash} receipt has no block number");
-            ClientRpcError::ReceiptWithoutBlockNumberError(tx_receipt.transaction_hash)
+            ClientRpcError::ReceiptWithoutBlockNumberError { tx_hash }
         })?;
 
         debug!(
