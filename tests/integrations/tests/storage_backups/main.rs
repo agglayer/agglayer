@@ -102,6 +102,7 @@ async fn purge_after_n_backup(#[case] state: Forest) {
         path: backup_dir.path.clone(),
         state_max_backup_count: 1,
         pending_max_backup_count: 1,
+        on_startup: agglayer_config::storage::backup::StartupBackupMode::Never,
     };
 
     let handle = CancellationToken::new();

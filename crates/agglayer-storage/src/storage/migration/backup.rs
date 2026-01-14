@@ -1,15 +1,11 @@
 use std::path::Path;
 
+use agglayer_config::storage::backup::BackupConfig;
 use tracing::info;
 
 use super::{DBOpenError, Migrator};
 
 /// When should a backup on startup be taken.
-pub enum BackupMode {
-    Never,
-    IfMigrating,
-    Always,
-}
 
 impl Migrator<'_> {
     /// Creates a versioned backup of the database before running migrations.
@@ -48,25 +44,39 @@ impl Migrator<'_> {
     }
 
     /// Create a backup if migration is needed.
-    pub fn backup_if_migration_needed(self, path: &Path) -> Result<Self, DBOpenError> {
+    pub fn backup_if_migration_needed(self, backup_path: &Path) -> Result<Self, DBOpenError> {
         if self.migration_needed() {
-            self.backup(path)
+            self.backup(backup_path)
         } else {
             Ok(self)
+        }
+    }
+
+    /// Backup according to mode settings.
+    pub fn backup_with_config(
+        self,
+        config: &BackupConfig,
+        subdir: impl AsRef<Path>,
+    ) -> Result<Self, DBOpenError> {
+        use agglayer_config::storage::backup::StartupBackupMode as BM;
+
+        match config {
+            BackupConfig::Disabled => Ok(self),
+            BackupConfig::Enabled {
+                path, on_startup, ..
+            } => {
+                let backup_path = path.join(subdir.as_ref());
+                match on_startup {
+                    BM::Never => Ok(self),
+                    BM::IfMigrating => self.backup_if_migration_needed(&backup_path),
+                    BM::Always => self.backup(&backup_path),
+                }
+            }
         }
     }
 
     /// Check if there are pending migration steps to execute.
     pub fn migration_needed(&self) -> bool {
         (self.start_step as usize) < self.steps.len()
-    }
-
-    /// Backup according to mode settings.
-    pub fn backup_using_mode(self, path: &Path, mode: BackupMode) -> Result<Self, DBOpenError> {
-        match mode {
-            BackupMode::Never => Ok(self),
-            BackupMode::IfMigrating => self.backup_if_migration_needed(path),
-            BackupMode::Always => self.backup(path),
-        }
     }
 }

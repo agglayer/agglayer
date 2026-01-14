@@ -93,6 +93,7 @@ impl Node {
             path,
             state_max_backup_count,
             pending_max_backup_count,
+            on_startup: _,
         } = &config.storage.backup
         {
             let (backup_engine, client) = BackupEngine::new(
