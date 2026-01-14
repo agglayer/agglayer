@@ -4,42 +4,41 @@ expression: stats
 snapshot_kind: text
 ---
 gas: 2166516
-opcode counts (229956 total instructions):
-    62831 add
-    26621 sw
-    26111 lw
-    17792 lbu
-    11276 beq
-    10779 bne
-     9549 sb
+opcode counts (227704 total instructions):
+    62295 add
+    26295 sw
+    25755 lw
+    17521 lbu
+    11017 beq
+    10797 bne
+     9160 sb
      8858 xor
-     7065 srl
-     6272 sll
-     5805 bltu
-     5659 sltu
-     5639 and
-     5581 or
-     5277 jalr
-     2643 auipc
-     2550 mul
-     2472 sub
-     2436 ecall
-     2384 mulhu
-     1523 jal
-      384 bgeu
-      164 lb
+     7056 srl
+     6298 sll
+     5842 bltu
+     5673 and
+     5668 sltu
+     5611 or
+     5137 jalr
+     2573 auipc
+     2555 mul
+     2470 sub
+     2450 ecall
+     2386 mulhu
+     1524 jal
+      388 bgeu
       162 sra
-       93 sh
-       15 lhu
+       96 lb
+       86 sh
+       14 lhu
        13 blt
-        1 lh
-        1 bge
-syscall counts (2436 total syscall instructions):
+        4 lh
+syscall counts (2450 total syscall instructions):
     1536 secp256k1_double
      775 secp256k1_add
       79 keccak_permute
-      11 hint_len
-      11 hint_read
+      18 hint_len
+      18 hint_read
        8 commit
        8 commit_deferred_proofs
        6 enter_unconstrained
