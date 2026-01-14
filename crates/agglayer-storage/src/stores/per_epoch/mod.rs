@@ -52,11 +52,11 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::epochs_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::EPOCHS_DB)
     }
 
     pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
-        DB::open_cf_readonly(path, cf_definitions::epochs_db_cf_definitions())
+        DB::open_cf_readonly(path, cf_definitions::EPOCHS_DB)
     }
 
     #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
@@ -298,7 +298,7 @@ where
         );
         let end_checkpoint_entry = end_checkpoint.entry(network_id);
 
-        let end_checkpoint_entry_assigment;
+        let end_checkpoint_entry_assignment;
 
         // Fetch the network current point for this epoch
         match (start_checkpoint, &end_checkpoint_entry) {
@@ -325,7 +325,7 @@ where
                     network_id
                 );
                 // Adding the network to the end checkpoint.
-                end_checkpoint_entry_assigment = Some(Height::ZERO);
+                end_checkpoint_entry_assignment = Some(Height::ZERO);
 
                 // Adding the certificate to the DB
             }
@@ -358,7 +358,7 @@ where
                     height
                 );
 
-                end_checkpoint_entry_assigment = Some(height);
+                end_checkpoint_entry_assignment = Some(height);
             }
 
             (_, Entry::Occupied(current_height)) => {
@@ -423,7 +423,7 @@ where
             epoch_number = %self.epoch_number,
             "Certificate assigned to epoch"
         );
-        if let Some(height) = end_checkpoint_entry_assigment {
+        if let Some(height) = end_checkpoint_entry_assignment {
             let entry = end_checkpoint_entry.or_default();
             *entry = height;
 

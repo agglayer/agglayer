@@ -535,6 +535,7 @@ dependencies = [
  "eyre",
  "tokio",
  "tokio-util",
+ "tower 0.4.13",
  "tracing",
  "ulid",
 ]
