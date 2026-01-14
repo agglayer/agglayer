@@ -33,6 +33,13 @@ mod l1_context;
 #[cfg(test)]
 mod tests;
 
+fn write_component(stdin: &mut SP1Stdin, mut bytes: Vec<u8>) {
+    if bytes.is_empty() {
+        bytes.push(0);
+    }
+    stdin.write_vec(bytes);
+}
+
 type ProverService = Buffer<
     BoxCloneService<prover_executor::Request, prover_executor::Response, prover_executor::Error>,
     prover_executor::Request,
@@ -154,11 +161,22 @@ where
             "Successfully generated the witness for the PP for certificate",
         );
 
+        let components = multi_batch_header
+            .to_zero_copy_components()
+            .map_err(|err| CertificationError::Other(eyre!(err)))?;
+
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
         let mut stdin = sp1_fast(|| {
             let mut stdin = SP1Stdin::new();
-            stdin.write(&network_state);
-            stdin.write(&multi_batch_header);
+            stdin.write_vec(network_state.to_bytes_zero_copy());
+            stdin.write_vec(components.header_bytes);
+            write_component(&mut stdin, components.bridge_exits_bytes);
+            write_component(&mut stdin, components.imported_bridge_exits_bytes);
+            write_component(&mut stdin, components.nullifier_paths_bytes);
+            write_component(&mut stdin, components.balances_proofs_bytes);
+            write_component(&mut stdin, components.balance_merkle_paths_bytes);
+            write_component(&mut stdin, components.multisig_signatures_bytes);
+            write_component(&mut stdin, components.multisig_expected_signers_bytes);
             stdin
         })
         .map_err(CertificationError::Other)?;

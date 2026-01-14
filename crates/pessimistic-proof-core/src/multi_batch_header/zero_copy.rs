@@ -376,17 +376,21 @@ impl MultiBatchHeader {
         let multisig_expected_signers_count =
             u32::from_le_bytes(header.multisig_expected_signers_count) as usize;
 
+        let bridge_exits_bytes = normalize_component_bytes(bridge_exits_bytes, bridge_exits_count)?;
         let bridge_exits = cast_slice::<BridgeExitWire>(bridge_exits_bytes)?;
         ensure_count("bridge_exits", bridge_exits_count, bridge_exits.len())?;
 
-        let imported_bridge_exits =
-            cast_slice::<ImportedBridgeExitWire>(imported_bridge_exits_bytes)?;
+        let imported_bridge_exits_bytes =
+            normalize_component_bytes(imported_bridge_exits_bytes, imported_bridge_exits_count)?;
+        let imported_bridge_exits = cast_slice::<ImportedBridgeExitWire>(imported_bridge_exits_bytes)?;
         ensure_count(
             "imported_bridge_exits",
             imported_bridge_exits_count,
             imported_bridge_exits.len(),
         )?;
 
+        let nullifier_paths_bytes =
+            normalize_component_bytes(nullifier_paths_bytes, imported_bridge_exits_count)?;
         let nullifier_paths = cast_slice::<SmtNonInclusionProofWire>(nullifier_paths_bytes)?;
         ensure_count(
             "nullifier_paths",
@@ -402,6 +406,8 @@ impl MultiBatchHeader {
             }
         }
 
+        let balances_proofs_bytes =
+            normalize_component_bytes(balances_proofs_bytes, balances_proofs_count)?;
         let balances_proofs = cast_slice::<BalanceProofEntryWire>(balances_proofs_bytes)?;
         ensure_count(
             "balances_proofs",
@@ -409,21 +415,32 @@ impl MultiBatchHeader {
             balances_proofs.len(),
         )?;
 
-        let balance_merkle_paths = cast_slice::<BalanceMerkleProofWire>(balance_merkle_paths_bytes)?;
+        let balance_merkle_paths_bytes =
+            normalize_component_bytes(balance_merkle_paths_bytes, balances_proofs_count)?;
+        let balance_merkle_paths =
+            cast_slice::<BalanceMerkleProofWire>(balance_merkle_paths_bytes)?;
         ensure_count(
             "balance_merkle_paths",
             balances_proofs_count,
             balance_merkle_paths.len(),
         )?;
 
-        let multisig_signatures = cast_slice::<MultisigSignatureEntryWire>(multisig_signatures_bytes)?;
+        let multisig_signatures_bytes =
+            normalize_component_bytes(multisig_signatures_bytes, multisig_signatures_count)?;
+        let multisig_signatures =
+            cast_slice::<MultisigSignatureEntryWire>(multisig_signatures_bytes)?;
         ensure_count(
             "multisig_signatures",
             multisig_signatures_count,
             multisig_signatures.len(),
         )?;
 
-        let multisig_expected_signers = cast_slice::<[u8; 20]>(multisig_expected_signers_bytes)?;
+        let multisig_expected_signers_bytes = normalize_component_bytes(
+            multisig_expected_signers_bytes,
+            multisig_expected_signers_count,
+        )?;
+        let multisig_expected_signers =
+            cast_slice::<[u8; 20]>(multisig_expected_signers_bytes)?;
         ensure_count(
             "multisig_expected_signers",
             multisig_expected_signers_count,
@@ -544,6 +561,27 @@ fn ensure_count(field: &'static str, expected: usize, actual: usize) -> Result<(
         });
     }
     Ok(())
+}
+
+fn normalize_component_bytes<'a>(
+    bytes: &'a [u8],
+    expected_count: usize,
+) -> Result<&'a [u8], ZeroCopyError> {
+    if expected_count == 0 {
+        if bytes.is_empty() {
+            return Ok(bytes);
+        }
+        // SP1 read_vec panics on empty input, so allow a 1-byte sentinel.
+        if bytes.len() == 1 && bytes[0] == 0 {
+            return Ok(&[]);
+        }
+        return Err(ZeroCopyError::InvalidSize {
+            expected: 0,
+            actual: bytes.len(),
+        });
+    }
+
+    Ok(bytes)
 }
 
 fn cast_slice<T: Pod>(bytes: &[u8]) -> Result<&[T], ZeroCopyError> {

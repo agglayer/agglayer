@@ -28,6 +28,13 @@ fn u(x: u64) -> U256 {
     x.try_into().unwrap()
 }
 
+fn write_component(stdin: &mut SP1Stdin, mut bytes: Vec<u8>) {
+    if bytes.is_empty() {
+        bytes.push(0);
+    }
+    stdin.write_vec(bytes);
+}
+
 struct VersionConsistencyChecker {
     /// Initial state
     initial_state: LocalNetworkStateData,
@@ -365,8 +372,18 @@ fn test_sp1_simple() {
 
     let initial_state: NetworkState = LocalNetworkState::from(initial_state).into();
     let mut stdin = SP1Stdin::new();
-    stdin.write(&initial_state);
-    stdin.write(&multi_batch_header);
+    stdin.write_vec(initial_state.to_bytes_zero_copy());
+    let components = multi_batch_header
+        .to_zero_copy_components()
+        .expect("zero-copy MultiBatchHeader");
+    stdin.write_vec(components.header_bytes);
+    write_component(&mut stdin, components.bridge_exits_bytes);
+    write_component(&mut stdin, components.imported_bridge_exits_bytes);
+    write_component(&mut stdin, components.nullifier_paths_bytes);
+    write_component(&mut stdin, components.balances_proofs_bytes);
+    write_component(&mut stdin, components.balance_merkle_paths_bytes);
+    write_component(&mut stdin, components.multisig_signatures_bytes);
+    write_component(&mut stdin, components.multisig_expected_signers_bytes);
     stdin.write_proof(
         *aggchain_proof.try_as_compressed().unwrap(),
         aggchain_vkey.vk,

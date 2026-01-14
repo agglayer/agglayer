@@ -19,8 +19,30 @@ pub fn main() {
             )
         });
 
-    // MultiBatchHeader still uses bincode for now
-    let batch_header = sp1_zkvm::io::read::<MultiBatchHeader>();
+    let header_bytes = sp1_zkvm::io::read_vec();
+    let bridge_exits_bytes = sp1_zkvm::io::read_vec();
+    let imported_bridge_exits_bytes = sp1_zkvm::io::read_vec();
+    let nullifier_paths_bytes = sp1_zkvm::io::read_vec();
+    let balances_proofs_bytes = sp1_zkvm::io::read_vec();
+    let balance_merkle_paths_bytes = sp1_zkvm::io::read_vec();
+    let multisig_signatures_bytes = sp1_zkvm::io::read_vec();
+    let multisig_expected_signers_bytes = sp1_zkvm::io::read_vec();
+
+    let batch_header_ref = MultiBatchHeader::from_zero_copy_components(
+        &header_bytes,
+        &bridge_exits_bytes,
+        &imported_bridge_exits_bytes,
+        &nullifier_paths_bytes,
+        &balances_proofs_bytes,
+        &balance_merkle_paths_bytes,
+        &multisig_signatures_bytes,
+        &multisig_expected_signers_bytes,
+    )
+    .unwrap_or_else(|err| panic!("Failed to parse MultiBatchHeader zero-copy: {err}"));
+
+    let batch_header = batch_header_ref
+        .to_owned()
+        .unwrap_or_else(|err| panic!("Failed to materialize MultiBatchHeader: {err}"));
 
     let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header).unwrap();
 
