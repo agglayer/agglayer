@@ -355,12 +355,11 @@ where
 
         // Check if the certificate aggchain hash matches the one stored in L1
 
-        if matches!(certificate.aggchain_data, AggchainData::MultisigOnly { .. })
-            || matches!(
-                certificate.aggchain_data,
-                AggchainData::MultisigAndAggchainProof { .. }
-            )
-            || matches!(certificate.aggchain_data, AggchainData::Generic { .. })
+        if matches!(certificate.aggchain_data,
+          AggchainData::MultisigOnly { .. } |
+          AggchainData::MultisigAndAggchainProof { .. } |
+          AggchainData::Generic { .. }
+        )
         {
             let rollup_address = self
                 .l1_rpc
