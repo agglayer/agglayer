@@ -2,21 +2,15 @@ use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamily, ColumnFamilyDescriptor, DBPinnableSlice, Direction, Options, ReadOptions,
-    WriteBatch, WriteOptions,
+    ColumnFamily, DBPinnableSlice, Direction, Options, ReadOptions, WriteBatch, WriteOptions,
 };
 
-use crate::columns::{Codec, ColumnSchema};
+use crate::schema::{Codec, ColumnDescriptor, ColumnSchema};
 
-mod cf_definitions;
 pub(crate) mod iterators;
+mod migration;
 
-pub mod backup;
-
-pub(crate) use cf_definitions::{
-    debug::debug_db_cf_definitions, epochs::epochs_db_cf_definitions,
-    pending::pending_db_cf_definitions, state::state_db_cf_definitions,
-};
+pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
@@ -24,25 +18,13 @@ pub enum DBError {
     RocksDB(#[from] rocksdb::Error),
 
     #[error("Codec error: {0}")]
-    CodecError(#[from] crate::columns::CodecError),
+    CodecError(#[from] crate::schema::CodecError),
 
     #[error("Trying to access an unknown ColumnFamily")]
     ColumnFamilyNotFound,
 
     #[error("Database was opened in read-only mode")]
     ReadOnlyMode,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum BackupError {
-    #[error("Unable to send backup request")]
-    UnableToSendBackupRequest,
-
-    #[error("RocksDB error: {0}")]
-    RocksDB(#[from] rocksdb::Error),
-
-    #[error("IO Error: {0}")]
-    IO(#[from] std::io::Error),
 }
 
 /// A physical storage component with an active RocksDB.
@@ -52,31 +34,33 @@ pub struct DB {
 }
 
 impl DB {
+    /// Open a new RocksDB instance at the given path with initial column
+    /// families and a possibility to migrate the database.
+    pub fn builder(path: &Path, cfs: &[ColumnDescriptor]) -> Result<Builder, DBOpenError> {
+        Builder::open(path, cfs)
+    }
+
     /// Open a new RocksDB instance at the given path with some column families.
-    pub fn open_cf(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
-        let mut options = Options::default();
-        options.create_if_missing(true);
-        options.create_missing_column_families(true);
-
-        let mut writeopts = WriteOptions::default();
-        writeopts.set_sync(true);
-
-        Ok(DB {
-            rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, cfs)?,
-            default_write_options: Some(writeopts),
-        })
+    pub fn open_cf(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
+        Builder::open(path, cfs)?.finalize(cfs)
     }
 
     /// Open a RocksDB instance in read-only mode at the given path with some
     /// column families. This prevents concurrency issues when multiple
     /// processes need to read from the database.
-    pub fn open_cf_readonly(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
+    pub fn open_cf_readonly(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBError> {
         let mut options = Options::default();
         options.create_if_missing(false); // Don't create if missing in readonly mode
         options.create_missing_column_families(false); // Don't create missing column families
 
+        let descriptors: Vec<_> = cfs.iter().map(|cd| cd.to_rocksdb_descriptor()).collect();
         Ok(DB {
-            rocksdb: rocksdb::DB::open_cf_descriptors_read_only(&options, path, cfs, false)?,
+            rocksdb: rocksdb::DB::open_cf_descriptors_read_only(
+                &options,
+                path,
+                descriptors,
+                false,
+            )?,
             default_write_options: None,
         })
     }
@@ -242,5 +226,9 @@ impl DB {
 
         let write_options = self.write_options()?;
         Ok(self.rocksdb.delete_cf_opt(&cf, key, write_options)?)
+    }
+
+    pub(crate) fn raw_rocksdb(&self) -> &rocksdb::DB {
+        &self.rocksdb
     }
 }

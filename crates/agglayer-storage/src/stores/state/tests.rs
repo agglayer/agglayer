@@ -16,11 +16,11 @@ use rstest::{fixture, rstest};
 use tracing::info;
 
 use crate::{
+    backup::BackupClient,
     columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     error::Error,
-    storage::backup::BackupClient,
     stores::{state::StateStore, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };
@@ -71,7 +71,15 @@ pub(crate) fn network_id() -> NetworkId {
 
 #[fixture]
 pub(crate) fn store() -> StateStore {
+    let _ = test_log::tracing_subscriber::fmt()
+        .with_test_writer()
+        .with_env_filter(test_log::tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
+
+    tracing::info!("Setting up storage fixture");
+
     let tmp = TempDBDir::new();
+    tracing::debug!(path = ?tmp.path, "Temporary directory created");
     let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
 
     StateStore::new(db.clone(), BackupClient::noop())
@@ -306,7 +314,7 @@ fn import_native_tokens() {
 #[case("n15-cert_h2")]
 #[case("n15-cert_h3")]
 fn certificate_serialization(#[case] cert_name: &str) {
-    use crate::columns::Codec;
+    use crate::schema::Codec;
 
     let certificate = data::load_certificate(&format!("{cert_name}.json"));
     let encoded = certificate.encode().unwrap();

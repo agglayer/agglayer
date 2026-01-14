@@ -38,9 +38,7 @@ fn main() -> eyre::Result<()> {
                 .enable_all()
                 .build()?
                 .block_on(async move {
-                    let vkey_hex = compute_program_vkey(ELF)
-                        .await
-                        .context("Failed to compute program vkey");
+                    let vkey_hex = compute_program_vkey(ELF).await;
                     match vkey_hex {
                         Ok(vkey_hex) => println!("{vkey_hex}"),
                         Err(error) => eprintln!("{error:?}"),
@@ -58,7 +56,7 @@ fn main() -> eyre::Result<()> {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
 
             if let BackupConfig::Enabled { path, .. } = cfg.storage.backup {
-                match agglayer_storage::storage::backup::BackupEngine::list_backups(&path) {
+                match agglayer_storage::backup::BackupEngine::list_backups(&path) {
                     Ok(result) => println!("{}", serde_json::to_string(&result).unwrap()),
                     Err(error) => eprintln!("{error}"),
                 }
@@ -75,7 +73,7 @@ fn main() -> eyre::Result<()> {
                 for (db_kind, version) in db_versions {
                     let (db_path, backup_path) = db_kind.create_paths(&cfg, path);
 
-                    agglayer_storage::storage::backup::BackupEngine::restore_at(
+                    agglayer_storage::backup::BackupEngine::restore_at(
                         &backup_path,
                         &db_path,
                         version,

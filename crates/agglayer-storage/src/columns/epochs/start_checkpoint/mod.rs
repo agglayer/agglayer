@@ -11,9 +11,11 @@ use crate::columns::PER_EPOCH_START_CHECKPOINT_CF;
 /// | `NetworkId` | `Height` |
 pub struct StartCheckpointColumn;
 
-impl crate::columns::ColumnSchema for StartCheckpointColumn {
+impl crate::schema::ColumnSchema for StartCheckpointColumn {
     type Key = NetworkId;
     type Value = Height;
 
     const COLUMN_FAMILY_NAME: &'static str = PER_EPOCH_START_CHECKPOINT_CF;
+    const COLUMN_OPTIONS: crate::schema::options::ColumnOptions =
+        crate::columns::CHECKPOINT_COLUMN_OPTIONS;
 }

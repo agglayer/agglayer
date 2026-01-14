@@ -147,7 +147,7 @@ impl NetworkState {
         }
     }
 
-    /// Apply the [`MultiBatchHeader`] on the current [`LocalNetworkState`].
+    /// Apply the [`MultiBatchHeader`] on the current [`NetworkState`].
     /// Checks that the transition reaches the target [`StateCommitment`].
     /// The state isn't modified on error.
     pub fn apply_batch_header(
@@ -161,7 +161,7 @@ impl NetworkState {
         Ok(roots)
     }
 
-    /// Apply the [`MultiBatchHeader`] on the current [`LocalNetworkState`].
+    /// Apply the [`MultiBatchHeader`] on the current [`NetworkState`].
     /// Returns the resulting [`StateCommitment`] upon success.
     /// The state can be modified on error.
     fn apply_batch_header_helper(

@@ -4,10 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-dirs.workspace = true
 alloy-primitives.workspace = true
 educe.workspace = true
 humantime-serde = "1.1.1"
+insta = { workspace = true, optional = true }
 jsonrpsee.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
@@ -24,11 +24,12 @@ agglayer-types.workspace = true
 prover-config.workspace = true
 
 [dev-dependencies]
-insta.workspace = true
 pretty_assertions = "1.4.0"
 rstest.workspace = true
 serde_json = { workspace = true }
 
+agglayer-config = { workspace = true, features = ["testutils"] }
+
 [features]
 default = []
-testutils = []
+testutils = ["dep:insta"]

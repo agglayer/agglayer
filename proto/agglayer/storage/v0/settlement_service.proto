@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+import "agglayer/storage/v0/types.proto";
+import "google/protobuf/timestamp.proto";
+
+// Settlement job ID.
+message SettlementJobId {
+  // ULID byte sequence.
+  bytes ulid = 1;
+}
+
+// Settlement job data.
+message SettlementJob {
+  // ----- Transaction details -----
+
+  // Contract address to which to submit the transaction.
+  Address contract_address = 1;
+
+  // Transaction calldata.
+  Calldata calldata = 2;
+
+  // Eth value to send with the transaction.
+  EthValue eth_value = 3;
+
+  // ----- Job result details -----
+
+  // Job result, if available.
+  TxResult job_result = 4;
+
+  // ----- Transaction parameters -----
+
+  // Number of confirmations to wait for.
+  uint32 num_confirmations = 5;
+
+  // Gas limit for each settlement attempt.
+  Uint128 gas_limit = 6;
+
+  // Ceiling for max fee per gas.
+  Uint128 max_fee_per_gas_ceiling = 7;
+
+  // Floor for max fee per gas.
+  Uint128 max_fee_per_gas_floor = 8;
+
+  // Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
+  uint32 max_fee_per_gas_increase_percents = 9;
+
+  // Ceiling for max priority fee per gas.
+  Uint128 max_priority_fee_per_gas_ceiling = 10;
+
+  // Floor for max priority fee per gas.
+  Uint128 max_priority_fee_per_gas_floor = 11;
+
+  // Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
+  uint32 max_priority_fee_per_gas_increase_percents = 12;
+}
+
+// Transaction result.
+message TxResult {
+  // Transaction result.
+  oneof tx_result {
+    // Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
+    ClientError client_error = 1;
+
+    // Result of a successfully-executed contract call.
+    ContractCallResult contract_call_result = 2;
+
+    // Reorganized transactions get their result edited to be this.
+    ReorganizedResult reorganized_result = 3;
+  }
+}
+
+// Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
+message ClientError {
+  // Type of error.
+  ClientErrorType error_type = 1;
+
+  // Error message.
+  string error_message = 2;
+}
+
+// Type of client error.
+enum ClientErrorType {
+  // Unspecified error type.
+  CLIENT_ERROR_TYPE_UNSPECIFIED = 0;
+
+  // Transient error (e.g., network issue, temporary RPC unavailability).
+  CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
+
+  // Permanent error (e.g., we have no private key for the wallet listed in there).
+  CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
+}
+
+// Result for a successfully-executed contract call.
+message ContractCallResult {
+  // The outcome of the contract call.
+  ContractCallOutcome outcome = 1;
+
+  // Additional metadata about the call outcome.
+  //
+  // This will be either the success outcome or the raw revert reason.
+  // At this stage we cannot parse this further, due to not knowing which ABI was used.
+  ContractCallMetadata metadata = 2;
+
+  // Block hash where the transaction was included.
+  BlockHash block_hash = 3;
+
+  // Block number where the transaction was included.
+  BlockNumber block_number = 4;
+
+  // Transaction hash of the settlement transaction.
+  TxHash tx_hash = 5;
+}
+
+// On-chain outcome of the contract call.
+enum ContractCallOutcome {
+  // Unspecified outcome. This should never be used.
+  CONTRACT_CALL_OUTCOME_UNSPECIFIED = 0;
+
+  // The call was successful.
+  CONTRACT_CALL_OUTCOME_SUCCESS = 1;
+
+  // The call reverted.
+  CONTRACT_CALL_OUTCOME_REVERTED = 2;
+}
+
+// Additional metadata about the call outcome.
+//
+// For successful calls, this is the ABI-encoded return data.
+// For reverted calls, this is the ABI-encoded revert reason.
+message ContractCallMetadata {
+  // Raw bytes of the metadata.
+  bytes metadata = 1;
+}
+
+// Result indicating that the transaction's previous result was reorganized out of the chain.
+message ReorganizedResult {
+  // Date of the reorg detection.
+  google.protobuf.Timestamp reorg_detection_time = 1;
+
+  // Previous result, that was recorded before the reorg was detected.
+  TxResult previous_result = 2;
+}
+
+// Sequence number of a settlement attempt within a settlement job.
+message AttemptSequenceNumber {
+  // Sequence number.
+  uint64 number = 1;
+}
+
+// Contents of the settlement attempts CF.
+message SettlementAttempt {
+  // Sender wallet.
+  Address sender_wallet = 1;
+
+  // Nonce reserved for the transaction.
+  Nonce nonce = 2;
+
+  // Gas limit used for this attempt.
+  Uint128 gas_limit = 3;
+
+  // Gas price parameters used for this attempt.
+  Uint128 max_fee_per_gas = 4;
+
+  // Gas price parameters used for this attempt.
+  Uint128 max_priority_fee_per_gas = 5;
+
+  // Hash of the submitted transaction.
+  TxHash tx_hash = 6;
+
+  // Result of the attempt, if available.
+  TxResult result = 7;
+}
+
+// Contents of the settlement nonces CF.
+message SettlementNonce {
+  // ID of the job that reserved this nonce.
+  SettlementJobId job_id = 1;
+
+  // Sequence numbers of all of this job's settlement attempts that used this nonce.
+  repeated AttemptSequenceNumber attempt_sequence_numbers = 2;
+}

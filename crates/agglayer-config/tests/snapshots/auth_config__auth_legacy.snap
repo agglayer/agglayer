@@ -79,7 +79,7 @@ input-backpressure-buffer-size = 1000
 [certificate-orchestrator.prover.sp1-local]
 
 [storage]
-db-path = "/home/runner/work/agglayer/agglayer/crates/agglayer-config/tests/fixtures/auth/storage"
+db-path = "/tmp/agglayer/tests/fixtures/auth/storage"
 
 [prover.network-prover]
 proving-timeout = "5m"

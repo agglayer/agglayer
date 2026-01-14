@@ -33,6 +33,7 @@ agglayer-jsonrpc-api = { path = "crates/agglayer-jsonrpc-api" }
 agglayer-node = { path = "crates/agglayer-node" }
 agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 agglayer-rpc = { path = "crates/agglayer-rpc" }
+agglayer-settlement-service = { path = "crates/agglayer-settlement-service" }
 agglayer-signer = { path = "crates/agglayer-signer" }
 agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-storage-types = { path = "crates/agglayer-storage-types" }
@@ -45,39 +46,39 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = "0.12.0"
-agglayer-interop = "0.12.0"
-agglayer-interop-types = "0.12.0"
-agglayer-elf-build = "0.12.0"
-agglayer-primitives = "0.12.0"
-agglayer-tries = "0.12.0"
-unified-bridge = "0.12.0"
+agglayer-bincode = "0.13.0"
+agglayer-interop = "0.13.0"
+agglayer-interop-types = "0.13.0"
+agglayer-elf-build = "0.13.0"
+agglayer-primitives = "0.13.0"
+agglayer-tries = "0.13.0"
+unified-bridge = "0.13.0"
 
 # Provers
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.9.1" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.9.1" }
+prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.9.1" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.9.1" }
+prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.9.1" }
+prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.9.1" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
 #       It is specified at the top of scripts/make/Makefile.pp.toml.
-sp1-core-machine = "=5.2.2"
+sp1-core-machine = "=5.2.4"
 sp1-sdk = "=5.2.2"
 sp1-primitives = "=5.2.2"
-sp1-prover = "=5.2.2"
-sp1-zkvm = { version = "=5.2.2", default-features = false }
+sp1-prover = "=5.2.4"
+sp1-zkvm = { version = "=5.2.4", default-features = false }
 
 # Zero-copy dependencies (pinned for host/guest coherence)
 bytemuck = { version = "=1.23.2", features = ["derive"] }
 static_assertions = "1.1"
 
 # Core dependencies
-alloy = { version = "1.0.42", features = ["full", "json-rpc"] }
-alloy-primitives = { version = "1.4.1", features = ["serde", "k256"] }
-alloy-signer-local = { version = "1.0.42", features = ["keystore", "mnemonic"] }
+alloy = { version = "1.1.3", features = ["full", "json-rpc"] }
+alloy-primitives = { version = "1.5.2", features = ["serde", "k256"] }
+alloy-signer-local = { version = "1.1.3", features = ["keystore", "mnemonic"] }
 anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"] }
 arc-swap = "1.7"
@@ -140,4 +141,5 @@ tower-http = { version = "0.6.2", features = ["full"] }
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+ulid = "1.2"
 url = { version = "2.5", features = ["serde"] }
