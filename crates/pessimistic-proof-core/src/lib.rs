@@ -1,7 +1,9 @@
 pub use agglayer_primitives::keccak;
 
 pub mod proof;
-pub use proof::{generate_pessimistic_proof, PessimisticProofOutput, ProofError};
+pub use proof::{
+    generate_pessimistic_proof, generate_pessimistic_proof_ref, PessimisticProofOutput, ProofError,
+};
 
 pub mod local_balance_tree;
 

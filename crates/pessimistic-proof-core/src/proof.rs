@@ -19,6 +19,7 @@ use crate::{
     },
     multi_batch_header::MultiBatchHeader,
 };
+use crate::multi_batch_header::MultiBatchHeaderRef;
 
 /// Refers to the commitment on the imported bridge exits involved in the
 /// aggchain proof public values (`commit_imported_bridge_exits` field).
@@ -109,6 +110,10 @@ pub enum ProofError {
     /// The signature on the state transition is invalid.
     #[error("Invalid signature.")]
     InvalidSignature,
+
+    /// Zero-copy decoding error.
+    #[error("Zero-copy decoding error: {0}")]
+    ZeroCopy(String),
 
     /// The signer recovered from the signature differs from the one declared as
     /// witness.
@@ -230,6 +235,40 @@ impl ConstrainedValues {
             prev_pessimistic_root_version,
         })
     }
+
+    fn try_new_ref(
+        batch_header: &MultiBatchHeaderRef<'_>,
+        initial_state_commitment: &StateCommitment,
+        final_state_commitment: &StateCommitment,
+    ) -> Result<Self, ProofError> {
+        let settled_prev_pp_root = batch_header.prev_pessimistic_root;
+
+        // Infer the version of the settled prev pp root based on the constrained values.
+        let prev_pessimistic_root_version = PessimisticRootCommitmentValues {
+            balance_root: initial_state_commitment.balance_root,
+            nullifier_root: initial_state_commitment.nullifier_root,
+            ler_leaf_count: initial_state_commitment.ler_leaf_count,
+            height: batch_header.height,
+            origin_network: batch_header.origin_network,
+        }
+        .infer_settled_pp_root_version(settled_prev_pp_root)?;
+
+        let commit_imported_bridge_exits = batch_header
+            .commit_imported_bridge_exits()
+            .map_err(|err| ProofError::ZeroCopy(err.to_string()))?;
+
+        Ok(Self {
+            initial_state_commitment: initial_state_commitment.clone(),
+            final_state_commitment: final_state_commitment.clone(),
+            height: batch_header.height,
+            origin_network: batch_header.origin_network,
+            l1_info_root: batch_header.l1_info_root,
+            commit_imported_bridge_exits,
+            certificate_id: batch_header.certificate_id,
+            prev_pessimistic_root: settled_prev_pp_root,
+            prev_pessimistic_root_version,
+        })
+    }
 }
 
 /// Proves that the given [`MultiBatchHeader`] can be applied on the given
@@ -251,6 +290,50 @@ pub fn generate_pessimistic_proof(
     )?;
 
     // Verify multisig, aggchain proof, or both.
+    let target_pp_root_version = batch_header.aggchain_data.verify(constrained_values)?;
+
+    let height = batch_header
+        .height
+        .checked_add(1)
+        .ok_or(ProofError::HeightOverflow)?;
+
+    let new_pessimistic_root = PessimisticRootCommitmentValues {
+        balance_root: final_state_commitment.balance_root,
+        nullifier_root: final_state_commitment.nullifier_root,
+        ler_leaf_count: final_state_commitment.ler_leaf_count,
+        height,
+        origin_network: batch_header.origin_network,
+    }
+    .compute_pp_root(target_pp_root_version);
+
+    Ok((
+        PessimisticProofOutput {
+            prev_local_exit_root: zero_if_empty_local_exit_root(initial_state_commitment.exit_root),
+            prev_pessimistic_root: batch_header.prev_pessimistic_root,
+            l1_info_root: batch_header.l1_info_root,
+            origin_network: batch_header.origin_network,
+            aggchain_hash: batch_header.aggchain_data.aggchain_hash(),
+            new_local_exit_root: zero_if_empty_local_exit_root(final_state_commitment.exit_root),
+            new_pessimistic_root,
+        },
+        final_state_commitment,
+    ))
+}
+
+pub fn generate_pessimistic_proof_ref(
+    initial_network_state: NetworkState,
+    batch_header: &MultiBatchHeaderRef<'_>,
+) -> Result<(PessimisticProofOutput, StateCommitment), ProofError> {
+    let initial_state_commitment = initial_network_state.get_state_commitment();
+    let mut network_state: NetworkState = initial_network_state;
+    let final_state_commitment = network_state.apply_batch_header_ref(batch_header)?;
+
+    let constrained_values = ConstrainedValues::try_new_ref(
+        batch_header,
+        &initial_state_commitment,
+        &final_state_commitment,
+    )?;
+
     let target_pp_root_version = batch_header.aggchain_data.verify(constrained_values)?;
 
     let height = batch_header

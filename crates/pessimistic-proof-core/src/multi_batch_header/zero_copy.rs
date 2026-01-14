@@ -5,8 +5,8 @@ use bytemuck::{Pod, Zeroable};
 use static_assertions::const_assert_eq;
 use unified_bridge::{
     BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex, ImportedBridgeExit,
-    L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, NetworkId, TokenInfo,
-    LETMerkleProof,
+    ImportedBridgeExitCommitmentValues, L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType,
+    MerkleProof, NetworkId, TokenInfo, LETMerkleProof,
 };
 
 use crate::{
@@ -667,6 +667,17 @@ impl<'a> MultiBatchHeaderRef<'a> {
             aggchain_data: self.aggchain_data.clone(),
             certificate_id: self.certificate_id,
         })
+    }
+
+    pub fn commit_imported_bridge_exits(
+        &self,
+    ) -> Result<ImportedBridgeExitCommitmentValues, ZeroCopyError> {
+        let mut claims = Vec::with_capacity(self.imported_bridge_exits.len());
+        for wire_exit in self.imported_bridge_exits {
+            let exit = ImportedBridgeExit::try_from(wire_exit)?;
+            claims.push(exit.to_indexed_exit_hash());
+        }
+        Ok(ImportedBridgeExitCommitmentValues { claims })
     }
 }
 

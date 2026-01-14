@@ -4,12 +4,12 @@ use bytemuck::{Pod, Zeroable};
 use commitment::StateCommitment;
 use serde::{Deserialize, Serialize};
 use static_assertions::{assert_eq_align, assert_eq_size};
-use unified_bridge::{Error, LocalExitTree, NetworkId, TokenInfo, L1_ETH};
+use unified_bridge::{BridgeExit, Error, ImportedBridgeExit, LocalExitTree, NetworkId, TokenInfo, L1_ETH};
 
 use crate::{
-    local_balance_tree::LocalBalanceTree,
-    multi_batch_header::MultiBatchHeader,
-    nullifier_tree::{NullifierKey, NullifierTree},
+    local_balance_tree::{LocalBalancePath, LocalBalanceTree},
+    multi_batch_header::{MultiBatchHeader, MultiBatchHeaderRef},
+    nullifier_tree::{NullifierKey, NullifierPath, NullifierTree},
     ProofError,
 };
 
@@ -159,6 +159,17 @@ impl NetworkState {
         Ok(roots)
     }
 
+    pub fn apply_batch_header_ref(
+        &mut self,
+        multi_batch_header: &MultiBatchHeaderRef<'_>,
+    ) -> Result<StateCommitment, ProofError> {
+        let mut clone = self.clone();
+        let roots = clone.apply_batch_header_ref_helper(multi_batch_header)?;
+        *self = clone;
+
+        Ok(roots)
+    }
+
     /// Apply the [`MultiBatchHeader`] on the current [`NetworkState`].
     /// Returns the resulting [`StateCommitment`] upon success.
     /// The state can be modified on error.
@@ -284,6 +295,157 @@ impl NetworkState {
                 .map_err(|_| ProofError::BalanceOverflowInBridgeExit)?;
             self.balance_tree
                 .verify_and_update(*token, balance_path, *old_balance, new_balance)?;
+        }
+
+        Ok(self.get_state_commitment())
+    }
+
+    fn apply_batch_header_ref_helper(
+        &mut self,
+        multi_batch_header: &MultiBatchHeaderRef<'_>,
+    ) -> Result<StateCommitment, ProofError> {
+        // Convert balances_proofs to sorted Vec for efficient binary search.
+        let mut new_balances: Vec<(TokenInfo, U512)> = multi_batch_header
+            .balances_proofs
+            .iter()
+            .map(|entry| {
+                let token = TokenInfo::from(&entry.token_info);
+                let balance = U512::from(U256::from_be_bytes(entry.balance));
+                (token, balance)
+            })
+            .collect();
+
+        new_balances.sort_by(|a, b| a.0.cmp(&b.0));
+        for i in 1..new_balances.len() {
+            if new_balances[i].0 == new_balances[i - 1].0 {
+                return Err(ProofError::DuplicateTokenBalanceProof(new_balances[i].0));
+            }
+        }
+
+        // Apply the imported bridge exits
+        for (wire_exit, wire_path) in multi_batch_header
+            .imported_bridge_exits
+            .iter()
+            .zip(multi_batch_header.nullifier_paths.iter())
+        {
+            let imported_bridge_exit =
+                ImportedBridgeExit::try_from(wire_exit).map_err(|err| {
+                    ProofError::ZeroCopy(err.to_string())
+                })?;
+            let nullifier_path = NullifierPath::from(wire_path);
+
+            if imported_bridge_exit.global_index.network_id() == multi_batch_header.origin_network {
+                // We don't allow a chain to exit to itself
+                return Err(ProofError::CannotExitToSameNetwork);
+            }
+            // Check that the destination network of the bridge exit matches the current network
+            if imported_bridge_exit.bridge_exit.dest_network != multi_batch_header.origin_network {
+                return Err(ProofError::InvalidImportedBridgeExit {
+                    source: Error::InvalidExitNetwork,
+                    global_index: imported_bridge_exit.global_index,
+                });
+            }
+
+            // Check the inclusion proof
+            imported_bridge_exit
+                .verify_path(multi_batch_header.l1_info_root)
+                .map_err(|source| ProofError::InvalidImportedBridgeExit {
+                    source,
+                    global_index: imported_bridge_exit.global_index,
+                })?;
+
+            // Check the nullifier non-inclusion path and update the nullifier tree
+            let nullifier_key: NullifierKey = imported_bridge_exit.global_index.into();
+            self.nullifier_tree
+                .verify_and_update(nullifier_key, &nullifier_path)?;
+
+            // The amount corresponds to L1 ETH if the leaf is a message
+            let token_info = imported_bridge_exit.bridge_exit.amount_token_info();
+
+            if multi_batch_header.origin_network == token_info.origin_network {
+                // When the token is native to the chain, we don't care about the local balance
+                continue;
+            }
+
+            // Update the token balance.
+            let amount = imported_bridge_exit.bridge_exit.amount;
+            match new_balances.binary_search_by(|(k, _)| k.cmp(&token_info)) {
+                Ok(index) => {
+                    new_balances[index].1 = new_balances[index]
+                        .1
+                        .checked_add(U512::from(amount))
+                        .ok_or(ProofError::BalanceOverflowInBridgeExit)?;
+                }
+                Err(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
+            }
+        }
+
+        // Apply the bridge exits
+        for wire_exit in multi_batch_header.bridge_exits {
+            let bridge_exit = BridgeExit::try_from(wire_exit)
+                .map_err(|err| ProofError::ZeroCopy(err.to_string()))?;
+
+            if bridge_exit.dest_network == multi_batch_header.origin_network {
+                // We don't allow a chain to exit to itself
+                return Err(ProofError::CannotExitToSameNetwork);
+            }
+            self.exit_tree.add_leaf(bridge_exit.hash())?;
+
+            // For message exits, the origin network in token info should be the origin network
+            // of the batch header.
+            if bridge_exit.is_message()
+                && bridge_exit.token_info.origin_network != multi_batch_header.origin_network
+            {
+                return Err(ProofError::InvalidMessageOriginNetwork);
+            }
+
+            // For ETH transfers, we need to check that the origin network is the L1 network
+            if bridge_exit.token_info.origin_token_address == L1_ETH.origin_token_address
+                && bridge_exit.token_info.origin_network != NetworkId::ETH_L1
+            {
+                return Err(ProofError::InvalidL1TokenInfo(bridge_exit.token_info));
+            }
+
+            // The amount corresponds to L1 ETH if the leaf is a message
+            let token_info = bridge_exit.amount_token_info();
+
+            if multi_batch_header.origin_network == token_info.origin_network {
+                // When the token is native to the chain, we don't care about the local balance
+                continue;
+            }
+
+            // Update the token balance.
+            let amount = bridge_exit.amount;
+            match new_balances.binary_search_by(|(k, _)| k.cmp(&token_info)) {
+                Ok(index) => {
+                    new_balances[index].1 = new_balances[index]
+                        .1
+                        .checked_sub(U512::from(amount))
+                        .ok_or(ProofError::BalanceUnderflowInBridgeExit)?;
+                }
+                Err(_) => return Err(ProofError::MissingTokenBalanceProof(token_info)),
+            }
+        }
+
+        // Verify that the original balances were correct and update the local balance
+        // tree with the new balances.
+        for (entry, path_wire) in multi_batch_header
+            .balances_proofs
+            .iter()
+            .zip(multi_batch_header.balance_merkle_paths.iter())
+        {
+            let token = TokenInfo::from(&entry.token_info);
+            let old_balance = U256::from_be_bytes(entry.balance);
+            let balance_path = LocalBalancePath::from(path_wire);
+
+            let new_balance = new_balances
+                .binary_search_by(|(k, _)| k.cmp(&token))
+                .map(|index| new_balances[index].1)
+                .map_err(|_| ProofError::MissingTokenBalanceProof(token))?;
+            let new_balance = U256::uint_try_from(new_balance)
+                .map_err(|_| ProofError::BalanceOverflowInBridgeExit)?;
+            self.balance_tree
+                .verify_and_update(token, &balance_path, old_balance, new_balance)?;
         }
 
         Ok(self.get_state_commitment())

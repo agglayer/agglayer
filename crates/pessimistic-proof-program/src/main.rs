@@ -1,7 +1,7 @@
 #![no_main]
 
 use pessimistic_proof_core::{
-    generate_pessimistic_proof, multi_batch_header::MultiBatchHeader, NetworkState,
+    generate_pessimistic_proof_ref, multi_batch_header::MultiBatchHeader, NetworkState,
     PessimisticProofOutput,
 };
 
@@ -21,14 +21,10 @@ pub fn main() {
 
     let packed_header_bytes = sp1_zkvm::io::read_vec();
 
-    let batch_header_ref = MultiBatchHeader::from_zero_copy_packed_bytes(&packed_header_bytes)
+    let batch_header = MultiBatchHeader::from_zero_copy_packed_bytes(&packed_header_bytes)
         .unwrap_or_else(|err| panic!("Failed to parse MultiBatchHeader zero-copy: {err}"));
 
-    let batch_header = batch_header_ref
-        .to_owned()
-        .unwrap_or_else(|err| panic!("Failed to materialize MultiBatchHeader: {err}"));
-
-    let (outputs, _targets) = generate_pessimistic_proof(initial_state, &batch_header).unwrap();
+    let (outputs, _targets) = generate_pessimistic_proof_ref(initial_state, &batch_header).unwrap();
 
     let pp_inputs = PessimisticProofOutput::bincode_codec()
         .serialize(&outputs)
