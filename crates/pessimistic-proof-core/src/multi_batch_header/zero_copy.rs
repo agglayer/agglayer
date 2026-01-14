@@ -220,6 +220,19 @@ pub struct ZeroCopyComponents {
     pub multisig_expected_signers_bytes: Vec<u8>,
 }
 
+#[repr(C, align(1))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Pod, Zeroable)]
+pub struct MultiBatchHeaderOffsets {
+    pub bridge_exits_offset: [u8; 4],
+    pub imported_bridge_exits_offset: [u8; 4],
+    pub nullifier_paths_offset: [u8; 4],
+    pub balances_proofs_offset: [u8; 4],
+    pub balance_merkle_paths_offset: [u8; 4],
+    pub multisig_signatures_offset: [u8; 4],
+    pub multisig_expected_signers_offset: [u8; 4],
+    pub total_len: [u8; 4],
+}
+
 #[derive(Debug)]
 pub struct MultiBatchHeaderRef<'a> {
     pub origin_network: NetworkId,
@@ -247,6 +260,7 @@ const_assert_eq!(mem::size_of::<SmtNonInclusionProofWire>(), 2052);
 const_assert_eq!(mem::size_of::<BalanceMerkleProofWire>(), 6144);
 const_assert_eq!(mem::size_of::<BalanceProofEntryWire>(), 56);
 const_assert_eq!(mem::size_of::<MultisigSignatureEntryWire>(), 72);
+const_assert_eq!(mem::size_of::<MultiBatchHeaderOffsets>(), 32);
 
 impl MultiBatchHeader {
     pub fn to_zero_copy_components(&self) -> Result<ZeroCopyComponents, ZeroCopyError> {
@@ -479,6 +493,135 @@ impl MultiBatchHeader {
             balance_merkle_paths,
             aggchain_data,
         })
+    }
+
+    pub fn to_zero_copy_packed_bytes(&self) -> Result<Vec<u8>, ZeroCopyError> {
+        let components = self.to_zero_copy_components()?;
+        let header_len = mem::size_of::<MultiBatchHeaderWire>();
+        let offsets_len = mem::size_of::<MultiBatchHeaderOffsets>();
+        let payload_start = header_len + offsets_len;
+
+        let mut offsets = MultiBatchHeaderOffsets::zeroed();
+        let mut cursor = 0usize;
+
+        offsets.bridge_exits_offset = u32_to_le_bytes(cursor)?;
+        cursor = cursor
+            .checked_add(components.bridge_exits_bytes.len())
+            .ok_or(ZeroCopyError::BytemuckCast)?;
+        offsets.imported_bridge_exits_offset = u32_to_le_bytes(cursor)?;
+        cursor = cursor
+            .checked_add(components.imported_bridge_exits_bytes.len())
+            .ok_or(ZeroCopyError::BytemuckCast)?;
+        offsets.nullifier_paths_offset = u32_to_le_bytes(cursor)?;
+        cursor = cursor
+            .checked_add(components.nullifier_paths_bytes.len())
+            .ok_or(ZeroCopyError::BytemuckCast)?;
+        offsets.balances_proofs_offset = u32_to_le_bytes(cursor)?;
+        cursor = cursor
+            .checked_add(components.balances_proofs_bytes.len())
+            .ok_or(ZeroCopyError::BytemuckCast)?;
+        offsets.balance_merkle_paths_offset = u32_to_le_bytes(cursor)?;
+        cursor = cursor
+            .checked_add(components.balance_merkle_paths_bytes.len())
+            .ok_or(ZeroCopyError::BytemuckCast)?;
+        offsets.multisig_signatures_offset = u32_to_le_bytes(cursor)?;
+        cursor = cursor
+            .checked_add(components.multisig_signatures_bytes.len())
+            .ok_or(ZeroCopyError::BytemuckCast)?;
+        offsets.multisig_expected_signers_offset = u32_to_le_bytes(cursor)?;
+        cursor = cursor
+            .checked_add(components.multisig_expected_signers_bytes.len())
+            .ok_or(ZeroCopyError::BytemuckCast)?;
+        offsets.total_len = u32_to_le_bytes(cursor)?;
+
+        let mut out = Vec::with_capacity(payload_start + cursor);
+        out.extend_from_slice(&components.header_bytes);
+        out.extend_from_slice(bytemuck::bytes_of(&offsets));
+        out.extend_from_slice(&components.bridge_exits_bytes);
+        out.extend_from_slice(&components.imported_bridge_exits_bytes);
+        out.extend_from_slice(&components.nullifier_paths_bytes);
+        out.extend_from_slice(&components.balances_proofs_bytes);
+        out.extend_from_slice(&components.balance_merkle_paths_bytes);
+        out.extend_from_slice(&components.multisig_signatures_bytes);
+        out.extend_from_slice(&components.multisig_expected_signers_bytes);
+
+        Ok(out)
+    }
+
+    pub fn from_zero_copy_packed_bytes<'a>(
+        bytes: &'a [u8],
+    ) -> Result<MultiBatchHeaderRef<'a>, ZeroCopyError> {
+        let header_len = mem::size_of::<MultiBatchHeaderWire>();
+        let offsets_len = mem::size_of::<MultiBatchHeaderOffsets>();
+        let payload_start = header_len + offsets_len;
+
+        if bytes.len() < payload_start {
+            return Err(ZeroCopyError::InvalidSize {
+                expected: payload_start,
+                actual: bytes.len(),
+            });
+        }
+
+        let header_bytes = &bytes[..header_len];
+        let offsets_bytes = &bytes[header_len..payload_start];
+        let offsets = bytemuck::try_from_bytes::<MultiBatchHeaderOffsets>(offsets_bytes)
+            .map_err(|_| ZeroCopyError::BytemuckCast)?;
+
+        let payload = &bytes[payload_start..];
+        let total_len = u32::from_le_bytes(offsets.total_len) as usize;
+        if total_len != payload.len() {
+            return Err(ZeroCopyError::InvalidSize {
+                expected: total_len,
+                actual: payload.len(),
+            });
+        }
+
+        let offsets_list = [
+            ("bridge_exits_offset", offsets.bridge_exits_offset),
+            ("imported_bridge_exits_offset", offsets.imported_bridge_exits_offset),
+            ("nullifier_paths_offset", offsets.nullifier_paths_offset),
+            ("balances_proofs_offset", offsets.balances_proofs_offset),
+            ("balance_merkle_paths_offset", offsets.balance_merkle_paths_offset),
+            ("multisig_signatures_offset", offsets.multisig_signatures_offset),
+            (
+                "multisig_expected_signers_offset",
+                offsets.multisig_expected_signers_offset,
+            ),
+            ("total_len", offsets.total_len),
+        ];
+
+        let mut last = 0usize;
+        let mut values = Vec::with_capacity(offsets_list.len());
+        for (field, value) in offsets_list {
+            let offset = u32::from_le_bytes(value) as usize;
+            if offset < last || offset > total_len {
+                return Err(ZeroCopyError::InvalidIndex {
+                    field,
+                    index: offset as u32,
+                });
+            }
+            values.push(offset);
+            last = offset;
+        }
+
+        let bridge_exits_bytes = &payload[values[0]..values[1]];
+        let imported_bridge_exits_bytes = &payload[values[1]..values[2]];
+        let nullifier_paths_bytes = &payload[values[2]..values[3]];
+        let balances_proofs_bytes = &payload[values[3]..values[4]];
+        let balance_merkle_paths_bytes = &payload[values[4]..values[5]];
+        let multisig_signatures_bytes = &payload[values[5]..values[6]];
+        let multisig_expected_signers_bytes = &payload[values[6]..values[7]];
+
+        Self::from_zero_copy_components(
+            header_bytes,
+            bridge_exits_bytes,
+            imported_bridge_exits_bytes,
+            nullifier_paths_bytes,
+            balances_proofs_bytes,
+            balance_merkle_paths_bytes,
+            multisig_signatures_bytes,
+            multisig_expected_signers_bytes,
+        )
     }
 }
 
@@ -1114,6 +1257,22 @@ mod tests {
             &components.multisig_expected_signers_bytes,
         )
         .unwrap();
+        let owned = ref_header.to_owned().unwrap();
+
+        assert_eq!(owned.origin_network, header.origin_network);
+        assert_eq!(owned.height, header.height);
+        assert_eq!(owned.prev_pessimistic_root, header.prev_pessimistic_root);
+        assert_eq!(owned.l1_info_root, header.l1_info_root);
+        assert_eq!(owned.certificate_id, header.certificate_id);
+        assert_eq!(owned.bridge_exits.len(), 1);
+        assert_eq!(owned.bridge_exits[0].dest_network, NetworkId::new(2));
+    }
+
+    #[test]
+    fn roundtrip_packed() {
+        let header = sample_header();
+        let packed = header.to_zero_copy_packed_bytes().unwrap();
+        let ref_header = MultiBatchHeader::from_zero_copy_packed_bytes(&packed).unwrap();
         let owned = ref_header.to_owned().unwrap();
 
         assert_eq!(owned.origin_network, header.origin_network);

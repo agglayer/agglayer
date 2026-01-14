@@ -56,17 +56,10 @@ impl Proof {
 
         let mut stdin = SP1Stdin::new();
         stdin.write_vec(state.to_bytes_zero_copy());
-        let components = multi_batch_header
-            .to_zero_copy_components()
+        let packed = multi_batch_header
+            .to_zero_copy_packed_bytes()
             .expect("zero-copy MultiBatchHeader");
-        stdin.write_vec(components.header_bytes);
-        write_component(&mut stdin, components.bridge_exits_bytes);
-        write_component(&mut stdin, components.imported_bridge_exits_bytes);
-        write_component(&mut stdin, components.nullifier_paths_bytes);
-        write_component(&mut stdin, components.balances_proofs_bytes);
-        write_component(&mut stdin, components.balance_merkle_paths_bytes);
-        write_component(&mut stdin, components.multisig_signatures_bytes);
-        write_component(&mut stdin, components.multisig_expected_signers_bytes);
+        stdin.write_vec(packed);
 
         let proof = mock.prove(&p, &stdin).plonk().run().unwrap();
 
@@ -74,13 +67,6 @@ impl Proof {
     }
 }
 
-#[cfg(any(test, feature = "testutils"))]
-fn write_component(stdin: &mut SP1Stdin, mut bytes: Vec<u8>) {
-    if bytes.is_empty() {
-        bytes.push(0);
-    }
-    stdin.write_vec(bytes);
-}
 
 #[cfg(test)]
 mod tests {

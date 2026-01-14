@@ -8,13 +8,6 @@ use crate::PESSIMISTIC_PROOF_ELF;
 
 pub struct ProofOutput {}
 
-fn write_component(stdin: &mut SP1Stdin, mut bytes: Vec<u8>) {
-    if bytes.is_empty() {
-        bytes.push(0);
-    }
-    stdin.write_vec(bytes);
-}
-
 /// A convenient interface to run the pessimistic proof ELF bytecode.
 pub struct Runner {
     client: sp1_sdk::EnvProver,
@@ -45,17 +38,10 @@ impl Runner {
         let network_state_bytes = state.to_bytes_zero_copy();
         stdin.write_vec(network_state_bytes);
 
-        let components = batch_header
-            .to_zero_copy_components()
+        let packed = batch_header
+            .to_zero_copy_packed_bytes()
             .expect("zero-copy MultiBatchHeader");
-        stdin.write_vec(components.header_bytes);
-        write_component(&mut stdin, components.bridge_exits_bytes);
-        write_component(&mut stdin, components.imported_bridge_exits_bytes);
-        write_component(&mut stdin, components.nullifier_paths_bytes);
-        write_component(&mut stdin, components.balances_proofs_bytes);
-        write_component(&mut stdin, components.balance_merkle_paths_bytes);
-        write_component(&mut stdin, components.multisig_signatures_bytes);
-        write_component(&mut stdin, components.multisig_expected_signers_bytes);
+        stdin.write_vec(packed);
         stdin
     }
 
