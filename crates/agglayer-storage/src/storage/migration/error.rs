@@ -31,6 +31,12 @@ pub enum DBOpenError {
 
     #[error("Column {cf_name:?} is in the final schema but was never added during migration")]
     MissingColumnInMigrationPlan { cf_name: String },
+
+    #[error("Backup operation failed: {0}")]
+    Backup(#[source] rocksdb::Error),
+
+    #[error("Backup created but no backup info returned")]
+    BackupInfoMissing,
 }
 
 #[derive(Debug, Error)]
