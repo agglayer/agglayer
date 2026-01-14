@@ -1,2 +1,2 @@
-mod error;
-mod transactions;
+pub mod error;
+pub mod transactions;

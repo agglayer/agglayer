@@ -11,6 +11,7 @@ use crate::utils::error::ClientRpcError;
 
 const RECEIPT_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
+#[tracing::instrument(level = "debug", skip(rpc_provider))]
 async fn fetch_transaction_receipt<P>(
     // The L1 Middleware provider.
     rpc_provider: Arc<P>,
@@ -24,7 +25,10 @@ where
         .get_transaction_receipt(tx_hash)
         .await
         .map_err(|error| {
-            error!(%tx_hash, ?error, "Failed to fetch transaction receipt for tx {tx_hash}");
+            error!(
+                ?error,
+                "Failed to fetch transaction receipt for tx {tx_hash}"
+            );
             ClientRpcError::TransactionReceiptError {
                 tx_hash,
                 source: error.into(),
@@ -33,7 +37,8 @@ where
 }
 
 /// Wait for the transaction to be included in the blockchain.
-async fn wait_for_transaction_receipt<P>(
+#[tracing::instrument(level = "debug", skip(rpc_provider))]
+pub async fn wait_for_transaction_receipt<P>(
     // The L1 Middleware provider.
     rpc_provider: Arc<P>,
     // Chain transaction hash.
@@ -48,39 +53,39 @@ where
     let start_time = Instant::now();
     let retry_interval = RECEIPT_RETRY_INTERVAL;
 
-    debug!(
-        ?timeout,
-        %tx_hash,
-        "Waiting for transaction {tx_hash} to be mined",
-    );
+    debug!("Waiting for tx {tx_hash} to be mined");
 
     loop {
         attempts += 1;
 
         match fetch_transaction_receipt(rpc_provider.clone(), tx_hash).await {
             Ok(Some(receipt)) => {
-                info!(attempts, "Successfully fetched transaction receipt");
+                info!(attempts, "Successfully fetched receipt for tx {tx_hash}");
                 return Ok(receipt);
             }
             Ok(None) => {
                 // Transaction not yet included in a block, check if timeout has passed.
                 let elapsed = start_time.elapsed();
                 if elapsed >= timeout {
-                    warn!(%tx_hash, ?elapsed, ?timeout, attempts, "Timeout waiting for transaction receipt");
+                    warn!(
+                        ?elapsed,
+                        attempts, "Timeout waiting for tx {tx_hash} receipt"
+                    );
                     return Err(ClientRpcError::TransactionReceiptTimeout { tx_hash, timeout });
                 }
 
-                debug!(%tx_hash, attempts, ?elapsed, ?timeout, ?retry_interval,
-                    "L1 transaction receipt not found yet, retrying",
+                debug!(
+                    attempts,
+                    ?elapsed,
+                    ?timeout,
+                    ?retry_interval,
+                    "L1 receipt for tx {tx_hash} not found yet, retrying",
                 );
                 tokio::time::sleep(retry_interval).await;
             }
             Err(error) => {
                 // Other error (e.g., network issue, RPC error)
-                error!(
-                    ?error,
-                    "Error watching the pending signed transaction settlement"
-                );
+                error!(?error, "Error while waiting for the tx {tx_hash} receipt");
                 return Err(error);
             }
         }
@@ -89,7 +94,8 @@ where
 
 /// Wait for the transaction to be included in the blockchain and
 /// to `confirmation` number of blocks to pass since that inclusion.
-async fn wait_for_transaction_receipt_with_confirmations<P>(
+#[tracing::instrument(level = "debug", skip(rpc_provider))]
+pub async fn wait_for_transaction_receipt_with_confirmations<P>(
     // The L1 Middleware provider.
     rpc_provider: Arc<P>,
     // Chain transaction hash.
@@ -111,13 +117,13 @@ where
     // Wait for the required number of confirmations
     if confirmations > 0 {
         let receipt_block = tx_receipt.block_number.ok_or_else(|| {
-            error!(%tx_hash, "Transaction receipt has no block number");
+            error!("Tx {tx_hash} receipt has no block number");
             ClientRpcError::ReceiptWithoutBlockNumberError(tx_receipt.transaction_hash)
         })?;
 
         debug!(
             receipt_block,
-            confirmations, "Waiting for chain block confirmations"
+            confirmations, "Waiting for tx {tx_hash} chain block confirmations"
         );
 
         // Wait until we have the required number of confirmations.
@@ -135,13 +141,13 @@ where
                             confirmations,
                             current_block,
                             attempts,
-                            "L1 transaction confirmed with required confirmations"
+                            "Tx {tx_hash} confirmed with required confirmations"
                         );
                         return Ok(tx_receipt.clone());
                     } else {
                         debug!(
                             current_confirmations,
-                            confirmations, "Waiting for more confirmations, sleeping"
+                            confirmations, "Waiting for tx {tx_hash} more confirmations, sleeping"
                         );
                         tokio::time::sleep(retry_interval).await;
                     }
@@ -156,7 +162,13 @@ where
                     // Error happened while trying to get block number, check if timeout has passed.
                     let elapsed = start_time.elapsed();
                     if elapsed >= timeout {
-                        warn!(%tx_hash, attempts, ?elapsed, ?timeout, attempts, "Timeout waiting for transaction receipt");
+                        error!(
+                            attempts,
+                            ?elapsed,
+                            ?timeout,
+                            attempts,
+                            "Timeout waiting for tx {tx_hash} receipt"
+                        );
                         return Err(ClientRpcError::TransactionReceiptTimeout { tx_hash, timeout });
                     }
 
