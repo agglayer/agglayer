@@ -119,7 +119,7 @@ async fn test_wait_for_transaction_receipt_timeout() {
     assert!(
         matches!(
             err,
-            agglayer_settlement_service::utils::error::ClientRpcError::TransactionReceiptTimeout { .. }
+            agglayer_settlement_service::utils::error::TransactionReceiptError::TransactionReceiptTimeout { .. }
         ),
         "Expected TransactionReceiptTimeout error, got: {:?}",
         err

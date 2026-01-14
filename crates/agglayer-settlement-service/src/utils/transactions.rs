@@ -7,7 +7,7 @@ use agglayer_types::primitives::alloy_primitives::TxHash;
 use alloy::{providers::Provider, rpc::types::TransactionReceipt};
 use tracing::{debug, error, info, warn};
 
-use crate::utils::error::ClientRpcError;
+use crate::utils::error::TransactionReceiptError;
 
 const RECEIPT_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
@@ -17,7 +17,7 @@ async fn fetch_transaction_receipt<P>(
     rpc_provider: Arc<P>,
     // Chain transaction hash.
     tx_hash: TxHash,
-) -> Result<Option<TransactionReceipt>, ClientRpcError>
+) -> Result<Option<TransactionReceipt>, TransactionReceiptError>
 where
     P: Provider,
 {
@@ -29,7 +29,7 @@ where
                 ?error,
                 "Failed to fetch transaction receipt for tx {tx_hash}"
             );
-            ClientRpcError::TransactionReceiptError {
+            TransactionReceiptError::RpcTransportError {
                 tx_hash,
                 source: error.into(),
             }
@@ -45,7 +45,7 @@ pub async fn wait_for_transaction_receipt<P>(
     tx_hash: TxHash,
     // Timeout for the transaction receipt.
     timeout: Duration,
-) -> Result<TransactionReceipt, ClientRpcError>
+) -> Result<TransactionReceipt, TransactionReceiptError>
 where
     P: Provider + 'static,
 {
@@ -60,6 +60,13 @@ where
 
         match fetch_transaction_receipt(rpc_provider.clone(), tx_hash).await {
             Ok(Some(receipt)) => {
+                // If receipt is without block number, maybe node returned
+                // receipt for the pending tx. Try again.
+                if receipt.block_number.is_none() {
+                    warn!("Tx {tx_hash} receipt has no block number. Trying again...");
+                    tokio::time::sleep(retry_interval).await;
+                    continue;
+                };
                 info!(attempts, "Successfully fetched receipt for tx {tx_hash}");
                 return Ok(receipt);
             }
@@ -71,7 +78,10 @@ where
                         ?elapsed,
                         attempts, "Timeout waiting for tx {tx_hash} receipt"
                     );
-                    return Err(ClientRpcError::TransactionReceiptTimeout { tx_hash, timeout });
+                    return Err(TransactionReceiptError::TransactionReceiptTimeout {
+                        tx_hash,
+                        timeout,
+                    });
                 }
 
                 debug!(
@@ -104,7 +114,7 @@ pub async fn wait_for_transaction_receipt_with_confirmations<P>(
     timeout: Duration,
     // Required number of blocks for confirmation
     confirmations: usize,
-) -> Result<TransactionReceipt, ClientRpcError>
+) -> Result<TransactionReceipt, TransactionReceiptError>
 where
     P: Provider + 'static,
 {
@@ -117,8 +127,10 @@ where
     // Wait for the required number of confirmations
     if confirmations > 0 {
         let receipt_block = tx_receipt.block_number.ok_or_else(|| {
+            // `wait_for_transaction_receipt` should return receipt with existing block
+            // number.
             error!("Tx {tx_hash} receipt has no block number");
-            ClientRpcError::ReceiptWithoutBlockNumberError { tx_hash }
+            TransactionReceiptError::InvalidReceipt { tx_hash }
         })?;
 
         debug!(
@@ -169,7 +181,10 @@ where
                             attempts,
                             "Timeout waiting for tx {tx_hash} receipt"
                         );
-                        return Err(ClientRpcError::TransactionReceiptTimeout { tx_hash, timeout });
+                        return Err(TransactionReceiptError::TransactionReceiptTimeout {
+                            tx_hash,
+                            timeout,
+                        });
                     }
 
                     tokio::time::sleep(retry_interval).await;
