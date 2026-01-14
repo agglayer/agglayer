@@ -11,6 +11,9 @@ use crate::{
     nullifier_tree::NullifierPath,
 };
 
+pub mod zero_copy;
+pub use zero_copy::{MultiBatchHeaderRef, ZeroCopyComponents, ZeroCopyError};
+
 /// Represents the chain state transition for the pessimistic proof.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiBatchHeader {
