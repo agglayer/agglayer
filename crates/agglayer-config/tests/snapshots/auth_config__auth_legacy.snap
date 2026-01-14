@@ -1,7 +1,6 @@
 ---
 source: crates/agglayer-config/tests/auth_config.rs
 expression: config
-snapshot_kind: text
 ---
 prover-buffer-size = 100
 
