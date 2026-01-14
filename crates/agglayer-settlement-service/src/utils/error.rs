@@ -17,6 +17,6 @@ pub enum ClientRpcError {
         #[source]
         source: eyre::Error,
     },
-    #[error("Receipt without block number: {0}")]
-    ReceiptWithoutBlockNumberError(TxHash),
+    #[error("Receipt without block number: {tx_hash}")]
+    ReceiptWithoutBlockNumberError { tx_hash: TxHash },
 }
