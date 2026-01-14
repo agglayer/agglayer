@@ -2,9 +2,22 @@ use std::{sync::Arc, time::Duration};
 
 use agglayer_types::primitives::alloy_primitives::TxHash;
 use alloy::{providers::Provider, rpc::types::TransactionReceipt};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
-use crate::utils::error::TransactionReceiptError;
+use crate::utils::error::{TransactionReceiptError, TxFinalityResult};
+
+/// Status of transaction finality on the blockchain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TxFinalityStatus {
+    /// Transaction is not yet included in any block
+    Pending,
+    /// Transaction is included but not yet safe
+    Included,
+    /// Transaction is in a safe block
+    Safe,
+    /// Transaction is in a finalized block
+    Finalized,
+}
 
 const RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
@@ -242,5 +255,265 @@ where
             })?
     } else {
         Ok(tx_receipt)
+    }
+}
+
+/// Check the finality status of a transaction.
+///
+/// Returns the current finality status based on the transaction's block
+/// compared to the safe and finalized block tags.
+#[tracing::instrument(level = "debug", skip(rpc_provider))]
+pub async fn check_transaction_finality<P>(
+    // The L1 Middleware provider.
+    rpc_provider: Arc<P>,
+    // Chain transaction hash.
+    tx_hash: TxHash,
+) -> Result<TxFinalityStatus, TransactionReceiptError>
+where
+    P: Provider + 'static,
+{
+    // First, check if transaction has a receipt
+    let receipt = match fetch_transaction_receipt(rpc_provider.clone(), tx_hash).await? {
+        Some(receipt) => receipt,
+        None => {
+            info!("Tx {tx_hash} is not yet included in a block");
+            return Ok(TxFinalityStatus::Pending);
+        }
+    };
+
+    let receipt_block = match receipt.block_number {
+        Some(block) => block,
+        None => {
+            // Seems tx has not been included in the block. Non-standard provider
+            // response.
+            return Ok(TxFinalityStatus::Pending);
+        }
+    };
+
+    debug!(
+        receipt_block,
+        "Tx {tx_hash} included in block, checking finality"
+    );
+
+    // Check if block is finalized
+    match rpc_provider
+        .get_block(alloy::eips::BlockId::Number(
+            alloy::eips::BlockNumberOrTag::Finalized,
+        ))
+        .await
+    {
+        Ok(Some(finalized_block)) => {
+            let finalized_block_number = finalized_block.header.number;
+            if finalized_block_number >= receipt_block {
+                info!(
+                    receipt_block,
+                    finalized_block_number, "Tx {tx_hash} is finalized"
+                );
+                return Ok(TxFinalityStatus::Finalized);
+            }
+            trace!(
+                receipt_block,
+                finalized_block_number,
+                "Tx {tx_hash} not yet finalized"
+            );
+        }
+        Ok(None) => {
+            debug!("Finalized block not found");
+        }
+        Err(error) => {
+            warn!(
+                ?error,
+                "Failed to get finalized block while checking tx {tx_hash} finality"
+            );
+        }
+    }
+
+    // Check if block is safe
+    match rpc_provider
+        .get_block(alloy::eips::BlockId::Number(
+            alloy::eips::BlockNumberOrTag::Safe,
+        ))
+        .await
+    {
+        Ok(Some(safe_block)) => {
+            let safe_block_number = safe_block.header.number;
+            if safe_block_number >= receipt_block {
+                info!(receipt_block, safe_block_number, "Tx {tx_hash} is safe");
+                return Ok(TxFinalityStatus::Safe);
+            }
+            trace!(
+                receipt_block,
+                safe_block_number,
+                "Tx {tx_hash} not yet safe"
+            );
+        }
+        Ok(None) => {
+            debug!("Safe block not found");
+        }
+        Err(error) => {
+            warn!(
+                ?error,
+                "Failed to get safe block while checking tx {tx_hash} finality"
+            );
+        }
+    }
+
+    // Transaction is included but not yet safe or finalized
+    info!(receipt_block, "Tx {tx_hash} is included but not yet safe");
+    Ok(TxFinalityStatus::Included)
+}
+
+/// Wait for the transaction to be included in the blockchain with respect
+/// to the required finality.
+#[tracing::instrument(level = "debug", skip(rpc_provider))]
+pub async fn wait_for_transaction_finality<P>(
+    // The L1 Middleware provider.
+    rpc_provider: Arc<P>,
+    // Chain transaction hash.
+    tx_hash: TxHash,
+    // Timeout for the transaction receipt.
+    timeout: Duration,
+    // Required tx finality
+    finality: agglayer_config::settlement_service::SettlementPolicy,
+) -> TxFinalityResult
+where
+    P: Provider + 'static,
+{
+    use agglayer_config::settlement_service::SettlementPolicy;
+
+    // First, wait for the transaction receipt and check for confirmations if needed
+    let tx_receipt = match finality {
+        SettlementPolicy::LatestBlock { confirmations } => {
+            wait_for_transaction_receipt_with_confirmations(
+                rpc_provider.clone(),
+                tx_hash,
+                timeout,
+                confirmations,
+            )
+            .await
+        }
+        _ => wait_for_transaction_receipt(rpc_provider.clone(), tx_hash, timeout).await,
+    };
+
+    let tx_receipt = match tx_receipt {
+        Ok(receipt) => receipt,
+        Err(error) => {
+            return if matches!(
+                error,
+                TransactionReceiptError::TransactionReceiptTimeout { .. }
+            ) {
+                TxFinalityResult::TransactionTimeout { tx_hash }
+            } else {
+                TxFinalityResult::RpcProviderError {
+                    tx_hash,
+                    source: error,
+                }
+            };
+        }
+    };
+
+    // Check if transaction was successful
+    if !tx_receipt.status() {
+        warn!("Tx {tx_hash} reverted");
+        return TxFinalityResult::TransactionReverted {
+            tx_hash,
+            receipt: tx_receipt,
+        };
+    }
+
+    // For LatestBlock, we're already done after confirmations
+    if matches!(finality, SettlementPolicy::LatestBlock { .. }) {
+        return TxFinalityResult::TransactionSuccess {
+            tx_hash,
+            receipt: tx_receipt,
+        };
+    }
+
+    // For SafeBlock and FinalizedBlock, wait for the required finality
+    let required_status = match finality {
+        SettlementPolicy::SafeBlock => TxFinalityStatus::Safe,
+        SettlementPolicy::FinalizedBlock => TxFinalityStatus::Finalized,
+        _ => unreachable!(),
+    };
+
+    let finality_name = match finality {
+        SettlementPolicy::SafeBlock => "safe",
+        SettlementPolicy::FinalizedBlock => "finalized",
+        _ => unreachable!(),
+    };
+
+    let receipt_block = match tx_receipt.block_number {
+        Some(block_number) => block_number,
+        None => {
+            error!("Failed to get receipt block number");
+            return TxFinalityResult::UnfinishedOperation { tx_hash };
+        }
+    };
+
+    debug!(
+        receipt_block,
+        "Waiting for tx {tx_hash} block to reach {finality_name} finality"
+    );
+
+    let start_time = Instant::now();
+    let retry_interval = RECEIPT_RETRY_INTERVAL;
+    let mut attempts: usize = 0;
+
+    loop {
+        attempts += 1;
+
+        // Check elapsed time before making the check
+        let elapsed = start_time.elapsed();
+        if elapsed >= timeout {
+            error!(
+                attempts,
+                ?elapsed,
+                ?timeout,
+                "Timeout waiting for tx {tx_hash} {finality_name} finality"
+            );
+            return TxFinalityResult::TransactionTimeout { tx_hash };
+        }
+
+        // Use check_transaction_finality to determine current status
+        match check_transaction_finality(rpc_provider.clone(), tx_hash).await {
+            Ok(status) => {
+                // Check if we've reached the required finality level
+                let reached = match required_status {
+                    TxFinalityStatus::Finalized => {
+                        matches!(status, TxFinalityStatus::Finalized)
+                    }
+                    TxFinalityStatus::Safe => {
+                        matches!(status, TxFinalityStatus::Safe | TxFinalityStatus::Finalized)
+                    }
+                    _ => false,
+                };
+
+                if reached {
+                    info!(
+                        receipt_block,
+                        attempts, "Tx {tx_hash} block reached {finality_name} finality"
+                    );
+                    return TxFinalityResult::TransactionSuccess {
+                        tx_hash,
+                        receipt: tx_receipt,
+                    };
+                } else {
+                    trace!(
+                        receipt_block,
+                        ?status,
+                        "Waiting for tx {tx_hash} block to reach {finality_name} finality, \
+                         sleeping"
+                    );
+                    tokio::time::sleep(retry_interval).await;
+                }
+            }
+            Err(error) => {
+                warn!(
+                    ?error,
+                    "Failed to check transaction finality for tx {tx_hash}, retrying"
+                );
+                tokio::time::sleep(retry_interval).await;
+            }
+        }
     }
 }
