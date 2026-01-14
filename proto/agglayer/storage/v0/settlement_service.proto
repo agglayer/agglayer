@@ -98,10 +98,19 @@ message ContractCallResult {
   ContractCallOutcome outcome = 1;
 
   // Additional metadata about the call outcome.
-  bytes metadata = 2;
+  //
+  // This will be either the success outcome or the raw revert reason.
+  // At this stage we cannot parse this further, due to not knowing which ABI was used.
+  ContractCallMetadata metadata = 2;
+
+  // Block hash where the transaction was included.
+  BlockHash block_hash = 3;
 
   // Block number where the transaction was included.
-  BlockHash block_hash = 3;
+  BlockNumber block_number = 4;
+
+  // Transaction hash of the settlement transaction.
+  TxHash tx_hash = 5;
 }
 
 // On-chain outcome of the contract call.
@@ -114,6 +123,15 @@ enum ContractCallOutcome {
 
   // The call reverted.
   CONTRACT_CALL_OUTCOME_REVERTED = 2;
+}
+
+// Additional metadata about the call outcome.
+//
+// For successful calls, this is the ABI-encoded return data.
+// For reverted calls, this is the ABI-encoded revert reason.
+message ContractCallMetadata {
+  // Raw bytes of the metadata.
+  bytes metadata = 1;
 }
 
 // Result indicating that the transaction's previous result was reorganized out of the chain.

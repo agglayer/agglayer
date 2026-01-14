@@ -26,7 +26,6 @@ pub struct TimeClock {
     genesis: DateTime<Utc>,
     current_block: Arc<AtomicU64>,
     epoch_duration: Arc<NonZeroU64>,
-    current_epoch: AtomicU64,
 }
 
 #[async_trait::async_trait]
@@ -63,7 +62,6 @@ impl TimeClock {
             genesis,
             current_block: Arc::new(AtomicU64::new(0)),
             epoch_duration: Arc::new(epoch_duration),
-            current_epoch: AtomicU64::new(0),
         }
     }
 
@@ -75,29 +73,8 @@ impl TimeClock {
     ) {
         let mut interval = interval_at(Instant::now(), Duration::from_secs(1));
 
-        // Compute the current Block height and Epoch number
-        let current_block = self.update_block_height();
-        let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
-
-        // Use compare_exchange to ensure the initial current_epoch is 0
-        if let Err(stored_value) = self.current_epoch.compare_exchange(
-            0,
-            current_epoch,
-            Ordering::AcqRel,
-            Ordering::Relaxed,
-        ) {
-            let error_message = format!(
-                "The current_epoch has already been modified. Shutting down the Clock task. \
-                 Stored value: {stored_value}"
-            );
-            #[cfg(not(test))]
-            {
-                error!("{}", error_message);
-                std::process::exit(1);
-            }
-            #[cfg(test)]
-            panic!("{}", error_message);
-        }
+        // Initialize the current Block height based on genesis
+        self.update_block_height();
 
         loop {
             tokio::select! {
@@ -106,7 +83,6 @@ impl TimeClock {
                     break;
                 }
                 _ = interval.tick() => {
-
                     // Increase the Block height by 1.
                     // The `fetch_add` method returns the previous value, so we need to add 1 to it
                     // to get the current Block height.
@@ -116,23 +92,16 @@ impl TimeClock {
                             .checked_add(1)
                     {
                         // If the current Block height is a multiple of the Epoch duration,
-                        // the current Epoch has ended. In this case, we need to update the
-                        // new Epoch number and send an `EpochEnded` event to the subscribers.
+                        // the current Epoch has ended. In this case, we calculate the epoch
+                        // number on demand and send an `EpochEnded` event to the subscribers.
                         if current_block % *self.epoch_duration == 0 {
-                            match self.update_epoch_number() {
-                                Ok(epoch_ended) => {
-                                    if let Err(error) = sender.send(Event::EpochEnded(epoch_ended)) {
-                                        error!("Failed to send EpochEnded event to subscribers: {error}");
-                                    }
-                                }
-                                Err((current_epoch, expected)) => {
-                                    error!(
-                                        "Unexpected error computing the current Epoch: current_epoch={}, \
-                                        expected_epoch={}, current_block={}",
-                                        current_epoch, expected, current_block
-                                    );
-                                    cancellation_token.cancel();
-                                }
+                            // Calculate the epoch that just ended (current_block / epoch_duration - 1)
+                            let epoch_ended = EpochNumber::new(
+                                <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration)
+                                    .saturating_sub(1)
+                            );
+                            if let Err(error) = sender.send(Event::EpochEnded(epoch_ended)) {
+                                error!("Failed to send EpochEnded event to subscribers: {error}");
                             }
                         }
                     } else {
@@ -162,30 +131,6 @@ impl TimeClock {
         block_height
     }
 
-    /// Updates the current Epoch of this [`TimeClock`].
-    ///
-    /// This method is used to update the current Epoch number based on the
-    /// Block height and the Epoch duration.
-    ///
-    /// To define the current Epoch number, the Epoch duration divides the Block
-    /// height.
-    fn update_epoch_number(&mut self) -> Result<EpochNumber, (EpochNumber, EpochNumber)> {
-        let current_block = self.current_block.load(Ordering::Acquire);
-
-        let current_epoch = Self::calculate_epoch_number(current_block, *self.epoch_duration);
-        let expected_epoch = current_epoch.saturating_sub(1);
-
-        match self.current_epoch.compare_exchange(
-            expected_epoch,
-            current_epoch,
-            Ordering::Acquire,
-            Ordering::Relaxed,
-        ) {
-            Ok(previous) => Ok(EpochNumber::new(previous)),
-            Err(stored) => Err((EpochNumber::new(stored), EpochNumber::new(expected_epoch))),
-        }
-    }
-
     /// Calculate the Block height.
     fn calculate_block_height(&self) -> u64 {
         std::cmp::max(
@@ -200,7 +145,7 @@ impl TimeClock {
 
 #[cfg(test)]
 mod tests {
-    use std::{num::NonZeroU64, sync::atomic::Ordering};
+    use std::num::NonZeroU64;
 
     use agglayer_types::EpochNumber;
     use chrono::{Duration, Utc};
@@ -297,21 +242,5 @@ mod tests {
         _ = futures::poll!(&mut fut);
 
         assert!(token.is_cancelled());
-    }
-
-    #[tokio::test]
-    #[should_panic]
-    async fn test_initial_epoch_update_error() {
-        let genesis = Utc::now()
-            .checked_sub_signed(Duration::seconds(30))
-            .unwrap();
-
-        let mut clock = TimeClock::new(genesis, NonZeroU64::new(5).unwrap());
-        clock.current_epoch.store(1, Ordering::Relaxed);
-
-        let (sender, _receiver) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
-
-        let token = CancellationToken::new();
-        let _ = clock.run(sender, token).await;
     }
 }

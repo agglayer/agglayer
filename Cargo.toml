@@ -137,4 +137,5 @@ tower-http = { version = "0.6.2", features = ["full"] }
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+ulid = "1.2"
 url = { version = "2.5", features = ["serde"] }
