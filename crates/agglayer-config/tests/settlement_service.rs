@@ -19,8 +19,8 @@ fn deserialize_default_settlement_tx_config() {
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(10)
     );
-    assert_eq!(config.confirmations, 32);
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
+    assert_eq!(config.settlement_policy.confirmations(), None);
     assert_eq!(config.gas_limit_ceiling, U256::from(60_000_000_u64));
     assert_eq!(config.gas_price_ceiling, 100_000_000_000_u128);
     assert_eq!(config.gas_price_floor, 0);
@@ -42,8 +42,8 @@ fn deserialize_custom_config_1() {
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(15)
     );
-    assert_eq!(config.confirmations, 64);
     assert_eq!(config.settlement_policy, SettlementPolicy::FinalizedBlock);
+    assert_eq!(config.settlement_policy.confirmations(), None);
     assert_eq!(config.gas_limit_ceiling, U256::from(100_000_000_u64));
     assert_eq!(config.gas_price_ceiling, 200_000_000_000_u128);
     assert_eq!(config.gas_price_floor, 5_000_000_000_u128);
@@ -67,8 +67,11 @@ fn deserialize_custom_config_2() {
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(5)
     );
-    assert_eq!(config.confirmations, 16);
-    assert_eq!(config.settlement_policy, SettlementPolicy::LatestBlock);
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 16 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(16));
     assert_eq!(config.gas_limit_ceiling, U256::from(30_000_000_u64));
     assert_eq!(config.gas_price_ceiling, 50_000_000_000_u128);
     assert_eq!(config.gas_price_floor, 1_000_000_000_u128);
@@ -98,10 +101,16 @@ fn deserialize_full_settlement_config() {
             .initial_interval,
         Duration::from_secs(15)
     );
-    assert_eq!(config.pessimistic_proof_tx_config.confirmations, 64);
     assert_eq!(
         config.pessimistic_proof_tx_config.settlement_policy,
         SettlementPolicy::FinalizedBlock
+    );
+    assert_eq!(
+        config
+            .pessimistic_proof_tx_config
+            .settlement_policy
+            .confirmations(),
+        None
     );
     assert_eq!(
         config.pessimistic_proof_tx_config.gas_limit_ceiling,
@@ -137,10 +146,13 @@ fn deserialize_full_settlement_config() {
             .initial_interval,
         Duration::from_secs(5)
     );
-    assert_eq!(config.validium_tx_config.confirmations, 16);
     assert_eq!(
         config.validium_tx_config.settlement_policy,
-        SettlementPolicy::LatestBlock
+        SettlementPolicy::LatestBlock { confirmations: 16 }
+    );
+    assert_eq!(
+        config.validium_tx_config.settlement_policy.confirmations(),
+        Some(16)
     );
     assert_eq!(
         config.validium_tx_config.gas_limit_ceiling,
@@ -169,13 +181,67 @@ fn deserialize_full_settlement_config() {
 
 #[test]
 fn test_finality_immediate() {
+    // Test with explicit confirmations
     let toml = r#"
-        settlement-policy = "LatestBlock"
+        [settlement-policy.latest-block]
+        confirmations = 10
     "#;
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
 
-    assert_eq!(config.settlement_policy, SettlementPolicy::LatestBlock);
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 10 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(10));
+}
+
+#[test]
+fn test_finality_immediate_default_confirmations() {
+    // Test with default confirmations (when not specified)
+    let toml = r#"
+        settlement-policy = { latest-block = {} }
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 0 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(0));
+}
+
+#[test]
+fn test_finality_immediate_compact_syntax() {
+    // Test the compact "latest-block/N" syntax
+    let toml = r#"
+        settlement-policy = "latest-block/10"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 10 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(10));
+}
+
+#[test]
+fn test_finality_immediate_compact_syntax_default() {
+    // Test "latest-block" without confirmations uses default
+    let toml = r#"
+        settlement-policy = "latest-block"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 0 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(0));
 }
 
 #[test]
@@ -185,7 +251,7 @@ fn test_settlement_policy_safe() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
-    assert_eq!(config.confirmations, 32);
+    assert_eq!(config.settlement_policy.confirmations(), None);
 
     assert_toml_snapshot!(config);
 }
@@ -193,7 +259,7 @@ fn test_settlement_policy_safe() {
 #[test]
 fn test_finality_finalized() {
     let toml = r#"
-        settlement-policy = "FinalizedBlock"
+        settlement-policy = "finalized-block"
     "#;
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
@@ -221,9 +287,9 @@ fn test_settlement_transaction_config_defaults() {
         Duration::from_secs(10)
     );
 
-    // Test confirmation and finality
-    assert_eq!(config.confirmations, 32);
+    // Test finality - SafeBlock is the default, no confirmations needed
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
+    assert_eq!(config.settlement_policy.confirmations(), None);
 
     // Test gas configuration
     assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.0);
