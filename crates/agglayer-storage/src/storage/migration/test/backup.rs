@@ -7,7 +7,7 @@ use super::sample::*;
 use crate::{storage::migration::Builder, tests::TempDBDir};
 
 #[test_log::test]
-fn test_backup_before_migrate() -> Result<(), eyre::Error> {
+fn backup_before_migrate() -> Result<(), eyre::Error> {
     let temp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
@@ -43,7 +43,7 @@ fn test_backup_before_migrate() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn test_backup_contains_data() -> Result<(), eyre::Error> {
+fn backup_contains_data() -> Result<(), eyre::Error> {
     let temp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
     let restore_dir = TempDBDir::new();
@@ -136,7 +136,7 @@ fn test_backup_contains_data() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn test_multiple_backups_versioned() -> Result<(), eyre::Error> {
+fn multiple_backups_versioned() -> Result<(), eyre::Error> {
     let temp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
@@ -171,13 +171,63 @@ fn test_multiple_backups_versioned() -> Result<(), eyre::Error> {
     Ok(())
 }
 
+#[test_log::test]
+fn backup_if_migration_needed() -> Result<(), eyre::Error> {
+    let temp_dir = TempDBDir::new();
+    let backup_dir = TempDBDir::new();
+    let db_path = &temp_dir.path;
+    let backup_path = &backup_dir.path;
+
+    // First opening: migrations are needed, backup should be created
+    {
+        let _db = Builder::sample_builder()
+            .finalize(CFS_V0)?
+            .open(db_path)?
+            .backup_if_migration_needed(backup_path)?
+            .migrate()?;
+    }
+
+    // Get backup info after first opening
+    let backup_info_after_first = get_backup_info(backup_path)?;
+    assert_eq!(
+        backup_info_after_first.len(),
+        1,
+        "Should have 1 backup after first opening"
+    );
+
+    // Second opening: no migrations needed, backup should NOT be created
+    {
+        let _db = Builder::sample_builder()
+            .finalize(CFS_V0)?
+            .open(db_path)?
+            .backup_if_migration_needed(backup_path)?
+            .migrate()?;
+    }
+
+    // Verify backup info is unchanged (no new backup created)
+    let backup_info_after_second = get_backup_info(backup_path)?;
+    assert_eq!(
+        backup_info_after_first.len(),
+        backup_info_after_second.len()
+    );
+    assert_eq!(
+        backup_info_after_first[0].backup_id,
+        backup_info_after_second[0].backup_id
+    );
+    assert_eq!(
+        backup_info_after_first[0].timestamp,
+        backup_info_after_second[0].timestamp
+    );
+
+    Ok(())
+}
+
 fn backup_engine(path: &Path) -> eyre::Result<rocksdb::backup::BackupEngine> {
     let env = rocksdb::Env::new()?;
     let opts = rocksdb::backup::BackupEngineOptions::new(path)?;
     Ok(rocksdb::backup::BackupEngine::open(&opts, &env)?)
 }
 
-// Helper function to get backup info
 fn get_backup_info(backup_path: &Path) -> eyre::Result<Vec<BackupEngineInfo>> {
     Ok(backup_engine(backup_path)?.get_backup_info())
 }

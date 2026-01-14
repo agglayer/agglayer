@@ -16,6 +16,7 @@ use crate::{
 };
 
 mod access;
+mod backup;
 mod error;
 mod migration_cf;
 mod plan;
@@ -119,41 +120,6 @@ impl<'a> Migrator<'a> {
             start_step,
             steps: plan.steps,
         })
-    }
-
-    /// Creates a versioned backup of the database before running migrations.
-    ///
-    /// Returns `Self` for method chaining. Call before `migrate()` to capture
-    /// the pre-migration state as a recovery point.
-    #[tracing::instrument(skip(self))]
-    pub fn backup(self, backup_path: &Path) -> Result<Self, DBOpenError> {
-        use rocksdb::backup::{BackupEngine, BackupEngineOptions};
-
-        info!("Creating startup backup");
-
-        // Open RocksDB backup engine (creates directory if needed)
-        let env = rocksdb::Env::new().map_err(DBOpenError::Backup)?;
-        let opts = BackupEngineOptions::new(backup_path).map_err(DBOpenError::Backup)?;
-        let mut engine = BackupEngine::open(&opts, &env).map_err(DBOpenError::Backup)?;
-
-        // Create new backup version with flush (ensures all data is written)
-        engine
-            .create_new_backup_flush(self.db.raw_rocksdb(), true)
-            .map_err(DBOpenError::Backup)?;
-
-        // Get info about the backup we just created
-        let backup_info = engine
-            .get_backup_info()
-            .pop()
-            .ok_or(DBOpenError::BackupInfoMissing)?;
-
-        info!(
-            backup_id = backup_info.backup_id,
-            size = backup_info.size,
-            "Startup backup created"
-        );
-
-        Ok(self)
     }
 
     fn writeopts() -> rocksdb::WriteOptions {
