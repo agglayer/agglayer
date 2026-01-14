@@ -18,10 +18,10 @@ impl<const TREE_DEPTH: usize> TryFrom<&LocalExitTreeData<TREE_DEPTH>>
     /// representation.
     ///
     /// The frontier is a compact representation of a Merkle tree that stores
-    /// only the rightmost non-empty nodes needed to reconstruct the root. For an
-    /// incremental tree with `n` leaves, the frontier contains the left
-    /// sibling of each odd-indexed (right child) node along the path from the last leaf
-    /// to the root.
+    /// only the rightmost non-empty nodes needed to reconstruct the root. For
+    /// an incremental tree with `n` leaves, the frontier contains the left
+    /// sibling of each odd-indexed (right child) node along the path from the
+    /// last leaf to the root.
     ///
     /// The algorithm traverses the path from the last leaf (`leaf_count`)
     /// upward to the root, collecting left siblings at each level where
