@@ -1,5 +1,4 @@
 #![allow(clippy::too_many_arguments)]
-use std::collections::BTreeMap;
 
 use agglayer_primitives::{Digest, U256};
 use serde::{Deserialize, Serialize};
@@ -29,7 +28,7 @@ pub struct MultiBatchHeader {
     pub l1_info_root: Digest,
     /// Token balances of the origin network before processing bridge events,
     /// with Merkle proofs of these balances in the local balance tree.
-    pub balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath)>,
+    pub balances_proofs: Vec<(TokenInfo, (U256, LocalBalancePath))>,
     /// Aggchain data which include either multisig, aggchain proof, or both.
     pub aggchain_data: AggchainData,
     /// Certificate id used as nonce to compute the commitment.
