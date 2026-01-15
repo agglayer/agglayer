@@ -376,6 +376,7 @@ dependencies = [
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
+ "agglayer-tries",
  "agglayer-types",
  "alloy",
  "axum 0.8.4",
@@ -393,6 +394,7 @@ dependencies = [
  "jsonrpsee-test-utils",
  "lazy_static",
  "mockall",
+ "pessimistic-proof",
  "pin-project 1.1.10",
  "rand 0.9.2",
  "reqwest",
@@ -412,6 +414,7 @@ dependencies = [
  "tracing",
  "tracing-capture",
  "tracing-subscriber",
+ "unified-bridge",
 ]
 
 [[package]]
@@ -530,8 +533,11 @@ dependencies = [
  "agglayer-types",
  "alloy",
  "eyre",
+ "test-log",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-util",
+ "tower 0.4.13",
  "tracing",
  "ulid",
 ]
@@ -579,6 +585,8 @@ dependencies = [
  "rstest",
  "serde",
  "serde-reflection",
+ "serde_json",
+ "serde_with",
  "sp1-sdk",
  "strum 0.27.2",
  "strum_macros 0.27.2",
