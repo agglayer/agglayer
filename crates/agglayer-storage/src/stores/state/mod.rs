@@ -749,7 +749,7 @@ impl MetadataReader for StateStore {
             Some(MetadataValue::LatestBlockThatSettledAnyCert(value)) => Ok(Some(value)),
             None => Ok(None),
             _ => Err(Error::Unexpected(
-                "Wrong value type decoded, was expecting LastCertificateSettlingBlock, decoded \
+                "Wrong value type decoded, was expecting LatestBlockThatSettledAnyCert, decoded \
                  another type"
                     .to_string(),
             )),
