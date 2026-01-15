@@ -25,3 +25,6 @@ test-log.workspace = true
 [features]
 default = []
 testutils = ["fail/failpoints"]
+
+[package.metadata.cargo-udeps.ignore]
+development = ["agglayer-clock"]

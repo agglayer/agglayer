@@ -52,5 +52,7 @@ agglayer-types.workspace = true
 pessimistic-proof-test-suite.workspace = true
 pessimistic-proof.workspace = true
 prover-config.workspace = true
-
 test-log.workspace = true
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["prover-config"]

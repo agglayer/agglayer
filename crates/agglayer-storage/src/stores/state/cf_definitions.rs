@@ -1,19 +1,27 @@
-use rocksdb::ColumnFamilyDescriptor;
-
-pub const CFS: [&str; 10] = [
-    crate::columns::CERTIFICATE_HEADER_CF,
-    crate::columns::CERTIFICATE_PER_NETWORK_CF,
-    crate::columns::LATEST_SETTLED_CERTIFICATE_PER_NETWORK_CF,
-    crate::columns::METADATA_CF,
-    crate::columns::LOCAL_EXIT_TREE_PER_NETWORK_CF,
-    crate::columns::BALANCE_TREE_PER_NETWORK_CF,
-    crate::columns::NULLIFIER_TREE_PER_NETWORK_CF,
-    crate::columns::NETWORK_INFO_CF,
-    crate::columns::DISABLED_NETWORKS_CF,
-    crate::columns::PP_ROOT_TO_CERTIFICATE_IDS_CF,
-];
+use crate::{
+    columns::{
+        balance_tree_per_network::BalanceTreePerNetworkColumn,
+        certificate_header::CertificateHeaderColumn,
+        certificate_per_network::CertificatePerNetworkColumn,
+        disabled_networks::DisabledNetworksColumn,
+        latest_settled_certificate_per_network::LatestSettledCertificatePerNetworkColumn,
+        local_exit_tree_per_network::LocalExitTreePerNetworkColumn, metadata::MetadataColumn,
+        network_info::NetworkInfoColumn, nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        pp_root_to_certificate_ids::PpRootToCertificateIdsColumn,
+    },
+    schema::ColumnDescriptor,
+};
 
 /// Definitions for the column families in the state storage.
-pub fn state_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    crate::schema::default_db_cf_definitions(&CFS)
-}
+pub const STATE_DB: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<CertificateHeaderColumn>(),
+    ColumnDescriptor::new::<CertificatePerNetworkColumn>(),
+    ColumnDescriptor::new::<LatestSettledCertificatePerNetworkColumn>(),
+    ColumnDescriptor::new::<MetadataColumn>(),
+    ColumnDescriptor::new::<LocalExitTreePerNetworkColumn>(),
+    ColumnDescriptor::new::<BalanceTreePerNetworkColumn>(),
+    ColumnDescriptor::new::<NullifierTreePerNetworkColumn>(),
+    ColumnDescriptor::new::<NetworkInfoColumn>(),
+    ColumnDescriptor::new::<DisabledNetworksColumn>(),
+    ColumnDescriptor::new::<PpRootToCertificateIdsColumn>(),
+];

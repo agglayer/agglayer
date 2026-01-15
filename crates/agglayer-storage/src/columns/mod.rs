@@ -1,6 +1,6 @@
 pub use std::io;
 
-use crate::schema::ColumnSchema;
+use crate::schema::{options::ColumnOptions, ColumnSchema};
 
 // State related CFs
 pub const CERTIFICATE_PER_NETWORK_CF: &str = "certificate_per_network_cf";
@@ -27,6 +27,14 @@ pub const PER_EPOCH_METADATA_CF: &str = "per_epoch_metadata_cf";
 pub const PER_EPOCH_PROOFS_CF: &str = "per_epoch_proofs_cf";
 pub const PER_EPOCH_END_CHECKPOINT_CF: &str = "per_epoch_end_checkpoint_cf";
 pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
+
+// Column options for checkpoint columns (start and end checkpoints).
+pub const CHECKPOINT_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: agglayer_types::NetworkId::BITS,
+    },
+};
 
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";

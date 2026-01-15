@@ -68,7 +68,7 @@ async fn block_clock_configuration(#[future] raw_rpc: RawRpcContext) {
     let json = serde_json::from_str::<serde_json::Value>(&response).unwrap();
     let json = serde_json::to_string_pretty(&json).unwrap();
 
-    assert_snapshot!("get_clock_configuration::block", json);
+    assert_snapshot!("get_clock_configuration__block", json);
 }
 
 #[test_log::test(tokio::test)]
@@ -93,5 +93,5 @@ async fn time_clock_configuration() {
     let json = serde_json::from_str::<serde_json::Value>(&response).unwrap();
     let json = serde_json::to_string_pretty(&json).unwrap();
 
-    assert_snapshot!("get_clock_configuration::time", json);
+    assert_snapshot!("get_clock_configuration__time", json);
 }
