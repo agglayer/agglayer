@@ -326,3 +326,137 @@ fn test_human_duration_formats() {
         Duration::from_secs(30)
     );
 }
+
+#[test]
+fn test_settlement_policy_camel_case_safe_block() {
+    let toml = r#"
+        settlement-policy = "SafeBlock"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
+    assert_eq!(config.settlement_policy.confirmations(), None);
+}
+
+#[test]
+fn test_settlement_policy_camel_case_finalized_block() {
+    let toml = r#"
+        settlement-policy = "FinalizedBlock"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(config.settlement_policy, SettlementPolicy::FinalizedBlock);
+    assert_eq!(config.settlement_policy.confirmations(), None);
+}
+
+#[test]
+fn test_settlement_policy_camel_case_latest_block() {
+    let toml = r#"
+        settlement-policy = "LatestBlock"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 0 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(0));
+}
+
+#[test]
+fn test_settlement_policy_camel_case_latest_block_with_confirmations() {
+    let toml = r#"
+        settlement-policy = "LatestBlock/6"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 6 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(6));
+}
+
+#[test]
+fn test_settlement_policy_camel_case_latest_block_with_large_confirmations() {
+    let toml = r#"
+        settlement-policy = "LatestBlock/100"
+    "#;
+
+    let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 100 }
+    );
+    assert_eq!(config.settlement_policy.confirmations(), Some(100));
+}
+
+#[test]
+fn test_settlement_policy_json_camel_case() {
+    // Test JSON deserialization with camel case
+    let json = r#"{
+        "settlement-policy": "SafeBlock"
+    }"#;
+
+    let config: SettlementTransactionConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
+
+    let json = r#"{
+        "settlement-policy": "FinalizedBlock"
+    }"#;
+
+    let config: SettlementTransactionConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(config.settlement_policy, SettlementPolicy::FinalizedBlock);
+
+    let json = r#"{
+        "settlement-policy": "LatestBlock/12"
+    }"#;
+
+    let config: SettlementTransactionConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        config.settlement_policy,
+        SettlementPolicy::LatestBlock { confirmations: 12 }
+    );
+}
+
+#[test]
+fn test_settlement_policy_mixed_case_compatibility() {
+    // Test that both kebab-case and camel case work
+    let toml_kebab = r#"settlement-policy = "safe-block""#;
+    let toml_camel = r#"settlement-policy = "SafeBlock""#;
+
+    let config_kebab: SettlementTransactionConfig = toml::from_str(toml_kebab).unwrap();
+    let config_camel: SettlementTransactionConfig = toml::from_str(toml_camel).unwrap();
+
+    assert_eq!(
+        config_kebab.settlement_policy,
+        config_camel.settlement_policy
+    );
+
+    let toml_kebab = r#"settlement-policy = "finalized-block""#;
+    let toml_camel = r#"settlement-policy = "FinalizedBlock""#;
+
+    let config_kebab: SettlementTransactionConfig = toml::from_str(toml_kebab).unwrap();
+    let config_camel: SettlementTransactionConfig = toml::from_str(toml_camel).unwrap();
+
+    assert_eq!(
+        config_kebab.settlement_policy,
+        config_camel.settlement_policy
+    );
+
+    let toml_kebab = r#"settlement-policy = "latest-block/5""#;
+    let toml_camel = r#"settlement-policy = "LatestBlock/5""#;
+
+    let config_kebab: SettlementTransactionConfig = toml::from_str(toml_kebab).unwrap();
+    let config_camel: SettlementTransactionConfig = toml::from_str(toml_camel).unwrap();
+
+    assert_eq!(
+        config_kebab.settlement_policy,
+        config_camel.settlement_policy
+    );
+}

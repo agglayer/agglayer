@@ -91,8 +91,8 @@ impl<'de> Deserialize<'de> for SettlementPolicy {
                 E: de::Error,
             {
                 match value {
-                    "safe-block" => Ok(SettlementPolicy::SafeBlock),
-                    "finalized-block" => Ok(SettlementPolicy::FinalizedBlock),
+                    "safe-block" | "SafeBlock" => Ok(SettlementPolicy::SafeBlock),
+                    "finalized-block" | "FinalizedBlock" => Ok(SettlementPolicy::FinalizedBlock),
                     s if s.starts_with("latest-block/") => {
                         let confirmations_str = s.strip_prefix("latest-block/").unwrap();
                         let confirmations = confirmations_str.parse::<usize>().map_err(|_| {
@@ -103,15 +103,26 @@ impl<'de> Deserialize<'de> for SettlementPolicy {
                         })?;
                         Ok(SettlementPolicy::LatestBlock { confirmations })
                     }
-                    "latest-block" => {
-                        // Support "latest-block" without confirmations, use default
+                    s if s.starts_with("LatestBlock/") => {
+                        let confirmations_str = s.strip_prefix("LatestBlock/").unwrap();
+                        let confirmations = confirmations_str.parse::<usize>().map_err(|_| {
+                            E::custom(format!(
+                                "invalid confirmations value '{}' in 'LatestBlock/N'",
+                                confirmations_str
+                            ))
+                        })?;
+                        Ok(SettlementPolicy::LatestBlock { confirmations })
+                    }
+                    "latest-block" | "LatestBlock" => {
+                        // Support both cases without confirmations, use default
                         Ok(SettlementPolicy::LatestBlock {
                             confirmations: default_latest_block_confirmations(),
                         })
                     }
                     _ => Err(E::custom(format!(
-                        "unknown settlement policy '{}', expected 'safe-block', \
-                         'finalized-block', 'latest-block', or 'latest-block/N'",
+                        "unknown settlement policy '{}', expected 'safe-block', 'SafeBlock', \
+                         'finalized-block', 'FinalizedBlock', 'latest-block', 'LatestBlock', \
+                         'latest-block/N', or 'LatestBlock/N'",
                         value
                     ))),
                 }
