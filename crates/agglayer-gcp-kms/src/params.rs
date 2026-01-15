@@ -2,7 +2,7 @@
 //! configuration. This struct is used to initialize and configure a Google
 //! Cloud KMS signer.
 
-use std::{fmt::Display, str::FromStr};
+use std::str::FromStr;
 
 use agglayer_config::GcpKmsConfig;
 use tracing::warn;
@@ -44,7 +44,7 @@ fn from_env_or_conf<T>(
     config_value: &Option<T>,
 ) -> Result<T, Error>
 where
-    T: FromStr + Clone + Display,
+    T: FromStr + Clone,
 {
     if let Ok(value) = std::env::var(env_key) {
         return value
