@@ -108,7 +108,6 @@ where
         Some(new_receipt) => {
             if *tx_receipt != new_receipt {
                 // Small reorg detected. We have a new receipt for the transaction.
-                // Wait until that receipt is confirmed.
                 warn!(
                     "Reorg detected, receipts are different. Old block {:?} new block {:?}",
                     tx_receipt.block_number, new_receipt.block_number
@@ -189,6 +188,7 @@ where
                                 check_for_reorg(rpc_provider.clone(), &tx_receipt).await?
                             {
                                 // Reorg detected. New receipt available for this tx.
+                                // Update receipt and confirmations block number start.
                                 receipt_block = match new_tx_receipt.block_number {
                                     Some(new_block_number) => new_block_number,
                                     None => {
