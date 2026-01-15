@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use alloy::primitives::TxHash;
+use alloy::{primitives::TxHash, rpc::types::TransactionReceipt};
 
 #[derive(thiserror::Error, Debug)]
 pub enum TransactionReceiptError {
@@ -16,4 +16,11 @@ pub enum TransactionReceiptError {
 
     #[error("Invalid receipt for {tx_hash}")]
     InvalidReceipt { tx_hash: TxHash },
+
+    #[error("Reorg detected for {tx_hash}")]
+    ReorgDetected {
+        tx_hash: TxHash,
+        old_receipt: Box<Option<TransactionReceipt>>,
+        new_receipt: Box<Option<TransactionReceipt>>,
+    },
 }
