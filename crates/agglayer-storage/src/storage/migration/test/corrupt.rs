@@ -127,6 +127,7 @@ fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
                 let v0_value = &DATA_V0[1].1;
                 db.put::<NetworkInfoV0Column>(&NetworkId::new(42), v0_value)
             })?
+            .drop_cfs(CFS_V0)?
             .finalize(CFS_V1)?
             .open(db_path)?
             .migrate();
@@ -135,8 +136,8 @@ fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
             Err(DBOpenError::Migration(migration_err)) => {
                 // Check that the error is WritingReadOnlyCf
                 match migration_err.details {
-                    crate::storage::DBMigrationErrorDetails::WritingReadOnlyCf(cf) => {
-                        assert_eq!(NetworkInfoV0Column::COLUMN_FAMILY_NAME, cf);
+                    crate::storage::DBMigrationErrorDetails::WritingReadOnlyCf { cf_name } => {
+                        assert_eq!(NetworkInfoV0Column::COLUMN_FAMILY_NAME, cf_name);
                     }
                     err => panic!("Unexpected error {err:?}"),
                 }

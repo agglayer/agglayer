@@ -40,7 +40,9 @@ impl<'a> DbAccess<'a> {
                 writing,
                 "Writing a read-only CF {writing:?} during migration",
             );
-            return Err(Error::WritingReadOnlyCf(writing.to_string()));
+
+            let cf_name = writing.to_string();
+            return Err(Error::WritingReadOnlyCf { cf_name });
         }
 
         Ok(self.db.put::<C>(key, value)?)

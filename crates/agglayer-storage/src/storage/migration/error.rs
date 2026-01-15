@@ -25,6 +25,12 @@ pub enum DBOpenError {
          from the code, or an older version of agglayer-node is being used, which is not allowed."
     )]
     FewerStepsDeclared { declared: u32, recorded: u32 },
+
+    #[error("Columns {cf_names:?} are in the migration schema but not in the final schema")]
+    UnexpectedColumnsInSchema { cf_names: Vec<String> },
+
+    #[error("Column {cf_name:?} is in the final schema but was never added during migration")]
+    MissingColumnInMigrationPlan { cf_name: String },
 }
 
 #[derive(Debug, Error)]
@@ -40,9 +46,15 @@ pub enum DBMigrationErrorDetails {
     #[error(transparent)]
     Database(#[from] DBError),
 
-    #[error("Writing in a read-only column family {0:?}")]
-    WritingReadOnlyCf(String),
+    #[error("Writing in a read-only column family {cf_name:?}")]
+    WritingReadOnlyCf { cf_name: String },
 
     #[error("Custom migration error")]
     Custom(#[source] eyre::Error),
+
+    #[error("Duplicate column family in migration plan: {cf_name}")]
+    DuplicateColumnInMigrationPlan { cf_name: String },
+
+    #[error("Column family not found in current schema: {cf_name}")]
+    ColumnNotFoundInSchema { cf_name: String },
 }

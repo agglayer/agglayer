@@ -1,6 +1,10 @@
-use std::path::Path;
+use std::{collections::BTreeSet, path::Path};
 
-use super::{error::DBOpenError, step::MigrationStep, Migrator};
+use super::{
+    error::{DBMigrationErrorDetails, DBOpenError},
+    step::MigrationStep,
+    MigrateFn, Migrator,
+};
 use crate::schema::ColumnDescriptor;
 
 /// Complete migration specification.
@@ -32,40 +36,67 @@ pub struct Builder<'a> {
 
     // Collected migration steps to be executed later.
     steps: Vec<MigrationStep<'a>>,
+
+    // Tracks the current schema (set of CF descriptors).
+    current_schema: BTreeSet<&'a ColumnDescriptor>,
 }
 
 impl<'a> Builder<'a> {
     /// Creates a new migration builder with the initial database schema.
-    pub fn new(initial_schema: &'a [ColumnDescriptor]) -> Self {
-        Self {
+    pub fn new(initial_schema: &'a [ColumnDescriptor]) -> Result<Self, DBOpenError> {
+        let this = Self {
             initial_schema,
-            steps: vec![MigrationStep::initialize()],
-        }
+            steps: Vec::new(),
+            current_schema: BTreeSet::new(),
+        };
+
+        Ok(this
+            .record_cfs(initial_schema)?
+            .add_step(MigrationStep::initialize()))
     }
 
     /// Creates new column families and populates them with data.
     ///
     /// This is a migration step that creates column families and runs the
     /// provided migration function to populate them. The migration function
-    /// should only write into the newly created column families.
-    pub fn add_cfs<F: super::MigrateFn + 'a>(
+    /// may only write into the newly created column families.
+    pub fn add_cfs<F: MigrateFn + 'a>(
         self,
         cfs: &'a [ColumnDescriptor],
         migrate_fn: F,
     ) -> Result<Self, DBOpenError> {
-        Ok(self.add_step(MigrationStep::add_cfs(cfs, migrate_fn)))
+        Ok(self
+            .record_cfs(cfs)?
+            .add_step(MigrationStep::add_cfs(cfs, migrate_fn)))
     }
 
     /// Removes old column families from the database.
-    pub fn drop_cfs(self, cfs: &'a [ColumnDescriptor]) -> Result<Self, DBOpenError> {
+    pub fn drop_cfs(mut self, cfs: &'a [ColumnDescriptor]) -> Result<Self, DBOpenError> {
+        self.unrecord_cfs(cfs).map_err(|cf_name| {
+            let details = DBMigrationErrorDetails::ColumnNotFoundInSchema { cf_name };
+            self.step_error(details)
+        })?;
+
         Ok(self.add_step(MigrationStep::drop_cfs(cfs)))
     }
 
     /// Completes the declaration and creates a migration plan.
     pub fn finalize(
-        self,
+        mut self,
         final_schema: &'a [ColumnDescriptor],
     ) -> Result<MigrationPlan<'a>, DBOpenError> {
+        self.unrecord_cfs(final_schema)
+            .map_err(|cf_name| DBOpenError::MissingColumnInMigrationPlan { cf_name })?;
+
+        if !self.current_schema.is_empty() {
+            let cf_names = self
+                .current_schema
+                .iter()
+                .map(|cf| cf.name().to_string())
+                .collect();
+            return Err(DBOpenError::UnexpectedColumnsInSchema { cf_names });
+        }
+
         Ok(MigrationPlan {
             initial_schema: self.initial_schema,
             final_schema,
@@ -77,5 +108,32 @@ impl<'a> Builder<'a> {
     fn add_step(mut self, migration_step: MigrationStep<'a>) -> Self {
         self.steps.push(migration_step);
         self
+    }
+
+    fn step_error(&self, details: DBMigrationErrorDetails) -> DBOpenError {
+        let step_no = self.steps.len() as u32;
+        DBOpenError::Migration(super::DBMigrationError { step_no, details })
+    }
+
+    // Record column families into the current schema.
+    fn record_cfs(mut self, cfs: &'a [ColumnDescriptor]) -> Result<Self, DBOpenError> {
+        for cf in cfs {
+            if !self.current_schema.insert(cf) {
+                let cf_name = cf.name().to_string();
+                let details = DBMigrationErrorDetails::DuplicateColumnInMigrationPlan { cf_name };
+                return Err(self.step_error(details));
+            }
+        }
+        Ok(self)
+    }
+
+    // Un-record column families from the current schema.
+    fn unrecord_cfs(&mut self, cfs: &'a [ColumnDescriptor]) -> Result<(), String> {
+        for cf in cfs {
+            if !self.current_schema.remove(cf) {
+                return Err(cf.name().to_string());
+            }
+        }
+        Ok(())
     }
 }

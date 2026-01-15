@@ -1,5 +1,5 @@
 /// Column compression
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Default)]
 pub enum ColumnCompressionType {
     /// No compression.
     None,
@@ -13,7 +13,7 @@ impl ColumnCompressionType {
     pub const DEFAULT: Self = Self::Lz4;
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Default)]
 pub enum PrefixExtractor {
     /// Rocksdb default.
     #[default]
@@ -27,7 +27,7 @@ impl PrefixExtractor {
     pub const DEFAULT: Self = Self::Default;
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Default)]
 pub struct ColumnOptions {
     pub compression: ColumnCompressionType,
     pub prefix_extractor: PrefixExtractor,
