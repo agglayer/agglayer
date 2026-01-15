@@ -42,11 +42,8 @@ impl<'a> Migrator<'a> {
     /// Opens the database and validates the migration plan.
     pub fn open(path: &Path, plan: MigrationPlan<'a>) -> Result<Self, DBOpenError> {
         debug!("Preparing database for initialization and migration");
-        let desc_v0: Vec<_> = plan
-            .initial_schema
-            .iter()
-            .map(|cd| cd.to_rocksdb_descriptor())
-            .collect();
+        let initial_schema_iter = plan.initial_schema.iter();
+        let desc_v0: Vec<_> = initial_schema_iter.map(DB::descriptor).collect();
         let cfs_v0: BTreeSet<_> = desc_v0.iter().map(|d| d.name()).collect();
 
         // Try to extract the current database schema.
@@ -68,7 +65,8 @@ impl<'a> Migrator<'a> {
         let db = if cfs_db.is_empty() {
             // We are initializing a new database.
             let mut cfs = desc_v0;
-            cfs.push(ColumnDescriptor::new::<MigrationRecordColumn>().to_rocksdb_descriptor());
+            let mr = DB::descriptor(&ColumnDescriptor::new::<MigrationRecordColumn>());
+            cfs.push(mr);
             Self::open_rocksdb_fresh(path, cfs)?
         } else if cfs_db.contains(MigrationRecordColumn::COLUMN_FAMILY_NAME) {
             // Move on to migration as usual.

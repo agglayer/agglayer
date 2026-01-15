@@ -41,7 +41,7 @@ impl AddColumnFamilies<'_> {
         // Create the column families first
         for descriptor in self.cfs {
             let cf = descriptor.name();
-            let opts = descriptor.options().to_rocksdb_options();
+            let opts = DB::options(descriptor.options());
 
             if db.cf_exists(cf) {
                 warn!("Column family {cf:?} already exists, dropping to create a fresh one");
