@@ -24,3 +24,24 @@ pub enum TransactionReceiptError {
         new_receipt: Box<Option<TransactionReceipt>>,
     },
 }
+
+pub enum TxFinalityResult {
+    RpcProviderError {
+        tx_hash: TxHash,
+        source: TransactionReceiptError,
+    },
+    TransactionTimeout {
+        tx_hash: TxHash,
+    },
+    TransactionReverted {
+        tx_hash: TxHash,
+        receipt: TransactionReceipt,
+    },
+    TransactionSuccess {
+        tx_hash: TxHash,
+        receipt: TransactionReceipt,
+    },
+    UnfinishedOperation {
+        tx_hash: TxHash,
+    },
+}
