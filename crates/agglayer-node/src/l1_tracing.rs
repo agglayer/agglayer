@@ -52,21 +52,25 @@ where
 
         let inner_fut = self.inner.call(request);
         Box::pin(async move {
-            let start = tokio::time::Instant::now();
-            let res = inner_fut.await;
-            let elapsed_ms = start.elapsed().as_millis();
-            match &res {
-                Ok(response) => match response {
-                    Response::Single(response) => {
-                        debug!(seq_no, elapsed_ms, ?response, "L1 response")
-                    }
-                    Response::Batch(response) => {
-                        debug!(seq_no, elapsed_ms, ?response, "L1 batch response")
-                    }
-                },
-                Err(error) => debug!(seq_no, elapsed_ms, ?error, "L1 interaction error"),
+            if tracing::enabled!(tracing::Level::DEBUG) {
+                let start = tokio::time::Instant::now();
+                let res = inner_fut.await;
+                let elapsed_ms = start.elapsed().as_millis();
+                match &res {
+                    Ok(response) => match response {
+                        Response::Single(response) => {
+                            debug!(seq_no, elapsed_ms, ?response, "L1 response")
+                        }
+                        Response::Batch(response) => {
+                            debug!(seq_no, elapsed_ms, ?response, "L1 batch response")
+                        }
+                    },
+                    Err(error) => debug!(seq_no, elapsed_ms, ?error, "L1 interaction error"),
+                }
+                res
+            } else {
+                inner_fut.await
             }
-            res
         })
     }
 }
