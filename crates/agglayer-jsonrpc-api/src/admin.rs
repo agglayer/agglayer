@@ -191,7 +191,7 @@ where
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
-    #[instrument(skip(self), fields(hash), level = "debug")]
+    #[instrument(skip(self))]
     async fn get_certificate(
         &self,
         certificate_id: CertificateId,
@@ -219,15 +219,13 @@ where
         }
     }
 
-    #[instrument(skip(self, certificate), level = "debug")]
+    #[instrument(skip(self), fields(certificate_id = %certificate.hash()))]
     async fn force_push_pending_certificate(
         &self,
         certificate: Certificate,
         status: CertificateStatus,
     ) -> RpcResult<()> {
         warn!(
-            hash = certificate.hash().to_string(),
-            ?certificate,
             "(ADMIN) Forcing push of pending certificate: {}",
             certificate.hash()
         );
@@ -267,7 +265,7 @@ where
         }
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn force_edit_certificate(
         &self,
         certificate_id: CertificateId,
@@ -275,13 +273,7 @@ where
         operation_1: Option<String>,
         operation_2: Option<String>,
     ) -> RpcResult<()> {
-        warn!(
-            %certificate_id,
-            ?process_now,
-            ?operation_1,
-            ?operation_2,
-            "(ADMIN) Editing certificate"
-        );
+        warn!("(ADMIN) Editing certificate");
 
         enum Operation {
             SetStatus {
@@ -472,11 +464,11 @@ where
         Ok(())
     }
 
-    #[instrument(skip(self, certificate_id), level = "debug")]
+    #[instrument(skip(self))]
     async fn set_latest_pending_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
         warn!(
-            hash = certificate_id.to_string(),
-            "(ADMIN) Setting latest pending certificate: {}", certificate_id
+            "(ADMIN) Setting latest pending certificate: {}",
+            certificate_id
         );
         let certificate = if let Some(certificate) = self
             .state
@@ -509,11 +501,11 @@ where
         }
     }
 
-    #[instrument(skip(self, certificate_id), level = "debug")]
+    #[instrument(skip(self))]
     async fn set_latest_proven_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
         warn!(
-            hash = certificate_id.to_string(),
-            "(ADMIN) Setting latest proven certificate: {}", certificate_id
+            "(ADMIN) Setting latest proven certificate: {}",
+            certificate_id
         );
         let certificate = if let Some(certificate) = self
             .state
@@ -546,12 +538,9 @@ where
         }
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn remove_pending_proof(&self, certificate_id: CertificateId) -> RpcResult<()> {
-        warn!(
-            hash = certificate_id.to_string(),
-            "(ADMIN) Removing pending proof: {}", certificate_id
-        );
+        warn!("(ADMIN) Removing pending proof: {}", certificate_id);
 
         self.pending_store
             .remove_generated_proof(&certificate_id)
@@ -561,7 +550,7 @@ where
             })
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self), fields(certificate_id))]
     async fn remove_pending_certificate(
         &self,
         network_id: NetworkId,
@@ -585,6 +574,7 @@ where
                 "PendingCertificate({network_id:?}, {height:?})",
             )));
         };
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
         self.pending_store
             .remove_pending_certificate(network_id, height)
@@ -601,7 +591,6 @@ where
             .update_certificate_header_status(&certificate_id, &error_status)
             .map_err(|error| {
                 error!(
-                    %certificate_id,
                     ?error,
                     "Failed to update certificate status in the state store on pending removal"
                 );
@@ -615,7 +604,7 @@ where
             self.pending_store
                 .remove_generated_proof(&certificate_id)
                 .map_err(|error| {
-                    error!( %certificate_id, ?error, "Failed to remove generated proof");
+                    error!(?error, "Failed to remove generated proof");
                     Error::internal(format!(
                         "Failed to remove generated proof for certificate_id: {certificate_id}"
                     ))
@@ -625,7 +614,7 @@ where
         Ok(())
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn get_disabled_networks(&self) -> RpcResult<Vec<NetworkId>> {
         self.state.get_disabled_networks().map_err(|error| {
             error!(?error, "Failed to get disabled networks");
@@ -633,7 +622,7 @@ where
         })
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn disable_network(&self, network_id: NetworkId) -> RpcResult<()> {
         self.state
             .disable_network(&network_id, agglayer_types::network_info::DisabledBy::Admin)
@@ -643,7 +632,7 @@ where
             })
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn enable_network(&self, network_id: NetworkId) -> RpcResult<()> {
         self.state.enable_network(&network_id).map_err(|error| {
             error!(?error, "Failed to enable network {network_id}");
