@@ -8,7 +8,7 @@ mod tests;
 
 /// Column family for the latest settled certificate per network.
 /// The key is the network_id and the value is the certificateID,
-/// the height and the epoch_number.
+/// the height, the epoch_number and the certificate_index.
 ///
 /// ## Column definition
 ///

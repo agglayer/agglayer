@@ -46,7 +46,7 @@ impl Builder {
     /// validates the database schema.
     pub fn open(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
         debug!("Preparing database for initialization and migration");
-        let desc_v0: Vec<_> = cfs_v0.iter().map(|cd| cd.to_rocksdb_descriptor()).collect();
+        let desc_v0: Vec<_> = cfs_v0.iter().map(DB::descriptor).collect();
         let cfs_v0: BTreeSet<_> = desc_v0.iter().map(|d| d.name()).collect();
 
         // Try to extract the current database schema.
@@ -68,7 +68,8 @@ impl Builder {
         let db = if cfs_db.is_empty() {
             // We are initializing a new database.
             let mut cfs = desc_v0;
-            cfs.push(ColumnDescriptor::new::<MigrationRecordColumn>().to_rocksdb_descriptor());
+            let mr = DB::descriptor(&ColumnDescriptor::new::<MigrationRecordColumn>());
+            cfs.push(mr);
             Self::open_rocksdb_fresh(path, cfs)?
         } else if cfs_db.contains(MigrationRecordColumn::COLUMN_FAMILY_NAME) {
             // Move on to migration as usual.
@@ -156,7 +157,7 @@ impl Builder {
             // Create the columns first.
             for descriptor in cfs {
                 let cf = descriptor.name();
-                let opts = descriptor.options().into();
+                let opts = DB::options(descriptor.options());
 
                 if db.cf_exists(cf) {
                     warn!("Column family {cf:?} already exists, dropping to create a fresh one");
