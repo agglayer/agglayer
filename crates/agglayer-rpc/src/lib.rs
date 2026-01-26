@@ -534,20 +534,19 @@ where
                             };
                     }
 
-                    if network_info.settled_claim.is_none() && network_info.settled_height.is_some()
-                    {
-                        // We can unwrap here because we just checked it's Some
-                        let height = network_info.settled_height.unwrap();
-                        // Get the last settled claim if we have a settled height
-                        network_info.settled_claim = self
-                            .get_latest_settled_claim(network_id, height)
-                            .map_err(|error| {
-                                error!(?error, "Failed to get last settled claim");
-                                GetNetworkInfoError::InternalError {
-                                    network_id,
-                                    source: error.into(),
-                                }
-                            })?;
+                    if network_info.settled_claim.is_none() {
+                        if let Some(height) = network_info.settled_height {
+                            // Get the last settled claim if we have a settled height
+                            network_info.settled_claim = self
+                                .get_latest_settled_claim(network_id, height)
+                                .map_err(|error| {
+                                    error!(?error, "Failed to get last settled claim");
+                                    GetNetworkInfoError::InternalError {
+                                        network_id,
+                                        source: error.into(),
+                                    }
+                                })?;
+                        }
                     }
                 }
             }
