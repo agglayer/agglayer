@@ -176,7 +176,7 @@ impl SettlementTask {
                 .min_by_key(|(_, result)| result.block_number);
             if let Some((attempt, result)) = earliest_included_tx {
                 let included_tx_hash = self.attempt(attempt).hash;
-                if !self.wait_for_finalization(included_tx_hash).await {
+                if !self.wait_for_settlement(included_tx_hash).await {
                     // TODO: admin commands handling
                     // Finalization failed, go back to the topmost loop
                     continue;
@@ -362,9 +362,9 @@ impl SettlementTask {
         todo!()
     }
 
-    async fn wait_for_finalization(&self, _tx: SettlementTxHash) -> bool {
-        // TODO: wait for finalization of the given transaction on L1
-        // XREF: https://github.com/agglayer/agglayer/issues/1316
+    async fn wait_for_settlement(&self, _tx: SettlementTxHash) -> bool {
+        // TODO: wait for settlement of the given transaction on L1 according to the
+        // settlement policy XREF: https://github.com/agglayer/agglayer/issues/1316
         todo!()
     }
 
