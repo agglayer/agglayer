@@ -13,7 +13,7 @@ use agglayer_types::{
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     network_task::{CertificateSettlementResult, NetworkTaskMessage},
@@ -50,6 +50,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     CertifierClient: Certifier,
 {
+    #[instrument(skip_all, fields(certificate_id))]
     pub fn new(
         certificate: Certificate,
         network_task: mpsc::Sender<NetworkTaskMessage>,
@@ -59,8 +60,9 @@ where
         cancellation_token: CancellationToken,
     ) -> Result<Self, Error> {
         let certificate_id = certificate.hash();
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
         let Some(header) = state_store.get_certificate_header(&certificate_id)? else {
-            error!(%certificate_id, "Certificate header not found");
+            error!("Certificate header not found");
 
             return Err(Error::InternalError(format!(
                 "Certificate header not found for {certificate_id}"
@@ -146,7 +148,7 @@ where
         // issue. When we finally do the storage refactoring, we should remove
         // this.
         if self.header.status == CertificateStatus::Proven {
-            warn!(%certificate_id,
+            warn!(
                 "Certificate is already proven but we do not have the new_state anymore... \
                  reproving"
             );
@@ -334,13 +336,20 @@ where
 
         // Execute the witness generation to retrieve the new local network state
         let (_, _, output) = self
-                .certifier_client
-                .witness_generation(&self.certificate, &mut state, self.header.settlement_tx_hash.map(Digest::from))
-                .await
-                .map_err(|error| {
-                    error!(%certificate_id, ?error, "Failed recomputing the new state for already-proven certificate");
-                    error
-                })?;
+            .certifier_client
+            .witness_generation(
+                &self.certificate,
+                &mut state,
+                self.header.settlement_tx_hash.map(Digest::from),
+            )
+            .await
+            .map_err(|error| {
+                error!(
+                    ?error,
+                    "Failed recomputing the new state for already-proven certificate"
+                );
+                error
+            })?;
         debug!("Recomputing new state completed");
 
         self.new_pp_root = Some(output.new_pessimistic_root);
