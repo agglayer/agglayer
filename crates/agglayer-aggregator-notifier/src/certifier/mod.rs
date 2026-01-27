@@ -150,7 +150,6 @@ where
         info!(
             %prev_pp_root,
             %new_pp_root,
-            %certificate_id,
             "Successfully generated the witness for the PP for certificate",
         );
 
