@@ -331,6 +331,7 @@ impl SettlementTask {
     async fn write_attempt_to_db(&self, _attempt_number: &SettlementAttemptNumber) {
         // TODO: write settlement attempt data to rocksdb
         // XREF: https://github.com/agglayer/agglayer/issues/1320
+        todo!()
     }
 
     async fn submit_attempt_to_l1(&self, _attempt_number: &SettlementAttemptNumber) {
