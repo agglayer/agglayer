@@ -1,8 +1,10 @@
 use std::time::Duration;
 
 use agglayer_primitives::U256;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, serde_conv};
+use tokio::time::sleep;
 
 use crate::{with::HumanDuration, Multiplier};
 
@@ -145,6 +147,16 @@ pub struct TxRetryPolicy {
     pub jitter: Duration,
 }
 
+/// Trait for errors that can be retried.
+///
+/// Errors implementing this trait indicate that they are transient and
+/// the operation may succeed on retry.
+pub trait TransientError: std::error::Error {
+    /// Returns `true` if this error is transient and the operation should be
+    /// retried.
+    fn is_transient(&self) -> bool;
+}
+
 impl TxRetryPolicy {
     /// Default retry policy for transient failures.
     pub fn default_on_transient_failure() -> Self {
@@ -158,6 +170,108 @@ impl TxRetryPolicy {
         NonInclusionRetryPolicyImpl(ConfigTxRetryPolicy::default())
             .get()
             .unwrap()
+    }
+
+    /// Retries a callback function until it succeeds, using exponential backoff
+    /// with jitter.
+    ///
+    /// This function will retry the provided async callback on transient errors
+    /// according to the retry policy. The retry interval increases
+    /// exponentially with each attempt, up to the maximum interval, and
+    /// includes random jitter to avoid thundering herd problems.
+    ///
+    /// # Parameters
+    ///
+    /// * `callback` - An async function that returns `Result<T, E>` where `E:
+    ///   TransientError`
+    ///
+    /// # Returns
+    ///
+    /// Returns `T` when the callback succeeds. The function will retry
+    /// indefinitely on transient errors, so it will only return when the
+    /// callback succeeds.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::io;
+    ///
+    /// use agglayer_config::settlement_service::{TransientError, TxRetryPolicy};
+    ///
+    /// #[derive(Debug, thiserror::Error)]
+    /// #[error("Network error")]
+    /// struct NetworkError;
+    ///
+    /// impl TransientError for NetworkError {
+    ///     fn is_transient(&self) -> bool {
+    ///         true
+    ///     }
+    /// }
+    ///
+    /// let policy = TxRetryPolicy::default_on_transient_failure();
+    /// let result = policy
+    ///     .retry_callback_until_success(|| async {
+    ///         // Some network operation
+    ///         Ok::<String, NetworkError>("success".to_string())
+    ///     })
+    ///     .await;
+    /// ```
+    pub async fn retry_callback_until_success<T, E, F, Fut>(&self, mut callback: F) -> T
+    where
+        E: TransientError,
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = Result<T, E>>,
+    {
+        let mut attempt = 0;
+        let mut current_interval = self.initial_interval;
+
+        loop {
+            match callback().await {
+                Ok(value) => return value,
+                Err(error) => {
+                    if !error.is_transient() {
+                        // If the error is not transient, we should propagate it
+                        // However, since the function signature returns T, we need to handle this.
+                        // In practice, this should probably panic or use a different error handling
+                        // strategy. For now, we'll treat non-transient
+                        // errors as fatal and panic.
+                        panic!(
+                            "Non-transient error encountered: {}. This indicates a programming \
+                             error.",
+                            error
+                        );
+                    }
+
+                    // Calculate next interval with exponential backoff
+                    let multiplier = self.interval_multiplier_factor.as_f64();
+                    let next_interval_secs = current_interval.as_secs_f64() * multiplier;
+
+                    // Apply maximum interval cap
+                    let capped_interval_secs =
+                        next_interval_secs.min(self.max_interval.as_secs_f64());
+
+                    // Add jitter: random value between 0 and jitter duration
+                    let jitter_amount_secs =
+                        rand::thread_rng().gen_range(0.0..=self.jitter.as_secs_f64());
+
+                    let final_interval =
+                        Duration::from_secs_f64(capped_interval_secs + jitter_amount_secs);
+
+                    tracing::debug!(
+                        attempt = attempt,
+                        interval = ?final_interval,
+                        error = %error,
+                        "Retrying after transient error"
+                    );
+
+                    sleep(final_interval).await;
+
+                    // Update current_interval for next retry (but cap at max_interval)
+                    current_interval = Duration::from_secs_f64(capped_interval_secs);
+                    attempt += 1;
+                }
+            }
+        }
     }
 }
 
