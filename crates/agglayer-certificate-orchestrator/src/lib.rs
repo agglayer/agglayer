@@ -345,7 +345,7 @@ where
             }
         }
 
-        // TODO: Check for overflow
+        // NOTE: Overflow is handled by EpochNumber::next() which panics on overflow
         let next_epoch = epoch.next();
 
         match self
