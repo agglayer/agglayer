@@ -15,7 +15,7 @@ use pessimistic_proof::{
 };
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::{certificate_task::CertificateTask, Certifier, Error, NonceInfo, SettlementClient};
 
@@ -260,6 +260,7 @@ where
         }
     }
 
+    #[instrument(skip(self, stream_epoch, cancellation_token), fields(certificate_id))]
     async fn make_progress(
         &mut self,
         stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
@@ -348,6 +349,7 @@ where
         };
 
         let certificate_id = certificate.hash();
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
         let (sender, mut receiver) = mpsc::channel(1);
 
@@ -375,7 +377,7 @@ where
             tokio::select! {
                 msg = receiver.recv() => match msg {
                     None => {
-                        error!(height = next_expected_height.as_u64(), %certificate_id, "Certificate task channel closed");
+                        error!(height = next_expected_height.as_u64(), "Certificate task channel closed");
                         return Err(Error::InternalError("Certificate task channel closed".into()));
                     }
                     Some(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { response, .. }) => {
@@ -419,7 +421,7 @@ where
                                         Ok((settlement_tx_hash, nonce))
                                     }
                                     Err(err) => {
-                                        error!(%certificate_id,
+                                        error!(
                                             "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                                          Ok((settlement_tx_hash, None))
                                     }
@@ -431,29 +433,29 @@ where
                         // If the error in the sending transaction happened for whatever reason,
                         // check if maybe the certificate has been settled through some other previous transaction.
                         if let Err(err) = &result {
-                            error!(%certificate_id, "Error submitting settlement transaction for certificate at height {height}: {err:?}");
+                            error!("Error submitting settlement transaction for certificate at height {height}: {err:?}");
                             for previous_tx_hash in previous_tx_hashes {
                                 match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
                                     Ok(crate::TxReceiptStatus::TxSuccessful) => {
                                         // Transaction is mined, but we haven't known that, return it for further processing.
-                                        info!(%certificate_id,
+                                        info!(
                                             "Certificate for new height: {height} has been settled on L1 through previous transaction {previous_tx_hash}");
                                         result = Ok((previous_tx_hash, None));
                                         break;
                                     }
                                     Ok(crate::TxReceiptStatus::TxFailed) => {
                                         // Transaction is mined with status 0 (reverted). Return it for further processing.
-                                        warn!(%certificate_id,
+                                        warn!(
                                             "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
                                         result = Ok((previous_tx_hash, None));
                                         break;
                                     }
                                     Ok(crate::TxReceiptStatus::NotFound) => {
-                                        debug!(%certificate_id,
+                                        debug!(
                                             "Certificate for new height: {height} previous transaction {previous_tx_hash} not mined");
                                     }
                                     Err(err) => {
-                                        debug!(%certificate_id,
+                                        debug!(
                                             "Error checking receipt status for previous settlement tx {previous_tx_hash}: {err}");
                                     }
                                 }
@@ -464,7 +466,7 @@ where
                             if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
                                if latest_pp_root == new_pp_root {
                                    // Certificate has been settled through some other previous transaction.
-                                   info!(%certificate_id,
+                                   info!(
                                        "Certificate for new height: {height} has been previously settled on \
                                        L1 through other transaction {latest_pp_root_tx_hash}, \
                                        hence unable to send settlement transaction");
@@ -499,21 +501,21 @@ where
                                 match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {
                                     Ok(crate::TxReceiptStatus::TxSuccessful) => {
                                         // Transaction is mined, but we did not get the event, consider it settled.
-                                        info!(%certificate_id,
+                                        info!(
                                             "Certificate for new height: {} has been settled on L1 through transaction {settlement_tx_hash} \
                                              (timeout but tx mined)", height);
                                     }
                                     Ok(crate::TxReceiptStatus::TxFailed) => {
                                          // Transaction is mined with status 0 (reverted).
-                                        warn!(%certificate_id,
+                                        warn!(
                                             "Certificate for new height: {height} settlement transaction {settlement_tx_hash} has status 0 (reverted)");
                                     }
                                     Ok(crate::TxReceiptStatus::NotFound) => {
-                                        warn!(%certificate_id,
+                                        warn!(
                                             "Certificate for new height: {height} settlement transaction {settlement_tx_hash} not yet mined");
                                     }
                                     Err(err) => {
-                                        debug!(%certificate_id,
+                                        debug!(
                                             "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                                     }
                                 }
@@ -522,7 +524,7 @@ where
                                 match self.fetch_latest_pp_root_from_l1().await {
                                     Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) if latest_pp_root == new_pp_root => {
                                         // Certificate has been settled through some other previous transaction.
-                                        info!(%certificate_id,
+                                        info!(
                                             "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height);
                                         CertificateSettlementResult::SettledThroughOtherTx(latest_pp_root_tx_hash)
                                     }
@@ -548,7 +550,7 @@ where
                         let certificate_index = settled_certificate.3;
                         self.latest_settled = Some(settled_certificate);
                         next_expected_height.increment();
-                        debug!(%certificate_id, "Certification process completed");
+                        debug!("Certification process completed");
                         let Some(new) = pending_state else {
                             return Err(Error::InternalError(format!("Missing pending state needed upon settlement, current state: {}", self.local_state.get_roots().display_to_hex() )))
                         };
@@ -589,22 +591,22 @@ where
                         self.at_capacity_for_epoch = false;
                         break;
                     }
-                    Some(NetworkTaskMessage::CheckSettlementTx { certificate_id, settlement_tx_hash, tx_mined_notifier }) => {
+                    Some(NetworkTaskMessage::CheckSettlementTx { settlement_tx_hash, tx_mined_notifier, .. }) => {
                         let mined = self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await;
                         match &mined {
                             Ok(crate::TxReceiptStatus::TxSuccessful) => {
-                                info!(%certificate_id,
+                                info!(
                                     "Settlement tx {settlement_tx_hash} has been mined");
                             }
                             Ok(crate::TxReceiptStatus::TxFailed) => {
-                                warn!(%certificate_id,
+                                warn!(
                                     "Settlement tx {settlement_tx_hash} is mined with the status 0 (failed)");
                             }
                             Ok(crate::TxReceiptStatus::NotFound) => {
-                                debug!(%certificate_id, "Settlement tx {settlement_tx_hash} is not mined");
+                                debug!( "Settlement tx {settlement_tx_hash} is not mined");
                             }
                             Err(err) => {
-                                debug!(%certificate_id,
+                                debug!(
                                     "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                             }
                         };
