@@ -8,7 +8,10 @@ fn sample_migration() -> Result<(), eyre::Error> {
 
     // Step 1: Initialize database with V0 schema and add V0 data
     {
-        let db = Builder::open_sample(db_path)?.finalize(CFS_V0)?;
+        let db = Builder::sample_builder()
+            .finalize(CFS_V0)?
+            .open(db_path)?
+            .migrate()?;
 
         // Insert V0 data
         for (key, value) in &DATA_V0 {
@@ -24,9 +27,11 @@ fn sample_migration() -> Result<(), eyre::Error> {
 
     // Step 2: Open database and migrate to V1, then add V1 data
     {
-        let db = Builder::open_sample(db_path)?
+        let db = Builder::sample_builder()
             .sample_migrate_v0_v1()?
-            .finalize(CFS_V1)?;
+            .finalize(CFS_V1)?
+            .open(db_path)?
+            .migrate()?;
 
         // Insert new V1 data
         for (key, value) in &DATA_V1[DATA_V1_NEW_START..] {
@@ -42,10 +47,12 @@ fn sample_migration() -> Result<(), eyre::Error> {
 
     // Step 3: Open database and migrate to V2, then add V2 data
     {
-        let db = Builder::open_sample(db_path)?
+        let db = Builder::sample_builder()
             .sample_migrate_v0_v1()?
             .sample_migrate_v1_v2()?
-            .finalize(CFS_V2)?;
+            .finalize(CFS_V2)?
+            .open(db_path)?
+            .migrate()?;
 
         // Insert new V2 cool data
         for (key, value) in &DATA_V2_COOL[DATA_V2_COOL_NEW_START..] {
