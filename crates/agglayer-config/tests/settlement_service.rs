@@ -14,7 +14,6 @@ fn deserialize_default_settlement_tx_config() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     // Assert default values
-    assert_eq!(config.max_expected_retries, 16384);
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(10)
@@ -22,10 +21,13 @@ fn deserialize_default_settlement_tx_config() {
     assert_eq!(config.confirmations, 32);
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
     assert_eq!(config.gas_limit_ceiling, U256::from(60_000_000_u64));
-    assert_eq!(config.gas_price_ceiling, 100_000_000_000_u128);
-    assert_eq!(config.gas_price_floor, 0);
+    assert_eq!(config.max_fee_per_gas_ceiling, 100_000_000_000_u128);
+    assert_eq!(config.max_fee_per_gas_floor, 0);
     assert_eq!(config.gas_limit_multiplier_factor, Multiplier::default());
-    assert_eq!(config.gas_price_multiplier_factor, Multiplier::default());
+    assert_eq!(
+        config.max_fee_per_gas_multiplier_factor,
+        Multiplier::default()
+    );
 
     assert_toml_snapshot!(config);
 }
@@ -37,7 +39,6 @@ fn deserialize_custom_config_1() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     // Assert custom certificate values
-    assert_eq!(config.max_expected_retries, 2048);
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(15)
@@ -45,12 +46,12 @@ fn deserialize_custom_config_1() {
     assert_eq!(config.confirmations, 64);
     assert_eq!(config.settlement_policy, SettlementPolicy::FinalizedBlock);
     assert_eq!(config.gas_limit_ceiling, U256::from(100_000_000_u64));
-    assert_eq!(config.gas_price_ceiling, 200_000_000_000_u128);
-    assert_eq!(config.gas_price_floor, 5_000_000_000_u128);
+    assert_eq!(config.max_fee_per_gas_ceiling, 200_000_000_000_u128);
+    assert_eq!(config.max_fee_per_gas_floor, 5_000_000_000_u128);
 
     // Assert multipliers
     assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.1);
-    assert_eq!(config.gas_price_multiplier_factor.as_f64(), 1.2);
+    assert_eq!(config.max_fee_per_gas_multiplier_factor.as_f64(), 1.2);
 
     assert_toml_snapshot!(config);
 }
@@ -62,7 +63,6 @@ fn deserialize_custom_config_2() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     // Assert custom validium values
-    assert_eq!(config.max_expected_retries, 512);
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(5)
@@ -70,12 +70,12 @@ fn deserialize_custom_config_2() {
     assert_eq!(config.confirmations, 16);
     assert_eq!(config.settlement_policy, SettlementPolicy::LatestBlock);
     assert_eq!(config.gas_limit_ceiling, U256::from(30_000_000_u64));
-    assert_eq!(config.gas_price_ceiling, 50_000_000_000_u128);
-    assert_eq!(config.gas_price_floor, 1_000_000_000_u128);
+    assert_eq!(config.max_fee_per_gas_ceiling, 50_000_000_000_u128);
+    assert_eq!(config.max_fee_per_gas_floor, 1_000_000_000_u128);
 
     // Assert multipliers
     assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.05);
-    assert_eq!(config.gas_price_multiplier_factor.as_f64(), 1.1);
+    assert_eq!(config.max_fee_per_gas_multiplier_factor.as_f64(), 1.1);
 
     assert_toml_snapshot!(config);
 }
@@ -87,10 +87,6 @@ fn deserialize_full_settlement_config() {
     let config: SettlementConfig = toml::from_str(&content).unwrap();
 
     // Assert certificate config
-    assert_eq!(
-        config.pessimistic_proof_tx_config.max_expected_retries,
-        2048
-    );
     assert_eq!(
         config
             .pessimistic_proof_tx_config
@@ -108,7 +104,7 @@ fn deserialize_full_settlement_config() {
         U256::from(100_000_000_u64)
     );
     assert_eq!(
-        config.pessimistic_proof_tx_config.gas_price_ceiling,
+        config.pessimistic_proof_tx_config.max_fee_per_gas_ceiling,
         200_000_000_000_u128
     );
 
@@ -123,13 +119,12 @@ fn deserialize_full_settlement_config() {
     assert_eq!(
         config
             .pessimistic_proof_tx_config
-            .gas_price_multiplier_factor
+            .max_fee_per_gas_multiplier_factor
             .as_f64(),
         1.2
     );
 
     // Assert validium config
-    assert_eq!(config.validium_tx_config.max_expected_retries, 512);
     assert_eq!(
         config
             .validium_tx_config
@@ -147,11 +142,11 @@ fn deserialize_full_settlement_config() {
         U256::from(30_000_000_u64)
     );
     assert_eq!(
-        config.validium_tx_config.gas_price_floor,
+        config.validium_tx_config.max_fee_per_gas_floor,
         2_000_000_000_u128
     );
     assert_eq!(
-        config.validium_tx_config.gas_price_ceiling,
+        config.validium_tx_config.max_fee_per_gas_ceiling,
         50_000_000_000_u128
     );
 
@@ -215,7 +210,6 @@ fn test_settlement_transaction_config_defaults() {
     let config = SettlementTransactionConfig::default();
 
     // Test retry configuration
-    assert_eq!(config.max_expected_retries, 16384);
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(10)
@@ -228,24 +222,24 @@ fn test_settlement_transaction_config_defaults() {
     // Test gas configuration
     assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.0);
     assert_eq!(config.gas_limit_ceiling, U256::from(60_000_000_u64));
-    assert_eq!(config.gas_price_multiplier_factor.as_f64(), 1.0);
-    assert_eq!(config.gas_price_floor, 0_u128);
-    assert_eq!(config.gas_price_ceiling, 100_000_000_000_u128); // 100 gwei
+    assert_eq!(config.max_fee_per_gas_multiplier_factor.as_f64(), 1.0);
+    assert_eq!(config.max_fee_per_gas_floor, 0_u128);
+    assert_eq!(config.max_fee_per_gas_ceiling, 100_000_000_000_u128); // 100 gwei
 
     assert_toml_snapshot!(config);
 }
 
 #[test]
-fn test_gas_price_with_units() {
+fn test_max_fee_per_gas_with_units() {
     let toml = r#"
-        gas-price-floor = "5gwei"
-        gas-price-ceiling = "200gwei"
+        max-fee-per-gas-floor = "5gwei"
+        max-fee-per-gas-ceiling = "200gwei"
     "#;
 
     let config: SettlementTransactionConfig = toml::from_str(toml).unwrap();
 
-    assert_eq!(config.gas_price_floor, 5_000_000_000_u128);
-    assert_eq!(config.gas_price_ceiling, 200_000_000_000_u128);
+    assert_eq!(config.max_fee_per_gas_floor, 5_000_000_000_u128);
+    assert_eq!(config.max_fee_per_gas_ceiling, 200_000_000_000_u128);
 }
 
 #[test]

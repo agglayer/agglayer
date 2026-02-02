@@ -31,29 +31,26 @@ message SettlementJob {
 
   // ----- Transaction parameters -----
 
-  // Number of confirmations to wait for.
-  uint32 num_confirmations = 5;
-
   // Gas limit for each settlement attempt.
-  Uint128 gas_limit = 6;
+  Uint128 gas_limit = 5;
 
   // Ceiling for max fee per gas.
-  Uint128 max_fee_per_gas_ceiling = 7;
+  Uint128 max_fee_per_gas_ceiling = 6;
 
   // Floor for max fee per gas.
-  Uint128 max_fee_per_gas_floor = 8;
+  Uint128 max_fee_per_gas_floor = 7;
 
   // Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-  uint32 max_fee_per_gas_increase_percents = 9;
+  uint32 max_fee_per_gas_increase_percents = 8;
 
   // Ceiling for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_ceiling = 10;
+  Uint128 max_priority_fee_per_gas_ceiling = 9;
 
   // Floor for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_floor = 11;
+  Uint128 max_priority_fee_per_gas_floor = 10;
 
   // Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-  uint32 max_priority_fee_per_gas_increase_percents = 12;
+  uint32 max_priority_fee_per_gas_increase_percents = 11;
 }
 
 // Transaction result.
@@ -88,7 +85,7 @@ enum ClientErrorType {
   // Transient error (e.g., network issue, temporary RPC unavailability).
   CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
 
-  // Permanent error (e.g., we have no private key for the wallet listed in there).
+  // Permanent error (e.g., the tx was already filled with another nonce).
   CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
 }
 
@@ -108,6 +105,8 @@ message ContractCallResult {
 
   // Block number where the transaction was included.
   BlockNumber block_number = 4;
+
+  // TODO: introduce index-in-block
 
   // Transaction hash of the settlement transaction.
   TxHash tx_hash = 5;
@@ -157,17 +156,17 @@ message SettlementAttempt {
   // Nonce reserved for the transaction.
   Nonce nonce = 2;
 
-  // Gas limit used for this attempt.
-  Uint128 gas_limit = 3;
+  // Gas price parameters used for this attempt.
+  Uint128 max_fee_per_gas = 3;
 
   // Gas price parameters used for this attempt.
-  Uint128 max_fee_per_gas = 4;
-
-  // Gas price parameters used for this attempt.
-  Uint128 max_priority_fee_per_gas = 5;
+  Uint128 max_priority_fee_per_gas = 4;
 
   // Hash of the submitted transaction.
-  TxHash tx_hash = 6;
+  TxHash tx_hash = 5;
+
+  // Timestamp at which the attempt was submitted to L1.
+  google.protobuf.Timestamp submission_time = 6;
 
   // Result of the attempt, if available.
   TxResult result = 7;

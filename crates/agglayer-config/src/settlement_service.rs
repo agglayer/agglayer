@@ -166,11 +166,6 @@ impl TxRetryPolicy {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct SettlementTransactionConfig {
-    /// Maximum number of retries for the transaction.
-    /// Expected to be a big number.
-    #[serde(default = "default_rpc_max_expected_retries")]
-    pub max_expected_retries: usize,
-
     /// Retry policy for the transaction when there is a transient failure.
     #[serde(default = "TxRetryPolicy::default_on_transient_failure")]
     #[serde_as(as = "TransientRetryPolicy")]
@@ -200,32 +195,46 @@ pub struct SettlementTransactionConfig {
     #[serde(default = "default_gas_limit_ceiling")]
     pub gas_limit_ceiling: U256,
 
-    /// Gas price multiplier for the transaction.
-    /// The gas price is calculated as follows:
-    /// `gas_price = estimate_gas_price * gas_price_multiplier_factor`
-    /// Used for both EIP1559 fee and priority fee.
+    /// Minimum gas price floor (in wei) for the transaction.
+    /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei".
+    /// Used for EIP1559 fee `max_fee_per_gas`.
     #[serde(default, skip_serializing_if = "crate::is_default")]
-    pub gas_price_multiplier_factor: Multiplier,
+    #[serde_as(as = "crate::with::EthAmount")]
+    pub max_fee_per_gas_floor: u128,
+
+    /// Maximum gas price ceiling (in wei) for the transaction.
+    /// Use for EIP1559 `max_fee_per_gas`.
+    /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
+    #[serde(default = "default_max_fee_per_gas_ceiling")]
+    #[serde_as(as = "crate::with::EthAmount")]
+    pub max_fee_per_gas_ceiling: u128,
+
+    /// Increase rate for the gas price for each retry attempt.
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    pub max_fee_per_gas_multiplier_factor: Multiplier,
 
     /// Minimum gas price floor (in wei) for the transaction.
     /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei".
-    /// Used for both EIP1559 fee and priority fee.
+    /// Used for EIP1559 fee `max_priority_fee_per_gas`.
     #[serde(default, skip_serializing_if = "crate::is_default")]
     #[serde_as(as = "crate::with::EthAmount")]
-    pub gas_price_floor: u128,
+    pub max_priority_fee_per_gas_floor: u128,
 
     /// Maximum gas price ceiling (in wei) for the transaction.
-    /// Use for both EIP1559 `max_fee_per_gas` and `max_priority_fee_per_gas`.
+    /// Use for EIP1559 `max_priority_fee_per_gas`.
     /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
-    #[serde(default = "default_gas_price_ceiling")]
+    #[serde(default = "default_max_priority_fee_per_gas_ceiling")]
     #[serde_as(as = "crate::with::EthAmount")]
-    pub gas_price_ceiling: u128,
+    pub max_priority_fee_per_gas_ceiling: u128,
+
+    /// Increase rate for the gas price for each retry attempt.
+    #[serde(default, skip_serializing_if = "crate::is_default")]
+    pub max_priority_fee_per_gas_multiplier_factor: Multiplier,
 }
 
 impl Default for SettlementTransactionConfig {
     fn default() -> Self {
         Self {
-            max_expected_retries: default_rpc_max_expected_retries(),
             retry_on_transient_failure: TransientRetryPolicyImpl(ConfigTxRetryPolicy::default())
                 .get()
                 .unwrap(),
@@ -237,9 +246,12 @@ impl Default for SettlementTransactionConfig {
             settlement_policy: SettlementPolicy::default(),
             gas_limit_multiplier_factor: Multiplier::default(),
             gas_limit_ceiling: default_gas_limit_ceiling(),
-            gas_price_multiplier_factor: Multiplier::default(),
-            gas_price_floor: 0,
-            gas_price_ceiling: default_gas_price_ceiling(),
+            max_fee_per_gas_multiplier_factor: Multiplier::default(),
+            max_fee_per_gas_floor: 0,
+            max_fee_per_gas_ceiling: default_max_fee_per_gas_ceiling(),
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::default(),
+            max_priority_fee_per_gas_floor: 0,
+            max_priority_fee_per_gas_ceiling: default_max_priority_fee_per_gas_ceiling(),
         }
     }
 }
@@ -333,10 +345,6 @@ pub struct SettlementConfig {
     pub settlement_service_config: SettlementServiceConfig,
 }
 
-const fn default_rpc_max_expected_retries() -> usize {
-    16 * 1024
-}
-
 /// Default number of confirmations required
 /// for the transaction to resolve a receipt.
 const fn default_confirmations() -> usize {
@@ -348,7 +356,13 @@ fn default_gas_limit_ceiling() -> U256 {
 }
 
 /// Default gas price ceiling for the transaction.
-const fn default_gas_price_ceiling() -> u128 {
+const fn default_max_fee_per_gas_ceiling() -> u128 {
+    // 100 gwei
+    100_000_000_000_u128
+}
+
+/// Default priority fee ceiling for the transaction.
+const fn default_max_priority_fee_per_gas_ceiling() -> u128 {
     // 100 gwei
     100_000_000_000_u128
 }
