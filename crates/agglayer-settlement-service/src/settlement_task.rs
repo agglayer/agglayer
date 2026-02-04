@@ -178,7 +178,7 @@ impl SettlementTask {
                 // We know that only the first tx has a chance to settle, as any other tx
                 // included later would necessarily conflict with the first included tx.
                 let included_tx_hash = self.attempt(attempt).hash;
-                if !self.wait_for_finalization(included_tx_hash).await {
+                if !self.wait_for_settlement(included_tx_hash).await {
                     // TODO: admin commands handling
                     // Finalization failed, go back to the topmost loop
                     continue;
@@ -406,7 +406,7 @@ impl SettlementTask {
         todo!()
     }
 
-    async fn wait_for_finalization(&self, _tx: SettlementTxHash) -> bool {
+    async fn wait_for_settlement(&self, _tx: SettlementTxHash) -> bool {
         // TODO: wait for finalization of the given transaction on L1
         // XREF: https://github.com/agglayer/agglayer/issues/1316
         todo!()
