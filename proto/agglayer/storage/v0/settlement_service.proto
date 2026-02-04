@@ -62,9 +62,6 @@ message TxResult {
 
     // Result of a successfully-executed contract call.
     ContractCallResult contract_call_result = 2;
-
-    // Reorganized transactions get their result edited to be this.
-    ReorganizedResult reorganized_result = 3;
   }
 }
 
@@ -82,11 +79,18 @@ enum ClientErrorType {
   // Unspecified error type.
   CLIENT_ERROR_TYPE_UNSPECIFIED = 0;
 
+  // Nonce already used and finalized in other tx.
+  CLIENT_ERROR_TYPE_NONCE_ALREADY_USED = 1;
+
+  /*
+  Not needed for now, might re-add later:
+
   // Transient error (e.g., network issue, temporary RPC unavailability).
   CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
 
   // Permanent error (e.g., the tx was already filled with another nonce).
   CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
+  */
 }
 
 // Result for a successfully-executed contract call.
@@ -131,15 +135,6 @@ enum ContractCallOutcome {
 message ContractCallMetadata {
   // Raw bytes of the metadata.
   bytes metadata = 1;
-}
-
-// Result indicating that the transaction's previous result was reorganized out of the chain.
-message ReorganizedResult {
-  // Date of the reorg detection.
-  google.protobuf.Timestamp reorg_detection_time = 1;
-
-  // Previous result, that was recorded before the reorg was detected.
-  TxResult previous_result = 2;
 }
 
 // Sequence number of a settlement attempt within a settlement job.

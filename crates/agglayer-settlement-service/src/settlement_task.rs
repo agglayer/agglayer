@@ -44,7 +44,6 @@ pub struct SettlementJob {
 pub enum SettlementJobResult {
     ClientError(ClientError),
     ContractCall(ContractCallResult),
-    Reorganized(ReorganizedResult),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -55,14 +54,16 @@ pub struct ClientError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClientErrorType {
-    Transient,
-    Permanent,
+    Unknown,
+    // Not needed for now, might re-add later: Transient,
+    // Not needed for now, might re-add later: Permanent,
+    NonceAlreadyUsed, // TODO: Set it only when the other tx that used the nonce is finalized
 }
 
 impl ClientError {
     pub fn nonce_already_used(address: Address, nonce: Nonce, tx_hash: SettlementTxHash) -> Self {
         Self {
-            kind: ClientErrorType::Permanent,
+            kind: ClientErrorType::NonceAlreadyUsed,
             message: format!(
                 "Nonce already used: for {address}/{nonce}, the settled tx is {tx_hash}"
             ),
@@ -71,7 +72,7 @@ impl ClientError {
 
     pub fn timeout_waiting_for_inclusion() -> Self {
         Self {
-            kind: ClientErrorType::Transient,
+            kind: ClientErrorType::Unknown,
             message: "Timeout waiting for inclusion on L1".to_string(),
         }
     }
@@ -90,12 +91,6 @@ pub struct ContractCallResult {
 pub enum ContractCallOutcome {
     Success,
     Revert,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ReorganizedResult {
-    pub reorg_detection_time: SystemTime,
-    pub previous_result: Box<SettlementJobResult>,
 }
 
 pub enum StoredSettlementJob {

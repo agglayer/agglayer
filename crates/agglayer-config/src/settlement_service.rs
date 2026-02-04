@@ -267,11 +267,9 @@ impl Default for SettlementTransactionConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct SettlementServiceConfig {
-    // TODO: settlement service will use L1 provider, agglayer contracts,
-    // transaction signer etc. already configured on other places.
-    // This structure should only have settlement service specific values.
-    // Is there any? If not we can remove this struct, but let's keep it for
-    // now to help parallelize work.
+    // TODO: introduce regexes / error numbers to identify "nonce already used" errors
+    // The exact format of this config will depend on the implementation and tests of RPC error
+    // handling in the settlement service.
 }
 
 /// The Agglayer settlement configuration.
