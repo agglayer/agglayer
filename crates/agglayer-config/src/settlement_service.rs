@@ -195,39 +195,39 @@ pub struct SettlementTransactionConfig {
     #[serde(default = "default_gas_limit_ceiling")]
     pub gas_limit_ceiling: U256,
 
-    /// Minimum gas price floor (in wei) for the transaction.
+    /// Minimum `max_fee_per_gas` (in wei) for the transaction.
     /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei".
     /// Used for EIP1559 fee `max_fee_per_gas`.
     #[serde(default, skip_serializing_if = "crate::is_default")]
     #[serde_as(as = "crate::with::EthAmount")]
     pub max_fee_per_gas_floor: u128,
 
-    /// Maximum gas price ceiling (in wei) for the transaction.
+    /// Maximum `max_fee_per_gas` (in wei) for the transaction.
     /// Use for EIP1559 `max_fee_per_gas`.
     /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
     #[serde(default = "default_max_fee_per_gas_ceiling")]
     #[serde_as(as = "crate::with::EthAmount")]
     pub max_fee_per_gas_ceiling: u128,
 
-    /// Increase rate for the gas price for each retry attempt.
+    /// Increase rate for the `max_fee_per_gas` for each retry attempt.
     #[serde(default, skip_serializing_if = "crate::is_default")]
     pub max_fee_per_gas_multiplier_factor: Multiplier,
 
-    /// Minimum gas price floor (in wei) for the transaction.
+    /// Minimum `max_priority_fee_per_gas` (in wei) for the transaction.
     /// Can be specified with units: "1gwei", "0.1eth", "1000000000wei".
     /// Used for EIP1559 fee `max_priority_fee_per_gas`.
     #[serde(default, skip_serializing_if = "crate::is_default")]
     #[serde_as(as = "crate::with::EthAmount")]
     pub max_priority_fee_per_gas_floor: u128,
 
-    /// Maximum gas price ceiling (in wei) for the transaction.
+    /// Maximum `max_priority_fee_per_gas` (in wei) for the transaction.
     /// Use for EIP1559 `max_priority_fee_per_gas`.
     /// Can be specified with units: "100gwei", "0.01eth", "10000000000wei"
     #[serde(default = "default_max_priority_fee_per_gas_ceiling")]
     #[serde_as(as = "crate::with::EthAmount")]
     pub max_priority_fee_per_gas_ceiling: u128,
 
-    /// Increase rate for the gas price for each retry attempt.
+    /// Increase rate for the `max_priority_fee_per_gas` for each retry attempt.
     #[serde(default, skip_serializing_if = "crate::is_default")]
     pub max_priority_fee_per_gas_multiplier_factor: Multiplier,
 }
