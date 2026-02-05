@@ -13,7 +13,7 @@ use ulid::Ulid;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SettlementAttemptNumber(pub u64);
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, derive_more::Display)]
 pub struct Nonce(pub u64);
 
 impl Nonce {
@@ -58,10 +58,12 @@ pub enum ClientErrorType {
 }
 
 impl ClientError {
-    pub fn nonce_already_used() -> Self {
+    pub fn nonce_already_used(address: Address, nonce: Nonce, tx_hash: SettlementTxHash) -> Self {
         Self {
             kind: ClientErrorType::Permanent,
-            message: "Nonce already used".to_string(),
+            message: format!(
+                "Nonce already used: for {address}/{nonce}, the settled tx is {tx_hash}"
+            ),
         }
     }
 
@@ -174,7 +176,10 @@ impl SettlementTask {
             let earliest_included_tx = included_attempts
                 .into_iter()
                 .min_by_key(|(_, result)| result.block_number);
+            // TODO: Also filter by index-in-block
             if let Some((attempt, result)) = earliest_included_tx {
+                // We know that only the first tx has a chance to settle, as any other tx
+                // included later would necessarily conflict with the first included tx.
                 let included_tx_hash = self.attempt(attempt).hash;
                 if !self.wait_for_settlement(included_tx_hash).await {
                     // TODO: admin commands handling
@@ -189,20 +194,18 @@ impl SettlementTask {
             }
 
             // Is there a settlement attempt without a result recorded in database yet?
-            let pending_attempts = self.pending_attempts_with_lowest_nonces();
-            let next_attempt = if pending_attempts.is_empty() {
+            let pending_nonces = self.lowest_nonces_with_pending_attempts();
+            let next_attempt = if pending_nonces.is_empty() {
                 self.build_next_attempt_with_same_nonce()
             } else {
                 // Wait for any of the pending attempts' nonces to be ready to be filled on L1
                 // (ie. previous nonce is filled)
-                let previous_nonces = pending_attempts
+                let previous_nonces = pending_nonces
                     .iter()
-                    .map(|(attempt_number, address, nonce)| {
-                        nonce
-                            .previous()
-                            .map(|prev_nonce| (*attempt_number, *address, prev_nonce))
+                    .map(|(address, nonce)| {
+                        nonce.previous().map(|prev_nonce| (*address, prev_nonce))
                     })
-                    .collect::<Option<Vec<_>>>();
+                    .collect::<Option<HashSet<_>>>();
                 if let Some(previous_nonces) = previous_nonces {
                     // None means at least one nonce is 0
                     self.wait_for_any_nonce_to_be_filled(&previous_nonces).await;
@@ -210,10 +213,6 @@ impl SettlementTask {
                 }
 
                 // Wait for any of the pending attempts' nonces to be used on L1
-                let pending_nonces = pending_attempts
-                    .iter()
-                    .map(|(attempt_number, address, nonce)| (*attempt_number, *address, *nonce))
-                    .collect::<Vec<_>>();
                 let filled = tokio::time::timeout(
                     self.next_non_inclusion_timeout(),
                     self.wait_for_any_nonce_to_be_filled(&pending_nonces),
@@ -224,28 +223,28 @@ impl SettlementTask {
                 // Confirm that the reason the nonce was used is because the attempt got
                 // included on L1
                 match filled {
-                    Ok(attempt_number) if self.is_attempt_included_on_l1(attempt_number).await => {
-                        // A pending attempt got included, go back to the topmost loop to wait for
-                        // finalization
-                        continue;
-                    }
-                    Ok(attempt_number) => {
-                        // Nonce used but attempt not included, the nonce was used by something else
-                        let result =
-                            SettlementJobResult::ClientError(ClientError::nonce_already_used());
-                        self.write_attempt_result_to_db(attempt_number, &result)
-                            .await;
-                        self.build_next_attempt_with_new_nonce()
+                    Ok((address, nonce, tx_hash)) => {
+                        if let Some(attempt_number) = self.settlement_attempt_number_for(tx_hash) {
+                            let attempt = self.attempt(attempt_number);
+                            assert_eq!(attempt.hash, tx_hash);
+                            assert_eq!(attempt.sender_wallet, address);
+                            assert_eq!(attempt.nonce, nonce);
+                            // A pending attempt got included, go back to the topmost loop to wait
+                            // for finalization
+                            continue;
+                        } else {
+                            // Nonce used but the tx was not one of our attempts, the nonce was used
+                            // by something else
+                            self.write_nonce_used_on_l1_to_db(address, nonce, tx_hash)
+                                .await;
+                            self.build_next_attempt_with_new_nonce()
+                        }
                     }
                     Err(error) => {
                         let _: tokio::time::error::Elapsed = error;
                         // Timeout expired, we can create a new attempt
-                        let result = SettlementJobResult::ClientError(
-                            ClientError::timeout_waiting_for_inclusion(),
-                        );
-                        for (attempt_number, _, _) in pending_nonces.iter() {
-                            self.write_attempt_result_to_db(*attempt_number, &result)
-                                .await;
+                        for (address, nonce) in pending_nonces.iter() {
+                            self.write_timeout_to_db(*address, *nonce).await;
                         }
                         self.build_next_attempt_with_same_nonce()
                     }
@@ -264,9 +263,19 @@ impl SettlementTask {
             .expect("Attempt number not found internally to the SettlementTask itself")
     }
 
-    fn pending_attempts_with_lowest_nonces(
+    fn settlement_attempt_number_for(
         &self,
-    ) -> Vec<(SettlementAttemptNumber, Address, Nonce)> {
+        tx_hash: SettlementTxHash,
+    ) -> Option<SettlementAttemptNumber> {
+        for (attempt_number, attempt) in self.attempts.iter() {
+            if attempt.hash == tx_hash {
+                return Some(*attempt_number);
+            }
+        }
+        None
+    }
+
+    fn lowest_nonces_with_pending_attempts(&self) -> HashSet<(Address, Nonce)> {
         let addresses = self
             .attempts
             .values()
@@ -280,10 +289,8 @@ impl SettlementTask {
                     .filter(|(_, attempt)| {
                         attempt.sender_wallet == address && attempt.result.is_none()
                     })
-                    .map(|(attempt_number, attempt)| {
-                        (*attempt_number, attempt.sender_wallet, attempt.nonce)
-                    })
-                    .min_by_key(|(_, _, nonce)| *nonce)
+                    .map(|(_, attempt)| (attempt.sender_wallet, attempt.nonce))
+                    .min_by_key(|(_, nonce)| *nonce)
             })
             .collect()
     }
@@ -334,6 +341,33 @@ impl SettlementTask {
         todo!()
     }
 
+    async fn write_nonce_used_on_l1_to_db(
+        &self,
+        address: Address,
+        nonce: Nonce,
+        tx_hash: SettlementTxHash,
+    ) {
+        let result = SettlementJobResult::ClientError(ClientError::nonce_already_used(
+            address, nonce, tx_hash,
+        ));
+        for (attempt_number, attempt) in self.attempts.iter() {
+            if attempt.sender_wallet == address && attempt.nonce == nonce {
+                self.write_attempt_result_to_db(*attempt_number, &result)
+                    .await;
+            }
+        }
+    }
+
+    async fn write_timeout_to_db(&self, address: Address, nonce: Nonce) {
+        let result = SettlementJobResult::ClientError(ClientError::timeout_waiting_for_inclusion());
+        for (attempt_number, attempt) in self.attempts.iter() {
+            if attempt.sender_wallet == address && attempt.nonce == nonce {
+                self.write_attempt_result_to_db(*attempt_number, &result)
+                    .await;
+            }
+        }
+    }
+
     async fn submit_attempt_to_l1(&self, _attempt_number: &SettlementAttemptNumber) {
         // TODO: submit the given attempt to L1
         // XREF: https://github.com/agglayer/agglayer/issues/1321
@@ -342,8 +376,8 @@ impl SettlementTask {
 
     async fn wait_for_any_nonce_to_be_filled(
         &self,
-        _nonces: &[(SettlementAttemptNumber, Address, Nonce)],
-    ) -> SettlementAttemptNumber {
+        _nonces: &HashSet<(Address, Nonce)>,
+    ) -> (Address, Nonce, SettlementTxHash) {
         // TODO: wait for any of the given nonces to be filled on L1
         // XREF: https://github.com/agglayer/agglayer/issues/1314
         todo!()
@@ -351,7 +385,7 @@ impl SettlementTask {
 
     async fn attempts_included_on_l1(&self) -> Vec<(SettlementAttemptNumber, ContractCallResult)> {
         // TODO: check which attempts have been included on L1, going over ALL previous
-        // attempts
+        // attempts, included any attempt that was originally marked as "in error"
         // XREF: https://github.com/agglayer/agglayer/issues/1313
         todo!()
     }
@@ -363,8 +397,8 @@ impl SettlementTask {
     }
 
     async fn wait_for_settlement(&self, _tx: SettlementTxHash) -> bool {
-        // TODO: wait for settlement of the given transaction on L1 according to the
-        // settlement policy XREF: https://github.com/agglayer/agglayer/issues/1316
+        // TODO: wait for finalization of the given transaction on L1
+        // XREF: https://github.com/agglayer/agglayer/issues/1316
         todo!()
     }
 
