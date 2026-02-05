@@ -1,10 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
     time::SystemTime,
 };
 
-use agglayer_config::Multiplier;
+use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
 use agglayer_types::SettlementTxHash;
 use alloy::primitives::{Address, BlockHash, Bytes, U128, U256};
 use tokio::sync::mpsc;
@@ -36,13 +36,14 @@ pub struct SettlementJob {
     max_priority_fee_per_gas_ceiling: U128,
     max_priority_fee_per_gas_floor: U128,
     max_priority_fee_per_gas_multiplier: Multiplier,
+
+    settlement_config: Arc<SettlementTransactionConfig>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SettlementJobResult {
     ClientError(ClientError),
     ContractCall(ContractCallResult),
-    Reorganized(ReorganizedResult),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -53,14 +54,16 @@ pub struct ClientError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClientErrorType {
-    Transient,
-    Permanent,
+    Unknown,
+    // Not needed for now, might re-add later: Transient,
+    // Not needed for now, might re-add later: Permanent,
+    NonceAlreadyUsed, // TODO: Set it only when the other tx that used the nonce is finalized
 }
 
 impl ClientError {
     pub fn nonce_already_used(address: Address, nonce: Nonce, tx_hash: SettlementTxHash) -> Self {
         Self {
-            kind: ClientErrorType::Permanent,
+            kind: ClientErrorType::NonceAlreadyUsed,
             message: format!(
                 "Nonce already used: for {address}/{nonce}, the settled tx is {tx_hash}"
             ),
@@ -69,7 +72,7 @@ impl ClientError {
 
     pub fn timeout_waiting_for_inclusion() -> Self {
         Self {
-            kind: ClientErrorType::Transient,
+            kind: ClientErrorType::Unknown,
             message: "Timeout waiting for inclusion on L1".to_string(),
         }
     }
@@ -90,12 +93,6 @@ pub enum ContractCallOutcome {
     Revert,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ReorganizedResult {
-    pub reorg_detection_time: SystemTime,
-    pub previous_result: Box<SettlementJobResult>,
-}
-
 pub enum StoredSettlementJob {
     Pending(SettlementTask),
     Completed(SettlementJob, SettlementJobResult),
@@ -109,10 +106,10 @@ pub enum TaskAdminCommand {
 pub struct SettlementAttempt {
     pub sender_wallet: Address,
     pub nonce: Nonce,
-    pub gas_limit: u128,
     pub max_fee_per_gas: u128,
     pub max_priority_fee_per_gas: u128,
     pub hash: SettlementTxHash,
+    pub submission_time: SystemTime,
     pub result: Option<SettlementJobResult>,
 }
 pub struct SettlementTask {
@@ -385,8 +382,21 @@ impl SettlementTask {
 
     async fn attempts_included_on_l1(&self) -> Vec<(SettlementAttemptNumber, ContractCallResult)> {
         // TODO: check which attempts have been included on L1, going over ALL previous
-        // attempts, included any attempt that was originally marked as "in error"
+        // attempts, included any attempt that was originally marked as "in error" (but
+        // only transient ones, not permanent ones)
         // XREF: https://github.com/agglayer/agglayer/issues/1313
+        // TODO: also submit with new nonce instead of with old nonce if all previous
+        // attempts are seen as permfail here. If even one attempt is marked as
+        // tempfail, then even if we don't have access to the wallet any longer
+        // we should probably just wait and not retry with new nonce, to avoid
+        // race conditions. Note that ReorganizedResult should count as
+        // transient until the nonce is used again. Maybe ReorganizedResult
+        // should actually have an additional field that indicates what the new
+        // result post-reorg would be? That feels like maybe the safest option.
+        // But this also raises the question, what if a reorg converts a permanent
+        // failure into an actual success? We need to give some more thought to
+        // reorgs, or maybe wait for finalization of the permfail before writing
+        // it to db?
         todo!()
     }
 
