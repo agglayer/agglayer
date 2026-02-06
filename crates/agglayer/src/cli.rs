@@ -1,5 +1,5 @@
 //! Agglayer command line interface.
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueHint};
 
