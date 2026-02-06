@@ -1,7 +1,5 @@
 // Sample migration testing schema and data.
 
-use std::path::Path;
-
 use agglayer_types::{Height, NetworkId};
 
 use crate::{
@@ -103,10 +101,10 @@ pub const CFS_V2: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<NetworkInfoV2UncoolColumn>(),
 ];
 
-impl Builder {
-    pub fn open_sample(path: &Path) -> Result<Self, DBOpenError> {
-        let cfs = [ColumnDescriptor::new::<NetworkInfoV0Column>()];
-        Self::open(path, &cfs)
+impl Builder<'_> {
+    /// Creates a sample Builder with V0 schema for testing.
+    pub fn sample_builder() -> Self {
+        Builder::new(CFS_V0)
     }
 
     pub fn sample_migrate_v0_v1(self) -> Result<Self, DBOpenError> {
