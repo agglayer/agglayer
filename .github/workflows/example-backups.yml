@@ -1,0 +1,32 @@
+name: Example workflow for downloading backups
+
+on:
+  workflow_dispatch:
+
+env:
+  BUCKET_NAME: agglayer-bali
+  OIDC_PROVIDER: projects/593545957356/locations/global/workloadIdentityPools/polygonlabs-cdk-dev/providers/oidc-cdk-dev
+  OIDC_SERVICE_ACCOUNT: cdk-dev-oidc-sa-sov@prj-polygonlabs-cdk-dev.iam.gserviceaccount.com
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  example-download-backups:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate with GCP via OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ env.OIDC_PROVIDER }}
+          service_account: ${{ env.OIDC_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download a backup
+        run: |
+          gsutil cp gs://${{ env.BUCKET_NAME }}/epochs/0 /tmp/backup
+          ls -la /tmp/backup
