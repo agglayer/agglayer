@@ -5,7 +5,7 @@ confirmations = 64
 settlement-policy = "FinalizedBlock"
 gas-limit-ceiling = "0x5f5e100"
 gas-limit-multiplier-factor = 1.1
-gas-price-multiplier-factor = 1.2
-gas-price-ceiling = "200gwei"
-gas-price-floor = "5gwei"
+max-fee-per-gas-multiplier-factor = 1.2
+max-fee-per-gas-ceiling = "200gwei"
+max-fee-per-gas-floor = "5gwei"
 
