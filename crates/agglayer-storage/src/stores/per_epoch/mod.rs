@@ -337,8 +337,8 @@ where
                 if height == Height::ZERO =>
             {
                 debug!(
-                    "Failed certificate candidate for network {} at height {}: height is 0 but \
-                     network is already present in the end checkpoint with height {}",
+                    "Failed certificate candidate for network {}: height is {} but network is \
+                     already present in the end checkpoint with height {}",
                     network_id,
                     height,
                     current_height.get()
