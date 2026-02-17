@@ -140,7 +140,7 @@ where
         let verifier = self.verifier.clone();
         let verifying_key = self.verifying_key.clone();
 
-        let mut state = state.clone();
+        let mut state = state;
         let (multi_batch_header, initial_state, pv_native) = self
             .witness_generation(&certificate, &mut state, None)
             .await?;
@@ -150,7 +150,6 @@ where
         info!(
             %prev_pp_root,
             %new_pp_root,
-            %certificate_id,
             "Successfully generated the witness for the PP for certificate",
         );
 

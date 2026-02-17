@@ -1,0 +1,5 @@
+[default]
+extend-ignore-identifiers-re = ["[gG]roth16"]
+
+[files]
+extend-exclude = ["crates/agglayer-grpc-types/src/compat/v1/snapshots/**"]

@@ -23,7 +23,7 @@ The transition is given by:
 - The number of bridge exits: `--n-exits <number>`
 - The number of imported bridge exits: `--n-imported-exits <number>`
 
-It will generate one Certificate with `--n-exits` brige exits and `--n-imported-exits` imported bridge exits.
+It will generate one Certificate with `--n-exits` bridge exits and `--n-imported-exits` imported bridge exits.
 
 The events are cyclically taken from the optional sample file given by `--sample-path`.
 If not provided, this default sample file of 200 events is used: [withdrawals.json](../../data/withdrawals.json)
