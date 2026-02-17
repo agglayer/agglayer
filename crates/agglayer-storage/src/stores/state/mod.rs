@@ -15,7 +15,7 @@ use pessimistic_proof::{
     unified_bridge::LocalExitTree,
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
@@ -53,7 +53,7 @@ pub struct StateStore {
 
 impl StateStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::state_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::STATE_DB)
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
@@ -92,6 +92,7 @@ impl StateWriter for StateStore {
             .delete::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)?)
     }
 
+    #[instrument(skip(self))]
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
@@ -136,7 +137,6 @@ impl StateWriter for StateStore {
             }
         } else {
             info!(
-                hash = %certificate_id,
                 "Certificate header not found for certificate_id: {}",
                 certificate_id
             )
@@ -145,6 +145,7 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
@@ -178,7 +179,6 @@ impl StateWriter for StateStore {
             }
         } else {
             info!(
-                hash = %certificate_id,
                 "Certificate header not found for certificate_id: {}",
                 certificate_id
             )

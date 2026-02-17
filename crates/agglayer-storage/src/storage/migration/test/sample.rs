@@ -5,7 +5,7 @@ use std::path::Path;
 use agglayer_types::{Height, NetworkId};
 
 use crate::{
-    schema::ColumnSchema,
+    schema::{ColumnDescriptor, ColumnSchema},
     storage::{Builder, DBMigrationErrorDetails, DBOpenError},
 };
 
@@ -64,7 +64,7 @@ impl ColumnSchema for NetworkInfoV0Column {
     const COLUMN_FAMILY_NAME: &'static str = "network_info_v0";
 }
 
-pub const CFS_V0: [&str; 1] = [NetworkInfoV0Column::COLUMN_FAMILY_NAME];
+pub const CFS_V0: &[ColumnDescriptor] = &[ColumnDescriptor::new::<NetworkInfoV0Column>()];
 
 // Version 1 schema
 pub struct NetworkInfoV1Column;
@@ -76,7 +76,7 @@ impl ColumnSchema for NetworkInfoV1Column {
     const COLUMN_FAMILY_NAME: &'static str = "network_info_v1";
 }
 
-pub const CFS_V1: [&str; 1] = [NetworkInfoV1Column::COLUMN_FAMILY_NAME];
+pub const CFS_V1: &[ColumnDescriptor] = &[ColumnDescriptor::new::<NetworkInfoV1Column>()];
 
 // Version 2 schema - Cool networks
 pub struct NetworkInfoV2CoolColumn;
@@ -98,24 +98,20 @@ impl ColumnSchema for NetworkInfoV2UncoolColumn {
     const COLUMN_FAMILY_NAME: &'static str = "network_info_v2_uncool";
 }
 
-pub const CFS_V2: [&str; 2] = [
-    NetworkInfoV2CoolColumn::COLUMN_FAMILY_NAME,
-    NetworkInfoV2UncoolColumn::COLUMN_FAMILY_NAME,
+pub const CFS_V2: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<NetworkInfoV2CoolColumn>(),
+    ColumnDescriptor::new::<NetworkInfoV2UncoolColumn>(),
 ];
 
 impl Builder {
     pub fn open_sample(path: &Path) -> Result<Self, DBOpenError> {
-        Self::open(
-            path,
-            CFS_V0.map(|name| {
-                rocksdb::ColumnFamilyDescriptor::new(name, rocksdb::Options::default())
-            }),
-        )
+        let cfs = [ColumnDescriptor::new::<NetworkInfoV0Column>()];
+        Self::open(path, &cfs)
     }
 
     pub fn sample_migrate_v0_v1(self) -> Result<Self, DBOpenError> {
         // Create and populate the new V1 column family
-        self.add_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME], |db| {
+        self.add_cfs(CFS_V1, |db| {
             // Iterate over all V0 entries
             for key in db.keys::<NetworkInfoV0Column>()? {
                 let key = key?;
@@ -135,7 +131,7 @@ impl Builder {
             Ok(())
         })?
         // Drop the old V0 column family
-        .drop_cfs([NetworkInfoV0Column::COLUMN_FAMILY_NAME])
+        .drop_cfs(CFS_V0)
     }
 
     pub fn sample_migrate_v1_v2(self) -> Result<Self, DBOpenError> {
@@ -172,7 +168,7 @@ impl Builder {
             Ok(())
         })?
         // Drop the old V1 column family
-        .drop_cfs([NetworkInfoV1Column::COLUMN_FAMILY_NAME])
+        .drop_cfs(CFS_V1)
     }
 }
 

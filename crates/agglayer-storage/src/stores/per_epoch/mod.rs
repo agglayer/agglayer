@@ -12,7 +12,7 @@ use agglayer_types::{
 };
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::ReadOptions;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, instrument, warn};
 
 use super::{
     interfaces::reader::PerEpochReader, MetadataWriter, PendingCertificateReader,
@@ -52,11 +52,11 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::epochs_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::EPOCHS_DB)
     }
 
     pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
-        DB::open_cf_readonly(path, cf_definitions::epochs_db_cf_definitions())
+        DB::open_cf_readonly(path, cf_definitions::EPOCHS_DB)
     }
 
     #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
@@ -246,6 +246,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: MetadataWriter + StateWriter + StateReader,
 {
+    #[instrument(skip(self), fields(epoch_number = %self.epoch_number))]
     fn add_certificate(
         &self,
         certificate_id: CertificateId,
@@ -298,7 +299,7 @@ where
         );
         let end_checkpoint_entry = end_checkpoint.entry(network_id);
 
-        let end_checkpoint_entry_assigment;
+        let end_checkpoint_entry_assignment;
 
         // Fetch the network current point for this epoch
         match (start_checkpoint, &end_checkpoint_entry) {
@@ -325,7 +326,7 @@ where
                     network_id
                 );
                 // Adding the network to the end checkpoint.
-                end_checkpoint_entry_assigment = Some(Height::ZERO);
+                end_checkpoint_entry_assignment = Some(Height::ZERO);
 
                 // Adding the certificate to the DB
             }
@@ -358,7 +359,7 @@ where
                     height
                 );
 
-                end_checkpoint_entry_assigment = Some(height);
+                end_checkpoint_entry_assignment = Some(height);
             }
 
             (_, Entry::Occupied(current_height)) => {
@@ -407,10 +408,7 @@ where
 
         self.pending_store
             .remove_pending_certificate(network_id, height)?;
-        debug!(
-            %certificate_id,
-            "Certificate and proof removed from pending store"
-        );
+        debug!("Certificate and proof removed from pending store");
 
         self.state_store.assign_certificate_to_epoch(
             &certificate_id,
@@ -418,12 +416,8 @@ where
             &certificate_index,
         )?;
 
-        debug!(
-            %certificate_id,
-            epoch_number = %self.epoch_number,
-            "Certificate assigned to epoch"
-        );
-        if let Some(height) = end_checkpoint_entry_assigment {
+        debug!("Certificate assigned to epoch");
+        if let Some(height) = end_checkpoint_entry_assignment {
             let entry = end_checkpoint_entry.or_default();
             *entry = height;
 
