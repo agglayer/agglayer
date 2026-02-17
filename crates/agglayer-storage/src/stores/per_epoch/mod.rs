@@ -337,8 +337,9 @@ where
                 if height == Height::ZERO =>
             {
                 debug!(
-                    "Failed certificate candidate for network {}: height is {} but network is \
+                    "{}Failed certificate candidate for network {}: height is {} but network is \
                      already present in the end checkpoint with height {}",
+                    mode.prefix(),
                     network_id,
                     height,
                     current_height.get()
@@ -364,11 +365,12 @@ where
 
             (_, Entry::Occupied(current_height)) => {
                 debug!(
-                    "Failed certificate candidate for network {} at height {}: current height is \
-                     {}",
+                    "{}Failed certificate candidate for network {}: current height is {} \
+                     submitted certificate height is {}",
+                    mode.prefix(),
                     network_id,
-                    height,
                     current_height.get(),
+                    height,
                 );
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
