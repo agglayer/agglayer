@@ -2,14 +2,14 @@ syntax = "proto3";
 
 package agglayer.storage.v0;
 
-import "agglayer/storage/v0/types.proto";
+import "agglayer/storage/v0/ethereum_types.proto";
 import "google/protobuf/timestamp.proto";
 
-// Settlement job ID.
-message SettlementJobId {
-  // ULID byte sequence.
-  bytes ulid = 1;
-}
+// // Settlement job ID.
+// message SettlementJobId {
+//   // ULID byte sequence.
+//   bytes ulid = 1;
+// }
 
 // Settlement job data.
 message SettlementJob {
@@ -23,11 +23,6 @@ message SettlementJob {
 
   // Eth value to send with the transaction.
   EthValue eth_value = 3;
-
-  // ----- Job result details -----
-
-  // Job result, if available.
-  TxResult job_result = 4;
 
   // ----- Transaction parameters -----
 
@@ -83,13 +78,13 @@ enum ClientErrorType {
   CLIENT_ERROR_TYPE_NONCE_ALREADY_USED = 1;
 
   /*
-  Not needed for now, might re-add later:
+     Not needed for now, might re-add later:
 
-  // Transient error (e.g., network issue, temporary RPC unavailability).
-  CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
+     // Transient error (e.g., network issue, temporary RPC unavailability).
+     CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
 
-  // Permanent error (e.g., the tx was already filled with another nonce).
-  CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
+     // Permanent error (e.g., the tx was already filled with another nonce).
+     CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
   */
 }
 
@@ -162,16 +157,13 @@ message SettlementAttempt {
 
   // Timestamp at which the attempt was submitted to L1.
   google.protobuf.Timestamp submission_time = 6;
-
-  // Result of the attempt, if available.
-  TxResult result = 7;
 }
 
-// Contents of the settlement nonces CF.
-message SettlementNonce {
-  // ID of the job that reserved this nonce.
-  SettlementJobId job_id = 1;
+// // Contents of the settlement nonces CF.
+// message SettlementNonce {
+//   // ID of the job that reserved this nonce.
+//   SettlementJobId job_id = 1;
 
-  // Sequence numbers of all of this job's settlement attempts that used this nonce.
-  repeated AttemptSequenceNumber attempt_sequence_numbers = 2;
-}
+//   // Sequence numbers of all of this job's settlement attempts that used this nonce.
+//   repeated AttemptSequenceNumber attempt_sequence_numbers = 2;
+// }

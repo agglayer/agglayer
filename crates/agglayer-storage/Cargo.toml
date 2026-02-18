@@ -23,6 +23,7 @@ thiserror.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+ulid = { workspace = true, features = ["serde"] }
 
 agglayer-config.workspace = true
 agglayer-types.workspace = true
