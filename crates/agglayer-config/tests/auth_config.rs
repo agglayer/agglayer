@@ -91,7 +91,7 @@ fn auth_distinct_pp_and_tx_settlement_keys_are_preserved() {
     let config = Config::try_load(Path::new(input)).unwrap();
 
     let AuthConfig::GcpKms(gkms) = &config.auth else {
-        panic!("Expected GKMS config to be present");
+        panic!("Expected GCP KMS config to be present");
     };
 
     assert_eq!(
@@ -105,4 +105,8 @@ fn auth_distinct_pp_and_tx_settlement_keys_are_preserved() {
         Some("tx-distinct-key-name".into())
     );
     assert_eq!(gkms.tx_settlement_key_version, Some(22));
+
+    assert_toml_snapshot!(config, {
+        ".storage.*" => agglayer_config::redact_storage_path(),
+    });
 }
