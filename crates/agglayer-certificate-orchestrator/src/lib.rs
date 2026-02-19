@@ -7,6 +7,7 @@ use std::{
 };
 
 use agglayer_clock::{ClockRef, Event};
+use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -111,6 +112,9 @@ pub struct CertificateOrchestrator<
 
     /// Network task future resolver.
     network_tasks: NetworkTasks,
+
+    /// Settlement service for submitting settlement jobs
+    settlement_service: Arc<SettlementService>,
 }
 
 impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
@@ -139,6 +143,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
+        settlement_service: Arc<SettlementService>,
     ) -> Result<Self, Error> {
         Ok(Self {
             epoch_packing_tasks: FuturesUnordered::new(),
@@ -158,6 +163,7 @@ where
             state_store,
             spawned_network_tasks: Default::default(),
             network_tasks: FuturesUnordered::new(),
+            settlement_service,
         })
     }
 }
@@ -209,6 +215,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
+        settlement_service: Arc<SettlementService>,
     ) -> eyre::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
             clock,
@@ -220,6 +227,7 @@ where
             epochs_store,
             current_epoch,
             state_store,
+            settlement_service,
         )?;
 
         // Try to spawn the certifier tasks for the next height of each network
@@ -269,6 +277,7 @@ where
             self.clock_ref.clone(),
             network_id,
             receiver,
+            self.settlement_service.clone(),
         )?;
 
         let task_future = task

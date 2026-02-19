@@ -1,6 +1,7 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use agglayer_clock::ClockRef;
+use agglayer_settlement_service::{SettlementService, SettlementServiceTrait};
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter},
@@ -17,7 +18,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::{certificate_task::CertificateTask, Certifier, Error, NonceInfo, SettlementClient};
+use crate::{certificate_task::CertificateTask, Certifier, Error, SettlementClient};
 
 #[cfg(test)]
 mod tests;
@@ -55,33 +56,6 @@ pub enum NetworkTaskMessage {
     CertificateProven {
         height: Height,
         certificate_id: CertificateId,
-    },
-
-    /// Notify the network task that a certificate is ready for settlement.
-    ///
-    /// The `settlement_submitted_notifier` is used to notify the certificate
-    /// task that the settlement has been successfully submitted.
-    CertificateReadyForSettlement {
-        height: Height,
-        certificate_id: CertificateId,
-        nonce_info: Option<NonceInfo>,
-        previous_tx_hashes: HashSet<SettlementTxHash>,
-        new_pp_root: Digest,
-        settlement_submitted_notifier:
-            oneshot::Sender<Result<(SettlementTxHash, Option<NonceInfo>), CertificateStatusError>>,
-    },
-
-    /// Notify the network task that a certificate is waiting for settlement to
-    /// complete.
-    ///
-    /// The `settlement_complete_notifier` is used to notify the certificate
-    /// task that the settlement has been successfully completed.
-    CertificateWaitingForSettlement {
-        height: Height,
-        certificate_id: CertificateId,
-        settlement_tx_hash: SettlementTxHash,
-        settlement_complete_notifier: oneshot::Sender<CertificateSettlementResult>,
-        new_pp_root: Digest,
     },
 
     /// Notify the network task that a certificate has been successfully
@@ -124,7 +98,15 @@ pub enum CertificateSettlementResult {
 }
 
 /// Network task that is responsible to certify the certificates for a network.
-pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, StateStore> {
+pub(crate) struct NetworkTask<
+    CertifierClient,
+    SettlementClient,
+    PendingStore,
+    StateStore,
+    SettlementSvc = SettlementService,
+> where
+    SettlementSvc: SettlementServiceTrait,
+{
     /// The network id for the network task.
     network_id: NetworkId,
     /// The pending store to read and write the pending certificates.
@@ -147,15 +129,18 @@ pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, S
     at_capacity_for_epoch: bool,
     /// latest certificate settled
     latest_settled: Option<SettledCertificate>,
+    /// The settlement service for submitting settlement jobs
+    settlement_service: Arc<SettlementSvc>,
 }
 
-impl<CertifierClient, Sc, PendingStore, StateStore>
-    NetworkTask<CertifierClient, Sc, PendingStore, StateStore>
+impl<CertifierClient, Sc, PendingStore, StateStore, SettlementSvc>
+    NetworkTask<CertifierClient, Sc, PendingStore, StateStore, SettlementSvc>
 where
     CertifierClient: 'static + Certifier,
     Sc: 'static + SettlementClient,
     PendingStore: 'static + PendingCertificateReader + PendingCertificateWriter,
     StateStore: 'static + StateReader + StateWriter,
+    SettlementSvc: 'static + SettlementServiceTrait,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -166,6 +151,7 @@ where
         clock_ref: ClockRef,
         network_id: NetworkId,
         certificate_stream: mpsc::Receiver<NewCertificate>,
+        settlement_service: Arc<SettlementSvc>,
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
 
@@ -196,6 +182,7 @@ where
             at_capacity_for_epoch: false,
             latest_settled,
             settlement_client,
+            settlement_service,
         })
     }
 
@@ -359,13 +346,14 @@ where
             .map(|exit| exit.hash())
             .collect::<Vec<Digest>>();
         let task = tokio::spawn(
-            CertificateTask::new(
+            CertificateTask::<_, _, _, SettlementSvc>::new(
                 certificate,
                 sender,
                 self.state_store.clone(),
                 self.pending_store.clone(),
                 self.certifier_client.clone(),
                 cancellation_token.clone(),
+                self.settlement_service.clone(),
             )?
             .process(),
         );
@@ -401,147 +389,6 @@ where
                                 "Failed to set the latest proven certificate per network: {:?}", error
                             );
                         }
-                        continue;
-                    }
-                    Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier,
-                        nonce_info, previous_tx_hashes, height, new_pp_root, .. }) => {
-                        // For now, the network task directly submits the settlement.
-                        // In the future, with aggregation, all this will likely move to a separate epoch packer task.
-                        // This is the reason why the certificate task does not directly submit and wait for settlement.
-                        let result = self
-                            .settlement_client
-                            .submit_certificate_settlement(certificate_id, nonce_info)
-                            .await;
-
-                        // Get the nonce of the tx.
-                        let mut result: Result<(SettlementTxHash, Option<NonceInfo>), Error> = match result {
-                            Ok(settlement_tx_hash) => {
-                                match self.settlement_client.fetch_settlement_nonce(settlement_tx_hash).await {
-                                    Ok(nonce) => {
-                                        Ok((settlement_tx_hash, nonce))
-                                    }
-                                    Err(err) => {
-                                        error!(
-                                            "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
-                                         Ok((settlement_tx_hash, None))
-                                    }
-                                }
-                            }
-                            Err(err) => Err(err),
-                        };
-
-                        // If the error in the sending transaction happened for whatever reason,
-                        // check if maybe the certificate has been settled through some other previous transaction.
-                        if let Err(err) = &result {
-                            error!("Error submitting settlement transaction for certificate at height {height}: {err:?}");
-                            for previous_tx_hash in previous_tx_hashes {
-                                match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
-                                    Ok(crate::TxReceiptStatus::TxSuccessful) => {
-                                        // Transaction is mined, but we haven't known that, return it for further processing.
-                                        info!(
-                                            "Certificate for new height: {height} has been settled on L1 through previous transaction {previous_tx_hash}");
-                                        result = Ok((previous_tx_hash, None));
-                                        break;
-                                    }
-                                    Ok(crate::TxReceiptStatus::TxFailed) => {
-                                        // Transaction is mined with status 0 (reverted). Return it for further processing.
-                                        warn!(
-                                            "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
-                                        result = Ok((previous_tx_hash, None));
-                                        break;
-                                    }
-                                    Ok(crate::TxReceiptStatus::NotFound) => {
-                                        debug!(
-                                            "Certificate for new height: {height} previous transaction {previous_tx_hash} not mined");
-                                    }
-                                    Err(err) => {
-                                        debug!(
-                                            "Error checking receipt status for previous settlement tx {previous_tx_hash}: {err}");
-                                    }
-                                }
-                            }
-
-                            // In the case we have lost the previous tx hashes (e.g. agglayer crashed),
-                            // we can still check the latest pp root on L1.
-                            if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
-                               if latest_pp_root == new_pp_root {
-                                   // Certificate has been settled through some other previous transaction.
-                                   info!(
-                                       "Certificate for new height: {height} has been previously settled on \
-                                       L1 through other transaction {latest_pp_root_tx_hash}, \
-                                       hence unable to send settlement transaction");
-                                   result = Ok((latest_pp_root_tx_hash, None));
-                               }
-                            }
-                        }
-
-                        settlement_submitted_notifier
-                            .send(result.map_err(Into::into))
-                            .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
-
-                        #[cfg(feature = "testutils")]
-                        fail::fail_point!("network_task::make_progress::settlement_submitted");
-                        continue;
-                    }
-                    Some(NetworkTaskMessage::CertificateWaitingForSettlement { settlement_tx_hash, settlement_complete_notifier,
-                        height, new_pp_root, ..}) => {
-                        let height = height.as_u64();
-                        // See comment on CertificateReadyForSettlement.
-                        let result = self
-                            .settlement_client
-                            .wait_for_settlement(settlement_tx_hash, certificate_id)
-                            .await;
-
-                        let result = match result {
-                            Ok((epoch, index)) => {
-                                // Certificate has been settled.
-                                CertificateSettlementResult::Settled(epoch, index)
-                            }
-                            Err(Error::PendingTransactionTimeout { settlement_tx_hash, .. }) => {
-                                match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {
-                                    Ok(crate::TxReceiptStatus::TxSuccessful) => {
-                                        // Transaction is mined, but we did not get the event, consider it settled.
-                                        info!(
-                                            "Certificate for new height: {} has been settled on L1 through transaction {settlement_tx_hash} \
-                                             (timeout but tx mined)", height);
-                                    }
-                                    Ok(crate::TxReceiptStatus::TxFailed) => {
-                                         // Transaction is mined with status 0 (reverted).
-                                        warn!(
-                                            "Certificate for new height: {height} settlement transaction {settlement_tx_hash} has status 0 (reverted)");
-                                    }
-                                    Ok(crate::TxReceiptStatus::NotFound) => {
-                                        warn!(
-                                            "Certificate for new height: {height} settlement transaction {settlement_tx_hash} not yet mined");
-                                    }
-                                    Err(err) => {
-                                        debug!(
-                                            "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
-                                    }
-                                }
-
-                                // On timeout, check if the certificate has been settled through some other transaction.
-                                match self.fetch_latest_pp_root_from_l1().await {
-                                    Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) if latest_pp_root == new_pp_root => {
-                                        // Certificate has been settled through some other previous transaction.
-                                        info!(
-                                            "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height);
-                                        CertificateSettlementResult::SettledThroughOtherTx(latest_pp_root_tx_hash)
-                                    }
-                                    _ => {
-                                        CertificateSettlementResult::TimeoutError
-                                    }
-                                }
-                            }
-
-                            Err(err) => {
-                                CertificateSettlementResult::Error(err.into())
-                            }
-                        };
-
-                        settlement_complete_notifier
-                            .send(result)
-                            .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateSettled { settled_certificate, height, .. }) => {

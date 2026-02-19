@@ -33,13 +33,15 @@ tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+ulid.workspace = true
 
 agglayer-clock.workspace = true
-agglayer-config = { workspace = true, optional = true }
+agglayer-config.workspace = true
 agglayer-contracts.workspace = true
 agglayer-storage.workspace = true
 agglayer-test-suite = { workspace = true, optional = true }
 agglayer-types.workspace = true
+agglayer-settlement-service.workspace = true
 pessimistic-proof.workspace = true
 
 # Optional dependencies
@@ -49,6 +51,7 @@ mockall = { workspace = true, optional = true }
 agglayer-certificate-orchestrator = { workspace = true, features = [
     "testutils",
 ] }
+agglayer-settlement-service = { workspace = true, features = ["testutils"] }
 
 async-trait.workspace = true
 alloy.workspace = true

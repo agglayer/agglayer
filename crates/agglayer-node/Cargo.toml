@@ -44,6 +44,7 @@ agglayer-grpc-types.workspace = true
 agglayer-jsonrpc-api.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-rpc.workspace = true
+agglayer-settlement-service.workspace = true
 agglayer-signer.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true

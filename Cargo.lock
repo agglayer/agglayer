@@ -122,6 +122,7 @@ dependencies = [
  "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-settlement-service",
  "agglayer-storage",
  "agglayer-test-suite",
  "agglayer-types",
@@ -146,6 +147,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
+ "ulid",
 ]
 
 [[package]]
@@ -431,6 +433,7 @@ dependencies = [
  "agglayer-jsonrpc-api",
  "agglayer-rate-limiting",
  "agglayer-rpc",
+ "agglayer-settlement-service",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
@@ -532,8 +535,10 @@ dependencies = [
  "agglayer-config",
  "agglayer-types",
  "alloy",
+ "async-trait",
  "derive_more 2.1.1",
  "eyre",
+ "mockall",
  "tokio",
  "tokio-util",
  "tower 0.4.13",
