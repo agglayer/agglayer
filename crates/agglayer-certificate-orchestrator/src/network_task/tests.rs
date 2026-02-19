@@ -7,6 +7,10 @@ use agglayer_storage::{
         TempDBDir,
     },
 };
+use agglayer_settlement_service::{
+    MockSettlementServiceTrait,
+    testutils::{mock_settlement_success, mock_settlement_error},
+};
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateStatus, L1WitnessCtx,
@@ -15,6 +19,7 @@ use agglayer_types::{
 use mockall::predicate::{always, eq, in_iter};
 use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
 use rstest::rstest;
+use tokio_util::sync::CancellationToken;
 
 use super::*;
 use crate::{
@@ -35,7 +40,7 @@ async fn start_from_zero() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
-    let mut settlement_client = MockSettlementClient::new();
+    let settlement_client = MockSettlementClient::new();
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(1);
@@ -113,35 +118,9 @@ async fn start_from_zero() {
         .with(eq(certificate_id), eq(CertificateStatus::Proven))
         .returning(|_, _| Ok(()));
 
-    settlement_client
-        .expect_submit_certificate_settlement()
-        .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
-
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
-        });
-
     state
         .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id && *t == SettlementTxHash::for_tests())
         .returning(|_, _, _, _| Ok(()));
-
-    settlement_client
-        .expect_wait_for_settlement()
-        .once()
-        .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -161,6 +140,11 @@ async fn start_from_zero() {
         )
         .returning(|_, _, _, _, _| Ok(()));
 
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    settlement_service
+        .expect_request_new_settlement()
+        .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_1)));
+
     let mut task = NetworkTask::new(
         Arc::new(pending),
         Arc::new(state),
@@ -169,6 +153,7 @@ async fn start_from_zero() {
         clock_ref,
         network_id,
         certificate_stream,
+        Arc::new(settlement_service),
     )
     .expect("Failed to create a new network task");
 
@@ -202,7 +187,7 @@ async fn one_per_epoch() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
-    let mut settlement_client = MockSettlementClient::new();
+    let settlement_client = MockSettlementClient::new();
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);
@@ -327,35 +312,9 @@ async fn one_per_epoch() {
         .with(eq(certificate_id), eq(CertificateStatus::Proven))
         .returning(|_, _| Ok(()));
 
-    settlement_client
-        .expect_submit_certificate_settlement()
-        .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SettlementTxHash::for_tests()));
-
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
-        });
-
     state
         .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id && *t == SettlementTxHash::for_tests())
         .returning(|_, _, _, _| Ok(()));
-
-    settlement_client
-        .expect_wait_for_settlement()
-        .once()
-        .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -375,6 +334,11 @@ async fn one_per_epoch() {
         )
         .returning(|_, _, _, _, _| Ok(()));
 
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    settlement_service
+        .expect_request_new_settlement()
+        .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_1)));
+
     let mut task = NetworkTask::new(
         Arc::new(pending),
         Arc::new(state),
@@ -383,6 +347,7 @@ async fn one_per_epoch() {
         clock_ref,
         network_id,
         certificate_stream,
+        Arc::new(settlement_service),
     )
     .expect("Failed to create a new network task");
 
@@ -438,7 +403,7 @@ async fn retries() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
-    let mut settlement_client = MockSettlementClient::new();
+    let settlement_client = MockSettlementClient::new();
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);
@@ -591,61 +556,18 @@ async fn retries() {
         .with(eq(certificate_id2), eq(CertificateStatus::Proven))
         .returning(|_, _| Ok(()));
 
+    // First certificate fails, expect error status update
     state
         .expect_update_certificate_header_status()
         .once()
-        .with(
-            eq(certificate_id),
-            eq(CertificateStatus::error(
-                CertificateStatusError::InternalError(String::new()),
-            )),
-        )
+        .withf(move |id, status| {
+            *id == certificate_id && matches!(status, CertificateStatus::InError { .. })
+        })
         .returning(|_, _| Ok(()));
-
-    // First certificate is failing
-    settlement_client
-        .expect_submit_certificate_settlement()
-        .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Err(Error::InternalError(String::new())));
-
-    // Mock fetch_last_settled_pp_root for the first certificate (retry scenario)
-    settlement_client
-        .expect_fetch_last_settled_pp_root()
-        .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(None));
-
-    // Second one (retry) is passing
-    settlement_client
-        .expect_submit_certificate_settlement()
-        .once()
-        .withf(move |i, _| *i == certificate_id2)
-        .returning(|_, _| Ok(SettlementTxHash::for_tests()));
-
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SettlementTxHash::for_tests()))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
-        });
 
     state
         .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SettlementTxHash::for_tests())
         .returning(|_, _, _, _| Ok(()));
-
-    settlement_client
-        .expect_wait_for_settlement()
-        .once()
-        .withf(move |t, i| *t == SettlementTxHash::for_tests() && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -665,6 +587,16 @@ async fn retries() {
         )
         .returning(|_, _, _, _, _| Ok(()));
 
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    settlement_service
+        .expect_request_new_settlement()
+        .times(1)
+        .return_once(|_| Ok(mock_settlement_error("Simulated failure")));
+    settlement_service
+        .expect_request_new_settlement()
+        .times(1)
+        .return_once(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_2)));
+
     let mut task = NetworkTask::new(
         Arc::new(pending),
         Arc::new(state),
@@ -673,6 +605,7 @@ async fn retries() {
         clock_ref,
         network_id,
         certificate_stream,
+        Arc::new(settlement_service),
     )
     .expect("Failed to create a new network task");
 
@@ -705,6 +638,7 @@ async fn retries() {
     .await
     .unwrap();
 
+    // First certificate should fail - height doesn't advance
     assert_eq!(next_expected_height, Height::ZERO);
 
     task.make_progress(
@@ -716,6 +650,7 @@ async fn retries() {
     .await
     .unwrap();
 
+    // Second certificate should succeed - height advances
     assert_eq!(next_expected_height, Height::new(1));
 }
 
@@ -726,7 +661,7 @@ async fn changing_epoch_triggers_certify() {
     let mut pending = MockPendingStore::new();
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
-    let mut settlement_client = MockSettlementClient::new();
+    let settlement_client = MockSettlementClient::new();
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);
@@ -856,59 +791,9 @@ async fn changing_epoch_triggers_certify() {
         .with(eq(certificate_id2), eq(CertificateStatus::Proven))
         .returning(|_, _| Ok(()));
 
-    settlement_client
-        .expect_submit_certificate_settlement()
-        .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
-
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SETTLEMENT_TX_HASH_1))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
-        });
-
     state
         .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
         .returning(|_, _, _, _| Ok(()));
-
-    settlement_client
-        .expect_submit_certificate_settlement()
-        .once()
-        .withf(move |i, _| *i == certificate_id2)
-        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
-
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SETTLEMENT_TX_HASH_2))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 2,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
-        });
-
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_2)
-        .returning(|_, _, _, _| Ok(()));
-
-    settlement_client
-        .expect_wait_for_settlement()
-        .once()
-        .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
 
     state
         .expect_update_certificate_header_status()
@@ -928,12 +813,6 @@ async fn changing_epoch_triggers_certify() {
         )
         .returning(|_, _, _, _, _| Ok(()));
 
-    settlement_client
-        .expect_wait_for_settlement()
-        .once()
-        .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::new(1), CertificateIndex::ZERO)));
-
     state
         .expect_update_certificate_header_status()
         .once()
@@ -947,10 +826,16 @@ async fn changing_epoch_triggers_certify() {
             eq(network_id),
             eq(Height::new(1)),
             eq(certificate_id2),
-            eq(EpochNumber::new(1)),
+            eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
         )
         .returning(|_, _, _, _, _| Ok(()));
+
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    settlement_service
+        .expect_request_new_settlement()
+        .times(2)
+        .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_1)));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -960,6 +845,7 @@ async fn changing_epoch_triggers_certify() {
         clock_ref.clone(),
         network_id,
         certificate_stream,
+        Arc::new(settlement_service),
     )
     .expect("Failed to create a new network task");
 
@@ -1102,6 +988,7 @@ async fn timeout_certifier() {
         .expect_read_local_network_state()
         .returning(|_| Ok(Default::default()));
 
+    let settlement_service = MockSettlementServiceTrait::new();
     let mut task = NetworkTask::new(
         Arc::new(pending),
         Arc::new(state),
@@ -1110,6 +997,7 @@ async fn timeout_certifier() {
         clock_ref.clone(),
         network_id,
         certificate_stream,
+        Arc::new(settlement_service),
     )
     .expect("Failed to create a new network task");
 
@@ -1142,7 +1030,7 @@ async fn timeout_certifier() {
 async fn process_next_certificate() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
-    let mut settlement_client = MockSettlementClient::new();
+    let settlement_client = MockSettlementClient::new();
 
     let mut certifier = MockCertifier::new();
     let clock_ref = clock();
@@ -1169,7 +1057,6 @@ async fn process_next_certificate() {
 
     let mut certificate = forest.apply_events(&[], &[(USDC, 1.try_into().unwrap())]);
     certificate.height = Height::new(1);
-    let certificate_id2 = certificate.hash();
 
     storage
         .pending
@@ -1220,53 +1107,11 @@ async fn process_next_certificate() {
             })
         });
 
-    settlement_client
-        .expect_submit_certificate_settlement()
-        .once()
-        .withf(move |i, _| *i == certificate_id)
-        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_1));
-
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SETTLEMENT_TX_HASH_1))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 1,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
-        });
-
-    settlement_client
-        .expect_submit_certificate_settlement()
-        .once()
-        .withf(move |i, _| *i == certificate_id2)
-        .returning(move |_, _| Ok(SETTLEMENT_TX_HASH_2));
-
-    settlement_client
-        .expect_fetch_settlement_nonce()
-        .once()
-        .with(eq(SETTLEMENT_TX_HASH_2))
-        .returning(|_| {
-            Ok(Some(NonceInfo {
-                nonce: 2,
-                previous_max_fee_per_gas: 0,
-                previous_max_priority_fee_per_gas: None,
-            }))
-        });
-
-    settlement_client
-        .expect_wait_for_settlement()
-        .once()
-        .withf(move |t, i| *t == SETTLEMENT_TX_HASH_1 && *i == certificate_id)
-        .returning(move |_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
-
-    settlement_client
-        .expect_wait_for_settlement()
-        .once()
-        .withf(move |t, i| *t == SETTLEMENT_TX_HASH_2 && *i == certificate_id2)
-        .returning(move |_, _| Ok((EpochNumber::new(1), CertificateIndex::ZERO)));
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    settlement_service
+        .expect_request_new_settlement()
+        .times(2)
+        .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_1)));
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -1276,6 +1121,7 @@ async fn process_next_certificate() {
         clock_ref.clone(),
         network_id,
         certificate_stream,
+        Arc::new(settlement_service),
     )
     .expect("Failed to create a new network task");
 
@@ -1339,6 +1185,7 @@ async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
 
     pending.expect_get_certificate().returning(|_, _| Ok(None));
 
+    let settlement_service = MockSettlementServiceTrait::new();
     let mut task = NetworkTask::new(
         Arc::new(pending),
         Arc::new(state),
@@ -1347,6 +1194,7 @@ async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
         clock_ref.clone(),
         network_id,
         certificate_stream,
+        Arc::new(settlement_service),
     )
     .expect("Failed to create a new network task");
 

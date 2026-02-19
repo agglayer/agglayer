@@ -40,6 +40,37 @@ pub struct SettlementJob {
     settlement_config: Arc<SettlementTransactionConfig>,
 }
 
+impl SettlementJob {
+    pub fn new(
+        contract_address: Address,
+        calldata: Bytes,
+        eth_value: U256,
+        num_confirmations: u32,
+        gas_limit: U128,
+        settlement_config: Arc<SettlementTransactionConfig>,
+    ) -> Self {
+        Self {
+            contract_address,
+            calldata,
+            eth_value,
+            num_confirmations,
+            gas_limit,
+            max_fee_per_gas_ceiling: U128::from(settlement_config.max_fee_per_gas_ceiling),
+            max_fee_per_gas_floor: U128::from(settlement_config.max_fee_per_gas_floor),
+            max_fee_per_gas_multiplier: settlement_config.max_fee_per_gas_multiplier_factor,
+            max_priority_fee_per_gas_ceiling: U128::from(
+                settlement_config.max_priority_fee_per_gas_ceiling,
+            ),
+            max_priority_fee_per_gas_floor: U128::from(
+                settlement_config.max_priority_fee_per_gas_floor,
+            ),
+            max_priority_fee_per_gas_multiplier: settlement_config
+                .max_priority_fee_per_gas_multiplier_factor,
+            settlement_config,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SettlementJobResult {
     ClientError(ClientError),

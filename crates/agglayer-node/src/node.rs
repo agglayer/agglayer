@@ -3,8 +3,11 @@ use std::{num::NonZeroU64, sync::Arc};
 use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
-use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
+use agglayer_config::{
+    settlement_service::SettlementServiceConfig, storage::backup::BackupConfig, Config, Epoch,
+};
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
+use agglayer_settlement_service::SettlementService;
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
@@ -269,6 +272,15 @@ impl Node {
 
         info!("Epoch packing aggregator task created.");
 
+        // Create the settlement service
+        let settlement_service_config = SettlementServiceConfig::default();
+        let settlement_service = Arc::new(
+            SettlementService::start(settlement_service_config, cancellation_token.clone())
+                .await
+                .context("Failed to start settlement service")?,
+        );
+        info!("Settlement service started.");
+
         let (data_sender, data_receiver) = mpsc::channel(
             config
                 .certificate_orchestrator
@@ -285,6 +297,7 @@ impl Node {
             .current_epoch(current_epoch_store)
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
+            .settlement_service(settlement_service)
             .start()
             .await
             .context("Failed starting certificate orchestrator")?;
