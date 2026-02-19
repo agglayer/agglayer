@@ -89,6 +89,8 @@ pub enum NetworkTaskMessage {
     },
 }
 
+// TODO: To replace with Settlement Job TxResult
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum CertificateSettlementResult {
     Settled(EpochNumber, CertificateIndex),
