@@ -55,10 +55,25 @@ impl<const TREE_DEPTH: usize> LocalExitTreeData<TREE_DEPTH> {
             return Err(LocalExitTreeError::LeafIndexOverflow);
         }
         self.layers[0].push(leaf);
+
+        // Cache empty hashes to avoid repeated calls to empty_hash_array_at_height
+        let empty_hashes = empty_hash_array_at_height::<TREE_DEPTH>();
+
         let mut index = leaf_index;
         let mut entry = leaf;
+        #[allow(clippy::needless_range_loop)]
         for height in 0..TREE_DEPTH - 1 {
-            let sibling = self.get(height, index ^ 1)?;
+            let sibling_index = index ^ 1;
+            // Direct access to layers to avoid overhead of get() method
+            // Check bounds first (same validation as in get())
+            if sibling_index >= 1 << (TREE_DEPTH - height) {
+                return Err(LocalExitTreeError::IndexOutOfBounds);
+            }
+            let sibling = self.layers[height]
+                .get(sibling_index)
+                .copied()
+                .unwrap_or(empty_hashes[height]);
+
             entry = if index & 1 == 1 {
                 keccak256_combine([&sibling, &entry])
             } else {
