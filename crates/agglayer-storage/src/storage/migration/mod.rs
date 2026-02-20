@@ -16,6 +16,7 @@ use crate::{
 };
 
 mod access;
+mod backup;
 mod error;
 mod migration_cf;
 mod plan;

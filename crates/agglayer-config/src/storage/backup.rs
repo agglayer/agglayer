@@ -2,6 +2,23 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// Configuration for taking backups on node startup.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum StartupBackupMode {
+    /// Do not take backups on startup.
+    #[serde(alias = "yolo")]
+    Never,
+
+    /// Take backup on startup if database migration is required,
+    /// just before the migration is executed.
+    #[default]
+    IfMigrating,
+
+    /// Always take backup on node startup.
+    Always,
+}
+
 /// Configuration for Storage backups.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -15,12 +32,18 @@ pub enum BackupConfig {
     Enabled {
         /// Path to the directory where backups are stored.
         path: PathBuf,
+
         /// Maximum number of backups to keep for the state storage.
         #[serde(default = "default_max_backup_number")]
         state_max_backup_count: usize,
+
         /// Maximum number of backups to keep for the pending storage.
         #[serde(default = "default_max_backup_number")]
         pending_max_backup_count: usize,
+
+        /// Whether to take backup on node startup.
+        #[serde(default)]
+        on_startup: StartupBackupMode,
     },
 }
 
@@ -33,6 +56,7 @@ impl BackupConfig {
             path: path.into(),
             state_max_backup_count: default_max_backup_number(),
             pending_max_backup_count: default_max_backup_number(),
+            on_startup: StartupBackupMode::default(),
         }
     }
 

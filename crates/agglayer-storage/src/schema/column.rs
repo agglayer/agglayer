@@ -9,7 +9,7 @@ pub trait ColumnSchema {
     const COLUMN_OPTIONS: ColumnOptions = ColumnOptions::DEFAULT;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct ColumnDescriptor {
     name: &'static str,
     options: &'static ColumnOptions,

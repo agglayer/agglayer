@@ -104,7 +104,7 @@ pub const CFS_V2: &[ColumnDescriptor] = &[
 impl Builder<'_> {
     /// Creates a sample Builder with V0 schema for testing.
     pub fn sample_builder() -> Self {
-        Builder::new(CFS_V0)
+        Builder::new(CFS_V0).unwrap()
     }
 
     pub fn sample_migrate_v0_v1(self) -> Result<Self, DBOpenError> {
