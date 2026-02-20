@@ -8,4 +8,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+eyre.workspace = true
+flate2.workspace = true
+tar.workspace = true
 tracing.workspace = true
