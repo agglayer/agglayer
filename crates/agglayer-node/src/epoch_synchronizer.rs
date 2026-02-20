@@ -10,7 +10,7 @@ use agglayer_storage::{
 };
 use agglayer_types::EpochNumber;
 use tokio::sync::broadcast::error::TryRecvError;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub(crate) struct EpochSynchronizer {}
 
@@ -20,6 +20,7 @@ impl EpochSynchronizer {
         mut opened_epoch: EpochsStore::PerEpochStore,
         mut current_epoch_number: EpochNumber,
         mut epoch_stream: tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
+        clock_ref: ClockRef,
     ) -> eyre::Result<EpochsStore::PerEpochStore>
     where
         EpochsStore: EpochStoreWriter,
@@ -57,10 +58,15 @@ impl EpochSynchronizer {
                     eyre::bail!("Epoch stream closed during epoch synchronization");
                 }
                 Err(TryRecvError::Lagged(n)) => {
-                    debug!(
-                        "Epoch stream lagged on {} EpochEnded update during epoch synchronization",
-                        n
+                    let updated_epoch = clock_ref.current_epoch();
+                    warn!(
+                        skipped_events = n,
+                        old_current_epoch = current_epoch_number.as_u64(),
+                        new_current_epoch = updated_epoch.as_u64(),
+                        "Epoch stream lagged during synchronization, updating current epoch from \
+                         clock"
                     );
+                    current_epoch_number = updated_epoch;
                 }
                 Err(TryRecvError::Empty) => {
                     // We don't care about empty stream during epoch
@@ -119,13 +125,18 @@ impl EpochSynchronizer {
             opened_epoch,
             current_epoch_number,
             epoch_stream,
+            clock_ref,
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, num::NonZeroU64, sync::atomic::AtomicU64};
+    use std::{
+        collections::BTreeMap,
+        num::NonZeroU64,
+        sync::atomic::{AtomicU64, Ordering},
+    };
 
     use agglayer_config::Config;
     use agglayer_storage::{
@@ -639,5 +650,109 @@ mod tests {
                 .unwrap();
 
         assert_eq!(result.get_epoch_number(), EpochNumber::new(13));
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn handles_epoch_stream_lag_during_synchronization() {
+        let mut state_store = MockStateStore::new();
+        state_store
+            .expect_get_latest_settled_epoch()
+            .once()
+            .returning(|| Ok(Some(EpochNumber::new(10))));
+
+        let mut epochs_store = MockEpochsStore::new();
+
+        epochs_store
+            .expect_open()
+            .once()
+            .with(eq(EpochNumber::new(10)))
+            .return_once(|epoch| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .returning(BTreeMap::new);
+                Ok(mock)
+            });
+
+        // Create a broadcast channel with a very small buffer (size 1) to simulate lag
+        // When many events are sent, the receiver will lag behind
+        let (sender, _receiver) = tokio::sync::broadcast::channel(1);
+
+        // Start with clock at epoch 12, but we'll update it to 15 during the test
+        // to simulate the clock advancing while synchronization is happening
+        let current_block = Arc::new(AtomicU64::new(12));
+        let clock_ref = ClockRef::new(
+            sender.clone(),
+            current_block.clone(),
+            Arc::new(NonZeroU64::new(1).unwrap()),
+        );
+
+        let sender_clone = sender.clone();
+        let mut seq = Sequence::new();
+
+        // When opening epoch 11, send multiple events to cause lag
+        // and update the clock to epoch 15 to simulate clock advancing
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(11)), eq(BTreeMap::new()))
+            .return_once(move |epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                // Send multiple events rapidly to cause the receiver to lag
+                // The channel buffer is only 1, so sending many events will cause lag
+                let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(11)));
+                let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(12)));
+                let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(13)));
+                let _ = sender_clone.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(14)));
+
+                // Update the clock to epoch 15 to simulate clock advancing
+                // This ensures that when lag is detected, clock_ref.current_epoch() returns 15
+                current_block.store(15, Ordering::SeqCst);
+
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        // After lag is detected and epoch is updated to 15 from clock_ref,
+        // we should open epochs 12-15
+        for i in 12..=15 {
+            epochs_store
+                .expect_open_with_start_checkpoint()
+                .once()
+                .in_sequence(&mut seq)
+                .with(eq(EpochNumber::new(i)), eq(BTreeMap::new()))
+                .return_once(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                    let mut mock = MockPerEpochStore::new();
+                    mock.expect_get_epoch_number().returning(move || epoch);
+                    // Only epochs 12-14 should be packed, epoch 15 is the current one
+                    if epoch.as_u64() < 15 {
+                        mock.expect_start_packing().once().returning(|| Ok(()));
+                        mock.expect_get_end_checkpoint()
+                            .once()
+                            .return_once(move || end_checkpoint.clone());
+                    } else {
+                        mock.expect_start_packing().never().returning(|| Ok(()));
+                        mock.expect_get_end_checkpoint()
+                            .never()
+                            .return_once(move || end_checkpoint.clone());
+                    }
+                    Ok(mock)
+                });
+        }
+
+        let result =
+            EpochSynchronizer::start(Arc::new(state_store), Arc::new(epochs_store), clock_ref)
+                .await
+                .unwrap();
+
+        // Should synchronize to epoch 15 (the current epoch from clock after lag is
+        // handled)
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(15));
     }
 }
