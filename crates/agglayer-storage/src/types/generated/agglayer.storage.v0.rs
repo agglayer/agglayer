@@ -292,7 +292,7 @@ pub struct SettlementJob {
 
     /// Job result, if available.
     #[prost(message, optional, tag="4")]
-    pub job_result: ::core::option::Option<TxResult>,
+    pub job_result: ::core::option::Option<ContractCallResult>,
     // ----- Transaction parameters -----
 
     /// Gas limit for each settlement attempt.
