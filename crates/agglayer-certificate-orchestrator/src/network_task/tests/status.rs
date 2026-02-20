@@ -25,7 +25,7 @@ use crate::{
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(2))]
-async fn from_pending_to_settle() {
+async fn from_pending_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
 
@@ -288,7 +288,7 @@ async fn from_proven_to_settled() {
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(2))]
-async fn from_candidate_to_settle() {
+async fn from_candidate_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
 
@@ -401,7 +401,7 @@ async fn from_candidate_to_settle() {
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(2))]
-async fn from_settle_to_settle() {
+async fn from_settled_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
 
