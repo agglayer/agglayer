@@ -27,6 +27,12 @@ pub const PER_EPOCH_PROOFS_CF: &str = "per_epoch_proofs_cf";
 pub const PER_EPOCH_END_CHECKPOINT_CF: &str = "per_epoch_end_checkpoint_cf";
 pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
 
+// Settlement related CFs
+pub const SETTLEMENT_ATTEMPTS_CF: &str = "settlement_attempts_cf";
+pub const SETTLEMENT_ATTEMPT_PER_WALLET_CF: &str = "settlement_attempt_per_wallet_cf";
+pub const SETTLEMENT_ATTEMPT_RESULTS_CF: &str = "settlement_attempt_results_cf";
+pub const SETTLEMENT_JOBS_CF: &str = "settlement_jobs_cf";
+
 // Column options for checkpoint columns (start and end checkpoints).
 pub const CHECKPOINT_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
@@ -63,6 +69,11 @@ pub(crate) mod metadata;
 
 // Debug
 pub(crate) mod debug_certificates;
+
+pub(crate) mod settlement_attempt_per_wallet;
+pub(crate) mod settlement_attempt_results;
+pub(crate) mod settlement_attempts;
+pub(crate) mod settlement_jobs;
 
 // PerEpoch
 pub mod epochs {

@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub mod network_info_reader;
+pub mod settlement_reader;
 
 pub trait DebugReader: Send + Sync {
     fn get_certificate(&self, certificate_id: &CertificateId)

@@ -41,6 +41,7 @@ use crate::{
 
 mod cf_definitions;
 mod network_info;
+mod settlement;
 
 #[cfg(test)]
 mod tests;

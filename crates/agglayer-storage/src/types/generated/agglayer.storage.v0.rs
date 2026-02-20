@@ -39,6 +39,69 @@ impl DisabledBy {
         }
     }
 }
+/// Represents a 128-bit unsigned integer.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Uint128 {
+    /// Value (encoded in big-endian format).
+    #[prost(bytes="bytes", tag="1")]
+    pub value: ::prost::bytes::Bytes,
+}
+/// Represents a 256-bit unsigned integer.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Uint256 {
+    /// Value (encoded in big-endian format).
+    #[prost(bytes="bytes", tag="1")]
+    pub value: ::prost::bytes::Bytes,
+}
+/// Represents an Ethereum address.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Address {
+    /// Ethereum address (20 bytes).
+    #[prost(bytes="bytes", tag="1")]
+    pub address: ::prost::bytes::Bytes,
+}
+/// Represents an Ethereum nonce.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct Nonce {
+    /// Nonce value.
+    #[prost(uint64, tag="1")]
+    pub nonce: u64,
+}
+/// Represents Ethereum transaction calldata.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Calldata {
+    /// Calldata bytes.
+    #[prost(bytes="bytes", tag="1")]
+    pub data: ::prost::bytes::Bytes,
+}
+/// Represents an Ethereum value (256-bit unsigned integer).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EthValue {
+    /// Value.
+    #[prost(message, optional, tag="1")]
+    pub value: ::core::option::Option<Uint256>,
+}
+/// Transaction hash.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TxHash {
+    /// Hash bytes.
+    #[prost(bytes="bytes", tag="1")]
+    pub hash: ::prost::bytes::Bytes,
+}
+/// Block hash
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BlockHash {
+    /// Hash bytes.
+    #[prost(bytes="bytes", tag="1")]
+    pub hash: ::prost::bytes::Bytes,
+}
+/// Block number.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct BlockNumber {
+    /// Block number.
+    #[prost(uint64, tag="1")]
+    pub number: u64,
+}
 /// Migration record for tracking database migration state.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct MigrationRecord {
@@ -204,76 +267,6 @@ impl NetworkType {
         }
     }
 }
-/// Represents a 128-bit unsigned integer.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Uint128 {
-    /// Value (encoded in big-endian format).
-    #[prost(bytes="bytes", tag="1")]
-    pub value: ::prost::bytes::Bytes,
-}
-/// Represents a 256-bit unsigned integer.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Uint256 {
-    /// Value (encoded in big-endian format).
-    #[prost(bytes="bytes", tag="1")]
-    pub value: ::prost::bytes::Bytes,
-}
-/// Represents an Ethereum address.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Address {
-    /// Ethereum address (20 bytes).
-    #[prost(bytes="bytes", tag="1")]
-    pub address: ::prost::bytes::Bytes,
-}
-/// Represents an Ethereum nonce.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct Nonce {
-    /// Nonce value.
-    #[prost(uint64, tag="1")]
-    pub nonce: u64,
-}
-/// Represents Ethereum transaction calldata.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Calldata {
-    /// Calldata bytes.
-    #[prost(bytes="bytes", tag="1")]
-    pub data: ::prost::bytes::Bytes,
-}
-/// Represents an Ethereum value (256-bit unsigned integer).
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EthValue {
-    /// Value.
-    #[prost(message, optional, tag="1")]
-    pub value: ::core::option::Option<Uint256>,
-}
-/// Transaction hash.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TxHash {
-    /// Hash bytes.
-    #[prost(bytes="bytes", tag="1")]
-    pub hash: ::prost::bytes::Bytes,
-}
-/// Block hash
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct BlockHash {
-    /// Hash bytes.
-    #[prost(bytes="bytes", tag="1")]
-    pub hash: ::prost::bytes::Bytes,
-}
-/// Block number.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct BlockNumber {
-    /// Block number.
-    #[prost(uint64, tag="1")]
-    pub number: u64,
-}
-/// Settlement job ID.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SettlementJobId {
-    /// ULID byte sequence.
-    #[prost(bytes="bytes", tag="1")]
-    pub ulid: ::prost::bytes::Bytes,
-}
 /// Settlement job data.
 ///
 /// ----- Transaction details -----
@@ -288,11 +281,6 @@ pub struct SettlementJob {
     /// Eth value to send with the transaction.
     #[prost(message, optional, tag="3")]
     pub eth_value: ::core::option::Option<EthValue>,
-    // ----- Job result details -----
-
-    /// Job result, if available.
-    #[prost(message, optional, tag="4")]
-    pub job_result: ::core::option::Option<TxResult>,
     // ----- Transaction parameters -----
 
     /// Gas limit for each settlement attempt.
@@ -409,19 +397,6 @@ pub struct SettlementAttempt {
     /// Timestamp at which the attempt was submitted to L1.
     #[prost(message, optional, tag="6")]
     pub submission_time: ::core::option::Option<::prost_types::Timestamp>,
-    /// Result of the attempt, if available.
-    #[prost(message, optional, tag="7")]
-    pub result: ::core::option::Option<TxResult>,
-}
-/// Contents of the settlement nonces CF.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SettlementNonce {
-    /// ID of the job that reserved this nonce.
-    #[prost(message, optional, tag="1")]
-    pub job_id: ::core::option::Option<SettlementJobId>,
-    /// Sequence numbers of all of this job's settlement attempts that used this nonce.
-    #[prost(message, repeated, tag="2")]
-    pub attempt_sequence_numbers: ::prost::alloc::vec::Vec<AttemptSequenceNumber>,
 }
 /// Type of client error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

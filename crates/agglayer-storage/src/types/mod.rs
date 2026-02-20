@@ -8,6 +8,7 @@ mod certificate;
 pub(crate) mod disabled_network;
 pub mod generated; // TODO: remove "pub" once implementation of storage is completed
 pub(crate) mod network_info;
+pub(crate) mod settlement;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
@@ -67,5 +68,8 @@ crate::schema::impl_codec_using_bincode_for!(
     Proof,
     SmtKey,
     SmtValue,
-    network_info::Key
+    network_info::Key,
+    settlement::job::Key,
+    settlement::attempt::Key,
+    settlement::attempt_per_wallet::Key,
 );
