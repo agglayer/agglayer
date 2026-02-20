@@ -37,7 +37,7 @@ macro_rules! log_assert_eq {
     ($lhs:expr, $rhs:expr $(,)?) => {
         match (&$lhs, &$rhs) {
             (lhs, rhs) => {
-                ::std::assert_eq!(lhs, rhs);
+                ::std::debug_assert_eq!(lhs, rhs);
                 if !(*lhs == *rhs) {
                     $crate::assertions::error!(
                         "INVARIANT VIOLATED in {}:{}: left: {lhs:?}, right: {rhs:?}",
@@ -51,7 +51,7 @@ macro_rules! log_assert_eq {
     ($lhs:expr, $rhs:expr, $($fmt:expr),+ $(,)?) => {
         match (&$lhs, &$rhs) {
             (lhs, rhs) => {
-                ::std::assert_eq!(lhs, rhs, $($fmt,)+);
+                ::std::debug_assert_eq!(lhs, rhs, $($fmt,)+);
                 if !(*lhs == *rhs) {
                     $crate::assertions::error!(
                         "INVARIANT VIOLATED in {}:{}: left: {lhs:?}, right: {rhs:?}, {}",
