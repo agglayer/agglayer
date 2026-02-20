@@ -58,6 +58,12 @@ async fn happy_path() {
         .return_once(|_, _| Ok(Some(certificate)));
 
     pending_store
+        .expect_get_proof()
+        .once()
+        .with(eq(certificate_id))
+        .return_once(|_| Ok(None));
+
+    pending_store
         .expect_insert_generated_proof()
         .once()
         .with(eq(certificate_id), always())
