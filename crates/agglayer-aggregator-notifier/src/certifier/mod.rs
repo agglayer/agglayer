@@ -352,45 +352,49 @@ where
         .map_err(|e| CertificationError::InternalError(e.to_string()))?
         .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
-        // Verify consistency on the aggchain proof public values if provided in the
-        // optional context
-        if let AggchainData::Generic {
-            public_values: Some(pv_from_proof),
-            aggchain_params,
-            ..
-        } = &certificate.aggchain_data
-        {
-            // Fetching rollup contract address
-            let rollup_address = self
-                .l1_rpc
-                .get_rollup_contract_address(certificate.network_id.to_u32())
-                .await
-                .map_err(CertificationError::RollupContractAddressNotFound)?;
+        // Check the certificate aggchain hash matches the one stored in L1
 
-            // Verify matching on the aggchain hash between the L1 and the agglayer
-            let l1_aggchain_hash: Digest = self
-                .l1_rpc
-                .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
-                .await
-                .map_err(CertificationError::UnableToFindAggchainHash)?
-                .into();
+        let rollup_address = self
+            .l1_rpc
+            .get_rollup_contract_address(certificate.network_id.to_u32())
+            .await
+            .map_err(CertificationError::RollupContractAddressNotFound)?;
 
-            let computed_aggchain_hash = multi_batch_header.aggchain_data.aggchain_hash();
+        let l1_aggchain_hash = self
+            .l1_rpc
+            .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
+            .await
+            .map_err(CertificationError::UnableToFindAggchainHash)?
+            .into();
 
-            if l1_aggchain_hash != computed_aggchain_hash {
-                return Err(CertificationError::AggchainHashMismatch {
-                    from_l1: l1_aggchain_hash,
-                    from_certificate: computed_aggchain_hash,
-                });
-            }
+        let computed_aggchain_hash = multi_batch_header.aggchain_data.aggchain_hash();
+        if l1_aggchain_hash != computed_aggchain_hash {
+            return Err(CertificationError::AggchainHashMismatch {
+                from_l1: l1_aggchain_hash,
+                from_certificate: computed_aggchain_hash,
+            });
+        }
 
-            // Consistency check across these 2 sources:
-            //
-            // - Public values expected by the proof (i.e., the valid ones to succeed the
-            //   proof verification, provided as metadata in the Certificate as-is)
-            //
-            // - Public values expected by the PP (i.e., the ones used to verify the
-            //   aggchain proof in the PP)
+        // Verify that the public values used in the aggchain proof match the ones
+        // computed during witness generation.
+
+        let pv_params_from_proof = match &certificate.aggchain_data {
+            AggchainData::Generic {
+                public_values,
+                aggchain_params,
+                ..
+            } => public_values
+                .as_ref()
+                .map(|v| (v.as_ref(), aggchain_params)),
+            AggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => aggchain_proof
+                .public_values
+                .as_ref()
+                .map(|v| (v.as_ref(), &aggchain_proof.aggchain_params)),
+            AggchainData::ECDSA { .. } => None,
+            AggchainData::MultisigOnly { .. } => None,
+        };
+
+        if let Some((pv_from_proof, aggchain_params)) = pv_params_from_proof {
             debug!("Public values expected by the certificate's aggchain-proof: {pv_from_proof:?}");
 
             let pv_from_pp_witness = AggchainProofPublicValues {
@@ -409,10 +413,10 @@ where
                 aggchain_params: *aggchain_params,
             };
 
-            if **pv_from_proof != pv_from_pp_witness {
+            if pv_from_proof != &pv_from_pp_witness {
                 error!("Mismatch on the aggchain proof public values.");
                 return Err(CertificationError::AggchainProofPublicValuesMismatch {
-                    from_proof: pv_from_proof.clone(),
+                    from_proof: Box::new(pv_from_proof.clone()),
                     from_witness: Box::new(pv_from_pp_witness),
                 });
             }
