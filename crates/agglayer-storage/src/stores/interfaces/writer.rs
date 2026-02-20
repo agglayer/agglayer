@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
+use agglayer_tries::roots::PessimisticRoot;
 use agglayer_types::{
-    primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    primitives::{alloy_primitives::BlockNumber, Digest},
+    Certificate, CertificateId, CertificateIndex, CertificateStatus, EpochNumber, ExecutionMode,
+    Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -34,6 +36,8 @@ pub trait EpochStoreWriter: Send + Sync {
 pub trait MetadataWriter: Send + Sync {
     /// Set the latest settled epoch.
     fn set_latest_settled_epoch(&self, value: EpochNumber) -> Result<(), Error>;
+    /// Set the latest certificate settling block.
+    fn set_latest_block_that_settled_any_cert(&self, value: BlockNumber) -> Result<(), Error>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +104,12 @@ pub trait StateWriter: Send + Sync {
         network_id: &NetworkId,
         new_state: &LocalNetworkStateData,
         new_leaves: &[Digest],
+    ) -> Result<(), Error>;
+
+    fn add_certificate_id_for_pp_root(
+        &self,
+        pp_root: &PessimisticRoot,
+        certificate_id: &CertificateId,
     ) -> Result<(), Error>;
 }
 

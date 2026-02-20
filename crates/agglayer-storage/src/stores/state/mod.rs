@@ -5,10 +5,11 @@ use std::{
     time::SystemTime,
 };
 
-use agglayer_tries::{node::Node, smt::Smt};
+use agglayer_tries::{node::Node, roots::PessimisticRoot, smt::Smt};
 use agglayer_types::{
-    primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    primitives::{alloy_primitives::BlockNumber, Digest},
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -31,6 +32,7 @@ use crate::{
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        pp_root_to_certificate_ids::PpRootToCertificateIdsColumn,
     },
     error::Error,
     schema::ColumnSchema,
@@ -386,6 +388,22 @@ impl StateWriter for StateStore {
 
         Ok(())
     }
+
+    fn add_certificate_id_for_pp_root(
+        &self,
+        pp_root: &PessimisticRoot,
+        certificate_id: &CertificateId,
+    ) -> Result<(), Error> {
+        let pp_root = (*pp_root).into();
+        let mut certificate_ids = self
+            .db
+            .get::<PpRootToCertificateIdsColumn>(&pp_root)?
+            .unwrap_or_default();
+        certificate_ids.push((*certificate_id).into());
+        self.db
+            .put::<PpRootToCertificateIdsColumn>(&pp_root, &certificate_ids)?;
+        Ok(())
+    }
 }
 
 impl StateStore {
@@ -648,6 +666,24 @@ impl StateReader for StateStore {
             .get::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)
             .map(|v| v.is_some())?)
     }
+
+    fn get_certificate_ids_for_pp_root(
+        &self,
+        pp_root: &PessimisticRoot,
+    ) -> Result<Vec<CertificateId>, Error> {
+        if let Some(certificate_ids) = self
+            .db
+            .get::<PpRootToCertificateIdsColumn>(&(*pp_root).into())?
+        {
+            let certificate_ids = certificate_ids
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<CertificateId>, _>>()
+                .map_err(|e| Error::Unexpected(e.to_string()))?;
+            return Ok(certificate_ids);
+        }
+        Ok(Vec::new())
+    }
 }
 
 impl MetadataWriter for StateStore {
@@ -664,6 +700,27 @@ impl MetadataWriter for StateStore {
             &MetadataKey::LatestSettledEpoch,
             &MetadataValue::LatestSettledEpoch(value),
         )?)
+    }
+
+    fn set_latest_block_that_settled_any_cert(&self, value: BlockNumber) -> Result<(), Error> {
+        if let Some(latest_block_that_settled_any_cert) =
+            self.get_latest_block_that_settled_any_cert()?
+        {
+            if latest_block_that_settled_any_cert >= value {
+                warn!(
+                    "Tried to set a lower value for latest certificate settling block: \
+                     {latest_block_that_settled_any_cert} >= {value}, ignoring"
+                );
+                return Ok(());
+            }
+        }
+
+        self.db.put::<MetadataColumn>(
+            &MetadataKey::LatestBlockThatSettledAnyCert,
+            &MetadataValue::LatestBlockThatSettledAnyCert(value),
+        )?;
+
+        Ok(())
     }
 }
 
@@ -682,5 +739,20 @@ impl MetadataReader for StateStore {
                     )),
                 })
             })
+    }
+
+    fn get_latest_block_that_settled_any_cert(&self) -> Result<Option<BlockNumber>, Error> {
+        match self
+            .db
+            .get::<MetadataColumn>(&MetadataKey::LatestBlockThatSettledAnyCert)?
+        {
+            Some(MetadataValue::LatestBlockThatSettledAnyCert(value)) => Ok(Some(value)),
+            None => Ok(None),
+            _ => Err(Error::Unexpected(
+                "Wrong value type decoded, was expecting LatestBlockThatSettledAnyCert, decoded \
+                 another type"
+                    .to_string(),
+            )),
+        }
     }
 }

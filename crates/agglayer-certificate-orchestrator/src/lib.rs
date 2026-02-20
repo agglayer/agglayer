@@ -7,14 +7,16 @@ use std::{
 };
 
 use agglayer_clock::{ClockRef, Event};
+use agglayer_contracts::{rollup::RollupContract, L1TransactionFetcher};
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
     stores::{
-        EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
-        PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+        EpochStoreReader, EpochStoreWriter, MetadataReader, MetadataWriter,
+        PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
+        StateReader, StateWriter,
     },
 };
 use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
@@ -31,14 +33,16 @@ use tracing::{debug, error, warn};
 mod certificate_task;
 mod certifier;
 mod error;
+mod listener_task;
 mod network_task;
 mod settlement_client;
 
-#[cfg(test)]
-mod tests;
+#[cfg(any(test, feature = "testutils"))]
+pub mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
 pub use error::{CertificationError, Error, PreCertificationError};
+use listener_task::ListenerTask;
 pub use settlement_client::{NonceInfo, SettlementClient, TxReceiptStatus};
 
 const MAX_POLL_READS: usize = 1_000;
@@ -78,6 +82,7 @@ pub struct CertificateOrchestrator<
     EpochsStore,
     PerEpochStore,
     StateStore,
+    L1Rpc,
 > {
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
@@ -111,9 +116,12 @@ pub struct CertificateOrchestrator<
 
     /// Network task future resolver.
     network_tasks: NetworkTasks,
+
+    /// Listener task singleton.
+    listener_task: Arc<ListenerTask<StateStore, L1Rpc>>,
 }
 
-impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         Sc,
         CertifierClient,
@@ -121,9 +129,12 @@ impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        L1Rpc,
     >
 where
     PendingStore: PendingCertificateReader,
+    L1Rpc: RollupContract + L1TransactionFetcher,
+    StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter,
 {
     const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
 
@@ -139,6 +150,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
+        l1_rpc: Arc<L1Rpc>,
     ) -> Result<Self, Error> {
         Ok(Self {
             epoch_packing_tasks: FuturesUnordered::new(),
@@ -155,15 +167,16 @@ where
             pending_store,
             epochs_store,
             current_epoch,
-            state_store,
+            state_store: state_store.clone(),
             spawned_network_tasks: Default::default(),
             network_tasks: FuturesUnordered::new(),
+            listener_task: Arc::new(ListenerTask::new(state_store, l1_rpc)),
         })
     }
 }
 
 #[buildstructor::buildstructor]
-impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         Sc,
         CertifierClient,
@@ -171,6 +184,7 @@ impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        L1Rpc,
     >
 where
     CertifierClient: Certifier,
@@ -178,7 +192,8 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter + 'static,
+    L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
     ///
@@ -209,18 +224,25 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
+        l1_rpc: Arc<L1Rpc>,
     ) -> eyre::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
             clock,
             data_receiver,
-            cancellation_token,
+            cancellation_token.clone(),
             settlement_client,
             certifier_task_builder,
             pending_store.clone(),
             epochs_store,
             current_epoch,
             state_store,
+            l1_rpc,
         )?;
+
+        tokio::spawn({
+            let listener_task = orchestrator.listener_task.clone();
+            async move { listener_task.run(cancellation_token).await }
+        });
 
         // Try to spawn the certifier tasks for the next height of each network
         for ProvenCertificate(_, network_id, _height) in
@@ -235,7 +257,7 @@ where
     }
 }
 
-impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
     CertificateOrchestrator<
         Sc,
         CertifierClient,
@@ -243,14 +265,16 @@ impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
         EpochsStore,
         PerEpochStore,
         StateStore,
+        L1Rpc,
     >
 where
     CertifierClient: Certifier,
     Sc: SettlementClient,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    L1Rpc: RollupContract + L1TransactionFetcher,
 {
     fn spawn_network_task(&mut self, network_id: NetworkId) -> Result<(), Error> {
         if self.spawned_network_tasks.contains_key(&network_id) {
@@ -370,15 +394,16 @@ where
     fn handle_epoch_packing_result(&mut self) {}
 }
 
-impl<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
-    for CertificateOrchestrator<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc> Future
+    for CertificateOrchestrator<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore, L1Rpc>
 where
     A: Certifier,
     Sc: SettlementClient,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + MetadataReader + MetadataWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    L1Rpc: RollupContract + L1TransactionFetcher + Send + Sync + 'static,
 {
     type Output = ();
 

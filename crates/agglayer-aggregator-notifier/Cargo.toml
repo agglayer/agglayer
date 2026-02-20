@@ -36,6 +36,7 @@ sp1-sdk.workspace = true
 sp1-prover.workspace = true
 
 [dev-dependencies]
+agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator", features = ["testutils"] }
 agglayer-storage = { path = "../agglayer-storage", features = ["testutils"] }
 pessimistic-proof = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
@@ -54,4 +55,4 @@ url.workspace = true
 [features]
 coverage = []
 sp1 = []
-testutils = []
+testutils = ["agglayer-certificate-orchestrator/testutils"]

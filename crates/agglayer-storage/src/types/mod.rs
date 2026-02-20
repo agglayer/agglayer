@@ -1,6 +1,6 @@
 use agglayer_types::{
-    primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    NetworkId, Proof,
+    primitives::{alloy_primitives::BlockNumber, Digest},
+    CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height, NetworkId, Proof,
 };
 use serde::{Deserialize, Serialize};
 
@@ -8,17 +8,20 @@ mod certificate;
 pub(crate) mod disabled_network;
 pub mod generated; // TODO: remove "pub" once implementation of storage is completed
 pub(crate) mod network_info;
+pub(crate) mod pp_root_to_certificate_ids;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataKey {
     LatestSettledEpoch,
     EpochSynchronization, // Actually unused, kept for storage backward compatibility
+    LatestBlockThatSettledAnyCert,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MetadataValue {
     LatestSettledEpoch(EpochNumber),
     EpochSynchronization(u64), // Actually unused, kept for storage backward compatibility
+    LatestBlockThatSettledAnyCert(BlockNumber),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

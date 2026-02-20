@@ -365,6 +365,7 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateReadyForSettlement { settlement_submitted_notifier,
                         nonce_info, previous_tx_hashes, height, new_pp_root, .. }) => {
+
                         // For now, the network task directly submits the settlement.
                         // In the future, with aggregation, all this will likely move to a separate epoch packer task.
                         // This is the reason why the certificate task does not directly submit and wait for settlement.
