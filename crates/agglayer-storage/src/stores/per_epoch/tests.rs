@@ -5,7 +5,8 @@ use std::{
 
 use agglayer_config::Config;
 use agglayer_types::{
-    Certificate, CertificateIndex, CertificateStatus, EpochNumber, Height, NetworkId, Proof,
+    Certificate, CertificateIndex, CertificateStatus, EpochNumber, ExecutionMode, Height,
+    NetworkId, Proof,
 };
 use parking_lot::RwLock;
 use rstest::{fixture, rstest};
@@ -20,6 +21,7 @@ use crate::{
         per_epoch::PerEpochStore,
         state::StateStore,
         PendingCertificateWriter as _, PerEpochReader as _, StateReader,
+        PendingCertificateReader as _,
     },
     tests::TempDBDir,
 };
@@ -416,6 +418,69 @@ fn can_retrieve_proof_at_index() {
     assert!(
         non_existent_proof.is_none(),
         "Should return None for non-existent index"
+    );
+}
+
+#[rstest]
+fn dry_run_does_not_mutate_store(store: PerEpochStore<PendingStore, StateStore>) {
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+    let network = NetworkId::new(0);
+    let height = Height::ZERO;
+
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    let result = store.add_certificate(certificate_id, ExecutionMode::DryRun);
+    assert!(
+        result.is_ok(),
+        "Dry run should succeed for valid certificate: {:?}",
+        result
+    );
+
+    let (epoch_number, certificate_index) = result.unwrap();
+    assert_eq!(epoch_number, EpochNumber::ZERO);
+    assert_eq!(certificate_index, CertificateIndex::ZERO);
+
+    assert!(
+        store
+            .get_certificate_at_index(CertificateIndex::ZERO)
+            .unwrap()
+            .is_none(),
+        "Dry run should not persist certificates"
+    );
+    assert!(
+        store
+            .get_proof_at_index(CertificateIndex::ZERO)
+            .unwrap()
+            .is_none(),
+        "Dry run should not persist proofs"
+    );
+
+    assert!(
+        pending_store.get_certificate(network, height).unwrap().is_some(),
+        "Dry run should not remove pending certificate"
+    );
+    assert!(
+        pending_store.get_proof(certificate_id).unwrap().is_some(),
+        "Dry run should not remove pending proof"
+    );
+
+    assert!(
+        store.get_end_checkpoint().is_empty(),
+        "Dry run should not advance end checkpoints"
     );
 }
 
