@@ -5,12 +5,6 @@ package agglayer.storage.v0;
 import "agglayer/storage/v0/ethereum_types.proto";
 import "google/protobuf/timestamp.proto";
 
-// // Settlement job ID.
-// message SettlementJobId {
-//   // ULID byte sequence.
-//   bytes ulid = 1;
-// }
-
 // Settlement job data.
 message SettlementJob {
   // ----- Transaction details -----
@@ -158,12 +152,3 @@ message SettlementAttempt {
   // Timestamp at which the attempt was submitted to L1.
   google.protobuf.Timestamp submission_time = 6;
 }
-
-// // Contents of the settlement nonces CF.
-// message SettlementNonce {
-//   // ID of the job that reserved this nonce.
-//   SettlementJobId job_id = 1;
-
-//   // Sequence numbers of all of this job's settlement attempts that used this nonce.
-//   repeated AttemptSequenceNumber attempt_sequence_numbers = 2;
-// }

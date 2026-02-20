@@ -71,4 +71,5 @@ crate::schema::impl_codec_using_bincode_for!(
     network_info::Key,
     settlement::job::Key,
     settlement::attempt::Key,
+    settlement::attempt_per_wallet::Key,
 );

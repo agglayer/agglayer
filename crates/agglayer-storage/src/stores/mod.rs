@@ -2,12 +2,12 @@ mod interfaces;
 
 pub use interfaces::{
     reader::{
-        network_info_reader::NetworkInfoReader, DebugReader, EpochStoreReader, MetadataReader,
-        settlement_reader::SettlementReader, PendingCertificateReader, PerEpochReader, StateReader,
+        network_info_reader::NetworkInfoReader, settlement_reader::SettlementReader, DebugReader,
+        EpochStoreReader, MetadataReader, PendingCertificateReader, PerEpochReader, StateReader,
     },
     writer::{
-        DebugWriter, EpochStoreWriter, MetadataWriter, PendingCertificateWriter, PerEpochWriter,
-        settlement_writer::SettlementWriter, StateWriter, UpdateEvenIfAlreadyPresent,
+        settlement_writer::SettlementWriter, DebugWriter, EpochStoreWriter, MetadataWriter,
+        PendingCertificateWriter, PerEpochWriter, StateWriter, UpdateEvenIfAlreadyPresent,
         UpdateStatusToCandidate,
     },
 };

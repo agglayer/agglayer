@@ -267,13 +267,6 @@ impl NetworkType {
         }
     }
 }
-/// Settlement job ID.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SettlementJobId {
-    /// ULID byte sequence.
-    #[prost(bytes="bytes", tag="1")]
-    pub ulid: ::prost::bytes::Bytes,
-}
 /// Settlement job data.
 ///
 /// ----- Transaction details -----

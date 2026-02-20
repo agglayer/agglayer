@@ -28,7 +28,6 @@ pub const PER_EPOCH_END_CHECKPOINT_CF: &str = "per_epoch_end_checkpoint_cf";
 pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
 
 // Settlement related CFs
-pub const LATEST_SETTLEMENT_ATTEMPT_PER_ID_CF: &str = "latest_settlement_attempt_per_id_cf";
 pub const SETTLEMENT_ATTEMPTS_CF: &str = "settlement_attempts_cf";
 pub const SETTLEMENT_ATTEMPT_PER_WALLET_CF: &str = "settlement_attempt_per_wallet_cf";
 pub const SETTLEMENT_ATTEMPT_RESULTS_CF: &str = "settlement_attempt_results_cf";
@@ -71,7 +70,6 @@ pub(crate) mod metadata;
 // Debug
 pub(crate) mod debug_certificates;
 
-pub(crate) mod latest_settlement_attempt_per_id;
 pub(crate) mod settlement_attempt_per_wallet;
 pub(crate) mod settlement_attempt_results;
 pub(crate) mod settlement_attempts;

@@ -2,10 +2,12 @@ use ulid::Ulid;
 
 use crate::{
     schema::Codec as _,
-    types::generated::agglayer::storage::v0::{
-        Address, Calldata, EthValue, SettlementJob, Uint128, Uint256,
+    types::{
+        generated::agglayer::storage::v0::{
+            Address, Calldata, EthValue, SettlementJob, Uint128, Uint256,
+        },
+        settlement::job::{Key, Value},
     },
-    types::settlement::job::{Key, Value},
 };
 
 #[test]
