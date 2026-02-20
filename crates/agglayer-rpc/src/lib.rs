@@ -102,6 +102,28 @@ where
     L1Rpc: Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
+    fn latest_settled_id_and_height(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
+        Ok(self
+            .state
+            .get_latest_settled_certificate_per_network(network_id)
+            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
+            .map(|(_, SettledCertificate(id, height, _, _))| (id, height)))
+    }
+
+    fn latest_proven_id_and_height(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
+        Ok(self
+            .pending_store
+            .get_latest_proven_certificate_per_network(network_id)
+            .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
+            .map(|(_, height, id)| (id, height)))
+    }
+
     pub fn get_latest_known_certificate_header(
         &self,
         network_id: NetworkId,
@@ -110,17 +132,8 @@ where
             "Received request to get the latest known certificate header for rollup {network_id}",
         );
 
-        let settled_certificate_id_and_height = self
-            .state
-            .get_latest_settled_certificate_per_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
-            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
-
-        let proven_certificate_id_and_height = self
-            .pending_store
-            .get_latest_proven_certificate_per_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
-            .map(|(_, height, id)| (id, height));
+        let settled_certificate_id_and_height = self.latest_settled_id_and_height(&network_id)?;
+        let proven_certificate_id_and_height = self.latest_proven_id_and_height(&network_id)?;
 
         let pending_certificate_id_and_height = self
             .pending_store
@@ -152,17 +165,8 @@ where
     ) -> Result<Option<Certificate>, GetLatestCertificateError> {
         debug!("Received request to get the latest available certificate for rollup {network_id}");
 
-        let proven_certificate_id_and_height = self
-            .pending_store
-            .get_latest_proven_certificate_per_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
-            .map(|(_, height, id)| (id, height));
-
-        let settled_certificate_id_and_height = self
-            .state
-            .get_latest_settled_certificate_per_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
-            .map(|(_, SettledCertificate(id, height, _, _))| (id, height));
+        let proven_certificate_id_and_height = self.latest_proven_id_and_height(&network_id)?;
+        let settled_certificate_id_and_height = self.latest_settled_id_and_height(&network_id)?;
 
         let certificate_id = std::cmp::max_by_key(
             proven_certificate_id_and_height,
