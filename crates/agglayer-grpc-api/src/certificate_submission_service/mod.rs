@@ -67,6 +67,8 @@ where
                 CertificateSubmissionErrorWrapper::new(error, SUBMIT_CERTIFICATE_METHOD_PATH)
             })?;
 
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
+
         Ok(tonic::Response::new(SubmitCertificateResponse {
             certificate_id: Some(certificate_id.into()),
         }))
