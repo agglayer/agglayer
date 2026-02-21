@@ -13,9 +13,9 @@ use agglayer_types::{
 use pessimistic_proof::{
     core::commitment::PessimisticRootCommitmentVersion, local_state::StateCommitment,
 };
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::{certificate_task::CertificateTask, Certifier, Error, NonceInfo, SettlementClient};
 
@@ -137,14 +137,11 @@ pub(crate) struct NetworkTask<CertifierClient, SettlementClient, PendingStore, S
     settlement_client: Arc<SettlementClient>,
     /// The local network state of the network task.
     local_state: Box<LocalNetworkStateData>,
-
     /// The clock reference to subscribe to the epoch events and check for
     /// current epoch.
     clock_ref: ClockRef,
     /// The stream of new certificates to certify.
     certificate_stream: mpsc::Receiver<NewCertificate>,
-    /// Flag to indicate if the network is at capacity for the current epoch.
-    at_capacity_for_epoch: bool,
     /// latest certificate settled
     latest_settled: Option<SettledCertificate>,
 }
@@ -193,7 +190,6 @@ where
             local_state,
             clock_ref,
             certificate_stream,
-            at_capacity_for_epoch: false,
             latest_settled,
             settlement_client,
         })
@@ -212,8 +208,6 @@ where
     ) -> Result<NetworkId, Error> {
         info!("Starting the network task for network {}", self.network_id);
 
-        let mut stream_epoch = self.clock_ref.subscribe()?;
-
         let current_epoch = self.clock_ref.current_epoch();
 
         // Start from the latest settled certificate to define the next expected height
@@ -227,7 +221,6 @@ where
                 debug!("Current network height is {}", current_height);
                 if epoch == current_epoch {
                     debug!("Already settled for the epoch {current_epoch}");
-                    self.at_capacity_for_epoch = true;
                 }
 
                 current_height.next()
@@ -246,7 +239,7 @@ where
                     return Ok(self.network_id);
                 }
 
-                result = self.make_progress(&mut stream_epoch, &mut next_expected_height, &mut first_run, &cancellation_token) => {
+                result = self.make_progress(&mut next_expected_height, &mut first_run, &cancellation_token) => {
                     if let Err(error)= result {
                         error!("Error during the certification process: {}", error);
 
@@ -260,9 +253,9 @@ where
         }
     }
 
+    #[instrument(skip(self, cancellation_token), fields(certificate_id))]
     async fn make_progress(
         &mut self,
-        stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
         next_expected_height: &mut Height,
         first_run: &mut bool,
         cancellation_token: &CancellationToken,
@@ -271,39 +264,7 @@ where
             *first_run = false;
         } else {
             tokio::select! {
-                event = stream_epoch.recv() => {
-                    let network_id = self.network_id;
-                    match event {
-                        Ok(agglayer_clock::Event::EpochEnded(epoch)) => {
-                            info!("Received an epoch event: {}", epoch);
-
-                            let current_epoch = self.clock_ref.current_epoch();
-                            if epoch != EpochNumber::ZERO && epoch.next() < current_epoch {
-                                warn!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
-
-                                return Ok(());
-                            }
-                            match self.latest_settled {
-                                Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
-                                    warn!("Network {network_id} is at capacity for the epoch {current_epoch}");
-                                    return Ok(());
-                                },
-                                _ => {
-                                    self.at_capacity_for_epoch = false;
-                                }
-                            }
-                        }
-                        Err(broadcast::error::RecvError::Lagged(num_skipped)) => {
-                            warn!("Network {network_id} skipped {num_skipped} epoch ticks");
-                            return Ok(());
-                        }
-                        Err(broadcast::error::RecvError::Closed) => {
-                            error!("Epoch channel closed for network {network_id}");
-                            return Err(Error::InternalError("epoch channel closed".into()));
-                        }
-                    }
-                }
-                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
+                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv() => {
                     info!(
                         hash = certificate_id.to_string(),
                         "Received a certificate event for {certificate_id} at height {height}"
@@ -348,6 +309,7 @@ where
         };
 
         let certificate_id = certificate.hash();
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
         let (sender, mut receiver) = mpsc::channel(1);
 
@@ -375,7 +337,7 @@ where
             tokio::select! {
                 msg = receiver.recv() => match msg {
                     None => {
-                        error!(height = next_expected_height.as_u64(), %certificate_id, "Certificate task channel closed");
+                        error!(height = next_expected_height.as_u64(), "Certificate task channel closed");
                         return Err(Error::InternalError("Certificate task channel closed".into()));
                     }
                     Some(NetworkTaskMessage::GetLocalNetworkStateBeforeHeight { response, .. }) => {
@@ -419,7 +381,7 @@ where
                                         Ok((settlement_tx_hash, nonce))
                                     }
                                     Err(err) => {
-                                        error!(%certificate_id,
+                                        error!(
                                             "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                                          Ok((settlement_tx_hash, None))
                                     }
@@ -431,29 +393,29 @@ where
                         // If the error in the sending transaction happened for whatever reason,
                         // check if maybe the certificate has been settled through some other previous transaction.
                         if let Err(err) = &result {
-                            error!(%certificate_id, "Error submitting settlement transaction for certificate at height {height}: {err:?}");
+                            error!("Error submitting settlement transaction for certificate at height {height}: {err:?}");
                             for previous_tx_hash in previous_tx_hashes {
                                 match self.settlement_client.fetch_settlement_receipt_status(previous_tx_hash).await {
                                     Ok(crate::TxReceiptStatus::TxSuccessful) => {
                                         // Transaction is mined, but we haven't known that, return it for further processing.
-                                        info!(%certificate_id,
+                                        info!(
                                             "Certificate for new height: {height} has been settled on L1 through previous transaction {previous_tx_hash}");
                                         result = Ok((previous_tx_hash, None));
                                         break;
                                     }
                                     Ok(crate::TxReceiptStatus::TxFailed) => {
                                         // Transaction is mined with status 0 (reverted). Return it for further processing.
-                                        warn!(%certificate_id,
+                                        warn!(
                                             "Certificate for new height: {height} transaction {previous_tx_hash} has status 0 (reverted)");
                                         result = Ok((previous_tx_hash, None));
                                         break;
                                     }
                                     Ok(crate::TxReceiptStatus::NotFound) => {
-                                        debug!(%certificate_id,
+                                        debug!(
                                             "Certificate for new height: {height} previous transaction {previous_tx_hash} not mined");
                                     }
                                     Err(err) => {
-                                        debug!(%certificate_id,
+                                        debug!(
                                             "Error checking receipt status for previous settlement tx {previous_tx_hash}: {err}");
                                     }
                                 }
@@ -464,7 +426,7 @@ where
                             if let Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) = self.fetch_latest_pp_root_from_l1().await {
                                if latest_pp_root == new_pp_root {
                                    // Certificate has been settled through some other previous transaction.
-                                   info!(%certificate_id,
+                                   info!(
                                        "Certificate for new height: {height} has been previously settled on \
                                        L1 through other transaction {latest_pp_root_tx_hash}, \
                                        hence unable to send settlement transaction");
@@ -499,21 +461,21 @@ where
                                 match self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await {
                                     Ok(crate::TxReceiptStatus::TxSuccessful) => {
                                         // Transaction is mined, but we did not get the event, consider it settled.
-                                        info!(%certificate_id,
+                                        info!(
                                             "Certificate for new height: {} has been settled on L1 through transaction {settlement_tx_hash} \
                                              (timeout but tx mined)", height);
                                     }
                                     Ok(crate::TxReceiptStatus::TxFailed) => {
                                          // Transaction is mined with status 0 (reverted).
-                                        warn!(%certificate_id,
+                                        warn!(
                                             "Certificate for new height: {height} settlement transaction {settlement_tx_hash} has status 0 (reverted)");
                                     }
                                     Ok(crate::TxReceiptStatus::NotFound) => {
-                                        warn!(%certificate_id,
+                                        warn!(
                                             "Certificate for new height: {height} settlement transaction {settlement_tx_hash} not yet mined");
                                     }
                                     Err(err) => {
-                                        debug!(%certificate_id,
+                                        debug!(
                                             "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                                     }
                                 }
@@ -522,7 +484,7 @@ where
                                 match self.fetch_latest_pp_root_from_l1().await {
                                     Ok(Some((latest_pp_root, latest_pp_root_tx_hash))) if latest_pp_root == new_pp_root => {
                                         // Certificate has been settled through some other previous transaction.
-                                        info!(%certificate_id,
+                                        info!(
                                             "Certificate for new height: {} has been settled on L1 through other transaction {latest_pp_root_tx_hash}", height);
                                         CertificateSettlementResult::SettledThroughOtherTx(latest_pp_root_tx_hash)
                                     }
@@ -543,12 +505,11 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateSettled { settled_certificate, height, .. }) => {
-                        self.at_capacity_for_epoch = true;
                         let epoch_number = settled_certificate.2;
                         let certificate_index = settled_certificate.3;
                         self.latest_settled = Some(settled_certificate);
                         next_expected_height.increment();
-                        debug!(%certificate_id, "Certification process completed");
+                        debug!("Certification process completed");
                         let Some(new) = pending_state else {
                             return Err(Error::InternalError(format!("Missing pending state needed upon settlement, current state: {}", self.local_state.get_roots().display_to_hex() )))
                         };
@@ -586,25 +547,24 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateErrored { .. }) => {
                         // The certificate task already logged everything that should be logged.
-                        self.at_capacity_for_epoch = false;
                         break;
                     }
-                    Some(NetworkTaskMessage::CheckSettlementTx { certificate_id, settlement_tx_hash, tx_mined_notifier }) => {
+                    Some(NetworkTaskMessage::CheckSettlementTx { settlement_tx_hash, tx_mined_notifier, .. }) => {
                         let mined = self.settlement_client.fetch_settlement_receipt_status(settlement_tx_hash).await;
                         match &mined {
                             Ok(crate::TxReceiptStatus::TxSuccessful) => {
-                                info!(%certificate_id,
+                                info!(
                                     "Settlement tx {settlement_tx_hash} has been mined");
                             }
                             Ok(crate::TxReceiptStatus::TxFailed) => {
-                                warn!(%certificate_id,
+                                warn!(
                                     "Settlement tx {settlement_tx_hash} is mined with the status 0 (failed)");
                             }
                             Ok(crate::TxReceiptStatus::NotFound) => {
-                                debug!(%certificate_id, "Settlement tx {settlement_tx_hash} is not mined");
+                                debug!( "Settlement tx {settlement_tx_hash} is not mined");
                             }
                             Err(err) => {
-                                debug!(%certificate_id,
+                                debug!(
                                     "Error checking receipt status for settlement tx {settlement_tx_hash}: {err}");
                             }
                         };

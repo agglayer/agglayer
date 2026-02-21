@@ -12,7 +12,7 @@ use agglayer_types::{
 };
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::ReadOptions;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, instrument, warn};
 
 use super::{
     interfaces::reader::PerEpochReader, MetadataWriter, PendingCertificateReader,
@@ -34,8 +34,6 @@ mod cf_definitions;
 
 #[cfg(test)]
 mod tests;
-
-const MAX_CERTIFICATE_PER_EPOCH: u64 = 1;
 
 /// A logical store for an Epoch.
 pub struct PerEpochStore<PendingStore, StateStore> {
@@ -246,6 +244,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: MetadataWriter + StateWriter + StateReader,
 {
+    #[instrument(skip(self), fields(epoch_number = %self.epoch_number))]
     fn add_certificate(
         &self,
         certificate_id: CertificateId,
@@ -326,8 +325,6 @@ where
                 );
                 // Adding the network to the end checkpoint.
                 end_checkpoint_entry_assignment = Some(Height::ZERO);
-
-                // Adding the certificate to the DB
             }
             // If the network is not found in the end checkpoint and the height is not 0,
             // this is an invalid certificate candidate and the operation should fail.
@@ -339,18 +336,23 @@ where
             (Some(_start_height), Entry::Occupied(ref current_height))
                 if height == Height::ZERO =>
             {
+                debug!(
+                    "{}Failed certificate candidate for network {}: height is {} but network is \
+                     already present in the end checkpoint with height {}",
+                    mode.prefix(),
+                    network_id,
+                    height,
+                    current_height.get()
+                );
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
                     height,
                     *current_height.get(),
-                ))?
+                ))?;
             }
             // If the network is found in the end checkpoint and the height minus one is equal to
             // the current network height. We can add the certificate.
-            (Some(start_height), Entry::Occupied(current_height))
-                if current_height.get().next() == height
-                    && height.distance_since(start_height) <= MAX_CERTIFICATE_PER_EPOCH =>
-            {
+            (_, Entry::Occupied(current_height)) if current_height.get().next() == height => {
                 debug!(
                     "{}Certificate candidate for network {} at height {} accepted",
                     mode.prefix(),
@@ -362,11 +364,19 @@ where
             }
 
             (_, Entry::Occupied(current_height)) => {
+                debug!(
+                    "{}Failed certificate candidate for network {}: current height is {} \
+                     submitted certificate height is {}",
+                    mode.prefix(),
+                    network_id,
+                    current_height.get(),
+                    height,
+                );
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
                     height,
                     *current_height.get(),
-                ))?
+                ))?;
             }
         }
 
@@ -407,10 +417,7 @@ where
 
         self.pending_store
             .remove_pending_certificate(network_id, height)?;
-        debug!(
-            %certificate_id,
-            "Certificate and proof removed from pending store"
-        );
+        debug!("Certificate and proof removed from pending store");
 
         self.state_store.assign_certificate_to_epoch(
             &certificate_id,
@@ -418,11 +425,7 @@ where
             &certificate_index,
         )?;
 
-        debug!(
-            %certificate_id,
-            epoch_number = %self.epoch_number,
-            "Certificate assigned to epoch"
-        );
+        debug!("Certificate assigned to epoch");
         if let Some(height) = end_checkpoint_entry_assignment {
             let entry = end_checkpoint_entry.or_default();
             *entry = height;
