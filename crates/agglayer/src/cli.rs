@@ -46,7 +46,7 @@ pub(crate) enum Commands {
     Vkey,
     VkeySelector,
 
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Backup(Backup),
 }
 
