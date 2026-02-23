@@ -122,10 +122,7 @@ impl BlockClock<BlockProvider> {
         let client = ClientBuilder::default().pubsub(ws).await?;
         let provider = ProviderBuilder::new().connect_client(client);
 
-        // Mark connection as successful
         let clock = Self::new(provider, genesis_block, epoch_duration);
-
-        agglayer_telemetry::clock::record_connection_established();
 
         Ok(clock)
     }
