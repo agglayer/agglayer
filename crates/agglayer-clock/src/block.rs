@@ -190,7 +190,6 @@ where
         })?;
 
         info!("Successfully subscribed to L1 block stream");
-        agglayer_telemetry::clock::record_connection_established();
 
         // Wait for genesis block if needed
         while self.latest_seen_block < self.genesis_block {
