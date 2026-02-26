@@ -56,5 +56,10 @@ name = "latest_certificate_bench"
 harness = false
 required-features = ["testutils"]
 
+[[bench]]
+name = "settlement_latest_attempt_bench"
+harness = false
+required-features = ["testutils"]
+
 [features]
 testutils = ["rand", "mockall", "agglayer-types/testutils"]
