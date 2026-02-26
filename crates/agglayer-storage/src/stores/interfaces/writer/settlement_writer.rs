@@ -24,7 +24,7 @@ pub trait SettlementWriter: Send + Sync {
     /// attempt_sequence_number)`.
     ///
     /// This is an insert-only operation and must fail if that composite key
-    /// already exists.
+    /// already exists. The parent settlement job must already exist.
     fn insert_settlement_attempt(
         &self,
         settlement_job_id: &Ulid,
@@ -36,7 +36,7 @@ pub trait SettlementWriter: Send + Sync {
     /// `(settlement_job_id, attempt_sequence_number)`.
     ///
     /// This is an insert-only operation and must fail if that composite key
-    /// already exists.
+    /// already exists. The corresponding settlement attempt must already exist.
     fn insert_settlement_attempt_result(
         &self,
         settlement_job_id: &Ulid,

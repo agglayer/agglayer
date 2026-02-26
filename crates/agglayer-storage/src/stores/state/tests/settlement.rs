@@ -5,6 +5,7 @@ use ulid::Ulid;
 use crate::{
     backup::BackupClient,
     columns::{
+        settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn, settlement_jobs::SettlementJobsColumn,
     },
@@ -17,7 +18,12 @@ use crate::{
             ContractCallOutcome, ContractCallResult, EthValue, Nonce, SettlementAttempt,
             SettlementJob, TxHash, TxResult, Uint128, Uint256,
         },
-        settlement::attempt::Key as SettlementAttemptKey,
+        settlement::{
+            attempt::Key as SettlementAttemptKey,
+            attempt_per_wallet::{
+                Key as SettlementAttemptPerWalletKey, Value as SettlementAttemptPerWalletValue,
+            },
+        },
     },
 };
 
@@ -135,8 +141,12 @@ fn insert_settlement_job_duplicate_fails() {
 #[test]
 fn insert_settlement_attempt_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
+    let job_id = mk_ulid(3);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(3))
+        .expect("job insert must succeed");
     assert!(store
-        .insert_settlement_attempt(&mk_ulid(3), 1, &mk_settlement_attempt(1))
+        .insert_settlement_attempt(&job_id, 1, &mk_settlement_attempt(1))
         .is_ok());
 }
 
@@ -146,6 +156,9 @@ fn insert_settlement_attempt_duplicate_fails() {
     let job_id = mk_ulid(4);
     let first = mk_settlement_attempt(1);
     let second = mk_settlement_attempt(2);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(4))
+        .expect("job insert must succeed");
     store
         .insert_settlement_attempt(&job_id, 1, &first)
         .expect("first insert must succeed");
@@ -162,10 +175,24 @@ fn insert_settlement_attempt_duplicate_fails() {
 }
 
 #[test]
+fn insert_settlement_attempt_without_job_fails() {
+    let (_tmp, _db, store) = setup_store();
+    let res = store.insert_settlement_attempt(&mk_ulid(404), 1, &mk_settlement_attempt(1));
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+}
+
+#[test]
 fn insert_settlement_attempt_result_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
+    let job_id = mk_ulid(5);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(5))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &mk_settlement_attempt(1))
+        .expect("attempt insert must succeed");
     assert!(store
-        .insert_settlement_attempt_result(&mk_ulid(5), 1, &mk_tx_result_success(1))
+        .insert_settlement_attempt_result(&job_id, 1, &mk_tx_result_success(1))
         .is_ok());
 }
 
@@ -175,6 +202,12 @@ fn insert_settlement_attempt_result_duplicate_fails() {
     let job_id = mk_ulid(6);
     let first = mk_tx_result_success(1);
     let second = mk_tx_result_success(2);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(6))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &mk_settlement_attempt(1))
+        .expect("attempt insert must succeed");
     store
         .insert_settlement_attempt_result(&job_id, 1, &first)
         .expect("first insert must succeed");
@@ -188,6 +221,55 @@ fn insert_settlement_attempt_result_duplicate_fails() {
         .expect("Unable to read stored value"),
         Some(first)
     );
+}
+
+#[test]
+fn insert_settlement_attempt_result_without_attempt_fails() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_ulid(405);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(42))
+        .expect("job insert must succeed");
+
+    let res = store.insert_settlement_attempt_result(&job_id, 1, &mk_tx_result_success(1));
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+}
+
+#[test]
+fn insert_settlement_attempt_indexes_by_wallet_and_nonce() {
+    let (_tmp, db, store) = setup_store();
+    let job_id = mk_ulid(406);
+    let seq = 3;
+    let attempt = mk_settlement_attempt(seq);
+    let wallet_bytes: [u8; 20] = attempt
+        .sender_wallet
+        .as_ref()
+        .expect("sender_wallet must be set")
+        .address
+        .as_ref()
+        .try_into()
+        .expect("sender wallet should be 20 bytes");
+    let nonce = attempt.nonce.as_ref().expect("nonce must be set").nonce;
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(42))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, seq, &attempt)
+        .expect("attempt insert must succeed");
+
+    let index_key = SettlementAttemptPerWalletKey {
+        address: wallet_bytes,
+        nonce,
+        settlement_job_id: job_id,
+        attempt_sequence_number: seq,
+    };
+
+    assert!(matches!(
+        db.get::<SettlementAttemptPerWalletColumn>(&index_key)
+            .expect("index read must succeed"),
+        Some(SettlementAttemptPerWalletValue)
+    ));
 }
 
 #[test]
@@ -234,6 +316,9 @@ fn get_settlement_attempt_returns_value_after_insert() {
     let job_id = mk_ulid(13);
     let attempt = mk_settlement_attempt(9);
     store
+        .insert_settlement_job(&job_id, &mk_settlement_job(13))
+        .expect("job insert must succeed");
+    store
         .insert_settlement_attempt(&job_id, 9, &attempt)
         .expect("insert must succeed");
     assert_eq!(
@@ -261,6 +346,12 @@ fn get_settlement_attempt_result_returns_value_after_insert() {
     let job_id = mk_ulid(15);
     let result = mk_tx_result_success(15);
     store
+        .insert_settlement_job(&job_id, &mk_settlement_job(15))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 2, &mk_settlement_attempt(2))
+        .expect("attempt insert must succeed");
+    store
         .insert_settlement_attempt_result(&job_id, 2, &result)
         .expect("insert must succeed");
     assert_eq!(
@@ -286,6 +377,9 @@ fn latest_attempt_sequence_none_when_no_attempts() {
 fn latest_attempt_sequence_returns_max_for_single_job() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_ulid(17);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(17))
+        .expect("job insert must succeed");
     for seq in [1u64, 3, 10] {
         store
             .insert_settlement_attempt(&job_id, seq, &mk_settlement_attempt(seq))
@@ -304,6 +398,12 @@ fn latest_attempt_sequence_ignores_other_jobs() {
     let (_tmp, _db, store) = setup_store();
     let job_a = mk_ulid(18);
     let job_b = mk_ulid(19);
+    store
+        .insert_settlement_job(&job_a, &mk_settlement_job(18))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_job(&job_b, &mk_settlement_job(19))
+        .expect("job insert must succeed");
 
     store
         .insert_settlement_attempt(&job_a, 2, &mk_settlement_attempt(2))
@@ -333,6 +433,9 @@ fn latest_attempt_sequence_ignores_other_jobs() {
 fn latest_attempt_sequence_with_single_attempt_returns_that_sequence() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_ulid(20);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(20))
+        .expect("job insert must succeed");
     store
         .insert_settlement_attempt(&job_id, 42, &mk_settlement_attempt(42))
         .expect("insert must succeed");
@@ -379,6 +482,9 @@ fn result_absent_does_not_imply_attempt_absent() {
     let job_id = mk_ulid(22);
     let attempt = mk_settlement_attempt(1);
     store
+        .insert_settlement_job(&job_id, &mk_settlement_job(22))
+        .expect("job insert must succeed");
+    store
         .insert_settlement_attempt(&job_id, 1, &attempt)
         .expect("insert must succeed");
 
@@ -398,6 +504,12 @@ fn duplicate_insert_preserves_original_value() {
     let job_id = mk_ulid(23);
     let first = mk_tx_result_success(1);
     let second = mk_tx_result_success(2);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(23))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 9, &mk_settlement_attempt(9))
+        .expect("attempt insert must succeed");
 
     store
         .insert_settlement_attempt_result(&job_id, 9, &first)
@@ -418,6 +530,9 @@ fn latest_attempt_sequence_handles_large_sequence_numbers() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_ulid(24);
     let high = u64::MAX - 1;
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(24))
+        .expect("job insert must succeed");
 
     store
         .insert_settlement_attempt(&job_id, high, &mk_settlement_attempt(high))
