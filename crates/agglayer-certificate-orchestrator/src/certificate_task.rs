@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use agglayer_settlement_service::{
-    SettlementJob, SettlementJobResult, SettlementService, SettlementServiceTrait,
+    RetrievedSettlementResult, SettlementJob, SettlementJobResult, SettlementService,
+    SettlementServiceTrait,
 };
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -175,7 +176,7 @@ where
             }
             CertificateStatus::Candidate => {
                 self.recompute_state().await?;
-                self.process_from_candidate(None).await
+                self.process_from_candidate().await
             }
             CertificateStatus::Settled => {
                 warn!("Built a CertificateTask for a certificate that is already settled");
@@ -472,6 +473,11 @@ where
                     UpdateEvenIfAlreadyPresent::Yes,
                     UpdateStatusToCandidate::Yes,
                 )?;
+
+                self.header.settlement_job_id = Some(job_id.into());
+                self.state_store
+                    .update_settlement_job_id(&certificate_id, job_id.into())?;
+
                 self.header.status = CertificateStatus::Candidate;
 
                 #[cfg(feature = "testutils")]
@@ -481,7 +487,7 @@ where
                     &self.state_store,
                 );
 
-                self.process_from_candidate(Some(job_id)).await
+                self.process_from_candidate().await
             }
             SettlementJobResult::ClientError(error) => {
                 error!("Settlement failed: {}", error.message);
@@ -490,10 +496,7 @@ where
         }
     }
 
-    async fn process_from_candidate(
-        &mut self,
-        job_id: Option<Ulid>,
-    ) -> Result<(), CertificateStatusError> {
+    async fn process_from_candidate(&mut self) -> Result<(), CertificateStatusError> {
         if self.header.status != CertificateStatus::Candidate {
             return Err(CertificateStatusError::InternalError(format!(
                 "process_from_candidate called with status {}",
@@ -503,18 +506,41 @@ where
 
         let certificate_id = self.header.certificate_id;
         let height = self.header.height;
-        let settlement_tx_hash = self
+        let job_id = self
             .header
-            .settlement_tx_hash
-            .ok_or_else(|| CertificateStatusError::SettlementError("No tx hash".into()))?;
+            .settlement_job_id
+            .ok_or_else(|| CertificateStatusError::SettlementError("No settlement job id".into()))?
+            .as_ulid();
+
+        let result =
+            match self
+                .settlement_service
+                .retrieve_settlement_result(job_id)
+                .await
+                .map_err(|e| CertificateStatusError::SettlementError(format!("{e}")))?
+            {
+                RetrievedSettlementResult::Pending(mut watcher) => {
+                    watcher.watcher().changed().await.map_err(|_| {
+                        CertificateStatusError::SettlementError("Watcher closed".into())
+                    })?;
+                    watcher.watcher().borrow().clone().ok_or_else(|| {
+                        CertificateStatusError::SettlementError("No result".into())
+                    })?
+                }
+                RetrievedSettlementResult::Completed(result) => result,
+            };
+
+        if let SettlementJobResult::ClientError(error) = result {
+            return Err(CertificateStatusError::SettlementError(error.message));
+        }
 
         info!(
-            "Certificate {} already settled with tx {}",
-            certificate_id, settlement_tx_hash
+            "Certificate {} settlement job {} completed",
+            certificate_id, job_id
         );
 
         // Extract epoch and index from settlement result
-        let (epoch_number, certificate_index) = self.extract_epoch_and_index(job_id).await?;
+        let (epoch_number, certificate_index) = self.extract_epoch_and_index(Some(job_id)).await?;
 
         let settled_certificate =
             SettledCertificate(certificate_id, height, epoch_number, certificate_index);

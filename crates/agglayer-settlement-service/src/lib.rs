@@ -11,14 +11,12 @@
 pub mod settlement_service;
 pub mod settlement_task;
 
-pub use settlement_service::{SettlementService, SettlementServiceTrait};
+#[cfg(any(test, feature = "testutils"))]
+pub use settlement_service::testutils;
+#[cfg(any(test, feature = "testutils"))]
+pub use settlement_service::MockSettlementServiceTrait;
+pub use settlement_service::{RetrievedSettlementResult, SettlementService, SettlementServiceTrait};
 pub use settlement_task::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, SettlementJob,
     SettlementJobResult,
 };
-
-#[cfg(any(test, feature = "testutils"))]
-pub use settlement_service::MockSettlementServiceTrait;
-
-#[cfg(any(test, feature = "testutils"))]
-pub use settlement_service::testutils;

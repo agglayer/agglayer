@@ -304,6 +304,9 @@ impl serde::Serialize for CertificateHeader {
         if self.settlement_tx_hash.is_some() {
             len += 1;
         }
+        if self.settlement_job_id.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.types.v1.CertificateHeader", len)?;
         if self.network_id != 0 {
             struct_ser.serialize_field("networkId", &self.network_id)?;
@@ -346,6 +349,9 @@ impl serde::Serialize for CertificateHeader {
         if let Some(v) = self.settlement_tx_hash.as_ref() {
             struct_ser.serialize_field("settlementTxHash", v)?;
         }
+        if let Some(v) = self.settlement_job_id.as_ref() {
+            struct_ser.serialize_field("settlementJobId", v)?;
+        }
         struct_ser.end()
     }
 }
@@ -374,6 +380,8 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
             "error",
             "settlement_tx_hash",
             "settlementTxHash",
+            "settlement_job_id",
+            "settlementJobId",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -389,6 +397,7 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
             Status,
             Error,
             SettlementTxHash,
+            SettlementJobId,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -421,6 +430,7 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
                             "status" => Ok(GeneratedField::Status),
                             "error" => Ok(GeneratedField::Error),
                             "settlementTxHash" | "settlement_tx_hash" => Ok(GeneratedField::SettlementTxHash),
+                            "settlementJobId" | "settlement_job_id" => Ok(GeneratedField::SettlementJobId),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -451,6 +461,7 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
                 let mut status__ = None;
                 let mut error__ = None;
                 let mut settlement_tx_hash__ = None;
+                let mut settlement_job_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::NetworkId => {
@@ -527,6 +538,12 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
                             }
                             settlement_tx_hash__ = map_.next_value()?;
                         }
+                        GeneratedField::SettlementJobId => {
+                            if settlement_job_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("settlementJobId"));
+                            }
+                            settlement_job_id__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(CertificateHeader {
@@ -541,6 +558,7 @@ impl<'de> serde::Deserialize<'de> for CertificateHeader {
                     status: status__.unwrap_or_default(),
                     error: error__,
                     settlement_tx_hash: settlement_tx_hash__,
+                    settlement_job_id: settlement_job_id__,
                 })
             }
         }

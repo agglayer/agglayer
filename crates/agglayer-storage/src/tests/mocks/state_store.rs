@@ -1,6 +1,6 @@
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementJobId, SettlementTxHash,
 };
 use mockall::mock;
 
@@ -43,6 +43,17 @@ mock! {
         ) -> Result<(), Error>;
 
         fn remove_settlement_tx_hash(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<(), Error>;
+
+        fn update_settlement_job_id(
+            &self,
+            certificate_id: &CertificateId,
+            job_id: SettlementJobId,
+        ) -> Result<(), Error>;
+
+        fn remove_settlement_job_id(
             &self,
             certificate_id: &CertificateId,
         ) -> Result<(), Error>;

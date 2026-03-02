@@ -57,6 +57,7 @@ fn transient_network_info() {
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Pending,
         settlement_tx_hash: None,
+        settlement_job_id: None,
     };
 
     state_store
@@ -151,6 +152,7 @@ fn pending_certificate_defined() {
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Settled,
         settlement_tx_hash: Some(Digest::ZERO.into()),
+        settlement_job_id: None,
     };
 
     let mut network_state = Forest::default();
@@ -187,6 +189,7 @@ fn pending_certificate_defined() {
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Pending,
         settlement_tx_hash: None,
+        settlement_job_id: None,
     };
 
     state_store
@@ -390,6 +393,7 @@ fn get_network_info_propagates_error_from_read_local_network_state() {
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Settled,
         settlement_tx_hash: Some(Digest::ZERO.into()),
+        settlement_job_id: None,
     };
 
     state_store
@@ -476,6 +480,7 @@ fn get_network_info_propagates_error_from_get_latest_settled_claim() {
         metadata: Metadata::DEFAULT,
         status: agglayer_types::CertificateStatus::Settled,
         settlement_tx_hash: Some(Digest::ZERO.into()),
+        settlement_job_id: None,
     };
 
     state_store

@@ -32,6 +32,7 @@ fn can_parse_value() {
         status: agglayer_types::CertificateStatus::Pending,
         metadata: Metadata::new([6; 32].into()),
         settlement_tx_hash: None,
+        settlement_job_id: None,
     };
 
     let encoded = value.encode().expect("Unable to encode value");

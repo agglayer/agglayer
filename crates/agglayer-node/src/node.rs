@@ -7,10 +7,10 @@ use agglayer_config::{
     settlement_service::SettlementServiceConfig, storage::backup::BackupConfig, Config, Epoch,
 };
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
-use agglayer_settlement_service::SettlementService;
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
+use agglayer_settlement_service::SettlementService;
 use agglayer_signer::{ConfiguredSigner, ConfiguredSigners};
 use agglayer_storage::{
     backup::{BackupClient, BackupEngine},

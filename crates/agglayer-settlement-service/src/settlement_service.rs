@@ -36,12 +36,16 @@ impl SettlementJobWatcher {
     }
 
     #[cfg(any(test, feature = "testutils"))]
-    pub fn new_for_test(watcher: watch::Receiver<Option<SettlementJobResult>>, job_id: Ulid) -> Self {
+    pub fn new_for_test(
+        watcher: watch::Receiver<Option<SettlementJobResult>>,
+        job_id: Ulid,
+    ) -> Self {
         Self { watcher, job_id }
     }
 
     /// Create a SettlementJobWatcher for tests with a completed result.
-    /// The channel sender is kept alive internally by spawning a background task.
+    /// The channel sender is kept alive internally by spawning a background
+    /// task.
     #[cfg(any(test, feature = "testutils"))]
     pub fn new_completed(result: SettlementJobResult, job_id: Ulid) -> Self {
         let (tx, rx) = tokio::sync::watch::channel(None);
@@ -55,7 +59,10 @@ impl SettlementJobWatcher {
             std::future::pending::<()>().await;
         });
 
-        Self { watcher: rx, job_id }
+        Self {
+            watcher: rx,
+            job_id,
+        }
     }
 }
 
@@ -67,16 +74,28 @@ pub enum RetrievedSettlementResult {
 #[cfg_attr(any(test, feature = "testutils"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait SettlementServiceTrait: Send + Sync {
-    async fn request_new_settlement(&self, job: SettlementJob) -> eyre::Result<SettlementJobWatcher>;
-    async fn retrieve_settlement_result(&self, job_id: Ulid) -> eyre::Result<RetrievedSettlementResult>;
+    async fn request_new_settlement(
+        &self,
+        job: SettlementJob,
+    ) -> eyre::Result<SettlementJobWatcher>;
+    async fn retrieve_settlement_result(
+        &self,
+        job_id: Ulid,
+    ) -> eyre::Result<RetrievedSettlementResult>;
 }
 
 #[async_trait::async_trait]
 impl SettlementServiceTrait for SettlementService {
-    async fn request_new_settlement(&self, job: SettlementJob) -> eyre::Result<SettlementJobWatcher> {
+    async fn request_new_settlement(
+        &self,
+        job: SettlementJob,
+    ) -> eyre::Result<SettlementJobWatcher> {
         self.request_new_settlement(job).await
     }
-    async fn retrieve_settlement_result(&self, job_id: Ulid) -> eyre::Result<RetrievedSettlementResult> {
+    async fn retrieve_settlement_result(
+        &self,
+        job_id: Ulid,
+    ) -> eyre::Result<RetrievedSettlementResult> {
         self.retrieve_settlement_result(job_id).await
     }
 }
@@ -267,10 +286,13 @@ impl tower::Service<AdminCommand> for SettlementService {
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod testutils {
-    use super::*;
-    use crate::{ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, SettlementJobResult};
     use agglayer_types::SettlementTxHash;
     use alloy::primitives::{BlockHash, Bytes};
+
+    use super::*;
+    use crate::{
+        ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, SettlementJobResult,
+    };
 
     /// Create a SettlementJobWatcher with a successful settlement result.
     pub fn mock_settlement_success(tx_hash: SettlementTxHash) -> SettlementJobWatcher {
@@ -282,6 +304,18 @@ pub mod testutils {
             tx_hash,
         });
         SettlementJobWatcher::new_completed(result, ulid::Ulid::new())
+    }
+
+    /// Create a completed `RetrievedSettlementResult` with a successful settlement result.
+    pub fn mock_retrieve_success(tx_hash: SettlementTxHash) -> RetrievedSettlementResult {
+        let result = SettlementJobResult::ContractCall(ContractCallResult {
+            outcome: ContractCallOutcome::Success,
+            metadata: Bytes::new(),
+            block_hash: BlockHash::ZERO,
+            block_number: 1,
+            tx_hash,
+        });
+        RetrievedSettlementResult::Completed(result)
     }
 
     /// Create a SettlementJobWatcher with a settlement error result.

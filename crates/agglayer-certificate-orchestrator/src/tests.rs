@@ -337,6 +337,21 @@ impl StateWriter for DummyPendingStore {
         todo!()
     }
 
+    fn update_settlement_job_id(
+        &self,
+        _certificate_id: &CertificateId,
+        _job_id: agglayer_types::SettlementJobId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn remove_settlement_job_id(
+        &self,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
     fn assign_certificate_to_epoch(
         &self,
         _certificate_id: &CertificateId,
@@ -369,6 +384,7 @@ impl StateWriter for DummyPendingStore {
                 status,
                 metadata: certificate.metadata,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             },
         );
 

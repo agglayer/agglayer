@@ -1,15 +1,15 @@
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
+use agglayer_settlement_service::{
+    testutils::{mock_retrieve_success, mock_settlement_error, mock_settlement_success},
+    MockSettlementServiceTrait,
+};
 use agglayer_storage::{
     stores::{PendingCertificateReader, PendingCertificateWriter, StateWriter},
     tests::{
         mocks::{MockPendingStore, MockStateStore},
         TempDBDir,
     },
-};
-use agglayer_settlement_service::{
-    MockSettlementServiceTrait,
-    testutils::{mock_settlement_success, mock_settlement_error},
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{
@@ -79,6 +79,7 @@ async fn start_from_zero() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
 
@@ -123,6 +124,10 @@ async fn start_from_zero() {
         .returning(|_, _, _, _| Ok(()));
 
     state
+        .expect_update_settlement_job_id()
+        .returning(|_, _| Ok(()));
+
+    state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Settled))
@@ -144,6 +149,9 @@ async fn start_from_zero() {
     settlement_service
         .expect_request_new_settlement()
         .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_1)));
+    settlement_service
+        .expect_retrieve_settlement_result()
+        .returning(|_| Ok(mock_retrieve_success(SETTLEMENT_TX_HASH_1)));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -239,6 +247,7 @@ async fn one_per_epoch() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
 
@@ -258,6 +267,7 @@ async fn one_per_epoch() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
     certifier
@@ -317,6 +327,10 @@ async fn one_per_epoch() {
         .returning(|_, _, _, _| Ok(()));
 
     state
+        .expect_update_settlement_job_id()
+        .returning(|_, _| Ok(()));
+
+    state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Settled))
@@ -338,6 +352,9 @@ async fn one_per_epoch() {
     settlement_service
         .expect_request_new_settlement()
         .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_1)));
+    settlement_service
+        .expect_retrieve_settlement_result()
+        .returning(|_| Ok(mock_retrieve_success(SETTLEMENT_TX_HASH_1)));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -460,6 +477,7 @@ async fn retries() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
 
@@ -479,6 +497,7 @@ async fn retries() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
 
@@ -570,6 +589,10 @@ async fn retries() {
         .returning(|_, _, _, _| Ok(()));
 
     state
+        .expect_update_settlement_job_id()
+        .returning(|_, _| Ok(()));
+
+    state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id2), eq(CertificateStatus::Settled))
@@ -596,6 +619,9 @@ async fn retries() {
         .expect_request_new_settlement()
         .times(1)
         .return_once(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_2)));
+    settlement_service
+        .expect_retrieve_settlement_result()
+        .returning(|_| Ok(mock_retrieve_success(SETTLEMENT_TX_HASH_2)));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -713,6 +739,7 @@ async fn changing_epoch_triggers_certify() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
 
@@ -732,6 +759,7 @@ async fn changing_epoch_triggers_certify() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
 
@@ -796,6 +824,10 @@ async fn changing_epoch_triggers_certify() {
         .returning(|_, _, _, _| Ok(()));
 
     state
+        .expect_update_settlement_job_id()
+        .returning(|_, _| Ok(()));
+
+    state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Settled))
@@ -836,6 +868,9 @@ async fn changing_epoch_triggers_certify() {
         .expect_request_new_settlement()
         .times(2)
         .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_1)));
+    settlement_service
+        .expect_retrieve_settlement_result()
+        .returning(|_| Ok(mock_retrieve_success(SETTLEMENT_TX_HASH_1)));
 
     let mut task = NetworkTask::new(
         Arc::new(pending),
@@ -948,6 +983,7 @@ async fn timeout_certifier() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Pending,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
 
@@ -1112,6 +1148,9 @@ async fn process_next_certificate() {
         .expect_request_new_settlement()
         .times(2)
         .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_1)));
+    settlement_service
+        .expect_retrieve_settlement_result()
+        .returning(|_| Ok(mock_retrieve_success(SETTLEMENT_TX_HASH_1)));
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
