@@ -306,7 +306,8 @@ pub mod testutils {
         SettlementJobWatcher::new_completed(result, ulid::Ulid::new())
     }
 
-    /// Create a completed `RetrievedSettlementResult` with a successful settlement result.
+    /// Create a completed `RetrievedSettlementResult` with a successful
+    /// settlement result.
     pub fn mock_retrieve_success(tx_hash: SettlementTxHash) -> RetrievedSettlementResult {
         let result = SettlementJobResult::ContractCall(ContractCallResult {
             outcome: ContractCallOutcome::Success,

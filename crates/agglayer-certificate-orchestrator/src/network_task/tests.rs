@@ -101,7 +101,6 @@ fn setup_certifier_mock(
     });
 }
 
-
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(1))]
@@ -843,8 +842,7 @@ async fn multiple_certificates_per_epoch_sequential() {
         assert_eq!(
             header.status,
             CertificateStatus::Settled,
-            "Certificate {} should be settled",
-            i
+            "Certificate {i} should be settled"
         );
     }
 
@@ -1188,8 +1186,7 @@ async fn process_multiple_certificates_across_epochs_from_pending() {
         assert_eq!(
             header.status,
             CertificateStatus::Settled,
-            "Certificate {} should be settled",
-            i
+            "Certificate {i} should be settled"
         );
 
         // After every 2 certificates, trigger epoch transition
@@ -1211,8 +1208,7 @@ async fn process_multiple_certificates_across_epochs_from_pending() {
         assert_eq!(
             header.status,
             CertificateStatus::Settled,
-            "Certificate {} should be settled",
-            i
+            "Certificate {i} should be settled"
         );
     }
 

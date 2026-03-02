@@ -14,7 +14,6 @@ use agglayer_storage::{
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx, SettlementJobId};
-use ulid::Ulid;
 use mockall::predicate::{always, eq};
 use pessimistic_proof::{
     core::{commitment::PessimisticRootCommitmentVersion, generate_pessimistic_proof},
@@ -22,6 +21,7 @@ use pessimistic_proof::{
 };
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
+use ulid::Ulid;
 
 use super::*;
 use crate::{
