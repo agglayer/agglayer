@@ -11,7 +11,7 @@ use crate::settlement_task::Nonce;
 ///
 /// Mempool-only transactions are ignored.
 pub async fn tx_hash_on_l1_for_nonce(
-    provider: &(impl Provider + Send + Sync),
+    provider: &impl Provider,
     wallet: Address,
     nonce: Nonce,
 ) -> TransportResult<Option<SettlementTxHash>> {
@@ -40,7 +40,7 @@ mod tests {
 
     use super::*;
 
-    fn build_provider(anvil: &AnvilInstance) -> impl Provider + Send + Sync + use<'_> {
+    fn build_provider(anvil: &AnvilInstance) -> impl Provider {
         let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
         ProviderBuilder::new()
             .wallet(EthereumWallet::from(signer))
