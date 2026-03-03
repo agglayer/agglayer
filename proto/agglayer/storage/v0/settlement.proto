@@ -70,16 +70,6 @@ enum ClientErrorType {
 
   // Nonce already used and finalized in other tx.
   CLIENT_ERROR_TYPE_NONCE_ALREADY_USED = 1;
-
-  /*
-     Not needed for now, might re-add later:
-
-     // Transient error (e.g., network issue, temporary RPC unavailability).
-     CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
-
-     // Permanent error (e.g., the tx was already filled with another nonce).
-     CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
-  */
 }
 
 // Result for a successfully-executed contract call.
