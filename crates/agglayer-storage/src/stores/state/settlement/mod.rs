@@ -1,7 +1,7 @@
-use rocksdb::{Direction, ReadOptions, WriteBatch};
+use rocksdb::WriteBatch;
 use ulid::Ulid;
 
-use self::telemetry::{AttemptWriteMetrics, LatestAttemptReadMetrics};
+use self::telemetry::AttemptWriteMetrics;
 use super::StateStore;
 use crate::{
     columns::{
@@ -56,43 +56,6 @@ impl SettlementReader for StateStore {
         };
 
         Ok(self.db.get::<SettlementAttemptResultsColumn>(&key)?)
-    }
-
-    fn get_latest_settlement_attempt_sequence_number(
-        &self,
-        settlement_job_id: &Ulid,
-    ) -> Result<Option<u64>, Error> {
-        let mut metrics = LatestAttemptReadMetrics::start();
-        let mut iter = match self.db.iter_with_direction::<SettlementAttemptsColumn>(
-            ReadOptions::default(),
-            Direction::Reverse,
-        ) {
-            Ok(iter) => iter,
-            Err(err) => return Err(err.into()),
-        };
-
-        if let Err(err) = iter.seek_for_prev(&SettlementAttemptKey {
-            settlement_job_id: *settlement_job_id,
-            attempt_sequence_number: u64::MAX,
-        }) {
-            return Err(err.into());
-        }
-
-        let entry = match iter.next().transpose() {
-            Ok(entry) => entry,
-            Err(err) => return Err(err.into()),
-        };
-
-        let latest = match entry {
-            Some((key, _)) if key.settlement_job_id == *settlement_job_id => {
-                Some(key.attempt_sequence_number)
-            }
-            _ => None,
-        };
-
-        metrics.mark_success(latest.is_some());
-
-        Ok(latest)
     }
 }
 

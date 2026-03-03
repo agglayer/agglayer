@@ -363,91 +363,6 @@ fn get_settlement_attempt_result_returns_value_after_insert() {
 }
 
 #[test]
-fn latest_attempt_sequence_none_when_no_attempts() {
-    let (_tmp, _db, store) = setup_store();
-    assert_eq!(
-        store
-            .get_latest_settlement_attempt_sequence_number(&mk_ulid(16))
-            .expect("read must succeed"),
-        None
-    );
-}
-
-#[test]
-fn latest_attempt_sequence_returns_max_for_single_job() {
-    let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(17);
-    store
-        .insert_settlement_job(&job_id, &mk_settlement_job(17))
-        .expect("job insert must succeed");
-    for seq in [1u64, 3, 10] {
-        store
-            .insert_settlement_attempt(&job_id, seq, &mk_settlement_attempt(seq))
-            .expect("insert must succeed");
-    }
-    assert_eq!(
-        store
-            .get_latest_settlement_attempt_sequence_number(&job_id)
-            .expect("read must succeed"),
-        Some(10)
-    );
-}
-
-#[test]
-fn latest_attempt_sequence_ignores_other_jobs() {
-    let (_tmp, _db, store) = setup_store();
-    let job_a = mk_ulid(18);
-    let job_b = mk_ulid(19);
-    store
-        .insert_settlement_job(&job_a, &mk_settlement_job(18))
-        .expect("job insert must succeed");
-    store
-        .insert_settlement_job(&job_b, &mk_settlement_job(19))
-        .expect("job insert must succeed");
-
-    store
-        .insert_settlement_attempt(&job_a, 2, &mk_settlement_attempt(2))
-        .expect("insert must succeed");
-    store
-        .insert_settlement_attempt(&job_b, 7, &mk_settlement_attempt(7))
-        .expect("insert must succeed");
-    store
-        .insert_settlement_attempt(&job_a, 9, &mk_settlement_attempt(9))
-        .expect("insert must succeed");
-
-    assert_eq!(
-        store
-            .get_latest_settlement_attempt_sequence_number(&job_a)
-            .expect("read must succeed"),
-        Some(9)
-    );
-    assert_eq!(
-        store
-            .get_latest_settlement_attempt_sequence_number(&job_b)
-            .expect("read must succeed"),
-        Some(7)
-    );
-}
-
-#[test]
-fn latest_attempt_sequence_with_single_attempt_returns_that_sequence() {
-    let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(20);
-    store
-        .insert_settlement_job(&job_id, &mk_settlement_job(20))
-        .expect("job insert must succeed");
-    store
-        .insert_settlement_attempt(&job_id, 42, &mk_settlement_attempt(42))
-        .expect("insert must succeed");
-    assert_eq!(
-        store
-            .get_latest_settlement_attempt_sequence_number(&job_id)
-            .expect("read must succeed"),
-        Some(42)
-    );
-}
-
-#[test]
 fn job_attempt_result_can_be_read_back_together() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_ulid(21);
@@ -522,26 +437,5 @@ fn duplicate_insert_preserves_original_value() {
             .get_settlement_attempt_result(&job_id, 9)
             .expect("read must succeed"),
         Some(first)
-    );
-}
-
-#[test]
-fn latest_attempt_sequence_handles_large_sequence_numbers() {
-    let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(24);
-    let high = u64::MAX - 1;
-    store
-        .insert_settlement_job(&job_id, &mk_settlement_job(24))
-        .expect("job insert must succeed");
-
-    store
-        .insert_settlement_attempt(&job_id, high, &mk_settlement_attempt(high))
-        .expect("insert must succeed");
-
-    assert_eq!(
-        store
-            .get_latest_settlement_attempt_sequence_number(&job_id)
-            .expect("read must succeed"),
-        Some(high)
     );
 }

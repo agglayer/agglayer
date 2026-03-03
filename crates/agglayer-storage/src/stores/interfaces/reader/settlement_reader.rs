@@ -33,12 +33,4 @@ pub trait SettlementReader: Send + Sync {
         settlement_job_id: &Ulid,
         attempt_sequence_number: u64,
     ) -> Result<Option<TxResult>, Error>;
-
-    /// Returns the latest attempt sequence number for `settlement_job_id`.
-    ///
-    /// If no attempt exists for the job, returns `Ok(None)`.
-    fn get_latest_settlement_attempt_sequence_number(
-        &self,
-        settlement_job_id: &Ulid,
-    ) -> Result<Option<u64>, Error>;
 }
