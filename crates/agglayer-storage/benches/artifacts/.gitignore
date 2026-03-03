@@ -1,0 +1,6 @@
+*
+!.gitignore
+!settlement_latest_attempt/
+!settlement_latest_attempt/.gitignore
+!settlement_latest_attempt/reports/
+!settlement_latest_attempt/reports/.gitignore

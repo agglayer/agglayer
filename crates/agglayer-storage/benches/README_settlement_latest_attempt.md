@@ -35,6 +35,9 @@ crates/agglayer-storage/benches/artifacts/settlement_latest_attempt/
     executive_summary.png
 ```
 
+Benchmark artifacts under `benches/artifacts/` are intentionally git-ignored.
+Keep only benchmark scripts and templates in version control.
+
 You can start from the template CSV:
 
 `crates/agglayer-storage/benches/settlement_latest_attempt_results_template.csv`
