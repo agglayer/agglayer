@@ -1,4 +1,6 @@
+# Ignore generated benchmark artifacts by default.
 *
+
+# Keep folder structure and ignore rules tracked.
+!*/
 !.gitignore
-!reports/
-!reports/.gitignore

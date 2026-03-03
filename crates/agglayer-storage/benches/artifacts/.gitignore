@@ -1,6 +1,6 @@
+# Ignore generated benchmark artifacts by default.
 *
+
+# Keep folder structure and ignore rules tracked.
+!*/
 !.gitignore
-!settlement_latest_attempt/
-!settlement_latest_attempt/.gitignore
-!settlement_latest_attempt/reports/
-!settlement_latest_attempt/reports/.gitignore
