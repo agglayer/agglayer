@@ -21,25 +21,25 @@ message SettlementJob {
   // ----- Transaction parameters -----
 
   // Gas limit for each settlement attempt.
-  Uint128 gas_limit = 5;
+  Uint128 gas_limit = 4;
 
   // Ceiling for max fee per gas.
-  Uint128 max_fee_per_gas_ceiling = 6;
+  Uint128 max_fee_per_gas_ceiling = 5;
 
   // Floor for max fee per gas.
-  Uint128 max_fee_per_gas_floor = 7;
+  Uint128 max_fee_per_gas_floor = 6;
 
   // Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-  uint32 max_fee_per_gas_increase_percents = 8;
+  uint32 max_fee_per_gas_increase_percents = 7;
 
   // Ceiling for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_ceiling = 9;
+  Uint128 max_priority_fee_per_gas_ceiling = 8;
 
   // Floor for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_floor = 10;
+  Uint128 max_priority_fee_per_gas_floor = 9;
 
   // Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-  uint32 max_priority_fee_per_gas_increase_percents = 11;
+  uint32 max_priority_fee_per_gas_increase_percents = 10;
 }
 
 // Transaction result.

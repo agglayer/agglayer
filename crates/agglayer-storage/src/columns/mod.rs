@@ -33,6 +33,20 @@ pub const SETTLEMENT_ATTEMPT_PER_WALLET_CF: &str = "settlement_attempt_per_walle
 pub const SETTLEMENT_ATTEMPT_RESULTS_CF: &str = "settlement_attempt_results_cf";
 pub const SETTLEMENT_JOBS_CF: &str = "settlement_jobs_cf";
 
+pub const SETTLEMENT_ATTEMPTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: 16, // settlement_job_id (Ulid)
+    },
+};
+
+pub const SETTLEMENT_ATTEMPT_PER_WALLET_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: 28, // address (20 bytes) + nonce (u64)
+    },
+};
+
 // Column options for checkpoint columns (start and end checkpoints).
 pub const CHECKPOINT_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,

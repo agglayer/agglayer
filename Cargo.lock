@@ -564,6 +564,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-storage",
+ "agglayer-telemetry 0.1.0",
  "agglayer-tries",
  "agglayer-types",
  "alloy-primitives",

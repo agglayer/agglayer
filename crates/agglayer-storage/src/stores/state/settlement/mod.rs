@@ -1,6 +1,7 @@
 use rocksdb::{Direction, ReadOptions, WriteBatch};
 use ulid::Ulid;
 
+use self::telemetry::{AttemptWriteMetrics, LatestAttemptReadMetrics};
 use super::StateStore;
 use crate::{
     columns::{
@@ -15,6 +16,16 @@ use crate::{
         settlement::{attempt::Key as SettlementAttemptKey, attempt_per_wallet},
     },
 };
+
+mod telemetry;
+
+impl StateStore {
+    fn lock_settlement_writes(&self) -> Result<std::sync::MutexGuard<'_, ()>, Error> {
+        self.settlement_write_lock
+            .lock()
+            .map_err(|_| Error::Unexpected("Settlement write lock is poisoned".to_string()))
+    }
+}
 
 impl SettlementReader for StateStore {
     fn get_settlement_job(&self, settlement_job_id: &Ulid) -> Result<Option<SettlementJob>, Error> {
@@ -51,21 +62,37 @@ impl SettlementReader for StateStore {
         &self,
         settlement_job_id: &Ulid,
     ) -> Result<Option<u64>, Error> {
-        let mut iter = self.db.iter_with_direction::<SettlementAttemptsColumn>(
+        let mut metrics = LatestAttemptReadMetrics::start();
+        let mut iter = match self.db.iter_with_direction::<SettlementAttemptsColumn>(
             ReadOptions::default(),
             Direction::Reverse,
-        )?;
-        iter.seek_for_prev(&SettlementAttemptKey {
+        ) {
+            Ok(iter) => iter,
+            Err(err) => return Err(err.into()),
+        };
+
+        if let Err(err) = iter.seek_for_prev(&SettlementAttemptKey {
             settlement_job_id: *settlement_job_id,
             attempt_sequence_number: u64::MAX,
-        })?;
+        }) {
+            return Err(err.into());
+        }
 
-        Ok(match iter.next().transpose()? {
+        let entry = match iter.next().transpose() {
+            Ok(entry) => entry,
+            Err(err) => return Err(err.into()),
+        };
+
+        let latest = match entry {
             Some((key, _)) if key.settlement_job_id == *settlement_job_id => {
                 Some(key.attempt_sequence_number)
             }
             _ => None,
-        })
+        };
+
+        metrics.mark_success(latest.is_some());
+
+        Ok(latest)
     }
 }
 
@@ -75,6 +102,8 @@ impl SettlementWriter for StateStore {
         settlement_job_id: &Ulid,
         settlement_job: &SettlementJob,
     ) -> Result<(), Error> {
+        let _settlement_write_lock = self.lock_settlement_writes()?;
+
         if self
             .db
             .get::<SettlementJobsColumn>(settlement_job_id)?
@@ -96,11 +125,14 @@ impl SettlementWriter for StateStore {
         attempt_sequence_number: u64,
         settlement_attempt: &SettlementAttempt,
     ) -> Result<(), Error> {
-        if self
-            .db
-            .get::<SettlementJobsColumn>(settlement_job_id)?
-            .is_none()
-        {
+        let _settlement_write_lock = self.lock_settlement_writes()?;
+        let mut metrics = AttemptWriteMetrics::start();
+
+        let job_exists = match self.db.get::<SettlementJobsColumn>(settlement_job_id) {
+            Ok(value) => value.is_some(),
+            Err(err) => return Err(err.into()),
+        };
+        if !job_exists {
             return Err(Error::UnprocessedAction(format!(
                 "Settlement job does not exist for id {settlement_job_id}"
             )));
@@ -111,28 +143,41 @@ impl SettlementWriter for StateStore {
             attempt_sequence_number,
         };
 
-        if self.db.get::<SettlementAttemptsColumn>(&key)?.is_some() {
+        let attempt_exists = match self.db.get::<SettlementAttemptsColumn>(&key) {
+            Ok(value) => value.is_some(),
+            Err(err) => return Err(err.into()),
+        };
+        if attempt_exists {
             return Err(Error::UnprocessedAction(format!(
                 "Settlement attempt already exists for job {settlement_job_id} and attempt \
                  sequence number {attempt_sequence_number}"
             )));
         }
 
-        let sender_wallet = settlement_attempt.sender_wallet.as_ref().ok_or_else(|| {
-            Error::UnprocessedAction(
-                "Settlement attempt cannot be stored without sender_wallet".to_string(),
-            )
-        })?;
-        let nonce = settlement_attempt.nonce.as_ref().ok_or_else(|| {
-            Error::UnprocessedAction(
-                "Settlement attempt cannot be stored without nonce".to_string(),
-            )
-        })?;
-        let address: [u8; 20] = sender_wallet.address.as_ref().try_into().map_err(|_| {
-            Error::UnprocessedAction(
-                "Settlement attempt sender_wallet must be 20 bytes".to_string(),
-            )
-        })?;
+        let sender_wallet = match settlement_attempt.sender_wallet.as_ref() {
+            Some(sender_wallet) => sender_wallet,
+            None => {
+                return Err(Error::UnprocessedAction(
+                    "Settlement attempt cannot be stored without sender_wallet".to_string(),
+                ));
+            }
+        };
+        let nonce = match settlement_attempt.nonce.as_ref() {
+            Some(nonce) => nonce,
+            None => {
+                return Err(Error::UnprocessedAction(
+                    "Settlement attempt cannot be stored without nonce".to_string(),
+                ));
+            }
+        };
+        let address: [u8; 20] = match sender_wallet.address.as_ref().try_into() {
+            Ok(address) => address,
+            Err(_) => {
+                return Err(Error::UnprocessedAction(
+                    "Settlement attempt sender_wallet must be 20 bytes".to_string(),
+                ));
+            }
+        };
 
         let attempt_per_wallet_key = attempt_per_wallet::Key {
             address,
@@ -143,17 +188,27 @@ impl SettlementWriter for StateStore {
         let attempt_per_wallet_value = attempt_per_wallet::Value;
 
         let mut batch = WriteBatch::default();
-        self.db.multi_insert_batch::<SettlementAttemptsColumn>(
+        if let Err(err) = self.db.multi_insert_batch::<SettlementAttemptsColumn>(
             [(&key, settlement_attempt)],
             &mut batch,
-        )?;
-        self.db
+        ) {
+            return Err(err.into());
+        }
+        if let Err(err) = self
+            .db
             .multi_insert_batch::<SettlementAttemptPerWalletColumn>(
                 [(&attempt_per_wallet_key, &attempt_per_wallet_value)],
                 &mut batch,
-            )?;
+            )
+        {
+            return Err(err.into());
+        }
+        if let Err(err) = self.db.write_batch(batch) {
+            return Err(err.into());
+        }
 
-        Ok(self.db.write_batch(batch)?)
+        metrics.mark_success();
+        Ok(())
     }
 
     fn insert_settlement_attempt_result(
@@ -162,6 +217,8 @@ impl SettlementWriter for StateStore {
         attempt_sequence_number: u64,
         tx_result: &TxResult,
     ) -> Result<(), Error> {
+        let _settlement_write_lock = self.lock_settlement_writes()?;
+
         let key = SettlementAttemptKey {
             settlement_job_id: *settlement_job_id,
             attempt_sequence_number,

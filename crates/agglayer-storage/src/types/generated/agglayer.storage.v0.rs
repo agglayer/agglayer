@@ -284,25 +284,25 @@ pub struct SettlementJob {
     // ----- Transaction parameters -----
 
     /// Gas limit for each settlement attempt.
-    #[prost(message, optional, tag="5")]
+    #[prost(message, optional, tag="4")]
     pub gas_limit: ::core::option::Option<Uint128>,
     /// Ceiling for max fee per gas.
-    #[prost(message, optional, tag="6")]
+    #[prost(message, optional, tag="5")]
     pub max_fee_per_gas_ceiling: ::core::option::Option<Uint128>,
     /// Floor for max fee per gas.
-    #[prost(message, optional, tag="7")]
+    #[prost(message, optional, tag="6")]
     pub max_fee_per_gas_floor: ::core::option::Option<Uint128>,
     /// Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-    #[prost(uint32, tag="8")]
+    #[prost(uint32, tag="7")]
     pub max_fee_per_gas_increase_percents: u32,
     /// Ceiling for max priority fee per gas.
-    #[prost(message, optional, tag="9")]
+    #[prost(message, optional, tag="8")]
     pub max_priority_fee_per_gas_ceiling: ::core::option::Option<Uint128>,
     /// Floor for max priority fee per gas.
-    #[prost(message, optional, tag="10")]
+    #[prost(message, optional, tag="9")]
     pub max_priority_fee_per_gas_floor: ::core::option::Option<Uint128>,
     /// Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-    #[prost(uint32, tag="11")]
+    #[prost(uint32, tag="10")]
     pub max_priority_fee_per_gas_increase_percents: u32,
 }
 /// Transaction result.

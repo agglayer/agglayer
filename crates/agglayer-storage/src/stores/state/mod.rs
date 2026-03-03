@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     path::Path,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::SystemTime,
 };
 
@@ -50,6 +50,7 @@ mod tests;
 pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
+    settlement_write_lock: Mutex<()>,
 }
 
 impl StateStore {
@@ -58,7 +59,11 @@ impl StateStore {
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
-        Self { db, backup_client }
+        Self {
+            db,
+            backup_client,
+            settlement_write_lock: Mutex::new(()),
+        }
     }
 
     pub fn new_with_path(
@@ -66,7 +71,11 @@ impl StateStore {
         backup_client: BackupClient,
     ) -> Result<Self, crate::storage::DBOpenError> {
         let db = Arc::new(Self::init_db(path)?);
-        Ok(Self { db, backup_client })
+        Ok(Self {
+            db,
+            backup_client,
+            settlement_write_lock: Mutex::new(()),
+        })
     }
 }
 
