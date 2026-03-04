@@ -126,6 +126,7 @@ async fn epoch_packer_can_settle_one_certificate() {
                 metadata: Metadata::ZERO,
                 status: CertificateStatus::Proven,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             }))
         });
 

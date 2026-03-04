@@ -9,6 +9,7 @@ use std::{
 
 use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     backup::BackupClient,
     columns::{
@@ -47,6 +48,18 @@ use crate::{
 };
 
 pub(crate) mod mocks;
+
+/// Helper function to create a SettlementService for tests
+async fn create_test_settlement_service() -> Arc<SettlementService> {
+    Arc::new(
+        SettlementService::start(
+            agglayer_config::settlement_service::SettlementServiceConfig::default(),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("Failed to create settlement service"),
+    )
+}
 
 #[allow(dead_code)]
 #[derive(Default)]
@@ -324,6 +337,21 @@ impl StateWriter for DummyPendingStore {
         todo!()
     }
 
+    fn update_settlement_job_id(
+        &self,
+        _certificate_id: &CertificateId,
+        _job_id: agglayer_types::SettlementJobId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn remove_settlement_job_id(
+        &self,
+        _certificate_id: &CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
     fn assign_certificate_to_epoch(
         &self,
         _certificate_id: &CertificateId,
@@ -356,6 +384,7 @@ impl StateWriter for DummyPendingStore {
                 status,
                 metadata: certificate.metadata,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             },
         );
 
@@ -533,6 +562,7 @@ async fn test_certificate_orchestrator_can_stop() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        create_test_settlement_service().await,
     )
     .expect("Unable to create orchestrator");
 
@@ -599,6 +629,7 @@ async fn test_collect_certificates() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        create_test_settlement_service().await,
     )
     .expect("Unable to create orchestrator");
 
@@ -670,6 +701,7 @@ async fn test_collect_certificates_after_epoch() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        create_test_settlement_service().await,
     )
     .expect("Unable to create orchestrator");
 
@@ -743,6 +775,7 @@ async fn test_collect_certificates_when_empty() {
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        create_test_settlement_service().await,
     )
     .expect("Unable to create orchestrator");
 
@@ -828,7 +861,7 @@ struct MockOrchestrator {
 type SenderAndClockRef = (mpsc::Sender<(NetworkId, Height, CertificateId)>, ClockRef);
 
 #[fixture]
-pub(crate) fn create_orchestrator_mock(
+pub(crate) async fn create_orchestrator_mock(
     #[default(MockOrchestrator::default())] builder: MockOrchestrator,
     clock: ClockRef,
 ) -> (SenderAndClockRef, IMockOrchestrator) {
@@ -873,6 +906,7 @@ pub(crate) fn create_orchestrator_mock(
             epochs_store,
             Arc::new(current_epoch),
             state_store,
+            create_test_settlement_service().await,
         )
         .expect("Unable to create orchestrator"),
     )

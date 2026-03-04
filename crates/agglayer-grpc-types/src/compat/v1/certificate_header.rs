@@ -37,6 +37,7 @@ impl From<CertificateHeader> for v1::CertificateHeader {
             settlement_tx_hash: value
                 .settlement_tx_hash
                 .map(|h| FixedBytes32::from(Digest::from(h))),
+            settlement_job_id: value.settlement_job_id.map(|id| id.as_ulid().to_string()),
         }
     }
 }

@@ -78,6 +78,9 @@ pub struct CertificateHeader {
     /// Settlement transaction hash.
     #[prost(message, optional, tag="11")]
     pub settlement_tx_hash: ::core::option::Option<::agglayer_interop::grpc::v1::FixedBytes32>,
+    /// Settlement job ID.
+    #[prost(string, optional, tag="12")]
+    pub settlement_job_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Certificate status error type.
 #[derive(Clone, PartialEq, ::prost::Message)]

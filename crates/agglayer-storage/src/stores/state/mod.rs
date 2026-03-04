@@ -8,7 +8,8 @@ use std::{
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementJobId,
+    SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -187,6 +188,94 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
+    #[instrument(skip(self))]
+    fn update_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+        job_id: SettlementJobId,
+    ) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            if certificate_header.settlement_job_id.is_some() {
+                return Err(Error::UnprocessedAction(
+                    "Tried to update settlement job id for a certificate that already has a \
+                     settlement job id"
+                        .to_string(),
+                ));
+            }
+
+            if certificate_header.status == CertificateStatus::Settled {
+                return Err(Error::UnprocessedAction(
+                    "Tried to update settlement job id for a certificate that is already settled"
+                        .to_string(),
+                ));
+            }
+
+            certificate_header.settlement_job_id = Some(job_id);
+
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+
+            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+                warn!(
+                    hash = certificate_id.to_string(),
+                    "Unable to trigger backup for the state database: {}", error
+                );
+            }
+        } else {
+            info!(
+                "Certificate header not found for certificate_id: {}",
+                certificate_id
+            )
+        }
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    fn remove_settlement_job_id(&self, certificate_id: &CertificateId) -> Result<(), Error> {
+        // TODO: make lockguard for certificate_id
+        let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
+
+        if let Some(mut certificate_header) = certificate_header {
+            if certificate_header.settlement_job_id.is_none() {
+                return Err(Error::UnprocessedAction(
+                    "Tried to remove settlement job id for a certificate that does not have a \
+                     settlement job id"
+                        .to_string(),
+                ));
+            }
+
+            if certificate_header.status == CertificateStatus::Settled {
+                return Err(Error::UnprocessedAction(
+                    "Tried to remove settlement job id for a certificate that is already settled"
+                        .to_string(),
+                ));
+            }
+
+            certificate_header.settlement_job_id = None;
+
+            self.db
+                .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+
+            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+                warn!(
+                    hash = certificate_id.to_string(),
+                    "Unable to trigger backup for the state database: {}", error
+                );
+            }
+        } else {
+            info!(
+                "Certificate header not found for certificate_id: {}",
+                certificate_id
+            )
+        }
+
+        Ok(())
+    }
+
     fn assign_certificate_to_epoch(
         &self,
         certificate_id: &CertificateId,
@@ -236,6 +325,7 @@ impl StateWriter for StateStore {
                 status: status.clone(),
                 metadata: certificate.metadata,
                 settlement_tx_hash: None,
+                settlement_job_id: None,
             },
         )?;
 

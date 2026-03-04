@@ -27,6 +27,7 @@ fn can_parse_value() {
         status: agglayer_types::CertificateStatus::Pending,
         metadata: Metadata::new([6; 32].into()),
         settlement_tx_hash: None,
+        settlement_job_id: None,
     };
 
     let encoded = value.encode().expect("Unable to encode value");
@@ -78,6 +79,8 @@ fn can_parse_value() {
     // certificate status
     assert_eq!(encoded[158..162], [0, 0, 0, 0]);
     assert_eq!(encoded[162..163], [0]);
+    // settlement_job_id (None = 0)
+    assert_eq!(encoded[163..164], [0]);
     // end
-    assert!(encoded[163..].is_empty());
+    assert!(encoded[164..].is_empty());
 }

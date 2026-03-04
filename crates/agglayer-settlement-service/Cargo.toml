@@ -9,13 +9,21 @@ agglayer-config.workspace = true
 agglayer-types.workspace = true
 
 alloy.workspace = true
+async-trait.workspace = true
 derive_more.workspace = true
 eyre.workspace = true
+mockall = { workspace = true, optional = true }
 tokio.workspace = true
 tokio-util.workspace = true
 tower.workspace = true
 tracing.workspace = true
 ulid.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true
+
+[features]
+testutils = ["mockall"]
 
 [lints]
 workspace = true

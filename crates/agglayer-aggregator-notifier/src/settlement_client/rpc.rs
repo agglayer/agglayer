@@ -216,7 +216,6 @@ where
                 let error_message = error.to_string();
 
                 error!(error_message, error_decoded, "Failed to settle certificate");
-
                 return Err(Error::SettlementError {
                     certificate_id,
                     error: format!("Message: {error_message}\nDecoded error: {error_decoded}"),

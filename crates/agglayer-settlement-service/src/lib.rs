@@ -9,6 +9,16 @@
 #![allow(dead_code)] // TODO remove after settlement service is integrated in the rest of the app
 
 pub mod settlement_service;
-mod settlement_task;
+pub mod settlement_task;
 
-pub use settlement_service::SettlementService;
+#[cfg(any(test, feature = "testutils"))]
+pub use settlement_service::testutils;
+#[cfg(any(test, feature = "testutils"))]
+pub use settlement_service::MockSettlementServiceTrait;
+pub use settlement_service::{
+    RetrievedSettlementResult, SettlementService, SettlementServiceTrait,
+};
+pub use settlement_task::{
+    ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, SettlementJob,
+    SettlementJobResult,
+};

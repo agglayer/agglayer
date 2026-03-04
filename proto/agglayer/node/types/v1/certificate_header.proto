@@ -29,6 +29,8 @@ message CertificateHeader {
   CertificateStatusError error = 10;
   // Settlement transaction hash.
   agglayer.interop.types.v1.FixedBytes32 settlement_tx_hash = 11;
+  // Settlement job ID.
+  optional string settlement_job_id = 12;
 }
 
 // Certificate status type.
