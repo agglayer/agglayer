@@ -18,8 +18,6 @@ message SettlementJob {
   // Eth value to send with the transaction.
   EthValue eth_value = 3;
 
-  // ----- Transaction parameters -----
-
   // Gas limit for each settlement attempt.
   Uint128 gas_limit = 4;
 

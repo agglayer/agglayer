@@ -281,8 +281,6 @@ pub struct SettlementJob {
     /// Eth value to send with the transaction.
     #[prost(message, optional, tag="3")]
     pub eth_value: ::core::option::Option<EthValue>,
-    // ----- Transaction parameters -----
-
     /// Gas limit for each settlement attempt.
     #[prost(message, optional, tag="4")]
     pub gas_limit: ::core::option::Option<Uint128>,
