@@ -35,8 +35,6 @@ mod cf_definitions;
 #[cfg(test)]
 mod tests;
 
-const MAX_CERTIFICATE_PER_EPOCH: u64 = 1;
-
 /// A logical store for an Epoch.
 pub struct PerEpochStore<PendingStore, StateStore> {
     pub epoch_number: Arc<EpochNumber>,
@@ -327,8 +325,6 @@ where
                 );
                 // Adding the network to the end checkpoint.
                 end_checkpoint_entry_assignment = Some(Height::ZERO);
-
-                // Adding the certificate to the DB
             }
             // If the network is not found in the end checkpoint and the height is not 0,
             // this is an invalid certificate candidate and the operation should fail.
@@ -340,18 +336,23 @@ where
             (Some(_start_height), Entry::Occupied(ref current_height))
                 if height == Height::ZERO =>
             {
+                debug!(
+                    "{}Failed certificate candidate for network {}: height is {} but network is \
+                     already present in the end checkpoint with height {}",
+                    mode.prefix(),
+                    network_id,
+                    height,
+                    current_height.get()
+                );
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
                     height,
                     *current_height.get(),
-                ))?
+                ))?;
             }
             // If the network is found in the end checkpoint and the height minus one is equal to
             // the current network height. We can add the certificate.
-            (Some(start_height), Entry::Occupied(current_height))
-                if current_height.get().next() == height
-                    && height.distance_since(start_height) <= MAX_CERTIFICATE_PER_EPOCH =>
-            {
+            (_, Entry::Occupied(current_height)) if current_height.get().next() == height => {
                 debug!(
                     "{}Certificate candidate for network {} at height {} accepted",
                     mode.prefix(),
@@ -363,11 +364,19 @@ where
             }
 
             (_, Entry::Occupied(current_height)) => {
+                debug!(
+                    "{}Failed certificate candidate for network {}: current height is {} \
+                     submitted certificate height is {}",
+                    mode.prefix(),
+                    network_id,
+                    current_height.get(),
+                    height,
+                );
                 return Err(CertificateCandidateError::UnexpectedHeight(
                     network_id,
                     height,
                     *current_height.get(),
-                ))?
+                ))?;
             }
         }
 
