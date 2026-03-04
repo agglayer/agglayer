@@ -255,6 +255,12 @@ impl SettlementTask {
                 // All nonces were seen on L1, but we didn't get a successful settlement result
                 // for any of them. Also, there was at least one revert.
                 // We can wait for finalization without submiting a new attempt.
+                let earliest_revert_result = reverts
+                    .values()
+                    .map(|(_, _, result)| result)
+                    .min_by_key(|result| result.block_number)
+                    .unwrap() // No panic: we checked `!reverts.is_empty()` just before.
+                    .clone();
                 for (wallet, nonce) in self.all_used_nonces() {
                     if let Some(tx_hash) = nonces_used_externally.remove(&(wallet, nonce)) {
                         if self.wait_for_settlement_of(tx_hash).await.is_none() {
@@ -287,12 +293,7 @@ impl SettlementTask {
                         );
                     }
                 }
-                let earliest_revert_result = reverts
-                    .values()
-                    .map(|(_, _, result)| result)
-                    .min_by_key(|result| result.block_number)
-                    .unwrap(); // No panic: we checked `!reverts.is_empty()` above.
-                self.write_job_revert_to_db(earliest_revert_result).await;
+                self.write_job_revert_to_db(&earliest_revert_result).await;
                 return SettlementJobResult::ContractCall(earliest_revert_result.clone());
             }
             // There was no successful attempt, and either at least one nonce was not yet
