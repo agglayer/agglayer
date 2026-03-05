@@ -60,6 +60,9 @@ fn main() -> eyre::Result<()> {
                     Ok(result) => println!("{}", serde_json::to_string(&result).unwrap()),
                     Err(error) => eprintln!("{error}"),
                 }
+            } else {
+                println!("Backups are not enabled in the configuration file.");
+                exit(1);
             }
         }
 
