@@ -92,6 +92,14 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 
         Ok(key.zip(value))
     }
+
+    /// Seeks for the first key (binary equal to or greater)
+    pub fn seek(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
+        let key = seek_key.encode()?;
+        self.iter.seek(&key);
+
+        Ok(())
+    }
 }
 
 impl<C: ColumnSchema> Iterator for ColumnIterator<'_, C> {

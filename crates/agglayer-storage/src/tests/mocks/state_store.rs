@@ -8,8 +8,12 @@ use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
     stores::{
-        MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter,
-        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        MetadataReader, MetadataWriter, NetworkInfoReader, SettlementReader, SettlementWriter,
+        StateReader, StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    },
+    types::generated::agglayer::storage::v0::{
+        SettlementAttempt as StoredSettlementAttempt, SettlementJob as StoredSettlementJob,
+        TxResult as StoredTxResult,
     },
 };
 mock! {
@@ -116,5 +120,55 @@ mock! {
             &self,
             network_id: NetworkId,
         ) -> Result<Option<LocalNetworkStateData>, Error>;
+    }
+
+    impl SettlementReader for StateStore {
+        fn get_settlement_job(
+            &self,
+            settlement_job_id: &ulid::Ulid,
+        ) -> Result<Option<StoredSettlementJob>, Error>;
+
+        fn get_settlement_job_result(
+            &self,
+            settlement_job_id: &ulid::Ulid,
+        ) -> Result<Option<StoredTxResult>, Error>;
+
+        fn list_settlement_attempts(
+            &self,
+            settlement_job_id: &ulid::Ulid,
+        ) -> Result<Vec<(u64, StoredSettlementAttempt)>, Error>;
+
+        fn list_settlement_attempt_results(
+            &self,
+            settlement_job_id: &ulid::Ulid,
+        ) -> Result<Vec<(u64, StoredTxResult)>, Error>;
+    }
+
+    impl SettlementWriter for StateStore {
+        fn insert_settlement_job(
+            &self,
+            settlement_job_id: &ulid::Ulid,
+            settlement_job: &StoredSettlementJob,
+        ) -> Result<(), Error>;
+
+        fn insert_settlement_job_result(
+            &self,
+            settlement_job_id: &ulid::Ulid,
+            tx_result: &StoredTxResult,
+        ) -> Result<(), Error>;
+
+        fn insert_settlement_attempt(
+            &self,
+            settlement_job_id: &ulid::Ulid,
+            attempt_sequence_number: u64,
+            settlement_attempt: &StoredSettlementAttempt,
+        ) -> Result<(), Error>;
+
+        fn insert_settlement_attempt_result(
+            &self,
+            settlement_job_id: &ulid::Ulid,
+            attempt_sequence_number: u64,
+            tx_result: &StoredTxResult,
+        ) -> Result<(), Error>;
     }
 }
