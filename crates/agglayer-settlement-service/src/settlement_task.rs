@@ -405,8 +405,9 @@ impl SettlementTask {
         _wallet: Address,
         _nonce: Nonce,
     ) -> Option<SettlementTxHash> {
-        // TODO: return tx hash if the nonce is already included on L1, and None
-        // otherwise Use retry_callback_until_success as needed
+        // TODO: delegate to the standalone `tx_hash_on_l1_for_nonce` function
+        // once a provider field is added to SettlementTask.
+        // Use retry_callback_until_success as needed.
         todo!()
     }
 
