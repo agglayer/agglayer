@@ -2,14 +2,8 @@ syntax = "proto3";
 
 package agglayer.storage.v0;
 
-import "agglayer/storage/v0/types.proto";
+import "agglayer/storage/v0/ethereum_types.proto";
 import "google/protobuf/timestamp.proto";
-
-// Settlement job ID.
-message SettlementJobId {
-  // ULID byte sequence.
-  bytes ulid = 1;
-}
 
 // Settlement job data.
 message SettlementJob {
@@ -24,33 +18,26 @@ message SettlementJob {
   // Eth value to send with the transaction.
   EthValue eth_value = 3;
 
-  // ----- Job result details -----
-
-  // Job result, if available.
-  ContractCallResult job_result = 4;
-
-  // ----- Transaction parameters -----
-
   // Gas limit for each settlement attempt.
-  Uint128 gas_limit = 5;
+  Uint128 gas_limit = 4;
 
   // Ceiling for max fee per gas.
-  Uint128 max_fee_per_gas_ceiling = 6;
+  Uint128 max_fee_per_gas_ceiling = 5;
 
   // Floor for max fee per gas.
-  Uint128 max_fee_per_gas_floor = 7;
+  Uint128 max_fee_per_gas_floor = 6;
 
   // Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-  uint32 max_fee_per_gas_increase_percents = 8;
+  uint32 max_fee_per_gas_increase_percents = 7;
 
   // Ceiling for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_ceiling = 9;
+  Uint128 max_priority_fee_per_gas_ceiling = 8;
 
   // Floor for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_floor = 10;
+  Uint128 max_priority_fee_per_gas_floor = 9;
 
   // Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-  uint32 max_priority_fee_per_gas_increase_percents = 11;
+  uint32 max_priority_fee_per_gas_increase_percents = 10;
 }
 
 // Transaction result.
@@ -81,16 +68,6 @@ enum ClientErrorType {
 
   // Nonce already used and finalized in other tx.
   CLIENT_ERROR_TYPE_NONCE_ALREADY_USED = 1;
-
-  /*
-  Not needed for now, might re-add later:
-
-  // Transient error (e.g., network issue, temporary RPC unavailability).
-  CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
-
-  // Permanent error (e.g., the tx was already filled with another nonce).
-  CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
-  */
 }
 
 // Result for a successfully-executed contract call.
@@ -162,16 +139,4 @@ message SettlementAttempt {
 
   // Timestamp at which the attempt was submitted to L1.
   google.protobuf.Timestamp submission_time = 6;
-
-  // Result of the attempt, if available.
-  TxResult result = 7;
-}
-
-// Contents of the settlement nonces CF.
-message SettlementNonce {
-  // ID of the job that reserved this nonce.
-  SettlementJobId job_id = 1;
-
-  // Sequence numbers of all of this job's settlement attempts that used this nonce.
-  repeated AttemptSequenceNumber attempt_sequence_numbers = 2;
 }
