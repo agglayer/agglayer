@@ -122,6 +122,8 @@ dependencies = [
  "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-interop-types",
+ "agglayer-primitives",
  "agglayer-storage",
  "agglayer-test-suite",
  "agglayer-types",
@@ -563,6 +565,7 @@ name = "agglayer-storage"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-primitives",
  "agglayer-storage",
  "agglayer-tries",
  "agglayer-types",

@@ -285,6 +285,7 @@ impl Node {
             .current_epoch(current_epoch_store)
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
+            .l1_rpc(Arc::clone(&rollup_manager))
             .start()
             .await
             .context("Failed starting certificate orchestrator")?;
