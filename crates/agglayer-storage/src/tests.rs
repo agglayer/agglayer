@@ -1,12 +1,11 @@
 use std::{
     env::temp_dir,
-    fs::create_dir_all,
+    fs,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use rand::Rng as _;
-
 pub mod mocks;
 
 pub struct TempDBDir {
@@ -37,7 +36,7 @@ impl TempDBDir {
             rng.random::<u64>()
         ));
 
-        create_dir_all(path.clone()).expect("Failed to create temp dir");
+        fs::create_dir_all(path.clone()).expect("Failed to create temp dir");
 
         Self { path }
     }
@@ -45,6 +44,9 @@ impl TempDBDir {
 
 impl Drop for TempDBDir {
     fn drop(&mut self) {
-        _ = std::fs::remove_dir_all(&self.path);
+        _ = fs::remove_dir_all(&self.path);
     }
 }
+
+#[cfg(test)]
+mod migration;
