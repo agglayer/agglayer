@@ -29,6 +29,13 @@ pub trait Component {
 }
 
 /// The rate limiter component for `sendTx` settlement.
+///
+/// This component limits the rate at which transaction settlements can be sent
+/// to the L1 network. It uses wall-clock time for rate limiting and provides
+/// information about rate limit violations when the limit is reached.
+///
+/// Use this type as a type parameter with [`Component`] trait methods to
+/// interact with the `sendTx` rate limiter.
 pub enum SendTx {}
 
 impl Component for SendTx {
