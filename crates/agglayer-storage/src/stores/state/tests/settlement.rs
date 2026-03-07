@@ -439,3 +439,108 @@ fn duplicate_insert_preserves_original_value() {
         Some(first)
     );
 }
+
+#[test]
+fn list_settlement_attempts_returns_empty_when_no_attempts_exist() {
+    let (_tmp, _db, store) = setup_store();
+
+    assert_eq!(
+        store
+            .list_settlement_attempts(&mk_ulid(999))
+            .expect("list must succeed"),
+        Vec::<(u64, SettlementAttempt)>::new()
+    );
+}
+
+#[test]
+fn list_settlement_attempts_returns_requested_job_attempts_in_sequence_order() {
+    let (_tmp, _db, store) = setup_store();
+    let job_a = mk_ulid(1_000);
+    let job_b = mk_ulid(2_000);
+
+    let attempt_a_1 = mk_settlement_attempt(1);
+    let attempt_a_2 = mk_settlement_attempt(2);
+    let attempt_b_1 = mk_settlement_attempt(3);
+
+    store
+        .insert_settlement_job(&job_a, &mk_settlement_job(10))
+        .expect("job A insert must succeed");
+    store
+        .insert_settlement_job(&job_b, &mk_settlement_job(20))
+        .expect("job B insert must succeed");
+
+    store
+        .insert_settlement_attempt(&job_a, 2, &attempt_a_2)
+        .expect("attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_b, 1, &attempt_b_1)
+        .expect("attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_a, 1, &attempt_a_1)
+        .expect("attempt insert must succeed");
+
+    let listed = store
+        .list_settlement_attempts(&job_a)
+        .expect("list must succeed");
+
+    assert_eq!(
+        listed,
+        vec![(1, attempt_a_1.clone()), (2, attempt_a_2.clone())]
+    );
+}
+
+#[test]
+fn list_settlement_attempt_results_returns_empty_when_no_results_exist() {
+    let (_tmp, _db, store) = setup_store();
+
+    assert_eq!(
+        store
+            .list_settlement_attempt_results(&mk_ulid(1_001))
+            .expect("list must succeed"),
+        Vec::<(u64, TxResult)>::new()
+    );
+}
+
+#[test]
+fn list_settlement_attempt_results_returns_requested_job_results_in_sequence_order() {
+    let (_tmp, _db, store) = setup_store();
+    let job_a = mk_ulid(3_000);
+    let job_b = mk_ulid(4_000);
+
+    let result_a_1 = mk_tx_result_success(1);
+    let result_a_2 = mk_tx_result_success(2);
+    let result_b_1 = mk_tx_result_success(3);
+
+    store
+        .insert_settlement_job(&job_a, &mk_settlement_job(30))
+        .expect("job A insert must succeed");
+    store
+        .insert_settlement_job(&job_b, &mk_settlement_job(40))
+        .expect("job B insert must succeed");
+
+    store
+        .insert_settlement_attempt(&job_a, 2, &mk_settlement_attempt(2))
+        .expect("attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_b, 1, &mk_settlement_attempt(3))
+        .expect("attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_a, 1, &mk_settlement_attempt(1))
+        .expect("attempt insert must succeed");
+
+    store
+        .insert_settlement_attempt_result(&job_a, 2, &result_a_2)
+        .expect("result insert must succeed");
+    store
+        .insert_settlement_attempt_result(&job_b, 1, &result_b_1)
+        .expect("result insert must succeed");
+    store
+        .insert_settlement_attempt_result(&job_a, 1, &result_a_1)
+        .expect("result insert must succeed");
+
+    let listed = store
+        .list_settlement_attempt_results(&job_a)
+        .expect("list must succeed");
+
+    assert_eq!(listed, vec![(1, result_a_1), (2, result_a_2)]);
+}

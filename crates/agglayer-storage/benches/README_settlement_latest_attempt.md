@@ -18,54 +18,41 @@ It uses realistic settlement workload assumptions:
 cargo bench -p agglayer-storage --features testutils --bench settlement_latest_attempt_bench
 ```
 
-## Result artifact layout
+Criterion writes HTML and JSON reports under:
+
+- `target/criterion/settlement_latest/**`
+- `target/criterion/report/index.html`
+
+Use the report index page to compare medians, confidence intervals, and
+distribution charts for each dataset/workload/strategy combination.
+
+## Compare against a baseline
+
+Use Criterion baselines instead of custom extraction scripts:
+
+```bash
+# Baseline run (for example on main)
+cargo bench -p agglayer-storage --features testutils --bench settlement_latest_attempt_bench -- --save-baseline settlement-latest-main
+
+# Candidate run (current branch)
+cargo bench -p agglayer-storage --features testutils --bench settlement_latest_attempt_bench -- --baseline settlement-latest-main
+```
+
+Criterion will include relative change and significance directly in its output
+and generated report pages.
+
+## Optional artifact layout
 
 Use this folder structure to keep benchmark outputs grouped and easy to compare:
 
 ```text
 crates/agglayer-storage/benches/artifacts/settlement_latest_attempt/
   raw/
-    criterion/                # copy target/criterion subset here
-  reports/
-    results.csv               # fill from extracted benchmark metrics
-    throughput_ops_per_s.png
-    latency_panel_us.png
-    db_size_mb.png
-    db_size_delta_pct.png
-    executive_summary.png
+    criterion/                # optional copy of target/criterion subset
 ```
 
 Benchmark artifacts under `benches/artifacts/` are intentionally git-ignored.
-Keep only benchmark scripts and templates in version control.
-
-You can start from the template CSV:
-
-`crates/agglayer-storage/benches/settlement_latest_attempt_results_template.csv`
-
-## Generate graphs from CSV
-
-Create a local virtualenv for plotting dependencies:
-
-```bash
-python3 -m venv .venv-bench
-.venv-bench/bin/pip install matplotlib
-```
-
-Extract CSV from Criterion outputs:
-
-```bash
-python3 crates/agglayer-storage/benches/extract_settlement_latest_attempt_results.py \
-  --criterion-root target/criterion \
-  --out-csv crates/agglayer-storage/benches/artifacts/settlement_latest_attempt/reports/results.csv
-```
-
-Generate plots from the CSV:
-
-```bash
-.venv-bench/bin/python crates/agglayer-storage/benches/plot_settlement_latest_attempt.py \
-  --csv crates/agglayer-storage/benches/artifacts/settlement_latest_attempt/reports/results.csv \
-  --out-dir crates/agglayer-storage/benches/artifacts/settlement_latest_attempt/reports
-```
+Keep benchmark code and this README in version control.
 
 ## Decision threshold
 

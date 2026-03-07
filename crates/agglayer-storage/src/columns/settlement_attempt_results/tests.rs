@@ -1,6 +1,7 @@
 use ulid::Ulid;
 
 use crate::{
+    columns::settlement_attempt_results::SettlementAttemptResultsColumn,
     schema::Codec as _,
     types::{
         generated::agglayer::storage::v0::{
@@ -13,6 +14,15 @@ use crate::{
         },
     },
 };
+
+#[test]
+fn settlement_attempt_results_column_uses_job_prefix_extractor() {
+    assert_eq!(
+        <SettlementAttemptResultsColumn as crate::schema::ColumnSchema>::COLUMN_OPTIONS
+            .prefix_extractor,
+        crate::schema::options::PrefixExtractor::Fixed { size: 16 }
+    );
+}
 
 #[test]
 fn settlement_attempt_result_roundtrip_codec() {
