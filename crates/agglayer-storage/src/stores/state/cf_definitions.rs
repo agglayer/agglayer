@@ -7,6 +7,9 @@ use crate::{
         latest_settled_certificate_per_network::LatestSettledCertificatePerNetworkColumn,
         local_exit_tree_per_network::LocalExitTreePerNetworkColumn, metadata::MetadataColumn,
         network_info::NetworkInfoColumn, nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
+        settlement_attempt_results::SettlementAttemptResultsColumn,
+        settlement_attempts::SettlementAttemptsColumn, settlement_jobs::SettlementJobsColumn,
     },
     schema::ColumnDescriptor,
 };
@@ -22,4 +25,9 @@ pub const STATE_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<NullifierTreePerNetworkColumn>(),
     ColumnDescriptor::new::<NetworkInfoColumn>(),
     ColumnDescriptor::new::<DisabledNetworksColumn>(),
+    // Settlement related CFs
+    ColumnDescriptor::new::<SettlementJobsColumn>(),
+    ColumnDescriptor::new::<SettlementAttemptsColumn>(),
+    ColumnDescriptor::new::<SettlementAttemptResultsColumn>(),
+    ColumnDescriptor::new::<SettlementAttemptPerWalletColumn>(),
 ];

@@ -530,10 +530,14 @@ name = "agglayer-settlement-service"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-storage",
  "agglayer-types",
  "alloy",
  "derive_more 2.1.1",
  "eyre",
+ "prost 0.13.5",
+ "prost-types 0.13.5",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-util",
  "tower 0.4.13",
@@ -594,6 +598,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "ulid",
 ]
 
 [[package]]
@@ -10228,6 +10233,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "470dbf6591da1b39d43c14523b2b469c86879a53e8b758c8e090a470fe7b1fbe"
 dependencies = [
  "rand 0.9.2",
+ "serde",
  "web-time",
 ]
 
