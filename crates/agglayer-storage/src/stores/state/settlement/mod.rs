@@ -1,7 +1,6 @@
-use rocksdb::WriteBatch;
+use rocksdb::{Direction, ReadOptions, WriteBatch};
 use ulid::Ulid;
 
-use self::telemetry::AttemptWriteMetrics;
 use super::StateStore;
 use crate::{
     columns::{
@@ -16,8 +15,6 @@ use crate::{
         settlement::{attempt::Key as SettlementAttemptKey, attempt_per_wallet},
     },
 };
-
-mod telemetry;
 
 impl StateStore {
     fn lock_settlement_writes(&self) -> Result<std::sync::MutexGuard<'_, ()>, Error> {
@@ -57,6 +54,60 @@ impl SettlementReader for StateStore {
 
         Ok(self.db.get::<SettlementAttemptResultsColumn>(&key)?)
     }
+
+    fn list_settlement_attempts(
+        &self,
+        settlement_job_id: &Ulid,
+    ) -> Result<Vec<(u64, SettlementAttempt)>, Error> {
+        let mut iterator = self.db.iter_with_direction::<SettlementAttemptsColumn>(
+            ReadOptions::default(),
+            Direction::Forward,
+        )?;
+        iterator.seek(&SettlementAttemptKey {
+            settlement_job_id: *settlement_job_id,
+            attempt_sequence_number: 0,
+        })?;
+
+        let mut attempts = Vec::new();
+        for entry in iterator {
+            let (key, attempt) = entry?;
+            if key.settlement_job_id != *settlement_job_id {
+                break;
+            }
+
+            attempts.push((key.attempt_sequence_number, attempt));
+        }
+
+        Ok(attempts)
+    }
+
+    fn list_settlement_attempt_results(
+        &self,
+        settlement_job_id: &Ulid,
+    ) -> Result<Vec<(u64, TxResult)>, Error> {
+        let mut iterator = self
+            .db
+            .iter_with_direction::<SettlementAttemptResultsColumn>(
+                ReadOptions::default(),
+                Direction::Forward,
+            )?;
+        iterator.seek(&SettlementAttemptKey {
+            settlement_job_id: *settlement_job_id,
+            attempt_sequence_number: 0,
+        })?;
+
+        let mut results = Vec::new();
+        for entry in iterator {
+            let (key, result) = entry?;
+            if key.settlement_job_id != *settlement_job_id {
+                break;
+            }
+
+            results.push((key.attempt_sequence_number, result));
+        }
+
+        Ok(results)
+    }
 }
 
 impl SettlementWriter for StateStore {
@@ -89,7 +140,6 @@ impl SettlementWriter for StateStore {
         settlement_attempt: &SettlementAttempt,
     ) -> Result<(), Error> {
         let _settlement_write_lock = self.lock_settlement_writes()?;
-        let mut metrics = AttemptWriteMetrics::start();
 
         let job_exists = match self.db.get::<SettlementJobsColumn>(settlement_job_id) {
             Ok(value) => value.is_some(),
@@ -170,7 +220,6 @@ impl SettlementWriter for StateStore {
             return Err(err.into());
         }
 
-        metrics.mark_success();
         Ok(())
     }
 

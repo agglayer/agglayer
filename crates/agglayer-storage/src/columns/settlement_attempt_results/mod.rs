@@ -1,4 +1,7 @@
-use crate::{columns::SETTLEMENT_ATTEMPT_RESULTS_CF, schema::ColumnSchema};
+use crate::{
+    columns::{SETTLEMENT_ATTEMPT_RESULTS_CF, SETTLEMENT_ATTEMPT_RESULTS_COLUMN_OPTIONS},
+    schema::ColumnSchema,
+};
 
 #[cfg(test)]
 mod tests;
@@ -11,4 +14,6 @@ impl ColumnSchema for SettlementAttemptResultsColumn {
     type Value = crate::types::settlement::attempt_result::Value;
 
     const COLUMN_FAMILY_NAME: &'static str = SETTLEMENT_ATTEMPT_RESULTS_CF;
+    const COLUMN_OPTIONS: crate::schema::options::ColumnOptions =
+        SETTLEMENT_ATTEMPT_RESULTS_COLUMN_OPTIONS;
 }

@@ -26,7 +26,6 @@ tracing.workspace = true
 ulid = { workspace = true, features = ["serde"] }
 
 agglayer-config.workspace = true
-agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 agglayer-tries.workspace = true
 pessimistic-proof.workspace = true
@@ -54,11 +53,6 @@ agglayer-storage = { workspace = true, features = ["testutils"] }
 
 [[bench]]
 name = "latest_certificate_bench"
-harness = false
-required-features = ["testutils"]
-
-[[bench]]
-name = "settlement_latest_attempt_bench"
 harness = false
 required-features = ["testutils"]
 

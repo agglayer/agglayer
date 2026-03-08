@@ -33,4 +33,20 @@ pub trait SettlementReader: Send + Sync {
         settlement_job_id: &Ulid,
         attempt_sequence_number: u64,
     ) -> Result<Option<TxResult>, Error>;
+
+    /// Returns all settlement attempts stored for `settlement_job_id`.
+    ///
+    /// Returned tuples are `(attempt_sequence_number, settlement_attempt)`.
+    fn list_settlement_attempts(
+        &self,
+        settlement_job_id: &Ulid,
+    ) -> Result<Vec<(u64, SettlementAttempt)>, Error>;
+
+    /// Returns all stored attempt results for `settlement_job_id`.
+    ///
+    /// Returned tuples are `(attempt_sequence_number, tx_result)`.
+    fn list_settlement_attempt_results(
+        &self,
+        settlement_job_id: &Ulid,
+    ) -> Result<Vec<(u64, TxResult)>, Error>;
 }

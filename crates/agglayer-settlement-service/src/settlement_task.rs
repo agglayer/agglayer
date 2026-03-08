@@ -5,6 +5,11 @@ use std::{
 };
 
 use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
+use agglayer_storage::{
+    error::Error as StorageError,
+    stores::{SettlementReader, SettlementWriter},
+    types::generated::agglayer::storage::v0,
+};
 use agglayer_types::{Digest, SettlementTxHash};
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
@@ -30,20 +35,20 @@ impl Nonce {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettlementJob {
-    contract_address: Address,
-    calldata: Bytes,
-    eth_value: U256,
+    pub(crate) contract_address: Address,
+    pub(crate) calldata: Bytes,
+    pub(crate) eth_value: U256,
 
-    num_confirmations: u32,
-    gas_limit: U128,
-    max_fee_per_gas_ceiling: U128,
-    max_fee_per_gas_floor: U128,
-    max_fee_per_gas_multiplier: Multiplier,
-    max_priority_fee_per_gas_ceiling: U128,
-    max_priority_fee_per_gas_floor: U128,
-    max_priority_fee_per_gas_multiplier: Multiplier,
+    pub(crate) num_confirmations: u32,
+    pub(crate) gas_limit: U128,
+    pub(crate) max_fee_per_gas_ceiling: U128,
+    pub(crate) max_fee_per_gas_floor: U128,
+    pub(crate) max_fee_per_gas_multiplier: Multiplier,
+    pub(crate) max_priority_fee_per_gas_ceiling: U128,
+    pub(crate) max_priority_fee_per_gas_floor: U128,
+    pub(crate) max_priority_fee_per_gas_multiplier: Multiplier,
 
-    settlement_config: Arc<SettlementTransactionConfig>,
+    pub(crate) settlement_config: Arc<SettlementTransactionConfig>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -99,8 +104,8 @@ pub enum ContractCallOutcome {
     Revert,
 }
 
-pub enum StoredSettlementJob {
-    Pending(SettlementTask),
+pub enum StoredSettlementJob<S> {
+    Pending(SettlementTask<S>),
     Completed(SettlementJob, SettlementJobResult),
 }
 
@@ -118,17 +123,81 @@ pub struct SettlementAttempt {
     pub submission_time: SystemTime,
     pub result: Option<SettlementJobResult>,
 }
-pub struct SettlementTask {
+
+type AttemptsByNonce =
+    BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, SettlementAttempt>>;
+
+pub(crate) fn derive_terminal_result_from_storage_records(
+    attempts: &[(u64, v0::SettlementAttempt)],
+    attempt_results: &[(u64, v0::TxResult)],
+) -> eyre::Result<Option<SettlementJobResult>> {
+    let mut attempt_sequence_numbers = BTreeSet::new();
+    for (attempt_sequence_number, _) in attempts {
+        attempt_sequence_numbers.insert(*attempt_sequence_number);
+    }
+
+    let mut parsed_results = BTreeMap::new();
+    for (attempt_sequence_number, result) in attempt_results {
+        let parsed_result = SettlementJobResult::try_from(result.clone())?;
+        if !attempt_sequence_numbers.contains(attempt_sequence_number) {
+            return Err(eyre::eyre!(
+                "Settlement storage is inconsistent for job: result for attempt {} exists but the \
+                 corresponding attempt does not",
+                attempt_sequence_number,
+            ));
+        }
+        parsed_results.insert(*attempt_sequence_number, parsed_result);
+    }
+
+    for result in parsed_results.values() {
+        if let SettlementJobResult::ContractCall(contract_call_result) = result {
+            if contract_call_result.outcome == ContractCallOutcome::Success {
+                return Ok(Some(result.clone()));
+            }
+        }
+    }
+
+    let all_attempts_have_results = !attempts.is_empty()
+        && attempts.iter().all(|(attempt_sequence_number, _)| {
+            parsed_results.contains_key(attempt_sequence_number)
+        });
+
+    if !all_attempts_have_results {
+        return Ok(None);
+    }
+
+    let earliest_revert = parsed_results
+        .values()
+        .filter_map(|result| match result {
+            SettlementJobResult::ContractCall(contract_call_result)
+                if contract_call_result.outcome == ContractCallOutcome::Revert =>
+            {
+                Some(contract_call_result)
+            }
+            _ => None,
+        })
+        .min_by_key(|result| result.block_number)
+        .cloned();
+
+    Ok(earliest_revert.map(SettlementJobResult::ContractCall))
+}
+
+pub struct SettlementTask<S> {
     id: Ulid,
     job: SettlementJob,
+    store: Arc<S>,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
-    attempts: BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, SettlementAttempt>>,
+    attempts: AttemptsByNonce,
 }
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
 
-impl SettlementTask {
+impl<S> SettlementTask<S>
+where
+    S: SettlementReader + SettlementWriter,
+{
     pub async fn create(
+        store: Arc<S>,
         job: SettlementJob,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
     ) -> eyre::Result<(Ulid, Self)> {
@@ -146,6 +215,7 @@ impl SettlementTask {
         let this = Self {
             id,
             job,
+            store,
             admin_commands,
             attempts: BTreeMap::new(),
         };
@@ -154,20 +224,33 @@ impl SettlementTask {
     }
 
     pub async fn load(
+        store: Arc<S>,
         id: Ulid,
+        num_confirmations: u32,
+        settlement_config: Arc<SettlementTransactionConfig>,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
-    ) -> eyre::Result<StoredSettlementJob> {
-        let (job, result) = Self::load_settlement_job_from_db(id).await?;
-        if let Some(result) = result {
+    ) -> eyre::Result<StoredSettlementJob<S>> {
+        let job_proto = store
+            .get_settlement_job(&id)?
+            .ok_or_else(|| eyre::eyre!("Settlement job {} not found in storage", id))?;
+        let job = SettlementJob::from_proto(job_proto, num_confirmations, settlement_config)?;
+
+        let attempts = store.list_settlement_attempts(&id)?;
+        let attempt_results = store.list_settlement_attempt_results(&id)?;
+        if let Some(result) =
+            derive_terminal_result_from_storage_records(&attempts, &attempt_results)?
+        {
             Ok(StoredSettlementJob::Completed(job, result))
         } else {
-            let mut this = SettlementTask {
+            let attempts = Self::attempts_from_storage_records(&id, attempts, attempt_results)?;
+
+            let this = SettlementTask {
                 id,
                 job,
+                store,
                 admin_commands,
-                attempts: BTreeMap::new(),
+                attempts,
             };
-            this.load_settlement_attempts_from_db().await?;
             Ok(StoredSettlementJob::Pending(this))
         }
     }
@@ -254,7 +337,7 @@ impl SettlementTask {
             if all_nonces_seen_on_l1 && !reverts.is_empty() {
                 // All nonces were seen on L1, but we didn't get a successful settlement result
                 // for any of them. Also, there was at least one revert.
-                // We can wait for finalization without submiting a new attempt.
+                // We can wait for finalization without submitting a new attempt.
                 let earliest_revert_result = reverts
                     .values()
                     .map(|(_, _, result)| result)
@@ -321,7 +404,7 @@ impl SettlementTask {
     }
 
     async fn save_attempt_to_db_and_submit_to_l1(
-        &self,
+        &mut self,
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
@@ -387,9 +470,10 @@ impl SettlementTask {
     }
 
     fn next_overall_deadline(&self) -> Option<SystemTime> {
-        self.attempts
-            .keys()
-            .map(|(wallet, nonce)| self.next_attempt_deadline_for_nonce(*wallet, *nonce))
+        let used_nonces = self.attempts.keys().cloned().collect::<Vec<_>>();
+        used_nonces
+            .into_iter()
+            .map(|(wallet, nonce)| self.next_attempt_deadline_for_nonce(wallet, nonce))
             .min()
     }
 
@@ -455,94 +539,307 @@ impl SettlementTask {
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
-        // TODO: Save the settlement job contents to L1
-        // XREF: https://github.com/agglayer/agglayer/issues/1381
-        todo!()
-    }
-
-    async fn load_settlement_job_from_db(
-        _id: Ulid,
-    ) -> eyre::Result<(SettlementJob, Option<SettlementJobResult>)> {
-        // TODO: Load a settlement job's contents from L1, including its result if it is
-        // completed.
-        // XREF: https://github.com/agglayer/agglayer/issues/1381
-        todo!()
+        let settlement_job = v0::SettlementJob::try_from(&self.job)?;
+        self.store
+            .insert_settlement_job(&self.id, &settlement_job)?;
+        Ok(())
     }
 
     async fn load_settlement_attempts_from_db(&mut self) -> eyre::Result<()> {
-        // TODO: Load all the settlement attempts related to self into self
-        // XREF: https://github.com/agglayer/agglayer/issues/1312
-        todo!()
+        let settlement_attempts = self.store.list_settlement_attempts(&self.id)?;
+        let settlement_attempt_results = self.store.list_settlement_attempt_results(&self.id)?;
+
+        self.attempts = Self::attempts_from_storage_records(
+            &self.id,
+            settlement_attempts,
+            settlement_attempt_results,
+        )?;
+        Ok(())
+    }
+
+    fn attempts_from_storage_records(
+        settlement_job_id: &Ulid,
+        settlement_attempts: Vec<(u64, v0::SettlementAttempt)>,
+        settlement_attempt_results: Vec<(u64, v0::TxResult)>,
+    ) -> eyre::Result<AttemptsByNonce> {
+        let mut parsed_attempt_results = BTreeMap::new();
+        for (attempt_sequence_number, result) in settlement_attempt_results {
+            parsed_attempt_results.insert(
+                attempt_sequence_number,
+                SettlementJobResult::try_from(result)?,
+            );
+        }
+
+        let mut attempts = BTreeMap::new();
+        for (attempt_sequence_number, settlement_attempt) in settlement_attempts {
+            let mut attempt = SettlementAttempt::try_from(settlement_attempt)?;
+            attempt.result = parsed_attempt_results.remove(&attempt_sequence_number);
+            attempts
+                .entry((attempt.sender_wallet, attempt.nonce))
+                .or_insert_with(BTreeMap::new)
+                .insert(SettlementAttemptNumber(attempt_sequence_number), attempt);
+        }
+
+        if !parsed_attempt_results.is_empty() {
+            return Err(eyre::eyre!(
+                "Settlement storage is inconsistent for job {}: found attempt results without \
+                 corresponding attempts",
+                settlement_job_id,
+            ));
+        }
+
+        Ok(attempts)
     }
 
     async fn save_attempt_to_db(
-        &self,
-        _wallet: Address,
-        _nonce: Nonce,
-        _attempt_number: SettlementAttemptNumber,
-        _tx: SettlementTxHash,
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        attempt_number: SettlementAttemptNumber,
+        tx: SettlementTxHash,
     ) {
-        // TODO: Save a new settlement attempt to db
-        // XREF: https://github.com/agglayer/agglayer/issues/1320
-        todo!()
+        let settlement_attempt = SettlementAttempt {
+            sender_wallet: wallet,
+            nonce,
+            max_fee_per_gas: 0,
+            max_priority_fee_per_gas: 0,
+            hash: tx,
+            submission_time: SystemTime::now(),
+            result: None,
+        };
+        let stored_attempt: v0::SettlementAttempt = (&settlement_attempt).into();
+
+        if let Err(error) =
+            self.store
+                .insert_settlement_attempt(&self.id, attempt_number.0, &stored_attempt)
+        {
+            if !Self::is_already_exists_storage_error(&error) {
+                panic!(
+                    "Failed to save settlement attempt {} for job {}: {error}",
+                    attempt_number.0, self.id,
+                );
+            }
+        }
+
+        self.attempts
+            .entry((wallet, nonce))
+            .or_default()
+            .entry(attempt_number)
+            .or_insert(settlement_attempt);
     }
 
     async fn write_client_error_to_db(
-        &self,
-        _attempt_number: SettlementAttemptNumber,
-        _result: ClientError,
+        &mut self,
+        attempt_number: SettlementAttemptNumber,
+        result: ClientError,
     ) {
-        // TODO: Record a settlement attempt as being "client error" to db
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+        let attempt_result = SettlementJobResult::ClientError(result);
+        self.persist_attempt_result_or_panic(
+            attempt_number,
+            &attempt_result,
+            "write_client_error_to_db",
+        );
+        self.set_attempt_result_in_memory(attempt_number, attempt_result);
     }
 
     async fn write_nonce_revert_to_db(
-        &self,
-        _wallet: Address,
-        _nonce: Nonce,
-        _attempt_number: SettlementAttemptNumber,
-        _result: ContractCallResult,
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        attempt_number: SettlementAttemptNumber,
+        result: ContractCallResult,
     ) {
-        // TODO: Record a nonce as having seen a revert to db. `attempt_number` is the
-        // attempt that got included on L1, and all other attempts with the same nonce
-        // should be marked as nonce already used.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+        let attempt_numbers = self.attempt_numbers_for_nonce_snapshot(wallet, nonce);
+        if attempt_numbers.is_empty() {
+            panic!(
+                "Cannot mark nonce revert for job {}: no attempts tracked for {wallet}/{nonce}",
+                self.id,
+            );
+        }
+
+        for current_attempt_number in attempt_numbers {
+            let attempt_result = if current_attempt_number == attempt_number {
+                SettlementJobResult::ContractCall(result.clone())
+            } else {
+                SettlementJobResult::ClientError(ClientError::nonce_already_used(
+                    wallet,
+                    nonce,
+                    result.tx_hash,
+                ))
+            };
+
+            self.persist_attempt_result_or_panic(
+                current_attempt_number,
+                &attempt_result,
+                "write_nonce_revert_to_db",
+            );
+            self.set_attempt_result_in_memory(current_attempt_number, attempt_result);
+        }
     }
 
     async fn write_nonce_used_externally_to_db(
-        &self,
-        _wallet: Address,
-        _nonce: Nonce,
-        _tx_hash: SettlementTxHash,
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        tx_hash: SettlementTxHash,
     ) {
-        // TODO: Record a nonce as having been used externally to db. All attempts with
-        // this nonce should be marked as nonce already used.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+        let attempt_numbers = self.attempt_numbers_for_nonce_snapshot(wallet, nonce);
+        if attempt_numbers.is_empty() {
+            panic!(
+                "Cannot mark external nonce usage for job {}: no attempts tracked for \
+                 {wallet}/{nonce}",
+                self.id,
+            );
+        }
+
+        for attempt_number in attempt_numbers {
+            let attempt_result = SettlementJobResult::ClientError(ClientError::nonce_already_used(
+                wallet, nonce, tx_hash,
+            ));
+            self.persist_attempt_result_or_panic(
+                attempt_number,
+                &attempt_result,
+                "write_nonce_used_externally_to_db",
+            );
+            self.set_attempt_result_in_memory(attempt_number, attempt_result);
+        }
     }
 
     async fn write_job_successful_to_db(
-        &self,
-        _wallet: Address,
-        _nonce: Nonce,
-        _attempt_number: SettlementAttemptNumber,
-        _tx_result: ContractCallResult,
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        attempt_number: SettlementAttemptNumber,
+        tx_result: ContractCallResult,
     ) {
-        // TODO: Record a settlement job as successful to db, with the given result. All
-        // attempts with the same nonce should be marked as nonce already used, and
-        // attempts with different nonces as having seen a successful settlement
-        // elsewhere.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+        let attempts = self.all_attempt_numbers_snapshot();
+        if attempts.is_empty() {
+            panic!(
+                "Cannot mark settlement job {} as successful: no attempts are tracked",
+                self.id,
+            );
+        }
+
+        for (current_wallet, current_nonce, current_attempt_number) in attempts {
+            let attempt_result = if current_wallet == wallet
+                && current_nonce == nonce
+                && current_attempt_number == attempt_number
+            {
+                SettlementJobResult::ContractCall(tx_result.clone())
+            } else if current_wallet == wallet && current_nonce == nonce {
+                SettlementJobResult::ClientError(ClientError::nonce_already_used(
+                    wallet,
+                    nonce,
+                    tx_result.tx_hash,
+                ))
+            } else {
+                SettlementJobResult::ClientError(ClientError {
+                    kind: ClientErrorType::Unknown,
+                    message: format!(
+                        "Settlement succeeded on another nonce: settled tx is {}",
+                        tx_result.tx_hash,
+                    ),
+                })
+            };
+
+            self.persist_attempt_result_or_panic(
+                current_attempt_number,
+                &attempt_result,
+                "write_job_successful_to_db",
+            );
+            self.set_attempt_result_in_memory(current_attempt_number, attempt_result);
+        }
     }
 
-    async fn write_job_revert_to_db(&self, _result: &ContractCallResult) {
-        // TODO: Record a settlement job as reverted to db, with the given result. All
-        // attempts should already have been marked as nonce already used or revert, so
-        // no need to update them, but maybe run a sanity-check.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+    async fn write_job_revert_to_db(&self, result: &ContractCallResult) {
+        let pending_attempts = self
+            .attempts
+            .iter()
+            .flat_map(|((wallet, nonce), attempts_for_nonce)| {
+                attempts_for_nonce
+                    .iter()
+                    .filter_map(move |(attempt_number, attempt)| {
+                        if attempt.result.is_none() {
+                            Some(format!("{wallet}/{nonce}/{}", attempt_number.0))
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        if !pending_attempts.is_empty() {
+            panic!(
+                "Cannot mark settlement job {} as reverted at tx {}: pending attempts remain ({})",
+                self.id,
+                result.tx_hash,
+                pending_attempts.join(", "),
+            );
+        }
+    }
+
+    fn attempt_numbers_for_nonce_snapshot(
+        &self,
+        wallet: Address,
+        nonce: Nonce,
+    ) -> Vec<SettlementAttemptNumber> {
+        self.attempts
+            .get(&(wallet, nonce))
+            .map(|attempts_for_nonce| attempts_for_nonce.keys().copied().collect())
+            .unwrap_or_default()
+    }
+
+    fn all_attempt_numbers_snapshot(&self) -> Vec<(Address, Nonce, SettlementAttemptNumber)> {
+        self.attempts
+            .iter()
+            .flat_map(|((wallet, nonce), attempts_for_nonce)| {
+                attempts_for_nonce
+                    .keys()
+                    .map(|attempt_number| (*wallet, *nonce, *attempt_number))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn persist_attempt_result_or_panic(
+        &self,
+        attempt_number: SettlementAttemptNumber,
+        result: &SettlementJobResult,
+        operation: &'static str,
+    ) {
+        let stored_result: v0::TxResult = result.clone().into();
+        if let Err(error) =
+            self.store
+                .insert_settlement_attempt_result(&self.id, attempt_number.0, &stored_result)
+        {
+            if !Self::is_already_exists_storage_error(&error) {
+                panic!(
+                    "{} failed for settlement job {} attempt {}: {error}",
+                    operation, self.id, attempt_number.0,
+                );
+            }
+        }
+    }
+
+    fn set_attempt_result_in_memory(
+        &mut self,
+        attempt_number: SettlementAttemptNumber,
+        result: SettlementJobResult,
+    ) {
+        for attempts_for_nonce in self.attempts.values_mut() {
+            if let Some(attempt) = attempts_for_nonce.get_mut(&attempt_number) {
+                attempt.result = Some(result);
+                return;
+            }
+        }
+
+        panic!(
+            "Failed to update in-memory settlement attempt {} for job {}: attempt was not found",
+            attempt_number.0, self.id,
+        );
+    }
+
+    fn is_already_exists_storage_error(error: &StorageError) -> bool {
+        matches!(error, StorageError::UnprocessedAction(message) if message.contains("already exists"))
     }
 }
