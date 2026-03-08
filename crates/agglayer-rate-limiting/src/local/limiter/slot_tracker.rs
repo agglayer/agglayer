@@ -36,7 +36,7 @@ mod tests {
     use super::SlotTracker;
 
     #[test]
-    #[should_panic = "slots not released"]
+    #[cfg_attr(debug_assertions, should_panic = "slots not released")]
     fn drop_without_release() {
         let _slot = SlotTracker::new();
     }

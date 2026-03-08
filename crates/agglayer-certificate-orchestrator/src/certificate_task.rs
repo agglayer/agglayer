@@ -1,26 +1,22 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
-use agglayer_storage::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{
-        PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
-        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
-    },
+use agglayer_settlement_service::{
+    ContractCallOutcome, RetrievedSettlementResult, SettlementJobResult, SettlementServiceTrait,
 };
+use agglayer_storage::stores::{
+    PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
+    UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+};
+#[cfg(feature = "testutils")]
+use agglayer_types::SettlementTxHash;
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
-    SettlementTxHash,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::{
-    network_task::{CertificateSettlementResult, NetworkTaskMessage},
-    Certifier, Error, NonceInfo,
-};
-
-const MAX_TX_RETRY: usize = 5;
+use crate::{network_task::NetworkTaskMessage, Certifier, Error};
 
 /// A task that processes a certificate, including certifying it and settling
 /// it.
@@ -29,7 +25,10 @@ const MAX_TX_RETRY: usize = 5;
 /// related to the certificate until it gets finalized, including exchanging the
 /// required messages with the network task to both get required information
 /// from it and notify it of certificate progress.
-pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
+pub struct CertificateTask<StateStore, PendingStore, CertifierClient, SettlementSvc>
+where
+    SettlementSvc: SettlementServiceTrait,
+{
     certificate: Certificate,
     header: CertificateHeader,
 
@@ -39,16 +38,16 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient> {
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
     new_pp_root: Option<Digest>,
-    nonce_info: Option<NonceInfo>,
-    previous_tx_hashes: HashSet<SettlementTxHash>,
+    settlement_service: Arc<SettlementSvc>,
 }
 
-impl<StateStore, PendingStore, CertifierClient>
-    CertificateTask<StateStore, PendingStore, CertifierClient>
+impl<StateStore, PendingStore, CertifierClient, SettlementSvc>
+    CertificateTask<StateStore, PendingStore, CertifierClient, SettlementSvc>
 where
     StateStore: StateReader + StateWriter,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     CertifierClient: Certifier,
+    SettlementSvc: SettlementServiceTrait,
 {
     #[instrument(skip_all, fields(certificate_id))]
     pub fn new(
@@ -58,6 +57,7 @@ where
         pending_store: Arc<PendingStore>,
         certifier_client: Arc<CertifierClient>,
         cancellation_token: CancellationToken,
+        settlement_service: Arc<SettlementSvc>,
     ) -> Result<Self, Error> {
         let certificate_id = certificate.hash();
         tracing::Span::current().record("certificate_id", certificate_id.to_string());
@@ -78,8 +78,7 @@ where
             certifier_client,
             cancellation_token,
             new_pp_root: None,
-            nonce_info: None,
-            previous_tx_hashes: HashSet::new(),
+            settlement_service,
         })
     }
 
@@ -199,140 +198,6 @@ where
         let mut state = state.await.map_err(recv_err)??;
 
         debug!("Recomputing new state for already-proven certificate");
-        // `settlement_tx_hash_missing_on_l1` is `true` if the settlement tx hash in
-        // certificate header is not found on L1.
-        let settlement_tx_hash_missing_on_l1: bool = if let Some(previous_tx_hash) =
-            self.header.settlement_tx_hash
-        {
-            let (request_is_settlement_tx_mined, response_is_settlement_tx_mined) =
-                oneshot::channel();
-            self.send_to_network_task(NetworkTaskMessage::CheckSettlementTx {
-                settlement_tx_hash: previous_tx_hash,
-                certificate_id,
-                tx_mined_notifier: request_is_settlement_tx_mined,
-            })
-            .await?;
-
-            let result_is_settlement_tx_mined = response_is_settlement_tx_mined
-                .await
-                .map_err(recv_err)?
-                .inspect_err(|error| {
-                    // Some error happened while checking the tx receipt on L1
-                    warn!(
-                        ?error,
-                        settlement_tx_hash = %previous_tx_hash,
-                        "Failed to check settlement tx prior existence on L1",
-                    );
-                });
-            match result_is_settlement_tx_mined {
-                Ok(crate::TxReceiptStatus::TxSuccessful) | Ok(crate::TxReceiptStatus::TxFailed) => {
-                    false // We have fetched the receipt, tx exists on L1
-                }
-                Ok(crate::TxReceiptStatus::NotFound) => true, // Tx not found on L1
-                Err(_error) => false,                         // If error happened we do nothing
-            }
-        } else {
-            // No settlement tx hash in the cert header, nothing to check
-            false
-        };
-
-        if settlement_tx_hash_missing_on_l1 {
-            warn!(
-                settlement_tx_hash = ?self.header.settlement_tx_hash,
-                "Previous settlement tx hash is missing on L1",
-            );
-
-            // If the settlement tx is not found on L1, we need to recover.
-            // With the latest pp root from the contract, check maybe if this
-            // certificate new pp root is the same as the latest pp root on the chain.
-            let (request_latest_contract_pp_root, response_latest_contract_pp_root) =
-                oneshot::channel();
-            self.send_to_network_task(NetworkTaskMessage::FetchLatestContractPPRoot {
-                contract_pp_root_notifier: request_latest_contract_pp_root,
-            })
-            .await?;
-            let result_latest_contract_pp_root =
-                response_latest_contract_pp_root.await.map_err(recv_err)?;
-            let recomputed_from_contract: Option<Digest> = match result_latest_contract_pp_root {
-                Ok(Some((contract_pp_root, contract_settlement_tx_hash))) => {
-                    // Try to recompute the state with the latest tx from contract.
-                    match self
-                        .certifier_client
-                        .witness_generation(
-                            &self.certificate,
-                            &mut state.clone(),
-                            Some(contract_settlement_tx_hash.into()),
-                        )
-                        .await
-                    {
-                        Ok((_, _, recomputed_output)) => {
-                            if contract_pp_root == recomputed_output.new_pessimistic_root {
-                                info!(
-                                    %contract_settlement_tx_hash,
-                                    "Certificate new pp root matches the latest settled pp root \
-                                     on L1, updating certificate settlement tx hash to the one in contracts"
-                                );
-                                self.header.settlement_tx_hash = Some(contract_settlement_tx_hash);
-                                if let Err(error) = self.state_store.update_settlement_tx_hash(
-                                    &certificate_id,
-                                    contract_settlement_tx_hash,
-                                    UpdateEvenIfAlreadyPresent::Yes,
-                                    UpdateStatusToCandidate::Yes,
-                                ) {
-                                    error!(
-                                        ?error,
-                                        "Failed to update certificate settlement tx hash in \
-                                         database"
-                                    );
-                                };
-                                // TODO refactor this function to not calculate witness_generation
-                                // twice in this function.
-                                // As this would be very rare scenario, we can leave it like this
-                                // for now.
-                                Some(contract_settlement_tx_hash.into())
-                            } else {
-                                warn!(
-                                    certificate_settlement_tx_hash = ?self.header.settlement_tx_hash,
-                                    certificate_pp_root = %recomputed_output.new_pessimistic_root,
-                                    %contract_settlement_tx_hash,
-                                    %contract_pp_root,
-                                    "Certificate pp root does not match the latest settled pp root on L1 contract, moving certificate back to Proven",
-                                );
-                                None
-                            }
-                        }
-                        Err(error) => {
-                            warn!(
-                                %contract_settlement_tx_hash,
-                                ?error,
-                                "Failed to recompute the state with the latest contract tx, moving certificate back to Proven"
-                            );
-                            None
-                        }
-                    }
-                }
-                Ok(None) => {
-                    warn!("No pp root found on contract, moving certificate back to Proven");
-                    None
-                }
-                Err(error) => {
-                    error!(?error, "Failed to fetch latest pp root from contract");
-                    return Err(CertificateStatusError::SettlementError(format!(
-                        "Cert settlement tx is missing from the l1, but failed to fetch latest pp \
-                         root from contract: {error}"
-                    )));
-                }
-            };
-
-            if recomputed_from_contract.is_none() {
-                // Tx not found on L1, and pp root from contract not matching,
-                // Make the cert InError and wait for aggkit to resubmit it.
-                return Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx {:?} not found on L1, moving certificate back to Proven",
-                    self.header.settlement_tx_hash
-                )));
-            }
-        }
 
         // Execute the witness generation to retrieve the new local network state
         let (_, _, output) = self
@@ -424,188 +289,140 @@ where
             )));
         }
 
-        if self.previous_tx_hashes.len() > MAX_TX_RETRY {
-            error!(
-                previous_tx_hashes = ?self.previous_tx_hashes,
-                max_retries = MAX_TX_RETRY,
-                "More settlement transactions submitted for the same certificate than allowed retries, something is wrong"
-            );
-            return Err(CertificateStatusError::SettlementError(format!(
-                "Too many different settlement transactions submitted for the same certificate: \
-                 {:?}",
-                self.previous_tx_hashes
-            )));
-        }
-
-        let height = self.header.height;
         let certificate_id = self.header.certificate_id;
 
-        debug!(
-            "Submitting certificate for settlement, previous nonce is {:?}",
-            self.nonce_info
-        );
-        let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
-        self.send_to_network_task(NetworkTaskMessage::CertificateReadyForSettlement {
-            height,
-            certificate_id,
-            nonce_info: self.nonce_info.clone(),
-            previous_tx_hashes: self.previous_tx_hashes.clone(),
-            new_pp_root: self
-                .new_pp_root
-                .ok_or(CertificateStatusError::InternalError(
-                    "CertificateTask::process_from_proven called without a pp_root".into(),
-                ))?,
-            settlement_submitted_notifier,
-        })
-        .await?;
+        // Submit settlement request
+        let mut watcher = self
+            .settlement_service
+            .request_new_settlement(certificate_id)
+            .await
+            .map_err(|e| {
+                CertificateStatusError::SettlementError(format!("Failed to submit: {e}"))
+            })?;
 
-        let (settlement_tx_hash, nonce_info) = settlement_submitted.await.map_err(recv_err)??;
+        let job_id = watcher.job_id();
+        info!("Settlement job {} submitted", job_id);
 
-        if self.previous_tx_hashes.insert(settlement_tx_hash) {
-            debug!(
-                "Certificate settlement transactions list: {:?}",
-                self.previous_tx_hashes
-            );
-        } else {
-            warn!("Resubmitted the same settlement transaction hash {settlement_tx_hash}");
+        // Wait for result — the settlement service owns its own timeouts
+        let result = watcher
+            .wait_for_result()
+            .await
+            .map_err(|e| CertificateStatusError::SettlementError(e.to_string()))?;
+
+        match result {
+            SettlementJobResult::ContractCall(contract_result)
+                if contract_result.outcome == ContractCallOutcome::Revert =>
+            {
+                Err(CertificateStatusError::SettlementError(format!(
+                    "Settlement tx {} reverted",
+                    contract_result.tx_hash
+                )))
+            }
+            SettlementJobResult::ContractCall(contract_result) => {
+                let tx_hash = contract_result.tx_hash;
+                info!("Settlement successful: {}", tx_hash);
+
+                self.header.settlement_tx_hash = Some(tx_hash);
+                self.state_store.update_settlement_tx_hash(
+                    &certificate_id,
+                    tx_hash,
+                    UpdateEvenIfAlreadyPresent::Yes,
+                    UpdateStatusToCandidate::Yes,
+                )?;
+
+                self.header.settlement_job_id = Some(job_id.into());
+                self.state_store
+                    .update_settlement_job_id(&certificate_id, job_id.into())?;
+
+                self.header.status = CertificateStatus::Candidate;
+
+                #[cfg(feature = "testutils")]
+                testutils::inject_fail_points_after_proving(
+                    &certificate_id,
+                    &mut self.header,
+                    &self.state_store,
+                );
+
+                self.process_from_candidate().await
+            }
+            SettlementJobResult::ClientError(error) => {
+                error!("Settlement failed: {}", error.message);
+                Err(CertificateStatusError::SettlementError(error.message))
+            }
         }
-
-        // Keep the nonce and previous fees for future use (e.g., retries)
-        if let Some(nonce_info) = nonce_info {
-            debug!("Settlement tx {settlement_tx_hash} submitted with nonce {nonce_info:?}");
-            self.nonce_info = Some(nonce_info);
-        }
-
-        #[cfg(feature = "testutils")]
-        fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
-
-        self.header.settlement_tx_hash = Some(settlement_tx_hash);
-        self.state_store.update_settlement_tx_hash(
-            &certificate_id,
-            settlement_tx_hash,
-            UpdateEvenIfAlreadyPresent::Yes,
-            UpdateStatusToCandidate::Yes,
-        )?;
-        // No set_status: update_settlement_tx_hash already updates the status in the
-        // database
-        self.header.status = CertificateStatus::Candidate;
-        debug!(
-            settlement_tx_hash = self.header.settlement_tx_hash.map(tracing::field::display),
-            "Submitted certificate for settlement"
-        );
-
-        #[cfg(feature = "testutils")]
-        testutils::inject_fail_points_after_proving(
-            &certificate_id,
-            &mut self.header,
-            &self.state_store,
-        );
-
-        self.process_from_candidate().await
     }
 
     async fn process_from_candidate(&mut self) -> Result<(), CertificateStatusError> {
         if self.header.status != CertificateStatus::Candidate {
             return Err(CertificateStatusError::InternalError(format!(
-                "CertificateTask::process_from_candidate called with cert status {}",
+                "process_from_candidate called with status {}",
                 self.header.status,
             )));
         }
 
-        let height = self.header.height;
         let certificate_id = self.header.certificate_id;
-        let new_pp_root = self
-            .new_pp_root
-            .ok_or(CertificateStatusError::InternalError(
-                "CertificateTask::process_from_candidate called without a pp_root".into(),
-            ))?;
+        let job_id = self
+            .header
+            .settlement_job_id
+            .ok_or_else(|| CertificateStatusError::SettlementError("No settlement job id".into()))?
+            .as_ulid();
 
-        let settlement_tx_hash = self.header.settlement_tx_hash.ok_or_else(|| {
-            CertificateStatusError::SettlementError(
-                "Candidate certificate header has no settlement tx hash".into(),
-            )
-        })?;
-        debug!(
-            %settlement_tx_hash,
-            "Waiting for certificate settlement to complete"
-        );
-        let (settlement_complete_notifier, settlement_complete) = oneshot::channel();
-        self.send_to_network_task(NetworkTaskMessage::CertificateWaitingForSettlement {
-            height,
-            certificate_id,
-            settlement_tx_hash,
-            settlement_complete_notifier,
-            new_pp_root,
-        })
-        .await?;
-
-        let settlement_complete_result = settlement_complete.await.map_err(recv_err)?;
-        let (epoch_number, certificate_index) = match settlement_complete_result {
-            CertificateSettlementResult::Settled(epoch_number, certificate_index) => {
-                (epoch_number, certificate_index)
-            }
-            CertificateSettlementResult::Error(error) => {
-                return Err(error);
-            }
-            CertificateSettlementResult::TimeoutError => {
-                // Retry the settlement transaction
+        match self
+            .settlement_service
+            .retrieve_settlement_result(job_id)
+            .await
+            .map_err(|e| CertificateStatusError::SettlementError(format!("{e}")))?
+        {
+            RetrievedSettlementResult::Pending(mut watcher) => {
+                let result = watcher
+                    .wait_for_result()
+                    .await
+                    .map_err(|e| CertificateStatusError::SettlementError(e.to_string()))?;
+                match result {
+                    SettlementJobResult::ClientError(error) => {
+                        return Err(CertificateStatusError::SettlementError(error.message));
+                    }
+                    SettlementJobResult::ContractCall(ref call)
+                        if call.outcome == ContractCallOutcome::Revert =>
+                    {
+                        return Err(CertificateStatusError::SettlementError(format!(
+                            "Settlement tx {} reverted",
+                            call.tx_hash
+                        )));
+                    }
+                    _ => {}
+                }
                 info!(
-                    "Retrying the settlement transaction after a timeout for certificate \
-                     {certificate_id}"
+                    "Certificate {certificate_id} settlement job {job_id} completed \
+                     (pending→completed)",
                 );
-                // We should theoretically remove the settlement_tx_hash here. However, doing so
-                // would currently expose us to bugs: recompute_state checks for already-settled
-                // cert only if there's already a settlement_tx_hash.
-                // Considering fixing this would likely be relatively hard right now, we
-                // currently leave the settlement_tx_hash here. This is not by design, and as
-                // soon as the settlement logic is refactored properly, we can remove
-                // the settlement_tx_hash here. But the refactor will likely lead to this code
-                // disappearing anyway, so… :shrug:
-                self.set_status(CertificateStatus::Proven)?;
-                return Box::pin(self.process_from_proven()).await;
             }
-            CertificateSettlementResult::SettledThroughOtherTx(alternative_settlement_tx_hash) => {
-                info!(
-                    "Process alternative settlement transaction {alternative_settlement_tx_hash}"
-                );
-                self.header.settlement_tx_hash = Some(alternative_settlement_tx_hash);
-                self.state_store.update_settlement_tx_hash(
-                    &certificate_id,
-                    alternative_settlement_tx_hash,
-                    UpdateEvenIfAlreadyPresent::Yes,
-                    UpdateStatusToCandidate::Yes,
-                )?;
-                // No set_status: update_settlement_tx_hash already updates the status in the
-                // database
-                // Reprocess from Candidate, and not directly to Settled: we want to check the
-                // number of confirmations, and have not done that here yet.
-                self.header.status = CertificateStatus::Candidate;
-                return Box::pin(self.process_from_candidate()).await;
+            RetrievedSettlementResult::Completed(result) => {
+                match result {
+                    SettlementJobResult::ClientError(error) => {
+                        return Err(CertificateStatusError::SettlementError(error.message));
+                    }
+                    SettlementJobResult::ContractCall(ref call)
+                        if call.outcome == ContractCallOutcome::Revert =>
+                    {
+                        return Err(CertificateStatusError::SettlementError(format!(
+                            "Settlement tx {} reverted",
+                            call.tx_hash
+                        )));
+                    }
+                    _ => {}
+                }
+                info!("Certificate {certificate_id} settlement job {job_id} completed",);
             }
-        };
-
-        let settled_certificate =
-            SettledCertificate(certificate_id, height, epoch_number, certificate_index);
-        self.set_status(CertificateStatus::Settled)?;
-        debug!(
-            ?settlement_tx_hash,
-            ?settled_certificate,
-            "Certificate settlement completed"
-        );
-        self.send_to_network_task(NetworkTaskMessage::CertificateSettled {
-            height,
-            certificate_id,
-            settled_certificate,
-        })
-        .await?;
-
-        if self.header.status != CertificateStatus::Settled {
-            return Err(CertificateStatusError::InternalError(
-                "CertificateTask completed with a non-settled certificate".into(),
-            ));
+            RetrievedSettlementResult::NotFound => {
+                return Err(CertificateStatusError::SettlementError(format!(
+                    "Certificate {certificate_id} settlement job {job_id} not found, unable to \
+                     recover",
+                )));
+            }
         }
 
-        Ok(())
+        self.finalize_settlement().await
     }
 
     fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
@@ -613,6 +430,16 @@ where
             .update_certificate_header_status(&self.header.certificate_id, &status)?;
         self.header.status = status;
         Ok(())
+    }
+
+    /// Common finalization logic for all settlement completion paths.
+    async fn finalize_settlement(&mut self) -> Result<(), CertificateStatusError> {
+        self.set_status(CertificateStatus::Settled)?;
+        self.send_to_network_task(NetworkTaskMessage::CertificateSettled {
+            height: self.header.height,
+            certificate_id: self.header.certificate_id,
+        })
+        .await
     }
 
     async fn send_to_network_task(

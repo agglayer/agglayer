@@ -5,7 +5,7 @@ use std::{
 };
 
 use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
-use agglayer_types::{Digest, SettlementTxHash};
+use agglayer_types::{CertificateId, Digest, SettlementTxHash};
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
     primitives::{Address, BlockHash, Bytes, U128, U256},
@@ -30,20 +30,57 @@ impl Nonce {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettlementJob {
-    contract_address: Address,
-    calldata: Bytes,
-    eth_value: U256,
+    pub(crate) certificate_id: CertificateId,
+    pub(crate) contract_address: Address,
+    pub(crate) calldata: Bytes,
+    pub(crate) eth_value: U256,
 
-    num_confirmations: u32,
-    gas_limit: U128,
-    max_fee_per_gas_ceiling: U128,
-    max_fee_per_gas_floor: U128,
-    max_fee_per_gas_multiplier: Multiplier,
-    max_priority_fee_per_gas_ceiling: U128,
-    max_priority_fee_per_gas_floor: U128,
-    max_priority_fee_per_gas_multiplier: Multiplier,
+    pub(crate) num_confirmations: u32,
+    pub(crate) gas_limit: U128,
+    pub(crate) max_fee_per_gas_ceiling: U128,
+    pub(crate) max_fee_per_gas_floor: U128,
+    pub(crate) max_fee_per_gas_multiplier: Multiplier,
+    pub(crate) max_priority_fee_per_gas_ceiling: U128,
+    pub(crate) max_priority_fee_per_gas_floor: U128,
+    pub(crate) max_priority_fee_per_gas_multiplier: Multiplier,
 
-    settlement_config: Arc<SettlementTransactionConfig>,
+    pub(crate) settlement_config: Arc<SettlementTransactionConfig>,
+}
+
+impl SettlementJob {
+    pub fn new(
+        certificate_id: CertificateId,
+        settlement_config: Arc<SettlementTransactionConfig>,
+    ) -> Self {
+        Self {
+            certificate_id,
+            // L1 tx fields — will be populated by SettlementTask's build_next_attempt_*
+            // methods once run_with_nonce_management is implemented. The task will use its
+            // provider + contract ABI to build these from the certificate data.
+            contract_address: Address::ZERO,
+            calldata: Bytes::new(),
+            eth_value: U256::ZERO,
+            // Gas/fee fields derived from config
+            num_confirmations: settlement_config.confirmations as u32,
+            gas_limit: U128::from(settlement_config.gas_limit_ceiling),
+            max_fee_per_gas_ceiling: U128::from(settlement_config.max_fee_per_gas_ceiling),
+            max_fee_per_gas_floor: U128::from(settlement_config.max_fee_per_gas_floor),
+            max_fee_per_gas_multiplier: settlement_config.max_fee_per_gas_multiplier_factor,
+            max_priority_fee_per_gas_ceiling: U128::from(
+                settlement_config.max_priority_fee_per_gas_ceiling,
+            ),
+            max_priority_fee_per_gas_floor: U128::from(
+                settlement_config.max_priority_fee_per_gas_floor,
+            ),
+            max_priority_fee_per_gas_multiplier: settlement_config
+                .max_priority_fee_per_gas_multiplier_factor,
+            settlement_config,
+        }
+    }
+
+    pub fn certificate_id(&self) -> CertificateId {
+        self.certificate_id
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -173,6 +210,21 @@ impl SettlementTask {
     }
 
     pub async fn run(&mut self) -> SettlementJobResult {
+        // TODO: replace with run_with_nonce_management once implemented
+        warn!(
+            id = %self.id,
+            certificate_id = %self.job.certificate_id(),
+            "SettlementTask::run() is a stub — settlement execution not yet implemented"
+        );
+        SettlementJobResult::ClientError(ClientError {
+            kind: ClientErrorType::Unknown,
+            message: "Settlement execution not yet implemented".to_string(),
+        })
+    }
+
+    /// Full nonce-management settlement loop (not yet implemented).
+    #[allow(dead_code, unreachable_code)]
+    async fn run_with_nonce_management(&mut self) -> SettlementJobResult {
         'start: loop {
             // Process in a big loop. We'll come back here whenever a reorg is detected, and
             // after waiting when we're done with one cycle.
@@ -254,7 +306,7 @@ impl SettlementTask {
             if all_nonces_seen_on_l1 && !reverts.is_empty() {
                 // All nonces were seen on L1, but we didn't get a successful settlement result
                 // for any of them. Also, there was at least one revert.
-                // We can wait for finalization without submiting a new attempt.
+                // We can wait for finalization without submitting a new attempt.
                 let earliest_revert_result = reverts
                     .values()
                     .map(|(_, _, result)| result)
@@ -456,9 +508,14 @@ impl SettlementTask {
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
-        // TODO: Save the settlement job contents to L1
+        // TODO: Save the settlement job contents to DB
         // XREF: https://github.com/agglayer/agglayer/issues/1381
-        todo!()
+        warn!(
+            id = %self.id,
+            certificate_id = %self.job.certificate_id(),
+            "save_settlement_job_to_db not yet implemented, skipping DB persistence"
+        );
+        Ok(())
     }
 
     async fn load_settlement_job_from_db(

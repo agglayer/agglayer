@@ -9,6 +9,7 @@ workspace = true
 
 [dependencies]
 alloy.workspace = true
+async-trait.workspace = true
 axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 arc-swap.workspace = true
 buildstructor.workspace = true
@@ -44,6 +45,7 @@ agglayer-grpc-types.workspace = true
 agglayer-jsonrpc-api.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-rpc.workspace = true
+agglayer-settlement-service.workspace = true
 agglayer-signer.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true

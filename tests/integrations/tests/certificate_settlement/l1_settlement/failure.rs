@@ -162,16 +162,13 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
 
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
-    // Check that we got an InError status with a SettlementError about too many
-    // transactions
+    // Check that we got an InError status with a SettlementError about timeout
     match result.status {
         CertificateStatus::InError { error } => {
             let error_message = error.to_string();
             assert!(
-                error_message.contains(
-                    "Too many different settlement transactions submitted for the same certificate"
-                ),
-                "Expected error message about too many settlement transactions, but got: \
+                error_message.contains("Timeout waiting for"),
+                "Expected error message about timeout waiting for settlement, but got: \
                  {error_message}"
             );
         }
@@ -186,14 +183,15 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
 #[timeout(Duration::from_secs(180))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
-    // Retry the settlement transaction 2 times because of induced timeouts,
-    // then the certificate should be settled
+    // First settlement attempt times out, causing InError.
+    // After disabling the timeout failpoint, re-submitting the certificate settles
+    // it.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
     fail::cfg(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
-        "2*return",
+        "return",
     )
     .expect("Failed to configure failpoint");
 
@@ -207,6 +205,23 @@ async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
 
+    let certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate.clone()])
+        .await
+        .unwrap();
+
+    let result = wait_for_settlement_or_error!(client, certificate_id).await;
+
+    assert!(matches!(result.status, CertificateStatus::InError { .. }));
+
+    // Disable the timeout failpoint so the next attempt can succeed
+    fail::cfg(
+        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+        "off",
+    )
+    .expect("Failed to disable failpoint");
+
+    // Re-submit the certificate — it should now settle successfully
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await

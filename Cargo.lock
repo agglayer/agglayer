@@ -122,6 +122,7 @@ dependencies = [
  "agglayer-clock",
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-settlement-service",
  "agglayer-storage",
  "agglayer-test-suite",
  "agglayer-types",
@@ -146,6 +147,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
+ "ulid",
 ]
 
 [[package]]
@@ -431,12 +433,14 @@ dependencies = [
  "agglayer-jsonrpc-api",
  "agglayer-rate-limiting",
  "agglayer-rpc",
+ "agglayer-settlement-service",
  "agglayer-signer",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
  "alloy",
  "arc-swap",
+ "async-trait",
  "axum 0.8.4",
  "buildstructor 0.6.0",
  "eyre",
@@ -532,8 +536,10 @@ dependencies = [
  "agglayer-config",
  "agglayer-types",
  "alloy",
+ "async-trait",
  "derive_more 2.1.1",
  "eyre",
+ "mockall",
  "tokio",
  "tokio-util",
  "tower 0.4.13",
@@ -680,6 +686,7 @@ dependencies = [
  "sp1-sdk",
  "strum_macros 0.27.2",
  "thiserror 2.0.16",
+ "ulid",
  "unified-bridge",
 ]
 
@@ -10228,6 +10235,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "470dbf6591da1b39d43c14523b2b469c86879a53e8b758c8e090a470fe7b1fbe"
 dependencies = [
  "rand 0.9.2",
+ "serde",
  "web-time",
 ]
 
