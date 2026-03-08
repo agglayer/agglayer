@@ -9,6 +9,7 @@ use std::{
 
 use agglayer_clock::ClockRef;
 use agglayer_config::Config;
+use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
     backup::BackupClient,
     columns::{
@@ -41,9 +42,8 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    settlement_client::{MockProvider, MockSettlementClient, SettlementClient},
     CertificateInput, CertificateOrchestrator, CertificationError, Certifier, CertifierOutput,
-    CertifierResult, Error, NonceInfo,
+    CertifierResult,
 };
 
 pub(crate) mod mocks;
@@ -527,11 +527,12 @@ async fn test_certificate_orchestrator_can_stop() {
         data_receiver,
         cancellation_token.clone(),
         check.clone(),
-        check.clone(),
         pending_store.clone(),
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        Arc::new(MockSettlementServiceTrait::new()),
+        Arc::new(agglayer_config::settlement_service::SettlementTransactionConfig::default()),
     )
     .expect("Unable to create orchestrator");
 
@@ -592,11 +593,12 @@ async fn test_collect_certificates() {
         data_receiver,
         cancellation_token,
         check.clone(),
-        check.clone(),
         pending_store.clone(),
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        Arc::new(MockSettlementServiceTrait::new()),
+        Arc::new(agglayer_config::settlement_service::SettlementTransactionConfig::default()),
     )
     .expect("Unable to create orchestrator");
 
@@ -662,11 +664,12 @@ async fn test_collect_certificates_after_epoch() {
         data_receiver,
         cancellation_token,
         check.clone(),
-        check.clone(),
         pending_store.clone(),
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        Arc::new(MockSettlementServiceTrait::new()),
+        Arc::new(agglayer_config::settlement_service::SettlementTransactionConfig::default()),
     )
     .expect("Unable to create orchestrator");
 
@@ -734,11 +737,12 @@ async fn test_collect_certificates_when_empty() {
         data_receiver,
         cancellation_token,
         check.clone(),
-        check.clone(),
         pending_store.clone(),
         epochs_store,
         Arc::new(current_epoch),
         state_store.clone(),
+        Arc::new(MockSettlementServiceTrait::new()),
+        Arc::new(agglayer_config::settlement_service::SettlementTransactionConfig::default()),
     )
     .expect("Unable to create orchestrator");
 
@@ -802,7 +806,6 @@ fn check() -> (
 }
 
 type IMockOrchestrator = CertificateOrchestrator<
-    MockSettlementClient,
     MockCertifier,
     MockPendingStore,
     MockEpochsStore,
@@ -813,7 +816,6 @@ type IMockOrchestrator = CertificateOrchestrator<
 #[derive(Default, buildstructor::Builder)]
 struct MockOrchestrator {
     certifier: Option<MockCertifier>,
-    settlement_client: Option<MockSettlementClient>,
     pending_store: Option<MockPendingStore>,
     epochs_store: Option<MockEpochsStore>,
     state_store: Option<MockStateStore>,
@@ -823,7 +825,7 @@ struct MockOrchestrator {
 type SenderAndClockRef = (mpsc::Sender<(NetworkId, Height, CertificateId)>, ClockRef);
 
 #[fixture]
-pub(crate) fn create_orchestrator_mock(
+pub(crate) async fn create_orchestrator_mock(
     #[default(MockOrchestrator::default())] builder: MockOrchestrator,
     clock: ClockRef,
 ) -> (SenderAndClockRef, IMockOrchestrator) {
@@ -848,15 +850,6 @@ pub(crate) fn create_orchestrator_mock(
             clock,
             data_receiver,
             cancellation_token,
-            builder.settlement_client.unwrap_or_else(|| {
-                let mut settlement_client = MockSettlementClient::default();
-
-                settlement_client
-                    .expect_submit_certificate_settlement()
-                    .never();
-
-                settlement_client
-            }),
             builder.certifier.unwrap_or_else(|| {
                 let mut certifier = MockCertifier::default();
 
@@ -868,6 +861,7 @@ pub(crate) fn create_orchestrator_mock(
             epochs_store,
             Arc::new(current_epoch),
             state_store,
+            Arc::new(MockSettlementServiceTrait::new()),
         )
         .expect("Unable to create orchestrator"),
     )
@@ -911,54 +905,6 @@ impl Check {
     pub fn with_proof(mut self, proof: Proof) -> Self {
         self.expected_proof = Some(proof);
         self
-    }
-}
-
-#[async_trait::async_trait]
-impl SettlementClient for Check {
-    type Provider = MockProvider;
-
-    async fn submit_certificate_settlement(
-        &self,
-        _certificate_id: CertificateId,
-        _nonce_info: Option<NonceInfo>,
-    ) -> Result<SettlementTxHash, Error> {
-        Ok(SettlementTxHash::for_tests())
-    }
-
-    /// Watch for the transaction to be mined and update the certificate
-    /// accordingly
-    async fn wait_for_settlement(
-        &self,
-        _settlement_tx_hash: SettlementTxHash,
-        _certificate_id: CertificateId,
-    ) -> Result<(EpochNumber, CertificateIndex), Error> {
-        Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
-    }
-
-    fn get_provider(&self) -> &Self::Provider {
-        unimplemented!("get_provider not needed in tests")
-    }
-
-    async fn fetch_last_settled_pp_root(
-        &self,
-        _network_id: NetworkId,
-    ) -> Result<Option<([u8; 32], SettlementTxHash)>, Error> {
-        Ok(None)
-    }
-
-    async fn fetch_settlement_nonce(
-        &self,
-        _settlement_tx_hash: SettlementTxHash,
-    ) -> Result<Option<NonceInfo>, Error> {
-        Ok(None)
-    }
-
-    async fn fetch_settlement_receipt_status(
-        &self,
-        _settlement_tx_hash: SettlementTxHash,
-    ) -> Result<crate::TxReceiptStatus, Error> {
-        Ok(crate::TxReceiptStatus::TxSuccessful)
     }
 }
 

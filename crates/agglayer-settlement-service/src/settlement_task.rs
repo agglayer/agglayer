@@ -5,7 +5,7 @@ use std::{
 };
 
 use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
-use agglayer_types::{Digest, SettlementTxHash};
+use agglayer_types::{CertificateId, Digest, SettlementTxHash};
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
     primitives::{Address, BlockHash, Bytes, U128, U256},
@@ -30,20 +30,54 @@ impl Nonce {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettlementJob {
-    contract_address: Address,
-    calldata: Bytes,
-    eth_value: U256,
+    pub(crate) certificate_id: CertificateId,
+    pub(crate) contract_address: Address,
+    pub(crate) calldata: Bytes,
+    pub(crate) eth_value: U256,
 
-    num_confirmations: u32,
-    gas_limit: U128,
-    max_fee_per_gas_ceiling: U128,
-    max_fee_per_gas_floor: U128,
-    max_fee_per_gas_multiplier: Multiplier,
-    max_priority_fee_per_gas_ceiling: U128,
-    max_priority_fee_per_gas_floor: U128,
-    max_priority_fee_per_gas_multiplier: Multiplier,
+    pub(crate) num_confirmations: u32,
+    pub(crate) gas_limit: U128,
+    pub(crate) max_fee_per_gas_ceiling: U128,
+    pub(crate) max_fee_per_gas_floor: U128,
+    pub(crate) max_fee_per_gas_multiplier: Multiplier,
+    pub(crate) max_priority_fee_per_gas_ceiling: U128,
+    pub(crate) max_priority_fee_per_gas_floor: U128,
+    pub(crate) max_priority_fee_per_gas_multiplier: Multiplier,
 
-    settlement_config: Arc<SettlementTransactionConfig>,
+    pub(crate) settlement_config: Arc<SettlementTransactionConfig>,
+}
+
+impl SettlementJob {
+    pub fn new(
+        certificate_id: CertificateId,
+        settlement_config: Arc<SettlementTransactionConfig>,
+    ) -> Self {
+        Self {
+            certificate_id,
+            contract_address: Address::ZERO,
+            calldata: Bytes::new(),
+            eth_value: U256::ZERO,
+            // Gas/fee fields derived from config
+            num_confirmations: settlement_config.confirmations as u32,
+            gas_limit: U128::from(settlement_config.gas_limit_ceiling),
+            max_fee_per_gas_ceiling: U128::from(settlement_config.max_fee_per_gas_ceiling),
+            max_fee_per_gas_floor: U128::from(settlement_config.max_fee_per_gas_floor),
+            max_fee_per_gas_multiplier: settlement_config.max_fee_per_gas_multiplier_factor,
+            max_priority_fee_per_gas_ceiling: U128::from(
+                settlement_config.max_priority_fee_per_gas_ceiling,
+            ),
+            max_priority_fee_per_gas_floor: U128::from(
+                settlement_config.max_priority_fee_per_gas_floor,
+            ),
+            max_priority_fee_per_gas_multiplier: settlement_config
+                .max_priority_fee_per_gas_multiplier_factor,
+            settlement_config,
+        }
+    }
+
+    pub fn certificate_id(&self) -> CertificateId {
+        self.certificate_id
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -456,7 +490,7 @@ impl SettlementTask {
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
-        // TODO: Save the settlement job contents to L1
+        // TODO: Save the settlement job contents to DB
         // XREF: https://github.com/agglayer/agglayer/issues/1381
         todo!()
     }
