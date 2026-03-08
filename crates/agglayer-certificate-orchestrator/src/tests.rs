@@ -22,10 +22,7 @@ use agglayer_storage::{
         PerEpochWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
         UpdateStatusToCandidate,
     },
-    tests::{
-        mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
-        TempDBDir,
-    },
+    tests::TempDBDir,
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
@@ -33,7 +30,6 @@ use agglayer_types::{
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
-use mocks::MockCertifier;
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
 };
@@ -813,68 +809,6 @@ fn check() -> (
         .build();
 
     ((pending_store, state_store), check_receiver, check)
-}
-
-type IMockOrchestrator = CertificateOrchestrator<
-    MockCertifier,
-    MockPendingStore,
-    MockEpochsStore,
-    MockPerEpochStore,
-    MockStateStore,
->;
-
-#[derive(Default, buildstructor::Builder)]
-struct MockOrchestrator {
-    certifier: Option<MockCertifier>,
-    pending_store: Option<MockPendingStore>,
-    epochs_store: Option<MockEpochsStore>,
-    state_store: Option<MockStateStore>,
-    current_epoch: Option<MockPerEpochStore>,
-}
-
-type SenderAndClockRef = (mpsc::Sender<(NetworkId, Height, CertificateId)>, ClockRef);
-
-#[fixture]
-pub(crate) async fn create_orchestrator_mock(
-    #[default(MockOrchestrator::default())] builder: MockOrchestrator,
-    clock: ClockRef,
-) -> (SenderAndClockRef, IMockOrchestrator) {
-    let (data_sender, data_receiver) = mpsc::channel(10);
-    let cancellation_token = CancellationToken::new();
-    let pending_store = Arc::new(builder.pending_store.unwrap_or_else(|| {
-        let mut pending_store = MockPendingStore::default();
-
-        pending_store
-            .expect_get_current_proven_height()
-            .returning(|| Ok(vec![]));
-
-        pending_store
-    }));
-    let epochs_store = Arc::new(builder.epochs_store.unwrap_or_default());
-    let current_epoch = ArcSwap::new(Arc::new(builder.current_epoch.unwrap_or_default()));
-    let state_store = Arc::new(builder.state_store.unwrap_or_default());
-
-    (
-        (data_sender, clock.clone()),
-        CertificateOrchestrator::try_new(
-            clock,
-            data_receiver,
-            cancellation_token,
-            builder.certifier.unwrap_or_else(|| {
-                let mut certifier = MockCertifier::default();
-
-                certifier.expect_certify().never();
-
-                certifier
-            }),
-            pending_store,
-            epochs_store,
-            Arc::new(current_epoch),
-            state_store,
-            Arc::new(MockSettlementServiceTrait::new()),
-        )
-        .expect("Unable to create orchestrator"),
-    )
 }
 
 #[derive(Clone)]
