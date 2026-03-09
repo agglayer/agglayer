@@ -1,6 +1,7 @@
 use rocksdb::WriteBatch;
 use ulid::Ulid;
 
+use self::telemetry::AttemptWriteMetrics;
 use super::StateStore;
 use crate::{
     columns::{
@@ -15,6 +16,8 @@ use crate::{
         settlement::{attempt::Key as SettlementAttemptKey, attempt_per_wallet},
     },
 };
+
+mod telemetry;
 
 impl StateStore {
     fn lock_settlement_writes(&self) -> Result<std::sync::MutexGuard<'_, ()>, Error> {
@@ -86,6 +89,7 @@ impl SettlementWriter for StateStore {
         settlement_attempt: &SettlementAttempt,
     ) -> Result<(), Error> {
         let _settlement_write_lock = self.lock_settlement_writes()?;
+        let mut metrics = AttemptWriteMetrics::start();
 
         let job_exists = match self.db.get::<SettlementJobsColumn>(settlement_job_id) {
             Ok(value) => value.is_some(),
@@ -166,6 +170,7 @@ impl SettlementWriter for StateStore {
             return Err(err.into());
         }
 
+        metrics.mark_success();
         Ok(())
     }
 
