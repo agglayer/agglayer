@@ -126,6 +126,10 @@ pub struct Config {
 
     #[serde(default)]
     pub grpc: grpc::GrpcConfig,
+
+    /// The settlement service configuration.
+    #[serde(default)]
+    pub settlement: settlement_service::SettlementConfig,
 }
 
 impl Config {
@@ -181,6 +185,7 @@ impl Config {
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
+            settlement: Default::default(),
         }
     }
 

@@ -262,11 +262,7 @@ impl Node {
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
 
         let settlement_service = Arc::new(
-            SettlementService::start(
-                agglayer_config::settlement_service::SettlementConfig::default(),
-                cancellation_token.clone(),
-            )
-            .await?,
+            SettlementService::start(config.settlement.clone(), cancellation_token.clone()).await?,
         );
 
         let (data_sender, data_receiver) = mpsc::channel(

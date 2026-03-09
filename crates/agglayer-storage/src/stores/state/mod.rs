@@ -225,10 +225,7 @@ impl StateWriter for StateStore {
                 );
             }
         } else {
-            info!(
-                "Certificate header not found for certificate_id: {}",
-                certificate_id
-            )
+            return Err(Error::NoCertificateHeader);
         }
 
         Ok(())

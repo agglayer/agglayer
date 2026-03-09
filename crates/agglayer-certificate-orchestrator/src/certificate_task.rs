@@ -355,7 +355,7 @@ where
     async fn process_from_candidate(&mut self) -> Result<(), CertificateStatusError> {
         if self.header.status != CertificateStatus::Candidate {
             return Err(CertificateStatusError::InternalError(format!(
-                "process_from_candidate called with status {}",
+                "CertificateTask::process_from_candidate called with cert status {}",
                 self.header.status,
             )));
         }
@@ -378,41 +378,15 @@ where
                     .wait_for_result()
                     .await
                     .map_err(|e| CertificateStatusError::SettlementError(e.to_string()))?;
-                match result {
-                    SettlementJobResult::ClientError(error) => {
-                        return Err(CertificateStatusError::SettlementError(error.message));
-                    }
-                    SettlementJobResult::ContractCall(ref call)
-                        if call.outcome == ContractCallOutcome::Revert =>
-                    {
-                        return Err(CertificateStatusError::SettlementError(format!(
-                            "Settlement tx {} reverted",
-                            call.tx_hash
-                        )));
-                    }
-                    _ => {}
-                }
+                validate_settlement_result(&result)?;
                 info!(
                     "Certificate {certificate_id} settlement job {job_id} completed \
                      (pending→completed)",
                 );
             }
             RetrievedSettlementResult::Completed(result) => {
-                match result {
-                    SettlementJobResult::ClientError(error) => {
-                        return Err(CertificateStatusError::SettlementError(error.message));
-                    }
-                    SettlementJobResult::ContractCall(ref call)
-                        if call.outcome == ContractCallOutcome::Revert =>
-                    {
-                        return Err(CertificateStatusError::SettlementError(format!(
-                            "Settlement tx {} reverted",
-                            call.tx_hash
-                        )));
-                    }
-                    _ => {}
-                }
-                info!("Certificate {certificate_id} settlement job {job_id} completed",);
+                validate_settlement_result(&result)?;
+                info!("Certificate {certificate_id} settlement job {job_id} completed");
             }
             RetrievedSettlementResult::NotFound => {
                 return Err(CertificateStatusError::SettlementError(format!(
@@ -459,6 +433,21 @@ fn recv_err(_: oneshot::error::RecvError) -> CertificateStatusError {
     CertificateStatusError::InternalError(
         "Failed to receive network task answer: sender dropped".into(),
     )
+}
+
+fn validate_settlement_result(result: &SettlementJobResult) -> Result<(), CertificateStatusError> {
+    match result {
+        SettlementJobResult::ClientError(error) => Err(CertificateStatusError::SettlementError(
+            error.message.clone(),
+        )),
+        SettlementJobResult::ContractCall(call) if call.outcome == ContractCallOutcome::Revert => {
+            Err(CertificateStatusError::SettlementError(format!(
+                "Settlement tx {} reverted",
+                call.tx_hash
+            )))
+        }
+        SettlementJobResult::ContractCall(_) => Ok(()),
+    }
 }
 
 #[cfg(feature = "testutils")]
