@@ -93,7 +93,7 @@ pub enum RetrievedSettlementResult {
     NotFound,
 }
 
-#[cfg_attr(any(test, feature = "testutils"), mockall::automock)]
+#[cfg_attr(feature = "testutils", mockall::automock)]
 #[async_trait::async_trait]
 pub trait SettlementServiceTrait: Send + Sync {
     async fn request_new_settlement(

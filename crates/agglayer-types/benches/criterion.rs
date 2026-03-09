@@ -16,6 +16,7 @@ fn bench_parse_certificate_header(c: &mut Criterion) {
             metadata: Metadata::default(),
             status: CertificateStatus::Pending,
             settlement_tx_hash: None,
+            settlement_job_id: None,
         })
         .unwrap();
     c.bench_function("default cert header", |b| {

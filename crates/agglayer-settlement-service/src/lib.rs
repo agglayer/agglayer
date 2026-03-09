@@ -14,7 +14,7 @@ mod utils;
 
 #[cfg(any(test, feature = "testutils"))]
 pub use settlement_service::testutils;
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(feature = "testutils")]
 pub use settlement_service::MockSettlementServiceTrait;
 pub use settlement_service::{
     RetrievedSettlementResult, SettlementJobWatcher, SettlementService, SettlementServiceTrait,
