@@ -323,27 +323,41 @@ where
                 info!("Settlement successful: {}", tx_hash);
 
                 self.header.settlement_tx_hash = Some(tx_hash);
-                self.state_store.update_settlement_tx_hash(
+
+                // The settlement service may have already marked the
+                // certificate as Settled (e.g. RpcSettlementClient's
+                // wait_for_settlement assigns it to the epoch). Tolerate the
+                // "already settled" error and skip straight to finalization in
+                // that case.
+                match self.state_store.update_settlement_tx_hash(
                     &certificate_id,
                     tx_hash,
                     UpdateEvenIfAlreadyPresent::Yes,
                     UpdateStatusToCandidate::Yes,
-                )?;
+                ) {
+                    Ok(()) => {
+                        self.header.settlement_job_id = Some(job_id.into());
+                        self.state_store
+                            .update_settlement_job_id(&certificate_id, job_id.into())?;
 
-                self.header.settlement_job_id = Some(job_id.into());
-                self.state_store
-                    .update_settlement_job_id(&certificate_id, job_id.into())?;
+                        self.header.status = CertificateStatus::Candidate;
 
-                self.header.status = CertificateStatus::Candidate;
+                        #[cfg(feature = "testutils")]
+                        testutils::inject_fail_points_after_proving(
+                            &certificate_id,
+                            &mut self.header,
+                            &self.state_store,
+                        );
 
-                #[cfg(feature = "testutils")]
-                testutils::inject_fail_points_after_proving(
-                    &certificate_id,
-                    &mut self.header,
-                    &self.state_store,
-                );
-
-                self.process_from_candidate().await
+                        self.process_from_candidate().await
+                    }
+                    Err(_) => {
+                        // Certificate already settled by the settlement
+                        // service — go straight to finalization.
+                        debug!("Certificate already settled by service, finalizing");
+                        self.finalize_settlement().await
+                    }
+                }
             }
             SettlementJobResult::ClientError(error) => {
                 error!("Settlement failed: {}", error.message);

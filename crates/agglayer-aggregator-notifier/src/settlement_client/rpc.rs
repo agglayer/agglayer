@@ -1,8 +1,12 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use agglayer_certificate_orchestrator::{Error, NonceInfo, SettlementClient, TxReceiptStatus};
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
+use agglayer_settlement_service::{
+    ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult,
+    RetrievedSettlementResult, SettlementJobResult, SettlementJobWatcher, SettlementServiceTrait,
+};
 use agglayer_storage::stores::{
     PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
 };
@@ -11,25 +15,66 @@ use agglayer_types::{
     ExecutionMode, Proof, SettlementTxHash, U256,
 };
 use alloy::{
-    eips::BlockNumberOrTag, providers::Provider, rpc::types::TransactionReceipt,
+    eips::BlockNumberOrTag,
+    primitives::{BlockHash, Bytes},
+    providers::Provider,
+    rpc::types::TransactionReceipt,
     signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
 use arc_swap::ArcSwap;
 use eyre::eyre;
 use pessimistic_proof::{proof::DisplayToHex, PessimisticProofOutput};
+use tokio::sync::{watch, Mutex};
 use tracing::{debug, error, info, instrument, warn};
+use ulid::Ulid;
 
 const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
 
 /// Rpc-based settlement client for L1 certificate settlement.
 /// Using alloy client to interact with the L1 rollup manager contract.
-#[derive(Default, Clone)]
 pub struct RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> {
     state_store: Arc<StateStore>,
     pending_store: Arc<PendingStore>,
     config: Arc<OutboundRpcSettleConfig>,
     l1_rpc: Arc<RollupManagerRpc>,
     current_epoch: Arc<ArcSwap<PerEpochStore>>,
+    /// Tracks in-flight and completed settlement jobs for
+    /// [`SettlementServiceTrait`].
+    jobs: Arc<Mutex<HashMap<Ulid, watch::Receiver<Option<SettlementJobResult>>>>>,
+}
+
+// Manual Clone/Default impls avoid requiring generic params to be Clone/Default
+// (all fields are Arc-wrapped, so cloning just bumps reference counts).
+impl<S, P, E, R> Clone for RpcSettlementClient<S, P, E, R> {
+    fn clone(&self) -> Self {
+        Self {
+            state_store: self.state_store.clone(),
+            pending_store: self.pending_store.clone(),
+            config: self.config.clone(),
+            l1_rpc: self.l1_rpc.clone(),
+            current_epoch: self.current_epoch.clone(),
+            jobs: self.jobs.clone(),
+        }
+    }
+}
+
+impl<S, P, E, R> Default for RpcSettlementClient<S, P, E, R>
+where
+    S: Default,
+    P: Default,
+    E: Default,
+    R: Default,
+{
+    fn default() -> Self {
+        Self {
+            state_store: Default::default(),
+            pending_store: Default::default(),
+            config: Default::default(),
+            l1_rpc: Default::default(),
+            current_epoch: Arc::new(ArcSwap::new(Default::default())),
+            jobs: Default::default(),
+        }
+    }
 }
 
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
@@ -49,6 +94,7 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
             state_store,
             pending_store,
             current_epoch,
+            jobs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -699,6 +745,104 @@ where
         };
 
         Ok(Some(nonce_info))
+    }
+}
+
+#[async_trait::async_trait]
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementServiceTrait
+    for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+where
+    StateStore: StateReader + StateWriter + 'static,
+    PendingStore: PendingCertificateReader + 'static,
+    RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+{
+    async fn request_new_settlement(
+        &self,
+        certificate_id: CertificateId,
+    ) -> eyre::Result<SettlementJobWatcher> {
+        let (tx, rx) = watch::channel(None);
+        let job_id = Ulid::new();
+
+        // Run settlement inline (same context as caller, matching main's
+        // behaviour) instead of spawning a separate task.
+        let result = self.run_settlement(certificate_id).await;
+        let _ = tx.send(Some(result));
+
+        self.jobs.lock().await.insert(job_id, rx.clone());
+        Ok(SettlementJobWatcher::from_channel(rx, job_id))
+    }
+
+    async fn retrieve_settlement_result(
+        &self,
+        job_id: Ulid,
+    ) -> eyre::Result<RetrievedSettlementResult> {
+        let jobs = self.jobs.lock().await;
+        if let Some(watcher) = jobs.get(&job_id) {
+            match watcher.borrow().as_ref() {
+                None => Ok(RetrievedSettlementResult::Pending(
+                    SettlementJobWatcher::from_channel(watcher.clone(), job_id),
+                )),
+                Some(result) => Ok(RetrievedSettlementResult::Completed(result.clone())),
+            }
+        } else {
+            Ok(RetrievedSettlementResult::NotFound)
+        }
+    }
+}
+
+impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+    RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
+where
+    StateStore: StateReader + StateWriter + 'static,
+    PendingStore: PendingCertificateReader + 'static,
+    RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+{
+    /// Drives the submit → receipt-wait cycle and translates the outcome into
+    /// a [`SettlementJobResult`].
+    ///
+    /// Unlike [`wait_for_settlement`], this does NOT assign the certificate to
+    /// an epoch — that is the orchestrator's responsibility via the
+    /// `CertificateSettled` message path.
+    async fn run_settlement(&self, certificate_id: CertificateId) -> SettlementJobResult {
+        let tx_hash = match self
+            .submit_certificate_settlement(certificate_id, None)
+            .await
+        {
+            Ok(h) => h,
+            Err(e) => {
+                error!(%certificate_id, error = %e, "Settlement submission failed");
+                return SettlementJobResult::ClientError(ClientError {
+                    kind: ClientErrorType::Unknown,
+                    message: format!("submit_certificate_settlement failed: {e}"),
+                });
+            }
+        };
+
+        info!(%certificate_id, %tx_hash, "Settlement tx submitted, waiting for confirmation");
+
+        // wait_for_settlement handles: receipt polling, confirmation wait,
+        // and epoch assignment (add_certificate).
+        match self.wait_for_settlement(tx_hash, certificate_id).await {
+            Ok(_) => {
+                info!(%certificate_id, %tx_hash, "Settlement tx confirmed on L1");
+                SettlementJobResult::ContractCall(ContractCallResult {
+                    outcome: ContractCallOutcome::Success,
+                    metadata: Bytes::new(),
+                    block_hash: BlockHash::ZERO,
+                    block_number: 0,
+                    tx_hash,
+                })
+            }
+            Err(e) => {
+                error!(%certificate_id, %tx_hash, error = %e, "Settlement wait failed");
+                SettlementJobResult::ClientError(ClientError {
+                    kind: ClientErrorType::Unknown,
+                    message: format!("wait_for_settlement failed: {e}"),
+                })
+            }
+        }
     }
 }
 

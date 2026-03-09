@@ -73,6 +73,7 @@ dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-primitives",
+ "agglayer-settlement-service",
  "agglayer-storage",
  "agglayer-types",
  "alloy",
@@ -101,6 +102,7 @@ dependencies = [
  "tonic 0.13.1",
  "tower 0.4.13",
  "tracing",
+ "ulid",
  "url",
 ]
 
