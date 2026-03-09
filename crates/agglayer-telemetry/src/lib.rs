@@ -23,7 +23,6 @@ mod constant;
 mod error;
 
 pub mod clock;
-pub mod settlement_storage;
 
 pub use error::Error;
 pub use opentelemetry::KeyValue;
