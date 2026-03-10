@@ -2,7 +2,7 @@ use ulid::Ulid;
 
 use crate::{
     error::Error,
-    types::generated::agglayer::storage::v0::{SettlementAttempt, SettlementJob, TxResult},
+    types::generated::agglayer::storage::v0::{SettlementJob, TxResult},
 };
 
 /// Read-only access to settlement-related records stored in RocksDB.
@@ -13,24 +13,9 @@ pub trait SettlementReader: Send + Sync {
     /// Returns the settlement job for `settlement_job_id`, if present.
     fn get_settlement_job(&self, settlement_job_id: &Ulid) -> Result<Option<SettlementJob>, Error>;
 
-    /// Returns the settlement attempt identified by
-    /// `(settlement_job_id, attempt_sequence_number)`, if present.
-    fn get_settlement_attempt(
+    /// Returns the terminal result for `settlement_job_id`, if present.
+    fn get_settlement_job_result(
         &self,
         settlement_job_id: &Ulid,
-        attempt_sequence_number: u64,
-    ) -> Result<Option<SettlementAttempt>, Error>;
-
-    /// Returns the stored result for an attempt identified by
-    /// `(settlement_job_id, attempt_sequence_number)`, if present.
-    ///
-    /// Note: If a result doesn't exist for the attempt, it can mean two things:
-    /// 1. The attempt doesn't exist
-    /// 2. The attempt exists but hasn't been finalized yet (i.e., its result
-    ///    hasn't been stored yet).
-    fn get_settlement_attempt_result(
-        &self,
-        settlement_job_id: &Ulid,
-        attempt_sequence_number: u64,
     ) -> Result<Option<TxResult>, Error>;
 }

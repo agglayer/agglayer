@@ -20,6 +20,17 @@ pub trait SettlementWriter: Send + Sync {
         settlement_job: &SettlementJob,
     ) -> Result<(), Error>;
 
+    /// Inserts a terminal settlement job result under `settlement_job_id`.
+    ///
+    /// This is an insert-only operation and must fail if
+    /// `settlement_job_id` already has a stored result. The parent settlement
+    /// job must already exist.
+    fn insert_settlement_job_result(
+        &self,
+        settlement_job_id: &Ulid,
+        tx_result: &TxResult,
+    ) -> Result<(), Error>;
+
     /// Inserts a settlement attempt under `(settlement_job_id,
     /// attempt_sequence_number)`.
     ///

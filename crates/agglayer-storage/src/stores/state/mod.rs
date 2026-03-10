@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     path::Path,
     sync::{Arc, Mutex},
     time::SystemTime,
@@ -50,7 +50,7 @@ mod tests;
 pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
-    settlement_write_lock: Mutex<()>,
+    settlement_write_locks: Mutex<HashMap<ulid::Ulid, Arc<Mutex<()>>>>,
 }
 
 impl StateStore {
@@ -62,7 +62,7 @@ impl StateStore {
         Self {
             db,
             backup_client,
-            settlement_write_lock: Mutex::new(()),
+            settlement_write_locks: Mutex::new(HashMap::new()),
         }
     }
 
@@ -74,7 +74,7 @@ impl StateStore {
         Ok(Self {
             db,
             backup_client,
-            settlement_write_lock: Mutex::new(()),
+            settlement_write_locks: Mutex::new(HashMap::new()),
         })
     }
 }

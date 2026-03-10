@@ -32,6 +32,7 @@ pub const SETTLEMENT_ATTEMPTS_CF: &str = "settlement_attempts_cf";
 pub const SETTLEMENT_ATTEMPT_PER_WALLET_CF: &str = "settlement_attempt_per_wallet_cf";
 pub const SETTLEMENT_ATTEMPT_RESULTS_CF: &str = "settlement_attempt_results_cf";
 pub const SETTLEMENT_JOBS_CF: &str = "settlement_jobs_cf";
+pub const SETTLEMENT_JOB_RESULTS_CF: &str = "settlement_job_results_cf";
 
 pub const SETTLEMENT_ATTEMPTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
@@ -87,6 +88,7 @@ pub(crate) mod debug_certificates;
 pub(crate) mod settlement_attempt_per_wallet;
 pub(crate) mod settlement_attempt_results;
 pub(crate) mod settlement_attempts;
+pub(crate) mod settlement_job_results;
 pub(crate) mod settlement_jobs;
 
 // PerEpoch
