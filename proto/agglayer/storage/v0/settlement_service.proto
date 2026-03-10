@@ -27,7 +27,7 @@ message SettlementJob {
   // ----- Job result details -----
 
   // Job result, if available.
-  TxResult job_result = 4;
+  ContractCallResult job_result = 4;
 
   // ----- Transaction parameters -----
 

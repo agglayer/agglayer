@@ -8,7 +8,7 @@ use tracing::debug;
 type Request = alloy::rpc::json_rpc::RequestPacket;
 type Response = alloy::rpc::json_rpc::ResponsePacket;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct L1TraceLayer;
 
 impl<S> tower::Layer<S> for L1TraceLayer {
