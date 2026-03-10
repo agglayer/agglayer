@@ -10,5 +10,6 @@
 
 pub mod settlement_service;
 mod settlement_task;
+mod utils;
 
 pub use settlement_service::SettlementService;
