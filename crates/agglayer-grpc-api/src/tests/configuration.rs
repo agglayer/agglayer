@@ -13,7 +13,6 @@ use agglayer_storage::{
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
-use agglayer_types::EpochNumber;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 use tonic::{transport::Channel, Code};
 use tonic_types::StatusExt as _;
@@ -108,7 +107,6 @@ async fn start_server_with_configuration_service(
         Arc::new(
             EpochsStore::new(
                 config.clone(),
-                EpochNumber::ZERO,
                 pending_store,
                 state_store,
                 BackupClient::noop(),

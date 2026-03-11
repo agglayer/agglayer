@@ -92,36 +92,6 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
 
         Ok(key.zip(value))
     }
-
-    /// Seeks to the first key.
-    #[allow(unused)]
-    pub fn seek_to_first(&mut self) {
-        self.iter.seek_to_first();
-    }
-
-    /// Seeks to the last key.
-    #[allow(unused)]
-    pub fn seek_to_last(&mut self) {
-        self.iter.seek_to_last();
-    }
-
-    /// Seeks for the first key (binary equal to or greater)
-    #[allow(unused)]
-    pub fn seek(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
-        let key = seek_key.encode()?;
-        self.iter.seek(&key);
-
-        Ok(())
-    }
-
-    /// Seeks for the last key (binary equal to or less)
-    #[allow(unused)]
-    pub fn seek_for_prev(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
-        let key = seek_key.encode()?;
-        self.iter.seek_for_prev(&key);
-
-        Ok(())
-    }
 }
 
 impl<C: ColumnSchema> Iterator for ColumnIterator<'_, C> {

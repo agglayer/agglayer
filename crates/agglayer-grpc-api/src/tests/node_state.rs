@@ -12,7 +12,7 @@ use agglayer_storage::{
     },
     tests::TempDBDir,
 };
-use agglayer_types::{CertificateId, CertificateStatus, Digest, EpochNumber, Height};
+use agglayer_types::{CertificateId, CertificateStatus, Digest, Height};
 use tokio::{net::TcpListener, sync::oneshot};
 use tonic::Code;
 use tower::ServiceExt as _;
@@ -49,7 +49,6 @@ async fn get_certificate_header() {
         Arc::new(
             EpochsStore::new(
                 config.clone(),
-                EpochNumber::ZERO,
                 pending_store,
                 state_store,
                 BackupClient::noop(),

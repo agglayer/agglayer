@@ -10,10 +10,6 @@ pub mod sample_data {
 }
 pub use storage::StorageContext;
 
-pub async fn new_node() {
-    todo!()
-}
-
 pub fn new_storage(path: &Path) -> StorageContext {
     let config = get_default_config(path);
 

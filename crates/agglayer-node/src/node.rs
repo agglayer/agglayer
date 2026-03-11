@@ -157,7 +157,6 @@ impl Node {
 
         let epochs_store = Arc::new(EpochsStore::new(
             config.clone(),
-            current_epoch,
             pending_store.clone(),
             state_store.clone(),
             backup_client,
