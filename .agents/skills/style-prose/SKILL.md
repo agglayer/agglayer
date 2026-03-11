@@ -1,13 +1,11 @@
 ---
-name: text-formatting
+name: style-prose
 description: >
   Text formatting conventions for markdown and prose files.
   Use when writing or editing any .md, .txt, .adoc, or .rst file,
   including AGENTS.md, SKILL.md files, and documentation in docs/.
 user-invocable: false
 ---
-
-# Text formatting
 
 When writing or editing text files (markdown, plain text, etc.),
 use **Semantic Line Breaks** (https://sembr.org/).

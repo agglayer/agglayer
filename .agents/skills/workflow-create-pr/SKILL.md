@@ -1,13 +1,12 @@
 ---
-name: pr-create
+name: create-pr
 description: Create a pull request following project conventions.
 disable-model-invocation: true
 ---
 
-# Pull request creation
-
-Create PRs using `gh pr create`
-with the project's template and merge-queue conventions.
+When creating a PR:
+- Use `gh pr create`
+- Use the project's template and merge-queue conventions.
 
 ## Merge-queue mapping
 
@@ -16,16 +15,6 @@ with the project's template and merge-queue conventions.
 - **PR title max**: 72 characters.
 - **PR description line max**: 72 characters,
   except long URLs, code blocks, or stack traces.
-
-## Template
-
-Always use `.github/pull_request_template.md`.
-The template contains:
-
-```
-CONFIG-CHANGE: Short description of the configuration changes.
-BREAKING-CHANGE: Short description of the breaking changes.
-```
 
 ## Description rules
 
@@ -44,14 +33,5 @@ BREAKING-CHANGE: Short description of the breaking changes.
 3. Draft a PR description following the rules above.
 4. Ask for confirmation from the user with all this information.
 5. Check if the branch needs to be pushed to remote.
-6. Create the PR with `gh pr create`.
-   Use a heredoc for the body:
-   ```bash
-   gh pr create --title "type(scope): description" --body "$(cat <<'EOF'
-   Context text describing the change.
-
-   CONFIG-CHANGE: ...
-   EOF
-   )"
-   ```
+6. Create the PR.
 7. Return the PR URL.

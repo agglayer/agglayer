@@ -6,7 +6,6 @@ Key references for navigating this project:
 - `README.md` -- project overview, crate table, build prerequisites.
 - `CONTRIBUTING.md` -- contribution workflow, PR conventions.
 - `docs/` -- human-readable documentation (validity checks, audits, dev guides).
-- `.agents/skills/` -- task-specific AI skills.
 - `Makefile.toml` -- build tasks (delegates to `scripts/make/*.toml`).
 
 ## Response priorities
@@ -20,11 +19,11 @@ Key references for navigating this project:
 - If ambiguity can affect correctness, security, scope, or destination path,
   ask before acting.
 - When unknown terms or domain concepts appear, ask for an explanation
-  and document them in the repository (in `docs/`) before proceeding.
-- Low-risk ambiguity about user intent may be assumed:
+  and document them in the repository (in `docs/knowledge-base`) before proceeding.
+- Low-risk ambiguity in instructions may be assumed:
   state one explicit assumption and proceed with the smallest reversible change.
 - Ambiguity about technical meaning, domain semantics, or definitions
-  is never low-risk. Always clarify and document.
+  is never low-risk. Always ask for clarification and document it if necessary.
 
 ## Evidence-Based Debugging and Communication
 
@@ -56,5 +55,8 @@ Key references for navigating this project:
   then proceed with the safest minimal change.
 - Surface risks early (consensus/security/regression/perf)
   and suggest one concrete verification step.
+- Leave edits unstaged by default so the user can review and adjust.
+  Stage changes only when explicitly requested,
+  or immediately before a user-requested commit.
 - Precedence: when rules conflict,
   favor the Clarification Before Action section.
