@@ -1,10 +1,6 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use agglayer_types::{Certificate, CertificateIndex, EpochNumber, Height, NetworkId};
-use parking_lot::RwLock;
 
 use super::{
     interfaces::reader::PerEpochReader, per_epoch::PerEpochStore, EpochStoreReader,
@@ -15,8 +11,6 @@ use crate::{backup::BackupClient, error::Error};
 
 pub struct EpochsStore<PendingStore, StateStore> {
     config: Arc<agglayer_config::Config>,
-    #[allow(dead_code)]
-    open_epochs: RwLock<BTreeSet<EpochNumber>>,
     pending_store: Arc<PendingStore>,
     state_store: Arc<StateStore>,
     backup_client: BackupClient,
@@ -25,17 +19,12 @@ pub struct EpochsStore<PendingStore, StateStore> {
 impl<PendingStore, StateStore> EpochsStore<PendingStore, StateStore> {
     pub fn new(
         config: Arc<agglayer_config::Config>,
-        epoch_number: EpochNumber,
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         backup_client: BackupClient,
     ) -> Result<Self, Error> {
-        let open_epochs = RwLock::new(BTreeSet::new());
-        open_epochs.write().insert(epoch_number);
-
         Ok(Self {
             config,
-            open_epochs,
             pending_store,
             state_store,
             backup_client,
