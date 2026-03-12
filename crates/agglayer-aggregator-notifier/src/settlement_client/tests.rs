@@ -1,17 +1,13 @@
 use std::sync::Arc;
 
+use agglayer_certificate_orchestrator::tests::mocks::MockL1Rpc;
 use agglayer_config::outbound::OutboundRpcSettleConfig;
-use agglayer_contracts::{L1RpcError, L1TransactionFetcher, Settler};
 use agglayer_storage::tests::mocks::{MockPendingStore, MockPerEpochStore, MockStateStore};
 use agglayer_types::{
-    aggchain_data::CertificateAggchainDataCtx, Address, CertificateHeader, CertificateStatus,
-    Height, L1WitnessCtx, Metadata, PessimisticRootInput, Proof, SettlementTxHash,
+    aggchain_data::CertificateAggchainDataCtx, CertificateHeader, CertificateStatus, Height,
+    L1WitnessCtx, Metadata, PessimisticRootInput, Proof,
 };
-use alloy::{
-    primitives::{Bytes, FixedBytes, TxHash},
-    providers::PendingTransactionBuilder,
-    rpc::types::TransactionReceipt,
-};
+use alloy::primitives::FixedBytes;
 use arc_swap::ArcSwap;
 use mockall::predicate::eq;
 use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
@@ -19,56 +15,6 @@ use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 
 use crate::settlement_client::RpcSettlementClient;
-
-mockall::mock! {
-    L1Rpc {}
-
-    #[async_trait::async_trait]
-    impl agglayer_contracts::RollupContract for L1Rpc {
-        async fn get_trusted_sequencer_address(
-            &self,
-            rollup_id: u32,
-            proof_signers: std::collections::HashMap<u32, Address>,
-        ) -> Result<Address, L1RpcError>;
-
-        async fn get_rollup_contract_address(&self, rollup_id: u32) -> Result<Address, L1RpcError>;
-
-        async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError>;
-        fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
-        async fn get_prev_pessimistic_root(&self, rollup_id: u32, before_tx: Option<TxHash>) -> Result<[u8; 32], L1RpcError>;
-
-        async fn get_verifier_type(&self, rollup_id: u32) -> Result<agglayer_contracts::rollup::VerifierType, L1RpcError>;
-
-        fn get_rollup_manager_address(&self) -> Address;
-        fn get_event_filter_block_range(&self) -> u64;
-    }
-
-    #[async_trait::async_trait]
-    impl L1TransactionFetcher for L1Rpc {
-        type Provider = alloy::providers::RootProvider<alloy::network::Ethereum>;
-
-        async fn fetch_transaction_receipt(&self, tx_hash: SettlementTxHash) -> Result<Option<TransactionReceipt>, L1RpcError>;
-
-        fn get_provider(&self) -> &<Self as L1TransactionFetcher>::Provider;
-    }
-
-    #[async_trait::async_trait]
-    impl Settler for L1Rpc {
-        fn decode_contract_revert(error: &alloy::contract::Error) -> Option<String>;
-
-        async fn verify_pessimistic_trusted_aggregator(
-            &self,
-            rollup_id: u32,
-            l_1_info_tree_leaf_count: u32,
-            new_local_exit_root: [u8; 32],
-            new_pessimistic_root: [u8; 32],
-            proof: Bytes,
-            custom_chain_data: Bytes,
-            nonce: Option<(u64, u128, Option<u128>)>
-        ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, alloy::contract::Error>;
-
-    }
-}
 
 #[rstest]
 #[test_log::test(tokio::test)]

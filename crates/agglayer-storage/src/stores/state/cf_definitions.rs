@@ -7,6 +7,7 @@ use crate::{
         latest_settled_certificate_per_network::LatestSettledCertificatePerNetworkColumn,
         local_exit_tree_per_network::LocalExitTreePerNetworkColumn, metadata::MetadataColumn,
         network_info::NetworkInfoColumn, nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        pp_root_to_certificate_ids::PpRootToCertificateIdsColumn,
     },
     schema::ColumnDescriptor,
 };
@@ -22,4 +23,5 @@ pub const STATE_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<NullifierTreePerNetworkColumn>(),
     ColumnDescriptor::new::<NetworkInfoColumn>(),
     ColumnDescriptor::new::<DisabledNetworksColumn>(),
+    ColumnDescriptor::new::<PpRootToCertificateIdsColumn>(),
 ];
