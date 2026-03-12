@@ -157,7 +157,6 @@ impl Node {
 
         let epochs_store = Arc::new(EpochsStore::new(
             config.clone(),
-            current_epoch,
             pending_store.clone(),
             state_store.clone(),
             backup_client,
@@ -188,6 +187,7 @@ impl Node {
                         .connect_client(
                             alloy::rpc::client::RpcClient::builder()
                                 .layer(crate::L1TraceLayer)
+                                .layer(crate::UrlRedactLayer)
                                 .http(config.l1.node_url.clone()),
                         ),
                 )

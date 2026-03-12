@@ -7,7 +7,7 @@ use agglayer_storage::{
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
-use agglayer_types::{Certificate, CertificateId, EpochNumber, Height, NetworkId};
+use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
 use alloy::{
     providers::{
         fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
@@ -127,7 +127,6 @@ impl TestContext {
         let epochs_store = Arc::new(
             EpochsStore::new(
                 config.clone(),
-                EpochNumber::ZERO,
                 pending_store.clone(),
                 state_store.clone(),
                 BackupClient::noop(),
@@ -271,7 +270,6 @@ impl TestContext {
         let epochs_store = Arc::new(
             EpochsStore::new(
                 config.clone(),
-                EpochNumber::ZERO,
                 pending_store.clone(),
                 state_store.clone(),
                 BackupClient::noop(),
