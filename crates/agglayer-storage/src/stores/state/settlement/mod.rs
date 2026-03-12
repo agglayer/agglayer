@@ -21,7 +21,7 @@ impl StateStore {
     fn with_settlement_write_lock<T>(
         &self,
         settlement_job_id: &Ulid,
-        f: impl FnOnce() -> Result<T, Error>,
+        callback: impl FnOnce() -> Result<T, Error>,
     ) -> Result<T, Error> {
         let key_lock = {
             let mut settlement_write_locks = self.settlement_write_locks.lock().map_err(|_| {
@@ -40,7 +40,7 @@ impl StateStore {
             ))
         })?;
 
-        f()
+        callback()
     }
 }
 
@@ -120,11 +120,12 @@ impl SettlementWriter for StateStore {
         attempt_sequence_number: u64,
         settlement_attempt: &SettlementAttempt,
     ) -> Result<(), Error> {
-        self.with_settlement_write_lock(settlement_job_id, || {
-            let job_exists = match self.db.get::<SettlementJobsColumn>(settlement_job_id) {
-                Ok(value) => value.is_some(),
-                Err(err) => return Err(err.into()),
-            };
+        self.with_settlement_write_lock(settlement_job_id, || -> Result<(), Error> {
+            let job_exists = self
+                .db
+                .get::<SettlementJobsColumn>(settlement_job_id)?
+                .is_some();
+
             if !job_exists {
                 return Err(Error::UnprocessedAction(format!(
                     "Settlement job does not exist for id {settlement_job_id}"
@@ -136,10 +137,7 @@ impl SettlementWriter for StateStore {
                 attempt_sequence_number,
             };
 
-            let attempt_exists = match self.db.get::<SettlementAttemptsColumn>(&key) {
-                Ok(value) => value.is_some(),
-                Err(err) => return Err(err.into()),
-            };
+            let attempt_exists = self.db.get::<SettlementAttemptsColumn>(&key)?.is_some();
             if attempt_exists {
                 return Err(Error::UnprocessedAction(format!(
                     "Settlement attempt already exists for job {settlement_job_id} and attempt \
@@ -181,24 +179,17 @@ impl SettlementWriter for StateStore {
             let attempt_per_wallet_value = attempt_per_wallet::Value;
 
             let mut batch = WriteBatch::default();
-            if let Err(err) = self.db.multi_insert_batch::<SettlementAttemptsColumn>(
+            self.db.multi_insert_batch::<SettlementAttemptsColumn>(
                 [(&key, settlement_attempt)],
                 &mut batch,
-            ) {
-                return Err(err.into());
-            }
-            if let Err(err) = self
-                .db
+            )?;
+            self.db
                 .multi_insert_batch::<SettlementAttemptPerWalletColumn>(
                     [(&attempt_per_wallet_key, &attempt_per_wallet_value)],
                     &mut batch,
-                )
-            {
-                return Err(err.into());
-            }
-            if let Err(err) = self.db.write_batch(batch) {
-                return Err(err.into());
-            }
+                )?;
+
+            self.db.write_batch(batch)?;
 
             Ok(())
         })
