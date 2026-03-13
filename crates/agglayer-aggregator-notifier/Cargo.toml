@@ -8,6 +8,7 @@ license.workspace = true
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 agglayer-config = { path = "../agglayer-config" }
 agglayer-contracts = { path = "../agglayer-contracts" }
+agglayer-settlement-service = { path = "../agglayer-settlement-service" }
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-primitives.workspace = true
 agglayer-types.workspace = true
@@ -31,6 +32,7 @@ tokio = { workspace = true, features = ["full"] }
 tower.workspace = true
 tonic = { workspace = true, features = ["zstd"] }
 tracing.workspace = true
+ulid.workspace = true
 
 sp1-sdk.workspace = true
 sp1-prover.workspace = true

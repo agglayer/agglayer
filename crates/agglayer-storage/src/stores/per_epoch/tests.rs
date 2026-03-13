@@ -452,9 +452,7 @@ fn can_add_multiple_certificates_per_epoch(
         let result = store.add_certificate(certificate_id, agglayer_types::ExecutionMode::Default);
         assert!(
             result.is_ok(),
-            "Failed to add certificate at height {}: {:?}",
-            i,
-            result
+            "Failed to add certificate at height {i}: {result:?}"
         );
 
         let (epoch_number, certificate_index) = result.unwrap();
@@ -469,8 +467,7 @@ fn can_add_multiple_certificates_per_epoch(
             .unwrap();
         assert!(
             certificate.is_some(),
-            "Certificate at index {} should exist",
-            i
+            "Certificate at index {i} should exist"
         );
 
         let cert = certificate.unwrap();
@@ -519,10 +516,7 @@ fn multiple_networks_multiple_certificates_per_epoch(
                 store.add_certificate(certificate_id, agglayer_types::ExecutionMode::Default);
             assert!(
                 result.is_ok(),
-                "Failed to add certificate for network {} at height {}: {:?}",
-                network,
-                i,
-                result
+                "Failed to add certificate for network {network} at height {i}: {result:?}"
             );
         }
     }

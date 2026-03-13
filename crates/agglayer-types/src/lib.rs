@@ -18,7 +18,7 @@ pub mod testutils {
 }
 pub use certificate::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Height,
-    Metadata, SettlementTxHash,
+    Metadata, SettlementJobId, SettlementTxHash,
 };
 pub use epoch::{EpochConfiguration, EpochNumber};
 pub use error::{CertificateStatusError, Error, SignerError};

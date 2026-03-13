@@ -2,9 +2,11 @@ use crate::{
     CertificateId, CertificateIndex, EpochNumber, Height, LocalExitRoot, Metadata, NetworkId,
 };
 
+mod settlement_job_id;
 mod settlement_tx_hash;
 mod status;
 
+pub use settlement_job_id::SettlementJobId;
 pub use settlement_tx_hash::SettlementTxHash;
 pub use status::CertificateStatus;
 
@@ -20,4 +22,5 @@ pub struct CertificateHeader {
     pub metadata: Metadata,
     pub status: CertificateStatus,
     pub settlement_tx_hash: Option<SettlementTxHash>,
+    pub settlement_job_id: Option<SettlementJobId>,
 }

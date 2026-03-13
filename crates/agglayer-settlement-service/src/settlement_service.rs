@@ -1,6 +1,7 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
-use agglayer_config::settlement_service::SettlementServiceConfig;
+use agglayer_config::settlement_service::SettlementConfig;
+use agglayer_types::CertificateId;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
@@ -19,6 +20,7 @@ const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 pub struct SettlementService {
     admin_command_senders: Arc<Mutex<HashMap<Ulid, mpsc::Sender<TaskAdminCommand>>>>,
     result_watchers: Arc<Mutex<HashMap<Ulid, watch::Receiver<Option<SettlementJobResult>>>>>,
+    config: SettlementConfig,
 }
 
 pub struct SettlementJobWatcher {
@@ -34,21 +36,101 @@ impl SettlementJobWatcher {
     pub fn job_id(&self) -> Ulid {
         self.job_id
     }
+
+    /// Wait for the settlement job to complete and return the result.
+    pub async fn wait_for_result(&mut self) -> eyre::Result<SettlementJobResult> {
+        self.watcher
+            .changed()
+            .await
+            .map_err(|_| eyre::eyre!("Settlement job watcher closed"))?;
+        self.watcher
+            .borrow()
+            .clone()
+            .ok_or_else(|| eyre::eyre!("Settlement job completed with no result"))
+    }
+
+    pub fn from_channel(
+        watcher: watch::Receiver<Option<SettlementJobResult>>,
+        job_id: Ulid,
+    ) -> Self {
+        Self { watcher, job_id }
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn new_for_test(
+        watcher: watch::Receiver<Option<SettlementJobResult>>,
+        job_id: Ulid,
+    ) -> Self {
+        Self { watcher, job_id }
+    }
+
+    /// Create a SettlementJobWatcher for tests with a completed result.
+    /// The channel sender is kept alive internally by spawning a background
+    /// task.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn new_completed(result: SettlementJobResult, job_id: Ulid) -> Self {
+        let (tx, rx) = tokio::sync::watch::channel(None);
+
+        // Send the result so changed() will trigger
+        let _ = tx.send(Some(result));
+
+        // Spawn a task to keep the sender alive
+        tokio::spawn(async move {
+            let _tx = tx;
+            std::future::pending::<()>().await;
+        });
+
+        Self {
+            watcher: rx,
+            job_id,
+        }
+    }
 }
 
 pub enum RetrievedSettlementResult {
     Pending(SettlementJobWatcher),
     Completed(SettlementJobResult),
+    NotFound,
+}
+
+#[cfg_attr(feature = "testutils", mockall::automock)]
+#[async_trait::async_trait]
+pub trait SettlementServiceTrait: Send + Sync {
+    async fn request_new_settlement(
+        &self,
+        certificate_id: CertificateId,
+    ) -> eyre::Result<SettlementJobWatcher>;
+    async fn retrieve_settlement_result(
+        &self,
+        job_id: Ulid,
+    ) -> eyre::Result<RetrievedSettlementResult>;
+}
+
+#[async_trait::async_trait]
+impl SettlementServiceTrait for SettlementService {
+    async fn request_new_settlement(
+        &self,
+        certificate_id: CertificateId,
+    ) -> eyre::Result<SettlementJobWatcher> {
+        self.request_new_settlement(certificate_id).await
+    }
+    async fn retrieve_settlement_result(
+        &self,
+        job_id: Ulid,
+    ) -> eyre::Result<RetrievedSettlementResult> {
+        self.retrieve_settlement_result(job_id).await
+    }
 }
 
 impl SettlementService {
     pub async fn start(
-        _config: SettlementServiceConfig,
+        config: SettlementConfig,
         cancellation_token: CancellationToken,
     ) -> eyre::Result<Self> {
         let this = Self {
             admin_command_senders: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
+            config,
         };
         tokio::task::spawn(Self::cancellation_token_proxy(
             cancellation_token,
@@ -107,10 +189,14 @@ impl SettlementService {
     #[tracing::instrument(skip(self))]
     pub async fn request_new_settlement(
         &self,
-        job: SettlementJob,
+        certificate_id: CertificateId,
     ) -> eyre::Result<SettlementJobWatcher> {
         let (admin_sender, admin_receiver) = mpsc::channel(ADMIN_CHANNEL_BUFFER_SIZE);
         let (result_sender, result_receiver) = watch::channel(None);
+        let job = SettlementJob::new(
+            certificate_id,
+            Arc::new(self.config.pessimistic_proof_tx_config.clone()),
+        );
         let (job_id, mut task) = SettlementTask::create(job, admin_receiver).await?;
         self.admin_command_senders
             .lock()
@@ -150,12 +236,13 @@ impl SettlementService {
                 Some(result) => Ok(RetrievedSettlementResult::Completed(result.clone())),
             };
         }
-        // TODO: check rocksdb for completed settlement job results
-        todo!()
+        // Job not found in memory — either it was never created (recovery after
+        // restart) or it was already cleaned up.
+        Ok(RetrievedSettlementResult::NotFound)
     }
 }
 
-pub struct RequestNewSettlement(pub SettlementJob);
+pub struct RequestNewSettlement(pub CertificateId);
 
 impl tower::Service<RequestNewSettlement> for SettlementService {
     type Response = SettlementJobWatcher;
@@ -222,5 +309,75 @@ impl tower::Service<AdminCommand> for SettlementService {
                 }
             }
         })
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+pub mod testutils {
+    use agglayer_types::SettlementTxHash;
+    use alloy::primitives::{BlockHash, Bytes};
+
+    use super::*;
+    use crate::{
+        ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, SettlementJobResult,
+    };
+
+    /// Create a SettlementJobWatcher with a successful settlement result.
+    pub fn mock_settlement_success(tx_hash: SettlementTxHash) -> SettlementJobWatcher {
+        let result = SettlementJobResult::ContractCall(ContractCallResult {
+            outcome: ContractCallOutcome::Success,
+            metadata: Bytes::new(),
+            block_hash: BlockHash::ZERO,
+            block_number: 1,
+            tx_hash,
+        });
+        SettlementJobWatcher::new_completed(result, ulid::Ulid::new())
+    }
+
+    /// Create a completed `RetrievedSettlementResult` with a successful
+    /// settlement result.
+    pub fn mock_retrieve_success(tx_hash: SettlementTxHash) -> RetrievedSettlementResult {
+        let result = SettlementJobResult::ContractCall(ContractCallResult {
+            outcome: ContractCallOutcome::Success,
+            metadata: Bytes::new(),
+            block_hash: BlockHash::ZERO,
+            block_number: 1,
+            tx_hash,
+        });
+        RetrievedSettlementResult::Completed(result)
+    }
+
+    /// Create a SettlementJobWatcher with a reverted settlement result.
+    pub fn mock_settlement_revert(tx_hash: SettlementTxHash) -> SettlementJobWatcher {
+        let result = SettlementJobResult::ContractCall(ContractCallResult {
+            outcome: ContractCallOutcome::Revert,
+            metadata: Bytes::new(),
+            block_hash: BlockHash::ZERO,
+            block_number: 1,
+            tx_hash,
+        });
+        SettlementJobWatcher::new_completed(result, ulid::Ulid::new())
+    }
+
+    /// Create a completed `RetrievedSettlementResult` with a reverted
+    /// settlement result.
+    pub fn mock_retrieve_revert(tx_hash: SettlementTxHash) -> RetrievedSettlementResult {
+        let result = SettlementJobResult::ContractCall(ContractCallResult {
+            outcome: ContractCallOutcome::Revert,
+            metadata: Bytes::new(),
+            block_hash: BlockHash::ZERO,
+            block_number: 1,
+            tx_hash,
+        });
+        RetrievedSettlementResult::Completed(result)
+    }
+
+    /// Create a SettlementJobWatcher with a settlement error result.
+    pub fn mock_settlement_error(error_message: impl Into<String>) -> SettlementJobWatcher {
+        let result = SettlementJobResult::ClientError(ClientError {
+            kind: ClientErrorType::Unknown,
+            message: error_message.into(),
+        });
+        SettlementJobWatcher::new_completed(result, ulid::Ulid::new())
     }
 }

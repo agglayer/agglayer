@@ -259,15 +259,14 @@ impl Node {
         let core = Kernel::new(rpc_tx_settlement.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
-        let epoch_packing_aggregator_task = RpcSettlementClient::new(
+
+        let settlement_service = Arc::new(RpcSettlementClient::new(
             Arc::new(config.outbound.rpc.settle_cert.clone()),
             state_store.clone(),
             pending_store.clone(),
             Arc::clone(&rollup_manager),
             current_epoch_store.clone(),
-        );
-
-        info!("Epoch packing aggregator task created.");
+        ));
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
@@ -279,12 +278,12 @@ impl Node {
             .clock(clock_ref)
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
-            .settlement_client(epoch_packing_aggregator_task)
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
             .current_epoch(current_epoch_store)
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
+            .settlement_service(settlement_service)
             .start()
             .await
             .context("Failed starting certificate orchestrator")?;

@@ -7,6 +7,7 @@ use std::{
 };
 
 use agglayer_clock::{ClockRef, Event};
+use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::{
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -33,7 +34,6 @@ mod certifier;
 mod error;
 mod network_task;
 mod settlement_client;
-
 #[cfg(test)]
 mod tests;
 
@@ -72,17 +72,17 @@ pub type SettlementTasks = FuturesUnordered<
 /// The Certificate Orchestrator collects the generated proofs and settles
 /// them on the L1 on the go.
 pub struct CertificateOrchestrator<
-    Sc,
     CertifierClient,
     PendingStore,
     EpochsStore,
     PerEpochStore,
     StateStore,
-> {
+    SettlementSvc,
+> where
+    SettlementSvc: SettlementServiceTrait,
+{
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
-    /// Settlement client.
-    settlement_client: Arc<Sc>,
     /// Certifier task builder.
     certifier_task_builder: Arc<CertifierClient>,
     /// Clock stream to receive EpochEnded events.
@@ -111,19 +111,23 @@ pub struct CertificateOrchestrator<
 
     /// Network task future resolver.
     network_tasks: NetworkTasks,
+
+    /// Settlement service for submitting settlement jobs
+    settlement_service: Arc<SettlementSvc>,
 }
 
-impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementSvc>
     CertificateOrchestrator<
-        Sc,
         CertifierClient,
         PendingStore,
         EpochsStore,
         PerEpochStore,
         StateStore,
+        SettlementSvc,
     >
 where
     PendingStore: PendingCertificateReader,
+    SettlementSvc: SettlementServiceTrait,
 {
     const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
 
@@ -133,12 +137,12 @@ where
         clock: ClockRef,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
-        settlement_client: Sc,
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
+        settlement_service: Arc<SettlementSvc>,
     ) -> Result<Self, Error> {
         Ok(Self {
             epoch_packing_tasks: FuturesUnordered::new(),
@@ -147,7 +151,6 @@ where
                 |v| v.ok(),
             )),
             clock_ref: clock,
-            settlement_client: Arc::new(settlement_client),
             certifier_task_builder: Arc::new(certifier_task_builder),
             data_receiver,
             cancellation_token: cancellation_token.clone(),
@@ -158,27 +161,28 @@ where
             state_store,
             spawned_network_tasks: Default::default(),
             network_tasks: FuturesUnordered::new(),
+            settlement_service,
         })
     }
 }
 
 #[buildstructor::buildstructor]
-impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementSvc>
     CertificateOrchestrator<
-        Sc,
         CertifierClient,
         PendingStore,
         EpochsStore,
         PerEpochStore,
         StateStore,
+        SettlementSvc,
     >
 where
     CertifierClient: Certifier,
-    Sc: SettlementClient,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
+    SettlementSvc: SettlementServiceTrait + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
     ///
@@ -203,23 +207,23 @@ where
         clock: ClockRef,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
-        settlement_client: Sc,
         certifier_task_builder: CertifierClient,
         pending_store: Arc<PendingStore>,
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
+        settlement_service: Arc<SettlementSvc>,
     ) -> eyre::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
             clock,
             data_receiver,
             cancellation_token,
-            settlement_client,
             certifier_task_builder,
             pending_store.clone(),
             epochs_store,
             current_epoch,
             state_store,
+            settlement_service,
         )?;
 
         // Try to spawn the certifier tasks for the next height of each network
@@ -235,22 +239,22 @@ where
     }
 }
 
-impl<Sc, CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementSvc>
     CertificateOrchestrator<
-        Sc,
         CertifierClient,
         PendingStore,
         EpochsStore,
         PerEpochStore,
         StateStore,
+        SettlementSvc,
     >
 where
     CertifierClient: Certifier,
-    Sc: SettlementClient,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    SettlementSvc: SettlementServiceTrait + 'static,
 {
     fn spawn_network_task(&mut self, network_id: NetworkId) -> Result<(), Error> {
         if self.spawned_network_tasks.contains_key(&network_id) {
@@ -265,10 +269,10 @@ where
             self.pending_store.clone(),
             self.state_store.clone(),
             self.certifier_task_builder.clone(),
-            self.settlement_client.clone(),
             self.clock_ref.clone(),
             network_id,
             receiver,
+            self.settlement_service.clone(),
         )?;
 
         let task_future = task
@@ -370,15 +374,22 @@ where
     fn handle_epoch_packing_result(&mut self) {}
 }
 
-impl<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore> Future
-    for CertificateOrchestrator<Sc, A, PendingStore, EpochsStore, PerEpochStore, StateStore>
+impl<A, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementSvc> Future
+    for CertificateOrchestrator<
+        A,
+        PendingStore,
+        EpochsStore,
+        PerEpochStore,
+        StateStore,
+        SettlementSvc,
+    >
 where
     A: Certifier,
-    Sc: SettlementClient,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
+    SettlementSvc: SettlementServiceTrait + 'static,
 {
     type Output = ();
 

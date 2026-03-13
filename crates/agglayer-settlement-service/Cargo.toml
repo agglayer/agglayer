@@ -9,8 +9,10 @@ agglayer-config.workspace = true
 agglayer-types.workspace = true
 
 alloy.workspace = true
+async-trait.workspace = true
 derive_more.workspace = true
 eyre.workspace = true
+mockall = { workspace = true, optional = true }
 tokio.workspace = true
 tokio-util.workspace = true
 tower.workspace = true
@@ -20,6 +22,9 @@ ulid.workspace = true
 [dev-dependencies]
 alloy = { workspace = true, features = ["node-bindings"] }
 tokio = { workspace = true }
+
+[features]
+testutils = ["dep:mockall"]
 
 [lints]
 workspace = true
