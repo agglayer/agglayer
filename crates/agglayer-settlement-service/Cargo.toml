@@ -6,10 +6,10 @@ license.workspace = true
 
 [dependencies]
 agglayer-config.workspace = true
+agglayer-storage.workspace = true
 agglayer-types.workspace = true
 
 alloy.workspace = true
-derive_more.workspace = true
 eyre.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

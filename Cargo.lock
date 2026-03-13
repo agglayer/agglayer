@@ -530,9 +530,9 @@ name = "agglayer-settlement-service"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-storage",
  "agglayer-types",
  "alloy",
- "derive_more 2.1.1",
  "eyre",
  "tokio",
  "tokio-util",

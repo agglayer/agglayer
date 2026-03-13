@@ -1,10 +1,8 @@
-use agglayer_types::SettlementTxHash;
+use agglayer_types::{Nonce, SettlementTxHash};
 use alloy::{
     network::TransactionResponse as _, primitives::Address, providers::Provider,
     transports::TransportResult,
 };
-
-use crate::settlement_task::Nonce;
 
 /// Returns the [`SettlementTxHash`] for a mined transaction matching the
 /// given wallet and nonce, or `None` if no such mined transaction exists.
