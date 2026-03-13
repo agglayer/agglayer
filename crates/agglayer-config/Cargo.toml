@@ -9,9 +9,11 @@ educe.workspace = true
 humantime-serde = "1.1.1"
 insta = { workspace = true, optional = true }
 jsonrpsee.workspace = true
+rand = "0.8"
 serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
 toml.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
