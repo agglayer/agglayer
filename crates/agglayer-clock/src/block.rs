@@ -122,10 +122,7 @@ impl BlockClock<BlockProvider> {
         let client = ClientBuilder::default().pubsub(ws).await?;
         let provider = ProviderBuilder::new().connect_client(client);
 
-        // Mark connection as successful
         let clock = Self::new(provider, genesis_block, epoch_duration);
-
-        agglayer_telemetry::clock::record_connection_established();
 
         Ok(clock)
     }
@@ -193,7 +190,6 @@ where
         })?;
 
         info!("Successfully subscribed to L1 block stream");
-        agglayer_telemetry::clock::record_connection_established();
 
         // Wait for genesis block if needed
         while self.latest_seen_block < self.genesis_block {
