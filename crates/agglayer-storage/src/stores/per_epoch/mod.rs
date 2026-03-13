@@ -427,8 +427,9 @@ where
 
         debug!("Certificate assigned to epoch");
         if let Some(height) = end_checkpoint_entry_assignment {
-            let entry = end_checkpoint_entry.or_default();
-            *entry = height;
+            end_checkpoint_entry
+                .and_modify(|h| *h = height)
+                .or_insert(height);
 
             debug!(
                 "Updating end checkpoint for network {} to height {}",
