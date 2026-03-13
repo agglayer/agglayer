@@ -51,6 +51,15 @@ async fn happy_path() {
     let signer = state.get_signer();
     let certificate_id = certificate.hash();
 
+    let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
+        certificate.aggchain_data
+    else {
+        panic!("this test expects one ecdsa as aggchain data")
+    };
+
+    let aggchain_hash =
+        pessimistic_proof::core::AggchainData::LegacyEcdsa { signer, signature }.aggchain_hash();
+
     pending_store
         .expect_get_certificate()
         .once()
@@ -70,8 +79,13 @@ async fn happy_path() {
 
     l1_rpc
         .expect_get_rollup_contract_address()
-        .once()
+        .times(2)
         .returning(|_| Ok(Address::ZERO));
+
+    l1_rpc
+        .expect_get_aggchain_hash()
+        .once()
+        .returning(move |_, _| Ok(*aggchain_hash));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
@@ -151,8 +165,13 @@ async fn prover_timeout() {
 
     l1_rpc
         .expect_get_rollup_contract_address()
-        .once()
+        .times(2)
         .returning(|_| Ok(Address::ZERO));
+
+    l1_rpc
+        .expect_get_aggchain_hash()
+        .once()
+        .returning(|_, _| Ok([1u8; 32]));
 
     l1_rpc
         .expect_default_l1_info_tree_entry()
