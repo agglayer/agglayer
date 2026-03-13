@@ -14,7 +14,7 @@ use crate::schema::{
 pub(crate) mod iterators;
 mod migration;
 
-pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError, MigrateFn};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
@@ -38,15 +38,14 @@ pub struct DB {
 }
 
 impl DB {
-    /// Open a new RocksDB instance at the given path with initial column
-    /// families and a possibility to migrate the database.
-    pub fn builder(path: &Path, cfs: &[ColumnDescriptor]) -> Result<Builder, DBOpenError> {
-        Builder::open(path, cfs)
+    /// Create a migration builder with the initial database schema.
+    pub fn builder(initial_schema: &[ColumnDescriptor]) -> Builder<'_> {
+        Builder::new(initial_schema)
     }
 
     /// Open a new RocksDB instance at the given path with some column families.
     pub fn open_cf(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
-        Builder::open(path, cfs)?.finalize(cfs)
+        Self::builder(cfs).finalize(cfs)?.open(path)?.migrate()
     }
 
     /// Open a RocksDB instance in read-only mode at the given path with some
@@ -79,6 +78,11 @@ impl DB {
         self.rocksdb
             .cf_handle(C::COLUMN_FAMILY_NAME)
             .ok_or(DBError::ColumnFamilyNotFound)
+    }
+
+    /// Check if a column family exists in the database.
+    pub(crate) fn cf_exists(&self, cf: &str) -> bool {
+        self.rocksdb.cf_handle(cf).is_some()
     }
 
     /// Try to get the value for the given key.
