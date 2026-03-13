@@ -55,8 +55,9 @@ Key references for navigating this project:
   then proceed with the safest minimal change.
 - Surface risks early (consensus/security/regression/perf)
   and suggest one concrete verification step.
-- Leave edits unstaged by default so the user can review and adjust.
-  Stage changes only when explicitly requested,
-  or immediately before a user-requested commit.
+- Do not run non-read-only git operations
+  (e.g., `add`, `rm`, `mv`, `checkout`, `restore`, `commit`, `push`)
+  without explicit user approval.
+  Read-only commands (`status`, `diff`, `log`, `show`) are always allowed.
 - Precedence: when rules conflict,
   favor the Clarification Before Action section.
