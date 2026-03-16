@@ -254,7 +254,7 @@ impl SettlementTask {
             if all_nonces_seen_on_l1 && !reverts.is_empty() {
                 // All nonces were seen on L1, but we didn't get a successful settlement result
                 // for any of them. Also, there was at least one revert.
-                // We can wait for finalization without submiting a new attempt.
+                // We can wait for finalization without submitting a new attempt.
                 let earliest_revert_result = reverts
                     .values()
                     .map(|(_, _, result)| result)
