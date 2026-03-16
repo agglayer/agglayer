@@ -1,9 +1,10 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
     time::{Duration, SystemTime},
 };
 
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
     SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
@@ -19,8 +20,11 @@ use ulid::Ulid;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
-pub enum StoredSettlementJob {
-    Pending(SettlementTask),
+pub enum StoredSettlementJob<S>
+where
+    S: SettlementStore,
+{
+    Pending(SettlementTask<S>),
     Completed(SettlementJob, SettlementJobResult),
 }
 
@@ -34,9 +38,17 @@ struct ActiveSettlementAttempt {
     result: Option<SettlementAttemptResult>,
 }
 
-pub struct SettlementTask {
+pub trait SettlementStore: SettlementReader + SettlementWriter {}
+
+impl<T> SettlementStore for T where T: SettlementReader + SettlementWriter {}
+
+pub struct SettlementTask<S>
+where
+    S: SettlementStore,
+{
     id: Ulid,
     job: SettlementJob,
+    settlement_store: Arc<S>,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
     attempts:
         BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>>,
@@ -44,10 +56,14 @@ pub struct SettlementTask {
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
 
-impl SettlementTask {
+impl<S> SettlementTask<S>
+where
+    S: SettlementStore,
+{
     pub async fn create(
         job: SettlementJob,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
+        settlement_store: Arc<S>,
     ) -> eyre::Result<(Ulid, Self)> {
         let id = loop {
             if let Ok(id) = ID_GENERATOR
@@ -63,6 +79,7 @@ impl SettlementTask {
         let this = Self {
             id,
             job,
+            settlement_store,
             admin_commands,
             attempts: BTreeMap::new(),
         };
@@ -73,7 +90,8 @@ impl SettlementTask {
     pub async fn load(
         id: Ulid,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
-    ) -> eyre::Result<StoredSettlementJob> {
+        settlement_store: Arc<S>,
+    ) -> eyre::Result<StoredSettlementJob<S>> {
         let (job, result) = Self::load_settlement_job_from_db(id).await?;
         if let Some(result) = result {
             Ok(StoredSettlementJob::Completed(job, result))
@@ -81,6 +99,7 @@ impl SettlementTask {
             let mut this = SettlementTask {
                 id,
                 job,
+                settlement_store,
                 admin_commands,
                 attempts: BTreeMap::new(),
             };
@@ -446,21 +465,34 @@ impl SettlementTask {
         _wallet: Address,
         _nonce: Nonce,
         _attempt_number: SettlementAttemptNumber,
-        _tx_result: ContractCallResult,
+        tx_result: ContractCallResult,
     ) {
-        // TODO: Record a settlement job as successful to db, with the given result. All
-        // attempts with the same nonce should be marked as nonce already used, and
-        // attempts with different nonces as having seen a successful settlement
-        // elsewhere.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+        let tx_result = SettlementJobResult::ContractCall(tx_result);
+
+        if let Err(error) = self
+            .settlement_store
+            .insert_settlement_job_result(&self.id, &tx_result)
+        {
+            warn!(
+                ?error,
+                settlement_job_id = %self.id,
+                "Failed to persist successful settlement job result"
+            );
+        }
     }
 
-    async fn write_job_revert_to_db(&self, _result: &ContractCallResult) {
-        // TODO: Record a settlement job as reverted to db, with the given result. All
-        // attempts should already have been marked as nonce already used or revert, so
-        // no need to update them, but maybe run a sanity-check.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+    async fn write_job_revert_to_db(&self, result: &ContractCallResult) {
+        let tx_result = SettlementJobResult::ContractCall(result.clone());
+
+        if let Err(error) = self
+            .settlement_store
+            .insert_settlement_job_result(&self.id, &tx_result)
+        {
+            warn!(
+                ?error,
+                settlement_job_id = %self.id,
+                "Failed to persist reverted settlement job result"
+            );
+        }
     }
 }
