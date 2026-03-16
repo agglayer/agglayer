@@ -11,6 +11,7 @@ mod error;
 mod local_network_state;
 pub mod network_info;
 mod proof_modes;
+mod settlement;
 
 #[cfg(feature = "testutils")]
 pub mod testutils {
@@ -25,3 +26,7 @@ pub use error::{CertificateStatusError, Error, SignerError};
 pub use local_network_state::{L1WitnessCtx, LocalNetworkStateData, PessimisticRootInput};
 pub use network_info::{NetworkInfo, NetworkStatus, NetworkType, SettledClaim};
 pub use proof_modes::{ExecutionMode, GenerationType};
+pub use settlement::{
+    ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Nonce,
+    SettlementAttempt, SettlementAttemptNumber, SettlementJob, SettlementJobResult,
+};
