@@ -3,10 +3,7 @@ use ulid::Ulid;
 use crate::{
     schema::Codec as _,
     types::{
-        generated::agglayer::storage::v0::{
-            settlement_attempt_result, BlockHash, BlockNumber, ContractCallMetadata,
-            ContractCallOutcome, ContractCallResult, SettlementAttemptResult, TxHash,
-        },
+        generated::agglayer::storage::v0::SettlementAttemptResult,
         settlement::{
             attempt,
             attempt_result::{Key, Value},
@@ -20,7 +17,7 @@ fn settlement_attempt_result_roundtrip_codec() {
         settlement_job_id: Ulid::from(7u128),
         attempt_sequence_number: 3,
     };
-    let value = mk_attempt_result_success();
+    let value = SettlementAttemptResult::contract_call_success_for_test(23);
 
     let encoded_key = key.encode().expect("Unable to encode key");
     let decoded_key = Key::decode(&encoded_key).expect("Unable to decode key");
@@ -33,24 +30,4 @@ fn settlement_attempt_result_roundtrip_codec() {
     let encoded_value = value.encode().expect("Unable to encode value");
     let decoded_value = Value::decode(&encoded_value).expect("Unable to decode value");
     assert_eq!(decoded_value, value);
-}
-
-fn mk_attempt_result_success() -> SettlementAttemptResult {
-    SettlementAttemptResult {
-        result: Some(settlement_attempt_result::Result::ContractCallResult(
-            ContractCallResult {
-                outcome: ContractCallOutcome::Success as i32,
-                metadata: Some(ContractCallMetadata {
-                    metadata: vec![0xab, 0xcd].into(),
-                }),
-                block_hash: Some(BlockHash {
-                    hash: vec![0x44; 32].into(),
-                }),
-                block_number: Some(BlockNumber { number: 123 }),
-                tx_hash: Some(TxHash {
-                    hash: vec![0x55; 32].into(),
-                }),
-            },
-        )),
-    }
 }
