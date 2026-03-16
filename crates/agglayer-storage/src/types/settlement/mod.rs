@@ -3,5 +3,6 @@ pub(crate) mod attempt_per_wallet;
 pub(crate) mod attempt_result;
 pub(crate) mod compat;
 pub(crate) mod job;
+pub(crate) mod job_id_per_certificate;
 pub(crate) mod job_result;
 mod primitives;
