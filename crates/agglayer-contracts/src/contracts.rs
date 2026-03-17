@@ -13,23 +13,8 @@ mod aggchain_base {
     );
 }
 
-mod agglayer_gateway {
-    use super::*;
-    sol!(
-        #[allow(missing_docs)]
-        #[allow(clippy::too_many_arguments)]
-        #[sol(rpc)]
-        #[derive(Debug, Eq, PartialEq)]
-        AgglayerGateway,
-        "src/contracts/AggLayerGateway.json"
-    );
-}
-
 // Re-export the contracts
 pub use aggchain_base::AggchainBase;
-// Use the IAggchainSigners from one of the modules to avoid duplication
-pub use aggchain_base::IAggchainSigners;
-pub use agglayer_gateway::AgglayerGateway;
 
 sol!(
     #[allow(missing_docs)]
@@ -60,9 +45,6 @@ sol!(
 
 pub(crate) type AggchainBaseRpcClient<RpcProvider> =
     AggchainBase::AggchainBaseInstance<RpcProvider, Ethereum>;
-
-pub(crate) type AgglayerGatewayRpcClient<RpcProvider> =
-    AgglayerGateway::AgglayerGatewayInstance<RpcProvider, Ethereum>;
 
 pub(crate) type PolygonRollupManagerRpcClient<RpcProvider> =
     PolygonRollupManager::PolygonRollupManagerInstance<RpcProvider, Ethereum>;
