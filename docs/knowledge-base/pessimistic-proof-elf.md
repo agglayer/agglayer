@@ -55,7 +55,7 @@ Any change to the transitive dependency closure of
 and therefore the vkey. This includes Cargo dependency updates
 even when the program source is unchanged.
 
-When the vkey changes, the vkey selector must also be bumped
-if it has not been updated since the last release.
-The selector lives in `pessimistic-proof-core` as
-`PESSIMISTIC_PROOF_PROGRAM_SELECTOR`.
+When the vkey changes, the vkey selector must be bumped
+unless it has already been bumped since the last release.
+The selector is `PESSIMISTIC_PROOF_PROGRAM_SELECTOR`
+in `pessimistic-proof-core`.
