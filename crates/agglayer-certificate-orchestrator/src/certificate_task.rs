@@ -51,6 +51,7 @@ where
     SettlementSvc: SettlementServiceTrait,
 {
     #[instrument(skip_all, fields(certificate_id))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         certificate: Certificate,
         network_task: mpsc::Sender<NetworkTaskMessage>,
