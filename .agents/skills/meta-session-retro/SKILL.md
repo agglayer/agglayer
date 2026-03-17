@@ -26,8 +26,13 @@ to the project's AI agent configuration and documentation.
 
 ### Step 2: Approval gate
 
-- User approves proposal IDs (or rejects).
-- No edits before explicit approval
+- Present **every** proposal to the user using the multi-choice
+  question tool (one question, `multiple: true`).
+  Each option label is the proposal ID + short title;
+  each description is a one-sentence summary.
+- Every correction received during the session must produce
+  at least one proposal. Do not silently drop corrections.
+- No edits before explicit approval.
 
 ### Step 3: Apply mode
 
