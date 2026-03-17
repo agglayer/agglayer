@@ -1,0 +1,88 @@
+---
+source: crates/agglayer-config/tests/auth_config.rs
+expression: config
+---
+prover-buffer-size = 100
+
+[full-node-rpcs]
+
+[l2]
+rpc-timeout = "45s"
+
+[proof-signers]
+
+[log]
+level = "info"
+outputs = []
+format = "pretty"
+
+[rpc]
+grpc-port = 9089
+readrpc-port = 9090
+admin-port = 9091
+host = "0.0.0.0"
+request-timeout = "3m"
+
+[rate-limiting]
+send-tx = "unlimited"
+
+[rate-limiting.network]
+
+[outbound.rpc.settle-tx]
+max-retries = 30
+retry-interval = "10s"
+confirmations = 1
+
+[outbound.rpc.settle-tx.gas-price]
+ceiling = "100gwei"
+
+[outbound.rpc.settle-cert]
+max-retries = 30
+retry-interval = "10s"
+confirmations = 1
+
+[outbound.rpc.settle-cert.gas-price]
+ceiling = "100gwei"
+
+[l1]
+chain-id = 1337
+node-url = "http://zkevm-mock-l1-network:8545/"
+ws-node-url = "ws://zkevm-mock-l1-network:8546/"
+connect-attempt-timeout = "3s"
+rollup-manager-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
+polygon-zkevm-global-exit-root-v2-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
+rpc-timeout = "45s"
+event-filter-block-range = 10000
+
+[auth.gcp-kms]
+project-id = "project-id_test"
+location = "location-test"
+keyring = "keyring-test"
+pp-settlement-key-name = "pp-distinct-key-name"
+pp-settlement-key-version = 11
+tx-settlement-key-name = "tx-distinct-key-name"
+tx-settlement-key-version = 22
+
+[telemetry]
+prometheus-addr = "0.0.0.0:3000"
+
+[epoch.block-clock]
+epoch-duration = 6
+genesis-block = 0
+
+[shutdown]
+runtime-timeout = "5s"
+
+[certificate-orchestrator]
+input-backpressure-buffer-size = 1000
+
+[certificate-orchestrator.prover.sp1-local]
+
+[storage]
+db-path = "/tmp/agglayer/tests/fixtures/auth/storage"
+
+[prover.network-prover]
+proving-timeout = "5m"
+sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+
+[grpc]

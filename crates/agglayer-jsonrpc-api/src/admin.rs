@@ -21,11 +21,21 @@ use unified_bridge::TokenInfo;
 use super::error::RpcResult;
 use crate::{error::Error, rpc_middleware, JsonRpcService};
 
+/// Controls whether the certificate is immediately submitted for reprocessing
+/// after edits are applied.
+///
+/// Passed as the `process_now` parameter of `admin_forceEditCertificate`.
 #[derive(Debug, Eq, PartialEq, serde::Deserialize)]
 pub enum ProcessNow {
+    /// Reprocess the certificate immediately after edits.
+    ///
+    /// Sends the certificate to the orchestrator as if it had just been
+    /// submitted. Use this to recover a certificate that is stuck in an
+    /// error state after correcting its status or settlement tx hash.
     #[serde(rename = "process-now=true")]
     True,
 
+    /// Apply edits without triggering reprocessing.
     #[serde(rename = "process-now=false")]
     False,
 }
@@ -86,6 +96,72 @@ pub(crate) trait AdminAgglayer {
         status: CertificateStatus,
     ) -> RpcResult<()>;
 
+    /// Edit a certificate's mutable fields as an administrative override.
+    ///
+    /// **JSON-RPC method:** `admin_forceEditCertificate`
+    ///
+    /// Up to two operations are applied atomically: all `from=` preconditions
+    /// are checked before any write is performed, so the certificate is never
+    /// left in a partially-updated state.
+    ///
+    /// # Parameters
+    ///
+    /// - `certificate_id` — the certificate to edit.
+    /// - `process_now` — whether to resubmit the certificate to the
+    ///   orchestrator for reprocessing once edits are applied.  Pass
+    ///   [`ProcessNow::True`] (`"process-now=true"`) to recover a stuck
+    ///   certificate after fixing its state.
+    /// - `operation_1`, `operation_2` — optional operation strings (see
+    ///   [Operation format](#operation-format) below).  Omit or pass `null` for
+    ///   unused slots.
+    ///
+    /// # Operation format
+    ///
+    /// Each operation is an ASCII string with a `from=` precondition and a
+    /// `to=` target value.  The precondition is checked against the live
+    /// certificate header **before** any write; a mismatch returns an error
+    /// and leaves the certificate unchanged.
+    ///
+    /// ## `set-status`
+    ///
+    /// ```text
+    /// set-status,from=<STATUS>,to=<STATUS>
+    /// ```
+    ///
+    /// Changes the certificate's [`CertificateStatus`].
+    ///
+    /// Valid `<STATUS>` values: `Pending`, `Proven`, `Candidate`, `InError`,
+    /// `Settled`.
+    ///
+    /// Special case for `InError`: when `from=InError` the inner error message
+    /// is **not** compared — any `InError` variant will satisfy the
+    /// precondition.  When `to=InError` the error is recorded as
+    /// `"Set to InError by administrator"`.
+    ///
+    /// ## `set-settlement-tx-hash`
+    ///
+    /// ```text
+    /// set-settlement-tx-hash,from=<HASH_OR_null>,to=<HASH_OR_null>
+    /// ```
+    ///
+    /// Sets or clears the settlement transaction hash.  Use the literal
+    /// `null` to represent the absence of a hash.  Any other value must be a
+    /// hex-encoded [`SettlementTxHash`] (a 32-byte keccak digest).
+    ///
+    /// # Guards
+    ///
+    /// - A [`CertificateStatus::Settled`] certificate cannot be edited.
+    /// - The `from=` value of every operation must exactly match the current
+    ///   state of the certificate header (with the `InError` relaxation
+    ///   described above).
+    ///
+    /// # Errors
+    ///
+    /// | Error | When |
+    /// |---|---|
+    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate |
+    /// | `ResourceNotFound` (`-10008`) | No certificate header found for `certificate_id` |
+    /// | `INTERNAL_ERROR` | Storage read/write failure; orchestrator channel failure |
     #[method(name = "forceEditCertificate")]
     async fn force_edit_certificate(
         &self,

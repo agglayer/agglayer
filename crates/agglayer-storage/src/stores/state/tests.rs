@@ -27,6 +27,7 @@ use crate::{
 
 mod disabled_networks;
 mod metadata;
+mod settlement;
 
 #[test]
 fn can_retrieve_list_of_network() {

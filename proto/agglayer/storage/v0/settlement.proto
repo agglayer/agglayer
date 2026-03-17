@@ -2,14 +2,8 @@ syntax = "proto3";
 
 package agglayer.storage.v0;
 
-import "agglayer/storage/v0/types.proto";
+import "agglayer/storage/v0/ethereum_types.proto";
 import "google/protobuf/timestamp.proto";
-
-// Settlement job ID.
-message SettlementJobId {
-  // ULID byte sequence.
-  bytes ulid = 1;
-}
 
 // Settlement job data.
 message SettlementJob {
@@ -24,36 +18,26 @@ message SettlementJob {
   // Eth value to send with the transaction.
   EthValue eth_value = 3;
 
-  // ----- Job result details -----
-
-  // Job result, if available.
-  TxResult job_result = 4;
-
-  // ----- Transaction parameters -----
-
-  // Number of confirmations to wait for.
-  uint32 num_confirmations = 5;
-
   // Gas limit for each settlement attempt.
-  Uint128 gas_limit = 6;
+  Uint128 gas_limit = 4;
 
   // Ceiling for max fee per gas.
-  Uint128 max_fee_per_gas_ceiling = 7;
+  Uint128 max_fee_per_gas_ceiling = 5;
 
   // Floor for max fee per gas.
-  Uint128 max_fee_per_gas_floor = 8;
+  Uint128 max_fee_per_gas_floor = 6;
 
   // Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-  uint32 max_fee_per_gas_increase_percents = 9;
+  uint32 max_fee_per_gas_increase_percents = 7;
 
   // Ceiling for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_ceiling = 10;
+  Uint128 max_priority_fee_per_gas_ceiling = 8;
 
   // Floor for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_floor = 11;
+  Uint128 max_priority_fee_per_gas_floor = 9;
 
   // Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-  uint32 max_priority_fee_per_gas_increase_percents = 12;
+  uint32 max_priority_fee_per_gas_increase_percents = 10;
 }
 
 // Transaction result.
@@ -65,9 +49,6 @@ message TxResult {
 
     // Result of a successfully-executed contract call.
     ContractCallResult contract_call_result = 2;
-
-    // Reorganized transactions get their result edited to be this.
-    ReorganizedResult reorganized_result = 3;
   }
 }
 
@@ -85,11 +66,8 @@ enum ClientErrorType {
   // Unspecified error type.
   CLIENT_ERROR_TYPE_UNSPECIFIED = 0;
 
-  // Transient error (e.g., network issue, temporary RPC unavailability).
-  CLIENT_ERROR_TYPE_UNSPECIFIED_TRANSIENT = 1;
-
-  // Permanent error (e.g., we have no private key for the wallet listed in there).
-  CLIENT_ERROR_TYPE_UNSPECIFIED_PERMANENT = 2;
+  // Nonce already used and finalized in other tx.
+  CLIENT_ERROR_TYPE_NONCE_ALREADY_USED = 1;
 }
 
 // Result for a successfully-executed contract call.
@@ -108,6 +86,8 @@ message ContractCallResult {
 
   // Block number where the transaction was included.
   BlockNumber block_number = 4;
+
+  // TODO: introduce index-in-block
 
   // Transaction hash of the settlement transaction.
   TxHash tx_hash = 5;
@@ -134,15 +114,6 @@ message ContractCallMetadata {
   bytes metadata = 1;
 }
 
-// Result indicating that the transaction's previous result was reorganized out of the chain.
-message ReorganizedResult {
-  // Date of the reorg detection.
-  google.protobuf.Timestamp reorg_detection_time = 1;
-
-  // Previous result, that was recorded before the reorg was detected.
-  TxResult previous_result = 2;
-}
-
 // Sequence number of a settlement attempt within a settlement job.
 message AttemptSequenceNumber {
   // Sequence number.
@@ -157,27 +128,15 @@ message SettlementAttempt {
   // Nonce reserved for the transaction.
   Nonce nonce = 2;
 
-  // Gas limit used for this attempt.
-  Uint128 gas_limit = 3;
+  // Gas price parameters used for this attempt.
+  Uint128 max_fee_per_gas = 3;
 
   // Gas price parameters used for this attempt.
-  Uint128 max_fee_per_gas = 4;
-
-  // Gas price parameters used for this attempt.
-  Uint128 max_priority_fee_per_gas = 5;
+  Uint128 max_priority_fee_per_gas = 4;
 
   // Hash of the submitted transaction.
-  TxHash tx_hash = 6;
+  TxHash tx_hash = 5;
 
-  // Result of the attempt, if available.
-  TxResult result = 7;
-}
-
-// Contents of the settlement nonces CF.
-message SettlementNonce {
-  // ID of the job that reserved this nonce.
-  SettlementJobId job_id = 1;
-
-  // Sequence numbers of all of this job's settlement attempts that used this nonce.
-  repeated AttemptSequenceNumber attempt_sequence_numbers = 2;
+  // Timestamp at which the attempt was submitted to L1.
+  google.protobuf.Timestamp submission_time = 6;
 }

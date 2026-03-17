@@ -179,7 +179,7 @@ fn adding_a_certificate(
 #[case::when_state_are_empty(
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
-    VecDeque::from([|result: Result<_, Error>| result.is_ok(), |result: Result<_, Error>| result.is_err()]),
+    VecDeque::from([|result: Result<_, Error>| result.is_ok(), |result: Result<_, Error>| result.is_ok()]),
     Height::ZERO)]
 #[case::when_state_are_empty_and_starting_at_wrong_height(
     StartCheckpointState::Empty,
@@ -189,7 +189,7 @@ fn adding_a_certificate(
 #[case::when_state_is_already_full(
     StartCheckpointState::Empty,
     EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ZERO)]),
-    VecDeque::from([|result: Result<_, Error>| result.is_err()]),
+    VecDeque::from([|result: Result<_, Error>| result.is_ok()]),
     Height::new(1))]
 #[case::when_state_contains_other_network(
     StartCheckpointState::Empty,
@@ -417,4 +417,219 @@ fn can_retrieve_proof_at_index() {
         non_existent_proof.is_none(),
         "Should return None for non-existent index"
     );
+}
+
+#[rstest]
+#[case::five_certificates(5)]
+#[case::ten_certificates(10)]
+#[case::fifty_certificates(50)]
+fn can_add_multiple_certificates_per_epoch(
+    store: PerEpochStore<PendingStore, StateStore>,
+    #[case] num_certificates: u64,
+) {
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+    let network = NetworkId::new(0);
+
+    // Add multiple certificates sequentially
+    for i in 0..num_certificates {
+        let height = Height::new(i);
+        let certificate = Certificate::new_for_test(network, height);
+        let certificate_id = certificate.hash();
+
+        state_store
+            .insert_certificate_header(&certificate, CertificateStatus::Proven)
+            .unwrap();
+
+        pending_store
+            .insert_pending_certificate(network, height, &certificate)
+            .unwrap();
+
+        pending_store
+            .insert_generated_proof(&certificate_id, &Proof::dummy())
+            .unwrap();
+
+        let result = store.add_certificate(certificate_id, agglayer_types::ExecutionMode::Default);
+        assert!(
+            result.is_ok(),
+            "Failed to add certificate at height {}: {:?}",
+            i,
+            result
+        );
+
+        let (epoch_number, certificate_index) = result.unwrap();
+        assert_eq!(epoch_number, EpochNumber::ZERO);
+        assert_eq!(certificate_index, CertificateIndex::new(i));
+    }
+
+    // Verify all certificates can be retrieved
+    for i in 0..num_certificates {
+        let certificate = store
+            .get_certificate_at_index(CertificateIndex::new(i))
+            .unwrap();
+        assert!(
+            certificate.is_some(),
+            "Certificate at index {} should exist",
+            i
+        );
+
+        let cert = certificate.unwrap();
+        assert_eq!(cert.network_id, network);
+        assert_eq!(cert.height, Height::new(i));
+    }
+
+    // Verify end checkpoint is updated correctly
+    let end_checkpoint = store.get_end_checkpoint();
+    assert_eq!(
+        end_checkpoint.get(&network),
+        Some(&Height::new(num_certificates - 1))
+    );
+}
+
+#[rstest]
+fn multiple_networks_multiple_certificates_per_epoch(
+    store: PerEpochStore<PendingStore, StateStore>,
+) {
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    // Add 10 certificates for 3 different networks
+    let networks = [NetworkId::new(0), NetworkId::new(1), NetworkId::new(2)];
+    let certificates_per_network = 10;
+
+    for network in networks.iter() {
+        for i in 0..certificates_per_network {
+            let height = Height::new(i);
+            let certificate = Certificate::new_for_test(*network, height);
+            let certificate_id = certificate.hash();
+
+            state_store
+                .insert_certificate_header(&certificate, CertificateStatus::Proven)
+                .unwrap();
+
+            pending_store
+                .insert_pending_certificate(*network, height, &certificate)
+                .unwrap();
+
+            pending_store
+                .insert_generated_proof(&certificate_id, &Proof::dummy())
+                .unwrap();
+
+            let result =
+                store.add_certificate(certificate_id, agglayer_types::ExecutionMode::Default);
+            assert!(
+                result.is_ok(),
+                "Failed to add certificate for network {} at height {}: {:?}",
+                network,
+                i,
+                result
+            );
+        }
+    }
+
+    // Verify end checkpoints for all networks
+    let end_checkpoint = store.get_end_checkpoint();
+    for network in networks.iter() {
+        assert_eq!(
+            end_checkpoint.get(network),
+            Some(&Height::new(certificates_per_network - 1)),
+            "Network {} should have end checkpoint at height {}",
+            network,
+            certificates_per_network - 1
+        );
+    }
+
+    // Verify total number of certificates
+    let mut count = 0;
+    for i in 0..(networks.len() as u64 * certificates_per_network) {
+        if store
+            .get_certificate_at_index(CertificateIndex::new(i))
+            .unwrap()
+            .is_some()
+        {
+            count += 1;
+        }
+    }
+    assert_eq!(
+        count,
+        networks.len() as u64 * certificates_per_network,
+        "Should have {} total certificates",
+        networks.len() * certificates_per_network as usize
+    );
+}
+
+#[rstest]
+fn sequential_validation_still_enforced(store: PerEpochStore<PendingStore, StateStore>) {
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+    let network = NetworkId::new(0);
+
+    // Add first certificate at height 0
+    let height0 = Height::ZERO;
+    let certificate0 = Certificate::new_for_test(network, height0);
+    let certificate_id0 = certificate0.hash();
+
+    pending_store
+        .insert_pending_certificate(network, height0, &certificate0)
+        .unwrap();
+
+    let height1 = Height::new(1);
+    let certificate1 = Certificate::new_for_test(network, height1);
+    let certificate_id1 = certificate1.hash();
+
+    pending_store
+        .insert_pending_certificate(network, height1, &certificate1)
+        .unwrap();
+
+    let height2 = Height::new(2);
+    let certificate2 = Certificate::new_for_test(network, height2);
+    let certificate_id2 = certificate2.hash();
+
+    pending_store
+        .insert_pending_certificate(network, height2, &certificate2)
+        .unwrap();
+
+    state_store
+        .insert_certificate_header(&certificate0, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id0, &Proof::dummy())
+        .unwrap();
+
+    assert!(store
+        .add_certificate(certificate_id0, agglayer_types::ExecutionMode::Default)
+        .is_ok());
+
+    state_store
+        .insert_certificate_header(&certificate2, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id2, &Proof::dummy())
+        .unwrap();
+
+    let result = store.add_certificate(certificate_id2, agglayer_types::ExecutionMode::Default);
+    assert!(
+        result.is_err(),
+        "Should reject certificate with gap in heights"
+    );
+    assert!(matches!(
+        result,
+        Err(Error::CertificateCandidateError(
+            crate::error::CertificateCandidateError::UnexpectedHeight(_, _, _)
+        ))
+    ));
+
+    state_store
+        .insert_certificate_header(&certificate1, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id1, &Proof::dummy())
+        .unwrap();
+
+    assert!(store
+        .add_certificate(certificate_id1, agglayer_types::ExecutionMode::Default)
+        .is_ok());
 }

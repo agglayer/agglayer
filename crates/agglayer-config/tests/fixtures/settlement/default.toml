@@ -5,7 +5,7 @@ confirmations = 32
 settlement-policy = "SafeBlock"
 gas-limit-ceiling = "0x3938700"
 gas-limit-multiplier-factor = 1.0
-gas-price-multiplier-factor = 1.0
-gas-price-ceiling = "100gwei"
-gas-price-floor = "0gwei"
+max-fee-per-gas-multiplier-factor = 1.0
+max-fee-per-gas-ceiling = "100gwei"
+max-fee-per-gas-floor = "0gwei"
 
