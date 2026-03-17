@@ -9,6 +9,9 @@ disable-model-invocation: true
 Review the full conversation and identify actionable improvements
 to the project's AI agent configuration and documentation.
 
+**Never delegate this skill to a subagent.**
+The retro requires full conversation context.
+
 ## Steps
 
 ### Step 1: Audit
@@ -21,6 +24,12 @@ to the project's AI agent configuration and documentation.
     or debugging techniques learned during the session.
   - **Missing context**: information you had to look up
     that should have been readily available.
+  - **Costly research**: topics where significant time or tokens
+    were spent exploring the codebase or external sources.
+    Propose adding results to `docs/knowledge-base/`
+    so future sessions start with the answer.
+- **Every** correction must produce at least one proposal.
+  Re-scan the conversation to confirm none were missed.
 - Produce proposals only, each with: What, Why (evidence), Where (exact file), Risk.
 - Changes should follow the [Guidelines](#guidelines)
 
@@ -50,6 +59,9 @@ to the project's AI agent configuration and documentation.
 - Keep docs factual and concise.
 - Do not add speculative content.
   Only propose changes backed by concrete conversation evidence.
+- Proposed text must match the target file's style and brevity.
+  In particular, `AGENTS.md` changes must be minimal
+  (one or two short lines per rule).
 - Use `.agents/skills/` for all agent conventions, including background knowledge
   (with `user-invocable: false`).
 
