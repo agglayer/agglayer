@@ -353,31 +353,31 @@ where
         .map_err(|source| CertificationError::NativeExecutionFailed { source })?;
 
         // Check the certificate aggchain hash matches the one stored in L1
+        if !matches!(certificate.aggchain_data, AggchainData::ECDSA { .. }) {
+            let rollup_address = self
+                .l1_rpc
+                .get_rollup_contract_address(certificate.network_id.to_u32())
+                .await
+                .map_err(CertificationError::RollupContractAddressNotFound)?;
 
-        let rollup_address = self
-            .l1_rpc
-            .get_rollup_contract_address(certificate.network_id.to_u32())
-            .await
-            .map_err(CertificationError::RollupContractAddressNotFound)?;
+            let l1_aggchain_hash = self
+                .l1_rpc
+                .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
+                .await
+                .map_err(CertificationError::UnableToFindAggchainHash)?
+                .into();
 
-        let l1_aggchain_hash = self
-            .l1_rpc
-            .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
-            .await
-            .map_err(CertificationError::UnableToFindAggchainHash)?
-            .into();
-
-        let computed_aggchain_hash = multi_batch_header.aggchain_data.aggchain_hash();
-        if l1_aggchain_hash != computed_aggchain_hash {
-            return Err(CertificationError::AggchainHashMismatch {
-                from_l1: l1_aggchain_hash,
-                from_certificate: computed_aggchain_hash,
-            });
+            let computed_aggchain_hash = multi_batch_header.aggchain_data.aggchain_hash();
+            if l1_aggchain_hash != computed_aggchain_hash {
+                return Err(CertificationError::AggchainHashMismatch {
+                    from_l1: l1_aggchain_hash,
+                    from_certificate: computed_aggchain_hash,
+                });
+            }
         }
 
         // Verify that the public values used in the aggchain proof match the ones
         // computed during witness generation.
-
         let pv_params_from_proof = match &certificate.aggchain_data {
             AggchainData::Generic {
                 public_values,
