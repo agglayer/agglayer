@@ -191,10 +191,9 @@ mod tests {
 
         let Some((sender, nonce, expected_hash)) = sample else {
             panic!(
-                "No mined transactions found in the last {} blocks through {}; submit at least one \
-                 transaction and retry",
-                MAX_SCAN_BLOCKS,
-                L1_RPC_ENV,
+                "No mined transactions found in the last {} blocks through {}; submit at least \
+                 one transaction and retry",
+                MAX_SCAN_BLOCKS, L1_RPC_ENV,
             );
         };
 
