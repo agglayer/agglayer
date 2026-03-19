@@ -92,21 +92,24 @@ jobs:
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     needs:
       - docker-build-local
-    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@2cf50f9f92eff4fdf6b2555e62fac67d76f8f290 # test/agglayer-e2e-bridge-test
+    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@74ce82684d4e6db97ff47b7a065dc23f4cc08e42 # 2026-03-17
     secrets: inherit
     with:
       test-name: agglayer-bridging
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
-      kurtosis-cdk-ref: 17959f2f2735d8ed58d43412b413bda8056a1ce6
+      kurtosis-cdk-ref: 00bd44a736df6ce132ec78976478d63eef5863ad # 2026-03-12
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: 2cf50f9f92eff4fdf6b2555e62fac67d76f8f290 # test/agglayer-e2e-bridge-test
+      agglayer-e2e-ref: 74ce82684d4e6db97ff47b7a065dc23f4cc08e42 # 2026-03-17
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
             "deploy_optimism_rollup": true
           },
           "args": {
+            "sequencer_type": "op-reth",
+            "l1_el_type": "reth",
+            "reth_image": "ghcr.io/paradigmxyz/reth",
             "aggkit_image": "ghcr.io/agglayer/aggkit:0.5.4",
             "consensus_contract_type": "pessimistic",
             "verbosity": "debug"
