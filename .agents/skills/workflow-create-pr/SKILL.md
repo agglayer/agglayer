@@ -5,6 +5,7 @@ disable-model-invocation: true
 ---
 
 When creating a PR:
+
 - Use `gh pr create`
 - Use the project's template and merge-queue conventions.
 

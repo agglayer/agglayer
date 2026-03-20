@@ -3,9 +3,12 @@
 ## Documentation and skills index
 
 Key references for navigating this project:
+
 - `README.md` -- project overview, crate table, build prerequisites.
 - `CONTRIBUTING.md` -- contribution workflow, PR conventions.
 - `docs/` -- human-readable documentation (validity checks, audits, dev guides).
+- `docs/knowledge-base/` -- mdbook knowledge base for architecture,
+  domain terms, and implementation conventions.
 - `Makefile.toml` -- build tasks (delegates to `scripts/make/*.toml`).
 
 ## Response priorities
