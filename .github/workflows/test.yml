@@ -92,6 +92,10 @@ jobs:
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     needs:
       - docker-build-local
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@76a2d2226c4e717438b31c036aa1e5a2e9a5df70 # 2026-03-20
     secrets: inherit
     with:
