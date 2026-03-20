@@ -96,14 +96,14 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@76a2d2226c4e717438b31c036aa1e5a2e9a5df70 # 2026-03-20
+    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@a2a90439583b62a7dcabcda915c72193e57ec6e7 # 2026-03-20
     secrets: inherit
     with:
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
       kurtosis-cdk-ref: 6f5c0f0cd2cce5cf11a025aade73b13664df8007 # 2026-03-18
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: 76a2d2226c4e717438b31c036aa1e5a2e9a5df70 # 2026-03-20
+      agglayer-e2e-ref: a2a90439583b62a7dcabcda915c72193e57ec6e7 # 2026-03-20
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
