@@ -97,9 +97,9 @@ jobs:
     with:
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
-      kurtosis-cdk-ref: 00bd44a736df6ce132ec78976478d63eef5863ad # 2026-03-12
+      kurtosis-cdk-ref: 6f5c0f0cd2cce5cf11a025aade73b13664df8007 # 2026-03-18
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: 74ce82684d4e6db97ff47b7a065dc23f4cc08e42 # 2026-03-17
+      agglayer-e2e-ref: 76a2d2226c4e717438b31c036aa1e5a2e9a5df70 # 2026-03-20
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
