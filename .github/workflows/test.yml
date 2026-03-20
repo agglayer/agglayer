@@ -87,15 +87,14 @@ jobs:
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
-  call-cdk-e2e-workflow:
-    name: E2E Tests | Kurtosis-CDK
+  call-agglayer-node-e2e-workflow:
+    name: E2E Tests | Agglayer Node
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     needs:
       - docker-build-local
-    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@74ce82684d4e6db97ff47b7a065dc23f4cc08e42 # 2026-03-17
+    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@76a2d2226c4e717438b31c036aa1e5a2e9a5df70 # 2026-03-20
     secrets: inherit
     with:
-      test-name: agglayer-bridging
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
       kurtosis-cdk-ref: 00bd44a736df6ce132ec78976478d63eef5863ad # 2026-03-12
@@ -123,12 +122,12 @@ jobs:
   check-e2e-result:
     name: E2E Tests | Passed
     needs:
-      - call-cdk-e2e-workflow
+      - call-agglayer-node-e2e-workflow
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: exit 1
-        if: ${{ contains(fromJSON('["failure", "cancelled"]'), needs.call-cdk-e2e-workflow.result) }}
+        if: ${{ contains(fromJSON('["failure", "cancelled"]'), needs.call-agglayer-node-e2e-workflow.result) }}
 
   check_elf:
     runs-on: ubuntu-latest-16-cores
