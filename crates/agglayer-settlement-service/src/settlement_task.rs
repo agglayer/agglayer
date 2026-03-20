@@ -5,7 +5,7 @@ use std::{
 };
 
 use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
-use agglayer_types::{CertificateId, Digest, SettlementTxHash};
+use agglayer_types::{Digest, SettlementTxHash};
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
     primitives::{Address, BlockHash, Bytes, U128, U256},
@@ -30,7 +30,6 @@ impl Nonce {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettlementJob {
-    pub(crate) certificate_id: CertificateId,
     pub(crate) contract_address: Address,
     pub(crate) calldata: Bytes,
     pub(crate) eth_value: U256,
@@ -48,12 +47,8 @@ pub struct SettlementJob {
 }
 
 impl SettlementJob {
-    pub fn new(
-        certificate_id: CertificateId,
-        settlement_config: Arc<SettlementTransactionConfig>,
-    ) -> Self {
+    pub fn new(settlement_config: Arc<SettlementTransactionConfig>) -> Self {
         Self {
-            certificate_id,
             contract_address: Address::ZERO,
             calldata: Bytes::new(),
             eth_value: U256::ZERO,
@@ -73,10 +68,6 @@ impl SettlementJob {
                 .max_priority_fee_per_gas_multiplier_factor,
             settlement_config,
         }
-    }
-
-    pub fn certificate_id(&self) -> CertificateId {
-        self.certificate_id
     }
 }
 

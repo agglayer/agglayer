@@ -293,10 +293,7 @@ where
         let certificate_id = self.header.certificate_id;
 
         // Submit settlement request
-        let job = agglayer_settlement_service::SettlementJob::new(
-            certificate_id,
-            self.settlement_config.clone(),
-        );
+        let job = agglayer_settlement_service::SettlementJob::new(self.settlement_config.clone());
         let mut watcher = self
             .settlement_service
             .request_new_settlement(job)
