@@ -1,6 +1,6 @@
 use std::{num::NonZeroU64, sync::Arc};
 
-use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
+use agglayer_aggregator_notifier::CertifierClient;
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
@@ -8,6 +8,7 @@ use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
+use agglayer_settlement_service::SettlementService;
 use agglayer_signer::{ConfiguredSigner, ConfiguredSigners};
 use agglayer_storage::{
     backup::{BackupClient, BackupEngine},
@@ -259,15 +260,12 @@ impl Node {
         let core = Kernel::new(rpc_tx_settlement.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
-        let epoch_packing_aggregator_task = RpcSettlementClient::new(
-            Arc::new(config.outbound.rpc.settle_cert.clone()),
-            state_store.clone(),
-            pending_store.clone(),
-            Arc::clone(&rollup_manager),
-            current_epoch_store.clone(),
-        );
 
-        info!("Epoch packing aggregator task created.");
+        let settlement_service = Arc::new(
+            SettlementService::start(config.settlement.clone(), cancellation_token.clone())
+                .await
+                .context("Failed starting settlement service")?,
+        );
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
@@ -275,16 +273,19 @@ impl Node {
                 .input_backpressure_buffer_size,
         );
 
+        let settlement_config = Arc::new(config.settlement.pessimistic_proof_tx_config.clone());
+
         let certificate_orchestrator_handle = CertificateOrchestrator::builder()
             .clock(clock_ref)
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
-            .settlement_client(epoch_packing_aggregator_task)
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
             .current_epoch(current_epoch_store)
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
+            .settlement_service(settlement_service)
+            .settlement_config(settlement_config)
             .start()
             .await
             .context("Failed starting certificate orchestrator")?;
