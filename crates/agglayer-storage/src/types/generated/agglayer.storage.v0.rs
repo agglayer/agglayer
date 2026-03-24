@@ -434,7 +434,7 @@ pub enum ContractCallOutcome {
     /// The call was successful.
     Success = 1,
     /// The call reverted.
-    Reverted = 2,
+    Revert = 2,
 }
 impl ContractCallOutcome {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -445,7 +445,7 @@ impl ContractCallOutcome {
         match self {
             Self::Unspecified => "CONTRACT_CALL_OUTCOME_UNSPECIFIED",
             Self::Success => "CONTRACT_CALL_OUTCOME_SUCCESS",
-            Self::Reverted => "CONTRACT_CALL_OUTCOME_REVERTED",
+            Self::Revert => "CONTRACT_CALL_OUTCOME_REVERT",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -453,7 +453,7 @@ impl ContractCallOutcome {
         match value {
             "CONTRACT_CALL_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
             "CONTRACT_CALL_OUTCOME_SUCCESS" => Some(Self::Success),
-            "CONTRACT_CALL_OUTCOME_REVERTED" => Some(Self::Reverted),
+            "CONTRACT_CALL_OUTCOME_REVERT" => Some(Self::Revert),
             _ => None,
         }
     }

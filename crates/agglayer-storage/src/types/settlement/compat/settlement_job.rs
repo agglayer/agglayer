@@ -1,12 +1,6 @@
 use agglayer_types::SettlementJob;
 
-use super::{
-    primitives::{
-        parse_address, parse_calldata, parse_eth_value, parse_uint128_to_u128, to_proto_address,
-        to_proto_calldata, to_proto_eth_value, to_proto_uint128_from_u128,
-    },
-    Error,
-};
+use super::Error;
 use crate::types::generated::agglayer::storage::v0;
 
 impl TryFrom<v0::SettlementJob> for SettlementJob {
@@ -14,23 +8,26 @@ impl TryFrom<v0::SettlementJob> for SettlementJob {
 
     fn try_from(value: v0::SettlementJob) -> Result<Self, Self::Error> {
         Ok(Self {
-            contract_address: required_field!(value, contract_address => parse_address),
-            calldata: required_field!(value, calldata => parse_calldata).into(),
-            eth_value: required_field!(value, eth_value => parse_eth_value),
-            gas_limit: required_field!(value, gas_limit => parse_uint128_to_u128),
-            max_fee_per_gas_ceiling: required_field!(
-                value,
-                max_fee_per_gas_ceiling => parse_uint128_to_u128
+            contract_address: required_field!(value, contract_address =>
+                try_into::<agglayer_types::Address>
             ),
-            max_fee_per_gas_floor: required_field!(value, max_fee_per_gas_floor => parse_uint128_to_u128),
+            calldata: required_field!(value, calldata => into::<Vec<u8>>).into(),
+            eth_value: required_field!(value, eth_value => try_into::<agglayer_types::U256>),
+            gas_limit: required_field!(value, gas_limit => try_into::<u128>),
+            max_fee_per_gas_ceiling: required_field!(value, max_fee_per_gas_ceiling =>
+                try_into::<u128>
+            ),
+            max_fee_per_gas_floor: required_field!(value, max_fee_per_gas_floor =>
+                try_into::<u128>
+            ),
             max_fee_per_gas_increase_percents: value.max_fee_per_gas_increase_percents,
             max_priority_fee_per_gas_ceiling: required_field!(
                 value,
-                max_priority_fee_per_gas_ceiling => parse_uint128_to_u128
+                max_priority_fee_per_gas_ceiling => try_into::<u128>
             ),
             max_priority_fee_per_gas_floor: required_field!(
                 value,
-                max_priority_fee_per_gas_floor => parse_uint128_to_u128
+                max_priority_fee_per_gas_floor => try_into::<u128>
             ),
             max_priority_fee_per_gas_increase_percents: value
                 .max_priority_fee_per_gas_increase_percents,
@@ -43,21 +40,17 @@ impl TryFrom<&SettlementJob> for v0::SettlementJob {
 
     fn try_from(value: &SettlementJob) -> Result<Self, Self::Error> {
         Ok(Self {
-            contract_address: Some(to_proto_address(value.contract_address)),
-            calldata: Some(to_proto_calldata(value.calldata.as_ref())),
-            eth_value: Some(to_proto_eth_value(value.eth_value)),
-            gas_limit: Some(to_proto_uint128_from_u128(value.gas_limit)),
-            max_fee_per_gas_ceiling: Some(to_proto_uint128_from_u128(
-                value.max_fee_per_gas_ceiling,
-            )),
-            max_fee_per_gas_floor: Some(to_proto_uint128_from_u128(value.max_fee_per_gas_floor)),
+            contract_address: Some(value.contract_address.into()),
+            calldata: Some(v0::Calldata {
+                data: value.calldata.to_vec().into(),
+            }),
+            eth_value: Some(value.eth_value.into()),
+            gas_limit: Some(value.gas_limit.into()),
+            max_fee_per_gas_ceiling: Some(value.max_fee_per_gas_ceiling.into()),
+            max_fee_per_gas_floor: Some(value.max_fee_per_gas_floor.into()),
             max_fee_per_gas_increase_percents: value.max_fee_per_gas_increase_percents,
-            max_priority_fee_per_gas_ceiling: Some(to_proto_uint128_from_u128(
-                value.max_priority_fee_per_gas_ceiling,
-            )),
-            max_priority_fee_per_gas_floor: Some(to_proto_uint128_from_u128(
-                value.max_priority_fee_per_gas_floor,
-            )),
+            max_priority_fee_per_gas_ceiling: Some(value.max_priority_fee_per_gas_ceiling.into()),
+            max_priority_fee_per_gas_floor: Some(value.max_priority_fee_per_gas_floor.into()),
             max_priority_fee_per_gas_increase_percents: value
                 .max_priority_fee_per_gas_increase_percents,
         })
@@ -74,7 +67,7 @@ impl TryFrom<SettlementJob> for v0::SettlementJob {
 
 #[cfg(test)]
 mod tests {
-    use agglayer_types::{Address, Digest};
+    use agglayer_types::Address;
     use alloy_primitives::Bytes;
 
     use super::*;
@@ -112,14 +105,5 @@ mod tests {
         let result = SettlementJob::try_from(proto);
 
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn settlement_tx_hash_primitive_conversion_smoke() {
-        let tx_hash = agglayer_types::SettlementTxHash::new(Digest::from([7_u8; 32]));
-        let proto = super::super::primitives::to_proto_settlement_tx_hash(tx_hash);
-        let decoded = super::super::primitives::parse_settlement_tx_hash(proto).unwrap();
-
-        assert_eq!(decoded, tx_hash);
     }
 }

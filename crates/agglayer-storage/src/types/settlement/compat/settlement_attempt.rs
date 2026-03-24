@@ -1,13 +1,6 @@
 use agglayer_types::{Nonce, SettlementAttempt, SettlementAttemptNumber};
 
-use super::{
-    primitives::{
-        parse_address, parse_settlement_tx_hash, parse_timestamp, parse_uint128_to_u128,
-        to_proto_address, to_proto_settlement_tx_hash, to_proto_timestamp,
-        to_proto_uint128_from_u128,
-    },
-    Error,
-};
+use super::Error;
 use crate::types::generated::agglayer::storage::v0;
 
 impl From<SettlementAttemptNumber> for v0::AttemptSequenceNumber {
@@ -37,21 +30,13 @@ impl From<v0::Nonce> for Nonce {
 impl From<&SettlementAttempt> for v0::SettlementAttempt {
     fn from(value: &SettlementAttempt) -> Self {
         Self {
-            sender_wallet: Some(to_proto_address(value.sender_wallet)),
+            sender_wallet: Some(value.sender_wallet.into()),
             nonce: Some(value.nonce.into()),
-            max_fee_per_gas: Some(to_proto_uint128_from_u128(value.max_fee_per_gas)),
-            max_priority_fee_per_gas: Some(to_proto_uint128_from_u128(
-                value.max_priority_fee_per_gas,
-            )),
-            tx_hash: Some(to_proto_settlement_tx_hash(value.hash)),
-            submission_time: Some(to_proto_timestamp(value.submission_time)),
+            max_fee_per_gas: Some(value.max_fee_per_gas.into()),
+            max_priority_fee_per_gas: Some(value.max_priority_fee_per_gas.into()),
+            tx_hash: Some(value.hash.into()),
+            submission_time: Some(prost_types::Timestamp::from(value.submission_time)),
         }
-    }
-}
-
-impl From<SettlementAttempt> for v0::SettlementAttempt {
-    fn from(value: SettlementAttempt) -> Self {
-        (&value).into()
     }
 }
 
@@ -60,15 +45,18 @@ impl TryFrom<v0::SettlementAttempt> for SettlementAttempt {
 
     fn try_from(value: v0::SettlementAttempt) -> Result<Self, Self::Error> {
         Ok(Self {
-            sender_wallet: required_field!(value, sender_wallet => parse_address),
-            nonce: required_field!(value, nonce => |nonce: v0::Nonce| Ok(nonce.into())),
-            max_fee_per_gas: required_field!(value, max_fee_per_gas => parse_uint128_to_u128),
-            max_priority_fee_per_gas: required_field!(
-                value,
-                max_priority_fee_per_gas => parse_uint128_to_u128
+            sender_wallet: required_field!(value, sender_wallet =>
+                try_into::<agglayer_types::Address>
             ),
-            hash: required_field!(value, tx_hash => parse_settlement_tx_hash),
-            submission_time: required_field!(value, submission_time => parse_timestamp),
+            nonce: required_field!(value, nonce => into::<Nonce>),
+            max_fee_per_gas: required_field!(value, max_fee_per_gas => try_into::<u128>),
+            max_priority_fee_per_gas: required_field!(value, max_priority_fee_per_gas =>
+                try_into::<u128>
+            ),
+            hash: required_field!(value, tx_hash => try_into::<agglayer_types::SettlementTxHash>),
+            submission_time: required_field!(value, submission_time =>
+                try_into::<std::time::SystemTime>
+            ),
         })
     }
 }

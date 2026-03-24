@@ -14,6 +14,18 @@ pub enum Error {
     },
 }
 
+impl From<crate::schema::CodecError> for Error {
+    fn from(value: crate::schema::CodecError) -> Self {
+        Self::invalid_data(value.to_string())
+    }
+}
+
+impl From<prost_types::TimestampError> for Error {
+    fn from(value: prost_types::TimestampError) -> Self {
+        Self::invalid_data(format!("invalid timestamp: {value}"))
+    }
+}
+
 impl Error {
     pub(crate) fn missing_field(field: &'static str) -> Self {
         Self::MissingField { field }

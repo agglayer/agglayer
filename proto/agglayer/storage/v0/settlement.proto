@@ -102,7 +102,7 @@ enum ContractCallOutcome {
   CONTRACT_CALL_OUTCOME_SUCCESS = 1;
 
   // The call reverted.
-  CONTRACT_CALL_OUTCOME_REVERTED = 2;
+  CONTRACT_CALL_OUTCOME_REVERT = 2;
 }
 
 // Additional metadata about the call outcome.

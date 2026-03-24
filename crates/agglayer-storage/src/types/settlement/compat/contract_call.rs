@@ -1,20 +1,20 @@
 use agglayer_types::{ContractCallOutcome, ContractCallResult};
 use prost::bytes::Bytes as ProstBytes;
 
-use super::{
-    primitives::{
-        parse_block_hash, parse_block_number, parse_settlement_tx_hash, to_proto_block_hash,
-        to_proto_block_number, to_proto_settlement_tx_hash,
-    },
-    Error,
-};
+use super::Error;
 use crate::types::generated::agglayer::storage::v0;
+
+impl From<v0::ContractCallMetadata> for Vec<u8> {
+    fn from(value: v0::ContractCallMetadata) -> Self {
+        value.metadata.to_vec()
+    }
+}
 
 impl From<&ContractCallOutcome> for v0::ContractCallOutcome {
     fn from(value: &ContractCallOutcome) -> Self {
         match value {
             ContractCallOutcome::Success => Self::Success,
-            ContractCallOutcome::Revert => Self::Reverted,
+            ContractCallOutcome::Revert => Self::Revert,
         }
     }
 }
@@ -28,7 +28,7 @@ impl TryFrom<v0::ContractCallOutcome> for ContractCallOutcome {
                 "contract call outcome must be specified",
             )),
             v0::ContractCallOutcome::Success => Ok(ContractCallOutcome::Success),
-            v0::ContractCallOutcome::Reverted => Ok(ContractCallOutcome::Revert),
+            v0::ContractCallOutcome::Revert => Ok(ContractCallOutcome::Revert),
         }
     }
 }
@@ -40,9 +40,9 @@ impl From<&ContractCallResult> for v0::ContractCallResult {
             metadata: Some(v0::ContractCallMetadata {
                 metadata: ProstBytes::copy_from_slice(value.metadata.as_ref()),
             }),
-            block_hash: Some(to_proto_block_hash(value.block_hash)),
-            block_number: Some(to_proto_block_number(value.block_number)),
-            tx_hash: Some(to_proto_settlement_tx_hash(value.tx_hash)),
+            block_hash: Some(value.block_hash.into()),
+            block_number: Some(value.block_number.into()),
+            tx_hash: Some(value.tx_hash.into()),
         }
     }
 }
@@ -63,13 +63,12 @@ impl TryFrom<v0::ContractCallResult> for ContractCallResult {
 
         Ok(Self {
             outcome,
-            metadata: required_field!(value, metadata =>
-                |metadata: v0::ContractCallMetadata| Ok(metadata.metadata.to_vec())
-            )
-            .into(),
-            block_hash: required_field!(value, block_hash => parse_block_hash),
-            block_number: required_field!(value, block_number => parse_block_number),
-            tx_hash: required_field!(value, tx_hash => parse_settlement_tx_hash),
+            metadata: required_field!(value, metadata => into::<Vec<u8>>).into(),
+            block_hash: required_field!(value, block_hash => try_into::<agglayer_types::B256>),
+            block_number: required_field!(value, block_number => into::<u64>),
+            tx_hash: required_field!(value, tx_hash =>
+                try_into::<agglayer_types::SettlementTxHash>
+            ),
         })
     }
 }
