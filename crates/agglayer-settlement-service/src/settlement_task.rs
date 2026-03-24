@@ -43,10 +43,14 @@ impl ActiveSettlementJob {
             gas_limit: U128::from(job.gas_limit),
             max_fee_per_gas_ceiling: U128::from(job.max_fee_per_gas_ceiling),
             max_fee_per_gas_floor: U128::from(job.max_fee_per_gas_floor),
-            max_fee_per_gas_multiplier: Multiplier::default(),
+            max_fee_per_gas_multiplier: Multiplier::from_u64_per_1000(
+                u64::from(job.max_fee_per_gas_increase_percents) * 10,
+            ),
             max_priority_fee_per_gas_ceiling: U128::from(job.max_priority_fee_per_gas_ceiling),
             max_priority_fee_per_gas_floor: U128::from(job.max_priority_fee_per_gas_floor),
-            max_priority_fee_per_gas_multiplier: Multiplier::default(),
+            max_priority_fee_per_gas_multiplier: Multiplier::from_u64_per_1000(
+                u64::from(job.max_priority_fee_per_gas_increase_percents) * 10,
+            ),
             num_confirmations: settlement_config.confirmations as u32,
             job,
             settlement_config: Arc::new(settlement_config),
