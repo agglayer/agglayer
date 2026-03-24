@@ -1,4 +1,6 @@
-use agglayer_types::{SettlementAttempt, SettlementJob, SettlementJobResult};
+use agglayer_types::{
+    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
+};
 use ulid::Ulid;
 
 use crate::error::Error;
@@ -50,6 +52,6 @@ pub trait SettlementWriter: Send + Sync {
         &self,
         settlement_job_id: &Ulid,
         attempt_sequence_number: u64,
-        tx_result: &SettlementJobResult,
+        tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error>;
 }

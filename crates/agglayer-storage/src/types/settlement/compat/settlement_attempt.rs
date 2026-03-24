@@ -10,10 +10,6 @@ use super::{
 };
 use crate::types::generated::agglayer::storage::v0;
 
-fn parse_nonce(value: v0::Nonce) -> Result<Nonce, Error> {
-    Ok(value.into())
-}
-
 impl From<SettlementAttemptNumber> for v0::AttemptSequenceNumber {
     fn from(value: SettlementAttemptNumber) -> Self {
         Self { number: value.0 }
@@ -65,7 +61,7 @@ impl TryFrom<v0::SettlementAttempt> for SettlementAttempt {
     fn try_from(value: v0::SettlementAttempt) -> Result<Self, Self::Error> {
         Ok(Self {
             sender_wallet: required_field!(value, sender_wallet => parse_address),
-            nonce: required_field!(value, nonce => parse_nonce),
+            nonce: required_field!(value, nonce => |nonce: v0::Nonce| Ok(nonce.into())),
             max_fee_per_gas: required_field!(value, max_fee_per_gas => parse_uint128_to_u128),
             max_priority_fee_per_gas: required_field!(
                 value,
@@ -73,7 +69,6 @@ impl TryFrom<v0::SettlementAttempt> for SettlementAttempt {
             ),
             hash: required_field!(value, tx_hash => parse_settlement_tx_hash),
             submission_time: required_field!(value, submission_time => parse_timestamp),
-            result: None,
         })
     }
 }
@@ -82,14 +77,12 @@ impl TryFrom<v0::SettlementAttempt> for SettlementAttempt {
 mod tests {
     use std::time::SystemTime;
 
-    use agglayer_types::{
-        Address, ClientError, ClientErrorType, Digest, SettlementJobResult, SettlementTxHash,
-    };
+    use agglayer_types::{Address, Digest, SettlementTxHash};
 
     use super::*;
 
     #[test]
-    fn settlement_attempt_round_trip_ignores_result() {
+    fn settlement_attempt_round_trip() {
         let attempt = SettlementAttempt {
             sender_wallet: Address::from([1_u8; 20]),
             nonce: Nonce(7),
@@ -97,10 +90,6 @@ mod tests {
             max_priority_fee_per_gas: 20,
             hash: SettlementTxHash::new(Digest::from([2_u8; 32])),
             submission_time: SystemTime::UNIX_EPOCH,
-            result: Some(SettlementJobResult::ClientError(ClientError {
-                kind: ClientErrorType::Unknown,
-                message: "ignored".to_string(),
-            })),
         };
 
         let proto: v0::SettlementAttempt = (&attempt).into();
@@ -115,6 +104,5 @@ mod tests {
         );
         assert_eq!(decoded.hash, attempt.hash);
         assert_eq!(decoded.submission_time, attempt.submission_time);
-        assert_eq!(decoded.result, None);
     }
 }

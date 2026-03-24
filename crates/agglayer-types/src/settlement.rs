@@ -37,6 +37,12 @@ pub enum SettlementJobResult {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettlementAttemptResult {
+    ClientError(ClientError),
+    ContractCall(ContractCallResult),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClientError {
     pub kind: ClientErrorType,
     pub message: String,
@@ -89,5 +95,4 @@ pub struct SettlementAttempt {
     pub max_priority_fee_per_gas: u128,
     pub hash: SettlementTxHash,
     pub submission_time: SystemTime,
-    pub result: Option<SettlementJobResult>,
 }

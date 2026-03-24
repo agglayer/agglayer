@@ -28,5 +28,6 @@ pub use network_info::{NetworkInfo, NetworkStatus, NetworkType, SettledClaim};
 pub use proof_modes::{ExecutionMode, GenerationType};
 pub use settlement::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Nonce,
-    SettlementAttempt, SettlementAttemptNumber, SettlementJob, SettlementJobResult,
+    SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
+    SettlementJobResult,
 };

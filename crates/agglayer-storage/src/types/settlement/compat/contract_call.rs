@@ -10,15 +10,11 @@ use super::{
 };
 use crate::types::generated::agglayer::storage::v0;
 
-fn parse_contract_call_metadata(value: v0::ContractCallMetadata) -> Result<Vec<u8>, Error> {
-    Ok(value.metadata.to_vec())
-}
-
-impl From<ContractCallOutcome> for v0::ContractCallOutcome {
-    fn from(value: ContractCallOutcome) -> Self {
+impl From<&ContractCallOutcome> for v0::ContractCallOutcome {
+    fn from(value: &ContractCallOutcome) -> Self {
         match value {
-            ContractCallOutcome::Success => v0::ContractCallOutcome::Success,
-            ContractCallOutcome::Revert => v0::ContractCallOutcome::Reverted,
+            ContractCallOutcome::Success => Self::Success,
+            ContractCallOutcome::Revert => Self::Reverted,
         }
     }
 }
@@ -37,10 +33,10 @@ impl TryFrom<v0::ContractCallOutcome> for ContractCallOutcome {
     }
 }
 
-impl From<ContractCallResult> for v0::ContractCallResult {
-    fn from(value: ContractCallResult) -> Self {
+impl From<&ContractCallResult> for v0::ContractCallResult {
+    fn from(value: &ContractCallResult) -> Self {
         Self {
-            outcome: v0::ContractCallOutcome::from(value.outcome) as i32,
+            outcome: v0::ContractCallOutcome::from(&value.outcome) as i32,
             metadata: Some(v0::ContractCallMetadata {
                 metadata: ProstBytes::copy_from_slice(value.metadata.as_ref()),
             }),
@@ -67,7 +63,10 @@ impl TryFrom<v0::ContractCallResult> for ContractCallResult {
 
         Ok(Self {
             outcome,
-            metadata: required_field!(value, metadata => parse_contract_call_metadata).into(),
+            metadata: required_field!(value, metadata =>
+                |metadata: v0::ContractCallMetadata| Ok(metadata.metadata.to_vec())
+            )
+            .into(),
             block_hash: required_field!(value, block_hash => parse_block_hash),
             block_number: required_field!(value, block_number => parse_block_number),
             tx_hash: required_field!(value, tx_hash => parse_settlement_tx_hash),
@@ -91,7 +90,7 @@ mod tests {
             tx_hash: SettlementTxHash::new(Digest::from([9_u8; 32])),
         };
 
-        let proto: v0::ContractCallResult = result.clone().into();
+        let proto: v0::ContractCallResult = (&result).into();
         let decoded = ContractCallResult::try_from(proto).unwrap();
 
         assert_eq!(decoded, result);

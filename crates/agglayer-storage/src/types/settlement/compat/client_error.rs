@@ -3,11 +3,11 @@ use agglayer_types::{ClientError, ClientErrorType};
 use super::Error;
 use crate::types::generated::agglayer::storage::v0;
 
-impl From<ClientErrorType> for v0::ClientErrorType {
-    fn from(value: ClientErrorType) -> Self {
+impl From<&ClientErrorType> for v0::ClientErrorType {
+    fn from(value: &ClientErrorType) -> Self {
         match value {
-            ClientErrorType::Unknown => v0::ClientErrorType::Unspecified,
-            ClientErrorType::NonceAlreadyUsed => v0::ClientErrorType::NonceAlreadyUsed,
+            ClientErrorType::Unknown => Self::Unspecified,
+            ClientErrorType::NonceAlreadyUsed => Self::NonceAlreadyUsed,
         }
     }
 }
@@ -21,11 +21,11 @@ impl From<v0::ClientErrorType> for ClientErrorType {
     }
 }
 
-impl From<ClientError> for v0::ClientError {
-    fn from(value: ClientError) -> Self {
+impl From<&ClientError> for v0::ClientError {
+    fn from(value: &ClientError) -> Self {
         Self {
-            error_type: v0::ClientErrorType::from(value.kind) as i32,
-            error_message: value.message,
+            error_type: v0::ClientErrorType::from(&value.kind) as i32,
+            error_message: value.message.clone(),
         }
     }
 }
@@ -59,7 +59,7 @@ mod tests {
             message: "nonce already used".to_string(),
         };
 
-        let proto: v0::ClientError = error.clone().into();
+        let proto: v0::ClientError = (&error).into();
         let decoded = ClientError::try_from(proto).unwrap();
 
         assert_eq!(decoded, error);

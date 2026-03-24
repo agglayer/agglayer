@@ -1,4 +1,6 @@
-use agglayer_types::{SettlementAttempt, SettlementJob, SettlementJobResult};
+use agglayer_types::{
+    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
+};
 use rocksdb::WriteBatch;
 use ulid::Ulid;
 
@@ -59,18 +61,6 @@ impl StateStore {
             ))
         })
     }
-
-    fn encode_result(result: &SettlementJobResult) -> v0::TxResult {
-        result.clone().into()
-    }
-
-    fn decode_result(result: v0::TxResult) -> Result<SettlementJobResult, Error> {
-        SettlementJobResult::try_from(result).map_err(|error| {
-            Error::Unexpected(format!(
-                "Failed to decode settlement result from storage: {error}"
-            ))
-        })
-    }
 }
 
 impl SettlementReader for StateStore {
@@ -87,7 +77,13 @@ impl SettlementReader for StateStore {
     ) -> Result<Option<SettlementJobResult>, Error> {
         self.db
             .get::<SettlementJobResultsColumn>(settlement_job_id)?
-            .map(Self::decode_result)
+            .map(|result| {
+                SettlementJobResult::try_from(result).map_err(|error| {
+                    Error::Unexpected(format!(
+                        "Failed to decode settlement result from storage: {error}"
+                    ))
+                })
+            })
             .transpose()
     }
 }
@@ -122,7 +118,7 @@ impl SettlementWriter for StateStore {
         settlement_job_id: &Ulid,
         tx_result: &SettlementJobResult,
     ) -> Result<(), Error> {
-        let tx_result = Self::encode_result(tx_result);
+        let tx_result: v0::TxResult = tx_result.into();
 
         self.with_settlement_write_lock(settlement_job_id, || {
             if self
@@ -159,7 +155,7 @@ impl SettlementWriter for StateStore {
     ) -> Result<(), Error> {
         let sender_wallet = settlement_attempt.sender_wallet;
         let nonce = settlement_attempt.nonce.0;
-        let proto_settlement_attempt: v0::SettlementAttempt = settlement_attempt.clone().into();
+        let proto_settlement_attempt: v0::SettlementAttempt = settlement_attempt.into();
 
         self.with_settlement_write_lock(settlement_job_id, || -> Result<(), Error> {
             let job_exists = self
@@ -217,9 +213,9 @@ impl SettlementWriter for StateStore {
         &self,
         settlement_job_id: &Ulid,
         attempt_sequence_number: u64,
-        tx_result: &SettlementJobResult,
+        tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error> {
-        let tx_result = Self::encode_result(tx_result);
+        let tx_result: v0::TxResult = tx_result.into();
 
         self.with_settlement_write_lock(settlement_job_id, || {
             let key = SettlementAttemptKey {

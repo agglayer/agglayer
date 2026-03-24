@@ -7,8 +7,8 @@ use std::{
 use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
-    SettlementAttempt, SettlementAttemptNumber, SettlementJob, SettlementJobResult,
-    SettlementTxHash,
+    SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
+    SettlementJobResult, SettlementTxHash,
 };
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
@@ -64,11 +64,17 @@ pub enum TaskAdminCommand {
     ReloadAndRestart,
 }
 
+struct ActiveSettlementAttempt {
+    attempt: SettlementAttempt,
+    result: Option<SettlementAttemptResult>,
+}
+
 pub struct SettlementTask {
     id: Ulid,
     job: ActiveSettlementJob,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
-    attempts: BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, SettlementAttempt>>,
+    attempts:
+        BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>>,
 }
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
@@ -294,6 +300,7 @@ impl SettlementTask {
     }
 
     fn is_any_attempt_pending_for_nonce(&self, wallet: Address, nonce: Nonce) -> bool {
+        // TODO: Replace by Storage call
         self.attempts
             .get(&(wallet, nonce))
             .map(|attempts_for_nonce| {
@@ -315,7 +322,7 @@ impl SettlementTask {
             .and_then(|attempts_for_nonce| {
                 attempts_for_nonce
                     .iter()
-                    .find(|(_, attempt)| attempt.hash == tx_hash)
+                    .find(|(_, attempt)| attempt.attempt.hash == tx_hash)
                     .map(|(attempt_number, _)| *attempt_number)
             })
     }
