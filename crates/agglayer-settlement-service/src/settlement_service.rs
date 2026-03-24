@@ -1,15 +1,14 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::SettlementServiceConfig;
+use agglayer_types::{SettlementJob, SettlementJobResult};
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 use ulid::Ulid;
 
-use crate::settlement_task::{
-    SettlementJob, SettlementJobResult, SettlementTask, TaskAdminCommand,
-};
+use crate::settlement_task::{SettlementTask, TaskAdminCommand};
 
 const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 

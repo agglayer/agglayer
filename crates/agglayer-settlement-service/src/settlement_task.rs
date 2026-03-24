@@ -5,10 +5,14 @@ use std::{
 };
 
 use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
-use agglayer_types::{Digest, SettlementTxHash};
+use agglayer_types::{
+    ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
+    SettlementAttempt, SettlementAttemptNumber, SettlementJob, SettlementJobResult,
+    SettlementTxHash,
+};
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
-    primitives::{Address, BlockHash, Bytes, U128, U256},
+    primitives::{Address, U128},
 };
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -16,24 +20,9 @@ use ulid::Ulid;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SettlementAttemptNumber(pub u64);
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, derive_more::Display)]
-pub struct Nonce(pub u64);
-
-impl Nonce {
-    pub fn previous(&self) -> Option<Nonce> {
-        self.0.checked_sub(1).map(Nonce)
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SettlementJob {
-    contract_address: Address,
-    calldata: Bytes,
-    eth_value: U256,
-
+pub struct ActiveSettlementJob {
+    job: SettlementJob,
     num_confirmations: u32,
     gas_limit: U128,
     max_fee_per_gas_ceiling: U128,
@@ -46,57 +35,23 @@ pub struct SettlementJob {
     settlement_config: Arc<SettlementTransactionConfig>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SettlementJobResult {
-    ClientError(ClientError),
-    ContractCall(ContractCallResult),
-}
+impl ActiveSettlementJob {
+    fn new(job: SettlementJob) -> Self {
+        let settlement_config = SettlementTransactionConfig::default();
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ClientError {
-    pub kind: ClientErrorType,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ClientErrorType {
-    Unknown,
-    // Not needed for now, might re-add later: Transient,
-    // Not needed for now, might re-add later: Permanent,
-    NonceAlreadyUsed, // TODO: Set it only when the other tx that used the nonce is finalized
-}
-
-impl ClientError {
-    pub fn nonce_already_used(address: Address, nonce: Nonce, tx_hash: SettlementTxHash) -> Self {
         Self {
-            kind: ClientErrorType::NonceAlreadyUsed,
-            message: format!(
-                "Nonce already used: for {address}/{nonce}, the settled tx is {tx_hash}"
-            ),
+            gas_limit: U128::from(job.gas_limit),
+            max_fee_per_gas_ceiling: U128::from(job.max_fee_per_gas_ceiling),
+            max_fee_per_gas_floor: U128::from(job.max_fee_per_gas_floor),
+            max_fee_per_gas_multiplier: Multiplier::default(),
+            max_priority_fee_per_gas_ceiling: U128::from(job.max_priority_fee_per_gas_ceiling),
+            max_priority_fee_per_gas_floor: U128::from(job.max_priority_fee_per_gas_floor),
+            max_priority_fee_per_gas_multiplier: Multiplier::default(),
+            num_confirmations: settlement_config.confirmations as u32,
+            job,
+            settlement_config: Arc::new(settlement_config),
         }
     }
-
-    pub fn timeout_waiting_for_inclusion() -> Self {
-        Self {
-            kind: ClientErrorType::Unknown,
-            message: "Timeout waiting for inclusion on L1".to_string(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ContractCallResult {
-    pub outcome: ContractCallOutcome,
-    pub metadata: Bytes,
-    pub block_hash: BlockHash,
-    pub block_number: u64,
-    pub tx_hash: SettlementTxHash,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ContractCallOutcome {
-    Success,
-    Revert,
 }
 
 pub enum StoredSettlementJob {
@@ -109,18 +64,9 @@ pub enum TaskAdminCommand {
     ReloadAndRestart,
 }
 
-pub struct SettlementAttempt {
-    pub sender_wallet: Address,
-    pub nonce: Nonce,
-    pub max_fee_per_gas: u128,
-    pub max_priority_fee_per_gas: u128,
-    pub hash: SettlementTxHash,
-    pub submission_time: SystemTime,
-    pub result: Option<SettlementJobResult>,
-}
 pub struct SettlementTask {
     id: Ulid,
-    job: SettlementJob,
+    job: ActiveSettlementJob,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
     attempts: BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, SettlementAttempt>>,
 }
@@ -145,7 +91,7 @@ impl SettlementTask {
         };
         let this = Self {
             id,
-            job,
+            job: ActiveSettlementJob::new(job),
             admin_commands,
             attempts: BTreeMap::new(),
         };
@@ -163,7 +109,7 @@ impl SettlementTask {
         } else {
             let mut this = SettlementTask {
                 id,
-                job,
+                job: ActiveSettlementJob::new(job),
                 admin_commands,
                 attempts: BTreeMap::new(),
             };
