@@ -24,10 +24,6 @@ then run **all** matching commands (scopes are cumulative).
 cargo check --workspace --tests --all-features
 ```
 
-`cargo check` only type-checks; it does **not** execute tests.
-Never treat a passing `cargo check` as proof that changes work.
-At least one scope below must also run before declaring completion.
-
 ### Code behavior (features, bug fixes, refactors)
 
 ```bash
