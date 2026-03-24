@@ -36,7 +36,8 @@ When creating a git commit:
 1. Review staged changes with `git diff --cached`.
 2. Draft a commit message following the rules above.
 3. Present the message for approval before committing.
-4. Create the commit.
+4. Create the commit with `git commit -S` (GPG-sign).
+   Repos enforce verified signatures; unsigned pushes are rejected.
    Do not push unless explicitly asked.
 
 ## Additional resources
