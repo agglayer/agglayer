@@ -45,46 +45,26 @@ impl StateStore {
 
         callback()
     }
-
-    fn encode_settlement_job(settlement_job: &SettlementJob) -> Result<v0::SettlementJob, Error> {
-        v0::SettlementJob::try_from(settlement_job).map_err(|error| {
-            Error::Unexpected(format!(
-                "Failed to encode settlement job for storage: {error}"
-            ))
-        })
-    }
-
-    fn decode_settlement_job(settlement_job: v0::SettlementJob) -> Result<SettlementJob, Error> {
-        SettlementJob::try_from(settlement_job).map_err(|error| {
-            Error::Unexpected(format!(
-                "Failed to decode settlement job from storage: {error}"
-            ))
-        })
-    }
 }
 
 impl SettlementReader for StateStore {
     fn get_settlement_job(&self, settlement_job_id: &Ulid) -> Result<Option<SettlementJob>, Error> {
-        self.db
+        Ok(self
+            .db
             .get::<SettlementJobsColumn>(settlement_job_id)?
-            .map(Self::decode_settlement_job)
-            .transpose()
+            .map(SettlementJob::try_from)
+            .transpose()?)
     }
 
     fn get_settlement_job_result(
         &self,
         settlement_job_id: &Ulid,
     ) -> Result<Option<SettlementJobResult>, Error> {
-        self.db
+        Ok(self
+            .db
             .get::<SettlementJobResultsColumn>(settlement_job_id)?
-            .map(|result| {
-                SettlementJobResult::try_from(result).map_err(|error| {
-                    Error::Unexpected(format!(
-                        "Failed to decode settlement result from storage: {error}"
-                    ))
-                })
-            })
-            .transpose()
+            .map(SettlementJobResult::try_from)
+            .transpose()?)
     }
 }
 
@@ -94,7 +74,7 @@ impl SettlementWriter for StateStore {
         settlement_job_id: &Ulid,
         settlement_job: &SettlementJob,
     ) -> Result<(), Error> {
-        let settlement_job = Self::encode_settlement_job(settlement_job)?;
+        let settlement_job = v0::SettlementJob::try_from(settlement_job)?;
 
         self.with_settlement_write_lock(settlement_job_id, || {
             if self

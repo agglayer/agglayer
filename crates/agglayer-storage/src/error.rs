@@ -48,6 +48,12 @@ pub enum Error {
     SmtNodeNotFound,
 }
 
+impl From<crate::types::settlement::compat::Error> for Error {
+    fn from(value: crate::types::settlement::compat::Error) -> Self {
+        Self::Unexpected(format!("Settlement conversion error: {value}"))
+    }
+}
+
 impl From<Error> for CertificateStatusError {
     fn from(error: Error) -> Self {
         CertificateStatusError::InternalError(format!("{error:?}"))
