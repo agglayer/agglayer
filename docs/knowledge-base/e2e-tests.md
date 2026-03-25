@@ -1,14 +1,15 @@
 # Running kurtosis-cdk E2E tests locally
 
 This document describes how to run the CI-style end-to-end tests locally.
-These tests spin up a full CDK network (L1 + L2 + bridge + agglayer) using
+These tests spin up a full CDK network
+(reth-based L1 + L2 + bridge + agglayer) using
 [kurtosis-cdk](https://github.com/0xPolygon/kurtosis-cdk),
 inject a locally built `agglayer` Docker image,
-then run BATS bridge tests from the
+then run BATS tests from the
 [agglayer/e2e](https://github.com/agglayer/e2e) repository.
 
 In CI, these tests run on `merge_group` and `workflow_dispatch` events only
-(see `.github/workflows/test.yml`, job `call-cdk-e2e-workflow`).
+(see `.github/workflows/test.yml`, job `call-agglayer-node-e2e-workflow`).
 
 ## Prerequisites
 
@@ -25,16 +26,17 @@ Make sure `~/go/bin` is on your `$PATH`.
 
 ### Installing polycli
 
-The CI workflow (`agglayer/e2e/.github/workflows/cdk-e2e.yml`) pins a specific
-polycli version in its `POLYCLI_VERSION` env var. **You must use the same
-version locally.** Building from source with `make install` produces the latest
-dev build, which may have regressions (e.g. gas estimation changes that cause
+The CI workflow (`agglayer/e2e/.github/workflows/agglayer-node-e2e.yml`)
+pins a specific polycli version in its `POLYCLI_VERSION` env var.
+**You must use the same version locally.**
+Building from source with `make install` produces the latest dev build,
+which may have regressions (e.g. gas estimation changes that cause
 bridge transactions to revert with `OutOfGas`).
 
 To install the CI-pinned version:
 
 ```bash
-# Check the pinned version in agglayer/e2e's cdk-e2e.yml (e.g. v0.1.90)
+# Check the pinned version in agglayer/e2e's agglayer-node-e2e.yml (e.g. v0.1.90)
 POLYCLI_VERSION=v0.1.90
 
 curl -sL "https://github.com/0xPolygon/polygon-cli/releases/download/${POLYCLI_VERSION}/polycli_${POLYCLI_VERSION}_linux_amd64.tar.gz" \
@@ -62,8 +64,9 @@ Subsequent builds are faster thanks to Docker layer caching.
 
 ### 2. Clone the external repositories
 
-The CI workflow in `.github/workflows/test.yml` (job `call-cdk-e2e-workflow`)
-pins specific commits for `kurtosis-cdk-ref` and `agglayer-e2e-ref`.
+The CI workflow in `.github/workflows/test.yml`
+(job `call-agglayer-node-e2e-workflow`) pins specific commits
+for `kurtosis-cdk-ref` and `agglayer-e2e-ref`.
 Look there for the current values and substitute them below:
 
 ```bash
@@ -129,12 +132,13 @@ export PROJECT_ROOT="$PWD"
 export ENCLAVE_NAME="cdk"
 export PATH="$PATH:$HOME/go/bin"   # needed if polycli was installed via 'make install'
 
-# Run the bridge tests (same as CI for test-name "agglayer-bridging")
-bats tests/lxly/lxly.bats
+# Run the agglayer e2e tests (same as CI)
+bats tests/agglayer/bridges.bats tests/agglayer/rpc-tests.bats --filter-tags agglayer
 ```
 
-The tests exercise L1-to-L2 and L2-to-L1 native ETH bridging,
-plus L2-originated ERC20 token bridging round-trips.
+`bridges.bats` exercises L1-to-L2 and L2-to-L1 native ETH bridging.
+`rpc-tests.bats` validates reth-specific RPC methods
+(e.g. `eth_getTransactionBySenderAndNonce`).
 
 ### 6. Clean up
 
@@ -147,8 +151,9 @@ kurtosis clean --all
 
 - **Check tool versions first.** If tests fail locally but pass in CI,
   compare your local versions of polycli, kurtosis, bats, and foundry/cast
-  against the versions installed by `cdk-e2e.yml`. Version drift is a common
-  root cause -- for example, a newer polycli may change gas estimation behavior,
+  against the versions installed by `agglayer-node-e2e.yml`.
+  Version drift is a common root cause --
+  for example, a newer polycli may change gas estimation behavior,
   causing bridge transactions to revert with `OutOfGas`.
 - **Dump enclave logs**: `kurtosis dump ./dump` saves all container logs.
 - **Inspect a service**: `kurtosis service logs cdk agglayer` for agglayer logs.
