@@ -4,8 +4,8 @@ use crate::{
     schema::Codec as _,
     types::{
         generated::agglayer::storage::v0::{
-            tx_result, BlockHash, BlockNumber, ContractCallMetadata, ContractCallOutcome,
-            ContractCallResult, TxHash, TxResult,
+            settlement_attempt_result, BlockHash, BlockNumber, ContractCallMetadata,
+            ContractCallOutcome, ContractCallResult, SettlementAttemptResult, TxHash,
         },
         settlement::{
             attempt,
@@ -20,7 +20,7 @@ fn settlement_attempt_result_roundtrip_codec() {
         settlement_job_id: Ulid::from(7u128),
         attempt_sequence_number: 3,
     };
-    let value = mk_tx_result_success();
+    let value = mk_attempt_result_success();
 
     let encoded_key = key.encode().expect("Unable to encode key");
     let decoded_key = Key::decode(&encoded_key).expect("Unable to decode key");
@@ -35,9 +35,9 @@ fn settlement_attempt_result_roundtrip_codec() {
     assert_eq!(decoded_value, value);
 }
 
-fn mk_tx_result_success() -> TxResult {
-    TxResult {
-        tx_result: Some(tx_result::TxResult::ContractCallResult(
+fn mk_attempt_result_success() -> SettlementAttemptResult {
+    SettlementAttemptResult {
+        result: Some(settlement_attempt_result::Result::ContractCallResult(
             ContractCallResult {
                 outcome: ContractCallOutcome::Success as i32,
                 metadata: Some(ContractCallMetadata {

@@ -303,25 +303,31 @@ pub struct SettlementJob {
     #[prost(uint32, tag="10")]
     pub max_priority_fee_per_gas_increase_percents: u32,
 }
-/// Transaction result.
+/// Result of one settlement attempt.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TxResult {
-    /// Transaction result.
-    #[prost(oneof="tx_result::TxResult", tags="1, 2")]
-    pub tx_result: ::core::option::Option<tx_result::TxResult>,
+pub struct SettlementAttemptResult {
+    #[prost(oneof="settlement_attempt_result::Result", tags="1, 2")]
+    pub result: ::core::option::Option<settlement_attempt_result::Result>,
 }
-/// Nested message and enum types in `TxResult`.
-pub mod tx_result {
-    /// Transaction result.
+/// Nested message and enum types in `SettlementAttemptResult`.
+pub mod settlement_attempt_result {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum TxResult {
-        /// Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
+    pub enum Result {
+        /// Error encountered while attempting to submit the transaction,
+        /// that didn't lead to an on-chain result.
         #[prost(message, tag="1")]
         ClientError(super::ClientError),
         /// Result of a successfully-executed contract call.
         #[prost(message, tag="2")]
         ContractCallResult(super::ContractCallResult),
     }
+}
+/// Terminal result of a settlement job.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SettlementJobResult {
+    /// Result of the final on-chain contract call for the job.
+    #[prost(message, optional, tag="1")]
+    pub contract_call_result: ::core::option::Option<ContractCallResult>,
 }
 /// Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
 #[derive(Clone, PartialEq, ::prost::Message)]

@@ -3,106 +3,97 @@ use agglayer_types::{SettlementAttemptResult, SettlementJobResult};
 use super::Error;
 use crate::types::generated::agglayer::storage::v0;
 
-enum SettlementTxResultKind {
+enum SettlementAttemptResultKind {
     ClientError(agglayer_types::ClientError),
     ContractCall(agglayer_types::ContractCallResult),
 }
 
-impl TryFrom<v0::tx_result::TxResult> for SettlementTxResultKind {
+impl TryFrom<v0::settlement_attempt_result::Result> for SettlementAttemptResultKind {
     type Error = Error;
 
-    fn try_from(value: v0::tx_result::TxResult) -> Result<Self, Self::Error> {
+    fn try_from(value: v0::settlement_attempt_result::Result) -> Result<Self, Self::Error> {
         match value {
-            v0::tx_result::TxResult::ClientError(client_error) => {
+            v0::settlement_attempt_result::Result::ClientError(client_error) => {
                 Ok(Self::ClientError(client_error.try_into()?))
             }
-            v0::tx_result::TxResult::ContractCallResult(contract_call_result) => {
+            v0::settlement_attempt_result::Result::ContractCallResult(contract_call_result) => {
                 Ok(Self::ContractCall(contract_call_result.try_into()?))
             }
         }
     }
 }
 
-impl TryFrom<v0::TxResult> for SettlementTxResultKind {
+impl TryFrom<v0::SettlementAttemptResult> for SettlementAttemptResultKind {
     type Error = Error;
 
-    fn try_from(value: v0::TxResult) -> Result<Self, Self::Error> {
+    fn try_from(value: v0::SettlementAttemptResult) -> Result<Self, Self::Error> {
         value
-            .tx_result
-            .ok_or_else(|| Error::missing_field("tx_result"))?
+            .result
+            .ok_or_else(|| Error::missing_field("result"))?
             .try_into()
     }
 }
 
-impl From<SettlementTxResultKind> for SettlementJobResult {
-    fn from(value: SettlementTxResultKind) -> Self {
+impl From<SettlementAttemptResultKind> for SettlementAttemptResult {
+    fn from(value: SettlementAttemptResultKind) -> Self {
         match value {
-            SettlementTxResultKind::ClientError(client_error) => Self::ClientError(client_error),
-            SettlementTxResultKind::ContractCall(contract_call_result) => {
+            SettlementAttemptResultKind::ClientError(client_error) => {
+                Self::ClientError(client_error)
+            }
+            SettlementAttemptResultKind::ContractCall(contract_call_result) => {
                 Self::ContractCall(contract_call_result)
             }
         }
     }
 }
 
-impl From<SettlementTxResultKind> for SettlementAttemptResult {
-    fn from(value: SettlementTxResultKind) -> Self {
-        match value {
-            SettlementTxResultKind::ClientError(client_error) => Self::ClientError(client_error),
-            SettlementTxResultKind::ContractCall(contract_call_result) => {
-                Self::ContractCall(contract_call_result)
-            }
-        }
-    }
-}
-
-impl From<&SettlementJobResult> for v0::TxResult {
-    fn from(value: &SettlementJobResult) -> Self {
-        let tx_result = match value {
-            SettlementJobResult::ClientError(client_error) => {
-                v0::tx_result::TxResult::ClientError(client_error.into())
-            }
-            SettlementJobResult::ContractCall(contract_call_result) => {
-                v0::tx_result::TxResult::ContractCallResult(contract_call_result.into())
-            }
-        };
-
-        Self {
-            tx_result: Some(tx_result),
-        }
-    }
-}
-
-impl From<&SettlementAttemptResult> for v0::TxResult {
+impl From<&SettlementAttemptResult> for v0::SettlementAttemptResult {
     fn from(value: &SettlementAttemptResult) -> Self {
-        let tx_result = match value {
+        let result = match value {
             SettlementAttemptResult::ClientError(client_error) => {
-                v0::tx_result::TxResult::ClientError(client_error.into())
+                v0::settlement_attempt_result::Result::ClientError(client_error.into())
             }
             SettlementAttemptResult::ContractCall(contract_call_result) => {
-                v0::tx_result::TxResult::ContractCallResult(contract_call_result.into())
+                v0::settlement_attempt_result::Result::ContractCallResult(
+                    contract_call_result.into(),
+                )
             }
         };
 
         Self {
-            tx_result: Some(tx_result),
+            result: Some(result),
         }
     }
 }
 
-impl TryFrom<v0::TxResult> for SettlementJobResult {
+impl TryFrom<v0::SettlementAttemptResult> for SettlementAttemptResult {
     type Error = Error;
 
-    fn try_from(value: v0::TxResult) -> Result<Self, Self::Error> {
-        Ok(SettlementTxResultKind::try_from(value)?.into())
+    fn try_from(value: v0::SettlementAttemptResult) -> Result<Self, Self::Error> {
+        Ok(SettlementAttemptResultKind::try_from(value)?.into())
     }
 }
 
-impl TryFrom<v0::TxResult> for SettlementAttemptResult {
+impl From<&SettlementJobResult> for v0::SettlementJobResult {
+    fn from(value: &SettlementJobResult) -> Self {
+        match value {
+            SettlementJobResult::ContractCall(contract_call_result) => Self {
+                contract_call_result: Some(contract_call_result.into()),
+            },
+        }
+    }
+}
+
+impl TryFrom<v0::SettlementJobResult> for SettlementJobResult {
     type Error = Error;
 
-    fn try_from(value: v0::TxResult) -> Result<Self, Self::Error> {
-        Ok(SettlementTxResultKind::try_from(value)?.into())
+    fn try_from(value: v0::SettlementJobResult) -> Result<Self, Self::Error> {
+        Ok(SettlementJobResult::ContractCall(
+            value
+                .contract_call_result
+                .ok_or_else(|| Error::missing_field("contract_call_result"))?
+                .try_into()?,
+        ))
     }
 }
 
@@ -133,76 +124,57 @@ mod tests {
     }
 
     #[test]
-    fn missing_oneof_fails() {
-        let proto = v0::TxResult { tx_result: None };
-
-        assert!(SettlementJobResult::try_from(proto).is_err());
-    }
-
-    #[test]
     fn missing_oneof_fails_for_attempt_result() {
-        let proto = v0::TxResult { tx_result: None };
+        let proto = v0::SettlementAttemptResult { result: None };
 
         assert!(SettlementAttemptResult::try_from(proto).is_err());
     }
 
     #[test]
-    fn job_and_attempt_contract_call_encode_same_proto() {
-        let contract_call = sample_contract_call_result();
-
-        let from_job: v0::TxResult =
-            (&SettlementJobResult::ContractCall(contract_call.clone())).into();
-        let from_attempt: v0::TxResult =
-            (&SettlementAttemptResult::ContractCall(contract_call)).into();
-
-        assert_eq!(from_job, from_attempt);
-    }
-
-    #[test]
-    fn job_and_attempt_client_error_encode_same_proto() {
-        let client_error = sample_client_error();
-
-        let from_job: v0::TxResult =
-            (&SettlementJobResult::ClientError(client_error.clone())).into();
-        let from_attempt: v0::TxResult =
-            (&SettlementAttemptResult::ClientError(client_error)).into();
-
-        assert_eq!(from_job, from_attempt);
-    }
-
-    #[test]
-    fn round_trip_contract_call_for_both_result_types() {
+    fn attempt_result_round_trip_contract_call() {
         let attempt_result = SettlementAttemptResult::ContractCall(sample_contract_call_result());
-        let proto: v0::TxResult = (&attempt_result).into();
+        let proto: v0::SettlementAttemptResult = (&attempt_result).into();
 
-        let job_result = SettlementJobResult::try_from(proto.clone()).unwrap();
-        let attempt_result = SettlementAttemptResult::try_from(proto).unwrap();
+        let decoded = SettlementAttemptResult::try_from(proto).unwrap();
 
         assert_eq!(
-            job_result,
-            SettlementJobResult::ContractCall(sample_contract_call_result())
-        );
-        assert_eq!(
-            attempt_result,
+            decoded,
             SettlementAttemptResult::ContractCall(sample_contract_call_result())
         );
     }
 
     #[test]
-    fn round_trip_client_error_for_both_result_types() {
+    fn attempt_result_round_trip_client_error() {
         let attempt_result = SettlementAttemptResult::ClientError(sample_client_error());
-        let proto: v0::TxResult = (&attempt_result).into();
+        let proto: v0::SettlementAttemptResult = (&attempt_result).into();
 
-        let job_result = SettlementJobResult::try_from(proto.clone()).unwrap();
-        let attempt_result = SettlementAttemptResult::try_from(proto).unwrap();
+        let decoded = SettlementAttemptResult::try_from(proto).unwrap();
 
         assert_eq!(
-            job_result,
-            SettlementJobResult::ClientError(sample_client_error())
-        );
-        assert_eq!(
-            attempt_result,
+            decoded,
             SettlementAttemptResult::ClientError(sample_client_error())
+        );
+    }
+
+    #[test]
+    fn missing_contract_call_fails_for_job_result() {
+        let proto = v0::SettlementJobResult {
+            contract_call_result: None,
+        };
+
+        assert!(SettlementJobResult::try_from(proto).is_err());
+    }
+
+    #[test]
+    fn job_result_round_trip_contract_call() {
+        let job_result = SettlementJobResult::ContractCall(sample_contract_call_result());
+        let proto: v0::SettlementJobResult = (&job_result).into();
+
+        let decoded = SettlementJobResult::try_from(proto).unwrap();
+
+        assert_eq!(
+            decoded,
+            SettlementJobResult::ContractCall(sample_contract_call_result())
         );
     }
 }

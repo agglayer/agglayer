@@ -32,7 +32,6 @@ pub struct SettlementJob {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SettlementJobResult {
-    ClientError(ClientError),
     ContractCall(ContractCallResult),
 }
 

@@ -98,7 +98,7 @@ impl SettlementWriter for StateStore {
         settlement_job_id: &Ulid,
         tx_result: &SettlementJobResult,
     ) -> Result<(), Error> {
-        let tx_result: v0::TxResult = tx_result.into();
+        let tx_result: v0::SettlementJobResult = tx_result.into();
 
         self.with_settlement_write_lock(settlement_job_id, || {
             if self
@@ -195,7 +195,7 @@ impl SettlementWriter for StateStore {
         attempt_sequence_number: u64,
         tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error> {
-        let tx_result: v0::TxResult = tx_result.into();
+        let tx_result: v0::SettlementAttemptResult = tx_result.into();
 
         self.with_settlement_write_lock(settlement_job_id, || {
             let key = SettlementAttemptKey {

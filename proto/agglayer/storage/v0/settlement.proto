@@ -40,16 +40,22 @@ message SettlementJob {
   uint32 max_priority_fee_per_gas_increase_percents = 10;
 }
 
-// Transaction result.
-message TxResult {
-  // Transaction result.
-  oneof tx_result {
-    // Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
+// Result of one settlement attempt.
+message SettlementAttemptResult {
+  oneof result {
+    // Error encountered while attempting to submit the transaction,
+    // that didn't lead to an on-chain result.
     ClientError client_error = 1;
 
     // Result of a successfully-executed contract call.
     ContractCallResult contract_call_result = 2;
   }
+}
+
+// Terminal result of a settlement job.
+message SettlementJobResult {
+  // Result of the final on-chain contract call for the job.
+  ContractCallResult contract_call_result = 1;
 }
 
 // Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
