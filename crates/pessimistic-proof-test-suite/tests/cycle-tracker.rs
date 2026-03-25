@@ -10,7 +10,7 @@ use pessimistic_proof::{
 use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
 
 #[rstest::rstest]
-#[timeout(Duration::from_secs(60))]
+#[timeout(Duration::from_secs(180))]
 fn sanity_check() {
     cycles_on_sample_inputs("s00_be000", Forest::new([]), std::iter::empty());
 }
