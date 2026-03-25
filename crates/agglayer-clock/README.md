@@ -20,10 +20,11 @@ All clock metrics are managed in the `agglayer-telemetry` crate under the `clock
 
 - `agglayer_node_clock_current_block_height` - Current block height processed
 - `agglayer_node_clock_current_epoch` - **Critical:** Current epoch number
-- `agglayer_node_clock_connection_status` - WebSocket connection status
-- `agglayer_node_clock_health_status` - Overall health indicator
-
-See the `agglayer-telemetry` crate documentation for complete metrics list.
+- `agglayer_node_clock_connection_status` - WebSocket connection status (1=connected, 0=disconnected)
+- `agglayer_node_clock_health_status` - Overall health indicator (1=healthy, 0.5=starting, 0.25=degraded, 0=unhealthy)
+- `agglayer_node_clock_reconnection_attempts_total` - Total number of reconnection attempts
+- `agglayer_node_clock_blocks_subscription_lag_total` - Total number of subscription lag events
+- `agglayer_node_clock_connection_errors_total` - Total number of connection errors
 
 ## Configuration
 
