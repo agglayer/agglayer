@@ -251,13 +251,14 @@ pub const EMPTY_ELF: &[u8] = include_bytes!("tests/empty.elf");
 /// Create a dummy STARK proof for testing purposes.
 /// This creates a minimal SP1 proof that can be used in tests.
 fn create_dummy_stark_proof() -> agglayer_interop_types::aggchain_proof::Proof {
-    use sp1_sdk::Prover;
+    use sp1_sdk::{blocking::Prover, ProvingKey};
 
     let (proof, vkey) = {
-        let client = sp1_sdk::ProverClient::builder().mock().build();
-        let (proving_key, verif_key) = client.setup(EMPTY_ELF);
+        let client = sp1_sdk::blocking::ProverClient::builder().mock().build();
+        let proving_key = client.setup(sp1_sdk::Elf::Static(EMPTY_ELF)).unwrap();
+        let verif_key = proving_key.verifying_key().clone();
         let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
-            &proving_key,
+            &verif_key,
             sp1_sdk::SP1PublicValues::new(),
             sp1_sdk::SP1ProofMode::Compressed,
             sp1_sdk::SP1_CIRCUIT_VERSION,

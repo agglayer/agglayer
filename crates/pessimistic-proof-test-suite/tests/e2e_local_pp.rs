@@ -21,7 +21,10 @@ use pessimistic_proof_test_suite::{
 };
 use rand::random;
 use rstest::rstest;
-use sp1_sdk::{utils, HashableKey, ProverClient, SP1Stdin};
+use sp1_sdk::{
+    blocking::{Prover, ProverClient},
+    utils, Elf, HashableKey, SP1Stdin,
+};
 use unified_bridge::Claim;
 
 fn u(x: u64) -> U256 {
@@ -374,5 +377,8 @@ fn test_sp1_simple() {
 
     // Execute the PP within SP1
     let client = ProverClient::from_env();
-    let (_public_vals, _report) = client.execute(PESSIMISTIC_PROOF_ELF, &stdin).run().unwrap();
+    let (_public_vals, _report) = client
+        .execute(Elf::Static(PESSIMISTIC_PROOF_ELF), stdin)
+        .run()
+        .unwrap();
 }

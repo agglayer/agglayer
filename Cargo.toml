@@ -45,30 +45,30 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
-agglayer-bincode = "0.12.0"
-agglayer-interop = "0.12.0"
-agglayer-interop-types = "0.12.0"
-agglayer-elf-build = "0.12.0"
-agglayer-primitives = "0.12.0"
-agglayer-tries = "0.12.0"
-unified-bridge = "0.12.0"
+agglayer-bincode = "0.14.0"
+agglayer-interop = "0.14.0"
+agglayer-interop-types = "0.14.0"
+agglayer-elf-build = "0.14.0"
+agglayer-primitives = "0.14.0"
+agglayer-tries = "0.14.0"
+unified-bridge = "0.14.0"
 
 # Provers
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
-prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v1.8.0" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", rev = "c3e3e32a4a070f56b1dd6cf963d808020561c08f" }
+prover-config = { git = "https://github.com/agglayer/provers.git", rev = "c3e3e32a4a070f56b1dd6cf963d808020561c08f" }
+prover-logger = { git = "https://github.com/agglayer/provers.git", rev = "c3e3e32a4a070f56b1dd6cf963d808020561c08f" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", rev = "c3e3e32a4a070f56b1dd6cf963d808020561c08f" }
+prover-engine = { git = "https://github.com/agglayer/provers.git", rev = "c3e3e32a4a070f56b1dd6cf963d808020561c08f" }
+prover-utils = { git = "https://github.com/agglayer/provers.git", rev = "c3e3e32a4a070f56b1dd6cf963d808020561c08f" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
 #       It is specified at the top of scripts/make/Makefile.pp.toml.
-sp1-core-machine = "=5.2.2"
-sp1-sdk = "=5.2.2"
-sp1-primitives = "=5.2.2"
-sp1-prover = "=5.2.2"
-sp1-zkvm = { version = "=5.2.2", default-features = false }
+sp1-core-machine = "=6.0.2"
+sp1-sdk = { version = "=6.0.2", features = ["blocking"] }
+sp1-primitives = "=6.0.2"
+sp1-prover = "=6.0.2"
+sp1-zkvm = { version = "=6.0.2", default-features = false }
 
 # Core dependencies
 alloy = { version = "1.0.42", features = ["full", "json-rpc"] }

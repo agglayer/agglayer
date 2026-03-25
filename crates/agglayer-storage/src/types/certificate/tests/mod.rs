@@ -6,7 +6,7 @@ use agglayer_types::{
 };
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
-use sp1_sdk::Prover;
+use sp1_sdk::blocking::Prover;
 
 mod header;
 mod status;
@@ -49,10 +49,11 @@ fn sig(r_byte: u8, s_byte: u8) -> Signature {
 impl AggchainDataV1<'static> {
     fn proof0() -> Proof {
         let (proof, vkey) = {
-            let client = sp1_sdk::ProverClient::builder().mock().build();
-            let (proving_key, verif_key) = client.setup(EMPTY_ELF);
+            let client = sp1_sdk::blocking::ProverClient::builder().mock().build();
+            let proving_key = client.setup(sp1_sdk::Elf::Static(EMPTY_ELF)).unwrap();
+            let verif_key = proving_key.vk.clone();
             let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
-                &proving_key,
+                &verif_key,
                 sp1_sdk::SP1PublicValues::new(),
                 sp1_sdk::SP1ProofMode::Compressed,
                 sp1_sdk::SP1_CIRCUIT_VERSION,

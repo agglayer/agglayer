@@ -20,7 +20,10 @@ use pessimistic_proof::{
     PessimisticProofOutput,
 };
 use rand::random;
-use sp1_sdk::{ProverClient, SP1Proof, SP1Stdin, SP1VerifyingKey};
+use sp1_sdk::{
+    blocking::{ProveRequest, Prover, ProverClient},
+    Elf, ProvingKey, SP1Proof, SP1Stdin, SP1VerifyingKey,
+};
 
 type NetworkId = u32;
 
@@ -33,10 +36,13 @@ pub fn compute_aggchain_proof(
     let mut stdin = SP1Stdin::new();
     stdin.write(&aggchain_ecdsa_witness);
 
-    let client = ProverClient::from_env();
-    let (pk, vk) = client.setup(AGGCHAIN_PROOF_ECDSA_ELF);
+    let client = ProverClient::builder().cpu().build();
+    let pk = client
+        .setup(Elf::Static(AGGCHAIN_PROOF_ECDSA_ELF))
+        .expect("setup failed");
+    let vk = pk.verifying_key().clone();
     let proof = client
-        .prove(&pk, &stdin)
+        .prove(&pk, stdin)
         .compressed()
         .run()
         .expect("proving failed");

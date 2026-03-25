@@ -5,7 +5,10 @@ pub use pessimistic_proof_core::PessimisticProofOutput;
 use pessimistic_proof_core::{multi_batch_header::MultiBatchHeader, NetworkState};
 use serde::{Deserialize, Serialize};
 #[cfg(any(test, feature = "testutils"))]
-use sp1_sdk::{Prover, ProverClient, SP1Stdin};
+use sp1_sdk::{
+    blocking::{ProveRequest, Prover, ProverClient},
+    Elf, SP1Stdin,
+};
 use sp1_sdk::{SP1Proof, SP1ProofWithPublicValues, SP1PublicValues};
 
 #[cfg(any(test, feature = "testutils"))]
@@ -52,13 +55,13 @@ impl Proof {
     #[cfg(any(test, feature = "testutils"))]
     pub fn new_for_test(state: &NetworkState, multi_batch_header: &MultiBatchHeader) -> Self {
         let mock = ProverClient::builder().mock().build();
-        let (p, _v) = mock.setup(ELF);
+        let p = mock.setup(Elf::Static(ELF)).unwrap();
 
         let mut stdin = SP1Stdin::new();
         stdin.write(state);
         stdin.write(multi_batch_header);
 
-        let proof = mock.prove(&p, &stdin).plonk().run().unwrap();
+        let proof = mock.prove(&p, stdin).plonk().run().unwrap();
 
         Proof::SP1(proof)
     }

@@ -42,6 +42,9 @@ impl From<SP1VerificationError> for ProofVerificationError {
             SP1VerificationError::InvalidPublicValues => {
                 ProofVerificationError::InvalidPublicValues
             }
+            SP1VerificationError::UnexpectedExitCode(exit_code) => {
+                ProofVerificationError::Other(format!("Unexpected exit code: {exit_code}"))
+            }
             SP1VerificationError::Other(error) => ProofVerificationError::Other(error.to_string()),
         }
     }
