@@ -80,4 +80,4 @@ proving-timeout = "5m"
 sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
 
 [grpc]
-max-decoding-message-size = 104857600
+max-decoding-message-size = "100 MiB"

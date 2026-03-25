@@ -1,16 +1,20 @@
 use serde::{Deserialize, Serialize};
 
-pub const DEFAULT_GRPC_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64MB
+use crate::with::HumanSize;
+
+pub const DEFAULT_GRPC_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64MiB
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct GrpcConfig {
     #[serde(
+        with = "HumanSize",
         skip_serializing_if = "same_as_default_max_decoding_message_size",
         default = "default_max_decoding_message_size"
     )]
     pub max_decoding_message_size: usize,
     #[serde(
+        with = "HumanSize",
         skip_serializing_if = "same_as_default_max_encoding_message_size",
         default = "default_max_encoding_message_size"
     )]
