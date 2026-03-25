@@ -21,7 +21,8 @@ use pessimistic_proof::{
 };
 use prover_executor::{sp1_blocking, sp1_fast};
 use sp1_sdk::{
-    CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
+    blocking::{EnvProver, Prover, ProverClient},
+    Elf, ProvingKey, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
 };
 use tower::{buffer::Buffer, util::BoxCloneService, Service, ServiceExt};
 use tracing::{debug, error, info, instrument, warn};
@@ -42,7 +43,7 @@ pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The pending store to fetch and store certificates and proofs.
     pending_store: Arc<PendingStore>,
     /// The local CPU verifier to verify the generated proofs.
-    verifier: Arc<CpuProver>,
+    verifier: Arc<EnvProver>,
     /// The verifying key of the SP1 proof system.
     verifying_key: SP1VerifyingKey,
     /// The prover service to generate pessimistic-proofs.
@@ -62,18 +63,21 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         debug!("Initializing the CertifierClient verifier...");
         let (verifier, verifying_key) = sp1_blocking({
             let mock_verifier = config.mock_verifier;
-            move || {
+            move || -> eyre::Result<(EnvProver, SP1VerifyingKey)> {
                 let verifier = if mock_verifier {
-                    sp1_sdk::ProverClient::builder().mock().build()
+                    EnvProver::Mock(ProverClient::builder().mock().build())
                 } else {
-                    sp1_sdk::ProverClient::builder().cpu().build()
+                    EnvProver::Cpu(ProverClient::builder().cpu().build())
                 };
-                let (_, verifying_key) = verifier.setup(ELF);
-                (verifier, verifying_key)
+                let proving_key = verifier
+                    .setup(Elf::Static(ELF))
+                    .map_err(|e| eyre!(e.to_string()))?;
+                let verifying_key = proving_key.verifying_key().clone();
+                Ok((verifier, verifying_key))
             }
         })
         .await
-        .context("Failed setting up SP1 verifier")?;
+        .context("Failed setting up SP1 verifier")??;
         prover
             .ready()
             .await
@@ -92,7 +96,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
     }
 
     fn verify_proof(
-        verifier: Arc<CpuProver>,
+        verifier: Arc<EnvProver>,
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
     ) -> eyre::Result<()> {
@@ -100,14 +104,18 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
             |_| {
-                let verifier = sp1_sdk::ProverClient::builder().mock().build();
-                let (_, verifying_key) = verifier.setup(ELF);
+                let verifier = ProverClient::builder().mock().build();
+                let proving_key = verifier.setup(Elf::Static(ELF))?;
+                let verifying_key = proving_key.vk;
 
-                Ok(verifier.verify(proof, &verifying_key)?)
+                Ok(verifier.verify(proof, &verifying_key, None)?)
             }
         );
 
-        Ok(sp1_fast(|| verifier.verify(proof, verifying_key))
+        // `sp1_fast` wraps the call in `catch_unwind`, which requires `UnwindSafe`.
+        // `EnvProver` contains interior mutability and does not implement `RefUnwindSafe`,
+        // so we explicitly assert unwind-safety for this closure boundary.
+        Ok(sp1_fast(AssertUnwindSafe(|| verifier.verify(proof, verifying_key, None)))
             .context("Failed verifying sp1 proof")??)
     }
 }
@@ -197,16 +205,18 @@ where
         let (pv_sp1_execute, _report) = {
             // Do not verify the deferred proof if we are in mock mode
             let deferred_proof_verification = !self.config.mock_verifier;
-            let (pv, report) = sp1_blocking({
+            // Same rationale as above: `sp1_blocking` also catches panics and requires
+            // `UnwindSafe`, so we mark this closure as unwind-safe at the boundary.
+            let (pv, report) = sp1_blocking(AssertUnwindSafe({
                 let verifier = self.verifier.clone();
                 let stdin = stdin.clone();
                 move || {
                     verifier
-                        .execute(ELF, &stdin)
+                        .execute(Elf::Static(ELF), stdin)
                         .deferred_proof_verification(deferred_proof_verification)
                         .run()
                 }
-            })
+            }))
             .await
             .map_err(CertificationError::Other)?
             .map_err(|e| CertificationError::Sp1ExecuteFailed(eyre!(e)))?;
