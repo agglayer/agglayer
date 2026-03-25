@@ -106,17 +106,20 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
             |_| {
                 let verifier = ProverClient::builder().mock().build();
                 let proving_key = verifier.setup(Elf::Static(ELF))?;
-                let verifying_key = proving_key.vk;
+                let verifying_key = proving_key.verifying_key().clone();
 
                 Ok(verifier.verify(proof, &verifying_key, None)?)
             }
         );
 
         // `sp1_fast` wraps the call in `catch_unwind`, which requires `UnwindSafe`.
-        // `EnvProver` contains interior mutability and does not implement `RefUnwindSafe`,
-        // so we explicitly assert unwind-safety for this closure boundary.
-        Ok(sp1_fast(AssertUnwindSafe(|| verifier.verify(proof, verifying_key, None)))
-            .context("Failed verifying sp1 proof")??)
+        // `EnvProver` contains interior mutability and does not implement
+        // `RefUnwindSafe`, so we explicitly assert unwind-safety for this
+        // closure boundary.
+        Ok(sp1_fast(AssertUnwindSafe(|| {
+            verifier.verify(proof, verifying_key, None)
+        }))
+        .context("Failed verifying sp1 proof")??)
     }
 }
 

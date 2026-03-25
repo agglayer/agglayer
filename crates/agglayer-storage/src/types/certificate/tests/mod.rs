@@ -4,7 +4,7 @@ use agglayer_types::{
 };
 use alloy_primitives::Bytes;
 use pessimistic_proof_test_suite::sample_data;
-use sp1_sdk::blocking::Prover;
+use sp1_sdk::{blocking::Prover, ProvingKey};
 
 use super::*;
 use crate::schema::Codec;
@@ -52,7 +52,7 @@ impl AggchainDataV1<'static> {
         let (proof, vkey) = {
             let client = sp1_sdk::blocking::ProverClient::builder().mock().build();
             let proving_key = client.setup(sp1_sdk::Elf::Static(EMPTY_ELF)).unwrap();
-            let verif_key = proving_key.vk.clone();
+            let verif_key = proving_key.verifying_key().clone();
             let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
                 &verif_key,
                 sp1_sdk::SP1PublicValues::new(),
