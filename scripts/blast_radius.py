@@ -69,13 +69,19 @@ def list_changed_files() -> tuple[list[str], str]:
         run_git(["ls-files", "--others", "--exclude-standard"])
     )
     local_changes = sorted(set(staged + unstaged + untracked))
-    if local_changes:
-        return local_changes, "working-tree"
 
     for baseline in ("main", "origin/main"):
         if git_ref_exists(baseline):
-            compared = split_nonempty_lines(run_git(["diff", "--name-only", f"{baseline}...HEAD"]))
-            return sorted(set(compared)), f"{baseline}...HEAD"
+            compared = split_nonempty_lines(
+                run_git(["diff", "--name-only", f"{baseline}...HEAD"])
+            )
+            changed_files = sorted(set(compared + local_changes))
+            if local_changes:
+                return changed_files, f"{baseline}...HEAD + working-tree"
+            return changed_files, f"{baseline}...HEAD"
+
+    if local_changes:
+        return local_changes, "working-tree"
 
     return [], "none"
 
@@ -110,12 +116,17 @@ def unique(values: list[str]) -> list[str]:
 
 
 def parse_analysis(changed_files: list[str], analysis_source: str) -> dict[str, Any]:
-    crates = unique([name for path in changed_files if (name := crate_name(path)) is not None])
+    crates = unique(
+        [name for path in changed_files if (name := crate_name(path)) is not None]
+    )
+    knowledge_base_changed = any(path.startswith("docs/knowledge-base/") for path in changed_files)
     proto_changed = any(
         path.startswith("proto/") or Path(path).name in PROTO_CONFIG_FILES
         for path in changed_files
     )
-    proof_changed = any(path.startswith("crates/pessimistic-proof") for path in changed_files)
+    proof_changed = any(
+        path.startswith("crates/pessimistic-proof") for path in changed_files
+    )
 
     docs_only = bool(changed_files) and all(is_prose_or_docs(path) for path in changed_files)
     runtime_behavior_may_change = any(
@@ -173,7 +184,7 @@ def parse_analysis(changed_files: list[str], analysis_source: str) -> dict[str, 
     )
 
     recommended_commands = ["cargo check --workspace --tests --all-features"]
-    if docs_only:
+    if docs_only or knowledge_base_changed:
         recommended_commands.append("mdbook build docs/knowledge-base/")
 
     if "code" in recommended_scopes:
