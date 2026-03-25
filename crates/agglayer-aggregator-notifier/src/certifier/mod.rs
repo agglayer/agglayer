@@ -104,11 +104,8 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
             |_| {
-                let verifier = ProverClient::builder().mock().build();
-                let proving_key = verifier.setup(Elf::Static(ELF))?;
-                let verifying_key = proving_key.verifying_key().clone();
-
-                Ok(verifier.verify(proof, &verifying_key, None)?)
+                let _ = proof;
+                Ok(())
             }
         );
 

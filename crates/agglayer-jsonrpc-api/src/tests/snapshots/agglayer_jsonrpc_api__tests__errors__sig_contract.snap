@@ -1,8 +1,6 @@
 ---
 source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
-assertion_line: 161
 expression: "SignatureMismatch { detail: \"contract error: contract not deployed: deployment transaction failed\" }"
-snapshot_kind: text
 ---
 {
   "code": -10002,
