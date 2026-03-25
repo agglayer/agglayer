@@ -306,11 +306,13 @@ pub struct SettlementJob {
 /// Result of one settlement attempt.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SettlementAttemptResult {
+    /// Attempt execution result.
     #[prost(oneof="settlement_attempt_result::Result", tags="1, 2")]
     pub result: ::core::option::Option<settlement_attempt_result::Result>,
 }
 /// Nested message and enum types in `SettlementAttemptResult`.
 pub mod settlement_attempt_result {
+    /// Attempt execution result.
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Result {
         /// Error encountered while attempting to submit the transaction,

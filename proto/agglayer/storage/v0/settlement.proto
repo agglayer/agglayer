@@ -42,6 +42,7 @@ message SettlementJob {
 
 // Result of one settlement attempt.
 message SettlementAttemptResult {
+  // Attempt execution result.
   oneof result {
     // Error encountered while attempting to submit the transaction,
     // that didn't lead to an on-chain result.
