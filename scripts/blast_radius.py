@@ -62,6 +62,20 @@ def split_nonempty_lines(value: str) -> list[str]:
     return [line for line in value.splitlines() if line]
 
 
+def list_head_commit_files() -> tuple[list[str], str] | None:
+    if git_ref_exists("HEAD^"):
+        compared = split_nonempty_lines(run_git(["diff", "--name-only", "HEAD^..HEAD"]))
+        return sorted(set(compared)), "HEAD^..HEAD"
+
+    if git_ref_exists("HEAD"):
+        compared = split_nonempty_lines(
+            run_git(["show", "--pretty=format:", "--name-only", "HEAD"])
+        )
+        return sorted(set(compared)), "HEAD"
+
+    return None
+
+
 def list_changed_files() -> tuple[list[str], str]:
     staged = split_nonempty_lines(run_git(["diff", "--name-only", "--cached"]))
     unstaged = split_nonempty_lines(run_git(["diff", "--name-only"]))
@@ -79,6 +93,14 @@ def list_changed_files() -> tuple[list[str], str]:
             if local_changes:
                 return changed_files, f"{baseline}...HEAD + working-tree"
             return changed_files, f"{baseline}...HEAD"
+
+    head_changes = list_head_commit_files()
+    if head_changes is not None:
+        compared, source = head_changes
+        changed_files = sorted(set(compared + local_changes))
+        if local_changes:
+            return changed_files, f"{source} + working-tree"
+        return changed_files, source
 
     if local_changes:
         return local_changes, "working-tree"
@@ -183,7 +205,11 @@ def parse_analysis(changed_files: list[str], analysis_source: str) -> dict[str, 
         or any(crate in CORE_BROAD_CRATES for crate in affected_crates)
     )
 
-    recommended_commands = ["cargo check --workspace --tests --all-features"]
+    recommended_commands = []
+    if "proto" in recommended_scopes:
+        recommended_commands.append("cargo make generate-proto")
+
+    recommended_commands.append("cargo check --workspace --tests --all-features")
     if docs_only or knowledge_base_changed:
         recommended_commands.append("mdbook build docs/knowledge-base/")
 
@@ -198,8 +224,6 @@ def parse_analysis(changed_files: list[str], analysis_source: str) -> dict[str, 
 
     if "proof" in recommended_scopes:
         recommended_commands.append("cargo make pp-check-vkey-change")
-    if "proto" in recommended_scopes:
-        recommended_commands.append("cargo make generate-proto")
 
     return {
         "analysis_source": analysis_source,
