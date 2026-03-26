@@ -22,7 +22,7 @@ use tokio_util::sync::CancellationToken;
     crate::common::type_0_ecdsa_forest()
 )]
 #[tokio::test]
-#[timeout(Duration::from_secs(90))]
+#[timeout(Duration::from_secs(180))]
 async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Forest) {
     // Shutdown node immediately after sending the settlement transaction, without
     // updating database. Try to recover by sending same certifciate after
@@ -52,6 +52,10 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
     for f in failpoints {
         fail::cfg(*f, "off").expect("Failed to configure failpoint");
     }
+
+    // Give the panicked node time to fully release resources (DB locks, ports).
+    tokio::time::sleep(Duration::from_secs(30)).await;
+
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
     println!("Node recovered, waiting for settlement...");

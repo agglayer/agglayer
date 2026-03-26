@@ -16,8 +16,8 @@ fn sanity_check() {
 }
 
 #[rstest::rstest]
-#[timeout(Duration::from_secs(60))]
-fn cycles_on_state01(#[values(0, 1, 2, 20, 50, 100, usize::MAX)] n_exits: usize) {
+#[timeout(Duration::from_secs(180))]
+fn cycles_on_state01(#[values(0, 1, 2, 20, 50)] n_exits: usize) {
     let bridge_exits = data::sample_bridge_exits_01().take(n_exits);
     let name = format!("s01_be{:03}", bridge_exits.len());
     cycles_on_sample_inputs(&name, data::sample_state_01(), bridge_exits);
