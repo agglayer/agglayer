@@ -1,6 +1,4 @@
 use insta::assert_snapshot;
-use serde::Deserialize;
-use sp1_sdk::SP1ProofWithPublicValues;
 
 use crate::{
     columns::proof_per_certificate::{CertificateId, Proof},
@@ -37,44 +35,60 @@ fn can_parse_value() {
     assert!(matches!(expected_value, Proof::SP1(_)));
 }
 
-#[derive(Deserialize)]
-struct SP1ProofWithPublicValuesV3 {
-    pub proof: sp1_sdk::SP1Proof,
-    #[allow(unused)]
-    pub stdin: sp1_sdk::SP1Stdin,
-    pub public_values: sp1_sdk::SP1PublicValues,
-    pub sp1_version: String,
-}
-
-impl SP1ProofWithPublicValuesV3 {
-    fn load(path: impl AsRef<std::path::Path>) -> eyre::Result<Self> {
-        agglayer_types::bincode::sp1v4()
-            .deserialize_from(std::fs::File::open(path).expect("failed to open file"))
-            .map_err(Into::into)
-    }
-}
-
-impl From<SP1ProofWithPublicValuesV3> for SP1ProofWithPublicValues {
-    fn from(v3: SP1ProofWithPublicValuesV3) -> Self {
-        Self {
-            proof: v3.proof,
-            public_values: v3.public_values,
-            sp1_version: v3.sp1_version,
-            tee_proof: None, // We do not care about TEE in tests
-        }
-    }
-}
-
+/// Guard against accidental changes in the storage encoding of [`Proof`].
+///
+/// The previous fixture was serialised with SP1 v3 types which are binary-
+/// incompatible with SP1 v6 (`PlonkBn254Proof.public_inputs` grew from
+/// `[String; 2]` to `[String; 5]`).  Instead of maintaining a cross-version
+/// fixture shim, we now generate a real Plonk proof via the mock prover and
+/// snapshot the storage-layer encoding.  Any future encoding drift will
+/// cause the snapshot to fail.
 #[test]
 fn non_regression_proof_encoding() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("./src/columns/proof_per_certificate/fixtures/non_regression_proof_encoding.proof");
+    use agglayer_types::{
+        aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx, PessimisticRootInput,
+    };
+    use pessimistic_proof::core::commitment::{
+        PessimisticRootCommitmentVersion, SignatureCommitmentVersion,
+    };
+    use pessimistic_proof_test_suite::forest::Forest;
 
-    let proof: SP1ProofWithPublicValues = SP1ProofWithPublicValuesV3::load(path).unwrap().into();
-    assert_snapshot!("proof hex format", hex::encode(proof.bytes()));
+    // Build a real Plonk proof from an empty-state execution so the
+    // snapshot exercises all codec fields (public_inputs, encoded_proof,
+    // public_values, sp1_version, …).
+    let mut state = Forest::new([]);
+    let old_state = state.local_state();
+    let certificate =
+        state
+            .clone()
+            .apply_bridge_exits([], std::iter::empty(), SignatureCommitmentVersion::V2);
+    let multi_batch_header = state
+        .state_b
+        .apply_certificate(
+            &certificate,
+            L1WitnessCtx {
+                l1_info_root: certificate.l1_info_root().unwrap().unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
+                    signer: state.get_signer(),
+                },
+            },
+        )
+        .unwrap();
+    let proof = Proof::new_for_test(&old_state.into(), &multi_batch_header);
 
+    // Verify the agglayer storage codec round-trips correctly.
+    let encoded = proof.encode().expect("Unable to encode proof");
+    let decoded = Proof::decode(&encoded[..]).expect("Unable to decode proof");
+
+    // Snapshot the storage-layer encoding (agglayer bincode codec).
+    assert_snapshot!("proof hex format", hex::encode(&encoded));
+
+    let Proof::SP1(sp1_proof) = decoded;
     assert_snapshot!(
         "proof public input hex format",
-        hex::encode(proof.public_values.as_slice())
+        hex::encode(sp1_proof.public_values.as_slice())
     );
 }
