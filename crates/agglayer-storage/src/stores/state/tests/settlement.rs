@@ -20,13 +20,10 @@ use crate::{
     error::Error,
     stores::{state::StateStore, SettlementReader as _, SettlementWriter as _},
     tests::TempDBDir,
-    types::{
-        generated::agglayer::storage::v0,
-        settlement::{
-            attempt::Key as SettlementAttemptKey,
-            attempt_per_wallet::{
-                Key as SettlementAttemptPerWalletKey, Value as SettlementAttemptPerWalletValue,
-            },
+    types::settlement::{
+        attempt::Key as SettlementAttemptKey,
+        attempt_per_wallet::{
+            Key as SettlementAttemptPerWalletKey, Value as SettlementAttemptPerWalletValue,
         },
     },
 };
@@ -81,10 +78,6 @@ fn mk_job_result_success(seed: u8) -> SettlementJobResult {
     })
 }
 
-fn mk_settlement_job_proto(job: &SettlementJob) -> v0::SettlementJob {
-    job.into()
-}
-
 fn setup_store() -> (TempDBDir, Arc<crate::storage::DB>, StateStore) {
     let tmp = TempDBDir::new();
     let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
@@ -114,7 +107,7 @@ fn insert_settlement_job_duplicate_fails() {
     assert_eq!(
         db.get::<SettlementJobsColumn>(&job_id)
             .expect("Unable to read stored value"),
-        Some(mk_settlement_job_proto(&first))
+        Some((&first).into())
     );
 }
 
