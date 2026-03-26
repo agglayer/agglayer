@@ -87,26 +87,32 @@ jobs:
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
-  call-cdk-e2e-workflow:
-    name: E2E Tests | Kurtosis-CDK
+  call-agglayer-node-e2e-workflow:
+    name: E2E Tests | Agglayer Node
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     needs:
       - docker-build-local
-    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@2cf50f9f92eff4fdf6b2555e62fac67d76f8f290 # test/agglayer-e2e-bridge-test
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@a2a90439583b62a7dcabcda915c72193e57ec6e7 # 2026-03-20
     secrets: inherit
     with:
-      test-name: agglayer-bridging
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
-      kurtosis-cdk-ref: 17959f2f2735d8ed58d43412b413bda8056a1ce6
+      kurtosis-cdk-ref: 6f5c0f0cd2cce5cf11a025aade73b13664df8007 # 2026-03-18
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: 2cf50f9f92eff4fdf6b2555e62fac67d76f8f290 # test/agglayer-e2e-bridge-test
+      agglayer-e2e-ref: a2a90439583b62a7dcabcda915c72193e57ec6e7 # 2026-03-20
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
             "deploy_optimism_rollup": true
           },
           "args": {
+            "sequencer_type": "op-reth",
+            "l1_el_type": "reth",
+            "reth_image": "ghcr.io/paradigmxyz/reth:v1.11.3",
             "aggkit_image": "ghcr.io/agglayer/aggkit:0.5.4",
             "consensus_contract_type": "pessimistic",
             "verbosity": "debug"
@@ -120,12 +126,12 @@ jobs:
   check-e2e-result:
     name: E2E Tests | Passed
     needs:
-      - call-cdk-e2e-workflow
+      - call-agglayer-node-e2e-workflow
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: exit 1
-        if: ${{ contains(fromJSON('["failure", "cancelled"]'), needs.call-cdk-e2e-workflow.result) }}
+        if: ${{ contains(fromJSON('["failure", "cancelled"]'), needs.call-agglayer-node-e2e-workflow.result) }}
 
   check_elf:
     runs-on: ubuntu-latest-16-cores
