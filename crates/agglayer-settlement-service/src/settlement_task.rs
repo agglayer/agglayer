@@ -1,10 +1,9 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, OnceLock},
+    sync::OnceLock,
     time::{Duration, SystemTime},
 };
 
-use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
     SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
@@ -12,51 +11,13 @@ use agglayer_types::{
 };
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
-    primitives::{Address, U128},
+    primitives::Address,
 };
 use tokio::sync::mpsc;
 use tracing::warn;
 use ulid::Ulid;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActiveSettlementJob {
-    job: SettlementJob,
-    num_confirmations: u32,
-    gas_limit: U128,
-    max_fee_per_gas_ceiling: U128,
-    max_fee_per_gas_floor: U128,
-    max_fee_per_gas_multiplier: Multiplier,
-    max_priority_fee_per_gas_ceiling: U128,
-    max_priority_fee_per_gas_floor: U128,
-    max_priority_fee_per_gas_multiplier: Multiplier,
-
-    settlement_config: Arc<SettlementTransactionConfig>,
-}
-
-impl ActiveSettlementJob {
-    fn new(job: SettlementJob) -> Self {
-        let settlement_config = SettlementTransactionConfig::default();
-
-        Self {
-            gas_limit: U128::from(job.gas_limit),
-            max_fee_per_gas_ceiling: U128::from(job.max_fee_per_gas_ceiling),
-            max_fee_per_gas_floor: U128::from(job.max_fee_per_gas_floor),
-            max_fee_per_gas_multiplier: Multiplier::from_u64_per_1000(
-                u64::from(job.max_fee_per_gas_increase_percents) * 10,
-            ),
-            max_priority_fee_per_gas_ceiling: U128::from(job.max_priority_fee_per_gas_ceiling),
-            max_priority_fee_per_gas_floor: U128::from(job.max_priority_fee_per_gas_floor),
-            max_priority_fee_per_gas_multiplier: Multiplier::from_u64_per_1000(
-                u64::from(job.max_priority_fee_per_gas_increase_percents) * 10,
-            ),
-            num_confirmations: settlement_config.confirmations as u32,
-            job,
-            settlement_config: Arc::new(settlement_config),
-        }
-    }
-}
 
 pub enum StoredSettlementJob {
     Pending(SettlementTask),
@@ -75,7 +36,7 @@ struct ActiveSettlementAttempt {
 
 pub struct SettlementTask {
     id: Ulid,
-    job: ActiveSettlementJob,
+    job: SettlementJob,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
     attempts:
         BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>>,
@@ -101,7 +62,7 @@ impl SettlementTask {
         };
         let this = Self {
             id,
-            job: ActiveSettlementJob::new(job),
+            job,
             admin_commands,
             attempts: BTreeMap::new(),
         };
@@ -119,7 +80,7 @@ impl SettlementTask {
         } else {
             let mut this = SettlementTask {
                 id,
-                job: ActiveSettlementJob::new(job),
+                job,
                 admin_commands,
                 attempts: BTreeMap::new(),
             };
@@ -304,7 +265,6 @@ impl SettlementTask {
     }
 
     fn is_any_attempt_pending_for_nonce(&self, wallet: Address, nonce: Nonce) -> bool {
-        // TODO: Replace by Storage call
         self.attempts
             .get(&(wallet, nonce))
             .map(|attempts_for_nonce| {

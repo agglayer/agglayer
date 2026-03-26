@@ -35,11 +35,9 @@ impl TryFrom<v0::SettlementJob> for SettlementJob {
     }
 }
 
-impl TryFrom<&SettlementJob> for v0::SettlementJob {
-    type Error = Error;
-
-    fn try_from(value: &SettlementJob) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<&SettlementJob> for v0::SettlementJob {
+    fn from(value: &SettlementJob) -> Self {
+        Self {
             contract_address: Some(value.contract_address.into()),
             calldata: Some(v0::Calldata {
                 data: value.calldata.to_vec().into(),
@@ -53,15 +51,13 @@ impl TryFrom<&SettlementJob> for v0::SettlementJob {
             max_priority_fee_per_gas_floor: Some(value.max_priority_fee_per_gas_floor.into()),
             max_priority_fee_per_gas_increase_percents: value
                 .max_priority_fee_per_gas_increase_percents,
-        })
+        }
     }
 }
 
-impl TryFrom<SettlementJob> for v0::SettlementJob {
-    type Error = Error;
-
-    fn try_from(value: SettlementJob) -> Result<Self, Self::Error> {
-        (&value).try_into()
+impl From<SettlementJob> for v0::SettlementJob {
+    fn from(value: SettlementJob) -> Self {
+        (&value).into()
     }
 }
 
@@ -91,7 +87,7 @@ mod tests {
     fn settlement_job_round_trip() {
         let job = sample_job();
 
-        let proto = v0::SettlementJob::try_from(&job).unwrap();
+        let proto: v0::SettlementJob = (&job).into();
         let decoded = SettlementJob::try_from(proto).unwrap();
 
         assert_eq!(decoded, job);
@@ -99,7 +95,7 @@ mod tests {
 
     #[test]
     fn settlement_job_from_proto_rejects_missing_required_field() {
-        let mut proto = v0::SettlementJob::try_from(sample_job()).unwrap();
+        let mut proto: v0::SettlementJob = sample_job().into();
         proto.contract_address = None;
 
         let result = SettlementJob::try_from(proto);

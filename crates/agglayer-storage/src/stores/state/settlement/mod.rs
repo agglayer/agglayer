@@ -74,7 +74,7 @@ impl SettlementWriter for StateStore {
         settlement_job_id: &Ulid,
         settlement_job: &SettlementJob,
     ) -> Result<(), Error> {
-        let settlement_job = v0::SettlementJob::try_from(settlement_job)?;
+        let settlement_job: v0::SettlementJob = settlement_job.into();
 
         self.with_settlement_write_lock(settlement_job_id, || {
             if self

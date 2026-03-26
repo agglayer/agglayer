@@ -3,12 +3,7 @@ use agglayer_types::{SettlementAttemptResult, SettlementJobResult};
 use super::Error;
 use crate::types::generated::agglayer::storage::v0;
 
-enum SettlementAttemptResultKind {
-    ClientError(agglayer_types::ClientError),
-    ContractCall(agglayer_types::ContractCallResult),
-}
-
-impl TryFrom<v0::settlement_attempt_result::Result> for SettlementAttemptResultKind {
+impl TryFrom<v0::settlement_attempt_result::Result> for SettlementAttemptResult {
     type Error = Error;
 
     fn try_from(value: v0::settlement_attempt_result::Result) -> Result<Self, Self::Error> {
@@ -18,30 +13,6 @@ impl TryFrom<v0::settlement_attempt_result::Result> for SettlementAttemptResultK
             }
             v0::settlement_attempt_result::Result::ContractCallResult(contract_call_result) => {
                 Ok(Self::ContractCall(contract_call_result.try_into()?))
-            }
-        }
-    }
-}
-
-impl TryFrom<v0::SettlementAttemptResult> for SettlementAttemptResultKind {
-    type Error = Error;
-
-    fn try_from(value: v0::SettlementAttemptResult) -> Result<Self, Self::Error> {
-        value
-            .result
-            .ok_or_else(|| Error::missing_field("result"))?
-            .try_into()
-    }
-}
-
-impl From<SettlementAttemptResultKind> for SettlementAttemptResult {
-    fn from(value: SettlementAttemptResultKind) -> Self {
-        match value {
-            SettlementAttemptResultKind::ClientError(client_error) => {
-                Self::ClientError(client_error)
-            }
-            SettlementAttemptResultKind::ContractCall(contract_call_result) => {
-                Self::ContractCall(contract_call_result)
             }
         }
     }
@@ -70,7 +41,10 @@ impl TryFrom<v0::SettlementAttemptResult> for SettlementAttemptResult {
     type Error = Error;
 
     fn try_from(value: v0::SettlementAttemptResult) -> Result<Self, Self::Error> {
-        Ok(SettlementAttemptResultKind::try_from(value)?.into())
+        value
+            .result
+            .ok_or_else(|| Error::missing_field("result"))?
+            .try_into()
     }
 }
 

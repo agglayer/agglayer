@@ -82,7 +82,7 @@ fn mk_job_result_success(seed: u8) -> SettlementJobResult {
 }
 
 fn mk_settlement_job_proto(job: &SettlementJob) -> v0::SettlementJob {
-    v0::SettlementJob::try_from(job).expect("settlement job conversion should succeed")
+    job.into()
 }
 
 fn setup_store() -> (TempDBDir, Arc<crate::storage::DB>, StateStore) {

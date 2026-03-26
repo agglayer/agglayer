@@ -46,12 +46,9 @@ pub enum Error {
 
     #[error("Smt node not found")]
     SmtNodeNotFound,
-}
 
-impl From<crate::types::settlement::compat::Error> for Error {
-    fn from(value: crate::types::settlement::compat::Error) -> Self {
-        Self::Unexpected(format!("Settlement conversion error: {value}"))
-    }
+    #[error(transparent)]
+    SettlementCompat(#[from] crate::types::settlement::compat::Error),
 }
 
 impl From<Error> for CertificateStatusError {
