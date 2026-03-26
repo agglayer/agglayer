@@ -10,19 +10,29 @@ description: >
 
 ## How CI runs E2E
 
-The CI workflow `.github/workflows/test.yml` (job `call-cdk-e2e-workflow`)
-calls an external reusable workflow at
-`agglayer/e2e/.github/workflows/cdk-e2e.yml`. It passes:
+The CI workflow `.github/workflows/test.yml`
+(job `call-agglayer-node-e2e-workflow`) calls an external reusable workflow at
+`agglayer/e2e/.github/workflows/agglayer-node-e2e.yml`.
+It passes:
 
 - A freshly built Docker image (via `docker-image-override: agglayer_image`)
 - A pinned `kurtosis-cdk-ref` commit
 - A pinned `agglayer-e2e-ref` commit
 - A `kurtosis-cdk-args` JSON block configuring the network
+  (including `l1_el_type`, `sequencer_type`, and `reth_image`
+  for the reth-based L1)
 
-The test-name `agglayer-bridging` maps to `bats tests/lxly/lxly.bats` in the
-`agglayer/e2e` repo.
-Other test names map to different bats files;
-see the conditional logic in `cdk-e2e.yml` for the full mapping.
+The workflow runs
+`bats tests/agglayer/bridges.bats tests/agglayer/rpc-tests.bats --filter-tags agglayer`
+in the `agglayer/e2e` repo.
+The `bridges.bats` file covers L1/L2 bridging;
+`rpc-tests.bats` validates reth-specific RPC methods
+(e.g. `eth_getTransactionBySenderAndNonce`).
+
+E2E jobs only trigger on `merge_group` and `workflow_dispatch` events,
+not on `pull_request`.
+See [Validating E2E on a PR branch](#validating-e2e-on-a-pr-branch)
+for how to exercise them before merging.
 
 ## Rules
 
@@ -40,7 +50,7 @@ see the conditional logic in `cdk-e2e.yml` for the full mapping.
   because skipping means the tests run against a stale image
   that does not reflect the current code.
 - **polycli version must match CI.**
-  The reusable workflow `agglayer/e2e/.github/workflows/cdk-e2e.yml`
+  The reusable workflow `agglayer/e2e/.github/workflows/agglayer-node-e2e.yml`
   pins `POLYCLI_VERSION` (e.g. `v0.1.90`) as an env var near the top.
   Install the matching release binary rather than building from source,
   because `make install` produces the latest dev build which may have
@@ -63,8 +73,30 @@ see the conditional logic in `cdk-e2e.yml` for the full mapping.
 
 - **When e2e tests fail locally but pass in CI, check tool versions first.**
   Compare local versions of polycli, kurtosis, bats, and foundry/cast
-  against the versions CI installs (defined in `cdk-e2e.yml`).
+  against the versions CI installs (defined in `agglayer-node-e2e.yml`).
   Version drift is a common root cause of otherwise-mysterious failures
   (e.g. gas estimation regressions, changed CLI flags).
 
 For step-by-step local setup, see `docs/knowledge-base/e2e-tests.md`.
+
+## Validating E2E on a PR branch
+
+E2E jobs only run on `merge_group` and `workflow_dispatch` events,
+so they are skipped during normal PR CI.
+To exercise them before the PR enters the merge queue,
+trigger a `workflow_dispatch` run against the PR branch:
+
+```bash
+gh workflow run test.yml --repo agglayer/agglayer --ref <branch-name>
+```
+
+Monitor the run with:
+
+```bash
+gh run list --repo agglayer/agglayer --branch <branch-name> --workflow test.yml --limit 1
+gh run view <run-id> --repo agglayer/agglayer --json jobs \
+  --jq '.jobs[] | "\(.name)\t\(.conclusion)"'
+```
+
+This run includes the full E2E suite (docker build + kurtosis + bats tests)
+and typically takes ~30 minutes.
