@@ -13,7 +13,10 @@ mod header;
 mod status;
 mod structure;
 
-const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
+/// Any valid riscv64 ELF works here; we only need it to derive a
+/// [`ProvingKey`] for mock proof creation.  The previous `empty.elf` was
+/// riscv32 and incompatible with SP1 v6.
+const TEST_ELF: &[u8] = pessimistic_proof::ELF;
 
 #[rstest::rstest]
 #[case(0.into(), [0, 0, 0, 0])]
@@ -51,7 +54,7 @@ impl AggchainDataV1<'static> {
     fn proof0() -> Proof {
         let (proof, vkey) = {
             let client = sp1_sdk::blocking::ProverClient::builder().mock().build();
-            let proving_key = client.setup(sp1_sdk::Elf::Static(EMPTY_ELF)).unwrap();
+            let proving_key = client.setup(sp1_sdk::Elf::Static(TEST_ELF)).unwrap();
             let verif_key = proving_key.verifying_key().clone();
             let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
                 &verif_key,
