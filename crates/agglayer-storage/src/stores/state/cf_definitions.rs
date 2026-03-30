@@ -35,3 +35,7 @@ pub const STATE_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<SettlementAttemptResultsColumn>(),
     ColumnDescriptor::new::<SettlementAttemptPerWalletColumn>(),
 ];
+
+/// Migration step 1: add certificate -> settlement job mapping.
+pub const STATE_DB_MIGRATION_STEP_1_ADD_CFS: &[ColumnDescriptor] =
+    &[ColumnDescriptor::new::<SettlementJobIdPerCertificateColumn>()];

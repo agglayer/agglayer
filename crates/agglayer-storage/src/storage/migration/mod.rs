@@ -195,6 +195,38 @@ impl Builder {
         })?)
     }
 
+    /// Ensures that the given column families exist.
+    ///
+    /// This migration step creates missing column families while preserving
+    /// existing ones.
+    pub fn ensure_cfs(self, cfs: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
+        let missing_cfs: Vec<_> = cfs
+            .iter()
+            .filter(|descriptor| !self.cf_exists(descriptor.name()))
+            .cloned()
+            .collect();
+
+        if missing_cfs.is_empty() {
+            debug!("All requested column families already exist, skipping migration step");
+            return Ok(Self {
+                step: self.step + 1,
+                ..self
+            });
+        }
+
+        Ok(self.perform_step(move |db| {
+            for descriptor in &missing_cfs {
+                let cf = descriptor.name();
+
+                let opts = DB::options(descriptor.options());
+                debug!("Creating missing column family {cf:?}");
+                db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
+            }
+
+            Ok(())
+        })?)
+    }
+
     /// Completes the migration process and returns the database.
     ///
     /// This method validates that all declared migration steps have been
