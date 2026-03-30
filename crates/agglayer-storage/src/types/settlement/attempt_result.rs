@@ -5,7 +5,7 @@ use prost::{bytes::BytesMut, Message as _};
 use crate::schema::Codec;
 
 pub type Key = super::attempt::Key;
-pub type Value = crate::types::generated::agglayer::storage::v0::TxResult;
+pub type Value = crate::types::generated::agglayer::storage::v0::SettlementAttemptResult;
 
 impl Codec for Value {
     fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::schema::CodecError> {
