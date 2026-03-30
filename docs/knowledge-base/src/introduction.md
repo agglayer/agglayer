@@ -17,6 +17,10 @@ with clarity and operational correctness as the primary goals.
   and storage layout.
 - Contributor workflows for AI-agent configuration and docs publishing.
 
+For generated Rust API documentation,
+see the [rustdoc reference](/rustdoc/agglayer/)
+(also accessible via the `</>` icon in the toolbar).
+
 ## How to use it
 
 1. Start with [Glossary](glossary.md)

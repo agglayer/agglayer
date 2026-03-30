@@ -19,7 +19,7 @@ Before selecting test commands,
 run the blast-radius detector script:
 
 ```bash
-python3 scripts/blast_radius.py
+cargo make blast-radius
 ```
 
 The script returns JSON with these fields:

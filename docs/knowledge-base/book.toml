@@ -7,3 +7,4 @@ title = "Agglayer Knowledge Base"
 [output.html]
 git-repository-url = "https://github.com/agglayer/agglayer"
 edit-url-template = "https://github.com/agglayer/agglayer/edit/main/docs/knowledge-base/{path}"
+additional-js = ["rustdoc-link.js"]
