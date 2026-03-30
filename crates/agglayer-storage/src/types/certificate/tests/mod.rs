@@ -390,8 +390,6 @@ fn regressions(#[case] cert_filename: &str) {
 }
 
 /// Regenerate `regression_01.hex` with current (v6) SP1 types.
-///
-/// Run with: `cargo test -p agglayer-storage generate_regression_01 -- --ignored --nocapture`
 #[test]
 #[ignore]
 fn generate_regression_01() {
