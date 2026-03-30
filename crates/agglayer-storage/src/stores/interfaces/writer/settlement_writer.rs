@@ -1,9 +1,9 @@
+use agglayer_types::{
+    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
+};
 use ulid::Ulid;
 
-use crate::{
-    error::Error,
-    types::generated::agglayer::storage::v0::{SettlementAttempt, SettlementJob, TxResult},
-};
+use crate::error::Error;
 
 /// Write access to settlement-related records stored in RocksDB.
 ///
@@ -28,7 +28,7 @@ pub trait SettlementWriter: Send + Sync {
     fn insert_settlement_job_result(
         &self,
         settlement_job_id: &Ulid,
-        tx_result: &TxResult,
+        tx_result: &SettlementJobResult,
     ) -> Result<(), Error>;
 
     /// Inserts a settlement attempt under `(settlement_job_id,
@@ -52,6 +52,6 @@ pub trait SettlementWriter: Send + Sync {
         &self,
         settlement_job_id: &Ulid,
         attempt_sequence_number: u64,
-        tx_result: &TxResult,
+        tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error>;
 }
