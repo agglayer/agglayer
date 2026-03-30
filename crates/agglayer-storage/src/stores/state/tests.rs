@@ -15,13 +15,18 @@ use pessimistic_proof::{
 use rstest::{fixture, rstest};
 use tracing::info;
 
+use super::cf_definitions;
 use crate::{
     backup::BackupClient,
-    columns::latest_settled_certificate_per_network::{
-        LatestSettledCertificatePerNetworkColumn, SettledCertificate,
+    columns::{
+        latest_settled_certificate_per_network::{
+            LatestSettledCertificatePerNetworkColumn, SettledCertificate,
+        },
+        SETTLEMENT_JOB_ID_PER_CERTIFICATE_CF,
     },
     error::Error,
-    stores::{state::StateStore, StateReader as _, StateWriter as _},
+    storage::DB,
+    stores::{state::StateStore, SettlementReader as _, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };
 
@@ -47,6 +52,55 @@ fn can_retrieve_list_of_network() {
     )
     .expect("Unable to put certificate into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);
+}
+
+#[test]
+fn init_db_adds_settlement_job_id_per_certificate_cf_for_legacy_schema() {
+    let tmp = TempDBDir::new();
+
+    {
+        let legacy_state_db: Vec<_> = cf_definitions::STATE_DB
+            .iter()
+            .filter(|cf| cf.name() != SETTLEMENT_JOB_ID_PER_CERTIFICATE_CF)
+            .cloned()
+            .collect();
+
+        let _db = DB::open_cf(tmp.path.as_path(), &legacy_state_db)
+            .expect("legacy schema db initialization should succeed");
+    }
+
+    let db = Arc::new(
+        StateStore::init_db(tmp.path.as_path())
+            .expect("state db initialization should add missing settlement mapping cf"),
+    );
+    let store = StateStore::new(db, BackupClient::noop());
+
+    assert_eq!(
+        store
+            .get_settlement_job_id_for_certificate(&CertificateId::for_test(9))
+            .expect("mapping lookup should succeed on upgraded db"),
+        None,
+    );
+}
+
+#[test]
+fn fresh_init_db_remains_readable_by_legacy_state_schema() {
+    let tmp = TempDBDir::new();
+
+    let legacy_state_db: Vec<_> = cf_definitions::STATE_DB
+        .iter()
+        .filter(|cf| cf.name() != SETTLEMENT_JOB_ID_PER_CERTIFICATE_CF)
+        .cloned()
+        .collect();
+
+    let db = StateStore::init_db(tmp.path.as_path())
+        .expect("fresh state db initialization should succeed");
+    drop(db);
+
+    DB::builder(tmp.path.as_path(), &legacy_state_db)
+        .expect("legacy state db builder should open fresh db")
+        .finalize(&legacy_state_db)
+        .expect("legacy state db schema should still open after fresh init");
 }
 
 fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool {

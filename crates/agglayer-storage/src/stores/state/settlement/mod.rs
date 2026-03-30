@@ -1,5 +1,5 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
+    CertificateId, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
 };
 use rocksdb::WriteBatch;
 use ulid::Ulid;
@@ -10,6 +10,7 @@ use crate::{
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
+        settlement_job_id_per_certificate::SettlementJobIdPerCertificateColumn,
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
     },
     error::Error,
@@ -48,6 +49,34 @@ impl StateStore {
 }
 
 impl SettlementReader for StateStore {
+    fn get_settlement_job_id_for_certificate(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<Ulid>, Error> {
+        Ok(self
+            .db
+            .get::<SettlementJobIdPerCertificateColumn>(certificate_id)?)
+    }
+
+    fn get_settlement_job_for_certificate(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<SettlementJob>, Error> {
+        let Some(settlement_job_id) = self.get_settlement_job_id_for_certificate(certificate_id)?
+        else {
+            return Ok(None);
+        };
+
+        let settlement_job = self.get_settlement_job(&settlement_job_id)?;
+        match settlement_job {
+            Some(settlement_job) => Ok(Some(settlement_job)),
+            None => Err(Error::Unexpected(format!(
+                "Settlement job mapping exists for certificate {certificate_id} but settlement \
+                 job {settlement_job_id} is missing",
+            ))),
+        }
+    }
+
     fn get_settlement_job(&self, settlement_job_id: &Ulid) -> Result<Option<SettlementJob>, Error> {
         Ok(self
             .db
@@ -69,6 +98,36 @@ impl SettlementReader for StateStore {
 }
 
 impl SettlementWriter for StateStore {
+    fn insert_settlement_job_id_for_certificate(
+        &self,
+        certificate_id: &CertificateId,
+        settlement_job_id: &Ulid,
+    ) -> Result<(), Error> {
+        if self
+            .db
+            .get::<SettlementJobIdPerCertificateColumn>(certificate_id)?
+            .is_some()
+        {
+            return Err(Error::UnprocessedAction(format!(
+                "Settlement job id already exists for certificate {certificate_id}"
+            )));
+        }
+
+        if self
+            .db
+            .get::<SettlementJobsColumn>(settlement_job_id)?
+            .is_none()
+        {
+            return Err(Error::UnprocessedAction(format!(
+                "Settlement job does not exist for id {settlement_job_id}"
+            )));
+        }
+
+        Ok(self
+            .db
+            .put::<SettlementJobIdPerCertificateColumn>(certificate_id, settlement_job_id)?)
+    }
+
     fn insert_settlement_job(
         &self,
         settlement_job_id: &Ulid,

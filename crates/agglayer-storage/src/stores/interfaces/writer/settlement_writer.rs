@@ -1,5 +1,5 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
+    CertificateId, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
 };
 use ulid::Ulid;
 
@@ -10,6 +10,17 @@ use crate::error::Error;
 /// All write operations in this trait are insert-only: implementations must
 /// reject attempts to overwrite an existing key.
 pub trait SettlementWriter: Send + Sync {
+    /// Inserts the settlement job id for `certificate_id`.
+    ///
+    /// This is an insert-only operation and must fail if
+    /// `certificate_id` already has an associated settlement job id. The
+    /// parent settlement job must already exist.
+    fn insert_settlement_job_id_for_certificate(
+        &self,
+        certificate_id: &CertificateId,
+        settlement_job_id: &Ulid,
+    ) -> Result<(), Error>;
+
     /// Inserts a settlement job under `settlement_job_id`.
     ///
     /// This is an insert-only operation and must fail if

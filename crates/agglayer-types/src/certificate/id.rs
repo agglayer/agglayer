@@ -25,6 +25,12 @@ impl CertificateId {
         CertificateId(id)
     }
 
+    /// Creates a deterministic certificate id for tests.
+    #[cfg(feature = "testutils")]
+    pub fn for_test(seed: u8) -> CertificateId {
+        CertificateId::new(Digest::from([seed; 32]))
+    }
+
     pub const fn as_digest(&self) -> &Digest {
         &self.0
     }

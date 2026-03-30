@@ -55,7 +55,9 @@ pub struct StateStore {
 
 impl StateStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::STATE_DB)
+        DB::builder(path, cf_definitions::STATE_DB)?
+            .ensure_cfs(cf_definitions::STATE_DB_MIGRATION_STEP_1_ADD_CFS)?
+            .finalize(cf_definitions::STATE_DB)
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
