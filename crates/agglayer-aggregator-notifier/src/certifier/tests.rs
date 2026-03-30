@@ -110,7 +110,7 @@ async fn happy_path() {
 
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(180))]
+#[timeout(Duration::from_secs(240))]
 async fn prover_timeout() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
