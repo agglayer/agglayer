@@ -15,6 +15,7 @@ use pessimistic_proof::{
 use rstest::{fixture, rstest};
 use tracing::info;
 
+use super::cf_definitions;
 use crate::{
     backup::BackupClient,
     columns::{
@@ -28,8 +29,6 @@ use crate::{
     stores::{state::StateStore, SettlementReader as _, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };
-
-use super::cf_definitions;
 
 mod disabled_networks;
 mod metadata;
