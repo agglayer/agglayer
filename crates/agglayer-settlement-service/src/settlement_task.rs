@@ -9,6 +9,7 @@ use agglayer_types::{Digest, SettlementTxHash};
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
     primitives::{Address, BlockHash, Bytes, U128, U256},
+    providers::Provider,
 };
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -99,8 +100,8 @@ pub enum ContractCallOutcome {
     Revert,
 }
 
-pub enum StoredSettlementJob {
-    Pending(SettlementTask),
+pub enum StoredSettlementJob<P> {
+    Pending(SettlementTask<P>),
     Completed(SettlementJob, SettlementJobResult),
 }
 
@@ -118,18 +119,20 @@ pub struct SettlementAttempt {
     pub submission_time: SystemTime,
     pub result: Option<SettlementJobResult>,
 }
-pub struct SettlementTask {
+pub struct SettlementTask<P> {
     id: Ulid,
     job: SettlementJob,
+    provider: Arc<P>,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
     attempts: BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, SettlementAttempt>>,
 }
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
 
-impl SettlementTask {
+impl<P: Provider + 'static> SettlementTask<P> {
     pub async fn create(
         job: SettlementJob,
+        provider: Arc<P>,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
     ) -> eyre::Result<(Ulid, Self)> {
         let id = loop {
@@ -146,6 +149,7 @@ impl SettlementTask {
         let this = Self {
             id,
             job,
+            provider,
             admin_commands,
             attempts: BTreeMap::new(),
         };
@@ -155,8 +159,9 @@ impl SettlementTask {
 
     pub async fn load(
         id: Ulid,
+        provider: Arc<P>,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
-    ) -> eyre::Result<StoredSettlementJob> {
+    ) -> eyre::Result<StoredSettlementJob<P>> {
         let (job, result) = Self::load_settlement_job_from_db(id).await?;
         if let Some(result) = result {
             Ok(StoredSettlementJob::Completed(job, result))
@@ -164,6 +169,7 @@ impl SettlementTask {
             let mut this = SettlementTask {
                 id,
                 job,
+                provider,
                 admin_commands,
                 attempts: BTreeMap::new(),
             };
@@ -402,13 +408,13 @@ impl SettlementTask {
 
     async fn tx_hash_on_l1_for_nonce(
         &self,
-        _wallet: Address,
-        _nonce: Nonce,
+        wallet: Address,
+        nonce: Nonce,
     ) -> Option<SettlementTxHash> {
-        // TODO: delegate to the standalone `tx_hash_on_l1_for_nonce` function
-        // once a provider field is added to SettlementTask.
-        // Use retry_callback_until_success as needed.
-        todo!()
+        // TODO: add retry with backoff using self.job.settlement_config.retry_on_transient_failure
+        crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce)
+            .await
+            .expect("TODO: add retry instead of panicking on transient RPC error")
     }
 
     async fn current_result_on_l1_for(
