@@ -136,7 +136,8 @@ mod tests {
             contract_call_result: None,
         };
 
-        assert!(SettlementJobResult::try_from(proto).is_err());
+        let result: Result<SettlementJobResult, _> = proto.try_into();
+        assert!(result.is_err());
     }
 
     #[test]
