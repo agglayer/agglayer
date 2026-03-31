@@ -105,7 +105,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         #[cfg(any(test, feature = "testutils"))]
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
-            |_| return testutils::verify_mock_proof_inputs(verifying_key, proof)
+            |_| testutils::verify_mock_proof_inputs(verifying_key, proof)
         );
 
         // `sp1_fast` wraps the call in `catch_unwind`, which requires `UnwindSafe`.
@@ -136,21 +136,34 @@ mod testutils {
             _ => return Ok(()),
         };
 
+        let vkey_hash = public_inputs.first().ok_or_else(|| {
+            eyre::eyre!(
+                "mock proof is missing required public inputs: expected at least 2, got {}",
+                public_inputs.len()
+            )
+        })?;
+        let public_values_hash = public_inputs.get(1).ok_or_else(|| {
+            eyre::eyre!(
+                "mock proof is missing required public inputs: expected at least 2, got {}",
+                public_inputs.len()
+            )
+        })?;
+
         let expected_vkey_hash = verifying_key.hash_bn254().to_string();
-        if public_inputs[0] != expected_vkey_hash {
+        if *vkey_hash != expected_vkey_hash {
             bail!(
                 "vkey hash mismatch: expected {}, got {}",
                 expected_vkey_hash,
-                public_inputs[0]
+                vkey_hash
             );
         }
 
         let expected_public_values_hash = proof.public_values.hash_bn254().to_string();
-        if public_inputs[1] != expected_public_values_hash {
+        if *public_values_hash != expected_public_values_hash {
             bail!(
                 "public values hash mismatch: expected {}, got {}",
                 expected_public_values_hash,
-                public_inputs[1]
+                public_values_hash
             );
         }
 
