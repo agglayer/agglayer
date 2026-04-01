@@ -1,6 +1,7 @@
 [env]
-CONTRACT_VERSION = "feature/ongoing-v0.3.0"
+CONTRACT_VERSION = "12.2.3"
 CONTRACT_REPO = "https://api.github.com/repos/agglayer/agglayer-contracts"
+CONTRACT_IMAGE_REPO = "ghcr.io/agglayer/agglayer-contracts"
 
 [tasks.contracts]
 description = "Download and update the contracts of agglayer-contracts"
@@ -50,3 +51,15 @@ args = [
     "=https",
     "${CONTRACT_REPO}/contents/compiled-contracts/${CONTRACT}?ref=${CONTRACT_VERSION}",
 ]
+
+[tasks.integration-l1-image]
+category = "INTEGRATIONS - PREPARE"
+description = "Pull and tag the L1 image for integration tests"
+script = '''
+set -euo pipefail
+
+IMAGE_TAG="${CONTRACT_IMAGE_TAG:-${CONTRACT_VERSION}-all}"
+
+docker pull "${CONTRACT_IMAGE_REPO}:${IMAGE_TAG}"
+docker tag "${CONTRACT_IMAGE_REPO}:${IMAGE_TAG}" hermeznetwork/geth-zkevm-contracts
+'''

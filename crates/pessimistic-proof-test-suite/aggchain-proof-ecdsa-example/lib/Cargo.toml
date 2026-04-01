@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-agglayer-tries.workspace = true
-agglayer-primitives.workspace = true
+agglayer-tries = "0.14.0"
+agglayer-primitives = "0.14.0"
 k256 = "0.13.4"
 serde = { version = "1.0.228", features = ["derive"] }
 
-unified-bridge.workspace = true
+unified-bridge = "0.14.0"
