@@ -1,7 +1,12 @@
 use std::{path::Path, time::Duration};
 
 use agglayer_config::{log::LogLevel, Config};
-use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
+use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
+use alloy::{
+    network::Ethereum,
+    providers::{Provider as _, RootProvider},
+    signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner},
+};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use prover_config::{MockProverConfig, ProverType};
 use tokio::sync::oneshot;
@@ -10,45 +15,28 @@ use tokio_util::sync::CancellationToken;
 use crate::l1_setup::{self, next_available_addr, L1Docker};
 
 const PHRASE: &str = "test test test test test test test test test test test junk";
+const AGGLAYER_RPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+const AGGLAYER_RPC_POLL_INTERVAL: Duration = Duration::from_millis(250);
+const CERTIFICATE_STATUS_POLL_INTERVAL: Duration = Duration::from_millis(250);
+const CERTIFICATE_STATUS_WAIT_TIMEOUT: Duration = Duration::from_secs(150);
+const DEFAULT_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[macro_export]
 macro_rules! wait_for_settlement_or_error {
-    ($client:ident, $certificate_id:ident) => {{
+    ($client:ident, $certificate_id:expr) => {{
         async {
-            use jsonrpsee::{core::client::ClientT, rpc_params};
-            let mut result;
-            loop {
-                let response: agglayer_types::CertificateHeader = $client
-                    .request(
-                        "interop_getCertificateHeader",
-                        jsonrpsee::rpc_params![$certificate_id],
-                    )
-                    .await
-                    .unwrap();
-
-                result = response;
-
-                match result.status {
-                    agglayer_types::CertificateStatus::InError { .. }
-                    | agglayer_types::CertificateStatus::Settled => {
-                        break;
-                    }
-                    _ => {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-                    }
-                }
-            }
-
-            return result;
+            integrations::agglayer_setup::wait_for_terminal_certificate_status(
+                &$client,
+                $certificate_id,
+            )
+            .await
         }
     }};
 }
 
 pub async fn start_l1() -> L1Docker {
     let name = std::thread::current().name().unwrap().replace("::", "_");
-    let l1 = l1_setup::L1Docker::new(name).await;
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    l1
+    l1_setup::L1Docker::new(name).await
 }
 
 pub async fn start_agglayer(
@@ -121,15 +109,14 @@ pub async fn start_agglayer(
     });
     let url = format!("ws://{}/", config.readrpc_addr());
 
-    let mut interval = tokio::time::interval(Duration::from_secs(10));
-    let mut max_attempts = 20;
+    let start = tokio::time::Instant::now();
     let client = loop {
-        if max_attempts == 0 {
-            panic!("Failed to connect to the server");
-        }
-        interval.tick().await;
         if let Ok(client) = WsClientBuilder::default().build(&url).await {
             break client;
+        }
+
+        if start.elapsed() >= AGGLAYER_RPC_CONNECT_TIMEOUT {
+            panic!("Failed to connect to the server");
         }
 
         if handle.is_finished() {
@@ -138,7 +125,7 @@ pub async fn start_agglayer(
             panic!("Server has finished");
         }
 
-        max_attempts -= 1;
+        tokio::time::sleep(AGGLAYER_RPC_POLL_INTERVAL).await;
     };
 
     assert!(!handle.is_finished());
@@ -166,6 +153,93 @@ pub fn get_signer(index: u32) -> PrivateKeySigner {
         .unwrap()
         .build()
         .unwrap()
+}
+
+pub async fn wait_for_terminal_certificate_status(
+    client: &WsClient,
+    certificate_id: CertificateId,
+) -> CertificateHeader {
+    use jsonrpsee::{core::client::ClientT, rpc_params};
+
+    let start = tokio::time::Instant::now();
+    let mut attempts = 0usize;
+
+    loop {
+        attempts += 1;
+
+        let current_observation = match client
+            .request::<CertificateHeader, _>(
+                "interop_getCertificateHeader",
+                rpc_params![certificate_id],
+            )
+            .await
+        {
+            Ok(response) => {
+                let current_observation = format!("status={:?}", response.status);
+
+                if matches!(
+                    response.status,
+                    CertificateStatus::InError { .. } | CertificateStatus::Settled
+                ) {
+                    return response;
+                }
+
+                current_observation
+            }
+            Err(error) => format!("rpc_error={error}"),
+        };
+
+        if start.elapsed() >= CERTIFICATE_STATUS_WAIT_TIMEOUT {
+            panic!(
+                "Timed out waiting for certificate {certificate_id} to settle after {} attempts. Last observation: {}",
+                attempts,
+                current_observation,
+            );
+        }
+
+        tokio::time::sleep(certificate_status_poll_interval()).await;
+    }
+}
+
+pub const fn certificate_status_poll_interval() -> Duration {
+    CERTIFICATE_STATUS_POLL_INTERVAL
+}
+
+pub async fn wait_for_condition<F, Fut>(description: &str, timeout: Duration, mut check: F)
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    let start = tokio::time::Instant::now();
+
+    loop {
+        if check().await {
+            return;
+        }
+
+        if start.elapsed() >= timeout {
+            panic!("Timed out waiting for {description}");
+        }
+
+        tokio::time::sleep(AGGLAYER_RPC_POLL_INTERVAL).await;
+    }
+}
+
+pub async fn l1_block_number(l1: &L1Docker) -> u64 {
+    let url = reqwest::Url::parse(&l1.rpc).unwrap();
+    RootProvider::<Ethereum>::new_http(url)
+        .get_block_number()
+        .await
+        .unwrap()
+}
+
+pub async fn wait_for_l1_blocks(l1: &L1Docker, additional_blocks: u64) {
+    let target = l1_block_number(l1).await + additional_blocks;
+
+    wait_for_condition("L1 block advancement", DEFAULT_WAIT_TIMEOUT, || async {
+        l1_block_number(l1).await >= target
+    })
+    .await;
 }
 
 const fn get_test_keystore_content() -> &'static str {
