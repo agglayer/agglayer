@@ -187,6 +187,7 @@ impl Node {
             .connect_client(
                 alloy::rpc::client::RpcClient::builder()
                     .layer(crate::L1TraceLayer)
+                    .layer(crate::UrlRedactLayer)
                     .http(config.l1.node_url.clone()),
             );
         let rpc = Arc::new(provider);

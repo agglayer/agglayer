@@ -534,7 +534,7 @@ where
                             };
                     }
 
-                    if network_info.settled_claim.is_none() && network_info.settled_height.is_some()
+                    if matches!(&network_info, NetworkInfo { settled_height, settled_claim, .. } if settled_claim.is_none() && settled_height.is_some())
                     {
                         // We can unwrap here because we just checked it's Some
                         let height = network_info.settled_height.unwrap();
