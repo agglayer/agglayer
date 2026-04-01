@@ -1,9 +1,7 @@
+use agglayer_types::{SettlementJob, SettlementJobResult};
 use ulid::Ulid;
 
-use crate::{
-    error::Error,
-    types::generated::agglayer::storage::v0::{SettlementJob, TxResult},
-};
+use crate::error::Error;
 
 /// Read-only access to settlement-related records stored in RocksDB.
 ///
@@ -17,5 +15,5 @@ pub trait SettlementReader: Send + Sync {
     fn get_settlement_job_result(
         &self,
         settlement_job_id: &Ulid,
-    ) -> Result<Option<TxResult>, Error>;
+    ) -> Result<Option<SettlementJobResult>, Error>;
 }
