@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{CertificateId, CertificateStatus};
+use agglayer_types::{CertificateId, CertificateStatus, CertificateStatusError};
 use fail::FailScenario;
 use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
@@ -166,13 +166,15 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
     // transactions
     match result.status {
         CertificateStatus::InError { error } => {
-            let error_message = error.to_string();
             assert!(
-                error_message.contains(
-                    "Too many different settlement transactions submitted for the same certificate"
+                matches!(
+                    &*error,
+                    CertificateStatusError::SettlementError(detail)
+                        if detail.starts_with(
+                            "Too many different settlement transactions submitted for the same certificate:"
+                        )
                 ),
-                "Expected error message about too many settlement transactions, but got: \
-                 {error_message}"
+                "Expected settlement error about too many transactions, but got: {error:?}"
             );
         }
         status => panic!("Expected InError status, but got: {status:?}"),
