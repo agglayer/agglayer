@@ -244,9 +244,10 @@ pub enum AggchainDataType {
     MultisigAndAggchainProof { num_signers: usize },
 }
 
-/// Empty ELF file for testing purposes.
-/// This is a minimal ELF that can be used to create dummy SP1 proofs in tests.
-pub const EMPTY_ELF: &[u8] = include_bytes!("tests/empty.elf");
+/// Any valid riscv64 ELF works here; we only need it to derive a proving key
+/// for mock proof creation. The previous `empty.elf` was riscv32 and is not
+/// compatible with SP1 v6.
+pub const EMPTY_ELF: &[u8] = pessimistic_proof::ELF;
 
 /// Create a dummy STARK proof for testing purposes.
 /// This creates a minimal SP1 proof that can be used in tests.

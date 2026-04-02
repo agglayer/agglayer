@@ -36,7 +36,7 @@ pub fn compute_aggchain_proof(
     let mut stdin = SP1Stdin::new();
     stdin.write(&aggchain_ecdsa_witness);
 
-    let client = ProverClient::builder().cpu().build();
+    let client = ProverClient::from_env();
     let pk = client
         .setup(Elf::Static(AGGCHAIN_PROOF_ECDSA_ELF))
         .expect("setup failed");

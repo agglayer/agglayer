@@ -100,13 +100,10 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
     ) -> eyre::Result<()> {
-        // This fail_point is use to make the verification pass or fail
+        #[cfg(any(test, feature = "testutils"))]
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
-            |_| {
-                let _ = proof;
-                Ok(())
-            }
+            |_| testutils::verify_mock_proof_inputs(verifying_key, proof)
         );
 
         // `sp1_fast` wraps the call in `catch_unwind`, which requires `UnwindSafe`.
@@ -117,6 +114,59 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
             verifier.verify(proof, verifying_key, None)
         }))
         .context("Failed verifying sp1 proof")??)
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+mod testutils {
+    use eyre::bail;
+    use sp1_sdk::{HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1VerifyingKey};
+
+    fn missing_public_inputs_error(len: usize) -> eyre::Error {
+        eyre::eyre!(
+            "mock proof is missing required public inputs: expected at least 2, got {}",
+            len
+        )
+    }
+
+    // Mirror SP1's mock verifier for Plonk/Groth16 proofs by checking that
+    // the proof's public-input hashes match the expected vkey and public values.
+    pub(super) fn verify_mock_proof_inputs(
+        verifying_key: &SP1VerifyingKey,
+        proof: &SP1ProofWithPublicValues,
+    ) -> eyre::Result<()> {
+        let public_inputs = match &proof.proof {
+            SP1Proof::Plonk(plonk) => &plonk.public_inputs,
+            SP1Proof::Groth16(groth16) => &groth16.public_inputs,
+            _ => return Ok(()),
+        };
+
+        let vkey_hash = public_inputs
+            .first()
+            .ok_or_else(|| missing_public_inputs_error(public_inputs.len()))?;
+        let public_values_hash = public_inputs
+            .get(1)
+            .ok_or_else(|| missing_public_inputs_error(public_inputs.len()))?;
+
+        let expected_vkey_hash = verifying_key.hash_bn254().to_string();
+        if *vkey_hash != expected_vkey_hash {
+            bail!(
+                "vkey hash mismatch: expected {}, got {}",
+                expected_vkey_hash,
+                vkey_hash
+            );
+        }
+
+        let expected_public_values_hash = proof.public_values.hash_bn254().to_string();
+        if *public_values_hash != expected_public_values_hash {
+            bail!(
+                "public values hash mismatch: expected {}, got {}",
+                expected_public_values_hash,
+                public_values_hash
+            );
+        }
+
+        Ok(())
     }
 }
 

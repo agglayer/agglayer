@@ -389,6 +389,34 @@ fn regressions(#[case] cert_filename: &str) {
 }
 
 #[test]
+#[ignore]
+fn generate_regression_01() {
+    let cert = CertificateV1 {
+        version: VersionTag,
+        network_id: NetworkId::new(10),
+        height: Height::new(1),
+        prev_local_exit_root: LocalExitRoot::from([0x5e; 32]),
+        new_local_exit_root: LocalExitRoot::from([0x3f; 32]),
+        bridge_exits: Vec::new().into(),
+        imported_bridge_exits: Vec::new().into(),
+        aggchain_data: AggchainDataV1::GenericNoSignature {
+            proof: Cow::Owned(AggchainDataV1::proof0()),
+            aggchain_params: Digest([0x42; 32]),
+        },
+        metadata: Metadata::new(Digest([0xa5; 32])),
+        custom_chain_data: Cow::Owned(vec![]),
+        l1_info_tree_leaf_count: None,
+    };
+    let certificate: Certificate = cert.into();
+    let encoded = Certificate::encode(&certificate).expect("encoding failed");
+    let hex = hex::encode(&encoded);
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/types/certificate/tests/encoded/regression_01.hex");
+    std::fs::write(&path, hex.as_bytes()).expect("failed to write fixture");
+    eprintln!("Wrote {} bytes to {}", hex.len(), path.display());
+}
+
+#[test]
 fn bad_format() {
     const NEXT_VERSION: u8 = 2;
 
