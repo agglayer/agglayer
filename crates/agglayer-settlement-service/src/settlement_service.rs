@@ -79,7 +79,7 @@ impl<P: Provider + 'static> SettlementService<P> {
             .wrap_err_with(|| {
                 format!(
                     "Failed to forward admin command to settlement task {job_id}, did it already \
-                 complete?"
+                     complete?"
                 )
             })?;
         Ok(())

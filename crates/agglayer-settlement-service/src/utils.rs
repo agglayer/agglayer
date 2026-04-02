@@ -6,8 +6,10 @@ use alloy::{
     network::TransactionResponse as _,
     primitives::Address,
     providers::Provider,
-    transports::layers::{RateLimitRetryPolicy, RetryPolicy},
-    transports::{TransportError, TransportResult},
+    transports::{
+        layers::{RateLimitRetryPolicy, RetryPolicy},
+        TransportError, TransportResult,
+    },
 };
 use rand::Rng as _;
 use tokio_util::sync::CancellationToken;

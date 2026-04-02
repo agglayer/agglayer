@@ -21,6 +21,25 @@ use crate::utils::RetryCallbackError;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
+macro_rules! unwrap_retry_callback {
+    ($task:expr, $result:expr, $wallet:expr, $nonce:expr, $operation:literal $(,)?) => {
+        match $result {
+            Ok(value) => value,
+            Err(RetryCallbackError::Cancelled) => return SettlementTaskRunResult::Cancelled,
+            Err(RetryCallbackError::Error(error)) => {
+                panic!(
+                    "{:#?}",
+                    eyre::Error::from(error).wrap_err(format!(
+                        "Non-recoverable error while {} for settlement task {} / wallet {} / \
+                         nonce {}",
+                        $operation, $task.id, $wallet, $nonce,
+                    ))
+                )
+            }
+        }
+    };
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SettlementAttemptNumber(pub u64);
 
@@ -256,22 +275,13 @@ impl<P: Provider + 'static> SettlementTask<P> {
                     return run_result;
                 }
 
-                let tx_hash_on_l1 = match self.tx_hash_on_l1_for_nonce(wallet, nonce).await {
-                    Ok(tx_hash_on_l1) => tx_hash_on_l1,
-                    Err(RetryCallbackError::Cancelled) => {
-                        return SettlementTaskRunResult::Cancelled;
-                    }
-                    Err(RetryCallbackError::Error(error)) => {
-                        panic!(
-                            "{:#?}",
-                            eyre::Error::from(error).wrap_err(format!(
-                                "Non-recoverable error while querying nonce inclusion on L1 for \
-                                 settlement task {} / wallet {} / nonce {}",
-                                self.id, wallet, nonce,
-                            ))
-                        );
-                    }
-                };
+                let tx_hash_on_l1 = unwrap_retry_callback!(
+                    self,
+                    self.tx_hash_on_l1_for_nonce(wallet, nonce).await,
+                    wallet,
+                    nonce,
+                    "querying nonce inclusion on L1",
+                );
 
                 if let Some(tx_hash) = tx_hash_on_l1 {
                     // If the nonce is used on L1, we won't need to submit any new tx related to it.
@@ -321,24 +331,13 @@ impl<P: Provider + 'static> SettlementTask<P> {
                         // At least one attempt is not in-error yet, so we'll need to wait for the
                         // previous nonce to be included before processing it further.
                         if let Some(previous_nonce) = nonce.previous() {
-                            let previous_nonce_on_l1 =
-                                match self.tx_hash_on_l1_for_nonce(wallet, previous_nonce).await {
-                                    Ok(tx_hash_on_l1) => tx_hash_on_l1,
-                                    Err(RetryCallbackError::Cancelled) => {
-                                        return SettlementTaskRunResult::Cancelled;
-                                    }
-                                    Err(RetryCallbackError::Error(error)) => {
-                                        panic!(
-                                            "{:#?}",
-                                            eyre::Error::from(error).wrap_err(format!(
-                                                "Non-recoverable error while querying previous \
-                                                 nonce inclusion on L1 for settlement task {} / \
-                                                 wallet {} / nonce {}",
-                                                self.id, wallet, previous_nonce,
-                                            ))
-                                        );
-                                    }
-                                };
+                            let previous_nonce_on_l1 = unwrap_retry_callback!(
+                                self,
+                                self.tx_hash_on_l1_for_nonce(wallet, previous_nonce).await,
+                                wallet,
+                                previous_nonce,
+                                "querying previous nonce inclusion on L1",
+                            );
                             if previous_nonce_on_l1.is_none() {
                                 continue 'nonces; // wait for previous nonce to
                                                   // be included
