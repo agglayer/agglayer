@@ -31,7 +31,8 @@ impl L1Docker {
             Ok(backend) if backend == ANVIL_BACKEND => Self::new_anvil().await,
             Ok(backend) if backend == DOCKER_BACKEND => Self::new_docker(name).await,
             Ok(backend) => panic!(
-                "Unsupported L1 backend `{backend}`. Supported values: `{ANVIL_BACKEND}`, `{DOCKER_BACKEND}`, or unset"
+                "Unsupported L1 backend `{backend}`. Supported values: `{ANVIL_BACKEND}`, \
+                 `{DOCKER_BACKEND}`, or unset"
             ),
             Err(std::env::VarError::NotPresent) => Self::new_anvil().await,
             Err(error) => panic!("Failed to read {L1_BACKEND_ENV}: {error}"),
