@@ -76,8 +76,16 @@ for _ in $(seq 1 60); do
     sleep 1
 done
 
-# The shipped genesis is the deployment base. Patch in the live Docker block-0
-# EOAs before replaying blocks so the later transactions reproduce exactly.
+# The shipped genesis is only the deployment base. Patch in the live Docker
+# block-0 EOAs before replaying blocks so the later transactions reproduce
+# exactly.
+#
+# Address groups below:
+# - the first 10 addresses are the standard Foundry mnemonic accounts
+# - 0xf39f... is also the Docker deployer/admin account
+# - 0x7099... is also the trusted aggregator account
+# - 0x4acf... and 0x5c68... are extra bootstrap EOAs funded and used by the
+#   Docker contracts chain during its initial setup
 for address in \
     0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 \
     0x70997970c51812dc3a010c7d01b50e0d17dc79c8 \
