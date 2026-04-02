@@ -193,9 +193,9 @@ pub async fn wait_for_terminal_certificate_status(
 
         if start.elapsed() >= CERTIFICATE_STATUS_WAIT_TIMEOUT {
             panic!(
-                "Timed out waiting for certificate {certificate_id} to settle after {} attempts. Last observation: {}",
-                attempts,
-                current_observation,
+                "Timed out waiting for certificate {certificate_id} to settle after {} attempts. \
+                 Last observation: {}",
+                attempts, current_observation,
             );
         }
 
