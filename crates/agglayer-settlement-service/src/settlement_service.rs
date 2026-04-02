@@ -1,6 +1,7 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::SettlementServiceConfig;
+use agglayer_storage::stores::SettlementWriter;
 use agglayer_types::{SettlementJob, SettlementJobResult};
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
@@ -15,9 +16,13 @@ const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 /// The Settlement Service is responsible for managing settlement jobs and
 /// answering settlement result requests.
 #[derive(Clone)]
-pub struct SettlementService {
+pub struct SettlementService<Store>
+where
+    Store: SettlementWriter,
+{
     admin_command_senders: Arc<Mutex<HashMap<Ulid, mpsc::Sender<TaskAdminCommand>>>>,
     result_watchers: Arc<Mutex<HashMap<Ulid, watch::Receiver<Option<SettlementJobResult>>>>>,
+    store: Arc<Store>,
 }
 
 pub struct SettlementJobWatcher {
@@ -40,14 +45,19 @@ pub enum RetrievedSettlementResult {
     Completed(SettlementJobResult),
 }
 
-impl SettlementService {
+impl<Store> SettlementService<Store>
+where
+    Store: SettlementWriter + 'static,
+{
     pub async fn start(
         _config: SettlementServiceConfig,
+        store: Arc<Store>,
         cancellation_token: CancellationToken,
     ) -> eyre::Result<Self> {
         let this = Self {
             admin_command_senders: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
+            store,
         };
         tokio::task::spawn(Self::cancellation_token_proxy(
             cancellation_token,
@@ -110,7 +120,8 @@ impl SettlementService {
     ) -> eyre::Result<SettlementJobWatcher> {
         let (admin_sender, admin_receiver) = mpsc::channel(ADMIN_CHANNEL_BUFFER_SIZE);
         let (result_sender, result_receiver) = watch::channel(None);
-        let (job_id, mut task) = SettlementTask::create(job, admin_receiver).await?;
+        let (job_id, mut task) =
+            SettlementTask::create(job, admin_receiver, self.store.clone()).await?;
         self.admin_command_senders
             .lock()
             .await
@@ -156,7 +167,10 @@ impl SettlementService {
 
 pub struct RequestNewSettlement(pub SettlementJob);
 
-impl tower::Service<RequestNewSettlement> for SettlementService {
+impl<Store> tower::Service<RequestNewSettlement> for SettlementService<Store>
+where
+    Store: SettlementWriter + 'static,
+{
     type Response = SettlementJobWatcher;
     type Error = eyre::Error;
     type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
@@ -176,7 +190,10 @@ impl tower::Service<RequestNewSettlement> for SettlementService {
 
 pub struct RetrieveSettlementResult(pub Ulid);
 
-impl tower::Service<RetrieveSettlementResult> for SettlementService {
+impl<Store> tower::Service<RetrieveSettlementResult> for SettlementService<Store>
+where
+    Store: SettlementWriter + 'static,
+{
     type Response = RetrievedSettlementResult;
     type Error = eyre::Error;
     type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
@@ -199,7 +216,10 @@ pub enum AdminCommand {
     ReloadAndRestartTask(Ulid),
 }
 
-impl tower::Service<AdminCommand> for SettlementService {
+impl<Store> tower::Service<AdminCommand> for SettlementService<Store>
+where
+    Store: SettlementWriter + 'static,
+{
     type Response = ();
     type Error = eyre::Error;
     type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
