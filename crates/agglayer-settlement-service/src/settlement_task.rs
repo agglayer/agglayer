@@ -19,6 +19,7 @@ use tracing::warn;
 use ulid::Ulid;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
+const RPC_LOOKUP_RETRY_DELAY: Duration = Duration::from_secs(1);
 
 pub enum StoredSettlementJob<P> {
     Pending(SettlementTask<P>),
@@ -109,7 +110,20 @@ impl<P: Provider + 'static> SettlementTask<P> {
             let mut all_nonces_seen_on_l1 = true;
             let mut need_to_submit_attempt_with_new_nonce = true;
             'nonces: for (wallet, nonce) in self.all_used_nonces() {
-                if let Some(tx_hash) = self.tx_hash_on_l1_for_nonce(wallet, nonce).await {
+                let tx_hash_on_l1 = match self.tx_hash_on_l1_for_nonce(wallet, nonce).await {
+                    Ok(tx_hash_on_l1) => tx_hash_on_l1,
+                    Err(error) => {
+                        warn!(
+                            ?error,
+                            ?wallet,
+                            ?nonce,
+                            "Failed to query whether a settlement nonce was mined on L1"
+                        );
+                        tokio::time::sleep(RPC_LOOKUP_RETRY_DELAY).await;
+                        continue 'start;
+                    }
+                };
+                if let Some(tx_hash) = tx_hash_on_l1 {
                     // If the nonce is used on L1, we won't need to submit any new tx related to it.
                     let Some(attempt_number) =
                         self.settlement_attempt_number_for(wallet, nonce, tx_hash)
@@ -155,11 +169,23 @@ impl<P: Provider + 'static> SettlementTask<P> {
                         // At least one attempt is not in-error yet, so we'll need to wait for the
                         // previous nonce to be included before processing it further.
                         if let Some(previous_nonce) = nonce.previous() {
-                            if self
+                            let previous_nonce_tx_hash = match self
                                 .tx_hash_on_l1_for_nonce(wallet, previous_nonce)
                                 .await
-                                .is_none()
                             {
+                                Ok(previous_nonce_tx_hash) => previous_nonce_tx_hash,
+                                Err(error) => {
+                                    warn!(
+                                        ?error,
+                                        ?wallet,
+                                        nonce = ?previous_nonce,
+                                        "Failed to query whether the previous settlement nonce was mined on L1"
+                                    );
+                                    tokio::time::sleep(RPC_LOOKUP_RETRY_DELAY).await;
+                                    continue 'start;
+                                }
+                            };
+                            if previous_nonce_tx_hash.is_none() {
                                 continue 'nonces; // wait for previous nonce to
                                                   // be included
                             }
@@ -327,11 +353,12 @@ impl<P: Provider + 'static> SettlementTask<P> {
         &self,
         wallet: Address,
         nonce: Nonce,
-    ) -> Option<SettlementTxHash> {
-        // TODO: add retry with backoff using self.job.settlement_config.retry_on_transient_failure
+    ) -> eyre::Result<Option<SettlementTxHash>> {
+        // TODO: add retry with backoff using
+        // self.job.settlement_config.retry_on_transient_failure
         crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce)
             .await
-            .expect("TODO: add retry instead of panicking on transient RPC error")
+            .map_err(Into::into)
     }
 
     async fn current_result_on_l1_for(
