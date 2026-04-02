@@ -39,36 +39,32 @@ impl L1Docker {
     }
 
     async fn new_anvil() -> Self {
-        let port = next_available_addr().port();
         let anvil = Anvil::new()
-            .port(port)
             .chain_id(1337u64)
             .block_time(1u64)
             .arg("--auto-impersonate")
             .spawn();
 
         let rpc = anvil.endpoint_url().to_string();
+        let ws = anvil.ws_endpoint();
         wait_for_rpc(&rpc).await;
         load_anvil_fixture(&rpc).await;
 
         Self {
             inner: L1Instance::Anvil { _instance: anvil },
-            ws: format!("ws://127.0.0.1:{port}"),
+            ws,
             rpc,
         }
     }
 
     async fn new_docker(name: String) -> Self {
-        let ws_port = next_available_addr().port();
-        let rpc_port = next_available_addr().port();
-
         let docker = Command::new("docker")
             .args([
                 "run",
                 "-p",
-                &format!("{rpc_port}:8545"),
+                "127.0.0.1::8545",
                 "-p",
-                &format!("{ws_port}:8546"),
+                "127.0.0.1::8546",
                 "-d",
                 "--name",
                 &name,
@@ -85,6 +81,8 @@ impl L1Docker {
         }
 
         let id = String::from_utf8(docker.stdout).unwrap().replace('\n', "");
+        let rpc_port = docker_published_port(&id, "8545/tcp").await;
+        let ws_port = docker_published_port(&id, "8546/tcp").await;
         let ws = format!("ws://127.0.0.1:{ws_port}");
         let rpc = format!("http://127.0.0.1:{rpc_port}");
 
@@ -96,6 +94,36 @@ impl L1Docker {
             rpc,
         }
     }
+}
+
+async fn docker_published_port(id: &str, container_port: &str) -> u16 {
+    let output = Command::new("docker")
+        .args(["port", id, container_port])
+        .output()
+        .await
+        .unwrap_or_else(|error| panic!("Failed to inspect Docker port {container_port}: {error}"));
+
+    if !output.status.success() {
+        panic!(
+            "Failed to inspect Docker port {container_port}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let binding = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .next()
+        .unwrap_or_else(|| panic!("Missing published port for {container_port}"))
+        .trim()
+        .to_owned();
+
+    binding
+        .rsplit(':')
+        .next()
+        .unwrap_or_else(|| panic!("Unexpected Docker port binding: {binding}"))
+        .parse()
+        .unwrap_or_else(|error| panic!("Invalid Docker published port in `{binding}`: {error}"))
 }
 
 impl Drop for L1Docker {

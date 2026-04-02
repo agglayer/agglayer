@@ -7,6 +7,7 @@ use alloy::{
     providers::{Provider as _, RootProvider},
     signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner},
 };
+use fs2::FileExt;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use prover_config::{MockProverConfig, ProverType};
 use tokio::sync::oneshot;
@@ -45,6 +46,7 @@ pub async fn start_agglayer(
     config: Option<agglayer_config::Config>,
     token: Option<CancellationToken>,
 ) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
+    let _port_reservation_lock = PortReservationLock::acquire();
     let (shutdown, receiver) = oneshot::channel();
 
     // Make the mock prover pass
@@ -240,6 +242,31 @@ pub async fn wait_for_l1_blocks(l1: &L1Docker, additional_blocks: u64) {
         l1_block_number(l1).await >= target
     })
     .await;
+}
+
+struct PortReservationLock {
+    _file: std::fs::File,
+}
+
+impl PortReservationLock {
+    fn acquire() -> Self {
+        let path = std::env::temp_dir().join("agglayer-integrations-port.lock");
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&path)
+            .unwrap_or_else(|error| {
+                panic!("Failed to open port reservation lock {path:?}: {error}")
+            });
+
+        file.lock_exclusive().unwrap_or_else(|error| {
+            panic!("Failed to lock port reservation file {path:?}: {error}")
+        });
+
+        Self { _file: file }
+    }
 }
 
 const fn get_test_keystore_content() -> &'static str {
