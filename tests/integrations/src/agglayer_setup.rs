@@ -19,7 +19,6 @@ const PHRASE: &str = "test test test test test test test test test test test jun
 const AGGLAYER_RPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 const AGGLAYER_RPC_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const CERTIFICATE_STATUS_POLL_INTERVAL: Duration = Duration::from_millis(250);
-const CERTIFICATE_STATUS_WAIT_TIMEOUT: Duration = Duration::from_secs(150);
 const DEFAULT_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[macro_export]
@@ -46,7 +45,9 @@ pub async fn start_agglayer(
     config: Option<agglayer_config::Config>,
     token: Option<CancellationToken>,
 ) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
-    let _port_reservation_lock = PortReservationLock::acquire();
+    let _port_reservation_lock = tokio::task::spawn_blocking(PortReservationLock::acquire)
+        .await
+        .expect("Port reservation lock task panicked");
     let (shutdown, receiver) = oneshot::channel();
 
     // Make the mock prover pass
@@ -161,6 +162,14 @@ pub async fn wait_for_terminal_certificate_status(
     client: &WsClient,
     certificate_id: CertificateId,
 ) -> CertificateHeader {
+    wait_for_terminal_certificate_status_with_timeout(client, certificate_id, None).await
+}
+
+pub async fn wait_for_terminal_certificate_status_with_timeout(
+    client: &WsClient,
+    certificate_id: CertificateId,
+    timeout: Option<Duration>,
+) -> CertificateHeader {
     use jsonrpsee::{core::client::ClientT, rpc_params};
 
     let start = tokio::time::Instant::now();
@@ -191,7 +200,7 @@ pub async fn wait_for_terminal_certificate_status(
             Err(error) => format!("rpc_error={error}"),
         };
 
-        if start.elapsed() >= CERTIFICATE_STATUS_WAIT_TIMEOUT {
+        if timeout.is_some_and(|timeout| start.elapsed() >= timeout) {
             panic!(
                 "Timed out waiting for certificate {certificate_id} to settle after {} attempts. \
                  Last observation: {}",
