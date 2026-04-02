@@ -1,6 +1,7 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::SettlementServiceConfig;
+use agglayer_types::{SettlementJob, SettlementJobResult};
 use alloy::providers::Provider;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
@@ -8,9 +9,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 use ulid::Ulid;
 
-use crate::settlement_task::{
-    SettlementJob, SettlementJobResult, SettlementTask, TaskAdminCommand,
-};
+use crate::settlement_task::{SettlementTask, TaskAdminCommand};
 
 const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 
@@ -18,8 +17,8 @@ const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 /// answering settlement result requests.
 #[derive(educe::Educe)]
 #[educe(Clone)]
-pub struct SettlementService<P> {
-    provider: Arc<P>,
+pub struct SettlementService<L1Provider> {
+    provider: Arc<L1Provider>,
     admin_command_senders: Arc<Mutex<HashMap<Ulid, mpsc::Sender<TaskAdminCommand>>>>,
     result_watchers: Arc<Mutex<HashMap<Ulid, watch::Receiver<Option<SettlementJobResult>>>>>,
 }
@@ -44,10 +43,10 @@ pub enum RetrievedSettlementResult {
     Completed(SettlementJobResult),
 }
 
-impl<P: Provider + 'static> SettlementService<P> {
+impl<L1Provider: Provider + 'static> SettlementService<L1Provider> {
     pub async fn start(
         _config: SettlementServiceConfig,
-        provider: Arc<P>,
+        provider: Arc<L1Provider>,
         cancellation_token: CancellationToken,
     ) -> eyre::Result<Self> {
         let this = Self {
@@ -163,7 +162,9 @@ impl<P: Provider + 'static> SettlementService<P> {
 
 pub struct RequestNewSettlement(pub SettlementJob);
 
-impl<P: Provider + 'static> tower::Service<RequestNewSettlement> for SettlementService<P> {
+impl<L1Provider: Provider + 'static> tower::Service<RequestNewSettlement>
+    for SettlementService<L1Provider>
+{
     type Response = SettlementJobWatcher;
     type Error = eyre::Error;
     type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
@@ -183,7 +184,9 @@ impl<P: Provider + 'static> tower::Service<RequestNewSettlement> for SettlementS
 
 pub struct RetrieveSettlementResult(pub Ulid);
 
-impl<P: Provider + 'static> tower::Service<RetrieveSettlementResult> for SettlementService<P> {
+impl<L1Provider: Provider + 'static> tower::Service<RetrieveSettlementResult>
+    for SettlementService<L1Provider>
+{
     type Response = RetrievedSettlementResult;
     type Error = eyre::Error;
     type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
@@ -206,7 +209,9 @@ pub enum AdminCommand {
     ReloadAndRestartTask(Ulid),
 }
 
-impl<P: Provider + 'static> tower::Service<AdminCommand> for SettlementService<P> {
+impl<L1Provider: Provider + 'static> tower::Service<AdminCommand>
+    for SettlementService<L1Provider>
+{
     type Response = ();
     type Error = eyre::Error;
     type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
