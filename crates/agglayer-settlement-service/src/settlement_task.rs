@@ -10,10 +10,14 @@ use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
     primitives::{Address, BlockHash, Bytes, U128, U256},
     providers::Provider,
+    transports::TransportError,
 };
 use tokio::sync::mpsc;
-use tracing::warn;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, warn};
 use ulid::Ulid;
+
+use crate::utils::RetryCallbackError;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
@@ -106,7 +110,59 @@ pub enum StoredSettlementJob<P> {
 }
 
 pub enum TaskAdminCommand {
-    Abort,
+    ReloadAndRestart,
+}
+
+pub struct TaskControl {
+    cancellation_token: CancellationToken,
+    admin_commands: mpsc::Receiver<TaskAdminCommand>,
+}
+
+#[derive(Clone)]
+pub struct TaskControlHandle {
+    cancellation_token: CancellationToken,
+    admin_commands: mpsc::Sender<TaskAdminCommand>,
+}
+
+impl TaskControlHandle {
+    pub fn new(
+        parent_cancellation_token: &CancellationToken,
+        admin_commands: mpsc::Sender<TaskAdminCommand>,
+        admin_command_receiver: mpsc::Receiver<TaskAdminCommand>,
+    ) -> (Self, TaskControl) {
+        let cancellation_token = parent_cancellation_token.child_token();
+        (
+            Self {
+                cancellation_token: cancellation_token.clone(),
+                admin_commands,
+            },
+            TaskControl {
+                cancellation_token,
+                admin_commands: admin_command_receiver,
+            },
+        )
+    }
+
+    pub fn cancel(&self) {
+        self.cancellation_token.cancel();
+    }
+
+    pub fn try_send(
+        &self,
+        command: TaskAdminCommand,
+    ) -> Result<(), mpsc::error::TrySendError<TaskAdminCommand>> {
+        self.admin_commands.try_send(command)
+    }
+}
+
+pub enum SettlementTaskRunResult {
+    Completed(SettlementJobResult),
+    Cancelled,
+    ReloadAndRestart,
+}
+
+enum TaskControlAction {
+    Cancelled,
     ReloadAndRestart,
 }
 
@@ -123,7 +179,7 @@ pub struct SettlementTask<P> {
     id: Ulid,
     job: SettlementJob,
     provider: Arc<P>,
-    admin_commands: mpsc::Receiver<TaskAdminCommand>,
+    control: TaskControl,
     attempts: BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, SettlementAttempt>>,
 }
 
@@ -133,7 +189,7 @@ impl<P: Provider + 'static> SettlementTask<P> {
     pub async fn create(
         job: SettlementJob,
         provider: Arc<P>,
-        admin_commands: mpsc::Receiver<TaskAdminCommand>,
+        control: TaskControl,
     ) -> eyre::Result<(Ulid, Self)> {
         let id = loop {
             if let Ok(id) = ID_GENERATOR
@@ -150,7 +206,7 @@ impl<P: Provider + 'static> SettlementTask<P> {
             id,
             job,
             provider,
-            admin_commands,
+            control,
             attempts: BTreeMap::new(),
         };
         this.save_settlement_job_to_db().await?;
@@ -160,7 +216,7 @@ impl<P: Provider + 'static> SettlementTask<P> {
     pub async fn load(
         id: Ulid,
         provider: Arc<P>,
-        admin_commands: mpsc::Receiver<TaskAdminCommand>,
+        control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<P>> {
         let (job, result) = Self::load_settlement_job_from_db(id).await?;
         if let Some(result) = result {
@@ -170,7 +226,7 @@ impl<P: Provider + 'static> SettlementTask<P> {
                 id,
                 job,
                 provider,
-                admin_commands,
+                control,
                 attempts: BTreeMap::new(),
             };
             this.load_settlement_attempts_from_db().await?;
@@ -178,8 +234,12 @@ impl<P: Provider + 'static> SettlementTask<P> {
         }
     }
 
-    pub async fn run(&mut self) -> SettlementJobResult {
+    pub async fn run(&mut self) -> SettlementTaskRunResult {
         'start: loop {
+            if let Some(run_result) = self.try_handle_control_action() {
+                return run_result;
+            }
+
             // Process in a big loop. We'll come back here whenever a reorg is detected, and
             // after waiting when we're done with one cycle.
 
@@ -192,7 +252,28 @@ impl<P: Provider + 'static> SettlementTask<P> {
             let mut all_nonces_seen_on_l1 = true;
             let mut need_to_submit_attempt_with_new_nonce = true;
             'nonces: for (wallet, nonce) in self.all_used_nonces() {
-                if let Some(tx_hash) = self.tx_hash_on_l1_for_nonce(wallet, nonce).await {
+                if let Some(run_result) = self.try_handle_control_action() {
+                    return run_result;
+                }
+
+                let tx_hash_on_l1 = match self.tx_hash_on_l1_for_nonce(wallet, nonce).await {
+                    Ok(tx_hash_on_l1) => tx_hash_on_l1,
+                    Err(RetryCallbackError::Cancelled) => {
+                        return SettlementTaskRunResult::Cancelled;
+                    }
+                    Err(RetryCallbackError::Error(error)) => {
+                        panic!(
+                            "{:#?}",
+                            eyre::Error::from(error).wrap_err(format!(
+                                "Non-recoverable error while querying nonce inclusion on L1 for \
+                                 settlement task {} / wallet {} / nonce {}",
+                                self.id, wallet, nonce,
+                            ))
+                        );
+                    }
+                };
+
+                if let Some(tx_hash) = tx_hash_on_l1 {
                     // If the nonce is used on L1, we won't need to submit any new tx related to it.
                     let Some(attempt_number) =
                         self.settlement_attempt_number_for(wallet, nonce, tx_hash)
@@ -220,7 +301,9 @@ impl<P: Provider + 'static> SettlementTask<P> {
                         tx_result.clone(),
                     )
                     .await;
-                    return SettlementJobResult::ContractCall(tx_result);
+                    return SettlementTaskRunResult::Completed(SettlementJobResult::ContractCall(
+                        tx_result,
+                    ));
                 } else {
                     // If the nonce is not used on L1, we'll need to either wait more or submit a
                     // new attempt with the same nonce.
@@ -238,11 +321,25 @@ impl<P: Provider + 'static> SettlementTask<P> {
                         // At least one attempt is not in-error yet, so we'll need to wait for the
                         // previous nonce to be included before processing it further.
                         if let Some(previous_nonce) = nonce.previous() {
-                            if self
-                                .tx_hash_on_l1_for_nonce(wallet, previous_nonce)
-                                .await
-                                .is_none()
-                            {
+                            let previous_nonce_on_l1 =
+                                match self.tx_hash_on_l1_for_nonce(wallet, previous_nonce).await {
+                                    Ok(tx_hash_on_l1) => tx_hash_on_l1,
+                                    Err(RetryCallbackError::Cancelled) => {
+                                        return SettlementTaskRunResult::Cancelled;
+                                    }
+                                    Err(RetryCallbackError::Error(error)) => {
+                                        panic!(
+                                            "{:#?}",
+                                            eyre::Error::from(error).wrap_err(format!(
+                                                "Non-recoverable error while querying previous \
+                                                 nonce inclusion on L1 for settlement task {} / \
+                                                 wallet {} / nonce {}",
+                                                self.id, wallet, previous_nonce,
+                                            ))
+                                        );
+                                    }
+                                };
+                            if previous_nonce_on_l1.is_none() {
                                 continue 'nonces; // wait for previous nonce to
                                                   // be included
                             }
@@ -300,7 +397,9 @@ impl<P: Provider + 'static> SettlementTask<P> {
                     }
                 }
                 self.write_job_revert_to_db(&earliest_revert_result).await;
-                return SettlementJobResult::ContractCall(earliest_revert_result.clone());
+                return SettlementTaskRunResult::Completed(SettlementJobResult::ContractCall(
+                    earliest_revert_result.clone(),
+                ));
             }
             // There was no successful attempt, and either at least one nonce was not yet
             // seen on L1 or there is no reverting attempt. So we need to wait
@@ -323,6 +422,36 @@ impl<P: Provider + 'static> SettlementTask<P> {
                 .duration_since(SystemTime::now())
                 .unwrap_or_else(|_| Duration::from_secs(0));
             let _ = tokio::time::timeout(timeout, self.wait_for_any_nonce_on_l1()).await;
+        }
+    }
+
+    fn try_handle_control_action(&mut self) -> Option<SettlementTaskRunResult> {
+        match self.poll_control_action() {
+            Some(TaskControlAction::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
+            Some(TaskControlAction::ReloadAndRestart) => {
+                Some(SettlementTaskRunResult::ReloadAndRestart)
+            }
+            None => None,
+        }
+    }
+
+    fn poll_control_action(&mut self) -> Option<TaskControlAction> {
+        if self.control.cancellation_token.is_cancelled() {
+            return Some(TaskControlAction::Cancelled);
+        }
+
+        match self.control.admin_commands.try_recv() {
+            Ok(TaskAdminCommand::ReloadAndRestart) => Some(TaskControlAction::ReloadAndRestart),
+            Err(mpsc::error::TryRecvError::Empty) => None,
+            Err(mpsc::error::TryRecvError::Disconnected) => {
+                error!(
+                    task_id = ?self.id,
+                    cancelled = self.control.cancellation_token.is_cancelled(),
+                    "Settlement task lost its admin command channel while still running; \
+                     stopping task"
+                );
+                Some(TaskControlAction::Cancelled)
+            }
         }
     }
 
@@ -401,7 +530,7 @@ impl<P: Provider + 'static> SettlementTask<P> {
 
     async fn wait_for_any_nonce_on_l1(&self) {
         // TODO: wait for any nonce from our known list to be included on L1 (not
-        // settled, just included) Use retry_callback_until_success as needed
+        // settled, just included) Use retry_alloy_callback_until_success as needed
         // XREF: https://github.com/agglayer/agglayer/issues/1314
         todo!()
     }
@@ -410,11 +539,13 @@ impl<P: Provider + 'static> SettlementTask<P> {
         &self,
         wallet: Address,
         nonce: Nonce,
-    ) -> Option<SettlementTxHash> {
-        // TODO: add retry with backoff using self.job.settlement_config.retry_on_transient_failure
-        crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce)
-            .await
-            .expect("TODO: add retry instead of panicking on transient RPC error")
+    ) -> Result<Option<SettlementTxHash>, RetryCallbackError<TransportError>> {
+        crate::utils::retry_alloy_callback_until_success(
+            &self.job.settlement_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce),
+        )
+        .await
     }
 
     async fn current_result_on_l1_for(
@@ -422,7 +553,7 @@ impl<P: Provider + 'static> SettlementTask<P> {
         _tx_hash: SettlementTxHash,
     ) -> Option<ContractCallResult> {
         // TODO: return the result on L1 if the tx_hash is already included on L1, and
-        // None otherwise Use retry_callback_until_success as needed
+        // None otherwise Use retry_alloy_callback_until_success as needed
         // XREF: https://github.com/agglayer/agglayer/issues/1382
         todo!()
     }

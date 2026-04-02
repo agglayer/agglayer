@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 /// Multiplier is a quantity specifying a scaling factor of some sort.
 ///
 /// It is internally implemented as a `u64` fixed point scaled by 1000.
@@ -65,6 +67,17 @@ impl Multiplier {
 
     pub fn as_f64(self) -> f64 {
         self.0 as f64 / Self::SCALE as f64
+    }
+
+    pub fn saturating_mul_duration(self, duration: Duration) -> Duration {
+        Duration::from_millis(
+            (duration
+                .as_millis()
+                .saturating_mul(u128::from(self.as_u64_per_1000()))
+                / 1000)
+                .try_into()
+                .unwrap_or(u64::MAX),
+        )
     }
 
     fn scale_f64(x: f64) -> f64 {
@@ -194,5 +207,13 @@ mod test {
     #[case(u64::MAX, "18446744073709551.615")]
     fn display(#[case] value: u64, #[case] expected: &str) {
         assert_eq!(Multiplier(value).to_string(), expected);
+    }
+
+    #[test]
+    fn saturating_mul_duration_scales_duration() {
+        assert_eq!(
+            Multiplier::from_u64_per_1000(1500).saturating_mul_duration(Duration::from_secs(2)),
+            Duration::from_secs(3)
+        );
     }
 }
