@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use agglayer_config::storage::backup::BackupConfig;
-use agglayer_storage::{backup::BackupEngine, tests::TempDBDir};
+use agglayer_storage::{
+    backup::{BackupEngine, BackupEngineInfo},
+    tests::TempDBDir,
+};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
 use integrations::{
@@ -27,6 +30,23 @@ async fn wait_for_backup_counts(
         let backup_report = BackupEngine::list_backups(backup_dir).unwrap();
         backup_report.get_state().len() >= minimum_state_backups
             && backup_report.get_pending().len() >= minimum_pending_backups
+    })
+    .await;
+}
+
+fn latest_backup_id(backups: &[BackupEngineInfo]) -> Option<u32> {
+    backups.iter().map(|backup| backup.backup_id).max()
+}
+
+async fn wait_for_new_backups(
+    backup_dir: &std::path::Path,
+    previous_state_backup_id: Option<u32>,
+    previous_pending_backup_id: Option<u32>,
+) {
+    wait_for_condition("new backup generation", Duration::from_secs(30), || async {
+        let backup_report = BackupEngine::list_backups(backup_dir).unwrap();
+        latest_backup_id(backup_report.get_state()) > previous_state_backup_id
+            && latest_backup_id(backup_report.get_pending()) > previous_pending_backup_id
     })
     .await;
 }
@@ -137,6 +157,11 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
+    wait_for_backup_counts(&backup_dir.path, 1, 1).await;
+    let first_backup_report = BackupEngine::list_backups(&backup_dir.path).unwrap();
+    let first_state_backup_id = latest_backup_id(first_backup_report.get_state());
+    let first_pending_backup_id = latest_backup_id(first_backup_report.get_pending());
+
     let certificate_id2: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2])
         .await
@@ -146,9 +171,16 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // This configuration purges state and pending backups eagerly, so only the
-    // latest backup is expected to remain even after multiple settlements.
-    wait_for_backup_counts(&backup_dir.path, 1, 1).await;
+    // This configuration purges state and pending backups eagerly, so the
+    // backup count can remain at 1 after both settlements. Wait for the latest
+    // backup ids to advance to ensure certificate2 is durably included before
+    // shutting the node down.
+    wait_for_new_backups(
+        &backup_dir.path,
+        first_state_backup_id,
+        first_pending_backup_id,
+    )
+    .await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;

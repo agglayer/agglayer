@@ -55,6 +55,11 @@ for _ in $(seq 1 60); do
     sleep 1
 done
 
+cast block-number --rpc-url "$docker_rpc" >/dev/null 2>&1 || {
+    printf 'Docker RPC never became ready at %s\n' "$docker_rpc" >&2
+    exit 1
+}
+
 replay_rpc="http://${ANVIL_HOST}:${ANVIL_PORT}"
 
 anvil \
@@ -75,6 +80,11 @@ for _ in $(seq 1 60); do
 
     sleep 1
 done
+
+cast block-number --rpc-url "$replay_rpc" >/dev/null 2>&1 || {
+    printf 'Anvil replay RPC never became ready at %s\n' "$replay_rpc" >&2
+    exit 1
+}
 
 # The shipped genesis is only the deployment base. Patch in the live Docker
 # block-0 EOAs before replaying blocks so the later transactions reproduce
