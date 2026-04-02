@@ -30,12 +30,12 @@ sp1-sdk = { workspace = true }
 sp1-core-machine.workspace = true
 lazy_static.workspace = true
 rand.workspace = true
-hex-literal = "0.4"
+hex-literal = "1.1"
 hex.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-uuid = { version = "1.18.0", features = ["v4", "fast-rng"] }
-regex = "1.11"
+uuid = { version = "1.22.0", features = ["v4", "fast-rng"] }
+regex = "1.12"
 
 [dev-dependencies]
 insta.workspace = true
