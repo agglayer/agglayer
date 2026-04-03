@@ -18,7 +18,7 @@ with clarity and operational correctness as the primary goals.
 - Contributor workflows for AI-agent configuration and docs publishing.
 
 For generated Rust API documentation,
-see the [rustdoc reference](/rustdoc/agglayer/)
+see the [rustdoc reference](rustdoc/agglayer/)
 (also accessible via the `</>` icon in the toolbar).
 
 ## How to use it
