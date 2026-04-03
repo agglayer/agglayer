@@ -26,8 +26,12 @@ use crate::utils::RetryCallbackError;
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
 #[derive(Debug, thiserror::Error)]
-#[error("assumed non-recoverable at {file}:{line}: {error_message}")]
+#[error(
+    "assumed non-recoverable in settlement task {settlement_task_id} at {file}:{line}: \
+     {error_message}"
+)]
 struct NonRecoverableError {
+    settlement_task_id: Ulid,
     file: &'static str,
     line: u32,
     error_message: String,
@@ -174,13 +178,10 @@ impl<P: Provider + 'static> SettlementTask<P> {
                         panic!(
                             "{:#?}",
                             eyre::Error::from(error).wrap_err(NonRecoverableError {
+                                settlement_task_id,
                                 file: file!(),
                                 line: line!(),
-                                error_message: format!(
-                                    "settlement task {}: {}",
-                                    settlement_task_id,
-                                    format_args!($($format_args)*)
-                                ),
+                                error_message: format!($($format_args)*),
                             })
                         )
                     }
