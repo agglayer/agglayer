@@ -206,7 +206,8 @@ pub async fn wait_for_terminal_certificate_status_with_timeout(
             Err(error) => {
                 if timeout.is_none() {
                     panic!(
-                        "Failed to fetch certificate {certificate_id} status after {} attempts: {error}",
+                        "Failed to fetch certificate {certificate_id} status after {} attempts: \
+                         {error}",
                         attempts,
                     );
                 }
