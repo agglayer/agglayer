@@ -31,6 +31,7 @@ tokio = { workspace = true, features = ["full"] }
 tower.workspace = true
 tonic = { workspace = true, features = ["zstd"] }
 tracing.workspace = true
+mockall = { workspace = true, optional = true }
 
 sp1-sdk.workspace = true
 sp1-prover.workspace = true
@@ -44,7 +45,6 @@ async-trait.workspace = true
 alloy.workspace = true
 arc-swap.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
-mockall.workspace = true
 prover-alloy.workspace = true
 rstest.workspace = true
 test-log.workspace = true
@@ -54,4 +54,4 @@ url.workspace = true
 [features]
 coverage = []
 sp1 = []
-testutils = []
+testutils = ["dep:mockall"]
