@@ -33,25 +33,6 @@ struct NonRecoverableError {
     error_message: String,
 }
 
-macro_rules! retry {
-    ($result:expr, $($format_args:tt)*) => {
-        match $result {
-            Ok(value) => value,
-            Err(RetryCallbackError::Cancelled) => return SettlementTaskRunResult::Cancelled,
-            Err(RetryCallbackError::Error(error)) => {
-                panic!(
-                    "{:#?}",
-                    eyre::Error::from(error).wrap_err(NonRecoverableError {
-                        file: file!(),
-                        line: line!(),
-                        error_message: format!($($format_args)*),
-                    })
-                )
-            }
-        }
-    };
-}
-
 pub enum StoredSettlementJob<P> {
     Pending(SettlementTask<P>),
     Completed(SettlementJob, SettlementJobResult),
@@ -180,6 +161,33 @@ impl<P: Provider + 'static> SettlementTask<P> {
     }
 
     pub async fn run(&mut self) -> SettlementTaskRunResult {
+        let settlement_task_id = self.id;
+
+        macro_rules! retry {
+            ($result:expr, $($format_args:tt)*) => {
+                match $result {
+                    Ok(value) => value,
+                    Err(RetryCallbackError::Cancelled) => {
+                        return SettlementTaskRunResult::Cancelled;
+                    }
+                    Err(RetryCallbackError::Error(error)) => {
+                        panic!(
+                            "{:#?}",
+                            eyre::Error::from(error).wrap_err(NonRecoverableError {
+                                file: file!(),
+                                line: line!(),
+                                error_message: format!(
+                                    "settlement task {}: {}",
+                                    settlement_task_id,
+                                    format_args!($($format_args)*)
+                                ),
+                            })
+                        )
+                    }
+                }
+            };
+        }
+
         'start: loop {
             if let Some(run_result) = self.try_handle_control_action() {
                 return run_result;
@@ -203,10 +211,7 @@ impl<P: Provider + 'static> SettlementTask<P> {
 
                 let tx_hash_on_l1 = retry!(
                     self.tx_hash_on_l1_for_nonce(wallet, nonce).await,
-                    "querying nonce inclusion on L1 for settlement task {} / wallet {} / nonce {}",
-                    self.id,
-                    wallet,
-                    nonce,
+                    "querying nonce inclusion on L1 for wallet {wallet} / nonce {nonce}",
                 );
                 if let Some(tx_hash) = tx_hash_on_l1 {
                     // If the nonce is used on L1, we won't need to submit any new tx related to it.
@@ -258,11 +263,8 @@ impl<P: Provider + 'static> SettlementTask<P> {
                         if let Some(previous_nonce) = nonce.previous() {
                             let previous_nonce_on_l1 = retry!(
                                 self.tx_hash_on_l1_for_nonce(wallet, previous_nonce).await,
-                                "querying previous nonce inclusion on L1 for settlement task {} / \
-                                 wallet {} / nonce {}",
-                                self.id,
-                                wallet,
-                                previous_nonce,
+                                "querying previous nonce inclusion on L1 for wallet {wallet} / \
+                                 nonce {previous_nonce}",
                             );
                             if previous_nonce_on_l1.is_none() {
                                 continue 'nonces; // wait for previous nonce to
