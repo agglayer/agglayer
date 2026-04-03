@@ -57,5 +57,32 @@ even when the program source is unchanged.
 
 When the vkey changes, the vkey selector must be bumped
 unless it has already been bumped since the last release.
+
+## How the selector is derived
+
 The selector is `PESSIMISTIC_PROOF_PROGRAM_SELECTOR`
-in `pessimistic-proof-core`.
+in `pessimistic-proof-core`. It is the **major version**
+of `crates/pessimistic-proof-program/Cargo.toml` encoded
+as a big-endian `[u8; 4]`.
+
+The build script `crates/pessimistic-proof-core/build.rs`
+reads the program's `Cargo.toml`, extracts the major version,
+and generates a `PESSIMISTIC_PROOF_PROGRAM_VERSION: u32`
+constant. The selector is that value in big-endian bytes.
+
+## How to bump the selector
+
+1. Increment the **major version** in
+   `crates/pessimistic-proof-program/Cargo.toml`
+   (e.g. `9.0.0` -> `10.0.0`).
+   Only the major component matters.
+
+2. Rebuild the ELF and accept the new snapshots:
+   ```bash
+   cargo make pp-elf
+   cargo make pp-accept-vkey-change
+   ```
+
+The `pp-check-vkey-change` task (part of `pp-elf`) will fail
+if the vkey changed but the selector was not bumped,
+serving as a safety net.
