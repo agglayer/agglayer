@@ -28,14 +28,23 @@ jobs:
 
       - uses: taiki-e/install-action@protoc
 
+      - name: Install mdBook
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: latest
+
+      - name: Build Knowledge Base
+        run: mdbook build docs/knowledge-base/
+
       - name: Build Documentation
         run: cargo doc --no-deps --all --all-features
 
-      - name: Add index file
+      - name: Assemble hosted documentation
         run: |
-          mkdir host-docs
-          echo "<meta http-equiv=\"refresh\" content=\"0; url=agglayer\">" > target/doc/index.html
-          cp -r target/doc/* ./host-docs
+          mkdir -p host-docs/rustdoc
+          cp -r docs/knowledge-base/book/. ./host-docs/
+          cp -r target/doc/. ./host-docs/rustdoc/
+          echo "<meta http-equiv=\"refresh\" content=\"0; url=agglayer\">" > host-docs/rustdoc/index.html
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v4
