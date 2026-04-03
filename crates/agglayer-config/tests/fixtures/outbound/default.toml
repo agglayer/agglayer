@@ -1,7 +1,7 @@
 [rpc.settle-tx]
 max-retries = 30
 retry-interval = "10s"
-confirmations = 1
+confirmations = 12
 gas-multiplier-factor = 100
 
 [rpc.settle-tx.gas-price]
@@ -12,7 +12,7 @@ ceiling = "100gwei"
 [rpc.settle-cert]
 max-retries = 30
 retry-interval = "10s"
-confirmations = 1
+confirmations = 12
 gas-multiplier-factor = 100
 
 [rpc.settle-cert.gas-price]
