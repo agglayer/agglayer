@@ -1,7 +1,7 @@
 {
   "_format": "hh-sol-artifact-1",
   "contractName": "AggchainBase",
-  "sourceName": "contracts/v2/lib/AggchainBase.sol",
+  "sourceName": "contracts/lib/AggchainBase.sol",
   "abi": [
     {
       "inputs": [],
@@ -762,7 +762,7 @@
       "name": "aggLayerGateway",
       "outputs": [
         {
-          "internalType": "contract IAggLayerGateway",
+          "internalType": "contract IAgglayerGateway",
           "name": "",
           "type": "address"
         }
@@ -870,7 +870,7 @@
       "name": "bridgeAddress",
       "outputs": [
         {
-          "internalType": "contract IPolygonZkEVMBridgeV2",
+          "internalType": "contract IAgglayerBridge",
           "name": "",
           "type": "address"
         }
@@ -1183,7 +1183,7 @@
       "name": "globalExitRootManager",
       "outputs": [
         {
-          "internalType": "contract IPolygonZkEVMGlobalExitRootV2",
+          "internalType": "contract IAgglayerGER",
           "name": "",
           "type": "address"
         }
@@ -1389,7 +1389,7 @@
       "name": "rollupManager",
       "outputs": [
         {
-          "internalType": "contract PolygonRollupManager",
+          "internalType": "contract AgglayerManager",
           "name": "",
           "type": "address"
         }
