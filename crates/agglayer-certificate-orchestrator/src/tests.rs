@@ -248,8 +248,8 @@ async fn test_collect_certificates_after_epoch() {
 
 // If no certificate is received, the orchestrator should send an empty payload
 #[tokio::test]
-#[ignore = "orchestrator no longer triggers certifier for empty epochs, \
-            test expectation needs to be redesigned"]
+#[ignore = "orchestrator no longer triggers certifier for empty epochs, test expectation needs to \
+            be redesigned"]
 async fn test_collect_certificates_when_empty() {
     let path = TempDBDir::new();
     let config = Config::new(&path.path);

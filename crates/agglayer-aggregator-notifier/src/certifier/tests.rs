@@ -194,5 +194,3 @@ async fn prover_timeout() {
 
     scenario.teardown();
 }
-
-
