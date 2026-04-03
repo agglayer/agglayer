@@ -45,9 +45,6 @@ pub async fn start_agglayer(
     config: Option<agglayer_config::Config>,
     token: Option<CancellationToken>,
 ) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
-    let _port_reservation_lock = tokio::task::spawn_blocking(PortReservationLock::acquire)
-        .await
-        .expect("Port reservation lock task panicked");
     let (shutdown, receiver) = oneshot::channel();
 
     // Make the mock prover pass
@@ -79,14 +76,23 @@ pub async fn start_agglayer(
         }],
     });
 
-    let grpc_addr = next_available_addr();
-    let readrpc_addr = next_available_addr();
-    let admin_addr = next_available_addr();
+    let (grpc_addr, readrpc_addr, admin_addr, telemetry_addr) = {
+        let _port_reservation_lock = tokio::task::spawn_blocking(PortReservationLock::acquire)
+            .await
+            .expect("Port reservation lock task panicked");
+
+        (
+            next_available_addr(),
+            next_available_addr(),
+            next_available_addr(),
+            next_available_addr(),
+        )
+    };
     config.rpc.grpc_port = grpc_addr.port().into();
     config.rpc.readrpc_port = readrpc_addr.port().into();
     config.rpc.admin_port = admin_addr.port().into();
 
-    config.telemetry.addr = next_available_addr();
+    config.telemetry.addr = telemetry_addr;
     config.log.level = LogLevel::Debug;
     config.l1.node_url = l1.rpc.parse().unwrap();
     config.l1.ws_node_url = l1.ws.parse().unwrap();
@@ -197,7 +203,16 @@ pub async fn wait_for_terminal_certificate_status_with_timeout(
 
                 current_observation
             }
-            Err(error) => format!("rpc_error={error}"),
+            Err(error) => {
+                if timeout.is_none() {
+                    panic!(
+                        "Failed to fetch certificate {certificate_id} status after {} attempts: {error}",
+                        attempts,
+                    );
+                }
+
+                format!("rpc_error={error}")
+            }
         };
 
         if timeout.is_some_and(|timeout| start.elapsed() >= timeout) {

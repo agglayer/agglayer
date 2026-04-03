@@ -1,7 +1,7 @@
 use std::{str::FromStr, time::Duration};
 
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
+use agglayer_types::{CertificateId, CertificateStatus};
 use alloy::{
     network::Ethereum,
     primitives::{Address, U256},
@@ -84,16 +84,8 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
         certificate_ids.push(certificate_id);
     }
 
-    let last_certificate_id = *certificate_ids.last().unwrap();
-    let result = wait_for_settlement_or_error!(client, last_certificate_id).await;
-
-    assert!(matches!(result.status, CertificateStatus::Settled));
-
     for certificate_id in &certificate_ids {
-        let header: CertificateHeader = client
-            .request("interop_getCertificateHeader", rpc_params![certificate_id])
-            .await
-            .unwrap();
+        let header = wait_for_settlement_or_error!(client, *certificate_id).await;
 
         assert!(matches!(header.status, CertificateStatus::Settled));
     }
