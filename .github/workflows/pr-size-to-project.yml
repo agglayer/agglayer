@@ -586,11 +586,11 @@ jobs:
             }
 
             const optionAliases = {
-              XS: ['xs', 'size/xs', 'size-xs', 'x-small', 'x small'],
-              S: ['s', 'size/s', 'size-s', 'small'],
-              M: ['m', 'size/m', 'size-m', 'medium'],
-              L: ['l', 'size/l', 'size-l', 'large'],
-              XL: ['xl', 'size/xl', 'size-xl', 'x-large', 'x large'],
+              XS: ['xs', 'x-small', 'x small'],
+              S: ['s', 'small'],
+              M: ['m', 'medium'],
+              L: ['l', 'large'],
+              XL: ['xl', 'x-large', 'x large'],
             };
 
             if (field.__typename === 'ProjectV2SingleSelectField') {
