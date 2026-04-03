@@ -5,12 +5,13 @@ disable-model-invocation: true
 ---
 
 When creating a git commit:
+
 - Use Conventional Commits format (see [Format](#format))
 - Follow repository commit conventions
 
 ## Format
 
-```
+```text
 <type>(<optional-scope>): <description>
 
 [optional body]
