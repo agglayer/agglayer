@@ -68,3 +68,58 @@ macro_rules! impl_codec_using_bincode_for {
 }
 
 pub(crate) use impl_codec_using_bincode_for;
+
+macro_rules! impl_codec_using_protobuf_for {
+    ($($type:ty),* $(,)?) => {
+        $(
+            impl $crate::schema::Codec for $type {
+                fn encode_into<W: ::std::io::Write>(
+                    &self,
+                    mut writer: W,
+                ) -> Result<(), $crate::schema::CodecError> {
+                    let mut buf = ::prost::bytes::BytesMut::with_capacity(
+                        <Self as ::prost::Message>::encoded_len(self),
+                    );
+
+                    <Self as ::prost::Message>::encode(self, &mut buf)?;
+
+                    writer.write_all(&buf)?;
+
+                    Ok(())
+                }
+
+                fn decode(buf: &[u8]) -> Result<Self, $crate::schema::CodecError> {
+                    <Self as ::prost::Message>::decode(buf).map_err(Into::into)
+                }
+            }
+        )*
+    };
+    ($($type:ty => $proto:ty),* $(,)?) => {
+        $(
+            impl $crate::schema::Codec for $type {
+                fn encode_into<W: ::std::io::Write>(
+                    &self,
+                    mut writer: W,
+                ) -> Result<(), $crate::schema::CodecError> {
+                    let proto: $proto = self.into();
+                    let mut buf = ::prost::bytes::BytesMut::with_capacity(
+                        <$proto as ::prost::Message>::encoded_len(&proto),
+                    );
+
+                    <$proto as ::prost::Message>::encode(&proto, &mut buf)?;
+
+                    writer.write_all(&buf)?;
+
+                    Ok(())
+                }
+
+                fn decode(buf: &[u8]) -> Result<Self, $crate::schema::CodecError> {
+                    let proto = <$proto as ::prost::Message>::decode(buf)?;
+                    Ok(proto.into())
+                }
+            }
+        )*
+    };
+}
+
+pub(crate) use impl_codec_using_protobuf_for;
