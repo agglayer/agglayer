@@ -533,6 +533,7 @@ dependencies = [
  "agglayer-types",
  "alloy",
  "derive_more 2.1.1",
+ "educe",
  "eyre",
  "tokio",
  "tokio-util",
