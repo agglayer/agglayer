@@ -1,4 +1,7 @@
 use insta::assert_snapshot;
+use serde::{de::IgnoredAny, Deserialize};
+use sp1_prover::{Groth16Bn254Proof, PlonkBn254Proof};
+use sp1_sdk::{SP1Proof, SP1ProofWithPublicValues, SP1PublicValues};
 
 use crate::{
     columns::proof_per_certificate::{CertificateId, Proof},
@@ -35,16 +38,111 @@ fn can_parse_value() {
     assert!(matches!(expected_value, Proof::SP1(_)));
 }
 
-/// Guard against accidental changes in the storage encoding of [`Proof`].
-///
-/// The previous fixture was serialised with SP1 v3 types which are binary-
-/// incompatible with SP1 v6 (`PlonkBn254Proof.public_inputs` grew from
-/// `[String; 2]` to `[String; 5]`).  Instead of maintaining a cross-version
-/// fixture shim, we now generate a real Plonk proof via the mock prover and
-/// snapshot the storage-layer encoding.  Any future encoding drift will
-/// cause the snapshot to fail.
+#[derive(Deserialize)]
+struct LegacySP1ProofWithPublicValues {
+    proof: LegacySP1Proof,
+    #[allow(unused)]
+    stdin: sp1_sdk::SP1Stdin,
+    public_values: SP1PublicValues,
+    sp1_version: String,
+}
+
+#[derive(Deserialize)]
+enum LegacySP1Proof {
+    Core(IgnoredAny),
+    Compressed(IgnoredAny),
+    Plonk(LegacyPlonkBn254Proof),
+    Groth16(LegacyGroth16Bn254Proof),
+}
+
+#[derive(Deserialize)]
+struct LegacyPlonkBn254Proof {
+    public_inputs: [String; 2],
+    encoded_proof: String,
+    raw_proof: String,
+    plonk_vkey_hash: [u8; 32],
+}
+
+#[derive(Deserialize)]
+struct LegacyGroth16Bn254Proof {
+    public_inputs: [String; 2],
+    encoded_proof: String,
+    raw_proof: String,
+    groth16_vkey_hash: [u8; 32],
+}
+
+impl LegacySP1ProofWithPublicValues {
+    fn load(path: impl AsRef<std::path::Path>) -> eyre::Result<Self> {
+        agglayer_types::bincode::sp1v4()
+            .deserialize_from(std::fs::File::open(path).expect("failed to open file"))
+            .map_err(Into::into)
+    }
+}
+
+fn expand_legacy_public_inputs([vkey_hash, public_values_hash]: [String; 2]) -> [String; 5] {
+    [
+        vkey_hash,
+        public_values_hash,
+        "0".to_string(),
+        "0".to_string(),
+        "0".to_string(),
+    ]
+}
+
+impl From<LegacySP1Proof> for SP1Proof {
+    fn from(legacy: LegacySP1Proof) -> Self {
+        match legacy {
+            LegacySP1Proof::Plonk(plonk) => SP1Proof::Plonk(PlonkBn254Proof {
+                public_inputs: expand_legacy_public_inputs(plonk.public_inputs),
+                encoded_proof: plonk.encoded_proof,
+                raw_proof: plonk.raw_proof,
+                plonk_vkey_hash: plonk.plonk_vkey_hash,
+            }),
+            LegacySP1Proof::Groth16(groth16) => SP1Proof::Groth16(Groth16Bn254Proof {
+                public_inputs: expand_legacy_public_inputs(groth16.public_inputs),
+                encoded_proof: groth16.encoded_proof,
+                raw_proof: groth16.raw_proof,
+                groth16_vkey_hash: groth16.groth16_vkey_hash,
+            }),
+            LegacySP1Proof::Core(_) | LegacySP1Proof::Compressed(_) => {
+                panic!("historical proof fixture unexpectedly contains a non-BN254 proof")
+            }
+        }
+    }
+}
+
+impl From<LegacySP1ProofWithPublicValues> for SP1ProofWithPublicValues {
+    fn from(legacy: LegacySP1ProofWithPublicValues) -> Self {
+        Self {
+            proof: legacy.proof.into(),
+            public_values: legacy.public_values,
+            sp1_version: legacy.sp1_version,
+            tee_proof: None,
+        }
+    }
+}
+
+/// Guard against accidental changes in the on-chain proof bytes and public
+/// values layout for already persisted proofs.
 #[test]
 fn non_regression_proof_encoding() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("./src/columns/proof_per_certificate/fixtures/non_regression_proof_encoding.proof");
+
+    let proof: SP1ProofWithPublicValues =
+        LegacySP1ProofWithPublicValues::load(path).unwrap().into();
+    assert_snapshot!("proof hex format", hex::encode(proof.bytes()));
+
+    assert_snapshot!(
+        "proof public input hex format",
+        hex::encode(proof.public_values.as_slice())
+    );
+}
+
+/// Snapshot the current v6 storage encoding separately so the legacy fixture
+/// remains a backward-compatibility check.
+#[test]
+fn non_regression_proof_encoding_v6() {
     use agglayer_types::{
         aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx, PessimisticRootInput,
     };
@@ -53,9 +151,6 @@ fn non_regression_proof_encoding() {
     };
     use pessimistic_proof_test_suite::forest::Forest;
 
-    // Build a real Plonk proof from an empty-state execution so the
-    // snapshot exercises all codec fields (public_inputs, encoded_proof,
-    // public_values, sp1_version, …).
     let mut state = Forest::new([]);
     let old_state = state.local_state();
     let certificate =
@@ -79,16 +174,14 @@ fn non_regression_proof_encoding() {
         .unwrap();
     let proof = Proof::new_for_test(&old_state.into(), &multi_batch_header);
 
-    // Verify the agglayer storage codec round-trips correctly.
     let encoded = proof.encode().expect("Unable to encode proof");
     let decoded = Proof::decode(&encoded[..]).expect("Unable to decode proof");
 
-    // Snapshot the storage-layer encoding (agglayer bincode codec).
-    assert_snapshot!("proof hex format", hex::encode(&encoded));
+    assert_snapshot!("proof storage hex format v6", hex::encode(&encoded));
 
     let Proof::SP1(sp1_proof) = decoded;
     assert_snapshot!(
-        "proof public input hex format",
+        "proof public input hex format v6",
         hex::encode(sp1_proof.public_values.as_slice())
     );
 }

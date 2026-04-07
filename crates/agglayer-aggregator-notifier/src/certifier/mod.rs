@@ -69,9 +69,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
                 } else {
                     EnvProver::Cpu(ProverClient::builder().cpu().build())
                 };
-                let proving_key = verifier
-                    .setup(Elf::Static(ELF))
-                    .map_err(|e| eyre!(e.to_string()))?;
+                let proving_key = verifier.setup(Elf::Static(ELF)).map_err(|e| eyre!(e))?;
                 let verifying_key = proving_key.verifying_key().clone();
                 Ok((verifier, verifying_key))
             }
@@ -106,6 +104,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
             |_| testutils::verify_mock_proof_inputs(verifying_key, proof)
+                .map_err(eyre::Error::from)
         );
 
         // `sp1_fast` wraps the call in `catch_unwind`, which requires `UnwindSafe`.
@@ -121,53 +120,54 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
 
 #[cfg(any(test, feature = "testutils"))]
 mod testutils {
-    use eyre::bail;
-    use sp1_sdk::{HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1VerifyingKey};
+    use anyhow::{anyhow, Result};
+    use sp1_sdk::{
+        HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey,
+    };
+
+    fn verify_mock_public_inputs(
+        verifying_key: &SP1VerifyingKey,
+        proof: &SP1ProofWithPublicValues,
+        public_inputs: &[String; 5],
+    ) -> Result<()> {
+        let expected_vkey_hash = verifying_key.hash_bn254().to_string();
+        if public_inputs[0] != expected_vkey_hash {
+            return Err(anyhow!(
+                "vkey hash mismatch: expected {}, got {}",
+                expected_vkey_hash,
+                public_inputs[0]
+            ));
+        }
+
+        let expected_public_values_hash = proof.public_values.hash_bn254().to_string();
+        if public_inputs[1] != expected_public_values_hash {
+            return Err(anyhow!(
+                "public values hash mismatch: expected {}, got {}",
+                expected_public_values_hash,
+                public_inputs[1]
+            ));
+        }
+
+        Ok(())
+    }
 
     // Mirror SP1's mock verifier for Plonk/Groth16 proofs by checking that
     // the proof's public-input hashes match the expected vkey and public values.
     pub(super) fn verify_mock_proof_inputs(
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
-    ) -> eyre::Result<()> {
-        let public_inputs = match &proof.proof {
-            SP1Proof::Plonk(plonk) => &plonk.public_inputs,
-            SP1Proof::Groth16(groth16) => &groth16.public_inputs,
-            _ => return Ok(()),
-        };
-
-        let vkey_hash = public_inputs.first().ok_or_else(|| {
-            eyre::eyre!(
-                "mock proof is missing required public inputs: expected at least 2, got {}",
-                public_inputs.len()
-            )
-        })?;
-        let public_values_hash = public_inputs.get(1).ok_or_else(|| {
-            eyre::eyre!(
-                "mock proof is missing required public inputs: expected at least 2, got {}",
-                public_inputs.len()
-            )
-        })?;
-
-        let expected_vkey_hash = verifying_key.hash_bn254().to_string();
-        if *vkey_hash != expected_vkey_hash {
-            bail!(
-                "vkey hash mismatch: expected {}, got {}",
-                expected_vkey_hash,
-                vkey_hash
-            );
+    ) -> Result<(), SP1VerificationError> {
+        match &proof.proof {
+            SP1Proof::Plonk(plonk) => {
+                verify_mock_public_inputs(verifying_key, proof, &plonk.public_inputs)
+                    .map_err(SP1VerificationError::Plonk)
+            }
+            SP1Proof::Groth16(groth16) => {
+                verify_mock_public_inputs(verifying_key, proof, &groth16.public_inputs)
+                    .map_err(SP1VerificationError::Groth16)
+            }
+            _ => Ok(()),
         }
-
-        let expected_public_values_hash = proof.public_values.hash_bn254().to_string();
-        if *public_values_hash != expected_public_values_hash {
-            bail!(
-                "public values hash mismatch: expected {}, got {}",
-                expected_public_values_hash,
-                public_values_hash
-            );
-        }
-
-        Ok(())
     }
 }
 
