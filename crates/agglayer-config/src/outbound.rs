@@ -166,7 +166,7 @@ const fn default_rpc_retry_interval() -> Duration {
 /// Default number of confirmations required for the transaction to resolve a
 /// receipt.
 const fn default_rpc_confirmations() -> usize {
-    1
+    12
 }
 
 /// Default gas price ceiling for the transaction.
@@ -220,7 +220,7 @@ mod tests {
 
                     assert_eq!(config.max_retries, 30);
                     assert_eq!(config.retry_interval, Duration::from_secs(10));
-                    assert_eq!(config.confirmations, 1);
+                    assert_eq!(config.confirmations, 12);
                 }
 
                 #[test]

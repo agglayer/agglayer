@@ -36,7 +36,6 @@ struct NonRecoverableError {
     line: u32,
     error_message: String,
 }
-
 pub enum StoredSettlementJob<P> {
     Pending(SettlementTask<P>),
     Completed(SettlementJob, SettlementJobResult),

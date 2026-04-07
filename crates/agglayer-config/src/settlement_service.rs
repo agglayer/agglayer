@@ -346,7 +346,7 @@ pub struct SettlementConfig {
 /// Default number of confirmations required
 /// for the transaction to resolve a receipt.
 const fn default_confirmations() -> usize {
-    32
+    12
 }
 
 fn default_gas_limit_ceiling() -> U256 {
