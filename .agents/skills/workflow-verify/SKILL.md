@@ -97,6 +97,10 @@ run `recommended_commands` directly in the provided order.
 cargo check --workspace --tests --all-features
 ```
 
+`cargo check` only type-checks; it does **not** execute tests.
+Never treat a passing `cargo check` as proof that changes work.
+When any scope below matches the changed files, it must also run.
+
 ### Code behavior (features, bug fixes, refactors)
 
 ```bash
