@@ -28,11 +28,14 @@ When creating a PR:
 
 ## Steps
 
-1. Review all commits on the branch
+1. **Run the `verify` skill** if it has not been run
+   since the last code change.
+   All matching checks must pass before proceeding.
+2. Review all commits on the branch
    (`git log` and `git diff` against the base branch).
-2. Draft a PR title (Conventional Commits format, 72 chars max).
-3. Draft a PR description following the rules above.
-4. Ask for confirmation from the user with all this information.
-5. Check if the branch needs to be pushed to remote.
-6. Create the PR.
-7. Return the PR URL.
+3. Draft a PR title (Conventional Commits format, 72 chars max).
+4. Draft a PR description following the rules above.
+5. Ask for confirmation from the user with all this information.
+6. Check if the branch needs to be pushed to remote.
+7. Create the PR.
+8. Return the PR URL.

@@ -1,6 +1,7 @@
 ---
 name: verify
 description: >
+  **Mandatory** before any commit or push.
   Run Definition-of-Done checks from change scope
   and report exact pass/fail per command.
 argument-hint: auto, minimal, code, proof, proto, full
