@@ -1,5 +1,3 @@
-use agglayer_interop_types::aggchain_proof::AggchainData;
-
 mod aggchain_proof;
 mod global;
 mod multisig;
@@ -15,6 +13,7 @@ pub use crate::aggchain_data::{
     multisig::{Ctx as MultisigCtx, Payload as MultisigPayload},
     PayloadWithCtx as CertificateAggchainDataWithCtx,
 };
+use crate::aggchain_proof::{AggchainData, AggchainProof};
 
 /// Represents the payload from the chain, with the context fetched from the L1.
 #[derive(Clone, Debug)]
@@ -49,7 +48,7 @@ impl TryFrom<AggchainData> for global::Payload {
             AggchainData::MultisigAndAggchainProof {
                 multisig,
                 aggchain_proof:
-                    agglayer_interop_types::aggchain_proof::AggchainProof {
+                    AggchainProof {
                         proof,
                         aggchain_params,
                         public_values,

@@ -1,4 +1,4 @@
-use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
+use agglayer_interop_types::LocalExitRoot;
 use agglayer_primitives::{Address, Hashable, Signature};
 use pessimistic_proof::{
     core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion},
@@ -10,6 +10,7 @@ use unified_bridge::{
 
 use crate::{
     aggchain_data::{MultisigCtx, MultisigPayload, PayloadWithCtx},
+    aggchain_proof::{AggchainData, AggchainProof},
     Digest, Error, SignerError,
 };
 
@@ -197,7 +198,7 @@ impl Certificate {
             AggchainData::MultisigOnly { .. } => None,
             AggchainData::MultisigAndAggchainProof {
                 aggchain_proof:
-                    agglayer_interop_types::aggchain_proof::AggchainProof {
+                    AggchainProof {
                         aggchain_params, ..
                     },
                 ..

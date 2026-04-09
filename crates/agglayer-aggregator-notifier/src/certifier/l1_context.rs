@@ -10,7 +10,6 @@ use agglayer_types::{
 };
 use eyre::Context as _;
 use prover_executor::sp1_fast;
-use sp1_sdk::HashableKey;
 use tracing::debug;
 
 use crate::CertifierClient;
@@ -117,11 +116,11 @@ where
             .await
             .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
 
-        let vkey = aggchain_proof_payload.aggchain_vkey_from_proof();
-
-        let vkey_hash_bytes = sp1_fast(|| vkey.vk.hash_bytes())
+        let vkey_hash_bytes = sp1_fast(|| aggchain_proof_payload.aggchain_vkey_hash_bytes())
             .context("Failed to hash SP1 vkey")
             .map_err(CertificationError::Other)?;
+        let vkey_hash_bytes =
+            vkey_hash_bytes.map_err(|source| CertificationError::Other(eyre::eyre!(source)))?;
 
         let vkey_digest = Digest::from(vkey_hash_bytes);
 
@@ -134,9 +133,11 @@ where
             });
         }
 
-        let vkey_hash_u32 = sp1_fast(|| vkey.vk.hash_u32())
+        let vkey_hash_u32 = sp1_fast(|| aggchain_proof_payload.aggchain_vkey_hash_u32())
             .context("Failed to hash SP1 vkey")
             .map_err(CertificationError::Other)?;
+        let vkey_hash_u32 =
+            vkey_hash_u32.map_err(|source| CertificationError::Other(eyre::eyre!(source)))?;
 
         Ok(AggchainProofCtx {
             aggchain_vkey: vkey_hash_u32,

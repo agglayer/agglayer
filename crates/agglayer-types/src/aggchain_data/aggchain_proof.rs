@@ -1,10 +1,9 @@
-use agglayer_interop_types::aggchain_proof::Proof;
 use agglayer_primitives::Digest;
 use pessimistic_proof::core;
-use sp1_sdk::SP1VerifyingKey;
 use unified_bridge::AggchainProofPublicValues;
 
 use crate::aggchain_data::PayloadWithCtx;
+use crate::aggchain_proof::{Proof, ProofError, ProofExt as _};
 
 /// Aggchain proof with aggchain params and optional public values for debug
 /// purposes.
@@ -19,9 +18,12 @@ pub struct Payload {
 }
 
 impl Payload {
-    pub fn aggchain_vkey_from_proof(&self) -> SP1VerifyingKey {
-        let Proof::SP1Stark(sp1_reduce_proof) = &self.proof;
-        sp1_reduce_proof.vkey.clone()
+    pub fn aggchain_vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError> {
+        self.proof.vkey_hash_bytes()
+    }
+
+    pub fn aggchain_vkey_hash_u32(&self) -> Result<[u32; 8], ProofError> {
+        self.proof.vkey_hash_u32()
     }
 }
 

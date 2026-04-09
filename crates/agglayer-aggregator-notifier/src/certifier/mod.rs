@@ -5,7 +5,8 @@ use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    aggchain_proof::AggchainData, Certificate, Digest, Height, LocalNetworkStateData, NetworkId,
+    aggchain_proof::{AggchainData, ProofExt as _}, Certificate, Digest, Height,
+    LocalNetworkStateData, NetworkId,
     Proof,
 };
 use eyre::{eyre, Context as _};
@@ -229,24 +230,28 @@ where
             AggchainData::ECDSA { .. } => {}
             AggchainData::MultisigOnly { .. } => {}
             AggchainData::Generic { ref proof, .. } => {
-                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
+                let stark_proof = proof
+                    .executable_sp1()
+                    .map_err(|source| CertificationError::Other(eyre!(source)))?;
 
                 // This operation is unwind safe: if it errors, we will discard stdin and
                 // stark_proof anyway.
                 sp1_fast(AssertUnwindSafe(|| {
-                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone())
+                    stdin.write_proof(stark_proof.proof.clone(), stark_proof.vkey.vk.clone())
                 }))
                 .map_err(CertificationError::Other)?;
             }
             AggchainData::MultisigAndAggchainProof {
                 ref aggchain_proof, ..
             } => {
-                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) =
-                    &aggchain_proof.proof;
+                let stark_proof = aggchain_proof
+                    .proof
+                    .executable_sp1()
+                    .map_err(|source| CertificationError::Other(eyre!(source)))?;
                 // This operation is unwind safe: if it errors, we will discard stdin and
                 // stark_proof anyway.
                 sp1_fast(AssertUnwindSafe(|| {
-                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
+                    stdin.write_proof(stark_proof.proof.clone(), stark_proof.vkey.vk.clone());
                 }))
                 .map_err(CertificationError::Other)?;
             }

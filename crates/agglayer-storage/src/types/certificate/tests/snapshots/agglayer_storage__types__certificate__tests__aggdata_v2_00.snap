@@ -1,0 +1,6 @@
+---
+source: crates/agglayer-storage/src/types/certificate/tests/mod.rs
+expression: bytes
+snapshot_kind: text
+---
+0x0000000000000000000000207a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a00000000000000209b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b00

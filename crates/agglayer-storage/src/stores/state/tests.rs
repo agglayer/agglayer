@@ -318,6 +318,9 @@ fn certificate_serialization(#[case] cert_name: &str) {
     use crate::schema::Codec;
 
     let certificate = data::load_certificate(&format!("{cert_name}.json"));
+    // These hash snapshots intentionally change once certificate storage starts
+    // encoding the new V2 envelope, because the stored bytes are part of the
+    // hashed value asserted here.
     let encoded = certificate.encode().unwrap();
     let hash = pessimistic_proof::keccak::keccak256(&encoded);
     insta::assert_debug_snapshot!(cert_name, hash);

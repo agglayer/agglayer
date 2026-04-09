@@ -16,6 +16,9 @@ pub enum CodecError {
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     BadCertificateVersion { version: u8 },
 
+    #[error("Certificate cannot be encoded in the current storage format: {reason}")]
+    NonWritableCertificate { reason: String },
+
     #[error(r#"Serialization error: {0}
         This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
     ProtobufSerialization(#[from] prost::EncodeError),

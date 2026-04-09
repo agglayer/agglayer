@@ -1,4 +1,9 @@
-use agglayer_types::{bincode, primitives::SignatureError, CertificateId, EpochConfiguration};
+use agglayer_types::{
+    aggchain_proof::{AggchainData, Proof},
+    bincode,
+    primitives::SignatureError,
+    Certificate, CertificateId, Digest, EpochConfiguration,
+};
 use prost::Message;
 
 use super::Error;
@@ -74,3 +79,63 @@ make_round_trip_fuzzers!(
     v1::EpochConfiguration,
     EpochConfiguration
 );
+
+#[test]
+fn certificate_round_trip_preserves_readable_legacy_sp1_proof() {
+    let proto = v1::Certificate {
+        network_id: 17,
+        height: 3,
+        prev_local_exit_root: Some(agglayer_interop::grpc::v1::FixedBytes32 {
+            value: vec![0; 32].into(),
+        }),
+        new_local_exit_root: Some(agglayer_interop::grpc::v1::FixedBytes32 {
+            value: vec![0; 32].into(),
+        }),
+        bridge_exits: Vec::new(),
+        imported_bridge_exits: Vec::new(),
+        aggchain_data: Some(agglayer_interop::grpc::v1::AggchainData {
+            data: Some(agglayer_interop::grpc::v1::aggchain_data::Data::Generic(
+                agglayer_interop::grpc::v1::AggchainProof {
+                    aggchain_params: Some(Digest([0x42; 32]).into()),
+                    signature: None,
+                    context: Default::default(),
+                    proof: Some(agglayer_interop::grpc::v1::aggchain_proof::Proof::Sp1Stark(
+                        agglayer_interop::grpc::v1::Sp1StarkProof {
+                            version: "v4.0.0-rc.3".to_string(),
+                            proof: vec![1, 2, 3, 4].into(),
+                            vkey: vec![5, 6, 7, 8].into(),
+                        },
+                    )),
+                },
+            )),
+        }),
+        metadata: None,
+        custom_chain_data: Vec::new().into(),
+        l1_info_tree_leaf_count: None,
+    };
+
+    let output = Certificate::try_from(proto).unwrap();
+
+    let AggchainData::Generic { ref proof, .. } = output.aggchain_data else {
+        panic!("expected generic aggchain data")
+    };
+    let Proof::SP1Stark(proof) = proof;
+
+    assert_eq!(proof.version, "v4.0.0-rc.3");
+    assert_eq!(proof.proof, vec![1, 2, 3, 4]);
+    assert_eq!(proof.vkey, vec![5, 6, 7, 8]);
+
+    let encoded: v1::Certificate = output.try_into().unwrap();
+    let sp1 = match encoded.aggchain_data.unwrap().data.unwrap() {
+        agglayer_interop::grpc::v1::aggchain_data::Data::Generic(proof) => {
+            match proof.proof.unwrap() {
+                agglayer_interop::grpc::v1::aggchain_proof::Proof::Sp1Stark(proof) => proof,
+            }
+        }
+        _ => panic!("expected generic aggchain proof"),
+    };
+
+    assert_eq!(sp1.version, "v4.0.0-rc.3");
+    assert_eq!(sp1.proof, vec![1, 2, 3, 4]);
+    assert_eq!(sp1.vkey, vec![5, 6, 7, 8]);
+}

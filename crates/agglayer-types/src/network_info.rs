@@ -1,9 +1,10 @@
-use agglayer_interop_types::aggchain_proof;
 use agglayer_primitives::Digest;
 use agglayer_tries::roots::LocalExitRoot;
 use serde::{Deserialize, Serialize};
 
-use crate::{CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId};
+use crate::{
+    aggchain_proof, CertificateId, CertificateStatus, CertificateStatusError, Height, NetworkId,
+};
 
 /// The status of a network.
 /// TODO: implement more detailed status tracking including

@@ -30,7 +30,10 @@ hex.workspace = true
 serde.workspace = true
 serde_with.workspace = true
 sp1-sdk.workspace = true
+sp1-sdk-v5 = { package = "sp1-sdk", version = "=5.2.2" }
 sp1-core-machine.workspace = true
+sp1-hypercube = "=6.0.2"
+sp1-primitives.workspace = true
 sp1-prover.workspace = true
 thiserror.workspace = true
 rand.workspace = true

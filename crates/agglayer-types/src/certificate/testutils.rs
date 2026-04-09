@@ -1,4 +1,4 @@
-use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
+use agglayer_interop_types::LocalExitRoot;
 use agglayer_primitives::{Address, Digest, Hashable, Signature, B256};
 use pessimistic_proof::{
     core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion},
@@ -9,7 +9,12 @@ use unified_bridge::{
     ImportedBridgeExit, ImportedBridgeExitCommitmentValues, LocalExitTree, NetworkId,
 };
 
-use crate::{Certificate, Height, SignerError, U256};
+use crate::{
+    aggchain_proof::{
+        current_sp1_stark_with_context, AggchainData, AggchainProof, MultisigPayload, Proof,
+    },
+    Certificate, Height, SignerError, U256,
+};
 
 impl Default for Certificate {
     fn default() -> Self {
@@ -188,7 +193,7 @@ impl Certificate {
                     .collect();
 
                 AggchainData::MultisigOnly {
-                    multisig: agglayer_interop_types::aggchain_proof::MultisigPayload(signatures),
+                    multisig: MultisigPayload(signatures),
                 }
             }
             AggchainDataType::MultisigAndAggchainProof { num_signers } => {
@@ -202,8 +207,8 @@ impl Certificate {
                 let proof = create_dummy_stark_proof();
 
                 AggchainData::MultisigAndAggchainProof {
-                    multisig: agglayer_interop_types::aggchain_proof::MultisigPayload(signatures),
-                    aggchain_proof: agglayer_interop_types::aggchain_proof::AggchainProof {
+                    multisig: MultisigPayload(signatures),
+                    aggchain_proof: AggchainProof {
                         proof,
                         aggchain_params,
                         public_values: None,
@@ -251,7 +256,7 @@ pub const EMPTY_ELF: &[u8] = pessimistic_proof::ELF;
 
 /// Create a dummy STARK proof for testing purposes.
 /// This creates a minimal SP1 proof that can be used in tests.
-fn create_dummy_stark_proof() -> agglayer_interop_types::aggchain_proof::Proof {
+fn create_dummy_stark_proof() -> Proof {
     use sp1_sdk::{blocking::Prover, ProvingKey};
 
     let (proof, vkey) = {
@@ -268,12 +273,8 @@ fn create_dummy_stark_proof() -> agglayer_interop_types::aggchain_proof::Proof {
         (proof, verif_key)
     };
 
-    agglayer_interop_types::aggchain_proof::Proof::SP1Stark(
-        agglayer_interop_types::aggchain_proof::SP1StarkWithContext {
-            proof,
-            vkey,
-            version: "test".to_string(),
-        },
+    Proof::SP1Stark(
+        current_sp1_stark_with_context(&proof, &vkey, sp1_sdk::SP1_CIRCUIT_VERSION).unwrap(),
     )
 }
 
@@ -308,11 +309,10 @@ impl Certificate {
 
 #[cfg(test)]
 mod tests {
-    use agglayer_interop_types::aggchain_proof::AggchainData;
     use pessimistic_proof::core::commitment::SignatureCommitmentVersion;
     use rstest::rstest;
 
-    use crate::{Certificate, Height};
+    use crate::{aggchain_proof::AggchainData, Certificate, Height};
 
     #[rstest]
     fn can_retrieve_correct_signer(
@@ -329,9 +329,7 @@ mod tests {
         );
 
         // Check that the signature is valid
-        let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
-            certificate.aggchain_data
-        else {
+        let AggchainData::ECDSA { signature } = certificate.aggchain_data else {
             panic!("inconsistent test data")
         };
 
