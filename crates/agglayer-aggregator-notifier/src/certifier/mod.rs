@@ -5,9 +5,8 @@ use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
-    aggchain_proof::{AggchainData, ProofExt as _}, Certificate, Digest, Height,
-    LocalNetworkStateData, NetworkId,
-    Proof,
+    aggchain_proof::{AggchainData, ProofExt as _},
+    Certificate, Digest, Height, LocalNetworkStateData, NetworkId, Proof,
 };
 use eyre::{eyre, Context as _};
 use pessimistic_proof::{

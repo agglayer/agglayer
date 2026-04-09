@@ -2,8 +2,10 @@ use agglayer_primitives::Digest;
 use pessimistic_proof::core;
 use unified_bridge::AggchainProofPublicValues;
 
-use crate::aggchain_data::PayloadWithCtx;
-use crate::aggchain_proof::{Proof, ProofError, ProofExt as _};
+use crate::{
+    aggchain_data::PayloadWithCtx,
+    aggchain_proof::{Proof, ProofError, ProofExt as _},
+};
 
 /// Aggchain proof with aggchain params and optional public values for debug
 /// purposes.

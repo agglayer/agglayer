@@ -1,6 +1,5 @@
 pub use agglayer_interop_types::aggchain_proof::*;
-use sp1_hypercube::SP1PcsProofInner;
-use sp1_hypercube::SP1RecursionProof;
+use sp1_hypercube::{SP1PcsProofInner, SP1RecursionProof};
 use sp1_primitives::SP1GlobalContext;
 use sp1_sdk::{HashableKey as _, SP1VerifyingKey};
 use sp1_sdk_v5::{HashableKey as _, SP1VerifyingKey as SP1VerifyingKeyV5};
