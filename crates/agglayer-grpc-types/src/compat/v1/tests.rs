@@ -139,3 +139,44 @@ fn certificate_round_trip_preserves_readable_legacy_sp1_proof() {
     assert_eq!(sp1.proof, vec![1, 2, 3, 4]);
     assert_eq!(sp1.vkey, vec![5, 6, 7, 8]);
 }
+
+#[test]
+fn certificate_rejects_multisig_index_overflow() {
+    let proto = v1::Certificate {
+        network_id: 17,
+        height: 3,
+        prev_local_exit_root: Some(agglayer_interop::grpc::v1::FixedBytes32 {
+            value: vec![0; 32].into(),
+        }),
+        new_local_exit_root: Some(agglayer_interop::grpc::v1::FixedBytes32 {
+            value: vec![0; 32].into(),
+        }),
+        bridge_exits: Vec::new(),
+        imported_bridge_exits: Vec::new(),
+        aggchain_data: Some(agglayer_interop::grpc::v1::AggchainData {
+            data: Some(agglayer_interop::grpc::v1::aggchain_data::Data::Multisig(
+                agglayer_interop::grpc::v1::Multisig {
+                    data: Some(agglayer_interop::grpc::v1::multisig::Data::Ecdsa(
+                        agglayer_interop::grpc::v1::EcdsaMultisig {
+                            signatures: vec![
+                                agglayer_interop::grpc::v1::ecdsa_multisig::EcdsaMultisigEntry {
+                                    index: u32::MAX,
+                                    signature: None,
+                                },
+                            ],
+                        },
+                    )),
+                },
+            )),
+        }),
+        metadata: None,
+        custom_chain_data: Vec::new().into(),
+        l1_info_tree_leaf_count: None,
+    };
+
+    let error = Certificate::try_from(proto).unwrap_err();
+
+    assert!(
+        error.to_string().contains("too many signers") || error.to_string().contains("overflow")
+    );
+}

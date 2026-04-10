@@ -66,19 +66,24 @@ fn parse_multisig(
                 ));
             }
 
-            let required_len = signatures
-                .iter()
-                .map(|entry| entry.index + 1)
-                .max()
-                .unwrap_or(0);
+            let required_len = signatures.iter().try_fold(0usize, |required_len, entry| {
+                let next_len = usize::try_from(entry.index)
+                    .ok()
+                    .and_then(|index| index.checked_add(1))
+                    .ok_or_else(|| {
+                        Error::invalid_data("Multisig ECDSA signer index overflow".to_string())
+                    })?;
 
-            if required_len as usize > MAX_SIGNERS {
+                Ok::<_, Error>(required_len.max(next_len))
+            })?;
+
+            if required_len > MAX_SIGNERS {
                 return Err(Error::invalid_data(format!(
                     "Multisig ECDSA has too many signers: {required_len} (max {MAX_SIGNERS})",
                 )));
             }
 
-            let mut result: Vec<Option<_>> = vec![None; required_len as usize];
+            let mut result: Vec<Option<_>> = vec![None; required_len];
 
             for entry in signatures {
                 let index = entry.index as usize;
@@ -87,13 +92,19 @@ fn parse_multisig(
                         .try_into()
                         .map_err(Error::parsing_signature)?;
 
-                    if result[index].is_some() {
+                    let slot = result.get_mut(index).ok_or_else(|| {
+                        Error::invalid_data(format!(
+                            "Multisig ECDSA signer index {index} is out of range",
+                        ))
+                    })?;
+
+                    if slot.is_some() {
                         return Err(Error::invalid_data(format!(
                             "Duplicate signature at index {index}",
                         )));
                     }
 
-                    result[index] = Some(signature);
+                    *slot = Some(signature);
                 }
             }
 

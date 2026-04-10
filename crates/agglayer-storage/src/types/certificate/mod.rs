@@ -557,20 +557,20 @@ where
     Certificate::try_from(deserialize_bincode::<T>(bytes)?)
 }
 
-fn ensure_writable(certificate: &Certificate) -> Result<(), CodecError> {
+fn ensure_storable(certificate: &Certificate) -> Result<(), CodecError> {
     let result = match &certificate.aggchain_data {
         AggchainData::ECDSA { .. } | AggchainData::MultisigOnly { .. } => Ok(()),
-        AggchainData::Generic { proof, .. } => proof.ensure_writable(),
+        AggchainData::Generic { proof, .. } => proof.ensure_readable().map(|_| ()),
         AggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
-            aggchain_proof.proof.ensure_writable()
+            aggchain_proof.proof.ensure_readable().map(|_| ())
         }
     };
 
     result.map_err(|err| match err {
-        ProofError::UnsupportedWritableSp1Version { version } => {
+        ProofError::UnsupportedReadableSp1Version { version } => {
             CodecError::NonWritableCertificate {
                 reason: format!(
-                    "SP1 proof version `{version}` is not writable in certificate storage v2"
+                    "SP1 proof version `{version}` is not readable in certificate storage v2"
                 ),
             }
         }
@@ -582,7 +582,7 @@ fn ensure_writable(certificate: &Certificate) -> Result<(), CodecError> {
 
 impl crate::schema::Codec for Certificate {
     fn encode_into<W: std::io::Write>(&self, writer: W) -> Result<(), CodecError> {
-        ensure_writable(self)?;
+        ensure_storable(self)?;
         Ok(bincode_codec().serialize_into(writer, &CurrentCertificate::from(self))?)
     }
 

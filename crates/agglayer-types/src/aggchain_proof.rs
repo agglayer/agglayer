@@ -181,6 +181,7 @@ impl SP1StarkWithContextExt for SP1StarkWithContext {
 }
 
 pub trait ProofExt {
+    fn ensure_readable(&self) -> Result<Sp1ProofVersion, ProofError>;
     fn ensure_writable(&self) -> Result<(), ProofError>;
     fn executable_sp1(&self) -> Result<ExecutableSp1Proof, ProofError>;
     fn vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError>;
@@ -189,6 +190,10 @@ pub trait ProofExt {
 }
 
 impl ProofExt for Proof {
+    fn ensure_readable(&self) -> Result<Sp1ProofVersion, ProofError> {
+        self.sp1().ensure_readable()
+    }
+
     fn ensure_writable(&self) -> Result<(), ProofError> {
         match self {
             Self::SP1Stark(proof) => proof.ensure_writable(),

@@ -14,6 +14,7 @@ use tracing::info;
 use crate::{
     backup::BackupClient,
     error::Error,
+    schema::Codec as _,
     stores::{
         interfaces::writer::{PerEpochWriter, StateWriter},
         pending::PendingStore,
@@ -44,6 +45,14 @@ fn store() -> PerEpochStore<PendingStore, StateStore> {
         backup_client,
     )
     .unwrap()
+}
+
+fn load_certificate_fixture(filename: &str) -> Certificate {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/types/certificate/tests")
+        .join(filename);
+    let bytes = hex::decode(std::fs::read(path).unwrap().trim_ascii()).unwrap();
+    Certificate::decode(&bytes).unwrap()
 }
 
 #[rstest]
@@ -244,6 +253,36 @@ fn adding_multiple_certificates(
 
         height.increment();
     }
+}
+
+#[rstest]
+fn adding_legacy_certificate_from_pending_store(
+    mut store: PerEpochStore<PendingStore, StateStore>,
+) {
+    let certificate = load_certificate_fixture("encoded/regression_01.hex");
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    let previous_height = Height::new(certificate.height.as_u64() - 1);
+    store.start_checkpoint = BTreeMap::from([(certificate.network_id, previous_height)]);
+    store.end_checkpoint = RwLock::new(BTreeMap::from([(certificate.network_id, previous_height)]));
+
+    let result = store.add_certificate(certificate_id, agglayer_types::ExecutionMode::Default);
+
+    assert!(result.is_ok());
 }
 
 #[test_log::test(rstest)]

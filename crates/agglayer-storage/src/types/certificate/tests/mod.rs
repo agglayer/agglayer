@@ -535,18 +535,21 @@ fn store_writes_certificate_v2() {
     let certificate = Certificate::new_for_test(74.into(), Height::new(998));
     let encoded = Certificate::encode(&certificate).expect("encoding failed");
 
+    // Byte 0 is the storage schema tag: 0 = V0, 1 = V1, 2 = the new V2 format.
     assert_eq!(encoded.first().copied(), Some(2));
 }
 
 #[test]
-fn regression_01_legacy_cannot_be_reencoded_for_storage() {
+fn regression_01_legacy_can_be_reencoded_for_storage() {
     let bytes = load_sample_bytes("encoded/regression_01.hex");
     let certificate = Certificate::decode(&bytes).expect("decoding failed");
 
-    assert!(matches!(
-        Certificate::encode(&certificate).unwrap_err(),
-        CodecError::NonWritableCertificate { .. }
-    ));
+    let encoded = Certificate::encode(&certificate).expect("encoding failed");
+    let decoded = Certificate::decode(&encoded).expect("re-decoding failed");
+
+    // Legacy V1 rows are rewritten into the current V2 on-disk format.
+    assert_eq!(encoded.first().copied(), Some(2));
+    assert_eq!(decoded, certificate);
 }
 
 #[rstest::rstest]
