@@ -3,9 +3,12 @@
 ## Documentation and skills index
 
 Key references for navigating this project:
+
 - `README.md` -- project overview, crate table, build prerequisites.
 - `CONTRIBUTING.md` -- contribution workflow, PR conventions.
 - `docs/` -- human-readable documentation (validity checks, audits, dev guides).
+- `docs/knowledge-base/` -- mdbook knowledge base for architecture,
+  domain terms, and implementation conventions.
 - `Makefile.toml` -- build tasks (delegates to `scripts/make/*.toml`).
 
 ## Response priorities
@@ -59,5 +62,7 @@ Key references for navigating this project:
   (e.g., `add`, `rm`, `mv`, `checkout`, `restore`, `commit`, `push`)
   without explicit user approval.
   Read-only commands (`status`, `diff`, `log`, `show`) are always allowed.
+- All skills must be created in `.agents/skills/` inside this repo.
+  All other documentation belongs in `docs/knowledge-base/`.
 - Precedence: when rules conflict,
   favor the Clarification Before Action section.

@@ -8,7 +8,7 @@ user-invocable: false
 ---
 
 When writing or editing text files (markdown, plain text, etc.),
-use **Semantic Line Breaks** (https://sembr.org/).
+use **Semantic Line Breaks** ([sembr.org](https://sembr.org/)).
 
 ## Rules
 

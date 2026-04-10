@@ -9,6 +9,11 @@ configuration checked into the repository.
 This keeps the configuration tool-agnostic.
 Claude Code discovers them via the `.claude/skills` symlink.
 
+**Use `docs/knowledge-base/` for domain and architecture knowledge.**
+Knowledge that should be read by both humans and agents belongs in mdbook
+chapters under `docs/knowledge-base/src/`.
+Skills should focus on workflows and decision procedures.
+
 **Prefer `.agents/skills/` over `.claude/rules/`.**
 Use `.agents/skills/` for most conventions.
 `.claude/rules/` may be used for Claude-specific behavior
@@ -18,6 +23,11 @@ that doesn't fit the skill model (e.g., sub-agent coordination).
 `AGENTS.md` contains only always-on behavioral rules and a documentation index.
 Task-specific workflows (committing, PR creation, verification) are skills
 that load on demand, reducing context consumption.
+
+**Use a scripted blast-radius detector for scope decisions.**
+`cargo make blast-radius` is the canonical detector for changed-file impact.
+Verification workflows should consume its output
+instead of re-deriving scope logic ad hoc.
 
 ## Skill prefixes
 

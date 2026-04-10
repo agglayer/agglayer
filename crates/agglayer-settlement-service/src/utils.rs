@@ -8,7 +8,7 @@ use alloy::{
 /// given wallet and nonce, or `None` if no such mined transaction exists.
 ///
 /// Mempool-only transactions are ignored.
-pub async fn tx_hash_on_l1_for_nonce(
+pub(crate) async fn tx_hash_on_l1_for_nonce(
     provider: &impl Provider,
     wallet: Address,
     nonce: Nonce,
