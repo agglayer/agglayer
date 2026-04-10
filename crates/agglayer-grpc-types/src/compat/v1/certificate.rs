@@ -22,7 +22,7 @@ fn parse_sp1_proof(value: agglayer_interop::grpc::v1::Sp1StarkProof) -> Result<P
         vkey: value.vkey.to_vec(),
     };
     proof
-        .ensure_readable()
+        .ensure_deserializable()
         .map_err(|err| Error::invalid_data(err.to_string()))?;
     Ok(Proof::SP1Stark(proof))
 }

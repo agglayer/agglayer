@@ -32,9 +32,11 @@ serde_with.workspace = true
 sp1-sdk.workspace = true
 sp1-sdk-v5 = { package = "sp1-sdk", version = "=5.2.2" }
 sp1-core-machine.workspace = true
+sp1-core-machine-v5 = { package = "sp1-core-machine", version = "=5.2.4" }
 sp1-hypercube = "=6.0.2"
 sp1-primitives.workspace = true
 sp1-prover.workspace = true
+sp1-prover-v5 = { package = "sp1-prover", version = "=5.2.4" }
 thiserror.workspace = true
 rand.workspace = true
 strum_macros.workspace = true

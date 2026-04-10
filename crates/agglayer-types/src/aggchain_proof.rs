@@ -1,12 +1,15 @@
 pub use agglayer_interop_types::aggchain_proof::*;
+use sp1_core_machine_v5::reduce::SP1ReduceProof as SP1ReduceProofV5;
 use sp1_hypercube::{SP1PcsProofInner, SP1RecursionProof};
 use sp1_primitives::SP1GlobalContext;
+use sp1_prover_v5::InnerSC as InnerSCV5;
 use sp1_sdk::{HashableKey as _, SP1VerifyingKey};
 use sp1_sdk_v5::{HashableKey as _, SP1VerifyingKey as SP1VerifyingKeyV5};
 
 use crate::bincode;
 
 pub type CurrentSp1StarkProof = SP1RecursionProof<SP1GlobalContext, SP1PcsProofInner>;
+pub type LegacySp1StarkProof = SP1ReduceProofV5<InnerSCV5>;
 
 pub struct ExecutableSp1Proof {
     pub proof: CurrentSp1StarkProof,
@@ -15,7 +18,7 @@ pub struct ExecutableSp1Proof {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Sp1ProofVersion {
-    V4,
+    V5,
     V6,
 }
 
@@ -63,6 +66,7 @@ pub fn current_sp1_stark_with_context(
 pub trait SP1StarkWithContextExt {
     fn version_kind(&self) -> Result<Sp1ProofVersion, ProofError>;
     fn ensure_readable(&self) -> Result<Sp1ProofVersion, ProofError>;
+    fn ensure_deserializable(&self) -> Result<(), ProofError>;
     fn ensure_executable(&self) -> Result<(), ProofError>;
     fn ensure_writable(&self) -> Result<(), ProofError>;
     fn executable(&self) -> Result<ExecutableSp1Proof, ProofError>;
@@ -83,7 +87,7 @@ impl SP1StarkWithContextExt for SP1StarkWithContext {
             })?;
 
         match major {
-            "4" => Ok(Sp1ProofVersion::V4),
+            "4" | "5" => Ok(Sp1ProofVersion::V5),
             "6" => Ok(Sp1ProofVersion::V6),
             _ if major.chars().all(|c| c.is_ascii_digit()) => {
                 Err(ProofError::UnsupportedReadableSp1Version {
@@ -103,16 +107,55 @@ impl SP1StarkWithContextExt for SP1StarkWithContext {
     fn ensure_executable(&self) -> Result<(), ProofError> {
         match self.ensure_readable()? {
             Sp1ProofVersion::V6 => Ok(()),
-            Sp1ProofVersion::V4 => Err(ProofError::UnsupportedExecutableSp1Version {
+            Sp1ProofVersion::V5 => Err(ProofError::UnsupportedExecutableSp1Version {
                 version: self.version.clone(),
             }),
+        }
+    }
+
+    fn ensure_deserializable(&self) -> Result<(), ProofError> {
+        match self.ensure_readable()? {
+            Sp1ProofVersion::V5 => {
+                let _: LegacySp1StarkProof =
+                    bincode::sp1v4()
+                        .deserialize(&self.proof)
+                        .map_err(|source| ProofError::DeserializeSp1Proof {
+                            version: self.version.clone(),
+                            source,
+                        })?;
+                let _: SP1VerifyingKeyV5 =
+                    bincode::sp1v4().deserialize(&self.vkey).map_err(|source| {
+                        ProofError::DeserializeSp1Vkey {
+                            version: self.version.clone(),
+                            source,
+                        }
+                    })?;
+                Ok(())
+            }
+            Sp1ProofVersion::V6 => {
+                let _: CurrentSp1StarkProof =
+                    bincode::sp1v4()
+                        .deserialize(&self.proof)
+                        .map_err(|source| ProofError::DeserializeSp1Proof {
+                            version: self.version.clone(),
+                            source,
+                        })?;
+                let _: SP1VerifyingKey =
+                    bincode::sp1v4().deserialize(&self.vkey).map_err(|source| {
+                        ProofError::DeserializeSp1Vkey {
+                            version: self.version.clone(),
+                            source,
+                        }
+                    })?;
+                Ok(())
+            }
         }
     }
 
     fn ensure_writable(&self) -> Result<(), ProofError> {
         match self.ensure_readable()? {
             Sp1ProofVersion::V6 => Ok(()),
-            Sp1ProofVersion::V4 => Err(ProofError::UnsupportedWritableSp1Version {
+            Sp1ProofVersion::V5 => Err(ProofError::UnsupportedWritableSp1Version {
                 version: self.version.clone(),
             }),
         }
@@ -139,7 +182,7 @@ impl SP1StarkWithContextExt for SP1StarkWithContext {
 
     fn vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError> {
         Ok(match self.ensure_readable()? {
-            Sp1ProofVersion::V4 => bincode::sp1v4()
+            Sp1ProofVersion::V5 => bincode::sp1v4()
                 .deserialize::<SP1VerifyingKeyV5>(&self.vkey)
                 .map_err(|source| ProofError::DeserializeSp1Vkey {
                     version: self.version.clone(),
@@ -160,7 +203,7 @@ impl SP1StarkWithContextExt for SP1StarkWithContext {
 
     fn vkey_hash_u32(&self) -> Result<[u32; 8], ProofError> {
         Ok(match self.ensure_readable()? {
-            Sp1ProofVersion::V4 => bincode::sp1v4()
+            Sp1ProofVersion::V5 => bincode::sp1v4()
                 .deserialize::<SP1VerifyingKeyV5>(&self.vkey)
                 .map_err(|source| ProofError::DeserializeSp1Vkey {
                     version: self.version.clone(),
@@ -182,6 +225,7 @@ impl SP1StarkWithContextExt for SP1StarkWithContext {
 
 pub trait ProofExt {
     fn ensure_readable(&self) -> Result<Sp1ProofVersion, ProofError>;
+    fn ensure_deserializable(&self) -> Result<(), ProofError>;
     fn ensure_writable(&self) -> Result<(), ProofError>;
     fn executable_sp1(&self) -> Result<ExecutableSp1Proof, ProofError>;
     fn vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError>;
@@ -192,6 +236,10 @@ pub trait ProofExt {
 impl ProofExt for Proof {
     fn ensure_readable(&self) -> Result<Sp1ProofVersion, ProofError> {
         self.sp1().ensure_readable()
+    }
+
+    fn ensure_deserializable(&self) -> Result<(), ProofError> {
+        self.sp1().ensure_deserializable()
     }
 
     fn ensure_writable(&self) -> Result<(), ProofError> {

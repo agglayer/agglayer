@@ -5,9 +5,30 @@ use agglayer_types::{
     Certificate, CertificateId, Digest, EpochConfiguration,
 };
 use prost::Message;
+use sp1_sdk_v5::Prover as _;
 
 use super::Error;
 use crate::node::types::v1;
+
+const LEGACY_EMPTY_ELF: &[u8] =
+    include_bytes!("../../../../agglayer-storage/src/types/certificate/tests/empty.elf");
+
+fn legacy_sp1_bytes() -> (Vec<u8>, Vec<u8>) {
+    let client = sp1_sdk_v5::ProverClient::builder().mock().build();
+    let (proving_key, verifying_key) = client.setup(LEGACY_EMPTY_ELF);
+    let dummy_proof = sp1_sdk_v5::SP1ProofWithPublicValues::create_mock_proof(
+        &proving_key,
+        sp1_sdk_v5::SP1PublicValues::new(),
+        sp1_sdk_v5::SP1ProofMode::Compressed,
+        sp1_sdk_v5::SP1_CIRCUIT_VERSION,
+    );
+    let proof = dummy_proof.proof.try_as_compressed().unwrap();
+
+    (
+        bincode::sp1v4().serialize(proof.as_ref()).unwrap(),
+        bincode::sp1v4().serialize(&verifying_key).unwrap(),
+    )
+}
 
 #[rstest::rstest]
 #[case::error("no_proof", Error::missing_field("proof"))]
@@ -82,6 +103,9 @@ make_round_trip_fuzzers!(
 
 #[test]
 fn certificate_round_trip_preserves_readable_legacy_sp1_proof() {
+    let (proof_bytes, vkey_bytes) = legacy_sp1_bytes();
+    let legacy_version = sp1_sdk_v5::SP1_CIRCUIT_VERSION.to_string();
+
     let proto = v1::Certificate {
         network_id: 17,
         height: 3,
@@ -101,9 +125,9 @@ fn certificate_round_trip_preserves_readable_legacy_sp1_proof() {
                     context: Default::default(),
                     proof: Some(agglayer_interop::grpc::v1::aggchain_proof::Proof::Sp1Stark(
                         agglayer_interop::grpc::v1::Sp1StarkProof {
-                            version: "v4.0.0-rc.3".to_string(),
-                            proof: vec![1, 2, 3, 4].into(),
-                            vkey: vec![5, 6, 7, 8].into(),
+                            version: legacy_version.clone(),
+                            proof: proof_bytes.clone().into(),
+                            vkey: vkey_bytes.clone().into(),
                         },
                     )),
                 },
@@ -121,9 +145,9 @@ fn certificate_round_trip_preserves_readable_legacy_sp1_proof() {
     };
     let Proof::SP1Stark(proof) = proof;
 
-    assert_eq!(proof.version, "v4.0.0-rc.3");
-    assert_eq!(proof.proof, vec![1, 2, 3, 4]);
-    assert_eq!(proof.vkey, vec![5, 6, 7, 8]);
+    assert_eq!(proof.version, legacy_version);
+    assert_eq!(proof.proof, proof_bytes);
+    assert_eq!(proof.vkey, vkey_bytes);
 
     let encoded: v1::Certificate = output.try_into().unwrap();
     let sp1 = match encoded.aggchain_data.unwrap().data.unwrap() {
@@ -135,9 +159,9 @@ fn certificate_round_trip_preserves_readable_legacy_sp1_proof() {
         _ => panic!("expected generic aggchain proof"),
     };
 
-    assert_eq!(sp1.version, "v4.0.0-rc.3");
-    assert_eq!(sp1.proof, vec![1, 2, 3, 4]);
-    assert_eq!(sp1.vkey, vec![5, 6, 7, 8]);
+    assert_eq!(sp1.version, sp1_sdk_v5::SP1_CIRCUIT_VERSION);
+    assert_eq!(sp1.proof, proof_bytes);
+    assert_eq!(sp1.vkey, vkey_bytes);
 }
 
 #[test]
@@ -179,4 +203,43 @@ fn certificate_rejects_multisig_index_overflow() {
     assert!(
         error.to_string().contains("too many signers") || error.to_string().contains("overflow")
     );
+}
+
+#[test]
+fn certificate_rejects_malformed_sp1_bytes_on_ingress() {
+    let proto = v1::Certificate {
+        network_id: 17,
+        height: 3,
+        prev_local_exit_root: Some(agglayer_interop::grpc::v1::FixedBytes32 {
+            value: vec![0; 32].into(),
+        }),
+        new_local_exit_root: Some(agglayer_interop::grpc::v1::FixedBytes32 {
+            value: vec![0; 32].into(),
+        }),
+        bridge_exits: Vec::new(),
+        imported_bridge_exits: Vec::new(),
+        aggchain_data: Some(agglayer_interop::grpc::v1::AggchainData {
+            data: Some(agglayer_interop::grpc::v1::aggchain_data::Data::Generic(
+                agglayer_interop::grpc::v1::AggchainProof {
+                    aggchain_params: Some(Digest([0x42; 32]).into()),
+                    signature: None,
+                    context: Default::default(),
+                    proof: Some(agglayer_interop::grpc::v1::aggchain_proof::Proof::Sp1Stark(
+                        agglayer_interop::grpc::v1::Sp1StarkProof {
+                            version: "v6.0.0".to_string(),
+                            proof: vec![1, 2, 3, 4].into(),
+                            vkey: vec![5, 6, 7, 8].into(),
+                        },
+                    )),
+                },
+            )),
+        }),
+        metadata: None,
+        custom_chain_data: Vec::new().into(),
+        l1_info_tree_leaf_count: None,
+    };
+
+    let error = Certificate::try_from(proto).unwrap_err();
+
+    assert!(error.to_string().contains("deserialize"));
 }

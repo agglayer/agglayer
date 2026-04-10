@@ -326,6 +326,7 @@ dependencies = [
  "prost 0.13.5",
  "rstest",
  "serde",
+ "sp1-sdk 5.2.2",
  "thiserror 2.0.18",
 ]
 
@@ -741,9 +742,11 @@ dependencies = [
  "rstest",
  "serde",
  "serde_with",
+ "sp1-core-machine 5.2.4",
  "sp1-core-machine 6.0.2",
  "sp1-hypercube",
  "sp1-primitives 6.0.2",
+ "sp1-prover 5.2.4",
  "sp1-prover 6.0.2",
  "sp1-sdk 5.2.2",
  "sp1-sdk 6.0.2",

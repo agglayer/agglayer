@@ -1,5 +1,6 @@
 ---
 source: crates/agglayer-storage/src/types/certificate/tests/mod.rs
+assertion_line: 488
 expression: bytes
 snapshot_kind: text
 ---

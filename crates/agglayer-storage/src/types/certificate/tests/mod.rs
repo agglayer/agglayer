@@ -22,7 +22,6 @@ const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
 /// Any valid riscv64 ELF works here; we only need it to derive proving keys for
 /// mock proof creation.
 const TEST_ELF: &[u8] = pessimistic_proof::ELF;
-const LEGACY_SP1_VERSION: &str = "v4.0.0-rc.3";
 
 impl PartialEq for AggchainDataV1<'_> {
     fn eq(&self, other: &Self) -> bool {
@@ -87,7 +86,7 @@ fn legacy_sp1_proof0() -> legacy_interop_types::aggchain_proof::Proof {
         legacy_interop_types::aggchain_proof::SP1StarkWithContext {
             proof,
             vkey: verifying_key,
-            version: LEGACY_SP1_VERSION.to_string(),
+            version: sp1_sdk_v5::SP1_CIRCUIT_VERSION.to_string(),
         },
     )
 }
@@ -143,7 +142,7 @@ fn normalize_legacy_aggchain_data_version(aggchain_data: &mut AggchainDataV1<'_>
     };
 
     let legacy_interop_types::aggchain_proof::Proof::SP1Stark(proof) = proof;
-    proof.version = LEGACY_SP1_VERSION.to_string();
+    proof.version = sp1_sdk_v5::SP1_CIRCUIT_VERSION.to_string();
 }
 
 fn normalize_legacy_certificate_version(certificate: &mut CertificateV1<'_>) {
@@ -482,9 +481,9 @@ where
     T: Serialize + serde::de::DeserializeOwned + std::fmt::Debug + std::cmp::Eq,
 {
     // The pre-existing V1 snapshots intentionally update in this branch because
-    // they now encode the real historical <=0.13 proof shape and version string
-    // (`v4.0.0-rc.3`) instead of the synthetic placeholder values that were
-    // previously used in these test fixtures.
+    // they now encode the real historical <=0.13 proof shape and old SP1 5.x
+    // circuit version string instead of the synthetic placeholder values that
+    // were previously used in these test fixtures.
     let bytes = Bytes::from(bincode::default().serialize(&value).unwrap());
     insta::assert_snapshot!(name, bytes);
 
@@ -527,7 +526,7 @@ fn regression_01_legacy() {
     };
 
     let Proof::SP1Stark(proof) = proof;
-    assert_eq!(proof.ensure_readable().unwrap(), Sp1ProofVersion::V4);
+    assert_eq!(proof.ensure_readable().unwrap(), Sp1ProofVersion::V5);
 }
 
 #[test]

@@ -25,6 +25,7 @@ thiserror = { workspace = true, optional = true }
 [dev-dependencies]
 agglayer-interop = { workspace = true, features = ["testutils"] }
 agglayer-types = { workspace = true, features = ["testutils"] }
+sp1-sdk-v5 = { package = "sp1-sdk", version = "=5.2.2" }
 
 
 bolero.workspace = true
