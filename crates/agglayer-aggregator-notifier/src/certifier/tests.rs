@@ -16,6 +16,7 @@ use fail::FailScenario;
 use mockall::predicate::{always, eq};
 use pessimistic_proof_test_suite::forest::Forest;
 use prover_config::{MockProverConfig, ProverType};
+use serial_test::serial;
 use sp1_sdk::{
     blocking::{EnvProver, Prover, ProverClient},
     Elf, ProvingKey, SP1ProofMode, SP1ProofWithPublicValues, SP1PublicValues, SP1VerificationError,
@@ -26,6 +27,7 @@ use tower::buffer::Buffer;
 use crate::{CertifierClient, ELF};
 
 #[test]
+#[serial]
 fn failpoint_mock_verifier_preserves_sp1_error_type() {
     let scenario = FailScenario::setup();
 
@@ -62,6 +64,7 @@ fn failpoint_mock_verifier_preserves_sp1_error_type() {
 
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
+#[serial]
 async fn happy_path() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
@@ -151,6 +154,7 @@ async fn happy_path() {
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(240))]
+#[serial]
 async fn prover_timeout() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();

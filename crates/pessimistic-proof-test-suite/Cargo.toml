@@ -40,4 +40,5 @@ regex = "1.12"
 [dev-dependencies]
 insta.workspace = true
 rstest.workspace = true
+serial_test = "3.4.0"
 tracing.workspace = true
