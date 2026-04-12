@@ -1,0 +1,42 @@
+name: Skills Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "**"
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skills-check:
+    name: Skills Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check skills are up to date
+        run: npx skills update -y -p
+
+      - name: Verify no drift from upstream
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Skills are out of date. Run 'npx skills update' locally and commit the changes."
+            exit 1
+          fi

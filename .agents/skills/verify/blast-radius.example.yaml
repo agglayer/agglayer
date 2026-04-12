@@ -1,0 +1,55 @@
+# Example .blast-radius.yaml for a Rust workspace.
+# Copy this file to your repo root as `.blast-radius.yaml` and edit.
+#
+# The blast-radius script reads this file to determine
+# which crates are high-impact, what risk areas to flag,
+# and which extra commands to run during verification.
+# All fields are optional — the script works without config
+# using built-in Rust workspace defaults.
+
+# Crates whose changes always trigger the broad-impact flag.
+# Broad impact means `cargo nextest run --workspace` instead
+# of targeted per-crate tests.
+core_crates:
+  - my-core-types
+  - my-storage
+  - my-config
+
+# Risk areas: named groups of path patterns.
+# When any changed file matches a pattern, the risk is flagged
+# in the output and (optionally) a scope + commands are triggered.
+risk_areas:
+    # Minimal example: just flag the risk, no extra scope/commands.
+  - name: database migration changes
+    patterns:
+      - "crates/my-storage/migrations/"
+
+    # Full example: flag risk, trigger a scope, propagate impact,
+    # and run specific commands.
+  - name: protobuf schema changes
+    patterns:
+      - "proto/"
+      - "buf.yaml"
+    scope: proto                     # adds "proto" to recommended_scopes
+    propagates_to:                   # these crates are added to affected_modules
+      - my-grpc-api                  # even if they have no direct file changes
+      - my-grpc-types
+    commands:                        # run when this risk fires
+      - "cargo make generate-proto"
+
+  - name: proof pipeline changes
+    patterns:
+      - "crates/my-proof-engine"
+    scope: proof
+    commands:
+      - "cargo make check-proof-keys"
+
+# Extra commands to run when only docs/prose files changed,
+# or when docs/knowledge-base/ files are among the changes.
+docs_commands:
+  - "mdbook build docs/knowledge-base/"
+
+# Extra commands to run in the "code" scope,
+# before `cargo nextest run`. Useful for lint/format gates.
+code_commands:
+  - "cargo make ci-all"

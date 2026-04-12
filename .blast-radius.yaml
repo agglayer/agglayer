@@ -1,0 +1,62 @@
+# Blast-radius configuration for agglayer/agglayer.
+#
+# Used by the verify skill to determine which crates are
+# high-impact, what risk areas to flag, and which commands
+# to run during verification.
+
+# Crates whose changes always trigger workspace-wide testing.
+core_crates:
+  - agglayer-types
+  - agglayer-config
+  - agglayer-storage
+  - pessimistic-proof-core
+
+# Risk areas: named groups of path patterns.
+risk_areas:
+  - name: protobuf schema changes
+    patterns:
+      - "proto/"
+      - "buf.yaml"
+      - "buf.rust.gen.yaml"
+      - "buf.storage.gen.yaml"
+    scope: proto
+    propagates_to:
+      - agglayer-grpc-types
+      - agglayer-grpc-api
+      - agglayer-grpc-server
+    commands:
+      - "cargo make generate-proto"
+
+  - name: pessimistic proof pipeline changes
+    patterns:
+      - "crates/pessimistic-proof"
+      - "crates/pessimistic-proof-core"
+      - "crates/pessimistic-proof-program"
+    scope: proof
+    commands:
+      - "cargo make pp-check-vkey-change"
+
+  - name: settlement and signer changes
+    patterns:
+      - "crates/agglayer-settlement-service"
+      - "crates/agglayer-signer"
+      - "crates/agglayer-contracts"
+      - "crates/agglayer-gcp-kms"
+
+  - name: storage schema changes
+    patterns:
+      - "crates/agglayer-storage"
+
+  - name: contract ABI changes
+    patterns:
+      - "crates/agglayer-contracts"
+    commands:
+      - "cargo make contracts"
+
+# Commands to run when only docs/prose files changed.
+docs_commands:
+  - "mdbook build docs/knowledge-base/"
+
+# Commands to run in the "code" scope before tests.
+code_commands:
+  - "cargo make ci-all"
