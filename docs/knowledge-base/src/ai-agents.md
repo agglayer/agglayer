@@ -25,7 +25,7 @@ Task-specific workflows (committing, PR creation, verification) are skills
 that load on demand, reducing context consumption.
 
 **Use a scripted blast-radius detector for scope decisions.**
-`scripts/blast_radius.py` is the canonical detector for changed-file impact.
+`cargo make blast-radius` is the canonical detector for changed-file impact.
 Verification workflows should consume its output
 instead of re-deriving scope logic ad hoc.
 
