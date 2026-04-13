@@ -189,7 +189,6 @@ async fn prover_timeout() {
 
     l1_rpc
         .expect_get_trusted_sequencer_address()
-        .once()
         .returning(move |_, _| Ok(signer));
 
     l1_rpc
