@@ -7578,7 +7578,6 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "serial_test",
  "sp1-core-machine 6.0.2",
  "sp1-sdk 6.0.2",
  "thiserror 2.0.18",
