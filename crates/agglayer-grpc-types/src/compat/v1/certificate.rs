@@ -1,360 +1,103 @@
-use std::collections::HashMap;
-
 use agglayer_types::{
-    aggchain_proof::{
-        AggchainData, AggchainProof, MultisigPayload, Proof, SP1StarkWithContext,
-        SP1StarkWithContextExt as _,
-    },
-    bincode, Certificate, Height, Metadata, NetworkId,
+    aggchain_proof::{AggchainData, AggchainProof, ProofExt as _},
+    Certificate, Height, Metadata, NetworkId,
 };
 use prost::bytes::Bytes;
 
 use super::Error;
 use crate::node::types::v1;
 
-/// Maximum number of signers allowed in a multisig payload.
-const MAX_SIGNERS: usize = 1024;
-
-fn parse_sp1_proof(value: agglayer_interop::grpc::v1::Sp1StarkProof) -> Result<Proof, Error> {
-    let proof = SP1StarkWithContext {
-        version: value.version,
-        proof: value.proof.to_vec(),
-        vkey: value.vkey.to_vec(),
-    };
-    proof
-        .ensure_deserializable()
-        .map_err(|err| Error::invalid_data(err.to_string()))?;
-    Ok(Proof::SP1Stark(proof))
-}
-
-fn parse_proof(value: agglayer_interop::grpc::v1::aggchain_proof::Proof) -> Result<Proof, Error> {
-    match value {
-        agglayer_interop::grpc::v1::aggchain_proof::Proof::Sp1Stark(proof) => {
-            parse_sp1_proof(proof)
-        }
-    }
-}
-
-fn parse_public_values(
-    bytes: &[u8],
-) -> Result<agglayer_types::aggchain_proof::AggchainProofPublicValues, Error> {
-    std::panic::catch_unwind(|| agglayer_interop::types::bincode::default().deserialize(bytes))
-        .map_err(|_| {
-            Error::deserializing_aggchain_proof_public_values(Box::new(bincode::ErrorKind::Custom(
-                String::from("panic"),
-            )))
-        })?
-        .map_err(Error::deserializing_aggchain_proof_public_values)
-}
-
-fn parse_generic_public_values(
-    context: &HashMap<String, Bytes>,
-) -> Result<Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>, Error> {
-    context
-        .get("public_values")
-        .map(|bytes| parse_public_values_container(bytes.as_ref()))
-        .transpose()
-        .map(Option::flatten)
-}
-
-fn parse_public_values_container(
-    bytes: &[u8],
-) -> Result<Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>, Error> {
-    std::panic::catch_unwind(|| agglayer_interop::types::bincode::default().deserialize(bytes))
-        .map_err(|_| {
-            Error::deserializing_aggchain_proof_public_values(Box::new(bincode::ErrorKind::Custom(
-                String::from("panic"),
-            )))
-        })?
-        .map_err(Error::deserializing_aggchain_proof_public_values)
-}
-
-fn parse_bare_public_values(
-    context: &HashMap<String, Bytes>,
-) -> Result<Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>, Error> {
-    context
-        .get("public_values")
-        .map(|bytes| parse_public_values(bytes.as_ref()).map(Box::new))
-        .transpose()
-}
-
-fn parse_multisig(
-    multisig: agglayer_interop::grpc::v1::Multisig,
-) -> Result<MultisigPayload, Error> {
-    match multisig.data {
-        Some(agglayer_interop::grpc::v1::multisig::Data::Ecdsa(
-            agglayer_interop::grpc::v1::EcdsaMultisig { signatures },
-        )) => {
-            if signatures.is_empty() {
-                return Err(Error::invalid_data(
-                    "Multisig ECDSA doesn't have any signature".to_string(),
-                ));
-            }
-
-            let required_len = signatures.iter().try_fold(0usize, |required_len, entry| {
-                let next_len = usize::try_from(entry.index)
-                    .ok()
-                    .and_then(|index| index.checked_add(1))
-                    .ok_or_else(|| {
-                        Error::invalid_data("Multisig ECDSA signer index overflow".to_string())
-                    })?;
-
-                Ok::<_, Error>(required_len.max(next_len))
-            })?;
-
-            if required_len > MAX_SIGNERS {
-                return Err(Error::invalid_data(format!(
-                    "Multisig ECDSA has too many signers: {required_len} (max {MAX_SIGNERS})",
-                )));
-            }
-
-            let mut result: Vec<Option<_>> = vec![None; required_len];
-
-            for entry in signatures {
-                let index = entry.index as usize;
-                if let Some(fixed_bytes) = entry.signature {
-                    let signature = (&*fixed_bytes.value)
-                        .try_into()
-                        .map_err(Error::parsing_signature)?;
-
-                    let slot = result.get_mut(index).ok_or_else(|| {
-                        Error::invalid_data(format!(
-                            "Multisig ECDSA signer index {index} is out of range",
-                        ))
-                    })?;
-
-                    if slot.is_some() {
-                        return Err(Error::invalid_data(format!(
-                            "Duplicate signature at index {index}",
-                        )));
-                    }
-
-                    *slot = Some(signature);
-                }
-            }
-
-            Ok(MultisigPayload(result))
-        }
-        None => Err(Error::missing_field("data")),
-    }
-}
-
-fn parse_aggchain_proof(
-    value: agglayer_interop::grpc::v1::AggchainProof,
-) -> Result<AggchainProof, Error> {
-    Ok(AggchainProof {
-        proof: parse_proof(value.proof.ok_or(Error::missing_field("proof"))?)
-            .map_err(|e| e.inside_field("proof"))?,
-        aggchain_params: value
-            .aggchain_params
-            .ok_or(Error::missing_field("aggchain_params"))?
-            .try_into()
-            .map_err(|e: Error| e.inside_field("aggchain_params"))?,
-        public_values: parse_bare_public_values(&value.context)?,
-    })
-}
-
-fn parse_aggchain_data(
-    value: agglayer_interop::grpc::v1::AggchainData,
-) -> Result<AggchainData, Error> {
-    Ok(match value.data {
-        Some(agglayer_interop::grpc::v1::aggchain_data::Data::Signature(signature)) => {
-            AggchainData::ECDSA {
-                signature: (&*signature.value)
-                    .try_into()
-                    .map_err(Error::parsing_signature)?,
-            }
-        }
-        Some(agglayer_interop::grpc::v1::aggchain_data::Data::Generic(aggchain_proof)) => {
-            let public_values = parse_generic_public_values(&aggchain_proof.context)?;
-            let signature = aggchain_proof
-                .signature
-                .as_ref()
-                .map(|signature| {
-                    (&*signature.value)
-                        .try_into()
-                        .map_err(Error::parsing_signature)
-                })
-                .transpose()?
-                .map(Box::new);
-
-            let proof = parse_proof(aggchain_proof.proof.ok_or(Error::missing_field("proof"))?)
-                .map_err(|e| e.inside_field("proof"))?;
-            let aggchain_params = aggchain_proof
-                .aggchain_params
-                .ok_or(Error::missing_field("aggchain_params"))?
-                .try_into()
-                .map_err(|e: Error| e.inside_field("aggchain_params"))?;
-
-            AggchainData::Generic {
-                proof,
-                aggchain_params,
-                signature,
-                public_values,
-            }
-        }
-        Some(agglayer_interop::grpc::v1::aggchain_data::Data::Multisig(multisig)) => {
-            AggchainData::MultisigOnly {
-                multisig: parse_multisig(multisig)?,
-            }
-        }
-        Some(agglayer_interop::grpc::v1::aggchain_data::Data::MultisigAndAggchainProof(
-            multisig_and_aggchain_proof,
-        )) => AggchainData::MultisigAndAggchainProof {
-            multisig: parse_multisig(
-                multisig_and_aggchain_proof
-                    .multisig
-                    .ok_or(Error::missing_field("multisig"))?,
-            )
-            .map_err(|e| e.inside_field("multisig"))?,
-            aggchain_proof: parse_aggchain_proof(
-                multisig_and_aggchain_proof
-                    .aggchain_proof
-                    .ok_or(Error::missing_field("aggchain_proof"))?,
-            )
-            .map_err(|e| e.inside_field("aggchain_proof"))?,
-        },
-        None => return Err(Error::missing_field("data")),
-    })
-}
-
-fn encode_public_values<T>(public_values: &T) -> Result<Bytes, Error>
-where
-    T: serde::Serialize + std::panic::RefUnwindSafe,
-{
-    Ok(Bytes::from(
-        std::panic::catch_unwind(|| {
-            agglayer_interop::types::bincode::default().serialize(public_values)
-        })
-        .map_err(|_| {
-            Error::serializing_aggchain_proof_public_values(Box::new(bincode::ErrorKind::Custom(
-                String::from("panic"),
-            )))
-        })?
-        .map_err(Error::serializing_context)?,
-    ))
-}
-
-fn encode_bare_public_values(
-    public_values: Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>,
-) -> Result<HashMap<String, Bytes>, Error> {
-    Ok(match public_values {
-        Some(public_values) => HashMap::from([(
-            "public_values".to_owned(),
-            encode_public_values(&*public_values)?,
-        )]),
-        None => HashMap::new(),
-    })
-}
-
-fn encode_generic_public_values(
-    public_values: Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>,
-) -> Result<HashMap<String, Bytes>, Error> {
-    Ok(HashMap::from([(
-        "public_values".to_owned(),
-        encode_public_values(&public_values)?,
-    )]))
-}
-
-fn encode_proof(value: Proof) -> Result<agglayer_interop::grpc::v1::aggchain_proof::Proof, Error> {
-    match value {
-        Proof::SP1Stark(proof) => Ok(agglayer_interop::grpc::v1::aggchain_proof::Proof::Sp1Stark(
-            agglayer_interop::grpc::v1::Sp1StarkProof {
-                version: proof.version,
-                proof: proof.proof.into(),
-                vkey: proof.vkey.into(),
-            },
-        )),
-    }
-}
-
-fn encode_aggchain_proof(
-    value: AggchainProof,
-) -> Result<agglayer_interop::grpc::v1::AggchainProof, Error> {
-    Ok(agglayer_interop::grpc::v1::AggchainProof {
-        proof: Some(encode_proof(value.proof)?),
-        aggchain_params: Some(value.aggchain_params.into()),
-        signature: None,
-        context: encode_bare_public_values(value.public_values)?,
-    })
-}
-
-fn encode_multisig(multisig: MultisigPayload) -> agglayer_interop::grpc::v1::Multisig {
-    agglayer_interop::grpc::v1::Multisig {
-        data: Some(agglayer_interop::grpc::v1::multisig::Data::Ecdsa(
-            agglayer_interop::grpc::v1::EcdsaMultisig {
-                signatures: multisig
-                    .0
-                    .iter()
-                    .enumerate()
-                    .map(|(index, sig)| {
-                        agglayer_interop::grpc::v1::ecdsa_multisig::EcdsaMultisigEntry {
-                            index: index.try_into().unwrap_or(u32::MAX),
-                            signature: sig.map(|sig| agglayer_interop::grpc::v1::FixedBytes65 {
-                                value: Bytes::copy_from_slice(&sig.as_bytes()),
-                            }),
-                        }
-                    })
-                    .collect(),
-            },
-        )),
-    }
-}
-
-fn encode_aggchain_data(
-    value: AggchainData,
-) -> Result<agglayer_interop::grpc::v1::AggchainData, Error> {
-    Ok(agglayer_interop::grpc::v1::AggchainData {
-        data: Some(match value {
-            AggchainData::ECDSA { signature } => {
-                agglayer_interop::grpc::v1::aggchain_data::Data::Signature(
-                    agglayer_interop::grpc::v1::FixedBytes65 {
-                        value: Bytes::copy_from_slice(&signature.as_bytes()),
-                    },
-                )
-            }
-            AggchainData::Generic {
-                proof,
-                signature,
-                aggchain_params,
-                public_values,
-            } => agglayer_interop::grpc::v1::aggchain_data::Data::Generic(
-                agglayer_interop::grpc::v1::AggchainProof {
-                    context: encode_generic_public_values(public_values)?,
-                    aggchain_params: Some(aggchain_params.into()),
-                    signature: signature.map(|signature| {
-                        agglayer_interop::grpc::v1::FixedBytes65 {
-                            value: Bytes::copy_from_slice(&signature.as_bytes()),
-                        }
-                    }),
-                    proof: Some(encode_proof(proof)?),
-                },
-            ),
-            AggchainData::MultisigOnly { multisig } => {
-                agglayer_interop::grpc::v1::aggchain_data::Data::Multisig(encode_multisig(multisig))
-            }
-            AggchainData::MultisigAndAggchainProof {
-                multisig,
-                aggchain_proof,
-            } => agglayer_interop::grpc::v1::aggchain_data::Data::MultisigAndAggchainProof(
-                agglayer_interop::grpc::v1::AggchainProofWithMultisig {
-                    multisig: Some(encode_multisig(multisig)),
-                    aggchain_proof: Some(encode_aggchain_proof(aggchain_proof)?),
-                },
-            ),
-        }),
-    })
-}
-
 impl TryFrom<v1::Certificate> for Certificate {
     type Error = Error;
 
     fn try_from(value: v1::Certificate) -> Result<Self, Self::Error> {
-        let aggchain_data = value
+        let aggchain_data = match value
             .aggchain_data
-            .ok_or(Error::missing_field("aggchain_data"))?;
-        let aggchain_data =
-            parse_aggchain_data(aggchain_data).map_err(|e| e.inside_field("aggchain_data"))?;
+            .ok_or(Error::missing_field("aggchain_data"))?
+            .data
+        {
+            Some(agglayer_interop::grpc::v1::aggchain_data::Data::Signature(signature)) => {
+                AggchainData::ECDSA {
+                    signature: (&*signature.value)
+                        .try_into()
+                        .map_err(Error::parsing_signature)
+                        .map_err(|e| e.inside_field("aggchain_data"))?,
+                }
+            }
+            Some(agglayer_interop::grpc::v1::aggchain_data::Data::Generic(aggchain_proof)) => {
+                let parsed: AggchainData = agglayer_interop::grpc::v1::AggchainData {
+                    data: Some(agglayer_interop::grpc::v1::aggchain_data::Data::Generic(
+                        aggchain_proof,
+                    )),
+                }
+                .try_into()
+                .map_err(|e: Error| e.inside_field("aggchain_data"))?;
+
+                let AggchainData::Generic {
+                    proof,
+                    aggchain_params,
+                    signature,
+                    public_values,
+                } = parsed
+                else {
+                    unreachable!("interop generic conversion returned a non-generic variant")
+                };
+
+                proof.ensure_deserializable().map_err(
+                    |err: agglayer_types::aggchain_proof::ProofError| {
+                        Error::invalid_data(err.to_string()).inside_field("aggchain_data")
+                    },
+                )?;
+
+                AggchainData::Generic {
+                    proof,
+                    aggchain_params,
+                    signature,
+                    public_values,
+                }
+            }
+            Some(agglayer_interop::grpc::v1::aggchain_data::Data::Multisig(multisig)) => {
+                // Full multisig delegation is temporary until agglayer/interop#214
+                // hardens signer-index overflow handling in the upstream compat decoder.
+                AggchainData::MultisigOnly {
+                    multisig: multisig
+                        .try_into()
+                        .map_err(|e: Error| e.inside_field("aggchain_data"))?,
+                }
+            }
+            Some(agglayer_interop::grpc::v1::aggchain_data::Data::MultisigAndAggchainProof(
+                multisig_and_aggchain_proof,
+            )) => AggchainData::MultisigAndAggchainProof {
+                multisig: multisig_and_aggchain_proof
+                    .multisig
+                    .ok_or(Error::missing_field("multisig"))
+                    .and_then(|multisig| {
+                        multisig
+                            .try_into()
+                            .map_err(|e: Error| e.inside_field("multisig"))
+                    })
+                    .map_err(|e| e.inside_field("aggchain_data"))?,
+                aggchain_proof: {
+                    let aggchain_proof = multisig_and_aggchain_proof
+                        .aggchain_proof
+                        .ok_or(Error::missing_field("aggchain_proof"))
+                        .map_err(|e| e.inside_field("aggchain_data"))?;
+
+                    let parsed: AggchainProof = aggchain_proof
+                        .try_into()
+                        .map_err(|e: Error| e.inside_field("aggchain_data"))?;
+
+                    parsed.proof.ensure_deserializable().map_err(
+                        |err: agglayer_types::aggchain_proof::ProofError| {
+                            Error::invalid_data(err.to_string()).inside_field("aggchain_data")
+                        },
+                    )?;
+
+                    parsed
+                },
+            },
+            None => return Err(Error::missing_field("data").inside_field("aggchain_data")),
+        };
 
         let has_multisig = matches!(
             aggchain_data,
@@ -402,6 +145,50 @@ impl TryFrom<Certificate> for v1::Certificate {
     type Error = Error;
 
     fn try_from(value: Certificate) -> Result<Self, Self::Error> {
+        let aggchain_data = agglayer_interop::grpc::v1::AggchainData {
+            data: Some(match value.aggchain_data {
+                AggchainData::ECDSA { signature } => {
+                    agglayer_interop::grpc::v1::aggchain_data::Data::Signature(
+                        agglayer_interop::grpc::v1::FixedBytes65 {
+                            value: Bytes::copy_from_slice(&signature.as_bytes()),
+                        },
+                    )
+                }
+                AggchainData::Generic {
+                    proof,
+                    signature,
+                    aggchain_params,
+                    public_values,
+                } => match agglayer_interop::grpc::v1::AggchainData::try_from(
+                    AggchainData::Generic {
+                        proof,
+                        signature,
+                        aggchain_params,
+                        public_values,
+                    },
+                )?
+                .data
+                {
+                    Some(agglayer_interop::grpc::v1::aggchain_data::Data::Generic(proof)) => {
+                        agglayer_interop::grpc::v1::aggchain_data::Data::Generic(proof)
+                    }
+                    _ => unreachable!("interop generic conversion returned a non-generic variant"),
+                },
+                AggchainData::MultisigOnly { multisig } => {
+                    agglayer_interop::grpc::v1::aggchain_data::Data::Multisig(multisig.into())
+                }
+                AggchainData::MultisigAndAggchainProof {
+                    multisig,
+                    aggchain_proof,
+                } => agglayer_interop::grpc::v1::aggchain_data::Data::MultisigAndAggchainProof(
+                    agglayer_interop::grpc::v1::AggchainProofWithMultisig {
+                        multisig: Some(multisig.into()),
+                        aggchain_proof: Some(aggchain_proof.try_into()?),
+                    },
+                ),
+            }),
+        };
+
         Ok(v1::Certificate {
             network_id: value.network_id.into(),
             height: value.height.as_u64(),
@@ -413,7 +200,7 @@ impl TryFrom<Certificate> for v1::Certificate {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
-            aggchain_data: Some(encode_aggchain_data(value.aggchain_data)?),
+            aggchain_data: Some(aggchain_data),
             metadata: Some((*value.metadata).into()),
             custom_chain_data: value.custom_chain_data.into(),
             l1_info_tree_leaf_count: value.l1_info_tree_leaf_count,
