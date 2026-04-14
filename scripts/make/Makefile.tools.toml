@@ -4,4 +4,4 @@
 category = "TOOLS"
 description = "Analyse changed files and recommend verification scopes"
 command = "python3"
-args = ["scripts/blast_radius.py"]
+args = [".agents/skills/verify/scripts/blast_radius.py"]

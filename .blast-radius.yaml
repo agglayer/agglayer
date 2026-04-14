@@ -9,6 +9,11 @@ core_crates:
   - agglayer-types
   - agglayer-config
   - agglayer-storage
+  - agglayer-rpc
+  - agglayer-jsonrpc-api
+  - agglayer-grpc-api
+  - agglayer-grpc-types
+  - agglayer-node
   - pessimistic-proof-core
 
 # Risk areas: named groups of path patterns.
@@ -23,7 +28,9 @@ risk_areas:
     propagates_to:
       - agglayer-grpc-types
       - agglayer-grpc-api
+      - agglayer-grpc-client
       - agglayer-grpc-server
+      - agglayer-storage
     commands:
       - "cargo make generate-proto"
 
@@ -46,6 +53,7 @@ risk_areas:
   - name: storage schema changes
     patterns:
       - "crates/agglayer-storage"
+      - "proto/agglayer/storage/"
 
   - name: contract ABI changes
     patterns:
