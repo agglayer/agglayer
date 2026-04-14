@@ -72,7 +72,7 @@ dependencies = [
  "agglayer-certificate-orchestrator",
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-storage",
  "agglayer-types",
  "alloy",
@@ -119,7 +119,7 @@ dependencies = [
 [[package]]
 name = "agglayer-bincode"
 version = "0.14.0"
-source = "git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d#71ec79b7d6260c0bebbf1e9e066ddab2c414d71d"
+source = "git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7#dd4530323aef7770156265bddf13c74842d3efb7"
 dependencies = [
  "bincode",
  "serde",
@@ -184,7 +184,7 @@ name = "agglayer-config"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-types",
  "alloy-primitives",
  "educe",
@@ -209,7 +209,7 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-types",
  "alloy",
  "async-trait",
@@ -230,7 +230,7 @@ dependencies = [
 [[package]]
 name = "agglayer-elf-build"
 version = "0.14.0"
-source = "git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d#71ec79b7d6260c0bebbf1e9e066ddab2c414d71d"
+source = "git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7#dd4530323aef7770156265bddf13c74842d3efb7"
 dependencies = [
  "cargo_metadata",
  "clap",
@@ -334,7 +334,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop"
 version = "0.14.0"
-source = "git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d#71ec79b7d6260c0bebbf1e9e066ddab2c414d71d"
+source = "git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7#dd4530323aef7770156265bddf13c74842d3efb7"
 dependencies = [
  "agglayer-interop-grpc-types",
  "agglayer-interop-types 0.14.0",
@@ -343,7 +343,7 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-grpc-types"
 version = "0.14.0"
-source = "git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d#71ec79b7d6260c0bebbf1e9e066ddab2c414d71d"
+source = "git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7#dd4530323aef7770156265bddf13c74842d3efb7"
 dependencies = [
  "agglayer-interop-types 0.14.0",
  "bincode",
@@ -377,10 +377,10 @@ dependencies = [
 [[package]]
 name = "agglayer-interop-types"
 version = "0.14.0"
-source = "git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d#71ec79b7d6260c0bebbf1e9e066ddab2c414d71d"
+source = "git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7#dd4530323aef7770156265bddf13c74842d3efb7"
 dependencies = [
  "agglayer-bincode 0.14.0",
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-tries 0.14.0",
  "arbitrary",
  "hex",
@@ -528,7 +528,7 @@ dependencies = [
 [[package]]
 name = "agglayer-primitives"
 version = "0.14.0"
-source = "git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d#71ec79b7d6260c0bebbf1e9e066ddab2c414d71d"
+source = "git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7#dd4530323aef7770156265bddf13c74842d3efb7"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -560,7 +560,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-rate-limiting",
  "agglayer-storage",
  "agglayer-tries 0.14.0",
@@ -717,9 +717,9 @@ dependencies = [
 [[package]]
 name = "agglayer-tries"
 version = "0.14.0"
-source = "git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d#71ec79b7d6260c0bebbf1e9e066ddab2c414d71d"
+source = "git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7#dd4530323aef7770156265bddf13c74842d3efb7"
 dependencies = [
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "hex",
  "serde",
  "serde_with",
@@ -732,7 +732,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-bincode 0.14.0",
  "agglayer-interop-types 0.14.0",
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-tries 0.14.0",
  "agglayer-types",
  "alloy",
@@ -4293,7 +4293,7 @@ dependencies = [
 name = "ecdsa-proof-lib"
 version = "0.1.0"
 dependencies = [
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-tries 0.14.0",
  "k256",
  "serde",
@@ -7513,7 +7513,7 @@ name = "pessimistic-proof"
 version = "0.1.0"
 dependencies = [
  "agglayer-elf-build",
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-tries 0.14.0",
  "arbitrary",
  "color-eyre",
@@ -7539,7 +7539,7 @@ name = "pessimistic-proof-core"
 version = "0.1.0"
 dependencies = [
  "agglayer-bincode 0.14.0",
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-tries 0.14.0",
  "alloy",
  "alloy-primitives",
@@ -12230,9 +12230,9 @@ dependencies = [
 [[package]]
 name = "unified-bridge"
 version = "0.14.0"
-source = "git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d#71ec79b7d6260c0bebbf1e9e066ddab2c414d71d"
+source = "git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7#dd4530323aef7770156265bddf13c74842d3efb7"
 dependencies = [
- "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=71ec79b7d6260c0bebbf1e9e066ddab2c414d71d)",
+ "agglayer-primitives 0.14.0 (git+https://github.com/agglayer/interop.git?rev=dd4530323aef7770156265bddf13c74842d3efb7)",
  "agglayer-tries 0.14.0",
  "arbitrary",
  "hex-literal",

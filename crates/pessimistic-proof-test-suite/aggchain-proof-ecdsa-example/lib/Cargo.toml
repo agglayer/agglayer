@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "71ec79b7d6260c0bebbf1e9e066ddab2c414d71d" }
-agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "71ec79b7d6260c0bebbf1e9e066ddab2c414d71d" }
+agglayer-tries = { git = "https://github.com/agglayer/interop.git", rev = "dd4530323aef7770156265bddf13c74842d3efb7" }
+agglayer-primitives = { git = "https://github.com/agglayer/interop.git", rev = "dd4530323aef7770156265bddf13c74842d3efb7" }
 k256 = "0.13.4"
 serde = { version = "1.0.228", features = ["derive"] }
 
-unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "71ec79b7d6260c0bebbf1e9e066ddab2c414d71d" }
+unified-bridge = { git = "https://github.com/agglayer/interop.git", rev = "dd4530323aef7770156265bddf13c74842d3efb7" }
