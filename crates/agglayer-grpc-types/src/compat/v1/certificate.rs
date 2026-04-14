@@ -36,20 +36,45 @@ fn parse_proof(value: agglayer_interop::grpc::v1::aggchain_proof::Proof) -> Resu
 }
 
 fn parse_public_values(
+    bytes: &[u8],
+) -> Result<agglayer_types::aggchain_proof::AggchainProofPublicValues, Error> {
+    std::panic::catch_unwind(|| agglayer_interop::types::bincode::default().deserialize(bytes))
+        .map_err(|_| {
+            Error::deserializing_aggchain_proof_public_values(Box::new(bincode::ErrorKind::Custom(
+                String::from("panic"),
+            )))
+        })?
+        .map_err(Error::deserializing_aggchain_proof_public_values)
+}
+
+fn parse_generic_public_values(
     context: &HashMap<String, Bytes>,
 ) -> Result<Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>, Error> {
     context
         .get("public_values")
-        .map(|bytes| {
-            std::panic::catch_unwind(|| bincode::default().deserialize(bytes.as_ref()))
-                .map_err(|_| {
-                    Error::deserializing_aggchain_proof_public_values(Box::new(
-                        bincode::ErrorKind::Custom(String::from("panic")),
-                    ))
-                })?
-                .map_err(Error::deserializing_aggchain_proof_public_values)
-                .map(Box::new)
-        })
+        .map(|bytes| parse_public_values_container(bytes.as_ref()))
+        .transpose()
+        .map(Option::flatten)
+}
+
+fn parse_public_values_container(
+    bytes: &[u8],
+) -> Result<Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>, Error> {
+    std::panic::catch_unwind(|| agglayer_interop::types::bincode::default().deserialize(bytes))
+        .map_err(|_| {
+            Error::deserializing_aggchain_proof_public_values(Box::new(bincode::ErrorKind::Custom(
+                String::from("panic"),
+            )))
+        })?
+        .map_err(Error::deserializing_aggchain_proof_public_values)
+}
+
+fn parse_bare_public_values(
+    context: &HashMap<String, Bytes>,
+) -> Result<Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>, Error> {
+    context
+        .get("public_values")
+        .map(|bytes| parse_public_values(bytes.as_ref()).map(Box::new))
         .transpose()
 }
 
@@ -125,7 +150,7 @@ fn parse_aggchain_proof(
             .ok_or(Error::missing_field("aggchain_params"))?
             .try_into()
             .map_err(|e: Error| e.inside_field("aggchain_params"))?,
-        public_values: parse_public_values(&value.context)?,
+        public_values: parse_bare_public_values(&value.context)?,
     })
 }
 
@@ -141,6 +166,7 @@ fn parse_aggchain_data(
             }
         }
         Some(agglayer_interop::grpc::v1::aggchain_data::Data::Generic(aggchain_proof)) => {
+            let public_values = parse_generic_public_values(&aggchain_proof.context)?;
             let signature = aggchain_proof
                 .signature
                 .as_ref()
@@ -152,11 +178,13 @@ fn parse_aggchain_data(
                 .transpose()?
                 .map(Box::new);
 
-            let AggchainProof {
-                proof,
-                aggchain_params,
-                public_values,
-            } = parse_aggchain_proof(aggchain_proof)?;
+            let proof = parse_proof(aggchain_proof.proof.ok_or(Error::missing_field("proof"))?)
+                .map_err(|e| e.inside_field("proof"))?;
+            let aggchain_params = aggchain_proof
+                .aggchain_params
+                .ok_or(Error::missing_field("aggchain_params"))?
+                .try_into()
+                .map_err(|e: Error| e.inside_field("aggchain_params"))?;
 
             AggchainData::Generic {
                 proof,
@@ -190,24 +218,42 @@ fn parse_aggchain_data(
     })
 }
 
-fn encode_public_values(
+fn encode_public_values<T>(public_values: &T) -> Result<Bytes, Error>
+where
+    T: serde::Serialize + std::panic::RefUnwindSafe,
+{
+    Ok(Bytes::from(
+        std::panic::catch_unwind(|| {
+            agglayer_interop::types::bincode::default().serialize(public_values)
+        })
+        .map_err(|_| {
+            Error::serializing_aggchain_proof_public_values(Box::new(bincode::ErrorKind::Custom(
+                String::from("panic"),
+            )))
+        })?
+        .map_err(Error::serializing_context)?,
+    ))
+}
+
+fn encode_bare_public_values(
     public_values: Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>,
 ) -> Result<HashMap<String, Bytes>, Error> {
     Ok(match public_values {
         Some(public_values) => HashMap::from([(
             "public_values".to_owned(),
-            Bytes::from(
-                std::panic::catch_unwind(|| bincode::default().serialize(&*public_values))
-                    .map_err(|_| {
-                        Error::serializing_aggchain_proof_public_values(Box::new(
-                            bincode::ErrorKind::Custom(String::from("panic")),
-                        ))
-                    })?
-                    .map_err(Error::serializing_context)?,
-            ),
+            encode_public_values(&*public_values)?,
         )]),
         None => HashMap::new(),
     })
+}
+
+fn encode_generic_public_values(
+    public_values: Option<Box<agglayer_types::aggchain_proof::AggchainProofPublicValues>>,
+) -> Result<HashMap<String, Bytes>, Error> {
+    Ok(HashMap::from([(
+        "public_values".to_owned(),
+        encode_public_values(&public_values)?,
+    )]))
 }
 
 fn encode_proof(value: Proof) -> Result<agglayer_interop::grpc::v1::aggchain_proof::Proof, Error> {
@@ -229,7 +275,7 @@ fn encode_aggchain_proof(
         proof: Some(encode_proof(value.proof)?),
         aggchain_params: Some(value.aggchain_params.into()),
         signature: None,
-        context: encode_public_values(value.public_values)?,
+        context: encode_bare_public_values(value.public_values)?,
     })
 }
 
@@ -274,7 +320,7 @@ fn encode_aggchain_data(
                 public_values,
             } => agglayer_interop::grpc::v1::aggchain_data::Data::Generic(
                 agglayer_interop::grpc::v1::AggchainProof {
-                    context: encode_public_values(public_values)?,
+                    context: encode_generic_public_values(public_values)?,
                     aggchain_params: Some(aggchain_params.into()),
                     signature: signature.map(|signature| {
                         agglayer_interop::grpc::v1::FixedBytes65 {
