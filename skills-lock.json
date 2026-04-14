@@ -14,7 +14,12 @@
     "create-pr": {
       "source": "agglayer/agglayer-ai-skills",
       "sourceType": "github",
-      "computedHash": "e2411d6917230db9d36b8f84511ade04a23538ff29fd0a3471d5e683a8216590"
+      "computedHash": "40ff39144c5a8271a8c6fa300074a3cf1ab28b00f112496662b41d7ce731fcbf"
+    },
+    "design": {
+      "source": "agglayer/agglayer-ai-skills",
+      "sourceType": "github",
+      "computedHash": "37cf3bc3a6b4385edb89d22b99264d761c78d46eda3f1c4dd52b23728a5dc348"
     },
     "dispatching-parallel-agents": {
       "source": "obra/superpowers",

@@ -8,7 +8,7 @@ When creating a PR:
 
 - Use `gh pr create`
 - Use the target repo's dedicated PR template when one exists.
-- Otherwise, use `workflow-create-pr/pull_request_template.md`
+- Otherwise, use `pull_request_template.md`
   from this package as the fallback template.
 - Follow merge-queue conventions.
 
@@ -27,7 +27,7 @@ When creating a PR:
 - If the target repo has a dedicated PR template, follow that template
   after the context line.
 - Otherwise, append the sections from
-  `workflow-create-pr/pull_request_template.md` after the context line.
+  `pull_request_template.md` after the context line.
 - Do not add extra headings beyond those required by the selected template.
 - Fill `CONFIG-CHANGE:` and `BREAKING-CHANGE:` sections when applicable.
 - **Remove** `CONFIG-CHANGE:` and/or `BREAKING-CHANGE:` sections entirely
@@ -45,7 +45,7 @@ When creating a PR:
 4. Draft a PR description that starts with a plain context line.
 5. If the target repo has a dedicated PR template, follow that template
    after the context line; otherwise append
-   `workflow-create-pr/pull_request_template.md` after the context line.
+   `pull_request_template.md` after the context line.
 6. Ask for confirmation from the user with all this information.
 7. Check if the branch needs to be pushed to remote.
 8. Create the PR.
