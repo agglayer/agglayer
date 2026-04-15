@@ -541,6 +541,7 @@ fn store_writes_certificate_v2() {
 #[test]
 fn regression_01_legacy_can_be_reencoded_for_storage() {
     let bytes = load_sample_bytes("encoded/regression_01.hex");
+    assert_eq!(bytes.first().copied(), Some(1));
     let certificate = Certificate::decode(&bytes).expect("decoding failed");
 
     let encoded = Certificate::encode(&certificate).expect("encoding failed");

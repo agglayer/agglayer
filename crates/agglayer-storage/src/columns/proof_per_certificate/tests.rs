@@ -1,6 +1,6 @@
 use insta::assert_snapshot;
 use serde::{de::IgnoredAny, Deserialize};
-use sp1_prover::{Groth16Bn254Proof, PlonkBn254Proof};
+use sp1_prover::PlonkBn254Proof;
 use sp1_sdk::{SP1Proof, SP1ProofWithPublicValues, SP1PublicValues};
 
 use crate::{
@@ -52,7 +52,6 @@ enum LegacySP1Proof {
     Core(IgnoredAny),
     Compressed(IgnoredAny),
     Plonk(LegacyPlonkBn254Proof),
-    Groth16(LegacyGroth16Bn254Proof),
 }
 
 #[derive(Deserialize)]
@@ -61,14 +60,6 @@ struct LegacyPlonkBn254Proof {
     encoded_proof: String,
     raw_proof: String,
     plonk_vkey_hash: [u8; 32],
-}
-
-#[derive(Deserialize)]
-struct LegacyGroth16Bn254Proof {
-    public_inputs: [String; 2],
-    encoded_proof: String,
-    raw_proof: String,
-    groth16_vkey_hash: [u8; 32],
 }
 
 impl LegacySP1ProofWithPublicValues {
@@ -97,12 +88,6 @@ impl From<LegacySP1Proof> for SP1Proof {
                 encoded_proof: plonk.encoded_proof,
                 raw_proof: plonk.raw_proof,
                 plonk_vkey_hash: plonk.plonk_vkey_hash,
-            }),
-            LegacySP1Proof::Groth16(groth16) => SP1Proof::Groth16(Groth16Bn254Proof {
-                public_inputs: expand_legacy_public_inputs(groth16.public_inputs),
-                encoded_proof: groth16.encoded_proof,
-                raw_proof: groth16.raw_proof,
-                groth16_vkey_hash: groth16.groth16_vkey_hash,
             }),
             LegacySP1Proof::Core(_) | LegacySP1Proof::Compressed(_) => {
                 panic!("historical proof fixture unexpectedly contains a non-BN254 proof")

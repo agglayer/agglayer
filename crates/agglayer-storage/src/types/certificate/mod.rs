@@ -557,7 +557,10 @@ where
     Certificate::try_from(deserialize_bincode::<T>(bytes)?)
 }
 
-fn ensure_storable(certificate: &Certificate) -> Result<(), CodecError> {
+// Storage v2 preserves readable historical proofs inside the current
+// certificate envelope. It does not require proofs to be writable in the latest
+// active protocol format.
+fn ensure_storage_readable(certificate: &Certificate) -> Result<(), CodecError> {
     let result = match &certificate.aggchain_data {
         AggchainData::ECDSA { .. } | AggchainData::MultisigOnly { .. } => Ok(()),
         AggchainData::Generic { proof, .. } => proof.ensure_readable().map(|_| ()),
@@ -582,7 +585,7 @@ fn ensure_storable(certificate: &Certificate) -> Result<(), CodecError> {
 
 impl crate::schema::Codec for Certificate {
     fn encode_into<W: std::io::Write>(&self, writer: W) -> Result<(), CodecError> {
-        ensure_storable(self)?;
+        ensure_storage_readable(self)?;
         Ok(bincode_codec().serialize_into(writer, &CurrentCertificate::from(self))?)
     }
 

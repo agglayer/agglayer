@@ -250,8 +250,7 @@ pub enum AggchainDataType {
 }
 
 /// Any valid riscv64 ELF works here; we only need it to derive a proving key
-/// for mock proof creation. The previous `empty.elf` was riscv32 and is not
-/// compatible with SP1 v6.
+/// for mock proof creation.
 pub const EMPTY_ELF: &[u8] = pessimistic_proof::ELF;
 
 /// Create a dummy STARK proof for testing purposes.
