@@ -121,8 +121,9 @@ pub async fn start_agglayer(
     });
     let url = format!("ws://{}/", config.readrpc_addr());
 
-    let mut interval = tokio::time::interval(Duration::from_secs(10));
-    let mut max_attempts = 20;
+    let poll_interval = Duration::from_millis(250);
+    let mut interval = tokio::time::interval(poll_interval);
+    let mut max_attempts = 800;
     let client = loop {
         if max_attempts == 0 {
             panic!("Failed to connect to the server");

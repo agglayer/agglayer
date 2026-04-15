@@ -67,7 +67,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
                 let verifier = if mock_verifier {
                     EnvProver::Mock(ProverClient::builder().mock().build())
                 } else {
-                    EnvProver::Cpu(ProverClient::builder().cpu().build())
+                    EnvProver::Light(ProverClient::builder().light().build())
                 };
                 let proving_key = verifier.setup(Elf::Static(ELF)).map_err(|e| eyre!(e))?;
                 let verifying_key = proving_key.verifying_key().clone();
