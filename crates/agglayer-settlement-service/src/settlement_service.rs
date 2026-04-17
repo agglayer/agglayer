@@ -1,8 +1,10 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::SettlementServiceConfig;
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{SettlementJob, SettlementJobResult};
 use alloy::providers::Provider;
+use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
@@ -17,10 +19,11 @@ const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 
 /// The Settlement Service is responsible for managing settlement jobs and
 /// answering settlement result requests.
-#[derive(educe::Educe)]
+#[derive(Educe)]
 #[educe(Clone)]
-pub struct SettlementService<L1Provider> {
+pub struct SettlementService<L1Provider, SettlementStore> {
     provider: Arc<L1Provider>,
+    store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
     task_controls: Arc<Mutex<HashMap<Ulid, TaskControlHandle>>>,
     result_watchers: Arc<Mutex<HashMap<Ulid, watch::Receiver<Option<SettlementJobResult>>>>>,
@@ -46,14 +49,20 @@ pub enum RetrievedSettlementResult {
     Completed(SettlementJobResult),
 }
 
-impl<L1Provider: Provider + 'static> SettlementService<L1Provider> {
+impl<
+        L1Provider: Provider + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
+    > SettlementService<L1Provider, SettlementStore>
+{
     pub async fn start(
         _config: SettlementServiceConfig,
         provider: Arc<L1Provider>,
+        store: Arc<SettlementStore>,
         cancellation_token: CancellationToken,
     ) -> eyre::Result<Self> {
         let this = Self {
             provider,
+            store,
             cancellation_token,
             task_controls: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
@@ -107,7 +116,8 @@ impl<L1Provider: Provider + 'static> SettlementService<L1Provider> {
         let (task_control_handle, task_control) =
             TaskControlHandle::new(&self.cancellation_token, admin_sender, admin_receiver);
         let (job_id, mut task) =
-            SettlementTask::create(job, self.provider.clone(), task_control).await?;
+            SettlementTask::create(job, self.provider.clone(), self.store.clone(), task_control)
+                .await?;
         self.task_controls
             .lock()
             .await
@@ -168,12 +178,14 @@ impl<L1Provider: Provider + 'static> SettlementService<L1Provider> {
 
 pub struct RequestNewSettlement(pub SettlementJob);
 
-impl<L1Provider: Provider + 'static> tower::Service<RequestNewSettlement>
-    for SettlementService<L1Provider>
+impl<
+        L1Provider: Provider + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
+    > tower::Service<RequestNewSettlement> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = SettlementJobWatcher;
     type Error = eyre::Error;
-    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
+    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>> + Send>>;
 
     fn poll_ready(
         &mut self,
@@ -190,12 +202,14 @@ impl<L1Provider: Provider + 'static> tower::Service<RequestNewSettlement>
 
 pub struct RetrieveSettlementResult(pub Ulid);
 
-impl<L1Provider: Provider + 'static> tower::Service<RetrieveSettlementResult>
-    for SettlementService<L1Provider>
+impl<
+        L1Provider: Provider + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
+    > tower::Service<RetrieveSettlementResult> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = RetrievedSettlementResult;
     type Error = eyre::Error;
-    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
+    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>> + Send>>;
 
     fn poll_ready(
         &mut self,
@@ -215,12 +229,14 @@ pub enum AdminCommand {
     ReloadAndRestartTask(Ulid),
 }
 
-impl<L1Provider: Provider + 'static> tower::Service<AdminCommand>
-    for SettlementService<L1Provider>
+impl<
+        L1Provider: Provider + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
+    > tower::Service<AdminCommand> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = ();
     type Error = eyre::Error;
-    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>>>>;
+    type Future = Pin<Box<dyn Future<Output = eyre::Result<Self::Response>> + Send>>;
 
     fn poll_ready(
         &mut self,

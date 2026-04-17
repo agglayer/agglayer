@@ -1,6 +1,7 @@
 ---
 name: verify
 description: >
+  **Mandatory** before any commit or push.
   Run Definition-of-Done checks from change scope
   and report exact pass/fail per command.
 argument-hint: auto, minimal, code, proof, proto, full
@@ -96,6 +97,10 @@ run `recommended_commands` directly in the provided order.
 ```bash
 cargo check --workspace --tests --all-features
 ```
+
+`cargo check` only type-checks; it does **not** execute tests.
+Never treat a passing `cargo check` as proof that changes work.
+When any scope below matches the changed files, it must also run.
 
 ### Code behavior (features, bug fixes, refactors)
 
