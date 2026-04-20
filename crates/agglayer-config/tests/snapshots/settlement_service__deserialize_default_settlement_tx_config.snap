@@ -2,7 +2,7 @@
 source: crates/agglayer-config/tests/settlement_service.rs
 expression: config
 ---
-confirmations = 32
+confirmations = 12
 settlement-policy = "SafeBlock"
 gas-limit-ceiling = "0x3938700"
 max-fee-per-gas-ceiling = "100gwei"

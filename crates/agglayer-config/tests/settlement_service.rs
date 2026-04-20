@@ -18,7 +18,7 @@ fn deserialize_default_settlement_tx_config() {
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(10)
     );
-    assert_eq!(config.confirmations, 32);
+    assert_eq!(config.confirmations, 12);
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
     assert_eq!(config.gas_limit_ceiling, U256::from(60_000_000_u64));
     assert_eq!(config.max_fee_per_gas_ceiling, 100_000_000_000_u128);
@@ -180,7 +180,7 @@ fn test_settlement_policy_safe() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
-    assert_eq!(config.confirmations, 32);
+    assert_eq!(config.confirmations, 12);
 
     assert_toml_snapshot!(config);
 }
@@ -216,7 +216,7 @@ fn test_settlement_transaction_config_defaults() {
     );
 
     // Test confirmation and finality
-    assert_eq!(config.confirmations, 32);
+    assert_eq!(config.confirmations, 12);
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
 
     // Test gas configuration

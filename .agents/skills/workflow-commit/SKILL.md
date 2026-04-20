@@ -5,12 +5,13 @@ disable-model-invocation: true
 ---
 
 When creating a git commit:
+
 - Use Conventional Commits format (see [Format](#format))
 - Follow repository commit conventions
 
 ## Format
 
-```
+```text
 <type>(<optional-scope>): <description>
 
 [optional body]
@@ -33,10 +34,13 @@ When creating a git commit:
 
 ## Steps
 
-1. Review staged changes with `git diff --cached`.
-2. Draft a commit message following the rules above.
-3. Present the message for approval before committing.
-4. Create the commit.
+1. **Run the `verify` skill** before staging.
+   All matching checks must pass before proceeding.
+2. Review staged changes with `git diff --cached`.
+3. Draft a commit message following the rules above.
+4. Present the message for approval before committing.
+5. Create the commit with `git commit -S` (GPG-sign).
+   Repos enforce verified signatures; unsigned pushes are rejected.
    Do not push unless explicitly asked.
 
 ## Additional resources
