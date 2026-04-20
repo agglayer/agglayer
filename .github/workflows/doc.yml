@@ -5,7 +5,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened]
   push:
     branches:
       - main
@@ -84,7 +84,7 @@ jobs:
   deploy-cloudflare:
     name: Deploy to Cloudflare Workers
     needs: build
-    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    if: false # Disabled: was creating a new Cloudflare worker per PR that never got cleaned up
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -154,7 +154,7 @@ jobs:
 
   cleanup-cloudflare:
     name: Cleanup Cloudflare deployment
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    if: false # Disabled: no longer deploying per-PR Cloudflare workers
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
