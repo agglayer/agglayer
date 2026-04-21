@@ -49,15 +49,15 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v6
 
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-make,nextest,protoc,cargo-hack
 
       - name: Load image
         run: cargo make integration-l1-image
-
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
 
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
