@@ -56,7 +56,7 @@ args = [
 category = "INTEGRATIONS - PREPARE"
 description = "Pull and tag the L1 image for integration tests"
 script = '''
-set -euo pipefail
+set -eu
 
 IMAGE_TAG="${CONTRACT_IMAGE_TAG:-${CONTRACT_VERSION}-all}"
 
