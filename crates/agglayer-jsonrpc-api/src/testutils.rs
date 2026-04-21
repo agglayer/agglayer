@@ -66,6 +66,8 @@ pub struct TestContext {
     pub admin_client: HttpClient,
     pub config: Arc<Config>,
     pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
+    api_handle: tokio::task::JoinHandle<()>,
+    admin_handle: tokio::task::JoinHandle<()>,
 }
 
 impl TestContext {
@@ -180,8 +182,12 @@ impl TestContext {
         let admin_server = axum::serve(listener_admin, admin_router)
             .with_graceful_shutdown(cancellation_token.child_token().cancelled_owned());
 
-        tokio::spawn(api_server.into_future());
-        tokio::spawn(admin_server.into_future());
+        let api_handle = tokio::spawn(async move {
+            let _ = api_server.into_future().await;
+        });
+        let admin_handle = tokio::spawn(async move {
+            let _ = admin_server.into_future().await;
+        });
 
         Self {
             cancellation_token,
@@ -191,6 +197,8 @@ impl TestContext {
             admin_client,
             config,
             certificate_receiver,
+            api_handle,
+            admin_handle,
         }
     }
 
@@ -298,6 +306,18 @@ impl TestContext {
             pending_store,
             debug_store,
         }
+    }
+}
+
+impl TestContext {
+    /// Gracefully shut down the test servers and wait for them to finish.
+    ///
+    /// Use this instead of `drop(context)` followed by `sleep()` to ensure
+    /// deterministic cleanup before re-opening the same database path.
+    pub async fn shutdown(self) {
+        self.cancellation_token.cancel();
+        let _ = self.api_handle.await;
+        let _ = self.admin_handle.await;
     }
 }
 

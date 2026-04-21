@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use agglayer_config::Config;
 use agglayer_storage::{
     stores::{PendingCertificateWriter, StateWriter},
@@ -76,10 +74,7 @@ async fn returns_the_pending_certificate_header() {
     assert_eq!(payload.certificate_id, pending_certificate.hash());
     assert_eq!(payload.status, CertificateStatus::Pending);
 
-    drop(context);
-
-    // Have some delay to ensure that the server has been stopped
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    context.shutdown().await;
     let config = Config::new(&tmp.path);
 
     // Restarting the server in raw mode
@@ -140,9 +135,7 @@ async fn returns_the_proven_certificate_header() {
         )
         .expect("unable to set latest proven certificate");
 
-    drop(context);
-
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    context.shutdown().await;
 
     let config = Config::new(&tmp.path);
 
@@ -159,10 +152,7 @@ async fn returns_the_proven_certificate_header() {
     assert_eq!(payload.certificate_id, proven_certificate.hash());
     assert_eq!(payload.status, CertificateStatus::Proven);
 
-    drop(context);
-
-    // Have some delayu to ensure that the server has been stopped
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    context.shutdown().await;
 
     let config = Config::new(&tmp.path);
 
@@ -211,9 +201,7 @@ async fn returns_the_settled_certificate_header() {
         )
         .expect("unable to set latest settled certificate");
 
-    drop(context);
-
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    context.shutdown().await;
     let config = Config::new(&tmp.path);
     let context = TestContext::new_with_config(config).await;
 
@@ -229,10 +217,7 @@ async fn returns_the_settled_certificate_header() {
     assert_eq!(payload.certificate_id, settled_certificate.hash());
     assert_eq!(payload.status, CertificateStatus::Settled);
 
-    drop(context);
-
-    // Have some delayu to ensure that the server has been stopped
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    context.shutdown().await;
 
     let config = Config::new(&tmp.path);
     // Restarting the server in raw mode
@@ -276,10 +261,7 @@ async fn returns_no_certificate_header() {
 
     assert!(payload.is_none());
 
-    drop(context);
-
-    // Have some delayu to ensure that the server has been stopped
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    context.shutdown().await;
 
     let config = Config::new(&tmp.path);
     // Restarting the server in raw mode
@@ -340,9 +322,7 @@ async fn returns_the_highest_height() {
         .insert_pending_certificate(network_id, Height::new(3), &pending_certificate)
         .expect("unable to insert pending certificate");
 
-    drop(context);
-
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    context.shutdown().await;
     let config = Config::new(&tmp.path);
     let context = TestContext::new_with_config(config).await;
 
@@ -359,10 +339,7 @@ async fn returns_the_highest_height() {
     assert_eq!(payload.status, CertificateStatus::Settled);
     assert_eq!(payload.height, Height::new(10));
 
-    drop(context);
-
-    // Have some delayu to ensure that the server has been stopped
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    context.shutdown().await;
 
     let config = Config::new(&tmp.path);
     // Restarting the server in raw mode
@@ -440,8 +417,7 @@ async fn returns_the_settled_one_at_same_height() {
         )
         .expect("unable to set latest proven certificate");
 
-    drop(context);
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    context.shutdown().await;
     let config = Config::new(&tmp.path);
 
     let context = TestContext::new_with_config(config).await;
@@ -459,10 +435,7 @@ async fn returns_the_settled_one_at_same_height() {
     assert_eq!(payload.status, CertificateStatus::Settled);
     assert_eq!(payload.height, Height::new(10));
 
-    drop(context);
-
-    // Have some delayu to ensure that the server has been stopped
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    context.shutdown().await;
 
     let config = Config::new(&tmp.path);
     // Restarting the server in raw mode

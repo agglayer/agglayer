@@ -1,9 +1,6 @@
 use std::{
-    collections::BTreeMap,
     num::NonZeroU64,
-    option::Option,
-    result::Result,
-    sync::{atomic::AtomicU64, Arc, RwLock},
+    sync::{atomic::AtomicU64, Arc},
     task::Poll,
 };
 
@@ -11,15 +8,9 @@ use agglayer_clock::ClockRef;
 use agglayer_config::Config;
 use agglayer_storage::{
     backup::BackupClient,
-    columns::{
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
     stores::{
-        epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
-        EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
-        PerEpochWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
-        UpdateStatusToCandidate,
+        epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreWriter,
+        PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
     },
     tests::{
         mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
@@ -27,8 +18,8 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    Certificate, CertificateId, CertificateIndex, Digest, EpochNumber, Height,
+    LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
@@ -47,434 +38,6 @@ use crate::{
 };
 
 pub(crate) mod mocks;
-
-#[allow(dead_code)]
-#[derive(Default)]
-pub(crate) struct DummyPendingStore {
-    pub(crate) current_epoch: EpochNumber,
-    pub(crate) pending_certificate: RwLock<BTreeMap<(NetworkId, Height), Certificate>>,
-    pub(crate) proofs: RwLock<BTreeMap<CertificateId, Proof>>,
-    pub(crate) settled: RwLock<BTreeMap<NetworkId, (Height, CertificateId)>>,
-    pub(crate) certificate_per_network: RwLock<BTreeMap<(NetworkId, Height), CertificateId>>,
-    pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
-    pub(crate) latest_proven_certificate_per_network:
-        RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
-    pub(crate) is_packed: bool,
-}
-
-impl PerEpochReader for DummyPendingStore {
-    fn is_epoch_packed(&self) -> bool {
-        self.is_packed
-    }
-    fn get_epoch_number(&self) -> EpochNumber {
-        self.current_epoch
-    }
-    fn get_certificate_at_index(
-        &self,
-        _index: CertificateIndex,
-    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
-        todo!()
-    }
-    fn get_proof_at_index(
-        &self,
-        _index: CertificateIndex,
-    ) -> Result<Option<Proof>, agglayer_storage::error::Error> {
-        todo!()
-    }
-    fn get_end_checkpoint(&self) -> BTreeMap<NetworkId, Height> {
-        todo!()
-    }
-
-    fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {
-        todo!()
-    }
-
-    fn get_end_checkpoint_height_per_network(
-        &self,
-        _network_id: NetworkId,
-    ) -> Result<Option<Height>, agglayer_storage::error::Error> {
-        todo!()
-    }
-}
-
-impl PerEpochWriter for DummyPendingStore {
-    fn add_certificate(
-        &self,
-        _certificate_id: CertificateId,
-        _mode: ExecutionMode,
-    ) -> Result<(EpochNumber, CertificateIndex), agglayer_storage::error::Error> {
-        Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
-    }
-
-    fn start_packing(&self) -> Result<(), agglayer_storage::error::Error> {
-        todo!()
-    }
-}
-
-impl StateReader for DummyPendingStore {
-    fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
-        Ok(Vec::new())
-    }
-    fn is_network_disabled(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<bool, agglayer_storage::error::Error> {
-        Ok(false)
-    }
-
-    fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
-        Ok(vec![])
-    }
-
-    fn get_latest_settled_certificate_per_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn get_certificate_header(
-        &self,
-        certificate_id: &CertificateId,
-    ) -> Result<Option<CertificateHeader>, agglayer_storage::error::Error> {
-        Ok(self
-            .certificate_headers
-            .read()
-            .unwrap()
-            .get(certificate_id)
-            .cloned())
-    }
-    fn get_current_settled_height(
-        &self,
-    ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
-        self.settled
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(network_id, (height, id))| {
-                Ok((
-                    *network_id,
-                    SettledCertificate(*id, *height, EpochNumber::ZERO, CertificateIndex::ZERO),
-                ))
-            })
-            .collect()
-    }
-
-    fn get_certificate_header_by_cursor(
-        &self,
-        network_id: NetworkId,
-        height: Height,
-    ) -> Result<Option<agglayer_types::CertificateHeader>, agglayer_storage::error::Error> {
-        Ok(self
-            .certificate_per_network
-            .read()
-            .unwrap()
-            .get(&(network_id, height))
-            .and_then(|id| self.certificate_headers.read().unwrap().get(id).cloned()))
-    }
-
-    fn read_local_network_state(
-        &self,
-        _network_id: NetworkId,
-    ) -> Result<Option<LocalNetworkStateData>, agglayer_storage::error::Error> {
-        todo!()
-    }
-}
-impl EpochStoreReader for DummyPendingStore {
-    fn get_certificate(
-        &self,
-        _epoch_number: EpochNumber,
-        _index: CertificateIndex,
-    ) -> Result<Option<Certificate>, agglayer_storage::error::Error> {
-        // This is a dummy implementation for testing
-        Ok(None)
-    }
-
-    fn get_proof(
-        &self,
-        _epoch_number: EpochNumber,
-        _index: CertificateIndex,
-    ) -> Result<Option<Proof>, agglayer_storage::error::Error> {
-        Ok(None)
-    }
-}
-
-impl EpochStoreWriter for DummyPendingStore {
-    type PerEpochStore = Self;
-
-    fn open(
-        &self,
-        _epoch_number: EpochNumber,
-    ) -> Result<Self::PerEpochStore, agglayer_storage::error::Error> {
-        Ok(DummyPendingStore::default())
-    }
-
-    fn open_with_start_checkpoint(
-        &self,
-        _epoch_number: EpochNumber,
-        _start_checkpoint: BTreeMap<NetworkId, Height>,
-    ) -> Result<Self::PerEpochStore, agglayer_storage::error::Error> {
-        Ok(DummyPendingStore::default())
-    }
-}
-
-impl PendingCertificateWriter for DummyPendingStore {
-    fn insert_pending_certificate(
-        &self,
-        network_id: NetworkId,
-        height: Height,
-        certificate: &agglayer_types::Certificate,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        self.pending_certificate
-            .write()
-            .unwrap()
-            .insert((network_id, height), certificate.clone());
-
-        Ok(())
-    }
-
-    fn insert_generated_proof(
-        &self,
-        certificate_id: &CertificateId,
-        proof: &agglayer_types::Proof,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        self.proofs
-            .write()
-            .unwrap()
-            .insert(*certificate_id, proof.clone());
-
-        Ok(())
-    }
-
-    fn remove_pending_certificate(
-        &self,
-        network_id: NetworkId,
-        height: Height,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        self.pending_certificate
-            .write()
-            .unwrap()
-            .remove(&(network_id, height));
-
-        Ok(())
-    }
-    fn remove_generated_proof(
-        &self,
-        certificate_id: &CertificateId,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        self.proofs.write().unwrap().remove(certificate_id);
-
-        Ok(())
-    }
-    fn set_latest_proven_certificate_per_network(
-        &self,
-        network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        self.latest_proven_certificate_per_network
-            .write()
-            .unwrap()
-            .insert(
-                *network_id,
-                ProvenCertificate(*certificate_id, *network_id, *height),
-            );
-
-        Ok(())
-    }
-
-    fn set_latest_pending_certificate_per_network(
-        &self,
-        _network_id: &NetworkId,
-        _height: &Height,
-        _certificate_id: &CertificateId,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        Ok(())
-    }
-}
-
-impl StateWriter for DummyPendingStore {
-    fn disable_network(
-        &self,
-        _network_id: &NetworkId,
-        _disabled_by: agglayer_types::network_info::DisabledBy,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        Ok(())
-    }
-    fn enable_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        Ok(())
-    }
-    fn update_settlement_tx_hash(
-        &self,
-        _certificate_id: &CertificateId,
-        _tx_hash: SettlementTxHash,
-        _force: UpdateEvenIfAlreadyPresent,
-        _set_status: UpdateStatusToCandidate,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn remove_settlement_tx_hash(
-        &self,
-        _certificate_id: &CertificateId,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn assign_certificate_to_epoch(
-        &self,
-        _certificate_id: &CertificateId,
-        _epoch_number: &EpochNumber,
-        _certificate_index: &agglayer_types::CertificateIndex,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn insert_certificate_header(
-        &self,
-        certificate: &Certificate,
-        status: CertificateStatus,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        self.certificate_per_network.write().unwrap().insert(
-            (certificate.network_id, certificate.height),
-            certificate.hash(),
-        );
-
-        self.certificate_headers.write().unwrap().insert(
-            certificate.hash(),
-            CertificateHeader {
-                network_id: certificate.network_id,
-                height: certificate.height,
-                epoch_number: None,
-                certificate_index: None,
-                certificate_id: certificate.hash(),
-                prev_local_exit_root: certificate.prev_local_exit_root,
-                new_local_exit_root: certificate.new_local_exit_root,
-                status,
-                metadata: certificate.metadata,
-                settlement_tx_hash: None,
-            },
-        );
-
-        Ok(())
-    }
-
-    fn update_certificate_header_status(
-        &self,
-        certificate_id: &CertificateId,
-        status: &CertificateStatus,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        if let Some(entry) = self
-            .certificate_headers
-            .write()
-            .unwrap()
-            .get_mut(certificate_id)
-        {
-            entry.status = status.clone();
-        }
-
-        Ok(())
-    }
-
-    fn set_latest_settled_certificate_for_network(
-        &self,
-        _network_id: &NetworkId,
-        _height: &Height,
-        _certificate_id: &CertificateId,
-        _epoch_number: &EpochNumber,
-        _certificate_index: &CertificateIndex,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        Ok(())
-    }
-
-    fn write_local_network_state(
-        &self,
-        _network_id: &NetworkId,
-        _new_state: &LocalNetworkStateData,
-        _new_leaves: &[Digest],
-    ) -> Result<(), agglayer_storage::error::Error> {
-        todo!()
-    }
-}
-
-impl PendingCertificateReader for DummyPendingStore {
-    fn get_latest_proven_certificate_per_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-    fn get_latest_pending_certificate_for_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn get_current_proven_height(
-        &self,
-    ) -> Result<Vec<ProvenCertificate>, agglayer_storage::error::Error> {
-        Ok(self
-            .latest_proven_certificate_per_network
-            .read()
-            .unwrap()
-            .values()
-            .cloned()
-            .collect())
-    }
-    fn get_current_proven_height_for_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<Height>, agglayer_storage::error::Error> {
-        Ok(self
-            .latest_proven_certificate_per_network
-            .read()
-            .unwrap()
-            .get(network_id)
-            .map(|x| x.2))
-    }
-
-    fn get_certificate(
-        &self,
-        network_id: NetworkId,
-        height: agglayer_types::Height,
-    ) -> Result<Option<agglayer_types::Certificate>, agglayer_storage::error::Error> {
-        Ok(self
-            .pending_certificate
-            .read()
-            .unwrap()
-            .get(&(network_id, height))
-            .cloned())
-    }
-
-    fn get_proof(
-        &self,
-        certificate_id: CertificateId,
-    ) -> Result<Option<agglayer_types::Proof>, agglayer_storage::error::Error> {
-        Ok(self.proofs.read().unwrap().get(&certificate_id).cloned())
-    }
-
-    fn multi_get_certificate(
-        &self,
-        keys: &[(NetworkId, Height)],
-    ) -> Result<Vec<Option<agglayer_types::Certificate>>, agglayer_storage::error::Error> {
-        let lock = self.pending_certificate.read().unwrap();
-
-        Ok(keys.iter().map(|key| lock.get(key).cloned()).collect())
-    }
-
-    fn multi_get_proof(
-        &self,
-        keys: &[CertificateId],
-    ) -> Result<Vec<Option<agglayer_types::Proof>>, agglayer_storage::error::Error> {
-        let lock = self.proofs.read().unwrap();
-
-        Ok(keys.iter().map(|key| lock.get(key).cloned()).collect())
-    }
-}
 
 // CertificateOrchestrator can be stopped
 #[tokio::test]
@@ -613,7 +176,8 @@ async fn test_collect_certificates() {
 
 // A certificate received after an EpochEnded is stored for next epoch
 #[tokio::test]
-#[ignore]
+#[ignore = "certificate is not inserted into pending store before the notification is sent, \
+            causing Check::certify to fail with CertificateNotFound"]
 async fn test_collect_certificates_after_epoch() {
     let path = TempDBDir::new();
     let config = Config::new(&path.path);
@@ -684,7 +248,8 @@ async fn test_collect_certificates_after_epoch() {
 
 // If no certificate is received, the orchestrator should send an empty payload
 #[tokio::test]
-#[ignore]
+#[ignore = "orchestrator no longer triggers certifier for empty epochs, test expectation needs to \
+            be redesigned"]
 async fn test_collect_certificates_when_empty() {
     let path = TempDBDir::new();
     let config = Config::new(&path.path);
