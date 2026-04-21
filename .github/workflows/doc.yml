@@ -81,18 +81,15 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
-  deploy-cloudflare:
-    name: Deploy to Cloudflare Workers
+  deploy-cloudflare-pages:
+    name: Deploy to Cloudflare Pages
     needs: build
-    if: false # Disabled: was creating a new Cloudflare worker per PR that never got cleaned up
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
       issues: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
       - name: Download documentation artifact
         uses: actions/download-artifact@v5
         with:
@@ -107,12 +104,11 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler
 
-      - name: Update wrangler.toml for PR
+      - name: Deploy to Cloudflare Pages
+        id: deploy
         run: |
-          sed -e "s/{{REPOSITORY_NAME}}/${{ github.event.repository.name }}/g" -e "s/{{PR_NUMBER}}/${{ github.event.number }}/g" wrangler.toml.template > wrangler.toml
-
-      - name: Deploy to Cloudflare Workers
-        run: wrangler deploy --env staging
+          DEPLOYMENT_URL=$(wrangler pages deploy docs --project-name=agglayer-node-docs --branch="${{ github.head_ref }}" | grep -oP 'https://[^\s]+\.pages\.dev')
+          echo "url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}
@@ -121,9 +117,9 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const deploymentComment = `📖 Documentation deployed to: https://${{ github.event.repository.name }}-pr-${{ github.event.number }}-rust-docs.agglayer.dev`;
+            const url = '${{ steps.deploy.outputs.url }}' || `https://${{ github.head_ref }}.agglayer-node-docs.pages.dev`;
+            const deploymentComment = `📖 Documentation deployed to: ${url}`;
 
-            // Check if we already have a deployment comment
             const comments = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -135,7 +131,6 @@ jobs:
             );
 
             if (existingComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 comment_id: existingComment.id,
                 owner: context.repo.owner,
@@ -143,7 +138,6 @@ jobs:
                 body: deploymentComment
               });
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
@@ -151,26 +145,3 @@ jobs:
                 body: deploymentComment
               });
             }
-
-  cleanup-cloudflare:
-    name: Cleanup Cloudflare deployment
-    if: false # Disabled: no longer deploying per-PR Cloudflare workers
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-
-      - name: Install Wrangler
-        run: npm install -g wrangler
-
-      - name: Delete worker
-        run: |
-          wrangler delete --name ${{ github.event.repository.name }}-rust-docs-pr-${{ github.event.number }}-staging --force || echo "Worker may not exist"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}
