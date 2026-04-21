@@ -1,6 +1,7 @@
 [env]
-CONTRACT_VERSION = "feature/ongoing-v0.3.0"
+CONTRACT_VERSION = "12.2.3"
 CONTRACT_REPO = "https://api.github.com/repos/agglayer/agglayer-contracts"
+CONTRACT_IMAGE_REPO = "ghcr.io/agglayer/agglayer-contracts"
 
 [tasks.contracts]
 description = "Download and update the contracts of agglayer-contracts"
@@ -16,27 +17,27 @@ dependencies = [
 ]
 
 [tasks.contracts-download-AggLayerGateway]
-env = { "CONTRACT" = "AggLayerGateway.json" }
+env = { "CONTRACT_SOURCE" = "AgglayerGateway.json", "CONTRACT_OUTPUT" = "AggLayerGateway.json" }
 run_task = "contracts-download"
 
 [tasks.contracts-download-AggchainBase]
-env = { "CONTRACT" = "AggchainBase.json" }
+env = { "CONTRACT_SOURCE" = "AggchainBase.json", "CONTRACT_OUTPUT" = "AggchainBase.json" }
 run_task = "contracts-download"
 
 [tasks.contracts-download-PolygonRollupManager]
-env = { "CONTRACT" = "PolygonRollupManager.json" }
+env = { "CONTRACT_SOURCE" = "PolygonRollupManager.json", "CONTRACT_OUTPUT" = "PolygonRollupManager.json" }
 run_task = "contracts-download"
 
 [tasks.contracts-download-PolygonZkEVM]
-env = { "CONTRACT" = "PolygonZkEVM.json" }
+env = { "CONTRACT_SOURCE" = "PolygonZkEVM.json", "CONTRACT_OUTPUT" = "PolygonZkEVM.json" }
 run_task = "contracts-download"
 
 [tasks.contracts-download-PolygonZkEVMGlobalExitRootV2]
-env = { "CONTRACT" = "PolygonZkEVMGlobalExitRootV2.json" }
+env = { "CONTRACT_SOURCE" = "PolygonZkEVMGlobalExitRootV2.json", "CONTRACT_OUTPUT" = "PolygonZkEVMGlobalExitRootV2.json" }
 run_task = "contracts-download"
 
 [tasks.contracts-download]
-condition = { env_set = ["CONTRACT", "GITHUB_TOKEN"] }
+condition = { env_set = ["CONTRACT_SOURCE", "CONTRACT_OUTPUT", "GITHUB_TOKEN"] }
 description = "Download the contract of agglayer-contracts"
 cwd = "crates/agglayer-contracts"
 command = "curl"
@@ -45,8 +46,20 @@ args = [
     "-HAccept: application/vnd.github.v4.raw",
     "-Ls",
     "--output",
-    "./src/contracts/${CONTRACT}",
+    "./src/contracts/${CONTRACT_OUTPUT}",
     "--proto",
     "=https",
-    "${CONTRACT_REPO}/contents/compiled-contracts/${CONTRACT}?ref=${CONTRACT_VERSION}",
+    "${CONTRACT_REPO}/contents/compiled-contracts/${CONTRACT_SOURCE}?ref=v${CONTRACT_VERSION}",
 ]
+
+[tasks.integration-l1-image]
+category = "INTEGRATIONS - PREPARE"
+description = "Pull and tag the L1 image for integration tests"
+script = '''
+set -euo pipefail
+
+IMAGE_TAG="${CONTRACT_IMAGE_TAG:-${CONTRACT_VERSION}-all}"
+
+docker pull "${CONTRACT_IMAGE_REPO}:${IMAGE_TAG}"
+docker tag "${CONTRACT_IMAGE_REPO}:${IMAGE_TAG}" hermeznetwork/geth-zkevm-contracts
+'''
