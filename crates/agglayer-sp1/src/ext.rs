@@ -49,6 +49,7 @@ impl Sp1StarkExt for SP1StarkWithContext {
 pub trait ProofExt {
     fn sp1(&self) -> &SP1StarkWithContext;
     fn ensure_readable(&self, policy: &AcceptancePolicy) -> Result<Sp1ProofVersion, ProofError>;
+    fn ensure_executable(&self, policy: &AcceptancePolicy) -> Result<(), ProofError>;
     fn ensure_writable(&self, policy: &AcceptancePolicy) -> Result<(), ProofError>;
     fn vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError>;
     fn vkey_hash_u32(&self) -> Result<[u32; 8], ProofError>;
@@ -63,6 +64,10 @@ impl ProofExt for Proof {
 
     fn ensure_readable(&self, policy: &AcceptancePolicy) -> Result<Sp1ProofVersion, ProofError> {
         self.sp1().ensure_readable(policy)
+    }
+
+    fn ensure_executable(&self, policy: &AcceptancePolicy) -> Result<(), ProofError> {
+        self.sp1().ensure_executable(policy)
     }
 
     fn ensure_writable(&self, policy: &AcceptancePolicy) -> Result<(), ProofError> {
