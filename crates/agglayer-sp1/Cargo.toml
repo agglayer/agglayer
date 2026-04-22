@@ -1,0 +1,10 @@
+[package]
+name = "agglayer-sp1"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agglayer-interop-types.workspace = true
+sp1-sdk.workspace = true
+thiserror.workspace = true
