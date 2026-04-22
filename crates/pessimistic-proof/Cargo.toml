@@ -14,7 +14,7 @@ agglayer-tries.workspace = true
 unified-bridge.workspace = true
 
 arbitrary = { workspace = true, optional = true }
-hex-literal = "0.4"
+hex-literal = "1.1"
 hex.workspace = true
 pessimistic-proof-core.workspace = true
 serde = { version = "1", features = ["derive"] }
@@ -29,7 +29,7 @@ tiny-keccak = { version = "2.0", features = ["keccak"] }
 [dev-dependencies]
 pessimistic-proof-core = { workspace = true, features = ["testutils"] }
 rand = "0.9.0"
-rs_merkle = { version = "1.4", default-features = false }
+rs_merkle = { version = "1.5", default-features = false }
 
 [build-dependencies]
 color-eyre.workspace = true
