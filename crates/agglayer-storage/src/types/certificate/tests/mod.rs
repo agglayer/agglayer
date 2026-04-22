@@ -450,7 +450,4 @@ fn catch_unwind_converts_deserializer_panic_into_codec_error() {
         Err(other) => panic!("unexpected error variant: {other:?}"),
         Ok(_) => panic!("deserialize_bincode returned Ok on a panicking type"),
     }
-
-    // Suppress the "unused" warning on the helper struct when not matched.
-    let _ = std::marker::PhantomData::<PanickingOnDeserialize>;
 }
