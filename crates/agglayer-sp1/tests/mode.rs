@@ -1,4 +1,4 @@
-use agglayer_sp1::{proof_mode, ProofMode};
+use agglayer_sp1::ProofMode;
 use sp1_sdk::{Prover, ProverClient, SP1ProofMode};
 
 /// A minimal valid RISC-V ELF. The mock prover's `setup` pipeline parses the
@@ -19,23 +19,23 @@ fn mock_proof(mode: SP1ProofMode) -> sp1_sdk::SP1ProofWithPublicValues {
 #[test]
 fn core_mode() {
     let proof = mock_proof(SP1ProofMode::Core);
-    assert_eq!(proof_mode(&proof.proof), ProofMode::Core);
+    assert_eq!(ProofMode::from(&proof.proof), ProofMode::Core);
 }
 
 #[test]
 fn compressed_mode() {
     let proof = mock_proof(SP1ProofMode::Compressed);
-    assert_eq!(proof_mode(&proof.proof), ProofMode::Compressed);
+    assert_eq!(ProofMode::from(&proof.proof), ProofMode::Compressed);
 }
 
 #[test]
 fn plonk_mode() {
     let proof = mock_proof(SP1ProofMode::Plonk);
-    assert_eq!(proof_mode(&proof.proof), ProofMode::Plonk);
+    assert_eq!(ProofMode::from(&proof.proof), ProofMode::Plonk);
 }
 
 #[test]
 fn groth16_mode() {
     let proof = mock_proof(SP1ProofMode::Groth16);
-    assert_eq!(proof_mode(&proof.proof), ProofMode::Groth16);
+    assert_eq!(ProofMode::from(&proof.proof), ProofMode::Groth16);
 }

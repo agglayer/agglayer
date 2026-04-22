@@ -10,7 +10,7 @@ mod policy;
 mod version;
 
 pub use error::ProofError;
-pub use ext::{ProofExt, Sp1StarkExt};
-pub use mode::{proof_mode, ProofMode};
+pub use ext::ProofExt;
+pub use mode::ProofMode;
 pub use policy::AcceptancePolicy;
 pub use version::{version_kind, Sp1ProofVersion};
