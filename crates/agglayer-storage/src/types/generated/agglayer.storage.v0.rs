@@ -466,4 +466,94 @@ impl ContractCallOutcome {
         }
     }
 }
+/// SDK-agnostic storage envelope for a zero-knowledge proof.
+/// The bytes fields are kept opaque so the wire format does not depend on the
+/// SDK Rust types.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StorageProof {
+    /// Which proof system produced this proof.
+    #[prost(enumeration="ProofSystem", tag="1")]
+    pub proof_system: i32,
+    /// Preserved end-to-end as reported by the producing SDK (e.g. "v5.2.2").
+    #[prost(string, tag="2")]
+    pub version: ::prost::alloc::string::String,
+    /// SP1 proof mode.
+    #[prost(enumeration="ProofMode", tag="3")]
+    pub mode: i32,
+    /// Opaque serialized proof payload.
+    #[prost(bytes="bytes", tag="4")]
+    pub proof: ::prost::bytes::Bytes,
+    /// Opaque serialized public values.
+    #[prost(bytes="bytes", tag="5")]
+    pub public_values: ::prost::bytes::Bytes,
+    /// Opaque serialized verifying key.
+    #[prost(bytes="bytes", tag="6")]
+    pub vkey: ::prost::bytes::Bytes,
+}
+/// Proof system that produced the opaque proof bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ProofSystem {
+    /// Default value, should not be used.
+    Unspecified = 0,
+    /// SP1 proof system.
+    Sp1 = 1,
+}
+impl ProofSystem {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "PROOF_SYSTEM_UNSPECIFIED",
+            Self::Sp1 => "PROOF_SYSTEM_SP1",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "PROOF_SYSTEM_UNSPECIFIED" => Some(Self::Unspecified),
+            "PROOF_SYSTEM_SP1" => Some(Self::Sp1),
+            _ => None,
+        }
+    }
+}
+/// Mode of the SP1 proof.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ProofMode {
+    /// Default value, should not be used.
+    Unspecified = 0,
+    /// Compressed (STARK) SP1 proof.
+    Compressed = 1,
+    /// Plonk SNARK wrapper over an SP1 proof.
+    Plonk = 2,
+    /// Groth16 SNARK wrapper over an SP1 proof.
+    Groth16 = 3,
+}
+impl ProofMode {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "PROOF_MODE_UNSPECIFIED",
+            Self::Compressed => "PROOF_MODE_COMPRESSED",
+            Self::Plonk => "PROOF_MODE_PLONK",
+            Self::Groth16 => "PROOF_MODE_GROTH16",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "PROOF_MODE_UNSPECIFIED" => Some(Self::Unspecified),
+            "PROOF_MODE_COMPRESSED" => Some(Self::Compressed),
+            "PROOF_MODE_PLONK" => Some(Self::Plonk),
+            "PROOF_MODE_GROTH16" => Some(Self::Groth16),
+            _ => None,
+        }
+    }
+}
 // @@protoc_insertion_point(module)
