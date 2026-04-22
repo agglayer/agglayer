@@ -408,3 +408,16 @@ fn bad_format() {
         }
     }
 }
+
+#[test]
+fn catch_unwind_turns_panic_into_error() {
+    // A trailing single 0x03 past a valid v1 version byte can make bincode
+    // panic while reading lengths; we want it to surface as a CodecError.
+    let bytes = [0x01u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+    let err = <Certificate as crate::schema::Codec>::decode(&bytes)
+        .expect_err("expected decode to fail, not panic");
+    assert!(
+        matches!(err, crate::schema::CodecError::Serialization(_)),
+        "unexpected error variant: {err:?}"
+    );
+}
