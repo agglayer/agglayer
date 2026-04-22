@@ -343,6 +343,14 @@ fn panic_bincode_error() -> agglayer_types::bincode::Error {
     )))
 }
 
+/// Wrap `bincode` deserialization in `catch_unwind` so a panic from a
+/// malformed row surfaces as `CodecError::Serialization` instead of
+/// unwinding the node process.
+///
+/// The closure captures `&[u8]` and a `bincode::Options` value, both of
+/// which are `UnwindSafe`; no `AssertUnwindSafe` is needed. Clippy's
+/// `catch_unwind` lint is not triggered here, confirming the
+/// `UnwindSafe` bound is satisfied by inference.
 fn deserialize_bincode<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, CodecError> {
     std::panic::catch_unwind(|| bincode_codec().deserialize::<T>(bytes))
         .map_err(|_| CodecError::Serialization(panic_bincode_error()))?
