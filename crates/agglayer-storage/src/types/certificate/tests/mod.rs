@@ -444,7 +444,15 @@ fn catch_unwind_converts_deserializer_panic_into_codec_error() {
     // Borrow the real catch_unwind helper by decoding through bincode.
     // `deserialize_bincode` is module-private, so call it via the
     // sibling `super::deserialize_bincode::<PanickingOnDeserialize>(...)`.
+    //
+    // Suppress the default panic hook during the intentional panic so CI
+    // logs are not polluted by the stack trace. The hook is restored
+    // immediately after the call returns.
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
     let result = super::deserialize_bincode::<PanickingOnDeserialize>(&[0u8; 0]);
+    std::panic::set_hook(prev_hook);
+
     match result {
         Err(crate::schema::CodecError::Serialization(_)) => {}
         Err(other) => panic!("unexpected error variant: {other:?}"),
