@@ -409,10 +409,12 @@ fn bad_format() {
     }
 }
 
+/// Smoke test: malformed bytes must surface as a recoverable `CodecError`,
+/// never as a process-level panic. Covers the common case where bincode
+/// returns its own error (no panic reached).
 #[test]
-fn catch_unwind_turns_panic_into_error() {
-    // A trailing single 0x03 past a valid v1 version byte can make bincode
-    // panic while reading lengths; we want it to surface as a CodecError.
+fn decode_of_corrupt_bytes_returns_codec_error() {
+    // A valid v1 version byte followed by junk that bincode rejects.
     let bytes = [0x01u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
     let err = <Certificate as crate::schema::Codec>::decode(&bytes)
         .expect_err("expected decode to fail, not panic");
@@ -420,4 +422,35 @@ fn catch_unwind_turns_panic_into_error() {
         matches!(err, crate::schema::CodecError::Serialization(_)),
         "unexpected error variant: {err:?}"
     );
+}
+
+/// Regression guard: if a deserializer ever panics mid-decode, the
+/// `catch_unwind` wrapper in `deserialize_bincode` must convert the panic
+/// into a `CodecError::Serialization`, not let it escape. We provoke this
+/// with a test-only type whose `Deserialize` impl deliberately panics.
+#[test]
+fn catch_unwind_converts_deserializer_panic_into_codec_error() {
+    use serde::de::{Deserialize, Deserializer};
+
+    #[derive(Debug)]
+    struct PanickingOnDeserialize;
+
+    impl<'de> Deserialize<'de> for PanickingOnDeserialize {
+        fn deserialize<D: Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+            panic!("intentional panic for catch_unwind test");
+        }
+    }
+
+    // Borrow the real catch_unwind helper by decoding through bincode.
+    // `deserialize_bincode` is module-private, so call it via the
+    // sibling `super::deserialize_bincode::<PanickingOnDeserialize>(...)`.
+    let result = super::deserialize_bincode::<PanickingOnDeserialize>(&[0u8; 0]);
+    match result {
+        Err(crate::schema::CodecError::Serialization(_)) => {}
+        Err(other) => panic!("unexpected error variant: {other:?}"),
+        Ok(_) => panic!("deserialize_bincode returned Ok on a panicking type"),
+    }
+
+    // Suppress the "unused" warning on the helper struct when not matched.
+    let _ = std::marker::PhantomData::<PanickingOnDeserialize>;
 }
