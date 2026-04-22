@@ -1,0 +1,248 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+import "agglayer/storage/v0/storage_proof.proto";
+
+// ===================================================================
+// Fixed-size byte buffers.
+// Named wrappers mirror the interop convention while keeping this
+// schema free of any inter-proto dependency.
+// ===================================================================
+
+// A 20-byte buffer (e.g. an EVM address).
+message StorageFixedBytes20 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
+
+// A 32-byte buffer (e.g. a hash, a root, a digest).
+message StorageFixedBytes32 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
+
+// A 65-byte buffer (e.g. an ECDSA signature with recovery byte).
+message StorageFixedBytes65 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
+
+// ===================================================================
+// Bridge-exit primitives.
+// ===================================================================
+
+// The type of the leaf in a bridge exit.
+enum StorageLeafType {
+  // Unspecified leaf type.
+  STORAGE_LEAF_TYPE_UNSPECIFIED = 0;
+  // Token transfer leaf type.
+  STORAGE_LEAF_TYPE_TRANSFER = 1;
+  // Message leaf type.
+  STORAGE_LEAF_TYPE_MESSAGE = 2;
+}
+
+// Identifier of a token on its origin network.
+message StorageTokenInfo {
+  // Network the token originates from.
+  uint32 origin_network = 1;
+  // Address of the token on the origin network.
+  StorageFixedBytes20 origin_token_address = 2;
+}
+
+// A bridge exit leaf.
+message StorageBridgeExit {
+  // The type of the leaf.
+  StorageLeafType leaf_type = 1;
+  // Identifier of the token being transferred.
+  StorageTokenInfo token_info = 2;
+  // Network the token is transferred to.
+  uint32 dest_network = 3;
+  // Address that will own the received token.
+  StorageFixedBytes20 dest_address = 4;
+  // Amount transferred (big-endian encoded).
+  StorageFixedBytes32 amount = 5;
+  // Metadata for the bridge exit.
+  StorageFixedBytes32 metadata = 6;
+}
+
+// ===================================================================
+// Merkle proofs and L1 info tree types.
+// ===================================================================
+
+// A Merkle proof.
+message StorageMerkleProof {
+  // Root of the Merkle tree.
+  StorageFixedBytes32 root = 1;
+  // Path from the leaf to the root.
+  repeated StorageFixedBytes32 siblings = 2;
+}
+
+// A leaf of the L1 info tree.
+message StorageL1InfoTreeLeaf {
+  // Global exit root at the time the leaf was produced.
+  StorageFixedBytes32 global_exit_root = 1;
+  // Block hash anchoring the leaf.
+  StorageFixedBytes32 block_hash = 2;
+  // Block timestamp.
+  uint64 timestamp = 3;
+}
+
+// An L1-info-tree leaf with its tree context.
+message StorageL1InfoTreeLeafWithContext {
+  // Index of the leaf in the L1 info tree.
+  uint32 l1_info_tree_index = 1;
+  // Rollup exit root.
+  StorageFixedBytes32 rer = 2;
+  // Mainnet exit root.
+  StorageFixedBytes32 mer = 3;
+  // Inner leaf payload.
+  StorageL1InfoTreeLeaf inner = 4;
+}
+
+// Claim originating from the mainnet network.
+message StorageClaimFromMainnet {
+  // Proof from the bridge-exit leaf up to the mainnet exit root.
+  StorageMerkleProof proof_leaf_mer = 1;
+  // Proof from the global exit root to the L1 info root.
+  StorageMerkleProof proof_ger_l1root = 2;
+  // L1 info tree leaf anchoring the claim.
+  StorageL1InfoTreeLeafWithContext l1_leaf = 3;
+}
+
+// Claim originating from a rollup.
+message StorageClaimFromRollup {
+  // Proof from the bridge-exit leaf up to the local exit root.
+  StorageMerkleProof proof_leaf_ler = 1;
+  // Proof from the local exit root to the rollup exit root.
+  StorageMerkleProof proof_ler_rer = 2;
+  // Proof from the global exit root to the L1 info root.
+  StorageMerkleProof proof_ger_l1root = 3;
+  // L1 info tree leaf anchoring the claim.
+  StorageL1InfoTreeLeafWithContext l1_leaf = 4;
+}
+
+// A bridge exit imported from another network.
+message StorageImportedBridgeExit {
+  // The original bridge exit on the sending network.
+  StorageBridgeExit bridge_exit = 1;
+  // Global index identifying this imported bridge exit.
+  StorageFixedBytes32 global_index = 2;
+  // Which type of claim proves the import.
+  oneof claim {
+    // Claim originating from the mainnet network.
+    StorageClaimFromMainnet mainnet = 3;
+    // Claim originating from a rollup.
+    StorageClaimFromRollup rollup = 4;
+  }
+}
+
+// ===================================================================
+// Aggchain data (storage mirror of interop's AggchainData).
+// Shape follows agglayer_interop_types::aggchain_proof::AggchainData
+// variants so Rust conversions are 1-to-1.
+// ===================================================================
+
+// Public values committed to by the aggchain proof.
+message StorageAggchainProofPublicValues {
+  // Previous local exit root.
+  StorageFixedBytes32 prev_local_exit_root = 1;
+  // New local exit root.
+  StorageFixedBytes32 new_local_exit_root = 2;
+  // L1 info root used to import bridge exits.
+  StorageFixedBytes32 l1_info_root = 3;
+  // Origin network id for which the proof was generated.
+  uint32 origin_network = 4;
+  // Commitment to the imported bridge-exit indices.
+  StorageFixedBytes32 commit_imported_bridge_exits = 5;
+  // Chain-specific commitment forwarded by the pessimistic proof.
+  StorageFixedBytes32 aggchain_params = 6;
+}
+
+// A single entry in an ordered vector of optional signatures.
+message StorageMultisigEntry {
+  // Whether a signature is present at this index.
+  bool present = 1;
+  // Signature bytes; the `value` field is empty when `present == false`.
+  StorageFixedBytes65 signature = 2;
+}
+
+// Ordered vector of optional ECDSA signatures.
+message StorageMultisigPayload {
+  // Signatures in committee order.
+  repeated StorageMultisigEntry signatures = 1;
+}
+
+// Generic aggchain data: proof + aggchain params + optional ECDSA
+// signature + optional public values.
+message StorageGeneric {
+  // Aggchain proof.
+  StorageProof proof = 1;
+  // Chain-specific aggchain params.
+  StorageFixedBytes32 aggchain_params = 2;
+  // Optional ECDSA signature; absent when `None`.
+  StorageFixedBytes65 signature = 3;
+  // Optional public values; absent when `None`.
+  StorageAggchainProofPublicValues public_values = 4;
+}
+
+// Multisig combined with an aggchain proof.
+message StorageMultisigAndAggchainProof {
+  // Multisig payload.
+  StorageMultisigPayload multisig = 1;
+  // Aggchain proof.
+  StorageProof proof = 2;
+  // Chain-specific aggchain params.
+  StorageFixedBytes32 aggchain_params = 3;
+  // Optional public values; absent when `None`.
+  StorageAggchainProofPublicValues public_values = 4;
+}
+
+// Multisig-only aggchain data (no aggchain proof).
+message StorageMultisigOnly {
+  // Multisig payload.
+  StorageMultisigPayload multisig = 1;
+}
+
+// Aggchain data variants stored in a certificate row.
+message StorageAggchainData {
+  // The active variant.
+  oneof data {
+    // Legacy single-signer ECDSA signature on the state transition.
+    StorageFixedBytes65 ecdsa = 1;
+    // 1-of-1 aggchain proof with an ECDSA signer.
+    StorageGeneric generic = 2;
+    // Multisig only (no aggchain proof).
+    StorageMultisigOnly multisig_only = 3;
+    // Multisig combined with an aggchain proof.
+    StorageMultisigAndAggchainProof multisig_and_aggchain_proof = 4;
+  }
+}
+
+// ===================================================================
+// Certificate envelope.
+// ===================================================================
+
+// Storage envelope for a certificate row.
+message StorageCertificate {
+  // Origin network id.
+  uint32 network_id = 1;
+  // Certificate height (per-network monotonic).
+  uint64 height = 2;
+  // Previous local exit root.
+  StorageFixedBytes32 prev_local_exit_root = 3;
+  // New local exit root.
+  StorageFixedBytes32 new_local_exit_root = 4;
+  // Bridge exits included in this certificate.
+  repeated StorageBridgeExit bridge_exits = 5;
+  // Bridge exits imported from other networks.
+  repeated StorageImportedBridgeExit imported_bridge_exits = 6;
+  // Aggchain-supplied data.
+  StorageAggchainData aggchain_data = 7;
+  // Fixed-size chain metadata.
+  StorageFixedBytes32 metadata = 8;
+  // Arbitrary chain-defined data.
+  bytes custom_chain_data = 9;
+  // L1 info tree leaf count (present when used).
+  optional uint32 l1_info_tree_leaf_count = 10;
+}
