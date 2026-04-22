@@ -17,6 +17,12 @@ fn mock_proof(mode: SP1ProofMode) -> sp1_sdk::SP1ProofWithPublicValues {
 }
 
 #[test]
+fn core_mode() {
+    let proof = mock_proof(SP1ProofMode::Core);
+    assert_eq!(proof_mode(&proof.proof), ProofMode::Core);
+}
+
+#[test]
 fn compressed_mode() {
     let proof = mock_proof(SP1ProofMode::Compressed);
     assert_eq!(proof_mode(&proof.proof), ProofMode::Compressed);
