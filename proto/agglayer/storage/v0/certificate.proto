@@ -2,6 +2,19 @@ syntax = "proto3";
 
 package agglayer.storage.v0;
 
+// Storage-local envelope for certificate rows in the agglayer
+// RocksDB. This schema intentionally mirrors the shape of
+// `agglayer.node.types.v1.Certificate` (see
+// `proto/agglayer/node/v1/node_state.proto` and the sibling
+// `proto/agglayer/node/types/v1/certificate.proto`) but is decoupled
+// from interop protos so the on-disk format is stable under
+// interop / SP1 SDK version bumps.
+//
+// Invariant: keep `StorageCertificate` in structural parity with the
+// canonical `Certificate` type in `agglayer-types`. Any new field
+// added to the canonical type must get a mirror here and an updated
+// conversion layer (see PR 4's `types/certificate/v2.rs`).
+
 import "agglayer/storage/v0/storage_proof.proto";
 
 // ===================================================================
@@ -159,18 +172,20 @@ message StorageAggchainProofPublicValues {
   StorageFixedBytes32 aggchain_params = 6;
 }
 
-// A single entry in an ordered vector of optional signatures.
-message StorageMultisigEntry {
-  // Whether a signature is present at this index.
-  bool present = 1;
-  // Signature bytes; the `value` field is empty when `present == false`.
-  StorageFixedBytes65 signature = 2;
+// Ordered vector of optional ECDSA signatures.
+// A given entry is "absent" (Rust `None`) when the `signature` field is
+// unset; proto3 message-field presence gives us that for free.
+message StorageMultisigPayload {
+  // One entry per committee index; unset entries represent absent
+  // signatures in the ordered vector.
+  repeated StorageMultisigEntry signatures = 1;
 }
 
-// Ordered vector of optional ECDSA signatures.
-message StorageMultisigPayload {
-  // Signatures in committee order.
-  repeated StorageMultisigEntry signatures = 1;
+// Entry in a multisig payload. The inner `signature` is optional: when
+// unset the entry denotes an absent signature (Rust `Option::None`).
+message StorageMultisigEntry {
+  // Optional 65-byte signature; absence means `None` in Rust.
+  StorageFixedBytes65 signature = 1;
 }
 
 // Generic aggchain data: proof + aggchain params + optional ECDSA

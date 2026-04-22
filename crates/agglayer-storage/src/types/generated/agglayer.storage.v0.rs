@@ -275,22 +275,23 @@ pub struct StorageAggchainProofPublicValues {
     #[prost(message, optional, tag="6")]
     pub aggchain_params: ::core::option::Option<StorageFixedBytes32>,
 }
-/// A single entry in an ordered vector of optional signatures.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct StorageMultisigEntry {
-    /// Whether a signature is present at this index.
-    #[prost(bool, tag="1")]
-    pub present: bool,
-    /// Signature bytes; the `value` field is empty when `present == false`.
-    #[prost(message, optional, tag="2")]
-    pub signature: ::core::option::Option<StorageFixedBytes65>,
-}
 /// Ordered vector of optional ECDSA signatures.
+/// A given entry is "absent" (Rust `None`) when the `signature` field is
+/// unset; proto3 message-field presence gives us that for free.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StorageMultisigPayload {
-    /// Signatures in committee order.
+    /// One entry per committee index; unset entries represent absent
+    /// signatures in the ordered vector.
     #[prost(message, repeated, tag="1")]
     pub signatures: ::prost::alloc::vec::Vec<StorageMultisigEntry>,
+}
+/// Entry in a multisig payload. The inner `signature` is optional: when
+/// unset the entry denotes an absent signature (Rust `Option::None`).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StorageMultisigEntry {
+    /// Optional 65-byte signature; absence means `None` in Rust.
+    #[prost(message, optional, tag="1")]
+    pub signature: ::core::option::Option<StorageFixedBytes65>,
 }
 /// Generic aggchain data: proof + aggchain params + optional ECDSA
 /// signature + optional public values.

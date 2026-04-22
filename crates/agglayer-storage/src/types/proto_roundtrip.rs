@@ -151,13 +151,9 @@ fn storage_certificate_roundtrip_is_lossless() {
                     multisig: Some(StorageMultisigPayload {
                         signatures: vec![
                             StorageMultisigEntry {
-                                present: true,
                                 signature: Some(fb65(0xA1)),
                             },
-                            StorageMultisigEntry {
-                                present: false,
-                                signature: None,
-                            },
+                            StorageMultisigEntry { signature: None },
                         ],
                     }),
                 },
