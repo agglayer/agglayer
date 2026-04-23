@@ -29,6 +29,6 @@ fn rejects_invalid_version() {
 fn rejects_unsupported_major() {
     assert!(matches!(
         version_kind("v7.0.0").unwrap_err(),
-        ProofError::UnsupportedReadableSp1Version { .. }
+        ProofError::UnsupportedSp1VersionMajor { .. }
     ));
 }

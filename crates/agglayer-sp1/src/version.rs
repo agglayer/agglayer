@@ -20,7 +20,7 @@ pub fn version_kind(version: &str) -> Result<Sp1ProofVersion, ProofError> {
         "4" | "5" => Ok(Sp1ProofVersion::V5),
         "6" => Ok(Sp1ProofVersion::V6),
         other if other.chars().all(|c| c.is_ascii_digit()) => {
-            Err(ProofError::UnsupportedReadableSp1Version {
+            Err(ProofError::UnsupportedSp1VersionMajor {
                 version: version.to_owned(),
             })
         }

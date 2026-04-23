@@ -8,6 +8,9 @@ pub enum ProofError {
     #[error("unsupported SP1 proof version `{version}` for read")]
     UnsupportedReadableSp1Version { version: String },
 
+    #[error("unsupported SP1 proof version `{version}`")]
+    UnsupportedSp1VersionMajor { version: String },
+
     #[error("unsupported SP1 proof version `{version}` for execute")]
     UnsupportedExecutableSp1Version { version: String },
 

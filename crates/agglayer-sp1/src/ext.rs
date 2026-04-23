@@ -31,10 +31,10 @@ pub trait ProofExt {
     fn ensure_writable(&self, policy: &AcceptancePolicy) -> Result<(), ProofError>;
 
     /// 32-byte hash of the verifying key.
-    fn vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError>;
+    fn vkey_hash_bytes(&self) -> [u8; 32];
 
     /// 32-byte hash of the verifying key returned as 8 big-endian u32s.
-    fn vkey_hash_u32(&self) -> Result<[u32; 8], ProofError>;
+    fn vkey_hash_u32(&self) -> [u32; 8];
 }
 
 impl ProofExt for Proof {
@@ -46,28 +46,43 @@ impl ProofExt for Proof {
 
     fn ensure_readable(&self, policy: &AcceptancePolicy) -> Result<Sp1ProofVersion, ProofError> {
         let sp1 = self.sp1();
-        let v = version_kind(&sp1.version)?;
+        let v = version_kind(&sp1.version).map_err(|err| match err {
+            ProofError::UnsupportedSp1VersionMajor { version } => {
+                ProofError::UnsupportedReadableSp1Version { version }
+            }
+            other => other,
+        })?;
         policy.ensure_readable(v, &sp1.version)?;
         Ok(v)
     }
 
     fn ensure_executable(&self, policy: &AcceptancePolicy) -> Result<(), ProofError> {
         let sp1 = self.sp1();
-        let v = version_kind(&sp1.version)?;
+        let v = version_kind(&sp1.version).map_err(|err| match err {
+            ProofError::UnsupportedSp1VersionMajor { version } => {
+                ProofError::UnsupportedExecutableSp1Version { version }
+            }
+            other => other,
+        })?;
         policy.ensure_executable(v, &sp1.version)
     }
 
     fn ensure_writable(&self, policy: &AcceptancePolicy) -> Result<(), ProofError> {
         let sp1 = self.sp1();
-        let v = version_kind(&sp1.version)?;
+        let v = version_kind(&sp1.version).map_err(|err| match err {
+            ProofError::UnsupportedSp1VersionMajor { version } => {
+                ProofError::UnsupportedWritableSp1Version { version }
+            }
+            other => other,
+        })?;
         policy.ensure_writable(v, &sp1.version)
     }
 
-    fn vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError> {
-        Ok(self.sp1().vkey.hash_bytes())
+    fn vkey_hash_bytes(&self) -> [u8; 32] {
+        self.sp1().vkey.hash_bytes()
     }
 
-    fn vkey_hash_u32(&self) -> Result<[u32; 8], ProofError> {
-        Ok(self.sp1().vkey.hash_u32())
+    fn vkey_hash_u32(&self) -> [u32; 8] {
+        self.sp1().vkey.hash_u32()
     }
 }
