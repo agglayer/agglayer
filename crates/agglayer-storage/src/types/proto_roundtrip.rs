@@ -1,13 +1,12 @@
 //! Structural round-trip tests for the storage proto envelopes.
-//! No typed conversion is exercised here — that is Task 4.
 
 use prost::Message as _;
 
-use crate::types::generated::agglayer::storage::v0::{ProofMode, ProofSystem, StorageProof};
+use crate::types::generated::agglayer::storage::v0::{Proof, ProofMode, ProofSystem};
 
 #[test]
-fn storage_proof_roundtrip_is_lossless() {
-    let original = StorageProof {
+fn proof_roundtrip_is_lossless() {
+    let original = Proof {
         proof_system: ProofSystem::Sp1 as i32,
         version: "v5.2.2".to_string(),
         mode: ProofMode::Compressed as i32,
@@ -17,13 +16,13 @@ fn storage_proof_roundtrip_is_lossless() {
     };
 
     let bytes = original.encode_to_vec();
-    let decoded = StorageProof::decode(bytes.as_slice()).unwrap();
+    let decoded = Proof::decode(bytes.as_slice()).unwrap();
     assert_eq!(original, decoded);
 }
 
 #[test]
-fn storage_proof_defaults_on_empty_bytes() {
-    let decoded = StorageProof::decode(&[][..]).unwrap();
+fn proof_defaults_on_empty_bytes() {
+    let decoded = Proof::decode(&[][..]).unwrap();
     assert_eq!(decoded.proof_system, ProofSystem::Unspecified as i32);
     assert!(decoded.version.is_empty());
     assert_eq!(decoded.mode, ProofMode::Unspecified as i32);
@@ -33,34 +32,31 @@ fn storage_proof_defaults_on_empty_bytes() {
 }
 
 #[test]
-fn storage_certificate_roundtrip_is_lossless() {
+fn certificate_roundtrip_is_lossless() {
     use crate::types::generated::agglayer::storage::v0::{
-        storage_aggchain_data, storage_imported_bridge_exit, ProofMode, ProofSystem,
-        StorageAggchainData, StorageAggchainProofPublicValues, StorageBridgeExit,
-        StorageCertificate, StorageClaimFromMainnet, StorageFixedBytes20, StorageFixedBytes32,
-        StorageFixedBytes65, StorageGeneric, StorageImportedBridgeExit, StorageL1InfoTreeLeaf,
-        StorageL1InfoTreeLeafWithContext, StorageLeafType, StorageMerkleProof,
-        StorageMultisigEntry, StorageMultisigOnly, StorageMultisigPayload, StorageProof,
-        StorageTokenInfo,
+        aggchain_data, imported_bridge_exit, AggchainData, AggchainProofPublicValues, BridgeExit,
+        Certificate, ClaimFromMainnet, FixedBytes20, FixedBytes32, FixedBytes65, Generic,
+        ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafWithContext, LeafType, MerkleProof,
+        MultisigEntry, MultisigOnly, MultisigPayload, Proof, ProofMode, ProofSystem, TokenInfo,
     };
 
-    fn fb20(b: u8) -> StorageFixedBytes20 {
-        StorageFixedBytes20 {
+    fn fb20(b: u8) -> FixedBytes20 {
+        FixedBytes20 {
             value: vec![b; 20].into(),
         }
     }
-    fn fb32(b: u8) -> StorageFixedBytes32 {
-        StorageFixedBytes32 {
+    fn fb32(b: u8) -> FixedBytes32 {
+        FixedBytes32 {
             value: vec![b; 32].into(),
         }
     }
-    fn fb65(b: u8) -> StorageFixedBytes65 {
-        StorageFixedBytes65 {
+    fn fb65(b: u8) -> FixedBytes65 {
+        FixedBytes65 {
             value: vec![b; 65].into(),
         }
     }
 
-    let proof = StorageProof {
+    let proof = Proof {
         proof_system: ProofSystem::Sp1 as i32,
         version: "v5.2.2".to_string(),
         mode: ProofMode::Compressed as i32,
@@ -69,9 +65,9 @@ fn storage_certificate_roundtrip_is_lossless() {
         vkey: vec![0xAA; 32].into(),
     };
 
-    let bridge_exit = StorageBridgeExit {
-        leaf_type: StorageLeafType::Transfer as i32,
-        token_info: Some(StorageTokenInfo {
+    let bridge_exit = BridgeExit {
+        leaf_type: LeafType::Transfer as i32,
+        token_info: Some(TokenInfo {
             origin_network: 7,
             origin_token_address: Some(fb20(0x11)),
         }),
@@ -81,41 +77,39 @@ fn storage_certificate_roundtrip_is_lossless() {
         metadata: Some(fb32(0x44)),
     };
 
-    let l1_leaf = StorageL1InfoTreeLeafWithContext {
+    let l1_leaf = L1InfoTreeLeafWithContext {
         l1_info_tree_index: 3,
         rer: Some(fb32(0x55)),
         mer: Some(fb32(0x66)),
-        inner: Some(StorageL1InfoTreeLeaf {
+        inner: Some(L1InfoTreeLeaf {
             global_exit_root: Some(fb32(0x77)),
             block_hash: Some(fb32(0x88)),
             timestamp: 1_000_000,
         }),
     };
 
-    let imported_bridge_exit = StorageImportedBridgeExit {
+    let imported_bridge_exit = ImportedBridgeExit {
         bridge_exit: Some(bridge_exit.clone()),
         global_index: Some(fb32(0x99)),
-        claim: Some(storage_imported_bridge_exit::Claim::Mainnet(
-            StorageClaimFromMainnet {
-                proof_leaf_mer: Some(StorageMerkleProof {
-                    root: Some(fb32(0xAA)),
-                    siblings: vec![fb32(0xBB), fb32(0xCC)],
-                }),
-                proof_ger_l1root: Some(StorageMerkleProof {
-                    root: Some(fb32(0xDD)),
-                    siblings: vec![],
-                }),
-                l1_leaf: Some(l1_leaf),
-            },
-        )),
+        claim: Some(imported_bridge_exit::Claim::Mainnet(ClaimFromMainnet {
+            proof_leaf_mer: Some(MerkleProof {
+                root: Some(fb32(0xAA)),
+                siblings: vec![fb32(0xBB), fb32(0xCC)],
+            }),
+            proof_ger_l1root: Some(MerkleProof {
+                root: Some(fb32(0xDD)),
+                siblings: vec![],
+            }),
+            l1_leaf: Some(l1_leaf),
+        })),
     };
 
-    let aggchain_data = StorageAggchainData {
-        data: Some(storage_aggchain_data::Data::Generic(StorageGeneric {
+    let aggchain_data = AggchainData {
+        data: Some(aggchain_data::Data::Generic(Generic {
             proof: Some(proof),
             aggchain_params: Some(fb32(0xEE)),
             signature: Some(fb65(0xFF)),
-            public_values: Some(StorageAggchainProofPublicValues {
+            public_values: Some(AggchainProofPublicValues {
                 prev_local_exit_root: Some(fb32(0x01)),
                 new_local_exit_root: Some(fb32(0x02)),
                 l1_info_root: Some(fb32(0x03)),
@@ -126,7 +120,7 @@ fn storage_certificate_roundtrip_is_lossless() {
         })),
     };
 
-    let original = StorageCertificate {
+    let original = Certificate {
         network_id: 1,
         height: 0,
         prev_local_exit_root: Some(fb32(0x10)),
@@ -140,28 +134,26 @@ fn storage_certificate_roundtrip_is_lossless() {
     };
 
     let bytes = prost::Message::encode_to_vec(&original);
-    let decoded = <StorageCertificate as prost::Message>::decode(&*bytes).unwrap();
+    let decoded = <Certificate as prost::Message>::decode(&*bytes).unwrap();
     assert_eq!(original, decoded);
 
     // Also exercise the multisig-only variant.
-    let multisig_only = StorageCertificate {
-        aggchain_data: Some(StorageAggchainData {
-            data: Some(storage_aggchain_data::Data::MultisigOnly(
-                StorageMultisigOnly {
-                    multisig: Some(StorageMultisigPayload {
-                        signatures: vec![
-                            StorageMultisigEntry {
-                                signature: Some(fb65(0xA1)),
-                            },
-                            StorageMultisigEntry { signature: None },
-                        ],
-                    }),
-                },
-            )),
+    let multisig_only = Certificate {
+        aggchain_data: Some(AggchainData {
+            data: Some(aggchain_data::Data::MultisigOnly(MultisigOnly {
+                multisig: Some(MultisigPayload {
+                    signatures: vec![
+                        MultisigEntry {
+                            signature: Some(fb65(0xA1)),
+                        },
+                        MultisigEntry { signature: None },
+                    ],
+                }),
+            })),
         }),
         ..original.clone()
     };
     let bytes = prost::Message::encode_to_vec(&multisig_only);
-    let decoded = <StorageCertificate as prost::Message>::decode(&*bytes).unwrap();
+    let decoded = <Certificate as prost::Message>::decode(&*bytes).unwrap();
     assert_eq!(multisig_only, decoded);
 }

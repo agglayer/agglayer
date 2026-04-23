@@ -22,17 +22,17 @@ enum ProofMode {
   PROOF_MODE_GROTH16 = 3;
 }
 
-// SDK-agnostic storage envelope for a zero-knowledge proof.
-// The bytes fields are kept opaque so the wire format does not depend on the
-// SDK Rust types.
-message StorageProof {
+// SDK-agnostic envelope for a zero-knowledge proof.
+// The bytes fields stay opaque so the stored wire format does not depend on
+// SDK-specific Rust types.
+message Proof {
   // Which proof system produced this proof.
   ProofSystem proof_system = 1;
 
-  // Preserved end-to-end as reported by the producing SDK (e.g. "v5.2.2").
+  // Preserved end to end as reported by the producing SDK.
   string version = 2;
 
-  // SP1 proof mode.
+  // Proof mode inside the selected proof system.
   ProofMode mode = 3;
 
   // Opaque serialized proof payload.
