@@ -408,3 +408,62 @@ fn bad_format() {
         }
     }
 }
+
+/// Smoke test: malformed bytes must surface as a recoverable `CodecError`,
+/// never as a process-level panic. Covers the common case where bincode
+/// returns its own error (no panic reached).
+#[test]
+fn decode_of_corrupt_bytes_returns_codec_error() {
+    // A valid v1 version byte followed by junk that bincode rejects.
+    let bytes = [0x01u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+    let err = <Certificate as crate::schema::Codec>::decode(&bytes)
+        .expect_err("expected decode to fail, not panic");
+    assert!(
+        matches!(err, crate::schema::CodecError::Serialization(_)),
+        "unexpected error variant: {err:?}"
+    );
+}
+
+/// Regression guard: if a deserializer ever panics mid-decode, the
+/// `catch_unwind` wrapper in `deserialize_bincode` must convert the panic
+/// into a `CodecError::Serialization`, not let it escape. We provoke this
+/// with a test-only type whose `Deserialize` impl deliberately panics.
+#[test]
+fn catch_unwind_converts_deserializer_panic_into_codec_error() {
+    use std::sync::{Mutex, OnceLock};
+
+    use serde::de::{Deserialize, Deserializer};
+
+    #[derive(Debug)]
+    struct PanickingOnDeserialize;
+
+    impl<'de> Deserialize<'de> for PanickingOnDeserialize {
+        fn deserialize<D: Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+            panic!("intentional panic for catch_unwind test");
+        }
+    }
+
+    // Borrow the real catch_unwind helper by decoding through bincode.
+    // `deserialize_bincode` is module-private, so call it via the
+    // sibling `super::deserialize_bincode::<PanickingOnDeserialize>(...)`.
+    //
+    // Suppress the default panic hook during the intentional panic so CI
+    // logs are not polluted by the stack trace. Protect the process-wide
+    // panic hook with a lock so parallel tests cannot race on the hook
+    // state. The hook is restored immediately after the call returns.
+    static PANIC_HOOK_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let _guard = PANIC_HOOK_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("panic hook lock poisoned");
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let result = super::deserialize_bincode::<PanickingOnDeserialize>(&[0u8; 0]);
+    std::panic::set_hook(prev_hook);
+
+    match result {
+        Err(crate::schema::CodecError::Serialization(_)) => {}
+        Err(other) => panic!("unexpected error variant: {other:?}"),
+        Ok(_) => panic!("deserialize_bincode returned Ok on a panicking type"),
+    }
+}
