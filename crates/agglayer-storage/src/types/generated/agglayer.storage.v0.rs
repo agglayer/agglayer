@@ -164,6 +164,8 @@ pub struct MerkleProof {
     pub siblings: ::prost::alloc::vec::Vec<FixedBytes32>,
 }
 /// A leaf of the L1 info tree.
+/// This mirrors the interop proto's inner leaf shape; the canonical Rust
+/// `unified_bridge::L1InfoTreeLeaf` maps to `L1InfoTreeLeafWithContext` below.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct L1InfoTreeLeaf {
     /// Global exit root at the time the leaf was produced.
@@ -370,12 +372,12 @@ pub struct Certificate {
     /// Bridge exits imported from other networks.
     #[prost(message, repeated, tag="6")]
     pub imported_bridge_exits: ::prost::alloc::vec::Vec<ImportedBridgeExit>,
-    /// Aggchain-supplied data.
-    #[prost(message, optional, tag="7")]
-    pub aggchain_data: ::core::option::Option<AggchainData>,
     /// Fixed-size chain metadata.
-    #[prost(message, optional, tag="8")]
+    #[prost(message, optional, tag="7")]
     pub metadata: ::core::option::Option<FixedBytes32>,
+    /// Aggchain-supplied data.
+    #[prost(message, optional, tag="8")]
+    pub aggchain_data: ::core::option::Option<AggchainData>,
     /// Arbitrary chain-defined bytes.
     #[prost(bytes="bytes", tag="9")]
     pub custom_chain_data: ::prost::bytes::Bytes,

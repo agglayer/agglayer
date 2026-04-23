@@ -85,6 +85,8 @@ message MerkleProof {
 }
 
 // A leaf of the L1 info tree.
+// This mirrors the interop proto's inner leaf shape; the canonical Rust
+// `unified_bridge::L1InfoTreeLeaf` maps to `L1InfoTreeLeafWithContext` below.
 message L1InfoTreeLeaf {
   // Global exit root at the time the leaf was produced.
   FixedBytes32 global_exit_root = 1;
@@ -231,10 +233,10 @@ message Certificate {
   repeated BridgeExit bridge_exits = 5;
   // Bridge exits imported from other networks.
   repeated ImportedBridgeExit imported_bridge_exits = 6;
-  // Aggchain-supplied data.
-  AggchainData aggchain_data = 7;
   // Fixed-size chain metadata.
-  FixedBytes32 metadata = 8;
+  FixedBytes32 metadata = 7;
+  // Aggchain-supplied data.
+  AggchainData aggchain_data = 8;
   // Arbitrary chain-defined bytes.
   bytes custom_chain_data = 9;
   // L1 info tree leaf count when present.

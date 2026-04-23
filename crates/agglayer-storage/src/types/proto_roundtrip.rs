@@ -157,3 +157,32 @@ fn certificate_roundtrip_is_lossless() {
     let decoded = <Certificate as prost::Message>::decode(&*bytes).unwrap();
     assert_eq!(multisig_only, decoded);
 }
+
+#[test]
+fn certificate_keeps_canonical_metadata_and_aggchain_tags() {
+    use crate::types::generated::agglayer::storage::v0::{
+        aggchain_data, AggchainData, Certificate, FixedBytes32,
+    };
+
+    let metadata_only = Certificate {
+        metadata: Some(FixedBytes32 {
+            value: vec![0xAB; 32].into(),
+        }),
+        ..Default::default()
+    };
+    let metadata_bytes = metadata_only.encode_to_vec();
+    assert_eq!(metadata_bytes.first().copied(), Some(0x3a));
+
+    let aggchain_only = Certificate {
+        aggchain_data: Some(AggchainData {
+            data: Some(aggchain_data::Data::Ecdsa(
+                crate::types::generated::agglayer::storage::v0::FixedBytes65 {
+                    value: vec![0xCD; 65].into(),
+                },
+            )),
+        }),
+        ..Default::default()
+    };
+    let aggchain_bytes = aggchain_only.encode_to_vec();
+    assert_eq!(aggchain_bytes.first().copied(), Some(0x42));
+}
