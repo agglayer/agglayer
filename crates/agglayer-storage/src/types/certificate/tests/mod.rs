@@ -430,8 +430,9 @@ fn decode_of_corrupt_bytes_returns_codec_error() {
 /// with a test-only type whose `Deserialize` impl deliberately panics.
 #[test]
 fn catch_unwind_converts_deserializer_panic_into_codec_error() {
-    use serde::de::{Deserialize, Deserializer};
     use std::sync::{Mutex, OnceLock};
+
+    use serde::de::{Deserialize, Deserializer};
 
     #[derive(Debug)]
     struct PanickingOnDeserialize;
