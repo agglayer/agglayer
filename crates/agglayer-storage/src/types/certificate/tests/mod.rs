@@ -431,6 +431,7 @@ fn decode_of_corrupt_bytes_returns_codec_error() {
 #[test]
 fn catch_unwind_converts_deserializer_panic_into_codec_error() {
     use serde::de::{Deserialize, Deserializer};
+    use std::sync::{Mutex, OnceLock};
 
     #[derive(Debug)]
     struct PanickingOnDeserialize;
@@ -446,8 +447,14 @@ fn catch_unwind_converts_deserializer_panic_into_codec_error() {
     // sibling `super::deserialize_bincode::<PanickingOnDeserialize>(...)`.
     //
     // Suppress the default panic hook during the intentional panic so CI
-    // logs are not polluted by the stack trace. The hook is restored
-    // immediately after the call returns.
+    // logs are not polluted by the stack trace. Protect the process-wide
+    // panic hook with a lock so parallel tests cannot race on the hook
+    // state. The hook is restored immediately after the call returns.
+    static PANIC_HOOK_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let _guard = PANIC_HOOK_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("panic hook lock poisoned");
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = super::deserialize_bincode::<PanickingOnDeserialize>(&[0u8; 0]);
