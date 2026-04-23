@@ -561,6 +561,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-sp1"
+version = "0.1.0"
+dependencies = [
+ "agglayer-interop-types",
+ "sp1-sdk",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "agglayer-storage"
 version = "0.1.0"
 dependencies = [
