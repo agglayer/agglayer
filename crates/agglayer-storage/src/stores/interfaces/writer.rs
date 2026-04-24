@@ -7,6 +7,8 @@ use agglayer_types::{
 
 use crate::{error::Error, stores::PerEpochReader};
 
+pub mod settlement_writer;
+
 pub trait DebugWriter: Send + Sync {
     fn add_certificate(&self, certificate: &Certificate) -> Result<(), Error>;
 }

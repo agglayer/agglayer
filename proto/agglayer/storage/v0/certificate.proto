@@ -1,0 +1,244 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+// Certificate storage schema for agglayer RocksDB.
+//
+// This file mirrors the canonical certificate domain model while staying
+// self-contained inside the `agglayer.storage.v0` proto package, so stored
+// rows do not depend on interop proto evolution.
+
+import "agglayer/storage/v0/storage_proof.proto";
+
+// ===================================================================
+// Fixed-size byte buffers.
+// Named wrappers mirror the interop convention while keeping this
+// schema free of any inter-proto dependency.
+// ===================================================================
+
+// A 20-byte buffer (e.g. an EVM address).
+message FixedBytes20 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
+
+// A 32-byte buffer (e.g. a hash, a root, a digest).
+message FixedBytes32 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
+
+// A 65-byte buffer (e.g. an ECDSA signature with recovery byte).
+message FixedBytes65 {
+  // bytes representation of the bytearray.
+  bytes value = 1;
+}
+
+// ===================================================================
+// Bridge-exit primitives.
+// ===================================================================
+
+// The type of the leaf in a bridge exit.
+enum LeafType {
+  // Unspecified leaf type.
+  LEAF_TYPE_UNSPECIFIED = 0;
+  // Token transfer leaf type.
+  LEAF_TYPE_TRANSFER = 1;
+  // Message leaf type.
+  LEAF_TYPE_MESSAGE = 2;
+}
+
+// Identifier of a token on its origin network.
+message TokenInfo {
+  // Network the token originates from.
+  uint32 origin_network = 1;
+  // Address of the token on the origin network.
+  FixedBytes20 origin_token_address = 2;
+}
+
+// A bridge exit leaf.
+message BridgeExit {
+  // The type of the leaf.
+  LeafType leaf_type = 1;
+  // Identifier of the token being transferred.
+  TokenInfo token_info = 2;
+  // Network the token is transferred to.
+  uint32 dest_network = 3;
+  // Address that will own the received token.
+  FixedBytes20 dest_address = 4;
+  // Amount transferred (big-endian encoded).
+  FixedBytes32 amount = 5;
+  // Metadata for the bridge exit.
+  FixedBytes32 metadata = 6;
+}
+
+// ===================================================================
+// Merkle proofs and L1 info tree types.
+// ===================================================================
+
+// A Merkle proof.
+message MerkleProof {
+  // Root of the Merkle tree.
+  FixedBytes32 root = 1;
+  // Path from the leaf to the root.
+  repeated FixedBytes32 siblings = 2;
+}
+
+// A leaf of the L1 info tree.
+// This mirrors the interop proto's inner leaf shape; the canonical Rust
+// `unified_bridge::L1InfoTreeLeaf` maps to `L1InfoTreeLeafWithContext` below.
+message L1InfoTreeLeaf {
+  // Global exit root at the time the leaf was produced.
+  FixedBytes32 global_exit_root = 1;
+  // Block hash anchoring the leaf.
+  FixedBytes32 block_hash = 2;
+  // Block timestamp.
+  uint64 timestamp = 3;
+}
+
+// An L1-info-tree leaf with its tree context.
+message L1InfoTreeLeafWithContext {
+  // Index of the leaf in the L1 info tree.
+  uint32 l1_info_tree_index = 1;
+  // Rollup exit root.
+  FixedBytes32 rer = 2;
+  // Mainnet exit root.
+  FixedBytes32 mer = 3;
+  // Inner leaf payload.
+  L1InfoTreeLeaf inner = 4;
+}
+
+// Claim originating from the mainnet network.
+message ClaimFromMainnet {
+  // Proof from the bridge-exit leaf up to the mainnet exit root.
+  MerkleProof proof_leaf_mer = 1;
+  // Proof from the global exit root to the L1 info root.
+  MerkleProof proof_ger_l1root = 2;
+  // L1 info tree leaf anchoring the claim.
+  L1InfoTreeLeafWithContext l1_leaf = 3;
+}
+
+// Claim originating from a rollup.
+message ClaimFromRollup {
+  // Proof from the bridge-exit leaf up to the local exit root.
+  MerkleProof proof_leaf_ler = 1;
+  // Proof from the local exit root to the rollup exit root.
+  MerkleProof proof_ler_rer = 2;
+  // Proof from the global exit root to the L1 info root.
+  MerkleProof proof_ger_l1root = 3;
+  // L1 info tree leaf anchoring the claim.
+  L1InfoTreeLeafWithContext l1_leaf = 4;
+}
+
+// A bridge exit imported from another network.
+message ImportedBridgeExit {
+  // The original bridge exit on the sending network.
+  BridgeExit bridge_exit = 1;
+  // Global index identifying this imported bridge exit.
+  FixedBytes32 global_index = 2;
+  // Which type of claim proves the import.
+  oneof claim {
+    // Claim originating from the mainnet network.
+    ClaimFromMainnet mainnet = 3;
+    // Claim originating from a rollup.
+    ClaimFromRollup rollup = 4;
+  }
+}
+
+// Public values committed to by an aggchain proof.
+message AggchainProofPublicValues {
+  // Previous local exit root.
+  FixedBytes32 prev_local_exit_root = 1;
+  // New local exit root.
+  FixedBytes32 new_local_exit_root = 2;
+  // L1 info root used to import bridge exits.
+  FixedBytes32 l1_info_root = 3;
+  // Origin network id for which the proof was generated.
+  uint32 origin_network = 4;
+  // Commitment to the imported bridge-exit indices.
+  FixedBytes32 commit_imported_bridge_exits = 5;
+  // Chain-specific commitment forwarded by the pessimistic proof.
+  FixedBytes32 aggchain_params = 6;
+}
+
+// Ordered vector of optional ECDSA signatures.
+message MultisigPayload {
+  // One entry per committee slot, in committee order.
+  repeated MultisigEntry signatures = 1;
+}
+
+// Entry in an ordered multisig payload.
+message MultisigEntry {
+  // Signature bytes; absence represents `None` for that slot.
+  FixedBytes65 signature = 1;
+}
+
+// Generic aggchain data: proof, aggchain params, optional signature, and
+// optional public values.
+message Generic {
+  // Aggchain proof.
+  Proof proof = 1;
+  // Chain-specific aggchain params.
+  FixedBytes32 aggchain_params = 2;
+  // Optional signature produced by the aggchain signer.
+  FixedBytes65 signature = 3;
+  // Optional public values committed to by the proof.
+  AggchainProofPublicValues public_values = 4;
+}
+
+// Multisig payload combined with an aggchain proof.
+message MultisigAndAggchainProof {
+  // Multisig payload.
+  MultisigPayload multisig = 1;
+  // Aggchain proof.
+  Proof proof = 2;
+  // Chain-specific aggchain params.
+  FixedBytes32 aggchain_params = 3;
+  // Optional public values committed to by the proof.
+  AggchainProofPublicValues public_values = 4;
+}
+
+// Multisig-only aggchain data.
+message MultisigOnly {
+  // Multisig payload.
+  MultisigPayload multisig = 1;
+}
+
+// Aggchain data variants stored in a certificate row.
+message AggchainData {
+  // Active aggchain-data variant.
+  oneof data {
+    // Legacy single-signer ECDSA payload.
+    FixedBytes65 ecdsa = 1;
+    // Generic aggchain proof payload.
+    Generic generic = 2;
+    // Multisig-only payload.
+    MultisigOnly multisig_only = 3;
+    // Multisig combined with an aggchain proof.
+    MultisigAndAggchainProof multisig_and_aggchain_proof = 4;
+  }
+}
+
+// Stored certificate envelope.
+message Certificate {
+  // Origin network id.
+  uint32 network_id = 1;
+  // Certificate height, monotonic per network.
+  uint64 height = 2;
+  // Previous local exit root.
+  FixedBytes32 prev_local_exit_root = 3;
+  // New local exit root.
+  FixedBytes32 new_local_exit_root = 4;
+  // Bridge exits emitted by the certificate.
+  repeated BridgeExit bridge_exits = 5;
+  // Bridge exits imported from other networks.
+  repeated ImportedBridgeExit imported_bridge_exits = 6;
+  // Fixed-size chain metadata.
+  FixedBytes32 metadata = 7;
+  // Aggchain-supplied data.
+  AggchainData aggchain_data = 8;
+  // Arbitrary chain-defined bytes.
+  bytes custom_chain_data = 9;
+  // L1 info tree leaf count when present.
+  optional uint32 l1_info_tree_leaf_count = 10;
+}
