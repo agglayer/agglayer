@@ -1,4 +1,4 @@
-use agglayer_sp1::{version_kind, AcceptancePolicy, ProofError, ProofExt};
+use agglayer_sp1::ProofError;
 use agglayer_types::aggchain_proof::{Proof as TypedProof, SP1StarkWithContext};
 
 use crate::{schema::bincode_codec, types::generated::agglayer::storage::v0 as proto};
@@ -98,9 +98,7 @@ impl TryFrom<&TypedProof> for proto::Proof {
     type Error = ProofConversionError;
 
     fn try_from(value: &TypedProof) -> Result<Self, Self::Error> {
-        value.ensure_writable(&AcceptancePolicy::DEFAULT)?;
-
-        let sp1 = value.sp1();
+        let TypedProof::SP1Stark(sp1) = value;
 
         Ok(Self {
             proof_system: proto::ProofSystem::Sp1 as i32,
@@ -132,8 +130,6 @@ impl TryFrom<proto::Proof> for TypedProof {
         }
 
         let version = value.version;
-        let proof_version = version_kind(&version)?;
-        AcceptancePolicy::DEFAULT.ensure_readable(proof_version, &version)?;
 
         Ok(TypedProof::SP1Stark(SP1StarkWithContext {
             proof: deserialize_sp1_proof(value.proof.as_ref(), &version)?,
@@ -175,13 +171,15 @@ mod tests {
     }
 
     #[test]
-    fn proof_proto_roundtrip_is_lossless() {
-        let proof = mock_proof("v5.2.2");
+    fn proof_proto_roundtrip_is_lossless_for_readable_versions() {
+        for version in ["v5.2.2", "v6.0.1"] {
+            let proof = mock_proof(version);
 
-        let proto = proto::Proof::try_from(&proof).unwrap();
-        let decoded = TypedProof::try_from(proto).unwrap();
+            let proto = proto::Proof::try_from(&proof).unwrap();
+            let decoded = TypedProof::try_from(proto).unwrap();
 
-        assert_eq!(decoded, proof);
+            assert_eq!(decoded, proof);
+        }
     }
 
     #[test]
@@ -203,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn proof_proto_rejects_unsupported_system_and_version() {
+    fn proof_proto_rejects_unsupported_system() {
         let unsupported_system = TypedProof::try_from(proto::Proof {
             proof_system: ProofSystem::Unspecified as i32,
             version: "v5.2.2".to_owned(),
@@ -217,13 +215,6 @@ mod tests {
         assert!(matches!(
             unsupported_system,
             ProofConversionError::UnsupportedProofSystem { .. }
-        ));
-
-        let unsupported_version = proto::Proof::try_from(&mock_proof("v7.0.0")).unwrap_err();
-
-        assert!(matches!(
-            unsupported_version,
-            ProofConversionError::Sp1(ProofError::UnsupportedWritableSp1Version { .. })
         ));
     }
 }
