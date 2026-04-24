@@ -35,6 +35,7 @@ agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 agglayer-rpc = { path = "crates/agglayer-rpc" }
 agglayer-settlement-service = { path = "crates/agglayer-settlement-service" }
 agglayer-signer = { path = "crates/agglayer-signer" }
+agglayer-sp1 = { path = "crates/agglayer-sp1" }
 agglayer-storage = { path = "crates/agglayer-storage" }
 agglayer-storage-types = { path = "crates/agglayer-storage-types" }
 agglayer-telemetry = { path = "crates/agglayer-telemetry" }
