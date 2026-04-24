@@ -107,8 +107,10 @@ jobs:
       - name: Deploy to Cloudflare Pages
         id: deploy
         run: |
-          DEPLOYMENT_URL=$(wrangler pages deploy docs --project-name=agglayer-node-docs --branch="${{ github.head_ref }}" | grep -oP 'https://[^\s]+\.pages\.dev')
-          echo "url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+          OUTPUT=$(wrangler pages deploy docs --project-name=agglayer-node-docs --branch="${{ github.head_ref }}")
+          echo "$OUTPUT"
+          DEPLOYMENT_URL=$(echo "$OUTPUT" | grep -oP 'https://[^\s]+\.pages\.dev' | tail -1)
+          echo "url=${DEPLOYMENT_URL:-https://${{ github.head_ref }}.agglayer-node-docs.pages.dev}" >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}
