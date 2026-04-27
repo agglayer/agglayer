@@ -1,4 +1,4 @@
-use agglayer_sp1::ProofError;
+use agglayer_sp1::{version_kind, AcceptancePolicy, ProofError, ProofExt};
 use agglayer_types::aggchain_proof::{Proof as TypedProof, SP1StarkWithContext};
 
 use crate::{schema::bincode_codec, types::generated::agglayer::storage::v0 as proto};
@@ -13,6 +13,7 @@ pub enum ProofConversionError {
 
     #[error("unsupported SP1 proof mode `{mode}`")]
     UnsupportedProofMode { mode: i32 },
+
     #[error("failed to serialize SP1 proof bytes for version `{version}`: {source}")]
     SerializeSp1Proof {
         version: String,
@@ -94,7 +95,9 @@ impl TryFrom<&TypedProof> for proto::Proof {
     type Error = ProofConversionError;
 
     fn try_from(value: &TypedProof) -> Result<Self, Self::Error> {
-        let TypedProof::SP1Stark(sp1) = value;
+        value.ensure_writable(&AcceptancePolicy::DEFAULT)?;
+
+        let sp1 = value.sp1();
 
         Ok(Self {
             proof_system: proto::ProofSystem::Sp1 as i32,
@@ -121,6 +124,13 @@ impl TryFrom<proto::Proof> for TypedProof {
         }
 
         let version = value.version;
+        let proof_version = version_kind(&version).map_err(|err| match err {
+            ProofError::UnsupportedSp1VersionMajor { version } => {
+                ProofError::UnsupportedReadableSp1Version { version }
+            }
+            other => other,
+        })?;
+        AcceptancePolicy::DEFAULT.ensure_readable(proof_version, &version)?;
 
         Ok(TypedProof::SP1Stark(SP1StarkWithContext {
             proof: deserialize_sp1_proof(value.proof.as_ref(), &version)?,
@@ -222,7 +232,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            ProofConversionError::Sp1(ProofError::UnsupportedSp1VersionMajor { .. })
+            ProofConversionError::Sp1(ProofError::UnsupportedReadableSp1Version { .. })
         ));
     }
 
