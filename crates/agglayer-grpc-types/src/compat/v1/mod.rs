@@ -17,6 +17,7 @@ mod error_kinds;
 mod network_info;
 
 pub use agglayer_interop::grpc::compat::v1::{Error, ErrorKind};
+pub use certificate::CertificateConversionError;
 
 #[cfg(test)]
 pub mod tests;
