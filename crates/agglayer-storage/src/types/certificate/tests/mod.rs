@@ -636,6 +636,21 @@ fn certificate_proto_roundtrip_preserves_aggchain_variants(
 }
 
 #[test]
+fn certificate_proto_roundtrip_preserves_read_only_proof_versions() {
+    let proto = proto_certificate(proto_aggchain_data(AggchainData::Generic {
+        proof: mock_sp1_proof("v6.0.1"),
+        aggchain_params: digest(0xa0),
+        signature: None,
+        public_values: Some(Box::new(public_values(0xa1))),
+    }));
+
+    let typed = Certificate::try_from(proto.clone()).unwrap();
+    let roundtrip = proto::Certificate::try_from(&typed).unwrap();
+
+    assert_eq!(roundtrip.aggchain_data, proto.aggchain_data);
+}
+
+#[test]
 fn certificate_proto_rejects_malformed_nested_submessages() {
     let missing_generic_proof = proto_certificate(proto::AggchainData {
         data: Some(proto::aggchain_data::Data::Generic(proto::Generic {

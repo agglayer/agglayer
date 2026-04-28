@@ -31,3 +31,31 @@ pub enum ProofError {
         source: bincode::Error,
     },
 }
+
+impl ProofError {
+    #[must_use]
+    pub fn invalid_version(&self) -> Option<&str> {
+        match self {
+            Self::InvalidSp1Version { version } => Some(version),
+            Self::UnsupportedReadableSp1Version { .. }
+            | Self::UnsupportedSp1VersionMajor { .. }
+            | Self::UnsupportedExecutableSp1Version { .. }
+            | Self::UnsupportedWritableSp1Version { .. }
+            | Self::DeserializeSp1Proof { .. }
+            | Self::DeserializeSp1Vkey { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn unsupported_version(&self) -> Option<&str> {
+        match self {
+            Self::UnsupportedReadableSp1Version { version }
+            | Self::UnsupportedSp1VersionMajor { version }
+            | Self::UnsupportedExecutableSp1Version { version }
+            | Self::UnsupportedWritableSp1Version { version }
+            | Self::DeserializeSp1Proof { version, .. }
+            | Self::DeserializeSp1Vkey { version, .. } => Some(version),
+            Self::InvalidSp1Version { .. } => None,
+        }
+    }
+}

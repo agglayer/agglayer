@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package agglayer.storage.v0;
 
-// Proof system that produced the opaque proof bytes.
+// Proof system that produced the opaque payload bytes.
 enum ProofSystem {
   // Default value, should not be used.
   PROOF_SYSTEM_UNSPECIFIED = 0;
@@ -22,25 +22,32 @@ enum ProofMode {
   PROOF_MODE_GROTH16 = 3;
 }
 
-// SDK-agnostic envelope for a zero-knowledge proof.
-// The bytes fields stay opaque so the stored wire format does not depend on
-// SDK-specific Rust types.
+// Storage envelope for a zero-knowledge proof.
+//
+// The protobuf envelope is stable and self-contained.
+// The payload bytes are opaque to protobuf, but their encoding is selected by
+// `proof_system`, `mode`, and `version`.
+// For SP1 proofs, the payload fields currently store version-specific
+// Rust-serialized proof-system data rather than a generic cross-SDK format.
 message Proof {
   // Which proof system produced this proof.
   ProofSystem proof_system = 1;
 
-  // Preserved end to end as reported by the producing SDK.
+  // Preserved end to end and used to select the payload deserializer.
   string version = 2;
 
   // Proof mode inside the selected proof system.
   ProofMode mode = 3;
 
   // Opaque serialized proof payload.
+  // Decoding requires `proof_system`, `mode`, and `version`.
   bytes proof = 4;
 
   // Opaque serialized public values.
+  // Decoding requires `proof_system`, `mode`, and `version`.
   bytes public_values = 5;
 
   // Opaque serialized verifying key.
+  // Decoding requires `proof_system`, `mode`, and `version`.
   bytes vkey = 6;
 }

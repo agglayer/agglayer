@@ -16,6 +16,9 @@ impl Display for SubmitCertificateErrorKind {
             SubmitCertificateErrorKind::UnableToReplacePendingCertificate => {
                 write!(f, "Unable to replace pending certificate")
             }
+            SubmitCertificateErrorKind::UnsupportedProofVersion => {
+                write!(f, "Unsupported proof version")
+            }
         }
     }
 }

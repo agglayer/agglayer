@@ -248,9 +248,10 @@ pub enum AggchainDataType {
 /// This is a minimal ELF that can be used to create dummy SP1 proofs in tests.
 pub const EMPTY_ELF: &[u8] = include_bytes!("tests/empty.elf");
 
-/// Create a dummy STARK proof for testing purposes.
-/// This creates a minimal SP1 proof that can be used in tests.
-fn create_dummy_stark_proof() -> agglayer_interop_types::aggchain_proof::Proof {
+/// Create a dummy STARK proof for testing purposes with a specific SP1 version.
+pub fn dummy_sp1_stark_proof_with_version(
+    version: &str,
+) -> agglayer_interop_types::aggchain_proof::Proof {
     use sp1_sdk::Prover;
 
     let (proof, vkey) = {
@@ -270,9 +271,15 @@ fn create_dummy_stark_proof() -> agglayer_interop_types::aggchain_proof::Proof {
         agglayer_interop_types::aggchain_proof::SP1StarkWithContext {
             proof,
             vkey,
-            version: "test".to_string(),
+            version: version.to_owned(),
         },
     )
+}
+
+/// Create a dummy STARK proof for testing purposes.
+/// This creates a minimal SP1 proof that can be used in tests.
+fn create_dummy_stark_proof() -> agglayer_interop_types::aggchain_proof::Proof {
+    dummy_sp1_stark_proof_with_version("test")
 }
 
 impl Certificate {

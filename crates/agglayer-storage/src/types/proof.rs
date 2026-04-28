@@ -1,4 +1,4 @@
-use agglayer_sp1::ProofError;
+use agglayer_sp1::{version_kind, ProofError, ProofExt};
 use agglayer_types::aggchain_proof::{Proof as TypedProof, SP1StarkWithContext};
 
 use crate::{schema::bincode_codec, types::generated::agglayer::storage::v0 as proto};
@@ -13,9 +13,6 @@ pub enum ProofConversionError {
 
     #[error("unsupported SP1 proof mode `{mode}`")]
     UnsupportedProofMode { mode: i32 },
-
-    #[error("unexpected non-empty public values in proof envelope")]
-    UnexpectedPublicValues,
 
     #[error("failed to serialize SP1 proof bytes for version `{version}`: {source}")]
     SerializeSp1Proof {
@@ -98,7 +95,8 @@ impl TryFrom<&TypedProof> for proto::Proof {
     type Error = ProofConversionError;
 
     fn try_from(value: &TypedProof) -> Result<Self, Self::Error> {
-        let TypedProof::SP1Stark(sp1) = value;
+        let sp1 = value.sp1();
+        version_kind(&sp1.version)?;
 
         Ok(Self {
             proof_system: proto::ProofSystem::Sp1 as i32,
@@ -125,11 +123,8 @@ impl TryFrom<proto::Proof> for TypedProof {
             return Err(ProofConversionError::UnsupportedProofMode { mode: value.mode });
         }
 
-        if !value.public_values.is_empty() {
-            return Err(ProofConversionError::UnexpectedPublicValues);
-        }
-
         let version = value.version;
+        version_kind(&version)?;
 
         Ok(TypedProof::SP1Stark(SP1StarkWithContext {
             proof: deserialize_sp1_proof(value.proof.as_ref(), &version)?,
@@ -171,15 +166,78 @@ mod tests {
     }
 
     #[test]
-    fn proof_proto_roundtrip_is_lossless_for_readable_versions() {
-        for version in ["v5.2.2", "v6.0.1"] {
-            let proof = mock_proof(version);
+    fn proof_proto_roundtrip_is_lossless_for_writable_versions() {
+        let proof = mock_proof("v5.2.2");
 
-            let proto = proto::Proof::try_from(&proof).unwrap();
-            let decoded = TypedProof::try_from(proto).unwrap();
+        let proto = proto::Proof::try_from(&proof).unwrap();
+        let decoded = TypedProof::try_from(proto).unwrap();
 
-            assert_eq!(decoded, proof);
-        }
+        assert_eq!(decoded, proof);
+    }
+
+    #[test]
+    fn proof_proto_reads_supported_read_only_versions() {
+        let proof = mock_proof("v5.2.2");
+        let TypedProof::SP1Stark(expected) = proof.clone();
+
+        let mut proto = proto::Proof::try_from(&proof).unwrap();
+        proto.version = "v6.0.1".to_owned();
+
+        let decoded = TypedProof::try_from(proto).unwrap();
+
+        assert_eq!(
+            decoded,
+            TypedProof::SP1Stark(SP1StarkWithContext {
+                version: "v6.0.1".to_owned(),
+                ..expected
+            })
+        );
+    }
+
+    #[test]
+    fn proof_proto_accepts_non_empty_public_values() {
+        let proof = mock_proof("v5.2.2");
+        let TypedProof::SP1Stark(expected) = proof.clone();
+
+        let mut proto = proto::Proof::try_from(&proof).unwrap();
+        proto.public_values = vec![9, 8, 7].into();
+
+        let decoded = TypedProof::try_from(proto).unwrap();
+
+        assert_eq!(decoded, TypedProof::SP1Stark(expected));
+    }
+
+    #[test]
+    fn proof_proto_writes_supported_read_only_versions() {
+        let proof = mock_proof("v6.0.1");
+
+        let proto = proto::Proof::try_from(&proof).unwrap();
+
+        assert_eq!(proto.version, "v6.0.1");
+    }
+
+    #[test]
+    fn proof_proto_rejects_unknown_write_version() {
+        let err = proto::Proof::try_from(&mock_proof("v7.0.0")).unwrap_err();
+
+        assert!(matches!(
+            err,
+            ProofConversionError::Sp1(ProofError::UnsupportedSp1VersionMajor { .. })
+        ));
+    }
+
+    #[test]
+    fn proof_proto_rejects_unknown_read_version() {
+        let proof = mock_proof("v5.2.2");
+        let mut proto = proto::Proof::try_from(&proof).unwrap();
+        proto.version = "v7.0.0".to_owned();
+
+        let err = TypedProof::try_from(proto).unwrap_err();
+
+        assert!(matches!(
+            err,
+            ProofConversionError::Sp1(ProofError::UnsupportedSp1VersionMajor { .. })
+        ));
     }
 
     #[test]
