@@ -34,11 +34,11 @@ pub(crate) enum Commands {
     },
 
     ValidateConfig {
-        /// The path to the agglayer dir.
+        /// The path to the configuration file.
         #[arg(
             long,
             short,
-            value_hint = ValueHint::DirPath,
+            value_hint = ValueHint::FilePath,
         )]
         path: PathBuf,
     },

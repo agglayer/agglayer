@@ -1,9 +1,0 @@
----
-source: crates/agglayer-node/src/rpc/tests/get_latest_known_certificate_header.rs
-expression: json
----
-{
-  "id": 0,
-  "jsonrpc": "2.0",
-  "result": null
-}

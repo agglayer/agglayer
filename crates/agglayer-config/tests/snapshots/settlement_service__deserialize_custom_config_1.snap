@@ -1,0 +1,24 @@
+---
+source: crates/agglayer-config/tests/settlement_service.rs
+expression: config
+---
+confirmations = 64
+settlement-policy = "FinalizedBlock"
+gas-limit-multiplier-factor = 1.1
+gas-limit-ceiling = "0x5f5e100"
+max-fee-per-gas-floor = "5gwei"
+max-fee-per-gas-ceiling = "200gwei"
+max-fee-per-gas-multiplier-factor = 1.2
+max-priority-fee-per-gas-ceiling = "100gwei"
+
+[retry-on-transient-failure]
+initial-interval = "15s"
+interval-multiplier-factor = 1.5
+max-interval = "2m"
+jitter = "1s"
+
+[retry-on-not-included-on-l1]
+initial-interval = "1m"
+interval-multiplier-factor = 2.0
+max-interval = "10m"
+jitter = "10s"

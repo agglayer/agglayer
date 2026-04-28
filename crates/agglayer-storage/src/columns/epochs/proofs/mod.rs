@@ -11,7 +11,7 @@ use crate::columns::PER_EPOCH_PROOFS_CF;
 /// | `CertificateIndex` | `Proof` |
 pub struct ProofPerIndexColumn;
 
-impl crate::columns::ColumnSchema for ProofPerIndexColumn {
+impl crate::schema::ColumnSchema for ProofPerIndexColumn {
     type Key = CertificateIndex;
     type Value = Proof;
 

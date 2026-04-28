@@ -28,9 +28,9 @@ use agglayer_types::{
 use pessimistic_proof::unified_bridge::{
     AggchainProofPublicValues, BridgeExit, ImportedBridgeExit,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::columns::{bincode_codec, CodecError};
+use crate::schema::{bincode_codec, CodecError};
 
 /// A unit type serializing to a constant byte representing the storage version.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq)]
@@ -337,13 +337,34 @@ impl From<AggchainDataV1<'_>> for AggchainData {
 /// Type specifying the current certificate encoding format.
 type CurrentCertificate<'a> = CertificateV1<'a>;
 
-fn decode<T: for<'de> Deserialize<'de> + Into<Certificate>>(
-    bytes: &[u8],
-) -> Result<Certificate, CodecError> {
-    Ok(bincode_codec().deserialize::<T>(bytes)?.into())
+fn panic_bincode_error() -> agglayer_types::bincode::Error {
+    Box::new(agglayer_types::bincode::ErrorKind::Custom(String::from(
+        "panic during deserialization",
+    )))
 }
 
-impl crate::columns::Codec for Certificate {
+/// Wrap `bincode` deserialization in `catch_unwind` so a panic from a
+/// malformed row surfaces as `CodecError::Serialization` instead of
+/// unwinding the node process.
+///
+/// The closure captures `&[u8]` and a `bincode::Options` value, both of
+/// which are `UnwindSafe`; no `AssertUnwindSafe` is needed. Clippy's
+/// `catch_unwind` lint is not triggered here, confirming the
+/// `UnwindSafe` bound is satisfied by inference.
+fn deserialize_bincode<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, CodecError> {
+    std::panic::catch_unwind(|| bincode_codec().deserialize::<T>(bytes))
+        .map_err(|_| CodecError::Serialization(panic_bincode_error()))?
+        .map_err(CodecError::Serialization)
+}
+
+fn decode<T>(bytes: &[u8]) -> Result<Certificate, CodecError>
+where
+    T: DeserializeOwned + Into<Certificate>,
+{
+    Ok(deserialize_bincode::<T>(bytes)?.into())
+}
+
+impl crate::schema::Codec for Certificate {
     fn encode_into<W: std::io::Write>(&self, writer: W) -> Result<(), CodecError> {
         Ok(bincode_codec().serialize_into(writer, &CurrentCertificate::from(self))?)
     }

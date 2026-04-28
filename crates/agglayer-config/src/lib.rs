@@ -28,6 +28,7 @@ pub mod outbound;
 mod port;
 pub mod rate_limiting;
 pub(crate) mod rpc;
+pub mod settlement_service;
 pub mod shutdown;
 pub mod storage;
 pub(crate) mod telemetry;

@@ -1,2 +1,0 @@
-[grpc]
-max-decoding-message-size = 104857600

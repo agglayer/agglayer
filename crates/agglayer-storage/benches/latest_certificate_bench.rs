@@ -5,10 +5,10 @@ use std::{
 };
 
 use agglayer_storage::{
+    backup::BackupClient,
     columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
-    storage::backup::BackupClient,
     stores::{state::StateStore, StateReader as _},
 };
 use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height};

@@ -1,12 +1,9 @@
-use std::io;
-
-use prost::{bytes::BytesMut, Message};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 pub use super::generated::agglayer::storage::v0;
 use crate::{
-    columns::Codec,
+    schema::CodecError,
     types::network_info::v0::{
         network_info_value::{self, ValueDiscriminants},
         NetworkType,
@@ -30,27 +27,10 @@ impl Key {
 
 pub type Value = super::generated::agglayer::storage::v0::NetworkInfoValue;
 
-impl Codec for Value {
-    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), crate::columns::CodecError> {
-        let len = self.encoded_len();
-
-        let mut buf = BytesMut::new();
-        buf.reserve(len);
-
-        <Value as prost::Message>::encode(self, &mut buf)?;
-
-        writer.write_all(&buf)?;
-
-        Ok(())
-    }
-
-    fn decode(buf: &[u8]) -> Result<Self, crate::columns::CodecError> {
-        <Value as prost::Message>::decode(buf).map_err(Into::into)
-    }
-}
+crate::schema::impl_codec_using_protobuf_for!(Value);
 
 impl TryFrom<v0::NetworkType> for agglayer_types::NetworkType {
-    type Error = crate::columns::CodecError;
+    type Error = CodecError;
 
     fn try_from(value: v0::NetworkType) -> Result<Self, Self::Error> {
         match value {

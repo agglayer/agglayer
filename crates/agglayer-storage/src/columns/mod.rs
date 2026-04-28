@@ -1,39 +1,6 @@
 pub use std::io;
 
-use agglayer_types::bincode;
-
-#[derive(Debug, thiserror::Error)]
-pub enum CodecError {
-    #[error(r#"Serialization error: {0}
-        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    Serialization(#[from] bincode::Error),
-
-    #[error(r#"Certificate encoded to an empty byte sequence.
-        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    CertificateEmpty,
-
-    #[error(r#"Unrecognized certificate storage format version {version}.
-        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    BadCertificateVersion { version: u8 },
-
-    #[error(r#"Serialization error: {0}
-        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    ProtobufSerialization(#[from] prost::EncodeError),
-
-    #[error(r#"Deserialization error: {0}
-           This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"#)]
-    ProtobufDeserialization(#[from] prost::DecodeError),
-
-    #[error(r#"Invalid enum variant {0}"#)]
-    InvalidEnumVariant(String),
-
-    #[error(r#"Unable to write encoded bytes: {0}"#)]
-    UnableToWriteEncodedBytes(#[from] std::io::Error),
-}
-
-pub fn bincode_codec() -> bincode::Codec<impl bincode::Options> {
-    bincode::default()
-}
+use crate::schema::{options::ColumnOptions, ColumnSchema};
 
 // State related CFs
 pub const CERTIFICATE_PER_NETWORK_CF: &str = "certificate_per_network_cf";
@@ -60,53 +27,41 @@ pub const PER_EPOCH_PROOFS_CF: &str = "per_epoch_proofs_cf";
 pub const PER_EPOCH_END_CHECKPOINT_CF: &str = "per_epoch_end_checkpoint_cf";
 pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
 
+// Settlement related CFs
+pub const SETTLEMENT_ATTEMPTS_CF: &str = "settlement_attempts_cf";
+pub const SETTLEMENT_ATTEMPT_PER_WALLET_CF: &str = "settlement_attempt_per_wallet_cf";
+pub const SETTLEMENT_ATTEMPT_RESULTS_CF: &str = "settlement_attempt_results_cf";
+pub const SETTLEMENT_JOBS_CF: &str = "settlement_jobs_cf";
+pub const SETTLEMENT_JOB_RESULTS_CF: &str = "settlement_job_results_cf";
+
+pub const SETTLEMENT_ATTEMPTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: 16, // settlement_job_id (Ulid)
+    },
+};
+
+pub const SETTLEMENT_ATTEMPT_PER_WALLET_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: 28, // address (20 bytes) + nonce (u64)
+    },
+};
+
+// Column options for checkpoint columns (start and end checkpoints).
+pub const CHECKPOINT_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: agglayer_types::NetworkId::BITS,
+    },
+};
+
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 
 // debug CFs
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
-
-pub trait Codec: Sized {
-    #[inline]
-    fn encode(&self) -> Result<Vec<u8>, CodecError> {
-        let mut buffer = Vec::new();
-        self.encode_into(&mut buffer)?;
-        Ok(buffer)
-    }
-
-    fn encode_into<W: io::Write>(&self, writer: W) -> Result<(), CodecError>;
-
-    fn decode(buf: &[u8]) -> Result<Self, CodecError>;
-}
-
-macro_rules! impl_codec_using_bincode_for {
-    ($($type:ty),* $(,)?) => {
-        $(
-            impl $crate::columns::Codec for $type {
-                fn encode_into<W: $crate::columns::io::Write>(
-                    &self,
-                    writer: W,
-                ) -> Result<(), $crate::columns::CodecError> {
-                    Ok($crate::columns::bincode_codec().serialize_into(writer, self)?)
-                }
-
-                fn decode(buf: &[u8]) -> Result<Self, $crate::columns::CodecError> {
-                    Ok($crate::columns::bincode_codec().deserialize(buf)?)
-                }
-            }
-        )*
-    };
-}
-
-pub(crate) use impl_codec_using_bincode_for;
-
-pub trait ColumnSchema {
-    type Key: Codec;
-    type Value: Codec;
-
-    const COLUMN_FAMILY_NAME: &'static str;
-}
 
 // State
 pub(crate) mod balance_tree_per_network;
@@ -129,6 +84,12 @@ pub(crate) mod metadata;
 
 // Debug
 pub(crate) mod debug_certificates;
+
+pub(crate) mod settlement_attempt_per_wallet;
+pub(crate) mod settlement_attempt_results;
+pub(crate) mod settlement_attempts;
+pub(crate) mod settlement_job_results;
+pub(crate) mod settlement_jobs;
 
 // PerEpoch
 pub mod epochs {

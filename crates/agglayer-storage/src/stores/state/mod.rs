@@ -1,7 +1,7 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     path::Path,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::SystemTime,
 };
 
@@ -15,19 +15,33 @@ use pessimistic_proof::{
     unified_bridge::LocalExitTree,
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
+    backup::{BackupClient, BackupRequest},
     columns::{
-        ColumnSchema, balance_tree_per_network::BalanceTreePerNetworkColumn, certificate_header::CertificateHeaderColumn, certificate_per_network::{self, CertificatePerNetworkColumn}, latest_settled_certificate_per_network::{
+        balance_tree_per_network::BalanceTreePerNetworkColumn,
+        certificate_header::CertificateHeaderColumn,
+        certificate_per_network::{self, CertificatePerNetworkColumn},
+        latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
-        }, local_exit_tree_per_network as LET, metadata::MetadataColumn, nullifier_tree_per_network::NullifierTreePerNetworkColumn
-    }, error::Error, storage::{
-        DB, backup::{BackupClient, BackupRequest}
-    }, stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate}, types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue}
+        },
+        local_exit_tree_per_network as LET,
+        metadata::MetadataColumn,
+        nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+    },
+    error::Error,
+    schema::ColumnSchema,
+    storage::DB,
+    stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
+    types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
 };
+
+mod cf_definitions;
+mod network_info;
+mod settlement;
 
 #[cfg(test)]
 mod tests;
@@ -36,22 +50,32 @@ mod tests;
 pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
+    settlement_write_locks: Mutex<HashMap<ulid::Ulid, Arc<Mutex<()>>>>,
 }
-
-mod network_info;
 
 impl StateStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, crate::storage::state_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::STATE_DB)
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
-        Self { db, backup_client }
+        Self {
+            db,
+            backup_client,
+            settlement_write_locks: Mutex::new(HashMap::new()),
+        }
     }
 
-    pub fn new_with_path(path: &Path, backup_client: BackupClient) -> Result<Self, crate::storage::DBOpenError> {
+    pub fn new_with_path(
+        path: &Path,
+        backup_client: BackupClient,
+    ) -> Result<Self, crate::storage::DBOpenError> {
         let db = Arc::new(Self::init_db(path)?);
-        Ok(Self { db, backup_client })
+        Ok(Self {
+            db,
+            backup_client,
+            settlement_write_locks: Mutex::new(HashMap::new()),
+        })
     }
 }
 
@@ -78,6 +102,7 @@ impl StateWriter for StateStore {
             .delete::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)?)
     }
 
+    #[instrument(skip(self))]
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
@@ -89,7 +114,9 @@ impl StateWriter for StateStore {
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
-            if certificate_header.settlement_tx_hash.is_some() && force != UpdateEvenIfAlreadyPresent::Yes {
+            if certificate_header.settlement_tx_hash.is_some()
+                && force != UpdateEvenIfAlreadyPresent::Yes
+            {
                 return Err(Error::UnprocessedAction(
                     "Tried to update settlement tx hash for a certificate that already has a \
                      settlement tx hash"
@@ -120,7 +147,6 @@ impl StateWriter for StateStore {
             }
         } else {
             info!(
-                hash = %certificate_id,
                 "Certificate header not found for certificate_id: {}",
                 certificate_id
             )
@@ -129,6 +155,7 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
@@ -162,7 +189,6 @@ impl StateWriter for StateStore {
             }
         } else {
             info!(
-                hash = %certificate_id,
                 "Certificate header not found for certificate_id: {}",
                 certificate_id
             )

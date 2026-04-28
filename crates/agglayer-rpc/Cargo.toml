@@ -7,7 +7,6 @@ license.workspace = true
 [dependencies]
 agglayer-contracts.workspace = true
 agglayer-config.workspace = true
-agglayer-interop.workspace = true
 agglayer-primitives.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-storage.workspace = true

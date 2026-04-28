@@ -3,13 +3,13 @@ use std::{sync::Arc, time::SystemTime};
 use agglayer_types::EpochNumber;
 
 use crate::{
+    backup::BackupClient,
     columns::{
         disabled_networks::DisabledNetworksColumn,
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
     },
-    storage::backup::BackupClient,
     stores::{state::StateStore, StateReader},
     tests::TempDBDir,
     types::network_info::v0::{DisabledBy, DisabledNetwork},

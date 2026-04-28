@@ -25,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 #[timeout(Duration::from_secs(90))]
 async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Forest) {
     // Shutdown node immediately after sending the settlement transaction, without
-    // updating database. Try to recover by sending same certifciate after
+    // updating database. Try to recover by sending same certificate after
     // startup.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();

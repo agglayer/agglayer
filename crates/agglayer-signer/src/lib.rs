@@ -152,11 +152,8 @@ impl Signer for ConfiguredSigner {
             ConfiguredSigner::Local(wallet) => {
                 wallet.set_chain_id(chain_id);
             }
-            ConfiguredSigner::Kms(_signer) => {
-                // KMS signer doesn't support mutable chain ID changes in the
-                // current implementation This is a limitation
-                // of the KmsSigner wrapper
-                panic!("KMS signer doesn't support mutable chain ID changes");
+            ConfiguredSigner::Kms(signer) => {
+                signer.set_chain_id(chain_id);
             }
         }
     }
@@ -188,6 +185,19 @@ impl TxSigner<Signature> for ConfiguredSigner {
 }
 
 impl ConfiguredSigner {
+    /// Signs a transaction using a local signer.
+    async fn sign_transaction_local(
+        wallet: &PrivateKeySigner,
+        tx: &TypedTransaction,
+    ) -> Result<Signature, Error> {
+        // Convert the TypedTransaction to a mutable dyn SignableTransaction
+        let mut tx_clone = tx.clone();
+        wallet
+            .sign_transaction(&mut tx_clone)
+            .await
+            .map_err(Error::Signer)
+    }
+
     /// Signs a transaction using the appropriate signer.
     ///
     /// This method provides transaction signing functionality that delegates
@@ -195,13 +205,7 @@ impl ConfiguredSigner {
     #[inline]
     pub async fn sign_transaction_typed(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
         match self {
-            ConfiguredSigner::Local(wallet) => {
-                let mut tx_clone = tx.clone();
-                wallet
-                    .sign_transaction(&mut tx_clone)
-                    .await
-                    .map_err(Error::Signer)
-            }
+            ConfiguredSigner::Local(wallet) => Self::sign_transaction_local(wallet, tx).await,
             ConfiguredSigner::Kms(signer) => {
                 signer.sign_transaction(tx).await.map_err(Error::GcpKms)
             }

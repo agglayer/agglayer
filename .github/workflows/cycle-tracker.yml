@@ -33,6 +33,8 @@ jobs:
         with:
           cache-on-failure: true
 
+      - uses: taiki-e/install-action@protoc
+
       - uses: taiki-e/install-action@nextest
 
       - name: Install Anvil

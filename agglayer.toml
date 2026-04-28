@@ -25,12 +25,12 @@ send-tx = "unlimited"
 [outbound.rpc.settle-tx]
 max-retries = 3
 retry-interval = "7s"
-confirmations = 1
+confirmations = 12
 
 [outbound.rpc.settle-cert]
 max-retries = 3
 retry-interval = "7s"
-confirmations = 1
+confirmations = 12
 
 [l1]
 chain-id = 1337

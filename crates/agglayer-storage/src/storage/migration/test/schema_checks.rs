@@ -1,7 +1,8 @@
-use crate::tests::TempDBDir;
-
 use super::sample::*;
-use crate::storage::{Builder, DBOpenError};
+use crate::{
+    storage::{Builder, DBOpenError},
+    tests::TempDBDir,
+};
 
 #[test_log::test]
 fn fewer_steps_declared_than_recorded() -> Result<(), eyre::Error> {
@@ -16,7 +17,8 @@ fn fewer_steps_declared_than_recorded() -> Result<(), eyre::Error> {
             .finalize(CFS_V2)?;
     }
 
-    // Phase 2: Try to open with only first migration - should fail with FewerStepsDeclared
+    // Phase 2: Try to open with only first migration - should fail with
+    // FewerStepsDeclared
     {
         let result = Builder::open_sample(db_path)?
             .sample_migrate_v0_v1()?

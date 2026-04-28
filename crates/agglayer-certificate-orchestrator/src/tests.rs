@@ -10,11 +10,11 @@ use std::{
 use agglayer_clock::ClockRef;
 use agglayer_config::Config;
 use agglayer_storage::{
+    backup::BackupClient,
     columns::{
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
-    storage::backup::BackupClient,
     stores::{
         epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
         EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
@@ -492,7 +492,6 @@ async fn test_certificate_orchestrator_can_stop() {
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -560,7 +559,6 @@ async fn test_collect_certificates() {
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -630,7 +628,6 @@ async fn test_collect_certificates_after_epoch() {
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -702,7 +699,6 @@ async fn test_collect_certificates_when_empty() {
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),
@@ -783,7 +779,6 @@ fn check() -> (
     let epochs_store = Arc::new(
         EpochsStore::new(
             Arc::new(config),
-            EpochNumber::ZERO,
             pending_store.clone(),
             state_store.clone(),
             BackupClient::noop(),

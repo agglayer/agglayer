@@ -5,14 +5,14 @@ use agglayer_grpc_server::node::v1::node_state_service_server::NodeStateServiceS
 use agglayer_grpc_types::node::v1::GetCertificateHeaderRequest;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
-    storage::backup::BackupClient,
+    backup::BackupClient,
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         StateWriter as _,
     },
     tests::TempDBDir,
 };
-use agglayer_types::{CertificateId, CertificateStatus, Digest, EpochNumber, Height};
+use agglayer_types::{CertificateId, CertificateStatus, Digest, Height};
 use tokio::{net::TcpListener, sync::oneshot};
 use tonic::Code;
 use tower::ServiceExt as _;
@@ -49,7 +49,6 @@ async fn get_certificate_header() {
         Arc::new(
             EpochsStore::new(
                 config.clone(),
-                EpochNumber::ZERO,
                 pending_store,
                 state_store,
                 BackupClient::noop(),

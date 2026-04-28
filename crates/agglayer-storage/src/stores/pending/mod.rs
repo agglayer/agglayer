@@ -19,6 +19,8 @@ use crate::{
     storage::DB,
 };
 
+mod cf_definitions;
+
 /// A logical store for pending.
 #[derive(Clone)]
 pub struct PendingStore {
@@ -27,7 +29,7 @@ pub struct PendingStore {
 
 impl PendingStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, crate::storage::pending_db_cf_definitions())
+        DB::open_cf(path, cf_definitions::PENDING_DB)
     }
 
     pub fn new(db: Arc<DB>) -> Self {

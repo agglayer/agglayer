@@ -3,8 +3,8 @@ use std::sync::Arc;
 use agglayer_types::EpochNumber;
 
 use crate::{
+    backup::BackupClient,
     columns::metadata::MetadataColumn,
-    storage::backup::BackupClient,
     stores::{state::StateStore, MetadataReader as _, MetadataWriter as _},
     tests::TempDBDir,
     types::{MetadataKey, MetadataValue},

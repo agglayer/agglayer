@@ -1,4 +1,0 @@
-
-[primary-prover.network-prover]
-proving-request-timeout = "5m"
-proving-timeout = "10m"

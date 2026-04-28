@@ -19,7 +19,7 @@ pub struct ProvenCertificate(pub CertificateId, pub NetworkId, pub Height);
 
 pub type Key = NetworkId;
 
-crate::columns::impl_codec_using_bincode_for!(ProvenCertificate);
+crate::schema::impl_codec_using_bincode_for!(ProvenCertificate);
 
 impl ColumnSchema for LatestProvenCertificatePerNetworkColumn {
     type Key = Key;

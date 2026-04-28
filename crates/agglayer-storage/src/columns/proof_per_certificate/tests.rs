@@ -2,9 +2,9 @@ use insta::assert_snapshot;
 use serde::Deserialize;
 use sp1_sdk::SP1ProofWithPublicValues;
 
-use crate::columns::{
-    proof_per_certificate::{CertificateId, Proof},
-    Codec as _,
+use crate::{
+    columns::proof_per_certificate::{CertificateId, Proof},
+    schema::Codec as _,
 };
 
 #[test]

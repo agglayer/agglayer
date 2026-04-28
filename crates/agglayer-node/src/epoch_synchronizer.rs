@@ -129,8 +129,8 @@ mod tests {
 
     use agglayer_config::Config;
     use agglayer_storage::{
+        backup::BackupClient,
         columns::epochs::end_checkpoint::EndCheckpointColumn,
-        storage::backup::BackupClient,
         stores::{
             epochs::EpochsStore, pending::PendingStore, state::StateStore,
             PendingCertificateWriter, StateWriter,
@@ -321,7 +321,6 @@ mod tests {
         let epochs_store = Arc::new(
             EpochsStore::new(
                 config.clone(),
-                EpochNumber::new(15),
                 pending_store.clone(),
                 state_store.clone(),
                 BackupClient::noop(),
@@ -452,7 +451,6 @@ mod tests {
         let epochs_store = Arc::new(
             EpochsStore::new(
                 config.clone(),
-                EpochNumber::new(15),
                 pending_store.clone(),
                 state_store.clone(),
                 BackupClient::noop(),

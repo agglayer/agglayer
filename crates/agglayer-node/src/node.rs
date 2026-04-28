@@ -10,7 +10,7 @@ use agglayer_jsonrpc_api::{
 };
 use agglayer_signer::{ConfiguredSigner, ConfiguredSigners};
 use agglayer_storage::{
-    storage::backup::{BackupClient, BackupEngine},
+    backup::{BackupClient, BackupEngine},
     stores::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         PerEpochReader as _,
@@ -109,8 +109,8 @@ impl Node {
         } else {
             BackupClient::noop()
         };
-        let state_store = Arc::new(StateStore::new(state_db.clone(), backup_client.clone()));
-        let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
+        let state_store = Arc::new(StateStore::new(state_db, backup_client.clone()));
+        let pending_store = Arc::new(PendingStore::new(pending_db));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
         } else {
@@ -157,7 +157,6 @@ impl Node {
 
         let epochs_store = Arc::new(EpochsStore::new(
             config.clone(),
-            current_epoch,
             pending_store.clone(),
             state_store.clone(),
             backup_client,
@@ -188,6 +187,7 @@ impl Node {
                         .connect_client(
                             alloy::rpc::client::RpcClient::builder()
                                 .layer(crate::L1TraceLayer)
+                                .layer(crate::UrlRedactLayer)
                                 .http(config.l1.node_url.clone()),
                         ),
                 )
