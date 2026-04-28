@@ -29,14 +29,6 @@ impl CertificateConversionError {
     }
 
     #[must_use]
-    pub fn invalid_proof_version(&self) -> Option<&str> {
-        match self {
-            Self::InvalidProofVersion { version } => Some(version),
-            Self::Compat(_) | Self::UnsupportedProofVersion { .. } => None,
-        }
-    }
-
-    #[must_use]
     pub fn kind(&self) -> super::ErrorKind {
         match self {
             Self::Compat(error) => error.kind(),
