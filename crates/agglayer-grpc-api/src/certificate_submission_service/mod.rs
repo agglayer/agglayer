@@ -44,14 +44,27 @@ where
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let certificate: agglayer_types::Certificate = match request.into_inner().certificate {
             Some(certificate) => certificate.try_into().map_err(
-                |error: agglayer_grpc_types::compat::v1::Error| {
+                |error: agglayer_grpc_types::compat::v1::CertificateConversionError| {
+                    let (message, kind, details) = match error.unsupported_proof_version() {
+                        Some(version) => (
+                            "Unsupported proof version",
+                            SubmitCertificateErrorKind::UnsupportedProofVersion.as_str_name(),
+                            [("proof_version".into(), version.to_owned())],
+                        ),
+                        None => (
+                            "Invalid certificate",
+                            SubmitCertificateErrorKind::from(error.kind()).as_str_name(),
+                            [("error".into(), format!("{error:?}"))],
+                        ),
+                    };
+
                     tonic::Status::with_error_details(
                         tonic::Code::InvalidArgument,
-                        "Invalid certificate",
+                        message,
                         ErrorDetails::with_error_info(
-                            SubmitCertificateErrorKind::from(error.kind()),
+                            kind,
                             SUBMIT_CERTIFICATE_METHOD_PATH,
-                            [("error".into(), format!("{error:?}"))],
+                            details,
                         ),
                     )
                 },
