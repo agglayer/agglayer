@@ -26,8 +26,8 @@ pub fn main() {
     let aggchain_ecdsa: AggchainECDSA = sp1_zkvm::io::read::<AggchainECDSA>();
 
     let combined_hash = keccak256_combine([
-        aggchain_ecdsa.new_local_exit_root,
-        aggchain_ecdsa.commit_imported_bridge_exits,
+        aggchain_ecdsa.new_local_exit_root.as_ref(),
+        aggchain_ecdsa.commit_imported_bridge_exits.as_ref(),
     ]);
 
     let recovered_signer = aggchain_ecdsa
@@ -35,7 +35,7 @@ pub fn main() {
         .recover_address_from_prehash(&B256::new(combined_hash))
         .expect("Invalid signature");
 
-    assert_eq!(recovered_signer.as_slice(), aggchain_ecdsa.signer);
+    assert_eq!(recovered_signer.as_slice(), aggchain_ecdsa.signer.as_slice());
 
     sp1_zkvm::io::commit(&aggchain_ecdsa.public_values());
 }

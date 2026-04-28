@@ -8,6 +8,7 @@ license.workspace = true
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
 agglayer-config = { path = "../agglayer-config" }
 agglayer-contracts = { path = "../agglayer-contracts" }
+agglayer-sp1.workspace = true
 agglayer-storage = { path = "../agglayer-storage" }
 agglayer-primitives.workspace = true
 agglayer-types.workspace = true
@@ -19,6 +20,7 @@ prover-executor.workspace = true
 async-trait.workspace = true
 arc-swap.workspace = true
 alloy.workspace = true
+anyhow.workspace = true
 eyre.workspace = true
 fail.workspace = true
 futures.workspace = true
@@ -47,6 +49,7 @@ fail = { workspace = true, features = ["failpoints"] }
 mockall.workspace = true
 prover-alloy.workspace = true
 rstest.workspace = true
+serial_test.workspace = true
 test-log.workspace = true
 tokio-util.workspace = true
 url.workspace = true

@@ -1,6 +1,6 @@
 use insta::assert_snapshot;
 use serde::Deserialize;
-use sp1_sdk::SP1ProofWithPublicValues;
+use sp1_sdk_v5::SP1ProofWithPublicValues;
 
 use crate::{
     columns::proof_per_certificate::{CertificateId, Proof},
@@ -37,12 +37,17 @@ fn can_parse_value() {
     assert!(matches!(expected_value, Proof::SP1(_)));
 }
 
+fn non_regression_proof_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("./src/columns/proof_per_certificate/fixtures/non_regression_proof_encoding.proof")
+}
+
 #[derive(Deserialize)]
 struct SP1ProofWithPublicValuesV3 {
-    pub proof: sp1_sdk::SP1Proof,
+    pub proof: sp1_sdk_v5::SP1Proof,
     #[allow(unused)]
-    pub stdin: sp1_sdk::SP1Stdin,
-    pub public_values: sp1_sdk::SP1PublicValues,
+    pub stdin: sp1_sdk_v5::SP1Stdin,
+    pub public_values: sp1_sdk_v5::SP1PublicValues,
     pub sp1_version: String,
 }
 
@@ -60,17 +65,17 @@ impl From<SP1ProofWithPublicValuesV3> for SP1ProofWithPublicValues {
             proof: v3.proof,
             public_values: v3.public_values,
             sp1_version: v3.sp1_version,
-            tee_proof: None, // We do not care about TEE in tests
+            tee_proof: None,
         }
     }
 }
 
 #[test]
 fn non_regression_proof_encoding() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("./src/columns/proof_per_certificate/fixtures/non_regression_proof_encoding.proof");
-
-    let proof: SP1ProofWithPublicValues = SP1ProofWithPublicValuesV3::load(path).unwrap().into();
+    let proof: SP1ProofWithPublicValues =
+        SP1ProofWithPublicValuesV3::load(non_regression_proof_path())
+            .unwrap()
+            .into();
     assert_snapshot!("proof hex format", hex::encode(proof.bytes()));
 
     assert_snapshot!(

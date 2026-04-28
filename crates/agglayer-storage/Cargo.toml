@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agglayer-interop-types-v13 = { package = "agglayer-interop-types", version = "0.13.0" }
 chrono = { version = "0.4", default-features = false, features = [
     "clock",
     "serde",
@@ -30,6 +31,7 @@ agglayer-sp1.workspace = true
 agglayer-types.workspace = true
 agglayer-tries.workspace = true
 pessimistic-proof.workspace = true
+sp1-sdk-v5.workspace = true
 
 mockall = { workspace = true, optional = true }
 
@@ -48,6 +50,7 @@ test-log.workspace = true
 tokio.workspace = true
 
 agglayer-types = { workspace = true, features = ["testutils"] }
+agglayer-sp1.workspace = true
 pessimistic-proof-test-suite.workspace = true
 
 agglayer-storage = { workspace = true, features = ["testutils"] }
