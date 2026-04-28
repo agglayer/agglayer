@@ -29,6 +29,7 @@ use pessimistic_proof::unified_bridge::{
     AggchainProofPublicValues, BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex,
     ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
 };
+use prost::Message as _;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
@@ -957,9 +958,6 @@ impl From<AggchainDataV1<'_>> for AggchainData {
     }
 }
 
-/// Type specifying the current certificate encoding format.
-type CurrentCertificate<'a> = CertificateV1<'a>;
-
 fn panic_bincode_error() -> agglayer_types::bincode::Error {
     Box::new(agglayer_types::bincode::ErrorKind::Custom(String::from(
         "panic during deserialization",
@@ -988,8 +986,14 @@ where
 }
 
 impl crate::schema::Codec for Certificate {
-    fn encode_into<W: std::io::Write>(&self, writer: W) -> Result<(), CodecError> {
-        Ok(bincode_codec().serialize_into(writer, &CurrentCertificate::from(self))?)
+    fn encode_into<W: std::io::Write>(&self, mut writer: W) -> Result<(), CodecError> {
+        let proto = proto::Certificate::try_from(self)
+            .map_err(|error| CodecError::Conversion(error.to_string()))?;
+        let mut buf = prost::bytes::BytesMut::with_capacity(proto.encoded_len());
+        proto.encode(&mut buf)?;
+        writer.write_all(&buf)?;
+
+        Ok(())
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
@@ -997,7 +1001,11 @@ impl crate::schema::Codec for Certificate {
             None => Err(CodecError::CertificateEmpty),
             Some(0) => decode::<CertificateV0>(bytes),
             Some(1) => decode::<CertificateV1>(bytes),
-            Some(version) => Err(CodecError::BadCertificateVersion { version }),
+            Some(_) => {
+                let proto = proto::Certificate::decode(bytes)?;
+                Certificate::try_from(proto)
+                    .map_err(|error| CodecError::Conversion(error.to_string()))
+            }
         }
     }
 }

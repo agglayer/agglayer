@@ -14,7 +14,7 @@ use crate::schema::{
 pub(crate) mod iterators;
 mod migration;
 
-pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError, DbAccess};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
