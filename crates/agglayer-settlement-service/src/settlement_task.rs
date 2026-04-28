@@ -4,11 +4,16 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use agglayer_config::{settlement_service::SettlementTransactionConfig, Multiplier};
-use agglayer_types::{Digest, SettlementTxHash};
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
+use agglayer_types::{
+    ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
+    SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
+    SettlementJobResult, SettlementTxHash,
+};
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
-    primitives::{Address, BlockHash, Bytes, U128, U256},
+    primitives::Address,
+    providers::Provider,
 };
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -16,91 +21,8 @@ use ulid::Ulid;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SettlementAttemptNumber(pub u64);
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, derive_more::Display)]
-pub struct Nonce(pub u64);
-
-impl Nonce {
-    pub fn previous(&self) -> Option<Nonce> {
-        self.0.checked_sub(1).map(Nonce)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SettlementJob {
-    contract_address: Address,
-    calldata: Bytes,
-    eth_value: U256,
-
-    num_confirmations: u32,
-    gas_limit: U128,
-    max_fee_per_gas_ceiling: U128,
-    max_fee_per_gas_floor: U128,
-    max_fee_per_gas_multiplier: Multiplier,
-    max_priority_fee_per_gas_ceiling: U128,
-    max_priority_fee_per_gas_floor: U128,
-    max_priority_fee_per_gas_multiplier: Multiplier,
-
-    settlement_config: Arc<SettlementTransactionConfig>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SettlementJobResult {
-    ClientError(ClientError),
-    ContractCall(ContractCallResult),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ClientError {
-    pub kind: ClientErrorType,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ClientErrorType {
-    Unknown,
-    // Not needed for now, might re-add later: Transient,
-    // Not needed for now, might re-add later: Permanent,
-    NonceAlreadyUsed, // TODO: Set it only when the other tx that used the nonce is finalized
-}
-
-impl ClientError {
-    pub fn nonce_already_used(address: Address, nonce: Nonce, tx_hash: SettlementTxHash) -> Self {
-        Self {
-            kind: ClientErrorType::NonceAlreadyUsed,
-            message: format!(
-                "Nonce already used: for {address}/{nonce}, the settled tx is {tx_hash}"
-            ),
-        }
-    }
-
-    pub fn timeout_waiting_for_inclusion() -> Self {
-        Self {
-            kind: ClientErrorType::Unknown,
-            message: "Timeout waiting for inclusion on L1".to_string(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ContractCallResult {
-    pub outcome: ContractCallOutcome,
-    pub metadata: Bytes,
-    pub block_hash: BlockHash,
-    pub block_number: u64,
-    pub tx_hash: SettlementTxHash,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ContractCallOutcome {
-    Success,
-    Revert,
-}
-
-pub enum StoredSettlementJob {
-    Pending(SettlementTask),
+pub enum StoredSettlementJob<L1Provider, SettlementStore> {
+    Pending(SettlementTask<L1Provider, SettlementStore>),
     Completed(SettlementJob, SettlementJobResult),
 }
 
@@ -109,27 +31,30 @@ pub enum TaskAdminCommand {
     ReloadAndRestart,
 }
 
-pub struct SettlementAttempt {
-    pub sender_wallet: Address,
-    pub nonce: Nonce,
-    pub max_fee_per_gas: u128,
-    pub max_priority_fee_per_gas: u128,
-    pub hash: SettlementTxHash,
-    pub submission_time: SystemTime,
-    pub result: Option<SettlementJobResult>,
+struct ActiveSettlementAttempt {
+    attempt: SettlementAttempt,
+    result: Option<SettlementAttemptResult>,
 }
-pub struct SettlementTask {
+
+pub struct SettlementTask<L1Provider, SettlementStore> {
     id: Ulid,
     job: SettlementJob,
+    provider: Arc<L1Provider>,
+    store: Arc<SettlementStore>,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
-    attempts: BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, SettlementAttempt>>,
+    attempts:
+        BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>>,
 }
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
 
-impl SettlementTask {
+impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + SettlementWriter>
+    SettlementTask<L1Provider, SettlementStore>
+{
     pub async fn create(
         job: SettlementJob,
+        provider: Arc<L1Provider>,
+        store: Arc<SettlementStore>,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
     ) -> eyre::Result<(Ulid, Self)> {
         let id = loop {
@@ -146,6 +71,8 @@ impl SettlementTask {
         let this = Self {
             id,
             job,
+            provider,
+            store,
             admin_commands,
             attempts: BTreeMap::new(),
         };
@@ -155,8 +82,10 @@ impl SettlementTask {
 
     pub async fn load(
         id: Ulid,
+        provider: Arc<L1Provider>,
+        store: Arc<SettlementStore>,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
-    ) -> eyre::Result<StoredSettlementJob> {
+    ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
         let (job, result) = Self::load_settlement_job_from_db(id).await?;
         if let Some(result) = result {
             Ok(StoredSettlementJob::Completed(job, result))
@@ -164,6 +93,8 @@ impl SettlementTask {
             let mut this = SettlementTask {
                 id,
                 job,
+                provider,
+                store,
                 admin_commands,
                 attempts: BTreeMap::new(),
             };
@@ -254,7 +185,7 @@ impl SettlementTask {
             if all_nonces_seen_on_l1 && !reverts.is_empty() {
                 // All nonces were seen on L1, but we didn't get a successful settlement result
                 // for any of them. Also, there was at least one revert.
-                // We can wait for finalization without submiting a new attempt.
+                // We can wait for finalization without submitting a new attempt.
                 let earliest_revert_result = reverts
                     .values()
                     .map(|(_, _, result)| result)
@@ -369,7 +300,7 @@ impl SettlementTask {
             .and_then(|attempts_for_nonce| {
                 attempts_for_nonce
                     .iter()
-                    .find(|(_, attempt)| attempt.hash == tx_hash)
+                    .find(|(_, attempt)| attempt.attempt.hash == tx_hash)
                     .map(|(attempt_number, _)| *attempt_number)
             })
     }
@@ -402,13 +333,14 @@ impl SettlementTask {
 
     async fn tx_hash_on_l1_for_nonce(
         &self,
-        _wallet: Address,
-        _nonce: Nonce,
+        wallet: Address,
+        nonce: Nonce,
     ) -> Option<SettlementTxHash> {
-        // TODO: delegate to the standalone `tx_hash_on_l1_for_nonce` function
-        // once a provider field is added to SettlementTask.
-        // Use retry_callback_until_success as needed.
-        todo!()
+        // TODO: add retry with backoff using
+        // self.job.settlement_config.retry_on_transient_failure
+        crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce)
+            .await
+            .unwrap()
     }
 
     async fn current_result_on_l1_for(
@@ -456,7 +388,7 @@ impl SettlementTask {
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
-        // TODO: Save the settlement job contents to L1
+        // TODO: Save the settlement job contents to DB
         // XREF: https://github.com/agglayer/agglayer/issues/1381
         todo!()
     }
@@ -464,8 +396,8 @@ impl SettlementTask {
     async fn load_settlement_job_from_db(
         _id: Ulid,
     ) -> eyre::Result<(SettlementJob, Option<SettlementJobResult>)> {
-        // TODO: Load a settlement job's contents from L1, including its result if it is
-        // completed.
+        // TODO: Load a settlement job's contents from DB, including its
+        // result if it is completed.
         // XREF: https://github.com/agglayer/agglayer/issues/1381
         todo!()
     }

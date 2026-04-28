@@ -5,6 +5,7 @@ extend = [
     { path = "scripts/make/Makefile.fuzz.toml" },
     { path = "scripts/make/Makefile.pp.toml" },
     { path = "scripts/make/Makefile.proto.toml" },
+    { path = "scripts/make/Makefile.tools.toml" },
 ]
 
 [config]
