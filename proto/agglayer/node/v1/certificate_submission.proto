@@ -39,4 +39,7 @@ enum SubmitCertificateErrorKind {
 
   // Unable to replace pending certificate.
   SUBMIT_CERTIFICATE_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE = 4;
+
+  // The certificate carries a proof version that gRPC ingress does not accept.
+  SUBMIT_CERTIFICATE_ERROR_KIND_UNSUPPORTED_PROOF_VERSION = 5;
 }
