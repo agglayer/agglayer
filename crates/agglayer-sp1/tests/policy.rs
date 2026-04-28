@@ -81,6 +81,26 @@ fn proof_reports_execute_specific_error_for_unknown_major() {
 }
 
 #[test]
+fn proof_error_exposes_unsupported_version_for_write_rejections() {
+    let err = mock_proof("v6.0.1")
+        .ensure_writable(&AcceptancePolicy::DEFAULT)
+        .unwrap_err();
+
+    assert_eq!(err.unsupported_version(), Some("v6.0.1"));
+    assert_eq!(err.invalid_version(), None);
+}
+
+#[test]
+fn proof_error_exposes_invalid_version_for_unparsable_inputs() {
+    let err = mock_proof("abc")
+        .ensure_writable(&AcceptancePolicy::DEFAULT)
+        .unwrap_err();
+
+    assert_eq!(err.invalid_version(), Some("abc"));
+    assert_eq!(err.unsupported_version(), None);
+}
+
+#[test]
 fn proof_vkey_hash_helpers_are_infallible() {
     let proof = mock_proof("v5.2.2");
 
