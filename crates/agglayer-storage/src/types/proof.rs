@@ -95,9 +95,8 @@ impl TryFrom<&TypedProof> for proto::Proof {
     type Error = ProofConversionError;
 
     fn try_from(value: &TypedProof) -> Result<Self, Self::Error> {
-        value.ensure_writable(&AcceptancePolicy::DEFAULT)?;
-
         let sp1 = value.sp1();
+        value.ensure_writable(&AcceptancePolicy::DEFAULT)?;
 
         Ok(Self {
             proof_system: proto::ProofSystem::Sp1 as i32,
