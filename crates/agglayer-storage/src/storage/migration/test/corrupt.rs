@@ -24,7 +24,9 @@ fn default_cf_not_empty() -> Result<(), eyre::Error> {
 
     // Phase 2: Try to open with Builder - should fail with DefaultCFNotEmpty
     {
-        let result = Builder::open_sample(db_path);
+        let result = Builder::sample_builder()
+            .finalize(CFS_V0)
+            .and_then(|plan| plan.open(db_path));
 
         match result {
             Err(DBOpenError::DefaultCfNotEmpty) => (),
@@ -43,9 +45,11 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
 
     // Phase 1: Create a database with a corrupted migration record.
     {
-        let db = Builder::open_sample(db_path)?
+        let db = Builder::sample_builder()
             .sample_migrate_v0_v1()?
-            .finalize(CFS_V1)?;
+            .finalize(CFS_V1)?
+            .open(db_path)?
+            .migrate()?;
 
         // Verify migration record contains 4 steps at the end of phase 1
         let migration_record_count = db.keys::<MigrationRecordColumn>()?.count();
@@ -57,7 +61,9 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
 
     // Phase 2: Try to open - should fail with MigrationRecordGap
     {
-        let result = Builder::open_sample(db_path);
+        let result = Builder::sample_builder()
+            .finalize(CFS_V0)
+            .and_then(|plan| plan.open(db_path));
 
         match result {
             Err(DBOpenError::MigrationRecordGap(step)) => {
@@ -86,7 +92,9 @@ fn unexpected_schema() -> Result<(), eyre::Error> {
 
     // Phase 2: Try to open with Builder - should fail with UnexpectedSchema
     {
-        let result = Builder::open_sample(db_path);
+        let result = Builder::sample_builder()
+            .finalize(CFS_V0)
+            .and_then(|plan| plan.open(db_path));
 
         match result {
             Err(DBOpenError::UnexpectedSchema) => (),
@@ -104,20 +112,24 @@ fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
 
     // Phase 1: Initialize database with V0 schema and add some data
     {
-        let db = Builder::open_sample(db_path)?.finalize(CFS_V0)?;
+        let db = Builder::sample_builder()
+            .finalize(CFS_V0)?
+            .open(db_path)?
+            .migrate()?;
         db.put::<NetworkInfoV0Column>(&NetworkId::new(42), &DATA_V0[0].1)?;
     }
 
     // Phase 2: Try to migrate but write to the old (read-only) CF
     {
-        let result = Builder::open_sample(db_path)?.add_cfs(
-            &[ColumnDescriptor::new::<NetworkInfoV1Column>()],
-            |db| {
+        let result = Builder::sample_builder()
+            .add_cfs(&[ColumnDescriptor::new::<NetworkInfoV1Column>()], |db| {
                 // This should FAIL - trying to write to old CF during migration
                 let v0_value = &DATA_V0[1].1;
                 db.put::<NetworkInfoV0Column>(&NetworkId::new(42), v0_value)
-            },
-        );
+            })?
+            .finalize(CFS_V1)?
+            .open(db_path)?
+            .migrate();
 
         match result {
             Err(DBOpenError::Migration(migration_err)) => {

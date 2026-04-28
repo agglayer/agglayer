@@ -28,9 +28,9 @@ pub enum DBOpenError {
 }
 
 #[derive(Debug, Error)]
-#[error("Migration failed at step {step}")]
+#[error("Migration failed at step {step_no}")]
 pub struct DBMigrationError {
-    pub step: u32,
+    pub step_no: u32,
     #[source]
     pub details: DBMigrationErrorDetails,
 }

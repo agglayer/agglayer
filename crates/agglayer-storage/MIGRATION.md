@@ -6,7 +6,11 @@ Database migration happens during storage initialization and may take some time,
 
 ### Basic Usage
 
-The `Builder` type provides a fluent API for defining and executing database migrations:
+The `Builder` type provides a fluent API for defining database migrations through three phases:
+
+1. **Declaration** - Define migration steps without side effects
+2. **Validation** - Open and validate the database
+3. **Execution** - Execute pending migration steps
 
 ```rust
 use agglayer_storage::{
@@ -33,15 +37,18 @@ let db = DB::builder(db_path, initial_schema)?
         Ok(())
     })?
     .drop_cfs(DROPPED_CFS)?
-    // Finalize with expected final schema
-    .finalize(final_schema)?;
+    .finalize(final_schema)?
+    // 2. Validation: Open database and validate schema
+    .open(db_path)?
+    // 3. Execution: Execute pending migration steps
+    .migrate()?;
 ```
 
 For concrete examples, see the `test::sample` module implementations such as `sample_migrate_v0_v1` and `sample_migrate_v1_v2`.
 
 ### Initial Schema
 
-The DB builder is initialized with the very first version schema. This represents the baseline state from which all migrations are applied:
+The migration builder is initialized with the very first version schema. This represents the baseline state from which all migrations are applied:
 
 ```rust
 const INITIAL_SCHEMA: &[ColumnDescriptor] = &[
@@ -49,7 +56,7 @@ const INITIAL_SCHEMA: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<CfV0_2Column>(),
 ];
 
-DB::builder(db_path, INITIAL_SCHEMA)
+DB::builder(INITIAL_SCHEMA)
 ```
 
 ### Migration Steps
@@ -86,7 +93,7 @@ Example:
 const DATA_V1: &[ColumnDescriptor] = &[ColumnDescriptor::new::<DataColumn>()];
 const DATA_V2: &[ColumnDescriptor] = &[ColumnDescriptor::new::<DataV2Column>()];
 
-DB::builder(db_path, DATA_V1)
+DB::builder(DATA_V1)
     // Step 1: Create new CF and migrate data
     .add_cfs(DATA_V2, |db| {
         // Read from "data", write to "data_v2"
@@ -101,6 +108,8 @@ DB::builder(db_path, DATA_V1)
     // Step 2: Remove old CF
     .drop_cfs(DATA_V1)?
     .finalize(DATA_V2)?
+    .open(db_path)?
+    .migrate()?
 ```
 
 ### Final Schema Validation
