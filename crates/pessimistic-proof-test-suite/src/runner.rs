@@ -2,7 +2,10 @@ use eyre::eyre;
 use pessimistic_proof::NetworkState;
 pub use pessimistic_proof::{multi_batch_header::MultiBatchHeader, PessimisticProofOutput};
 pub use sp1_sdk::{ExecutionReport, SP1Proof};
-use sp1_sdk::{SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin, SP1VerifyingKey};
+use sp1_sdk::{
+    blocking::{EnvProver, ProveRequest, Prover, ProverClient},
+    Elf, ProvingKey, SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin, SP1VerifyingKey,
+};
 
 use crate::PESSIMISTIC_PROOF_ELF;
 
@@ -10,7 +13,7 @@ pub struct ProofOutput {}
 
 /// A convenient interface to run the pessimistic proof ELF bytecode.
 pub struct Runner {
-    client: sp1_sdk::EnvProver,
+    client: EnvProver,
 }
 
 impl Default for Runner {
@@ -22,11 +25,11 @@ impl Default for Runner {
 impl Runner {
     /// Create a new pessimistic proof client.
     pub fn new() -> Self {
-        Self::from_client(sp1_sdk::ProverClient::from_env())
+        Self::from_client(ProverClient::from_env())
     }
 
     /// Create a new pessimistic proof client from a custom generic client.
-    pub fn from_client(client: sp1_sdk::EnvProver) -> Self {
+    pub fn from_client(client: EnvProver) -> Self {
         Self { client }
     }
 
@@ -54,7 +57,7 @@ impl Runner {
         let stdin = Self::prepare_stdin(state, batch_header);
         let (public_vals, report) = self
             .client
-            .execute(PESSIMISTIC_PROOF_ELF, &stdin)
+            .execute(Elf::Static(PESSIMISTIC_PROOF_ELF), stdin)
             .run()
             .map_err(|e| eyre!(e))?;
 
@@ -64,8 +67,11 @@ impl Runner {
     }
 
     pub fn get_vkey(&self) -> SP1VerifyingKey {
-        let (_pk, vk) = self.client.setup(PESSIMISTIC_PROOF_ELF);
-        vk
+        self.client
+            .setup(Elf::Static(PESSIMISTIC_PROOF_ELF))
+            .unwrap()
+            .verifying_key()
+            .clone()
     }
 
     /// Generate one plonk proof.
@@ -79,11 +85,15 @@ impl Runner {
         PessimisticProofOutput,
     )> {
         let stdin = Self::prepare_stdin(state, batch_header);
-        let (pk, vk) = self.client.setup(PESSIMISTIC_PROOF_ELF);
+        let pk = self
+            .client
+            .setup(Elf::Static(PESSIMISTIC_PROOF_ELF))
+            .map_err(|e| eyre!(e))?;
+        let vk = pk.verifying_key().clone();
 
         let proof = self
             .client
-            .prove(&pk, &stdin)
+            .prove(&pk, stdin)
             .plonk()
             .run()
             .map_err(|e| eyre!(e))?;

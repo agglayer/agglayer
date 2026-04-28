@@ -1,14 +1,14 @@
 use agglayer_types::{
-    aggchain_proof::{AggchainProof, MultisigPayload, Proof, SP1StarkWithContext},
+    aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof},
     bincode, Address, Digest, U256,
 };
+use agglayer_interop_types_v13 as legacy_interop_types;
 use alloy_primitives::Bytes;
 use pessimistic_proof::unified_bridge::{
     AggchainProofPublicValues, BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex,
     ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
 };
 use pessimistic_proof_test_suite::sample_data;
-use sp1_sdk::Prover;
 
 use super::*;
 use crate::{schema::Codec, types::generated::agglayer::storage::v0 as proto};
@@ -16,8 +16,6 @@ use crate::{schema::Codec, types::generated::agglayer::storage::v0 as proto};
 mod header;
 mod status;
 mod structure;
-
-const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
 
 #[rstest::rstest]
 #[case(0.into(), [0, 0, 0, 0])]
@@ -37,6 +35,22 @@ fn load_sample_bytes(filename: &str) -> Vec<u8> {
     hex::decode(std::fs::read(path).unwrap().trim_ascii()).unwrap()
 }
 
+impl PartialEq for AggchainDataV1<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        bincode::default().serialize(self).unwrap() == bincode::default().serialize(other).unwrap()
+    }
+}
+
+impl Eq for AggchainDataV1<'_> {}
+
+impl PartialEq for CertificateV1<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        bincode::default().serialize(self).unwrap() == bincode::default().serialize(other).unwrap()
+    }
+}
+
+impl Eq for CertificateV1<'_> {}
+
 impl From<NetworkId> for NetworkIdV0 {
     fn from(value: NetworkId) -> Self {
         let [b3, b2, b1, b0] = value.to_u32().to_be_bytes();
@@ -55,24 +69,34 @@ fn digest(byte: u8) -> Digest {
     Digest([byte; 32])
 }
 
-fn mock_sp1_proof(version: &str) -> Proof {
-    let client = sp1_sdk::ProverClient::builder().mock().build();
+const EMPTY_ELF: &[u8] = agglayer_types::testutils::EMPTY_ELF_V5;
+
+fn legacy_sp1_proof(version: &str) -> legacy_interop_types::aggchain_proof::Proof {
+    use sp1_sdk_v5::Prover as _;
+
+    let client = sp1_sdk_v5::ProverClient::builder().mock().build();
     let (proving_key, vkey) = client.setup(EMPTY_ELF);
-    let proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
+    let proof = sp1_sdk_v5::SP1ProofWithPublicValues::create_mock_proof(
         &proving_key,
-        sp1_sdk::SP1PublicValues::new(),
-        sp1_sdk::SP1ProofMode::Compressed,
-        sp1_sdk::SP1_CIRCUIT_VERSION,
+        sp1_sdk_v5::SP1PublicValues::new(),
+        sp1_sdk_v5::SP1ProofMode::Compressed,
+        sp1_sdk_v5::SP1_CIRCUIT_VERSION,
     )
     .proof
     .try_as_compressed()
     .unwrap();
 
-    Proof::SP1Stark(SP1StarkWithContext {
-        proof,
-        vkey,
-        version: version.to_owned(),
-    })
+    legacy_interop_types::aggchain_proof::Proof::SP1Stark(
+        legacy_interop_types::aggchain_proof::SP1StarkWithContext {
+            proof,
+            vkey,
+            version: version.to_owned(),
+        },
+    )
+}
+
+fn mock_sp1_proof(version: &str) -> Proof {
+    agglayer_types::testutils::dummy_sp1_stark_proof_with_version(version)
 }
 
 fn proto_aggchain_data(aggchain_data: AggchainData) -> proto::AggchainData {
@@ -177,8 +201,8 @@ fn proto_certificate(aggchain_data: proto::AggchainData) -> proto::Certificate {
 }
 
 impl AggchainDataV1<'static> {
-    fn proof0() -> Proof {
-        mock_sp1_proof("1.2.3")
+    fn proof0() -> legacy_interop_types::aggchain_proof::Proof {
+        legacy_sp1_proof(sp1_sdk_v5::SP1_CIRCUIT_VERSION)
     }
 
     fn aggchain_proof_public_values0(aggchain_params: Digest) -> AggchainProofPublicValues {
@@ -346,81 +370,6 @@ impl CertificateV1<'static> {
     }
 }
 
-impl CertificateV1<'_> {
-    fn into_owned(self) -> CertificateV1<'static> {
-        let Self {
-            version,
-            network_id,
-            height,
-            prev_local_exit_root,
-            new_local_exit_root,
-            bridge_exits,
-            imported_bridge_exits,
-            aggchain_data,
-            metadata,
-            custom_chain_data,
-            l1_info_tree_leaf_count,
-        } = self;
-
-        CertificateV1 {
-            version,
-            network_id,
-            height,
-            prev_local_exit_root,
-            new_local_exit_root,
-            bridge_exits: bridge_exits.into_owned().into(),
-            imported_bridge_exits: imported_bridge_exits.into_owned().into(),
-            aggchain_data: match aggchain_data {
-                AggchainDataV1::ECDSA { signature } => AggchainDataV1::ECDSA { signature },
-                AggchainDataV1::GenericNoSignature {
-                    proof,
-                    aggchain_params,
-                } => AggchainDataV1::GenericNoSignature {
-                    proof: Cow::Owned(proof.into_owned()),
-                    aggchain_params,
-                },
-                AggchainDataV1::GenericWithSignature {
-                    proof,
-                    aggchain_params,
-                    signature,
-                } => AggchainDataV1::GenericWithSignature {
-                    proof: Cow::Owned(proof.into_owned()),
-                    aggchain_params,
-                    signature: Cow::Owned(signature.into_owned()),
-                },
-                AggchainDataV1::GenericWithPublicValues {
-                    proof,
-                    aggchain_params,
-                    signature,
-                    public_values,
-                } => AggchainDataV1::GenericWithPublicValues {
-                    proof: Cow::Owned(proof.into_owned()),
-                    aggchain_params,
-                    signature,
-                    public_values: Cow::Owned(public_values.into_owned()),
-                },
-                AggchainDataV1::MultisigOnly { multisig } => AggchainDataV1::MultisigOnly {
-                    multisig: Cow::Owned(multisig.into_owned()),
-                },
-                AggchainDataV1::MultisigAndAggchainProof {
-                    multisig,
-                    proof,
-                    aggchain_params,
-                    public_values,
-                } => AggchainDataV1::MultisigAndAggchainProof {
-                    multisig: Cow::Owned(multisig.into_owned()),
-                    proof: Cow::Owned(proof.into_owned()),
-                    aggchain_params,
-                    public_values: public_values.map(|pv| Cow::Owned(pv.into_owned())),
-                },
-            },
-            metadata,
-            custom_chain_data: Cow::Owned(custom_chain_data.into_owned()),
-            l1_info_tree_leaf_count,
-        }
-    }
-}
-
 #[rstest::rstest]
 #[case(CertificateV0::test0(), &[0x00, 0x00, 0x00, 55])]
 #[case(CertificateV0::test0().with_network_id(0x123456.into()), &[0x00, 0x12, 0x34, 0x56])]
@@ -431,16 +380,17 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 }
 
 #[rstest::rstest]
-#[case(CertificateV0::test0())]
-#[case(CertificateV1::test0())]
-#[case(CertificateV1::test1())]
-#[case(CertificateV1::test4())]
-#[case(CertificateV1::test5())]
-#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), Height::new(998))).into_owned())]
-fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
+#[case(CertificateV0::test0(), Certificate::from(CertificateV0::test0()))]
+#[case(CertificateV1::test0(), Certificate::try_from(CertificateV1::test0()).unwrap())]
+#[case(CertificateV1::test1(), Certificate::try_from(CertificateV1::test1()).unwrap())]
+#[case(CertificateV1::test4(), Certificate::try_from(CertificateV1::test4()).unwrap())]
+#[case(CertificateV1::test5(), Certificate::try_from(CertificateV1::test5()).unwrap())]
+fn encoding_roundtrip_consistent_with_into<T>(#[case] orig: T, #[case] converted: Certificate)
+where
+    T: Serialize,
+{
     let bytes = bincode_codec().serialize(&orig).unwrap();
     let decoded = Certificate::decode(&bytes).unwrap();
-    let converted = orig.into();
 
     assert_eq!(converted, decoded);
 }

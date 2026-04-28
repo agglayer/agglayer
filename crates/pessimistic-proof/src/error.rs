@@ -42,7 +42,22 @@ impl From<SP1VerificationError> for ProofVerificationError {
             SP1VerificationError::InvalidPublicValues => {
                 ProofVerificationError::InvalidPublicValues
             }
+            SP1VerificationError::UnexpectedExitCode(code) => {
+                ProofVerificationError::Other(format!("Unexpected exit code: {code}"))
+            }
             SP1VerificationError::Other(error) => ProofVerificationError::Other(error.to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ProofVerificationError, SP1VerificationError};
+
+    #[test]
+    fn maps_unexpected_exit_code_to_other() {
+        let err = ProofVerificationError::from(SP1VerificationError::UnexpectedExitCode(7));
+
+        assert_eq!(err, ProofVerificationError::Other("Unexpected exit code: 7".to_owned()));
     }
 }

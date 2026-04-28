@@ -127,7 +127,7 @@ impl L1TransactionFetcher for L1Rpc {
 async fn submit_certificate_preserves_unsupported_proof_version_error() {
     let tmp = TempDBDir::new();
     let config = Arc::new(Config::new(&tmp.path));
-    let certificate = generic_certificate_proto("v6.0.1");
+    let certificate = generic_certificate_proto("v5.2.2");
 
     let (mut client, tx, jh) = start_server_with_certificate_submission_service(config).await;
 
@@ -152,7 +152,7 @@ async fn submit_certificate_preserves_unsupported_proof_version_error() {
     assert_eq!(error_info.domain, SUBMIT_CERTIFICATE_METHOD_PATH);
     assert_eq!(
         error_info.metadata.get("proof_version"),
-        Some(&"v6.0.1".to_owned())
+        Some(&"v5.2.2".to_owned())
     );
 
     tx.send(()).unwrap();

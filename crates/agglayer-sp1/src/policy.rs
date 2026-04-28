@@ -8,12 +8,12 @@ pub struct AcceptancePolicy {
 }
 
 impl AcceptancePolicy {
-    /// Default policy for this milestone: read v5 + v6 rows from storage;
-    /// execute and write only the versions the active SDK supports (v5).
+    /// Default policy for this migration phase: read both legacy SP1 v5 and
+    /// current SP1 v6 envelopes, but execute and write only v6.
     pub const DEFAULT: Self = Self {
         readable: &[Sp1ProofVersion::V5, Sp1ProofVersion::V6],
-        executable: &[Sp1ProofVersion::V5],
-        writable: &[Sp1ProofVersion::V5],
+        executable: &[Sp1ProofVersion::V6],
+        writable: &[Sp1ProofVersion::V6],
     };
 
     pub fn ensure_readable(&self, version: Sp1ProofVersion, raw: &str) -> Result<(), ProofError> {

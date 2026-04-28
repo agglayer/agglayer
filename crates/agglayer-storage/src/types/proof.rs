@@ -137,32 +137,16 @@ impl TryFrom<proto::Proof> for TypedProof {
 #[cfg(test)]
 mod tests {
     use agglayer_sp1::ProofError;
-    use agglayer_types::aggchain_proof::{Proof as TypedProof, SP1StarkWithContext};
-    use sp1_sdk::Prover;
+    use agglayer_types::{
+        aggchain_proof::Proof as TypedProof,
+        testutils::dummy_sp1_stark_proof_with_version,
+    };
 
     use super::*;
     use crate::types::generated::agglayer::storage::v0::{ProofMode, ProofSystem};
 
-    const EMPTY_ELF: &[u8] = include_bytes!("certificate/tests/empty.elf");
-
     fn mock_proof(version: &str) -> TypedProof {
-        let client = sp1_sdk::ProverClient::builder().mock().build();
-        let (proving_key, vkey) = client.setup(EMPTY_ELF);
-        let proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
-            &proving_key,
-            sp1_sdk::SP1PublicValues::new(),
-            sp1_sdk::SP1ProofMode::Compressed,
-            sp1_sdk::SP1_CIRCUIT_VERSION,
-        )
-        .proof
-        .try_as_compressed()
-        .unwrap();
-
-        TypedProof::SP1Stark(SP1StarkWithContext {
-            proof,
-            vkey,
-            version: version.to_owned(),
-        })
+        dummy_sp1_stark_proof_with_version(version)
     }
 
     #[test]

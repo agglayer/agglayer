@@ -3,23 +3,27 @@ version = "0.1.0"
 name = "sp1-ecdsa-verification-program"
 edition = "2021"
 
+[workspace]
+
 [dependencies]
-alloy-primitives.workspace = true
+alloy-primitives = { version = "1.5.7", features = ["serde", "k256"] }
 bincode = "1.3.3"
-sp1-zkvm = "=5.2.4"
-tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0", features = [
+sp1-zkvm = "=6.1.0"
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-6.0.0", features = [
     "keccak",
 ] }
 
 ecdsa-proof-lib = { path = "../lib/", default-features = false }
 
 # Inject sp1-friendly versions of the relevant crypto packages.
+# The `sp1-6.0.0` patch tags cover the entire SP1 6.x line, including 6.1.0.
 
 [patch.crates-io]
 
-sha2-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.8-sp1-4.0.0" }
-sha3-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha3", tag = "patch-sha3-0.10.8-sp1-4.0.0" }
-crypto-bigint = { git = "https://github.com/sp1-patches/RustCrypto-bigint", tag = "patch-0.5.5-sp1-4.0.0" }
+k256 = { git = "https://github.com/sp1-patches/elliptic-curves", tag = "patch-k256-13.4-sp1-6.0.0" }
+sha2-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.8-sp1-6.0.0" }
+sha3-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha3", tag = "patch-sha3-0.10.8-sp1-6.0.0" }
+crypto-bigint = { git = "https://github.com/sp1-patches/RustCrypto-bigint", tag = "patch-0.5.5-sp1-6.0.0" }
 ecdsa-core = { git = "https://github.com/sp1-patches/signatures", package = "ecdsa", tag = "patch-16.9-sp1-4.1.0" }
 
 [package.metadata.cargo-udeps.ignore]
