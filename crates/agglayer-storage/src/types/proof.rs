@@ -1,4 +1,4 @@
-use agglayer_sp1::{version_kind, AcceptancePolicy, ProofError, ProofExt};
+use agglayer_sp1::{version_kind, ProofError, ProofExt};
 use agglayer_types::aggchain_proof::{Proof as TypedProof, SP1StarkWithContext};
 
 use crate::{schema::bincode_codec, types::generated::agglayer::storage::v0 as proto};
@@ -95,9 +95,8 @@ impl TryFrom<&TypedProof> for proto::Proof {
     type Error = ProofConversionError;
 
     fn try_from(value: &TypedProof) -> Result<Self, Self::Error> {
-        value.ensure_writable(&AcceptancePolicy::DEFAULT)?;
-
         let sp1 = value.sp1();
+        version_kind(&sp1.version)?;
 
         Ok(Self {
             proof_system: proto::ProofSystem::Sp1 as i32,
@@ -125,13 +124,7 @@ impl TryFrom<proto::Proof> for TypedProof {
         }
 
         let version = value.version;
-        let proof_version = version_kind(&version).map_err(|err| match err {
-            ProofError::UnsupportedSp1VersionMajor { version } => {
-                ProofError::UnsupportedReadableSp1Version { version }
-            }
-            other => other,
-        })?;
-        AcceptancePolicy::DEFAULT.ensure_readable(proof_version, &version)?;
+        version_kind(&version)?;
 
         Ok(TypedProof::SP1Stark(SP1StarkWithContext {
             proof: deserialize_sp1_proof(value.proof.as_ref(), &version)?,
@@ -215,17 +208,26 @@ mod tests {
     }
 
     #[test]
-    fn proof_proto_rejects_unsupported_write_version() {
+    fn proof_proto_writes_supported_read_only_versions() {
+        let proof = mock_proof("v6.0.1");
+
+        let proto = proto::Proof::try_from(&proof).unwrap();
+
+        assert_eq!(proto.version, "v6.0.1");
+    }
+
+    #[test]
+    fn proof_proto_rejects_unknown_write_version() {
         let err = proto::Proof::try_from(&mock_proof("v7.0.0")).unwrap_err();
 
         assert!(matches!(
             err,
-            ProofConversionError::Sp1(ProofError::UnsupportedWritableSp1Version { .. })
+            ProofConversionError::Sp1(ProofError::UnsupportedSp1VersionMajor { .. })
         ));
     }
 
     #[test]
-    fn proof_proto_rejects_unsupported_read_version() {
+    fn proof_proto_rejects_unknown_read_version() {
         let proof = mock_proof("v5.2.2");
         let mut proto = proto::Proof::try_from(&proof).unwrap();
         proto.version = "v7.0.0".to_owned();
@@ -234,7 +236,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            ProofConversionError::Sp1(ProofError::UnsupportedReadableSp1Version { .. })
+            ProofConversionError::Sp1(ProofError::UnsupportedSp1VersionMajor { .. })
         ));
     }
 
