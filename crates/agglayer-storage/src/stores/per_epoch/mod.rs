@@ -21,8 +21,10 @@ use super::{
 use crate::{
     backup::BackupClient,
     columns::epochs::{
-        certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
-        metadata::PerEpochMetadataColumn, proofs::ProofPerIndexColumn,
+        certificates::{CertificatePerIndexColumn, CertificatePerIndexProtoColumn},
+        end_checkpoint::EndCheckpointColumn,
+        metadata::PerEpochMetadataColumn,
+        proofs::ProofPerIndexColumn,
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
@@ -50,7 +52,12 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::EPOCHS_DB)
+        DB::builder(path, cf_definitions::EPOCHS_DB_V0)?
+            .add_cfs(
+                cf_definitions::EPOCH_CERTIFICATE_PROTO_CFS,
+                backfill_epoch_certificates_proto_from_legacy_bincode,
+            )?
+            .finalize(cf_definitions::EPOCHS_DB)
     }
 
     pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
@@ -175,13 +182,21 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         } else {
             // For read-write access, calculate the next index from existing certificates
             if let Some(Ok((index, _))) = db
-                .iter_with_direction::<CertificatePerIndexColumn>(
+                .iter_with_direction::<CertificatePerIndexProtoColumn>(
                     ReadOptions::default(),
                     rocksdb::Direction::Reverse,
                 )?
                 .next()
             {
                 // We're starting from the next index after the last one found in the database.
+                AtomicU64::new(index.as_u64() + 1)
+            } else if let Some(Ok((index, _))) = db
+                .iter_with_direction::<CertificatePerIndexColumn>(
+                    ReadOptions::default(),
+                    rocksdb::Direction::Reverse,
+                )?
+                .next()
+            {
                 AtomicU64::new(index.as_u64() + 1)
             } else {
                 AtomicU64::new(0)
@@ -237,6 +252,27 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     fn lock_for_packing(&self) -> RwLockWriteGuard<'_, bool> {
         self.packing_lock.write()
     }
+}
+
+/// Migration step for the certificate serialization switch from the legacy
+/// bincode epoch certificate CF to the proto-backed CF.
+///
+/// This keeps the original CF untouched while populating the new one so we can
+/// finish validation before removing the legacy family in a later cleanup.
+fn backfill_epoch_certificates_proto_from_legacy_bincode(
+    db: &crate::storage::DbAccess,
+) -> Result<(), crate::storage::DBMigrationErrorDetails> {
+    let keys = db
+        .keys::<CertificatePerIndexColumn>()?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for key in keys {
+        if let Some(certificate) = db.get::<CertificatePerIndexColumn>(&key)? {
+            db.put::<CertificatePerIndexProtoColumn>(&key, &certificate)?;
+        }
+    }
+
+    Ok(())
 }
 
 impl<PendingStore, StateStore> PerEpochWriter for PerEpochStore<PendingStore, StateStore>
@@ -407,7 +443,7 @@ where
 
         // Adding the certificate and proof to the current epoch store
         self.db
-            .put::<CertificatePerIndexColumn>(&certificate_index, &certificate)?;
+            .put::<CertificatePerIndexProtoColumn>(&certificate_index, &certificate)?;
 
         self.db
             .put::<ProofPerIndexColumn>(&certificate_index, &proof)?;
@@ -493,7 +529,7 @@ where
         &self,
         index: CertificateIndex,
     ) -> Result<Option<Certificate>, Error> {
-        Ok(self.db.get::<CertificatePerIndexColumn>(&index)?)
+        Ok(self.db.get::<CertificatePerIndexProtoColumn>(&index)?)
     }
 
     fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error> {

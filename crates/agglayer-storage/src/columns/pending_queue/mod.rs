@@ -1,7 +1,7 @@
 use agglayer_types::{Certificate, Height, NetworkId};
 use serde::{Deserialize, Serialize};
 
-use super::{ColumnSchema, PENDING_QUEUE_CF};
+use super::{ColumnSchema, PENDING_QUEUE_CF, PENDING_QUEUE_PROTO_CF};
 
 /// Column family containing the pending certificates queue.
 ///
@@ -22,4 +22,14 @@ impl ColumnSchema for PendingQueueColumn {
     type Value = Certificate;
 
     const COLUMN_FAMILY_NAME: &'static str = PENDING_QUEUE_CF;
+}
+
+/// Proto-backed column family containing the pending certificates queue.
+pub(crate) struct PendingQueueProtoColumn;
+
+impl ColumnSchema for PendingQueueProtoColumn {
+    type Key = PendingQueueKey;
+    type Value = Certificate;
+
+    const COLUMN_FAMILY_NAME: &'static str = PENDING_QUEUE_PROTO_CF;
 }

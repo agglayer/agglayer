@@ -12,7 +12,7 @@ use crate::{
         latest_proven_certificate_per_network::{
             LatestProvenCertificatePerNetworkColumn, ProvenCertificate,
         },
-        pending_queue::{PendingQueueColumn, PendingQueueKey},
+        pending_queue::{PendingQueueColumn, PendingQueueKey, PendingQueueProtoColumn},
         proof_per_certificate::ProofPerCertificateColumn,
     },
     error::Error,
@@ -20,6 +20,9 @@ use crate::{
 };
 
 mod cf_definitions;
+
+#[cfg(test)]
+mod tests;
 
 /// A logical store for pending.
 #[derive(Clone)]
@@ -29,7 +32,12 @@ pub struct PendingStore {
 
 impl PendingStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::PENDING_DB)
+        DB::builder(path, cf_definitions::PENDING_DB_V0)?
+            .add_cfs(
+                cf_definitions::PENDING_CERTIFICATE_PROTO_CFS,
+                backfill_pending_certificates_proto_from_legacy_bincode,
+            )?
+            .finalize(cf_definitions::PENDING_DB)
     }
 
     pub fn new(db: Arc<DB>) -> Self {
@@ -41,15 +49,35 @@ impl PendingStore {
     }
 }
 
+/// Migration step for the certificate serialization switch from the legacy
+/// bincode pending queue CF to the proto-backed CF.
+///
+/// The legacy CF stays in place for this PR, but runtime reads and writes only
+/// use the proto CF after this backfill completes.
+fn backfill_pending_certificates_proto_from_legacy_bincode(
+    db: &crate::storage::DbAccess,
+) -> Result<(), crate::storage::DBMigrationErrorDetails> {
+    let keys = db
+        .keys::<PendingQueueColumn>()?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for key in keys {
+        if let Some(certificate) = db.get::<PendingQueueColumn>(&key)? {
+            db.put::<PendingQueueProtoColumn>(&key, &certificate)?;
+        }
+    }
+
+    Ok(())
+}
+
 impl PendingCertificateWriter for PendingStore {
     fn remove_pending_certificate(
         &self,
         network_id: NetworkId,
         height: Height,
     ) -> Result<(), Error> {
-        Ok(self
-            .db
-            .delete::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?)
+        let key = PendingQueueKey(network_id, height);
+        Ok(self.db.delete::<PendingQueueProtoColumn>(&key)?)
     }
     fn set_latest_pending_certificate_per_network(
         &self,
@@ -85,7 +113,7 @@ impl PendingCertificateWriter for PendingStore {
         self.set_latest_pending_certificate_per_network(&network_id, &height, &certificate.hash())?;
         Ok(self
             .db
-            .put::<PendingQueueColumn>(&PendingQueueKey(network_id, height), certificate)?)
+            .put::<PendingQueueProtoColumn>(&PendingQueueKey(network_id, height), certificate)?)
     }
 
     fn insert_generated_proof(
@@ -138,7 +166,7 @@ impl PendingCertificateReader for PendingStore {
     ) -> Result<Option<Certificate>, Error> {
         Ok(self
             .db
-            .get::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?)
+            .get::<PendingQueueProtoColumn>(&PendingQueueKey(network_id, height))?)
     }
 
     fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
@@ -178,9 +206,10 @@ impl PendingCertificateReader for PendingStore {
         &self,
         keys: &[(NetworkId, Height)],
     ) -> Result<Vec<Option<Certificate>>, Error> {
-        Ok(self
-            .db
-            .multi_get::<PendingQueueColumn>(keys.iter().map(|(n, h)| PendingQueueKey(*n, *h)))?)
+        Ok(self.db.multi_get::<PendingQueueProtoColumn>(
+            keys.iter()
+                .map(|(network_id, height)| PendingQueueKey(*network_id, *height)),
+        )?)
     }
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error> {

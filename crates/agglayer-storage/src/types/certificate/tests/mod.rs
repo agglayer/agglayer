@@ -514,10 +514,10 @@ fn bad_format() {
     }
 
     for v in NEXT_VERSION..=u8::MAX {
-        match Certificate::decode(&[v]).unwrap_err() {
-            CodecError::BadCertificateVersion { version } => assert_eq!(version, v),
-            err => panic!("Unexpected error: {err:?}"),
-        }
+        assert!(matches!(
+            Certificate::decode(&[v]).unwrap_err(),
+            CodecError::ProtobufDeserialization(_) | CodecError::Conversion(_)
+        ));
     }
 }
 
