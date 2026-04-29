@@ -33,6 +33,8 @@ fn serialize_sp1_proof<T: serde::Serialize>(
     proof: &T,
     version: &str,
 ) -> Result<Vec<u8>, ProofConversionError> {
+    version_kind(version)?;
+
     bincode_codec()
         .serialize(proof)
         .map_err(|source| ProofConversionError::SerializeSp1Proof {
@@ -45,6 +47,8 @@ fn serialize_sp1_vkey<T: serde::Serialize>(
     vkey: &T,
     version: &str,
 ) -> Result<Vec<u8>, ProofConversionError> {
+    version_kind(version)?;
+
     bincode_codec()
         .serialize(vkey)
         .map_err(|source| ProofConversionError::SerializeSp1Vkey {
@@ -63,6 +67,8 @@ fn deserialize_sp1_proof<T: serde::de::DeserializeOwned>(
     bytes: &[u8],
     version: &str,
 ) -> Result<T, ProofConversionError> {
+    version_kind(version)?;
+
     std::panic::catch_unwind(|| bincode_codec().deserialize(bytes))
         .map_err(|_| ProofError::DeserializeSp1Proof {
             version: version.to_owned(),
@@ -79,6 +85,8 @@ fn deserialize_sp1_vkey<T: serde::de::DeserializeOwned>(
     bytes: &[u8],
     version: &str,
 ) -> Result<T, ProofConversionError> {
+    version_kind(version)?;
+
     std::panic::catch_unwind(|| bincode_codec().deserialize(bytes))
         .map_err(|_| ProofError::DeserializeSp1Vkey {
             version: version.to_owned(),
@@ -103,7 +111,6 @@ impl TryFrom<&TypedProof> for proto::Proof {
             version: sp1.version.clone(),
             mode: proto::ProofMode::Compressed as i32,
             proof: serialize_sp1_proof(&sp1.proof, &sp1.version)?.into(),
-            public_values: Default::default(),
             vkey: serialize_sp1_vkey(&sp1.vkey, &sp1.version)?.into(),
         })
     }
@@ -195,16 +202,13 @@ mod tests {
     }
 
     #[test]
-    fn proof_proto_accepts_non_empty_public_values() {
-        let proof = mock_proof("v5.2.2");
-        let TypedProof::SP1Stark(expected) = proof.clone();
+    fn proof_proto_roundtrip_is_lossless_for_read_only_versions() {
+        let proof = mock_proof("v6.0.1");
 
-        let mut proto = proto::Proof::try_from(&proof).unwrap();
-        proto.public_values = vec![9, 8, 7].into();
-
+        let proto = proto::Proof::try_from(&proof).unwrap();
         let decoded = TypedProof::try_from(proto).unwrap();
 
-        assert_eq!(decoded, TypedProof::SP1Stark(expected));
+        assert_eq!(decoded, proof);
     }
 
     #[test]
@@ -247,7 +251,6 @@ mod tests {
             version: "v5.2.2".to_owned(),
             mode: ProofMode::Compressed as i32,
             proof: vec![0xde, 0xad, 0xbe, 0xef].into(),
-            public_values: Default::default(),
             vkey: vec![0xca, 0xfe].into(),
         })
         .unwrap_err();
@@ -265,7 +268,6 @@ mod tests {
             version: "v5.2.2".to_owned(),
             mode: ProofMode::Compressed as i32,
             proof: vec![1, 2, 3].into(),
-            public_values: Default::default(),
             vkey: vec![4, 5, 6].into(),
         })
         .unwrap_err();
