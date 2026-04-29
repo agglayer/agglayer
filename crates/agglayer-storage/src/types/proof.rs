@@ -33,6 +33,8 @@ fn serialize_sp1_proof<T: serde::Serialize>(
     proof: &T,
     version: &str,
 ) -> Result<Vec<u8>, ProofConversionError> {
+    version_kind(version)?;
+
     bincode_codec()
         .serialize(proof)
         .map_err(|source| ProofConversionError::SerializeSp1Proof {
@@ -45,6 +47,8 @@ fn serialize_sp1_vkey<T: serde::Serialize>(
     vkey: &T,
     version: &str,
 ) -> Result<Vec<u8>, ProofConversionError> {
+    version_kind(version)?;
+
     bincode_codec()
         .serialize(vkey)
         .map_err(|source| ProofConversionError::SerializeSp1Vkey {
@@ -63,6 +67,8 @@ fn deserialize_sp1_proof<T: serde::de::DeserializeOwned>(
     bytes: &[u8],
     version: &str,
 ) -> Result<T, ProofConversionError> {
+    version_kind(version)?;
+
     std::panic::catch_unwind(|| bincode_codec().deserialize(bytes))
         .map_err(|_| ProofError::DeserializeSp1Proof {
             version: version.to_owned(),
@@ -79,6 +85,8 @@ fn deserialize_sp1_vkey<T: serde::de::DeserializeOwned>(
     bytes: &[u8],
     version: &str,
 ) -> Result<T, ProofConversionError> {
+    version_kind(version)?;
+
     std::panic::catch_unwind(|| bincode_codec().deserialize(bytes))
         .map_err(|_| ProofError::DeserializeSp1Vkey {
             version: version.to_owned(),
