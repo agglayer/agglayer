@@ -19,8 +19,8 @@ use prover_config::{MockProverConfig, ProverType};
 use serial_test::serial;
 use sp1_sdk::{
     blocking::{EnvProver, Prover, ProverClient},
-    Elf, ProvingKey, SP1ProofMode, SP1ProofWithPublicValues, SP1PublicValues,
-    SP1VerificationError, SP1_CIRCUIT_VERSION,
+    Elf, ProvingKey, SP1ProofMode, SP1ProofWithPublicValues, SP1PublicValues, SP1VerificationError,
+    SP1_CIRCUIT_VERSION,
 };
 use tower::buffer::Buffer;
 

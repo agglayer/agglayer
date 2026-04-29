@@ -1,6 +1,6 @@
 use agglayer_interop_types::{aggchain_proof::AggchainData, LocalExitRoot};
-use agglayer_sp1::testutils::{EMPTY_ELF, EMPTY_ELF_V5};
 use agglayer_primitives::{Address, Digest, Hashable, Signature, B256};
+use agglayer_sp1::testutils::{EMPTY_ELF, EMPTY_ELF_V5};
 use pessimistic_proof::{
     core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion},
     keccak::keccak256_combine,
@@ -285,9 +285,11 @@ pub fn dummy_sp1_stark_proof_with_version(
                     );
                     let proof = dummy_proof.proof.try_as_compressed().unwrap();
 
-                    agglayer_interop_types::aggchain_proof::Proof::SP1Stark(
-                        sp1_stark_with_context(proof.as_ref(), &vkey, &version),
-                    )
+                    agglayer_interop_types::aggchain_proof::Proof::SP1Stark(sp1_stark_with_context(
+                        proof.as_ref(),
+                        &vkey,
+                        &version,
+                    ))
                 }
             })
             .join()
