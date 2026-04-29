@@ -2,9 +2,6 @@ syntax = "proto3";
 
 package agglayer.storage.v0;
 
-import "agglayer/storage/v0/ethereum_types.proto";
-import "agglayer/storage/v0/network_info.proto";
-
 // ECDSA signature with recovery byte (65 bytes).
 message Signature {
   // bytes representation of the signature.
