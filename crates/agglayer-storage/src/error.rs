@@ -49,6 +49,12 @@ pub enum Error {
 
     #[error(transparent)]
     SettlementCompat(#[from] crate::types::settlement::compat::Error),
+
+    #[error(
+        "Invalid pending certificate height for network {0}: attempted to insert height {1}, but \
+         latest pending height is {2}"
+    )]
+    InvalidPendingHeight(NetworkId, Height, Height),
 }
 
 impl From<Error> for CertificateStatusError {
