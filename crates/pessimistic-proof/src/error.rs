@@ -58,6 +58,9 @@ mod tests {
     fn maps_unexpected_exit_code_to_other() {
         let err = ProofVerificationError::from(SP1VerificationError::UnexpectedExitCode(7));
 
-        assert_eq!(err, ProofVerificationError::Other("Unexpected exit code: 7".to_owned()));
+        assert_eq!(
+            err,
+            ProofVerificationError::Other("Unexpected exit code: 7".to_owned())
+        );
     }
 }

@@ -23,8 +23,7 @@ use pessimistic_proof::{
 use prover_executor::{sp1_blocking, sp1_fast};
 use sp1_sdk::{
     blocking::{EnvProver, Prover, ProverClient},
-    Elf, ProvingKey, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError,
-    SP1VerifyingKey,
+    Elf, ProvingKey, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
 };
 use tower::{buffer::Buffer, util::BoxCloneService, Service, ServiceExt};
 use tracing::{debug, error, info, instrument, warn};
@@ -103,18 +102,23 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         #[cfg(any(test, feature = "testutils"))]
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
-            |_| testutils::verify_mock_proof_inputs(verifying_key, proof).map_err(eyre::Error::from)
+            |_| testutils::verify_mock_proof_inputs(verifying_key, proof)
+                .map_err(eyre::Error::from)
         );
 
-        Ok(sp1_fast(AssertUnwindSafe(|| verifier.verify(proof, verifying_key, None)))
-            .context("Failed verifying sp1 proof")??)
+        Ok(sp1_fast(AssertUnwindSafe(|| {
+            verifier.verify(proof, verifying_key, None)
+        }))
+        .context("Failed verifying sp1 proof")??)
     }
 }
 
 #[cfg(any(test, feature = "testutils"))]
 mod testutils {
     use anyhow::{anyhow, Result};
-    use sp1_sdk::{HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey};
+    use sp1_sdk::{
+        HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey,
+    };
 
     fn verify_mock_public_inputs(
         verifying_key: &SP1VerifyingKey,
@@ -147,10 +151,14 @@ mod testutils {
         proof: &SP1ProofWithPublicValues,
     ) -> Result<(), SP1VerificationError> {
         match &proof.proof {
-            SP1Proof::Plonk(plonk) => verify_mock_public_inputs(verifying_key, proof, &plonk.public_inputs)
-                .map_err(SP1VerificationError::Plonk),
-            SP1Proof::Groth16(groth16) => verify_mock_public_inputs(verifying_key, proof, &groth16.public_inputs)
-                .map_err(SP1VerificationError::Groth16),
+            SP1Proof::Plonk(plonk) => {
+                verify_mock_public_inputs(verifying_key, proof, &plonk.public_inputs)
+                    .map_err(SP1VerificationError::Plonk)
+            }
+            SP1Proof::Groth16(groth16) => {
+                verify_mock_public_inputs(verifying_key, proof, &groth16.public_inputs)
+                    .map_err(SP1VerificationError::Groth16)
+            }
             _ => Ok(()),
         }
     }

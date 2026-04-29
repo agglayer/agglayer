@@ -44,8 +44,10 @@ pub trait ProofExt {
     fn executable_sp1(&self) -> Result<CurrentSp1StarkWithContext, ProofError>;
 }
 
-pub type CurrentSp1StarkProof =
-    sp1_core_executor::SP1RecursionProof<sp1_primitives::SP1GlobalContext, sp1_hypercube::SP1PcsProofInner>;
+pub type CurrentSp1StarkProof = sp1_core_executor::SP1RecursionProof<
+    sp1_primitives::SP1GlobalContext,
+    sp1_hypercube::SP1PcsProofInner,
+>;
 
 #[derive(Clone)]
 pub struct CurrentSp1StarkWithContext {
@@ -116,18 +118,18 @@ pub fn current_sp1_stark_with_context<P: Serialize>(
     version: &str,
 ) -> Result<SP1StarkWithContext, ProofError> {
     Ok(SP1StarkWithContext {
-        proof: agglayer_interop_types::bincode::default().serialize(proof).map_err(|source| {
-            ProofError::DeserializeSp1Proof {
+        proof: agglayer_interop_types::bincode::default()
+            .serialize(proof)
+            .map_err(|source| ProofError::DeserializeSp1Proof {
                 version: version.to_owned(),
                 source,
-            }
-        })?,
-        vkey: agglayer_interop_types::bincode::default().serialize(vkey).map_err(|source| {
-            ProofError::DeserializeSp1Vkey {
+            })?,
+        vkey: agglayer_interop_types::bincode::default()
+            .serialize(vkey)
+            .map_err(|source| ProofError::DeserializeSp1Vkey {
                 version: version.to_owned(),
                 source,
-            }
-        })?,
+            })?,
         version: version.to_owned(),
     })
 }

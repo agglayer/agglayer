@@ -1,6 +1,6 @@
-use agglayer_sp1::{ProofError, ProofExt as _};
 use agglayer_interop_types::aggchain_proof::Proof;
 use agglayer_primitives::Digest;
+use agglayer_sp1::{ProofError, ProofExt as _};
 use pessimistic_proof::core;
 use unified_bridge::AggchainProofPublicValues;
 

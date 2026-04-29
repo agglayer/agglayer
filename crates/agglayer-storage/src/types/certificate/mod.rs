@@ -19,8 +19,8 @@
 
 use std::borrow::Cow;
 
-use agglayer_sp1::ProofExt as _;
 use agglayer_interop_types_v13 as legacy_interop_types;
+use agglayer_sp1::ProofExt as _;
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
     aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof, SP1StarkWithContext},

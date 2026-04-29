@@ -1,11 +1,11 @@
 use eyre::eyre;
 use pessimistic_proof::NetworkState;
 pub use pessimistic_proof::{multi_batch_header::MultiBatchHeader, PessimisticProofOutput};
-pub use sp1_sdk::{ExecutionReport, SP1Proof};
 use sp1_sdk::{
     blocking::{EnvProver, ProveRequest, Prover, ProverClient},
     Elf, ProvingKey, SP1ProofWithPublicValues, SP1PublicValues, SP1Stdin, SP1VerifyingKey,
 };
+pub use sp1_sdk::{ExecutionReport, SP1Proof};
 
 use crate::PESSIMISTIC_PROOF_ELF;
 

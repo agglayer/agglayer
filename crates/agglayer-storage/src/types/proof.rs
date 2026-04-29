@@ -145,8 +145,7 @@ impl TryFrom<proto::Proof> for TypedProof {
 mod tests {
     use agglayer_sp1::ProofError;
     use agglayer_types::{
-        aggchain_proof::Proof as TypedProof,
-        testutils::dummy_sp1_stark_proof_with_version,
+        aggchain_proof::Proof as TypedProof, testutils::dummy_sp1_stark_proof_with_version,
     };
 
     use super::*;

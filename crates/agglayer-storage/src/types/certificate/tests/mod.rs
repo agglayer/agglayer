@@ -1,8 +1,8 @@
+use agglayer_interop_types_v13 as legacy_interop_types;
 use agglayer_types::{
     aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof},
     bincode, Address, Digest, U256,
 };
-use agglayer_interop_types_v13 as legacy_interop_types;
 use alloy_primitives::Bytes;
 use pessimistic_proof::unified_bridge::{
     AggchainProofPublicValues, BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex,
