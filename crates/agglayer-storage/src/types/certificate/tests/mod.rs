@@ -1,4 +1,5 @@
 use agglayer_interop_types_v13 as legacy_interop_types;
+use agglayer_sp1::ProofExt as _;
 use agglayer_types::{
     aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof},
     bincode, Address, Digest, U256,
@@ -393,6 +394,31 @@ where
     let decoded = Certificate::decode(&bytes).unwrap();
 
     assert_eq!(converted, decoded);
+}
+
+/// Regression test for the storage-v1 migration boundary: legacy v5 proof
+/// bytes must remain readable by downstream `agglayer-sp1` hash helpers after
+/// decoding a stored V1 certificate row.
+#[test]
+fn regression_certificate_v1_decode_preserves_legacy_v5_vkey_hash() {
+    use sp1_sdk_v5::HashableKey as _;
+
+    let certificate = CertificateV1::test1();
+    let expected = match &certificate.aggchain_data {
+        AggchainDataV1::GenericWithSignature { proof, .. } => match proof.as_ref() {
+            legacy_interop_types::aggchain_proof::Proof::SP1Stark(proof) => proof.vkey.hash_bytes(),
+        },
+        _ => panic!("expected GenericWithSignature fixture"),
+    };
+
+    let bytes = bincode_codec().serialize(&certificate).unwrap();
+    let decoded = Certificate::decode(&bytes).unwrap();
+    let proof = match &decoded.aggchain_data {
+        AggchainData::Generic { proof, .. } => proof,
+        _ => panic!("expected Generic aggchain data after V1 decode"),
+    };
+
+    assert_eq!(proof.vkey_hash_bytes().unwrap(), expected);
 }
 
 #[rstest::rstest]

@@ -831,8 +831,8 @@ fn legacy_proof_into_current(
         legacy_interop_types::aggchain_proof::Proof::SP1Stark(proof) => {
             Proof::SP1Stark(SP1StarkWithContext {
                 version: proof.version,
-                proof: agglayer_types::bincode::sp1v4().serialize(proof.proof.as_ref())?,
-                vkey: agglayer_types::bincode::sp1v4().serialize(&proof.vkey)?,
+                proof: agglayer_types::bincode::default().serialize(proof.proof.as_ref())?,
+                vkey: agglayer_types::bincode::default().serialize(&proof.vkey)?,
             })
         }
     };
