@@ -106,8 +106,13 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
                 .map_err(eyre::Error::from)
         );
 
-        Ok(sp1_fast(AssertUnwindSafe(|| {
-            verifier.verify(proof, verifying_key, None)
+        // For mock proofs, call `MockProver::verify` directly (lenient string-equality
+        // check on public_inputs[0..=1]). For every other variant, the default
+        // `EnvProver::verify` runs the strict cryptographic path, which is correct
+        // for real proofs.
+        Ok(sp1_fast(AssertUnwindSafe(|| match verifier.as_ref() {
+            EnvProver::Mock(p) => p.verify(proof, verifying_key, None),
+            _ => verifier.verify(proof, verifying_key, None),
         }))
         .context("Failed verifying sp1 proof")??)
     }
