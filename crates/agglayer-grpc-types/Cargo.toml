@@ -6,13 +6,14 @@ license.workspace = true
 
 [features]
 default = []
-compat = ["dep:agglayer-types", "dep:thiserror"]
+compat = ["dep:agglayer-sp1", "dep:agglayer-types", "dep:thiserror"]
 
 [lints]
 workspace = true
 
 [dependencies]
 agglayer-interop = { workspace = true, features = ["grpc-compat"] }
+agglayer-sp1 = { workspace = true, optional = true }
 agglayer-types = { workspace = true, optional = true }
 
 
