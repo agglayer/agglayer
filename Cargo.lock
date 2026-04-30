@@ -253,7 +253,6 @@ dependencies = [
  "gcloud-sdk",
  "serde",
  "serial_test",
- "thiserror 2.0.18",
  "tracing",
 ]
 
@@ -556,8 +555,8 @@ dependencies = [
  "alloy-signer-local",
  "async-trait",
  "derive_more 2.1.1",
+ "eyre",
  "rstest",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
 ]

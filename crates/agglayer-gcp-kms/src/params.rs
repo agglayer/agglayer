@@ -5,9 +5,8 @@
 use std::str::FromStr;
 
 use agglayer_config::GcpKmsConfig;
+use eyre::eyre;
 use tracing::warn;
-
-pub use crate::error::Error;
 
 const GOOGLE_PROJECT_ID: &str = "GOOGLE_PROJECT_ID";
 const GOOGLE_LOCATION: &str = "GOOGLE_LOCATION";
@@ -42,20 +41,20 @@ fn from_env_or_conf<T>(
     env_key: &str,
     env_key_fallback: Option<&str>,
     config_value: &Option<T>,
-) -> Result<T, Error>
+) -> eyre::Result<T>
 where
     T: FromStr + Clone,
 {
     if let Ok(value) = std::env::var(env_key) {
         return value
             .parse()
-            .map_err(|_| Error::KmsConfig(env_key.to_string()));
+            .map_err(|_| eyre!("KMS configuration error: invalid value for key or env {env_key}"));
     } else if let Some(env_key_fallback) = env_key_fallback {
         if let Ok(value) = std::env::var(env_key_fallback) {
             warn!("Fallback KMS env:{env_key}=>env:{env_key_fallback}");
-            return value
-                .parse()
-                .map_err(|_| Error::KmsConfig(env_key_fallback.to_string()));
+            return value.parse().map_err(|_| {
+                eyre!("KMS configuration error: invalid value for key or env {env_key_fallback}")
+            });
         }
     }
 
@@ -63,11 +62,13 @@ where
         return Ok(config_value.clone());
     }
 
-    Err(Error::KmsConfig(env_key.to_string()))
+    Err(eyre!(
+        "KMS configuration error: missing key or env {env_key}"
+    ))
 }
 
 impl TryFrom<&GcpKmsConfig> for KMSParameters {
-    type Error = Error;
+    type Error = eyre::Report;
     fn try_from(config: &GcpKmsConfig) -> Result<Self, Self::Error> {
         // Get configuration values from environment variables or config
         let project_id = from_env_or_conf(GOOGLE_PROJECT_ID, None, &config.project_id)?;
@@ -222,5 +223,62 @@ mod test {
         assert_eq!(params.key_version_pp_settlement, 1);
         assert_eq!(params.key_name_tx_settlement, "conf_key_name_tx");
         assert_eq!(params.key_version_tx_settlement, 2);
+    }
+
+    #[test]
+    #[serial]
+    fn missing_required_value_reports_kms_context() {
+        let _raii = set_env(false, false);
+        let config = GcpKmsConfig {
+            project_id: None,
+            location: None,
+            keyring: None,
+            pp_settlement_key_name: None,
+            pp_settlement_key_version: None,
+            tx_settlement_key_name: None,
+            tx_settlement_key_version: None,
+        };
+
+        let error = crate::KMSParameters::try_from(&config).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "KMS configuration error: missing key or env GOOGLE_PROJECT_ID"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn invalid_primary_env_value_reports_kms_context() {
+        let _raii = (
+            set_env(false, false),
+            SetEnvGuard::new("GOOGLE_KEY_VERSION_PP_SETTLEMENT", Some("invalid")),
+        );
+        let config = config();
+
+        let error = crate::KMSParameters::try_from(&config).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "KMS configuration error: invalid value for key or env GOOGLE_KEY_VERSION_PP_SETTLEMENT"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn invalid_fallback_env_value_reports_kms_context() {
+        let _raii = (
+            set_env(false, false),
+            SetEnvGuard::new("GOOGLE_KEY_VERSION", Some("invalid")),
+        );
+        let mut config = config();
+        config.pp_settlement_key_version = None;
+
+        let error = crate::KMSParameters::try_from(&config).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "KMS configuration error: invalid value for key or env GOOGLE_KEY_VERSION"
+        );
     }
 }
