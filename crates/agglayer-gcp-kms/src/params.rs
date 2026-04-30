@@ -260,7 +260,8 @@ mod test {
 
         assert_eq!(
             error.to_string(),
-            "KMS configuration error: invalid value for key or env GOOGLE_KEY_VERSION_PP_SETTLEMENT"
+            "KMS configuration error: invalid value for key or env \
+             GOOGLE_KEY_VERSION_PP_SETTLEMENT"
         );
     }
 
