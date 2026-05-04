@@ -28,6 +28,7 @@ use crate::{
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
+    schema::ColumnDescriptor,
     storage::DB,
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
@@ -54,7 +55,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
         DB::builder(path, cf_definitions::EPOCHS_DB_V0)?
             .add_cfs(
-                cf_definitions::EPOCH_CERTIFICATE_PROTO_CFS,
+                &[ColumnDescriptor::new::<CertificatePerIndexProtoColumn>()],
                 backfill_epoch_certificates_proto_from_legacy_bincode,
             )?
             .finalize(cf_definitions::EPOCHS_DB)
@@ -180,7 +181,10 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             // For readonly access, we don't need to track the next index
             AtomicU64::new(0)
         } else {
-            // For read-write access, calculate the next index from existing certificates
+            // For read-write access, calculate the next index from existing certificates.
+            // The proto-backed CF is the single source of truth at runtime: legacy rows
+            // are backfilled into it during `init_db`, so consulting the legacy CF here
+            // would only re-read data that has already been migrated.
             if let Some(Ok((index, _))) = db
                 .iter_with_direction::<CertificatePerIndexProtoColumn>(
                     ReadOptions::default(),
@@ -189,14 +193,6 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 .next()
             {
                 // We're starting from the next index after the last one found in the database.
-                AtomicU64::new(index.as_u64() + 1)
-            } else if let Some(Ok((index, _))) = db
-                .iter_with_direction::<CertificatePerIndexColumn>(
-                    ReadOptions::default(),
-                    rocksdb::Direction::Reverse,
-                )?
-                .next()
-            {
                 AtomicU64::new(index.as_u64() + 1)
             } else {
                 AtomicU64::new(0)
@@ -255,24 +251,21 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
 }
 
 /// Migration step for the certificate serialization switch from the legacy
-/// bincode epoch certificate CF to the proto-backed CF.
+/// epoch certificate CF to the proto-backed CF.
 ///
-/// This keeps the original CF untouched while populating the new one so we can
-/// finish validation before removing the legacy family in a later cleanup.
+/// Delegates to
+/// [`super::migration_helpers::copy_legacy_certificate_cf_into_proto`],
+/// which streams the legacy keyspace, skips and logs rows whose bytes cannot
+/// be decoded as a certificate, and copies the rest into the proto CF. The
+/// original CF is left untouched so we can finish validation before
+/// removing it in a later cleanup step.
 fn backfill_epoch_certificates_proto_from_legacy_bincode(
     db: &crate::storage::DbAccess,
 ) -> Result<(), crate::storage::DBMigrationErrorDetails> {
-    let keys = db
-        .keys::<CertificatePerIndexColumn>()?
-        .collect::<Result<Vec<_>, _>>()?;
-
-    for key in keys {
-        if let Some(certificate) = db.get::<CertificatePerIndexColumn>(&key)? {
-            db.put::<CertificatePerIndexProtoColumn>(&key, &certificate)?;
-        }
-    }
-
-    Ok(())
+    super::migration_helpers::copy_legacy_certificate_cf_into_proto::<
+        CertificatePerIndexColumn,
+        CertificatePerIndexProtoColumn,
+    >(db, "epoch")
 }
 
 impl<PendingStore, StateStore> PerEpochWriter for PerEpochStore<PendingStore, StateStore>

@@ -27,6 +27,3 @@ pub const EPOCHS_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<StartCheckpointColumn>(),
     ColumnDescriptor::new::<EndCheckpointColumn>(),
 ];
-
-pub const EPOCH_CERTIFICATE_PROTO_CFS: &[ColumnDescriptor] =
-    &[ColumnDescriptor::new::<CertificatePerIndexProtoColumn>()];

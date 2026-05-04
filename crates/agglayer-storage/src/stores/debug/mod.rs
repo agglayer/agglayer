@@ -6,6 +6,7 @@ use super::interfaces::{reader::DebugReader, writer::DebugWriter};
 use crate::{
     columns::debug_certificates::{DebugCertificatesColumn, DebugCertificatesProtoColumn},
     error::Error,
+    schema::ColumnDescriptor,
     storage::DB,
 };
 
@@ -29,7 +30,7 @@ impl DebugStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
         DB::builder(path, cf_definitions::DEBUG_DB_V0)?
             .add_cfs(
-                cf_definitions::DEBUG_CERTIFICATE_PROTO_CFS,
+                &[ColumnDescriptor::new::<DebugCertificatesProtoColumn>()],
                 backfill_debug_certificates_proto_from_legacy_bincode,
             )?
             .finalize(cf_definitions::DEBUG_DB)
@@ -45,25 +46,22 @@ impl DebugStore {
     }
 }
 
-/// Migration step for the certificate serialization switch from legacy bincode
-/// rows to the proto-backed debug CF.
+/// Migration step for the certificate serialization switch from the legacy
+/// debug CF to the proto-backed CF.
 ///
-/// Keep the source CF intact and copy every existing row into the new CF so the
-/// rollout remains reversible until the legacy family is intentionally dropped.
+/// Delegates to
+/// [`super::migration_helpers::copy_legacy_certificate_cf_into_proto`],
+/// which streams the legacy keyspace, skips and logs rows whose bytes cannot
+/// be decoded as a certificate, and copies the rest into the proto CF. The
+/// source CF is left intact so the rollout remains reversible until the
+/// legacy family is intentionally dropped.
 fn backfill_debug_certificates_proto_from_legacy_bincode(
     db: &crate::storage::DbAccess,
 ) -> Result<(), crate::storage::DBMigrationErrorDetails> {
-    let keys = db
-        .keys::<DebugCertificatesColumn>()?
-        .collect::<Result<Vec<_>, _>>()?;
-
-    for key in keys {
-        if let Some(certificate) = db.get::<DebugCertificatesColumn>(&key)? {
-            db.put::<DebugCertificatesProtoColumn>(&key, &certificate)?;
-        }
-    }
-
-    Ok(())
+    super::migration_helpers::copy_legacy_certificate_cf_into_proto::<
+        DebugCertificatesColumn,
+        DebugCertificatesProtoColumn,
+    >(db, "debug")
 }
 
 impl DebugReader for DebugStore {
@@ -72,16 +70,9 @@ impl DebugReader for DebugStore {
         certificate_id: &CertificateId,
     ) -> Result<Option<Certificate>, Error> {
         match self {
-            DebugStore::Enabled(store) => {
-                if let Some(certificate) = store
-                    .db
-                    .get::<DebugCertificatesProtoColumn>(certificate_id)?
-                {
-                    return Ok(Some(certificate));
-                }
-
-                Ok(store.db.get::<DebugCertificatesColumn>(certificate_id)?)
-            }
+            DebugStore::Enabled(store) => Ok(store
+                .db
+                .get::<DebugCertificatesProtoColumn>(certificate_id)?),
             DebugStore::Disabled => Ok(None),
         }
     }
