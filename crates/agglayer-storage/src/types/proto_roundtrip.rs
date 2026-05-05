@@ -122,9 +122,9 @@ fn certificate_roundtrip_is_lossless() {
     use crate::types::generated::agglayer::storage::v0::{
         aggchain_data, imported_bridge_exit, Address, AggchainData, AggchainParams,
         AggchainProofPublicValues, Amount, BlockHash, BridgeExit, Certificate, ClaimFromMainnet,
-        CommitImportedBridgeExits, Generic, GlobalExitRoot, GlobalIndex, ImportedBridgeExit,
-        L1InfoRoot, L1InfoTreeLeaf, L1InfoTreeLeafWithContext, LeafType, LocalExitRoot,
-        MainnetExitRoot, MerkleProof, MerkleRoot, Metadata, MultisigEntry, MultisigOnly,
+        CommitImportedBridgeExits, Digest, Generic, GlobalExitRoot, GlobalIndex,
+        ImportedBridgeExit, L1InfoRoot, L1InfoTreeLeaf, L1InfoTreeLeafWithContext, LeafType,
+        LocalExitRoot, MainnetExitRoot, MerkleProof, Metadata, MultisigEntry, MultisigOnly,
         MultisigPayload, Proof, ProofMode, ProofSystem, RollupExitRoot, Signature, TokenInfo,
     };
 
@@ -138,8 +138,8 @@ fn certificate_roundtrip_is_lossless() {
             value: vec![b; 32].into(),
         }
     }
-    fn merkle_root(b: u8) -> MerkleRoot {
-        MerkleRoot {
+    fn digest(b: u8) -> Digest {
+        Digest {
             value: vec![b; 32].into(),
         }
     }
@@ -235,11 +235,11 @@ fn certificate_roundtrip_is_lossless() {
         global_index: Some(global_index(0x99)),
         claim: Some(imported_bridge_exit::Claim::Mainnet(ClaimFromMainnet {
             proof_leaf_mer: Some(MerkleProof {
-                root: Some(merkle_root(0xAA)),
-                siblings: vec![merkle_root(0xBB), merkle_root(0xCC)],
+                root: Some(digest(0xAA)),
+                siblings: vec![digest(0xBB), digest(0xCC)],
             }),
             proof_ger_l1root: Some(MerkleProof {
-                root: Some(merkle_root(0xDD)),
+                root: Some(digest(0xDD)),
                 siblings: vec![],
             }),
             l1_leaf: Some(l1_leaf),

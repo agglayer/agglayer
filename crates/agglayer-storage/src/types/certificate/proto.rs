@@ -49,7 +49,7 @@ fn parse_address(value: proto::Address) -> Result<Address, CertificateConversion
     )?))
 }
 
-proto_digest_bytes32!(MerkleRoot, "merkle_root");
+proto_digest_bytes32!(Digest, "digest");
 proto_digest_bytes32!(GlobalExitRoot, "global_exit_root");
 proto_digest_bytes32!(LocalExitRoot, "local_exit_root");
 proto_digest_bytes32!(PessimisticRoot, "pessimistic_root");

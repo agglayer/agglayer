@@ -56,10 +56,10 @@ pub struct MainnetExitRoot {
     #[prost(bytes="bytes", tag="1")]
     pub value: ::prost::bytes::Bytes,
 }
-/// Merkle root or sibling hash (32 bytes).
+/// Generic 32-byte digest used as a hash wrapper (e.g. Merkle path nodes).
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MerkleRoot {
-    /// bytes representation of the root/hash.
+pub struct Digest {
+    /// bytes representation of the digest.
     #[prost(bytes="bytes", tag="1")]
     pub value: ::prost::bytes::Bytes,
 }
@@ -516,10 +516,10 @@ pub struct BridgeExit {
 pub struct MerkleProof {
     /// Root of the Merkle tree.
     #[prost(message, optional, tag="1")]
-    pub root: ::core::option::Option<MerkleRoot>,
+    pub root: ::core::option::Option<Digest>,
     /// Path from the leaf to the root.
     #[prost(message, repeated, tag="2")]
-    pub siblings: ::prost::alloc::vec::Vec<MerkleRoot>,
+    pub siblings: ::prost::alloc::vec::Vec<Digest>,
 }
 /// A leaf of the L1 info tree.
 /// This mirrors the interop proto's inner leaf shape; the canonical Rust
