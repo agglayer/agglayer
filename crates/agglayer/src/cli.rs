@@ -48,6 +48,58 @@ pub(crate) enum Commands {
 
     #[clap(subcommand)]
     Backup(Backup),
+
+    /// Run the storage migration in place against the configured data
+    /// directory. Brings every store (state, pending, debug, every
+    /// epoch) up to the current schema. Safe to invoke before starting
+    /// the node so the implicit on-startup migration becomes a no-op.
+    /// The same migration also runs on the first node start, so this
+    /// command is an opt-in optimisation rather than a required step.
+    MigrateStorage {
+        /// Path to the agglayer configuration file. Migration paths are
+        /// derived from `[storage]`.
+        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "AGGLAYER_CONFIG_PATH")]
+        cfg: PathBuf,
+
+        /// Operator-supplied environment label (`mainnet`, `testnet`, …)
+        /// used in the markdown report's heading and filename. Defaults
+        /// to the data directory's basename.
+        #[arg(long, env = "AGGLAYER_MIGRATION_ENV_LABEL")]
+        env_label: Option<String>,
+
+        /// Skip the epoch sweep entirely; only state, pending, and debug
+        /// run. Useful when iterating on the upgrade procedure or when
+        /// epoch migration was already done in a previous run.
+        #[arg(long)]
+        skip_epochs: bool,
+
+        /// Cap the epoch sweep to the N most-recent epochs (highest
+        /// numeric names first). Useful for spot checks: the active
+        /// data lives at the latest epochs while the lowest-numbered
+        /// ones are typically empty.
+        #[arg(long)]
+        latest_epochs: Option<u64>,
+
+        /// Write the markdown report to this file path. By default the
+        /// markdown is printed to stdout; pass this flag to redirect it
+        /// to a file instead. The flag is independent of `--html-file`,
+        /// so you can request both, neither, or either.
+        #[arg(long, value_hint = ValueHint::FilePath)]
+        markdown_file: Option<PathBuf>,
+
+        /// Write the HTML report to this file path. When unset, no HTML
+        /// is produced. The HTML is self-contained (no external
+        /// resources) and openable in any browser.
+        #[arg(long, value_hint = ValueHint::FilePath)]
+        html_file: Option<PathBuf>,
+
+        /// Suppress the non-zero exit on fatal store outcomes. By
+        /// default the command exits non-zero when any store fails so
+        /// CI/orchestration sees the failure; pass this flag to keep
+        /// the run "advisory" (markdown report still flags failures).
+        #[arg(long)]
+        no_fail_on_error: bool,
+    },
 }
 
 #[derive(Subcommand)]

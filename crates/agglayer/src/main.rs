@@ -86,6 +86,64 @@ fn main() -> eyre::Result<()> {
                 exit(1);
             }
         }
+
+        cli::Commands::MigrateStorage {
+            cfg,
+            env_label,
+            skip_epochs,
+            latest_epochs,
+            markdown_file,
+            html_file,
+            no_fail_on_error,
+        } => {
+            let cfg = agglayer_config::Config::try_load(&cfg)?;
+
+            // Default the env_label to the storage parent directory's
+            // basename so concatenated reports across environments stay
+            // distinguishable without requiring the operator to set it
+            // explicitly.
+            let env_label = env_label.unwrap_or_else(|| {
+                cfg.storage
+                    .pending_db_path
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("snapshot")
+                    .to_string()
+            });
+
+            let opts = agglayer_storage::migrate::MigrateOptions {
+                state_db_path: Some(cfg.storage.state_db_path.clone()),
+                pending_db_path: Some(cfg.storage.pending_db_path.clone()),
+                debug_db_path: Some(cfg.storage.debug_db_path.clone()),
+                epochs_db_path: Some(cfg.storage.epochs_db_path.clone()),
+                env_label,
+                skip_epochs,
+                latest_epochs,
+                markdown_file: markdown_file.clone(),
+                html_file: html_file.clone(),
+            };
+
+            let outcome = agglayer_storage::migrate::run(opts)
+                .map_err(|e| eyre::eyre!("storage migration runner failed: {e}"))?;
+
+            // Default behaviour: print the markdown report to stdout so
+            // the operator immediately sees the outcome. If the operator
+            // explicitly redirected markdown to a file, we surface the
+            // file path on stderr instead (and skip stdout to avoid
+            // duplicating the report).
+            match markdown_file.as_deref() {
+                None => println!("{}", agglayer_storage::migrate::render_markdown(&outcome)),
+                Some(path) => eprintln!("Markdown report: {}", path.display()),
+            }
+            if let Some(path) = html_file.as_deref() {
+                eprintln!("HTML report:     {}", path.display());
+            }
+
+            if !no_fail_on_error && !outcome.is_success() {
+                exit(1);
+            }
+        }
     }
 
     Ok(())
