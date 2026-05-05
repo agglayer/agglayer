@@ -8,6 +8,7 @@ use pessimistic_proof::ELF;
 use sp1_sdk::HashableKey as _;
 
 mod cli;
+mod migrate_report;
 
 fn main() -> eyre::Result<()> {
     install_default_crypto_provider();
@@ -120,12 +121,9 @@ fn main() -> eyre::Result<()> {
                 env_label,
                 skip_epochs,
                 latest_epochs,
-                markdown_file: markdown_file.clone(),
-                html_file: html_file.clone(),
             };
 
-            let outcome = agglayer_storage::migrate::run(opts)
-                .map_err(|e| eyre::eyre!("storage migration runner failed: {e}"))?;
+            let outcome = agglayer_storage::migrate::run(opts);
 
             // Default behaviour: print the markdown report to stdout so
             // the operator immediately sees the outcome. If the operator
@@ -133,10 +131,20 @@ fn main() -> eyre::Result<()> {
             // file path on stderr instead (and skip stdout to avoid
             // duplicating the report).
             match markdown_file.as_deref() {
-                None => println!("{}", agglayer_storage::migrate::render_markdown(&outcome)),
-                Some(path) => eprintln!("Markdown report: {}", path.display()),
+                None => println!("{}", migrate_report::render_markdown(&outcome)),
+                Some(path) => {
+                    migrate_report::write_to_file(path, &migrate_report::render_markdown(&outcome))
+                        .with_context(|| {
+                            format!("failed to write markdown report to {}", path.display())
+                        })?;
+                    eprintln!("Markdown report: {}", path.display());
+                }
             }
             if let Some(path) = html_file.as_deref() {
+                migrate_report::write_to_file(path, &migrate_report::render_html(&outcome))
+                    .with_context(|| {
+                        format!("failed to write HTML report to {}", path.display())
+                    })?;
                 eprintln!("HTML report:     {}", path.display());
             }
 

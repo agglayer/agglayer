@@ -1,0 +1,18 @@
+## {{ env_label }}
+
+Migration run at {{ started_at }} UTC, total {{ overall_duration }}. Status: **{{ status_label }}**.
+
+| Store | Status | Duration | Notes |
+|---|---|---:|---|
+{%- for row in rows %}
+| {{ row.label }} | {{ row.status }} | {{ row.duration }} | {{ row.notes }} |
+{%- endfor %}
+
+{% if !is_success -%}
+**Fatal errors**
+
+{% for fatal in fatals -%}
+- {{ fatal.label }}: {{ fatal.error }}
+{% endfor %}
+{% endif -%}
+---

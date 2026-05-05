@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storage migration report — {{ env_label }}</title>
+<style>{{ style|safe }}</style>
+</head>
+<body>
+<div class="container">
+
+<header class="page-header">
+  <h1>Storage migration report</h1>
+  <div class="meta">
+    <span><span class="badge {{ status_class }}">{{ status_label }}</span></span>
+    <span>env <strong>{{ env_label }}</strong></span>
+    <span>generated <strong>{{ started_at }}</strong> UTC</span>
+    <span>duration <strong>{{ overall_duration }}</strong></span>
+  </div>
+</header>
+
+<section><h2>Summary</h2>
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Status</div>
+    <div class="kpi-value {{ status_class }}">{{ status_label }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Stores migrated</div>
+    <div class="kpi-value success">{{ store_count }}</div>
+    <div class="kpi-hint">state + pending + debug + epochs</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Failures</div>
+    <div class="kpi-value {{ status_class }}">{{ fatal_count }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Total time</div>
+    <div class="kpi-value success">{{ overall_duration }}</div>
+  </div>
+</div>
+</section>
+
+{% for card in store_cards %}
+<section><h2>{{ card.heading }}</h2>
+{% if card.skipped %}
+<div class="card">
+  <div class="card-title"><span>—</span><span class="badge muted">SKIPPED</span></div>
+  <p class="muted">not configured for this deployment</p>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-title">
+    <span>{{ card.label }}</span>
+    <span class="badge {{ card.badge_class }}">{{ card.badge_label }}</span>
+  </div>
+  <table><tbody>
+    <tr><th class="store-key">Path</th><td><code class="mono break">{{ card.path }}</code></td></tr>
+    <tr><th class="store-key">Duration</th><td>{{ card.duration }}</td></tr>
+  </tbody></table>
+  {% if card.has_error %}<div class="fatal">{{ card.error }}</div>{% endif %}
+</div>
+{% endif %}
+</section>
+{% endfor %}
+
+<section><h2>Epoch DBs</h2>
+{% if epochs.kind_not_configured %}
+<div class="card">
+  <div class="card-title"><span>—</span><span class="badge muted">SKIPPED</span></div>
+  <p class="muted">not configured for this deployment</p>
+</div>
+{% else if epochs.kind_skipped %}
+<div class="card">
+  <div class="card-title"><span>aggregate</span><span class="badge muted">SKIPPED</span></div>
+  <p class="muted">{{ epochs.skip_reason }}</p>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-title">
+    <span>aggregate ({{ epochs.path }})</span>
+    <span class="badge {{ epochs.badge_class }}">{{ epochs.badge_label }}</span>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Discovered</div><div class="kpi-value success">{{ epochs.discovered }}</div></div>
+    <div class="kpi"><div class="kpi-label">Processed</div><div class="kpi-value success">{{ epochs.processed }}</div></div>
+    <div class="kpi"><div class="kpi-label">Successful</div><div class="kpi-value success">{{ epochs.successful }}</div></div>
+    <div class="kpi"><div class="kpi-label">Failed</div><div class="kpi-value {{ epochs.failed_class }}">{{ epochs.failed_count }}</div></div>
+    <div class="kpi"><div class="kpi-label">Duration</div><div class="kpi-value success">{{ epochs.duration }}</div></div>
+  </div>
+  {% if epochs.has_failures %}
+  <h3>Failed epochs ({{ epochs.failed_count }})</h3>
+  <table><thead><tr><th>Epoch</th><th>Error</th></tr></thead><tbody>
+  {% for f in epochs.failures %}
+    <tr><td class="num"><strong>{{ f.epoch }}</strong></td><td>{{ f.error }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  {% endif %}
+</div>
+{% endif %}
+</section>
+
+<h2>Run configuration</h2>
+<table><tbody>
+  <tr><th class="path-key">Environment label</th><td>{{ env_label }}</td></tr>
+{% for r in path_rows %}
+  <tr><th class="path-key">{{ r.label }}</th><td><code class="mono break">{{ r.path }}</code></td></tr>
+{% endfor %}
+</tbody></table>
+
+</div>
+</body>
+</html>
