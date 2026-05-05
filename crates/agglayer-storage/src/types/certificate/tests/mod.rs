@@ -1,13 +1,17 @@
 use agglayer_types::{
-    aggchain_proof::{Proof, SP1StarkWithContext},
-    bincode, U256,
+    aggchain_proof::{AggchainProof, MultisigPayload, Proof, SP1StarkWithContext},
+    bincode, Address, Digest, U256,
 };
 use alloy_primitives::Bytes;
+use pessimistic_proof::unified_bridge::{
+    AggchainProofPublicValues, BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex,
+    ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
+};
 use pessimistic_proof_test_suite::sample_data;
 use sp1_sdk::Prover;
 
 use super::*;
-use crate::schema::Codec;
+use crate::{schema::Codec, types::generated::agglayer::storage::v0 as proto};
 
 mod header;
 mod status;
@@ -47,26 +51,134 @@ fn sig(r_byte: u8, s_byte: u8) -> Signature {
     Signature::new(r, s, false)
 }
 
+fn digest(byte: u8) -> Digest {
+    Digest([byte; 32])
+}
+
+fn mock_sp1_proof(version: &str) -> Proof {
+    let client = sp1_sdk::ProverClient::builder().mock().build();
+    let (proving_key, vkey) = client.setup(EMPTY_ELF);
+    let proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
+        &proving_key,
+        sp1_sdk::SP1PublicValues::new(),
+        sp1_sdk::SP1ProofMode::Compressed,
+        sp1_sdk::SP1_CIRCUIT_VERSION,
+    )
+    .proof
+    .try_as_compressed()
+    .unwrap();
+
+    Proof::SP1Stark(SP1StarkWithContext {
+        proof,
+        vkey,
+        version: version.to_owned(),
+    })
+}
+
+fn proto_aggchain_data(aggchain_data: AggchainData) -> proto::AggchainData {
+    proto::AggchainData::try_from(&aggchain_data).unwrap()
+}
+
+fn bridge_exit(seed: u8) -> BridgeExit {
+    BridgeExit {
+        leaf_type: LeafType::Transfer,
+        token_info: TokenInfo {
+            origin_network: NetworkId::new(seed as u32),
+            origin_token_address: Address::from([seed; 20]),
+        },
+        dest_network: NetworkId::new(seed as u32 + 100),
+        dest_address: Address::from([seed.wrapping_add(1); 20]),
+        amount: U256::from_be_bytes([seed.wrapping_add(2); 32]),
+        metadata: Some(digest(seed.wrapping_add(3))),
+    }
+}
+
+fn merkle_proof(root: u8, sibling_seed: u8) -> MerkleProof {
+    MerkleProof::new(
+        digest(root),
+        std::array::from_fn(|offset| digest(sibling_seed.wrapping_add(offset as u8))),
+    )
+}
+
+fn l1_leaf(seed: u8) -> L1InfoTreeLeaf {
+    L1InfoTreeLeaf {
+        l1_info_tree_index: seed as u32,
+        rer: digest(seed.wrapping_add(1)),
+        mer: digest(seed.wrapping_add(2)),
+        inner: L1InfoTreeLeafInner {
+            global_exit_root: digest(seed.wrapping_add(3)),
+            block_hash: digest(seed.wrapping_add(4)),
+            timestamp: 1_000 + seed as u64,
+        },
+    }
+}
+
+fn imported_bridge_exit(seed: u8, claim: Claim) -> ImportedBridgeExit {
+    ImportedBridgeExit {
+        bridge_exit: bridge_exit(seed),
+        global_index: GlobalIndex::new(NetworkId::new(0), seed as u32),
+        claim_data: claim,
+    }
+}
+
+fn mainnet_imported_bridge_exit(seed: u8) -> ImportedBridgeExit {
+    imported_bridge_exit(
+        seed,
+        Claim::Mainnet(Box::new(ClaimFromMainnet {
+            proof_leaf_mer: merkle_proof(seed.wrapping_add(11), seed.wrapping_add(12)),
+            proof_ger_l1root: merkle_proof(seed.wrapping_add(13), seed.wrapping_add(14)),
+            l1_leaf: l1_leaf(seed.wrapping_add(13)),
+        })),
+    )
+}
+
+fn rollup_imported_bridge_exit(seed: u8) -> ImportedBridgeExit {
+    let mut imported_bridge_exit = imported_bridge_exit(
+        seed,
+        Claim::Rollup(Box::new(ClaimFromRollup {
+            proof_leaf_ler: merkle_proof(seed.wrapping_add(21), seed.wrapping_add(22)),
+            proof_ler_rer: merkle_proof(seed.wrapping_add(23), seed.wrapping_add(24)),
+            proof_ger_l1root: merkle_proof(seed.wrapping_add(25), seed.wrapping_add(26)),
+            l1_leaf: l1_leaf(seed.wrapping_add(24)),
+        })),
+    );
+    imported_bridge_exit.global_index =
+        GlobalIndex::new(NetworkId::new(seed as u32 + 1), seed as u32);
+    imported_bridge_exit
+}
+
+fn public_values(seed: u8) -> AggchainProofPublicValues {
+    AggchainProofPublicValues {
+        prev_local_exit_root: digest(seed),
+        new_local_exit_root: digest(seed.wrapping_add(1)),
+        l1_info_root: digest(seed.wrapping_add(2)),
+        origin_network: NetworkId::new(seed as u32),
+        commit_imported_bridge_exits: digest(seed.wrapping_add(3)),
+        aggchain_params: digest(seed.wrapping_add(4)),
+    }
+}
+
+fn proto_certificate(aggchain_data: proto::AggchainData) -> proto::Certificate {
+    let mut certificate = Certificate::new_for_test(9.into(), Height::new(42));
+    certificate.prev_local_exit_root = digest(0x11).into();
+    certificate.new_local_exit_root = digest(0x22).into();
+    certificate.bridge_exits = vec![bridge_exit(0x33)];
+    certificate.imported_bridge_exits = vec![
+        mainnet_imported_bridge_exit(0x44),
+        rollup_imported_bridge_exit(0x55),
+    ];
+    certificate.metadata = Metadata::new(digest(0x66));
+    certificate.custom_chain_data = vec![0xca, 0xfe, 0xba, 0xbe];
+    certificate.l1_info_tree_leaf_count = Some(7);
+
+    let mut proto = proto::Certificate::try_from(&certificate).unwrap();
+    proto.aggchain_data = Some(aggchain_data);
+    proto
+}
+
 impl AggchainDataV1<'static> {
     fn proof0() -> Proof {
-        let (proof, vkey) = {
-            let client = sp1_sdk::ProverClient::builder().mock().build();
-            let (proving_key, verif_key) = client.setup(EMPTY_ELF);
-            let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
-                &proving_key,
-                sp1_sdk::SP1PublicValues::new(),
-                sp1_sdk::SP1ProofMode::Compressed,
-                sp1_sdk::SP1_CIRCUIT_VERSION,
-            );
-            let proof = dummy_proof.proof.try_as_compressed().unwrap();
-            (proof, verif_key)
-        };
-
-        Proof::SP1Stark(SP1StarkWithContext {
-            proof,
-            vkey,
-            version: String::from("1.2.3"),
-        })
+        mock_sp1_proof("1.2.3")
     }
 
     fn aggchain_proof_public_values0(aggchain_params: Digest) -> AggchainProofPublicValues {
@@ -466,4 +578,121 @@ fn catch_unwind_converts_deserializer_panic_into_codec_error() {
         Err(other) => panic!("unexpected error variant: {other:?}"),
         Ok(_) => panic!("deserialize_bincode returned Ok on a panicking type"),
     }
+}
+
+#[test]
+fn certificate_proto_roundtrip_preserves_nested_certificate_data() {
+    let proto = proto_certificate(proto_aggchain_data(AggchainData::Generic {
+        proof: mock_sp1_proof("v5.2.2"),
+        aggchain_params: digest(0x72),
+        signature: Some(Box::new(sig(0x73, 0x74))),
+        public_values: Some(Box::new(public_values(0x74))),
+    }));
+
+    let typed = Certificate::try_from(proto.clone()).unwrap();
+    let roundtrip = proto::Certificate::try_from(&typed).unwrap();
+
+    assert_eq!(roundtrip, proto);
+    assert_eq!(typed.metadata, Metadata::new(Digest([0x66; 32])));
+    assert_eq!(typed.custom_chain_data, vec![0xca, 0xfe, 0xba, 0xbe]);
+    assert_eq!(typed.l1_info_tree_leaf_count, Some(7));
+}
+
+#[rstest::rstest]
+#[case(proto_aggchain_data(AggchainData::ECDSA {
+    signature: sig(0x80, 0x81),
+}))]
+#[case(proto_aggchain_data(AggchainData::Generic {
+    proof: mock_sp1_proof("v5.2.2"),
+    aggchain_params: digest(0x82),
+    signature: None,
+    public_values: None,
+}))]
+#[case(proto_aggchain_data(AggchainData::MultisigOnly {
+    multisig: MultisigPayload(vec![
+        Some(sig(0x83, 0x84)),
+        None,
+        Some(sig(0x85, 0x86)),
+        None,
+    ]),
+}))]
+#[case(proto_aggchain_data(AggchainData::MultisigAndAggchainProof {
+    multisig: MultisigPayload(vec![None, Some(sig(0x87, 0x88)), None]),
+    aggchain_proof: AggchainProof {
+        proof: mock_sp1_proof("v5.2.2"),
+        aggchain_params: digest(0x87),
+        public_values: Some(Box::new(public_values(0x88))),
+    },
+}))]
+fn certificate_proto_roundtrip_preserves_aggchain_variants(
+    #[case] aggchain_data: proto::AggchainData,
+) {
+    let proto = proto_certificate(aggchain_data);
+
+    let typed = Certificate::try_from(proto.clone()).unwrap();
+    let roundtrip = proto::Certificate::try_from(&typed).unwrap();
+
+    assert_eq!(roundtrip.aggchain_data, proto.aggchain_data);
+}
+
+#[test]
+fn certificate_proto_roundtrip_preserves_read_only_proof_versions() {
+    let proto = proto_certificate(proto_aggchain_data(AggchainData::Generic {
+        proof: mock_sp1_proof("v6.0.1"),
+        aggchain_params: digest(0xa0),
+        signature: None,
+        public_values: Some(Box::new(public_values(0xa1))),
+    }));
+
+    let typed = Certificate::try_from(proto.clone()).unwrap();
+    let roundtrip = proto::Certificate::try_from(&typed).unwrap();
+
+    assert_eq!(roundtrip.aggchain_data, proto.aggchain_data);
+}
+
+#[test]
+fn certificate_proto_rejects_malformed_nested_submessages() {
+    let missing_generic_proof = proto_certificate(proto::AggchainData {
+        data: Some(proto::aggchain_data::Data::Generic(proto::Generic {
+            proof: None,
+            aggchain_params: Some(digest(0x91).into()),
+            signature: None,
+            public_values: None,
+        })),
+    });
+    assert!(Certificate::try_from(missing_generic_proof).is_err());
+
+    let missing_l1_leaf_inner = proto::Certificate {
+        imported_bridge_exits: vec![proto::ImportedBridgeExit {
+            bridge_exit: Some(bridge_exit(0x92).into()),
+            global_index: Some(GlobalIndex::new(NetworkId::new(0), 0x93).into()),
+            claim: Some(proto::imported_bridge_exit::Claim::Mainnet(
+                proto::ClaimFromMainnet {
+                    proof_leaf_mer: Some(merkle_proof(0x94, 0x95).into()),
+                    proof_ger_l1root: Some(merkle_proof(0x96, 0x97).into()),
+                    l1_leaf: Some(proto::L1InfoTreeLeafWithContext {
+                        l1_info_tree_index: 5,
+                        rer: Some(digest(0x98).into()),
+                        mer: Some(digest(0x99).into()),
+                        inner: None,
+                    }),
+                },
+            )),
+        }],
+        ..proto_certificate(proto_aggchain_data(AggchainData::ECDSA {
+            signature: sig(0x99, 0x9a),
+        }))
+    };
+    assert!(Certificate::try_from(missing_l1_leaf_inner).is_err());
+}
+
+#[test]
+fn legacy_v0_decode_proto_roundtrip_stays_lossless() {
+    let bytes = load_sample_bytes("encoded/v0-n15-cert_h0.hex");
+    let typed = Certificate::decode(&bytes).unwrap();
+
+    let proto = proto::Certificate::try_from(&typed).unwrap();
+    let roundtrip = Certificate::try_from(proto).unwrap();
+
+    assert_eq!(roundtrip, typed);
 }

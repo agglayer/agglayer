@@ -8,31 +8,9 @@ package agglayer.storage.v0;
 // self-contained inside the `agglayer.storage.v0` proto package, so stored
 // rows do not depend on interop proto evolution.
 
-import "agglayer/storage/v0/storage_proof.proto";
-
-// ===================================================================
-// Fixed-size byte buffers.
-// Named wrappers mirror the interop convention while keeping this
-// schema free of any inter-proto dependency.
-// ===================================================================
-
-// A 20-byte buffer (e.g. an EVM address).
-message FixedBytes20 {
-  // bytes representation of the bytearray.
-  bytes value = 1;
-}
-
-// A 32-byte buffer (e.g. a hash, a root, a digest).
-message FixedBytes32 {
-  // bytes representation of the bytearray.
-  bytes value = 1;
-}
-
-// A 65-byte buffer (e.g. an ECDSA signature with recovery byte).
-message FixedBytes65 {
-  // bytes representation of the bytearray.
-  bytes value = 1;
-}
+import "agglayer/storage/v0/proof.proto";
+import "agglayer/storage/v0/ethereum_types.proto";
+import "agglayer/storage/v0/network_info.proto";
 
 // ===================================================================
 // Bridge-exit primitives.
@@ -53,7 +31,7 @@ message TokenInfo {
   // Network the token originates from.
   uint32 origin_network = 1;
   // Address of the token on the origin network.
-  FixedBytes20 origin_token_address = 2;
+  Address origin_token_address = 2;
 }
 
 // A bridge exit leaf.
@@ -65,11 +43,11 @@ message BridgeExit {
   // Network the token is transferred to.
   uint32 dest_network = 3;
   // Address that will own the received token.
-  FixedBytes20 dest_address = 4;
+  Address dest_address = 4;
   // Amount transferred (big-endian encoded).
-  FixedBytes32 amount = 5;
+  Amount amount = 5;
   // Metadata for the bridge exit.
-  FixedBytes32 metadata = 6;
+  Metadata metadata = 6;
 }
 
 // ===================================================================
@@ -79,9 +57,9 @@ message BridgeExit {
 // A Merkle proof.
 message MerkleProof {
   // Root of the Merkle tree.
-  FixedBytes32 root = 1;
+  Digest root = 1;
   // Path from the leaf to the root.
-  repeated FixedBytes32 siblings = 2;
+  repeated Digest siblings = 2;
 }
 
 // A leaf of the L1 info tree.
@@ -89,9 +67,9 @@ message MerkleProof {
 // `unified_bridge::L1InfoTreeLeaf` maps to `L1InfoTreeLeafWithContext` below.
 message L1InfoTreeLeaf {
   // Global exit root at the time the leaf was produced.
-  FixedBytes32 global_exit_root = 1;
+  GlobalExitRoot global_exit_root = 1;
   // Block hash anchoring the leaf.
-  FixedBytes32 block_hash = 2;
+  BlockHash block_hash = 2;
   // Block timestamp.
   uint64 timestamp = 3;
 }
@@ -101,9 +79,9 @@ message L1InfoTreeLeafWithContext {
   // Index of the leaf in the L1 info tree.
   uint32 l1_info_tree_index = 1;
   // Rollup exit root.
-  FixedBytes32 rer = 2;
+  RollupExitRoot rer = 2;
   // Mainnet exit root.
-  FixedBytes32 mer = 3;
+  MainnetExitRoot mer = 3;
   // Inner leaf payload.
   L1InfoTreeLeaf inner = 4;
 }
@@ -135,7 +113,7 @@ message ImportedBridgeExit {
   // The original bridge exit on the sending network.
   BridgeExit bridge_exit = 1;
   // Global index identifying this imported bridge exit.
-  FixedBytes32 global_index = 2;
+  GlobalIndex global_index = 2;
   // Which type of claim proves the import.
   oneof claim {
     // Claim originating from the mainnet network.
@@ -143,22 +121,6 @@ message ImportedBridgeExit {
     // Claim originating from a rollup.
     ClaimFromRollup rollup = 4;
   }
-}
-
-// Public values committed to by an aggchain proof.
-message AggchainProofPublicValues {
-  // Previous local exit root.
-  FixedBytes32 prev_local_exit_root = 1;
-  // New local exit root.
-  FixedBytes32 new_local_exit_root = 2;
-  // L1 info root used to import bridge exits.
-  FixedBytes32 l1_info_root = 3;
-  // Origin network id for which the proof was generated.
-  uint32 origin_network = 4;
-  // Commitment to the imported bridge-exit indices.
-  FixedBytes32 commit_imported_bridge_exits = 5;
-  // Chain-specific commitment forwarded by the pessimistic proof.
-  FixedBytes32 aggchain_params = 6;
 }
 
 // Ordered vector of optional ECDSA signatures.
@@ -170,7 +132,7 @@ message MultisigPayload {
 // Entry in an ordered multisig payload.
 message MultisigEntry {
   // Signature bytes; absence represents `None` for that slot.
-  FixedBytes65 signature = 1;
+  Signature signature = 1;
 }
 
 // Generic aggchain data: proof, aggchain params, optional signature, and
@@ -179,9 +141,9 @@ message Generic {
   // Aggchain proof.
   Proof proof = 1;
   // Chain-specific aggchain params.
-  FixedBytes32 aggchain_params = 2;
+  AggchainParams aggchain_params = 2;
   // Optional signature produced by the aggchain signer.
-  FixedBytes65 signature = 3;
+  Signature signature = 3;
   // Optional public values committed to by the proof.
   AggchainProofPublicValues public_values = 4;
 }
@@ -193,7 +155,7 @@ message MultisigAndAggchainProof {
   // Aggchain proof.
   Proof proof = 2;
   // Chain-specific aggchain params.
-  FixedBytes32 aggchain_params = 3;
+  AggchainParams aggchain_params = 3;
   // Optional public values committed to by the proof.
   AggchainProofPublicValues public_values = 4;
 }
@@ -209,7 +171,7 @@ message AggchainData {
   // Active aggchain-data variant.
   oneof data {
     // Legacy single-signer ECDSA payload.
-    FixedBytes65 ecdsa = 1;
+    Signature ecdsa = 1;
     // Generic aggchain proof payload.
     Generic generic = 2;
     // Multisig-only payload.
@@ -226,15 +188,15 @@ message Certificate {
   // Certificate height, monotonic per network.
   uint64 height = 2;
   // Previous local exit root.
-  FixedBytes32 prev_local_exit_root = 3;
+  LocalExitRoot prev_local_exit_root = 3;
   // New local exit root.
-  FixedBytes32 new_local_exit_root = 4;
+  LocalExitRoot new_local_exit_root = 4;
   // Bridge exits emitted by the certificate.
   repeated BridgeExit bridge_exits = 5;
   // Bridge exits imported from other networks.
   repeated ImportedBridgeExit imported_bridge_exits = 6;
   // Fixed-size chain metadata.
-  FixedBytes32 metadata = 7;
+  Metadata metadata = 7;
   // Aggchain-supplied data.
   AggchainData aggchain_data = 8;
   // Arbitrary chain-defined bytes.
