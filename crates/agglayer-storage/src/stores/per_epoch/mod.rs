@@ -181,22 +181,41 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             // For readonly access, we don't need to track the next index
             AtomicU64::new(0)
         } else {
-            // For read-write access, calculate the next index from existing certificates.
-            // The proto-backed CF is the single source of truth at runtime: legacy rows
-            // are backfilled into it during `init_db`, so consulting the legacy CF here
-            // would only re-read data that has already been migrated.
-            if let Some(Ok((index, _))) = db
-                .iter_with_direction::<CertificatePerIndexProtoColumn>(
-                    ReadOptions::default(),
-                    rocksdb::Direction::Reverse,
-                )?
-                .next()
-            {
-                // We're starting from the next index after the last one found in the database.
-                AtomicU64::new(index.as_u64() + 1)
-            } else {
-                AtomicU64::new(0)
-            }
+            // For read-write access, calculate the next index from existing
+            // certificates.
+            //
+            // The proto CF is the runtime source of truth, but consulting it
+            // alone is unsafe: the proto migration helper skips legacy rows
+            // whose bytes fail to decode as either bincode v0/v1 or proto
+            // (instead of aborting the migration), so the proto CF can have
+            // holes at indices that are still occupied in the legacy CF and
+            // in `ProofPerIndexColumn`. The proof CF shares this index space
+            // and is *not* touched by the cert codec migration, so reusing an
+            // index that is missing from proto but present elsewhere would
+            // silently overwrite the proof row at that index.
+            //
+            // Take the max across both certificate CFs and bump by one. Per-
+            // epoch DBs hold a bounded number of certificates so the
+            // forward-scan over keys is cheap, and `CertificateIndex` is a
+            // `u64` that decodes reliably even when the legacy row's value
+            // bytes are malformed.
+            let legacy_max = db
+                .keys::<CertificatePerIndexColumn>()?
+                .filter_map(Result::ok)
+                .map(|idx| idx.as_u64())
+                .max();
+            let proto_max = db
+                .keys::<CertificatePerIndexProtoColumn>()?
+                .filter_map(Result::ok)
+                .map(|idx| idx.as_u64())
+                .max();
+            let next_index = match (legacy_max, proto_max) {
+                (Some(l), Some(p)) => l.max(p) + 1,
+                (Some(l), None) => l + 1,
+                (None, Some(p)) => p + 1,
+                (None, None) => 0,
+            };
+            AtomicU64::new(next_index)
         };
 
         let end_checkpoint = {
