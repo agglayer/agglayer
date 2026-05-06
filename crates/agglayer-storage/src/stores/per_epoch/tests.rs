@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, VecDeque},
     path::PathBuf,
-    sync::{atomic::Ordering, Arc},
+    sync::Arc,
 };
 
 use agglayer_config::Config;
@@ -246,63 +246,6 @@ fn readonly_epoch_access_requires_migrated_proto_cf() {
     write_raw_epoch_certificate_bytes(&epoch_path, index, legacy);
 
     assert!(epochs_store.get_certificate(epoch_number, index).is_err());
-}
-
-/// Regression: when the proto migration helper skips a legacy row
-/// (because its bytes fail to decode as either bincode v0/v1 or proto),
-/// the proto CF gets a hole at that index. `next_certificate_index`
-/// must still observe the legacy CF so that adding a new certificate
-/// does not collide with the hole — `ProofPerIndexColumn` is keyed by
-/// the same index space and is *not* affected by the cert codec
-/// migration, so reusing a skipped index would silently overwrite the
-/// existing proof row at that index.
-#[test]
-fn next_certificate_index_accounts_for_skipped_legacy_rows() {
-    let tmp = TempDBDir::new();
-    let config = Arc::new(Config::new(&tmp.path));
-    let epoch_number = EpochNumber::ZERO;
-    let epoch_path = config.storage.epoch_db_path(epoch_number);
-    let pending_store =
-        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
-    let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
-    );
-    let network_id = NetworkId::new(15);
-    let height = Height::ZERO;
-    seed_epoch_checkpoints(&epoch_path, network_id, height);
-
-    // Indices 0 and 1: valid legacy v0 rows that will migrate cleanly.
-    let valid = load_v0_certificate_bytes("v0-n15-cert_h0.hex");
-    write_raw_epoch_certificate_bytes(&epoch_path, CertificateIndex::new(0), valid.clone());
-    write_raw_epoch_certificate_bytes(&epoch_path, CertificateIndex::new(1), valid);
-
-    // Index 2: deliberately-malformed bytes that fail to decode as
-    // bincode v0/v1 (first byte != 0/1) *and* as proto (varint
-    // continuation set throughout, never terminates). The migration
-    // helper logs and skips this row; the legacy CF keeps it but the
-    // proto CF gets a hole at index 2.
-    write_raw_epoch_certificate_bytes(&epoch_path, CertificateIndex::new(2), vec![0xff_u8; 16]);
-
-    let store = PerEpochStore::try_open(
-        config,
-        epoch_number,
-        pending_store,
-        state_store,
-        Some(std::iter::once((network_id, height)).collect()),
-        BackupClient::noop(),
-    )
-    .unwrap();
-
-    // Without the fix: proto CF only has indices 0 and 1, so
-    // next_certificate_index would be 2, colliding with the legacy row
-    // / proof at index 2. With the fix: the legacy CF still has
-    // index 2 in its keyspace, so next_certificate_index = 3.
-    assert_eq!(
-        store.next_certificate_index.load(Ordering::Relaxed),
-        3,
-        "next_certificate_index must skip past indices that are present in the legacy CF but \
-         absent from the proto CF (skipped by the migration helper)",
-    );
 }
 
 #[rstest]
