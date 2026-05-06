@@ -15,4 +15,11 @@ Migration run at {{ started_at }} UTC, total {{ overall_duration }}. Status: **{
 - {{ fatal.label }}: {{ fatal.error }}
 {% endfor %}
 {% endif -%}
+{% if has_unparsable -%}
+**Unparsable rows ({{ unparsable_count }})**
+
+{% for u in unparsable -%}
+- `{{ u.cf }}` ({{ u.source }}) at key `{{ u.key_hex }}`: {{ u.error }}
+{% endfor %}
+{% endif -%}
 ---

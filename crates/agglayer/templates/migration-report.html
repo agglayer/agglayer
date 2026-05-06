@@ -38,6 +38,10 @@
     <div class="kpi-label">Total time</div>
     <div class="kpi-value success">{{ overall_duration }}</div>
   </div>
+  <div class="kpi">
+    <div class="kpi-label">Unparsable rows</div>
+    <div class="kpi-value {{ unparsable_class }}">{{ unparsable_total }}</div>
+  </div>
 </div>
 </section>
 
@@ -59,6 +63,14 @@
     <tr><th class="store-key">Duration</th><td>{{ card.duration }}</td></tr>
   </tbody></table>
   {% if card.has_error %}<div class="fatal">{{ card.error }}</div>{% endif %}
+  {% if card.has_unparsable %}
+  <h3>Unparsable rows ({{ card.unparsable_count }})</h3>
+  <table><thead><tr><th>CF</th><th>Key</th><th>Error</th></tr></thead><tbody>
+  {% for u in card.unparsable %}
+    <tr><td><code>{{ u.cf }}</code></td><td><code class="mono break">{{ u.key_hex }}</code></td><td>{{ u.error }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  {% endif %}
 </div>
 {% endif %}
 </section>
@@ -93,6 +105,14 @@
   <table><thead><tr><th>Epoch</th><th>Error</th></tr></thead><tbody>
   {% for f in epochs.failures %}
     <tr><td class="num"><strong>{{ f.epoch }}</strong></td><td>{{ f.error }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  {% endif %}
+  {% if epochs.has_unparsable %}
+  <h3>Unparsable rows ({{ epochs.unparsable_count }})</h3>
+  <table><thead><tr><th>CF</th><th>Source</th><th>Key</th><th>Error</th></tr></thead><tbody>
+  {% for u in epochs.unparsable %}
+    <tr><td><code>{{ u.cf }}</code></td><td>{{ u.source }}</td><td><code class="mono break">{{ u.key_hex }}</code></td><td>{{ u.error }}</td></tr>
   {% endfor %}
   </tbody></table>
   {% endif %}

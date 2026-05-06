@@ -58,6 +58,9 @@ struct MarkdownReport<'a> {
     status_label: &'static str,
     rows: Vec<RowVm>,
     fatals: Vec<FatalVm>,
+    unparsable: Vec<UnparsableRowVm>,
+    unparsable_count: usize,
+    has_unparsable: bool,
 }
 
 struct RowVm {
@@ -69,6 +72,14 @@ struct RowVm {
 
 struct FatalVm {
     label: String,
+    error: String,
+}
+
+#[derive(Clone)]
+struct UnparsableRowVm {
+    source: String,
+    cf: String,
+    key_hex: String,
     error: String,
 }
 
@@ -103,6 +114,9 @@ impl<'a> MarkdownReport<'a> {
             });
         }
 
+        let unparsable = collect_unparsable(o);
+        let unparsable_count = unparsable.len();
+
         Self {
             env_label: &o.env_label,
             started_at: format_time(o.started_at),
@@ -111,8 +125,37 @@ impl<'a> MarkdownReport<'a> {
             status_label,
             rows,
             fatals,
+            has_unparsable: !unparsable.is_empty(),
+            unparsable_count,
+            unparsable,
         }
     }
+}
+
+/// Flatten every store's unparsable rows into a single, deterministically-
+/// ordered list (state, pending, debug, epochs) for the markdown summary
+/// section. The HTML report keeps the per-store buckets separate.
+fn collect_unparsable(o: &MigrateOutcome) -> Vec<UnparsableRowVm> {
+    let mut out = Vec::new();
+    for store in [&o.state, &o.pending, &o.debug].iter().filter_map(|s| s.as_ref()) {
+        for u in &store.unparsable_rows {
+            out.push(UnparsableRowVm {
+                source: u.source.clone(),
+                cf: u.cf.to_string(),
+                key_hex: u.key_hex.clone(),
+                error: u.error.clone(),
+            });
+        }
+    }
+    for u in &o.epochs.unparsable_rows {
+        out.push(UnparsableRowVm {
+            source: u.source.clone(),
+            cf: u.cf.to_string(),
+            key_hex: u.key_hex.clone(),
+            error: u.error.clone(),
+        });
+    }
+    out
 }
 
 fn store_row(store: Option<&StoreResult>, fallback_label: &str) -> RowVm {
@@ -124,8 +167,16 @@ fn store_row(store: Option<&StoreResult>, fallback_label: &str) -> RowVm {
             notes: "not configured for this deployment".into(),
         };
     };
+    let unparsable_count = r.unparsable_rows.len();
     let (status, notes) = match &r.error {
-        None => ("✅ OK".to_string(), "—".to_string()),
+        None => {
+            let notes = if unparsable_count > 0 {
+                format!("{unparsable_count} unparsable rows")
+            } else {
+                "—".to_string()
+            };
+            ("✅ OK".to_string(), notes)
+        }
         Some(e) => ("❌ FAILED".to_string(), e.clone()),
     };
     RowVm {
@@ -158,12 +209,16 @@ fn epochs_row(epochs: &EpochsResult) -> RowVm {
     } else {
         "❌ FAILED"
     };
-    let notes = format!(
+    let mut notes = format!(
         "{} processed; {} OK; {} failed",
         epochs.processed,
         epochs.successful,
         epochs.failed.len(),
     );
+    let unparsable_count = epochs.unparsable_rows.len();
+    if unparsable_count > 0 {
+        notes.push_str(&format!("; {unparsable_count} unparsable"));
+    }
     RowVm {
         label: "epochs".into(),
         status: status.into(),
@@ -188,6 +243,8 @@ struct HtmlReport<'a> {
     status_class: &'static str,
     store_count: usize,
     fatal_count: usize,
+    unparsable_total: usize,
+    unparsable_class: &'static str,
     store_cards: Vec<StoreCardVm>,
     epochs: EpochsCardVm,
     path_rows: Vec<PathRowVm>,
@@ -204,6 +261,9 @@ struct StoreCardVm {
     duration: String,
     has_error: bool,
     error: String,
+    has_unparsable: bool,
+    unparsable_count: usize,
+    unparsable: Vec<UnparsableRowVm>,
 }
 
 struct EpochsCardVm {
@@ -221,6 +281,9 @@ struct EpochsCardVm {
     duration: String,
     has_failures: bool,
     failures: Vec<EpochFailureVm>,
+    has_unparsable: bool,
+    unparsable_count: usize,
+    unparsable: Vec<UnparsableRowVm>,
 }
 
 struct EpochFailureVm {
@@ -285,6 +348,13 @@ impl<'a> HtmlReport<'a> {
             });
         }
 
+        let unparsable_total: usize = [&o.state, &o.pending, &o.debug]
+            .iter()
+            .filter_map(|s| s.as_ref())
+            .map(|s| s.unparsable_rows.len())
+            .sum::<usize>()
+            + o.epochs.unparsable_rows.len();
+
         Self {
             env_label: &o.env_label,
             started_at: format_time(o.started_at),
@@ -293,6 +363,12 @@ impl<'a> HtmlReport<'a> {
             status_class,
             store_count,
             fatal_count: o.fatal_count(),
+            unparsable_total,
+            unparsable_class: if unparsable_total == 0 {
+                "success"
+            } else {
+                "warning"
+            },
             store_cards,
             epochs: epochs_card(&o.epochs),
             path_rows,
@@ -313,12 +389,25 @@ fn store_card(heading: &'static str, store: Option<&StoreResult>) -> StoreCardVm
             duration: String::new(),
             has_error: false,
             error: String::new(),
+            has_unparsable: false,
+            unparsable_count: 0,
+            unparsable: Vec::new(),
         };
     };
     let (badge_class, badge_label) = match &s.error {
         None => ("success", "OK"),
         Some(_) => ("destructive", "FAILED"),
     };
+    let unparsable: Vec<UnparsableRowVm> = s
+        .unparsable_rows
+        .iter()
+        .map(|u| UnparsableRowVm {
+            source: u.source.clone(),
+            cf: u.cf.to_string(),
+            key_hex: u.key_hex.clone(),
+            error: u.error.clone(),
+        })
+        .collect();
     StoreCardVm {
         heading,
         skipped: false,
@@ -329,10 +418,23 @@ fn store_card(heading: &'static str, store: Option<&StoreResult>) -> StoreCardVm
         duration: format_duration(s.duration),
         has_error: s.error.is_some(),
         error: s.error.clone().unwrap_or_default(),
+        has_unparsable: !unparsable.is_empty(),
+        unparsable_count: unparsable.len(),
+        unparsable,
     }
 }
 
 fn epochs_card(epochs: &EpochsResult) -> EpochsCardVm {
+    let unparsable: Vec<UnparsableRowVm> = epochs
+        .unparsable_rows
+        .iter()
+        .map(|u| UnparsableRowVm {
+            source: u.source.clone(),
+            cf: u.cf.to_string(),
+            key_hex: u.key_hex.clone(),
+            error: u.error.clone(),
+        })
+        .collect();
     if epochs.epochs_dir.is_none() {
         return EpochsCardVm {
             kind_not_configured: true,
@@ -349,6 +451,9 @@ fn epochs_card(epochs: &EpochsResult) -> EpochsCardVm {
             duration: String::new(),
             has_failures: false,
             failures: Vec::new(),
+            has_unparsable: false,
+            unparsable_count: 0,
+            unparsable: Vec::new(),
         };
     }
     if let Some(reason) = epochs.skipped_reason {
@@ -371,6 +476,9 @@ fn epochs_card(epochs: &EpochsResult) -> EpochsCardVm {
             duration: String::new(),
             has_failures: false,
             failures: Vec::new(),
+            has_unparsable: !unparsable.is_empty(),
+            unparsable_count: unparsable.len(),
+            unparsable,
         };
     }
     let (badge_class, badge_label) = if epochs.failed.is_empty() {
@@ -410,6 +518,9 @@ fn epochs_card(epochs: &EpochsResult) -> EpochsCardVm {
         duration: format_duration(epochs.duration),
         has_failures: !epochs.failed.is_empty(),
         failures,
+        has_unparsable: !unparsable.is_empty(),
+        unparsable_count: unparsable.len(),
+        unparsable,
     }
 }
 
@@ -464,7 +575,7 @@ mod tests {
     };
 
     use agglayer_storage::migrate::{
-        EpochFailure, EpochsResult, MigrateOutcome, StoreResult,
+        EpochFailure, EpochsResult, MigrateOutcome, StoreResult, UnparsableRow,
     };
 
     use super::*;
@@ -627,5 +738,93 @@ mod tests {
         let html = render_html(&o);
         assert!(html.contains("class=\"badge muted\">SKIPPED"));
         assert!(html.contains("skipped via --skip-epochs"));
+    }
+
+    fn outcome_with_unparsable_rows() -> MigrateOutcome {
+        let mut o = outcome_all_ok();
+        if let Some(p) = o.pending.as_mut() {
+            p.unparsable_rows = vec![
+                UnparsableRow {
+                    source: "pending".into(),
+                    cf: "pending_queue",
+                    key_hex: "00000000000000010000000000000005".into(),
+                    error: "invalid varint".into(),
+                },
+                UnparsableRow {
+                    source: "pending".into(),
+                    cf: "pending_queue",
+                    key_hex: "0000000000000002000000000000000a".into(),
+                    error: "BadCertificateVersion { version: 7 }".into(),
+                },
+            ];
+        }
+        o.epochs.unparsable_rows = vec![UnparsableRow {
+            source: "epoch 17".into(),
+            cf: "epoch_certificate_per_index",
+            key_hex: "0000000000000003".into(),
+            error: "decode error".into(),
+        }];
+        o
+    }
+
+    #[test]
+    fn markdown_lists_unparsable_rows_per_store() {
+        let md = render_markdown(&outcome_with_unparsable_rows());
+
+        // Dedicated section header with total count.
+        assert!(
+            md.contains("**Unparsable rows (3)**"),
+            "missing unparsable section header in:\n{md}"
+        );
+        // Each row shown with cf, source, key, error.
+        assert!(md.contains("`pending_queue` (pending) at key `00000000000000010000000000000005`"));
+        assert!(md.contains("invalid varint"));
+        assert!(md.contains("BadCertificateVersion"));
+        assert!(md.contains("`epoch_certificate_per_index` (epoch 17) at key `0000000000000003`"));
+    }
+
+    #[test]
+    fn markdown_omits_unparsable_section_when_none() {
+        let md = render_markdown(&outcome_all_ok());
+        assert!(!md.contains("Unparsable rows"));
+    }
+
+    #[test]
+    fn markdown_per_store_row_notes_count_unparsable_rows() {
+        let md = render_markdown(&outcome_with_unparsable_rows());
+        // Pending has 2 unparsable rows; the table notes column should
+        // surface that even though init_db succeeded.
+        assert!(
+            md.contains("2 unparsable rows"),
+            "pending row should annotate unparsable count:\n{md}"
+        );
+    }
+
+    #[test]
+    fn html_with_unparsable_rows_renders_section_per_store() {
+        let html = render_html(&outcome_with_unparsable_rows());
+
+        // Top-level KPI exposes the total count.
+        assert!(
+            html.contains("Unparsable rows"),
+            "missing unparsable KPI label"
+        );
+
+        // Pending card has its own per-store table.
+        assert!(html.contains("<h3>Unparsable rows (2)</h3>"));
+        // CF + key + error rendered as code.
+        assert!(html.contains("<code>pending_queue</code>"));
+        assert!(html.contains("00000000000000010000000000000005"));
+        assert!(html.contains("invalid varint"));
+
+        // Epoch card has its own.
+        assert!(html.contains("<h3>Unparsable rows (1)</h3>"));
+        assert!(html.contains("<code>epoch_certificate_per_index</code>"));
+    }
+
+    #[test]
+    fn html_omits_unparsable_section_when_none() {
+        let html = render_html(&outcome_all_ok());
+        assert!(!html.contains("<h3>Unparsable rows"));
     }
 }
