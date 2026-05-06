@@ -22,15 +22,61 @@ use std::borrow::Cow;
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
     aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof},
-    primitives::Digest,
-    Certificate, Height, Metadata, NetworkId, Signature,
+    primitives::{Digest, SignatureError},
+    Address, Certificate, Height, Metadata, NetworkId, Signature, U256,
 };
 use pessimistic_proof::unified_bridge::{
-    AggchainProofPublicValues, BridgeExit, ImportedBridgeExit,
+    AggchainProofPublicValues, BridgeExit, Claim, ClaimFromMainnet, ClaimFromRollup, GlobalIndex,
+    ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::schema::{bincode_codec, CodecError};
+use crate::{
+    schema::{bincode_codec, CodecError},
+    types::{generated::agglayer::storage::v0 as proto, proof::ProofConversionError},
+};
+
+#[path = "proto.rs"]
+mod proto_conversions;
+
+#[derive(Debug, thiserror::Error)]
+pub enum CertificateConversionError {
+    #[error("missing field `{0}`")]
+    MissingField(&'static str),
+
+    #[error("invalid data for `{field}`: {reason}")]
+    InvalidData { field: &'static str, reason: String },
+
+    #[error("invalid signature in `{field}`: {source}")]
+    Signature {
+        field: &'static str,
+        #[source]
+        source: SignatureError,
+    },
+
+    #[error("{0}")]
+    Proof(#[from] ProofConversionError),
+}
+
+fn expect_bytes<const N: usize>(
+    bytes: &[u8],
+    field: &'static str,
+) -> Result<[u8; N], CertificateConversionError> {
+    bytes
+        .try_into()
+        .map_err(|_| CertificateConversionError::InvalidData {
+            field,
+            reason: format!("expected {N} bytes, got {}", bytes.len()),
+        })
+}
+
+fn parse_signature(
+    value: proto::Signature,
+    field: &'static str,
+) -> Result<Signature, CertificateConversionError> {
+    Signature::try_from(value.value.as_ref())
+        .map_err(|source| CertificateConversionError::Signature { field, source })
+}
 
 /// A unit type serializing to a constant byte representing the storage version.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq)]
