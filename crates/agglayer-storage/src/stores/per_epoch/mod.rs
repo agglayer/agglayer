@@ -33,7 +33,7 @@ use crate::{
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
-mod cf_definitions;
+pub(crate) mod cf_definitions;
 
 #[cfg(test)]
 mod tests;

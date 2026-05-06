@@ -10,7 +10,7 @@ use crate::{
     storage::DB,
 };
 
-mod cf_definitions;
+pub(crate) mod cf_definitions;
 
 #[cfg(test)]
 mod tests;
