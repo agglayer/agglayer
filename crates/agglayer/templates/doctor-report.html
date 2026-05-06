@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>storage-doctor — {{ env_label }}</title>
+<style>{{ style|safe }}</style>
+</head>
+<body>
+<div class="container">
+
+<header class="page-header">
+  <h1>storage-doctor</h1>
+  <div class="meta">
+    <span><span class="badge {{ status_class }}">{{ status_label }}</span></span>
+    <span>env <strong>{{ env_label }}</strong></span>
+    <span>generated <strong>{{ generated_at }}</strong> UTC</span>
+  </div>
+</header>
+
+<section><h2>Summary</h2>
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Unparsable rows</div>
+    <div class="kpi-value {{ status_class }}">{{ total }}</div>
+  </div>
+</div>
+</section>
+
+{% if has_rows %}
+<section>
+  <h2>Unparsable rows</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Source</th><th>CF</th><th>Key</th><th>Error</th></tr>
+      </thead>
+      <tbody>
+{% for r in rows %}
+        <tr>
+          <td>{{ r.source }}</td>
+          <td><code>{{ r.cf }}</code></td>
+          <td><code class="mono break">{{ r.key_hex }}</code></td>
+          <td>{{ r.error }}</td>
+        </tr>
+{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section>
+  <h2>Unparsable rows</h2>
+  <p class="muted">No unparsable rows found. The legacy certificate CFs decode cleanly through `LegacyCertificate`.</p>
+</section>
+{% endif %}
+
+</div>
+</body>
+</html>

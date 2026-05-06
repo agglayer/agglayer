@@ -100,6 +100,42 @@ pub(crate) enum Commands {
         #[arg(long)]
         no_fail_on_error: bool,
     },
+
+    /// Diagnostic tools for the legacy -> proto certificate migration.
+    /// Read-only by default: does not modify any database. Pair with
+    /// `migrate-storage` to triage rows that the migration helper
+    /// could not decode.
+    #[clap(subcommand)]
+    StorageDoctor(StorageDoctor),
+}
+
+#[derive(Subcommand)]
+pub(crate) enum StorageDoctor {
+    /// List every row in the legacy certificate CFs whose value bytes
+    /// fail to decode as a `LegacyCertificate`. Read-only; no writes
+    /// to any database.
+    List {
+        /// Path to the agglayer configuration file. Scan paths are
+        /// derived from `[storage]`.
+        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "AGGLAYER_CONFIG_PATH")]
+        cfg: PathBuf,
+
+        /// Operator-supplied environment label (`mainnet`, `testnet`,
+        /// …) used in the report's heading. Defaults to the data
+        /// directory's basename.
+        #[arg(long, env = "AGGLAYER_DOCTOR_ENV_LABEL")]
+        env_label: Option<String>,
+
+        /// Write the markdown report to this file path. By default the
+        /// markdown is printed to stdout.
+        #[arg(long, value_hint = ValueHint::FilePath)]
+        markdown_file: Option<PathBuf>,
+
+        /// Write the HTML report to this file path. When unset, no
+        /// HTML is produced. The HTML is self-contained.
+        #[arg(long, value_hint = ValueHint::FilePath)]
+        html_file: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
