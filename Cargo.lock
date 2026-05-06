@@ -576,6 +576,7 @@ name = "agglayer-storage"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-sp1",
  "agglayer-storage",
  "agglayer-tries",
  "agglayer-types",
