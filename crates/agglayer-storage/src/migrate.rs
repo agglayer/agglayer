@@ -22,8 +22,12 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-use crate::stores::{
-    debug::DebugStore, pending::PendingStore, per_epoch::PerEpochStore, state::StateStore,
+pub use crate::diagnostics::UnparsableRow;
+use crate::{
+    diagnostics,
+    stores::{
+        debug::DebugStore, pending::PendingStore, per_epoch::PerEpochStore, state::StateStore,
+    },
 };
 
 /// Inputs for a migration run. The four `*_db_path` fields mirror the
@@ -70,6 +74,12 @@ pub struct StoreResult {
     pub duration: Duration,
     /// `None` on success; `Some(message)` if `init_db` returned an error.
     pub error: Option<String>,
+    /// Legacy CF rows that the post-migration diagnostics scan flagged as
+    /// undecodable (skipped by the migration helper). Empty when the
+    /// store has no relevant legacy CF (e.g. `state`), when `init_db`
+    /// failed (we did not run the scan), or when the scan itself failed
+    /// (logged via `tracing::warn`).
+    pub unparsable_rows: Vec<UnparsableRow>,
 }
 
 #[derive(Debug, Default)]
@@ -81,6 +91,10 @@ pub struct EpochsResult {
     pub failed: Vec<EpochFailure>,
     pub duration: Duration,
     pub skipped_reason: Option<&'static str>,
+    /// Aggregate of unparsable rows across every epoch that was
+    /// successfully migrated. Each entry's `source` field carries the
+    /// epoch number (e.g. `"epoch 1234"`).
+    pub unparsable_rows: Vec<UnparsableRow>,
 }
 
 #[derive(Debug)]
@@ -152,11 +166,14 @@ fn migrate_state(path: &Path) -> StoreResult {
         Ok(_) => None,
         Err(e) => Some(format_chain(&e)),
     };
+    // State DB does not have a legacy certificate CF subject to the
+    // proto migration, so there is nothing to scan here.
     StoreResult {
         label: "state".into(),
         path: path.to_path_buf(),
         duration: started.elapsed(),
         error,
+        unparsable_rows: Vec::new(),
     }
 }
 
@@ -166,11 +183,17 @@ fn migrate_pending(path: &Path) -> StoreResult {
         Ok(_) => None,
         Err(e) => Some(format_chain(&e)),
     };
+    let unparsable_rows = if error.is_none() {
+        scan_or_warn(diagnostics::scan_unparsable_pending_rows(path), "pending")
+    } else {
+        Vec::new()
+    };
     StoreResult {
         label: "pending".into(),
         path: path.to_path_buf(),
         duration: started.elapsed(),
         error,
+        unparsable_rows,
     }
 }
 
@@ -180,11 +203,36 @@ fn migrate_debug(path: &Path) -> StoreResult {
         Ok(_) => None,
         Err(e) => Some(format_chain(&e)),
     };
+    let unparsable_rows = if error.is_none() {
+        scan_or_warn(diagnostics::scan_unparsable_debug_rows(path), "debug")
+    } else {
+        Vec::new()
+    };
     StoreResult {
         label: "debug".into(),
         path: path.to_path_buf(),
         duration: started.elapsed(),
         error,
+        unparsable_rows,
+    }
+}
+
+/// Run a diagnostics scan and downgrade any failure to a warn-log +
+/// empty result so a scan error never blocks the migration report.
+fn scan_or_warn(
+    result: Result<Vec<UnparsableRow>, diagnostics::ScanError>,
+    store: &'static str,
+) -> Vec<UnparsableRow> {
+    match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::warn!(
+                store,
+                %error,
+                "diagnostics scan for unparsable legacy rows failed; report will not include them",
+            );
+            Vec::new()
+        }
     }
 }
 
@@ -253,6 +301,13 @@ fn migrate_epochs(epochs_dir: &Path, latest_epochs: Option<u64>) -> EpochsResult
         }
     }
 
+    // Diagnostic scan over the whole epochs directory, regardless of
+    // `latest_epochs` (the operator wants to see every currently-unparsable
+    // row, not just the ones in the subset they chose to re-migrate this
+    // run).
+    result.unparsable_rows =
+        scan_or_warn(diagnostics::scan_unparsable_epoch_rows(epochs_dir), "epoch");
+
     result.duration = started.elapsed();
     result
 }
@@ -280,4 +335,109 @@ fn format_chain(error: &dyn std::error::Error) -> String {
         }
     }
     single_line.trim().to_string()
+}
+
+#[cfg(test)]
+#[cfg(feature = "testutils")]
+mod tests {
+    use agglayer_types::{Height, NetworkId};
+
+    use super::*;
+    use crate::{
+        columns::pending_queue::{PendingQueueColumn, PendingQueueKey},
+        schema::{Codec as _, ColumnSchema as _},
+        stores::pending::cf_definitions::PENDING_DB_V0,
+        tests::TempDBDir,
+    };
+
+    fn seed_corrupt_pending_row(path: &Path, key: PendingQueueKey, value: Vec<u8>) {
+        let db = crate::storage::DB::open_cf(path, PENDING_DB_V0).unwrap();
+        let cf = db
+            .raw_rocksdb()
+            .cf_handle(PendingQueueColumn::COLUMN_FAMILY_NAME)
+            .unwrap();
+        db.raw_rocksdb()
+            .put_cf(&cf, key.encode().unwrap(), value)
+            .unwrap();
+    }
+
+    #[test]
+    fn outcome_surfaces_unparsable_rows_per_store() {
+        let tmp = TempDBDir::new();
+        let pending_path = tmp.path.join("pending");
+
+        // Two rows in the legacy CF: one valid, one corrupt.
+        let valid_v0_bytes = {
+            let p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("src/types/certificate/tests/encoded/v0-n15-cert_h0.hex");
+            hex::decode(std::fs::read_to_string(p).unwrap().trim()).unwrap()
+        };
+        seed_corrupt_pending_row(
+            &pending_path,
+            PendingQueueKey(NetworkId::new(15), Height::ZERO),
+            valid_v0_bytes,
+        );
+        seed_corrupt_pending_row(
+            &pending_path,
+            PendingQueueKey(NetworkId::new(15), Height::new(1)),
+            vec![0xff_u8; 16],
+        );
+
+        let outcome = run(MigrateOptions {
+            state_db_path: None,
+            pending_db_path: Some(pending_path),
+            debug_db_path: None,
+            epochs_db_path: None,
+            env_label: "test".into(),
+            skip_epochs: true,
+            latest_epochs: None,
+        });
+
+        let pending = outcome.pending.expect("pending store ran");
+        assert!(
+            pending.error.is_none(),
+            "init_db should succeed despite the corrupt row, got {:?}",
+            pending.error
+        );
+        assert_eq!(
+            pending.unparsable_rows.len(),
+            1,
+            "exactly the corrupt row should be reported, got {:?}",
+            pending.unparsable_rows
+        );
+        let row = &pending.unparsable_rows[0];
+        assert_eq!(row.source, "pending");
+        assert_eq!(row.cf, PendingQueueColumn::COLUMN_FAMILY_NAME);
+        let expected_key = PendingQueueKey(NetworkId::new(15), Height::new(1))
+            .encode()
+            .unwrap();
+        assert_eq!(row.key_hex, hex::encode(expected_key));
+    }
+
+    #[test]
+    fn outcome_unparsable_rows_empty_when_legacy_cf_is_clean() {
+        let tmp = TempDBDir::new();
+        let pending_path = tmp.path.join("pending");
+
+        // Initialise the pending DB with V0 schema; no rows seeded.
+        let _ = crate::storage::DB::open_cf(&pending_path, PENDING_DB_V0).unwrap();
+
+        let outcome = run(MigrateOptions {
+            state_db_path: None,
+            pending_db_path: Some(pending_path),
+            debug_db_path: None,
+            epochs_db_path: None,
+            env_label: "test".into(),
+            skip_epochs: true,
+            latest_epochs: None,
+        });
+
+        let pending = outcome.pending.expect("pending store ran");
+        assert!(pending.error.is_none());
+        assert!(
+            pending.unparsable_rows.is_empty(),
+            "no unparsable rows expected, got {:?}",
+            pending.unparsable_rows
+        );
+    }
 }

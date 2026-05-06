@@ -485,18 +485,21 @@ mod tests {
                 path: PathBuf::from("/var/agglayer/state"),
                 duration: Duration::from_millis(120),
                 error: None,
+                unparsable_rows: Vec::new(),
             }),
             pending: Some(StoreResult {
                 label: "pending".into(),
                 path: PathBuf::from("/var/agglayer/pending"),
                 duration: Duration::from_millis(45),
                 error: None,
+                unparsable_rows: Vec::new(),
             }),
             debug: Some(StoreResult {
                 label: "debug".into(),
                 path: PathBuf::from("/var/agglayer/debug"),
                 duration: Duration::from_millis(30),
                 error: None,
+                unparsable_rows: Vec::new(),
             }),
             epochs: EpochsResult {
                 epochs_dir: Some(PathBuf::from("/var/agglayer/epochs")),
@@ -506,6 +509,7 @@ mod tests {
                 failed: Vec::new(),
                 duration: Duration::from_millis(800),
                 skipped_reason: None,
+                unparsable_rows: Vec::new(),
             },
         }
     }
@@ -517,6 +521,7 @@ mod tests {
                 path: PathBuf::from("/var/agglayer/state"),
                 duration: Duration::from_millis(120),
                 error: Some("schema mismatch".into()),
+                unparsable_rows: Vec::new(),
             }),
             epochs: EpochsResult {
                 epochs_dir: Some(PathBuf::from("/var/agglayer/epochs")),
@@ -535,6 +540,7 @@ mod tests {
                 ],
                 duration: Duration::from_millis(500),
                 skipped_reason: None,
+                unparsable_rows: Vec::new(),
             },
             ..outcome_all_ok()
         }
