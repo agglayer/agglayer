@@ -168,7 +168,15 @@ mod tests {
     use agglayer_types::{CertificateIndex, Height, NetworkId};
 
     use super::*;
-    use crate::{columns::pending_queue::PendingQueueKey, tests::TempDBDir};
+    use crate::{
+        columns::pending_queue::PendingQueueKey,
+        stores::{
+            debug::{cf_definitions::DEBUG_DB, DebugStore},
+            pending::{cf_definitions::PENDING_DB, PendingStore},
+            per_epoch::{cf_definitions::EPOCHS_DB, PerEpochStore},
+        },
+        tests::TempDBDir,
+    };
 
     fn load_v0_certificate_bytes(name: &str) -> Vec<u8> {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -178,37 +186,57 @@ mod tests {
         hex::decode(hex.trim()).unwrap()
     }
 
-    fn write_raw_pending(path: &Path, key: PendingQueueKey, value: Vec<u8>) {
-        let db = crate::storage::DB::open_cf(path, PENDING_DB_V0).unwrap();
+    fn write_raw_pending(
+        path: &Path,
+        cfs: &[crate::schema::ColumnDescriptor],
+        key: PendingQueueKey,
+        value: Vec<u8>,
+    ) {
+        let db = open_raw_cf(path, cfs);
         let cf = db
-            .raw_rocksdb()
             .cf_handle(PendingQueueColumn::COLUMN_FAMILY_NAME)
             .unwrap();
-        db.raw_rocksdb()
-            .put_cf(&cf, key.encode().unwrap(), value)
-            .unwrap();
+        db.put_cf(&cf, key.encode().unwrap(), value).unwrap();
     }
 
-    fn write_raw_debug(path: &Path, id: agglayer_types::CertificateId, value: Vec<u8>) {
-        let db = crate::storage::DB::open_cf(path, DEBUG_DB_V0).unwrap();
+    fn write_raw_debug(
+        path: &Path,
+        cfs: &[crate::schema::ColumnDescriptor],
+        id: agglayer_types::CertificateId,
+        value: Vec<u8>,
+    ) {
+        let db = open_raw_cf(path, cfs);
         let cf = db
-            .raw_rocksdb()
             .cf_handle(DebugCertificatesColumn::COLUMN_FAMILY_NAME)
             .unwrap();
-        db.raw_rocksdb()
-            .put_cf(&cf, id.encode().unwrap(), value)
-            .unwrap();
+        db.put_cf(&cf, id.encode().unwrap(), value).unwrap();
     }
 
-    fn write_raw_epoch(path: &Path, idx: CertificateIndex, value: Vec<u8>) {
-        let db = crate::storage::DB::open_cf(path, EPOCHS_DB_V0).unwrap();
+    fn write_raw_epoch(
+        path: &Path,
+        cfs: &[crate::schema::ColumnDescriptor],
+        idx: CertificateIndex,
+        value: Vec<u8>,
+    ) {
+        let db = open_raw_cf(path, cfs);
         let cf = db
-            .raw_rocksdb()
             .cf_handle(CertificatePerIndexColumn::COLUMN_FAMILY_NAME)
             .unwrap();
-        db.raw_rocksdb()
-            .put_cf(&cf, idx.encode().unwrap(), value)
-            .unwrap();
+        db.put_cf(&cf, idx.encode().unwrap(), value).unwrap();
+    }
+
+    fn open_raw_cf(path: &Path, cfs: &[crate::schema::ColumnDescriptor]) -> rocksdb::DB {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+
+        let names = rocksdb::DB::list_cf(&options, path).unwrap_or_else(|_| {
+            cfs.iter()
+                .map(|cf| cf.name().to_string())
+                .collect::<Vec<_>>()
+        });
+
+        rocksdb::DB::open_cf(&options, path, names).unwrap()
     }
 
     /// Bytes that are not valid bincode v0/v1 (first byte != 0/1) and
@@ -224,11 +252,13 @@ mod tests {
 
         write_raw_pending(
             &path,
+            PENDING_DB_V0,
             PendingQueueKey(NetworkId::new(15), Height::ZERO),
             load_v0_certificate_bytes("v0-n15-cert_h0.hex"),
         );
         write_raw_pending(
             &path,
+            PENDING_DB_V0,
             PendingQueueKey(NetworkId::new(15), Height::new(1)),
             corrupt_bytes(),
         );
@@ -256,6 +286,7 @@ mod tests {
 
         write_raw_pending(
             &path,
+            PENDING_DB_V0,
             PendingQueueKey(NetworkId::new(15), Height::ZERO),
             load_v0_certificate_bytes("v0-n15-cert_h0.hex"),
         );
@@ -268,12 +299,35 @@ mod tests {
     }
 
     #[test]
+    fn pending_scan_works_after_proto_cf_migration() {
+        let tmp = TempDBDir::new();
+        let pending_path = tmp.path.join("pending");
+
+        let pending = PendingStore::new_with_path(&pending_path).unwrap();
+        drop(pending);
+
+        write_raw_pending(
+            &pending_path,
+            PENDING_DB,
+            PendingQueueKey(NetworkId::new(15), Height::new(1)),
+            corrupt_bytes(),
+        );
+
+        let result = scan_unparsable_pending_rows(&pending_path).unwrap();
+        assert_eq!(
+            result.len(),
+            1,
+            "expected corrupt legacy row after migration"
+        );
+    }
+
+    #[test]
     fn debug_scan_returns_only_unparsable_rows() {
         let tmp = TempDBDir::new();
         let path = tmp.path.join("debug");
         let id = agglayer_types::CertificateId::new(agglayer_types::Digest([1u8; 32]));
 
-        write_raw_debug(&path, id, corrupt_bytes());
+        write_raw_debug(&path, DEBUG_DB_V0, id, corrupt_bytes());
 
         let result = scan_unparsable_debug_rows(&path).unwrap();
         assert_eq!(result.len(), 1);
@@ -281,6 +335,25 @@ mod tests {
         assert_eq!(row.source, "debug");
         assert_eq!(row.cf, DebugCertificatesColumn::COLUMN_FAMILY_NAME);
         assert_eq!(row.key_hex, hex::encode(id.encode().unwrap()));
+    }
+
+    #[test]
+    fn debug_scan_works_after_proto_cf_migration() {
+        let tmp = TempDBDir::new();
+        let path = tmp.path.join("debug");
+        let id = agglayer_types::CertificateId::new(agglayer_types::Digest([1u8; 32]));
+
+        let debug = DebugStore::new_with_path(&path).unwrap();
+        drop(debug);
+
+        write_raw_debug(&path, DEBUG_DB, id, corrupt_bytes());
+
+        let result = scan_unparsable_debug_rows(&path).unwrap();
+        assert_eq!(
+            result.len(),
+            1,
+            "expected corrupt legacy row after migration"
+        );
     }
 
     #[test]
@@ -293,10 +366,16 @@ mod tests {
         let epoch_99 = epochs_dir.join("99");
 
         // Epoch 42: one corrupt row.
-        write_raw_epoch(&epoch_42, CertificateIndex::new(7), corrupt_bytes());
+        write_raw_epoch(
+            &epoch_42,
+            EPOCHS_DB_V0,
+            CertificateIndex::new(7),
+            corrupt_bytes(),
+        );
         // Epoch 99: clean (one valid v0 row).
         write_raw_epoch(
             &epoch_99,
+            EPOCHS_DB_V0,
             CertificateIndex::new(0),
             load_v0_certificate_bytes("v0-n15-cert_h0.hex"),
         );
@@ -326,5 +405,30 @@ mod tests {
 
         let result = scan_unparsable_epoch_rows(&epochs_dir).unwrap();
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn epoch_scan_works_after_proto_cf_migration() {
+        let tmp = TempDBDir::new();
+        let epochs_dir = tmp.path.join("epochs");
+        let epoch_path = epochs_dir.join("42");
+        std::fs::create_dir_all(&epochs_dir).unwrap();
+
+        let epoch_db = PerEpochStore::<(), ()>::init_db(&epoch_path).unwrap();
+        drop(epoch_db);
+
+        write_raw_epoch(
+            &epoch_path,
+            EPOCHS_DB,
+            CertificateIndex::new(7),
+            corrupt_bytes(),
+        );
+
+        let result = scan_unparsable_epoch_rows(&epochs_dir).unwrap();
+        assert_eq!(
+            result.len(),
+            1,
+            "expected corrupt legacy row after migration"
+        );
     }
 }

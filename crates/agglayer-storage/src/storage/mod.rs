@@ -57,7 +57,15 @@ impl DB {
         options.create_if_missing(false); // Don't create if missing in readonly mode
         options.create_missing_column_families(false); // Don't create missing column families
 
-        let descriptors: Vec<_> = cfs.iter().map(Self::descriptor).collect();
+        let descriptors: Vec<_> = match rocksdb::DB::list_cf(&options, path) {
+            Ok(names) => names
+                .into_iter()
+                .filter(|name| name != rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
+                .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
+                .collect(),
+            Err(_) => cfs.iter().map(Self::descriptor).collect(),
+        };
+
         Ok(DB {
             rocksdb: rocksdb::DB::open_cf_descriptors_read_only(
                 &options,
