@@ -90,9 +90,7 @@ pub fn scan_unparsable_debug_rows(db_path: &Path) -> Result<Vec<UnparsableRow>, 
 /// Scan the legacy `epoch_certificate_per_index` CF in every numeric
 /// epoch subdirectory under `epochs_db_path`. Non-numeric subdirectories
 /// (`lost+found`, etc.) are ignored.
-pub fn scan_unparsable_epoch_rows(
-    epochs_db_path: &Path,
-) -> Result<Vec<UnparsableRow>, ScanError> {
+pub fn scan_unparsable_epoch_rows(epochs_db_path: &Path) -> Result<Vec<UnparsableRow>, ScanError> {
     let entries = std::fs::read_dir(epochs_db_path).map_err(|source| ScanError::EpochDir {
         path: epochs_db_path.to_path_buf(),
         source,

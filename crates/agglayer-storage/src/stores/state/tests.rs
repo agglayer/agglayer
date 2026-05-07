@@ -83,8 +83,9 @@ fn init_db_adds_legacy_missing_cfs() {
 
 #[test]
 fn init_db_is_idempotent_on_current_schema() {
-    // Opening init_db twice on a fresh DB must succeed: the second call
-    // sees every CF already present and the ensure_cfs step is a no-op.
+    // Opening init_db twice on a fresh DB must succeed: after the first
+    // open records the ensure_cfs step, the second call sees the current
+    // schema and skips that already-recorded step.
     let tmp = TempDBDir::new();
     let db = StateStore::init_db(tmp.path.as_path()).expect("first init_db");
     drop(db);

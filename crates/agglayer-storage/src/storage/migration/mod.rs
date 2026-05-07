@@ -186,29 +186,26 @@ impl Builder {
     /// created by a build that already declared these CFs in its V0
     /// schema (no data is lost on already-present CFs).
     ///
-    /// When all requested CFs are already present, the step is a no-op:
-    /// the step counter advances but no migration record is written. This
-    /// keeps fresh databases (where the CFs were created as part of V0
-    /// initialization) compatible with subsequent reopens by older
-    /// builds that did not declare this step.
+    /// When all requested CFs are already present, the step is still
+    /// recorded as a no-op. This preserves a contiguous migration history
+    /// so later recorded steps cannot create gaps on reopen.
     ///
     /// [`add_cfs`]: Self::add_cfs
     pub fn ensure_cfs(self, cfs: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
-        let missing_cfs: Vec<_> = cfs
-            .iter()
-            .filter(|descriptor| !self.cf_exists(descriptor.name()))
-            .cloned()
-            .collect();
-
-        if missing_cfs.is_empty() {
-            debug!("All requested column families already exist, skipping migration step");
-            return Ok(Self {
-                step: self.step + 1,
-                ..self
-            });
-        }
-
         Ok(self.perform_step(move |db| {
+            let missing_cfs: Vec<_> = cfs
+                .iter()
+                .filter(|descriptor| !db.cf_exists(descriptor.name()))
+                .cloned()
+                .collect();
+
+            if missing_cfs.is_empty() {
+                debug!(
+                    "All requested column families already exist, recording no-op migration step"
+                );
+                return Ok(());
+            }
+
             for descriptor in &missing_cfs {
                 let cf = descriptor.name();
 
