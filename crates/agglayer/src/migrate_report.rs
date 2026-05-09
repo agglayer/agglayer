@@ -137,7 +137,10 @@ impl<'a> MarkdownReport<'a> {
 /// section. The HTML report keeps the per-store buckets separate.
 fn collect_unparsable(o: &MigrateOutcome) -> Vec<UnparsableRowVm> {
     let mut out = Vec::new();
-    for store in [&o.state, &o.pending, &o.debug].iter().filter_map(|s| s.as_ref()) {
+    for store in [&o.state, &o.pending, &o.debug]
+        .iter()
+        .filter_map(|s| s.as_ref())
+    {
         for u in &store.unparsable_rows {
             out.push(UnparsableRowVm {
                 source: u.source.clone(),

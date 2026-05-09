@@ -16,7 +16,11 @@ use agglayer_storage::diagnostics::UnparsableRow;
 use askama::Template;
 
 /// Render the markdown doctor report.
-pub fn render_markdown(env_label: &str, generated_at: SystemTime, rows: &[UnparsableRow]) -> String {
+pub fn render_markdown(
+    env_label: &str,
+    generated_at: SystemTime,
+    rows: &[UnparsableRow],
+) -> String {
     MarkdownDoctor::new(env_label, generated_at, rows)
         .render()
         .expect("markdown doctor template renders")
@@ -182,7 +186,10 @@ mod tests {
     #[test]
     fn markdown_with_rows_lists_each_one() {
         let md = render_markdown("mainnet", fixed_time(), &sample_rows());
-        assert!(md.contains("**Unparsable rows (2)**"), "missing header in:\n{md}");
+        assert!(
+            md.contains("**Unparsable rows (2)**"),
+            "missing header in:\n{md}"
+        );
         assert!(md.contains(
             "`pending_queue` (pending) at key `00000000000000010000000000000005`: invalid varint"
         ));
