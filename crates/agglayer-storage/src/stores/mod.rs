@@ -20,9 +20,6 @@ pub mod state;
 
 mod migration_helpers;
 
-#[cfg(test)]
-mod migration_snapshot;
-
 macro_rules! try_digest {
     ($value:expr, $err_msg:expr) => {
         agglayer_types::Digest::try_from(&*$value).map_err(|_| {
