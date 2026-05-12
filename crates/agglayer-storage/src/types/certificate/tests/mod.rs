@@ -380,20 +380,26 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
     assert!(bytes.starts_with(start));
 }
 
+// SP1 v6 made the legacy `CertificateV1` → `Certificate` conversion fallible
+// (`TryFrom`) and dropped the `From<&Certificate> for CertificateV1` impl, so
+// the synthesised round-trip case from #1519 is no longer expressible. The
+// pre-existing fixtures still exercise the legacy CF decode path.
 #[rstest::rstest]
 #[case(CertificateV0::test0(), Certificate::from(CertificateV0::test0()))]
 #[case(CertificateV1::test0(), Certificate::try_from(CertificateV1::test0()).unwrap())]
 #[case(CertificateV1::test1(), Certificate::try_from(CertificateV1::test1()).unwrap())]
 #[case(CertificateV1::test4(), Certificate::try_from(CertificateV1::test4()).unwrap())]
 #[case(CertificateV1::test5(), Certificate::try_from(CertificateV1::test5()).unwrap())]
-fn encoding_roundtrip_consistent_with_into<T>(#[case] orig: T, #[case] converted: Certificate)
-where
+fn legacy_decoding_roundtrip_consistent_with_into<T>(
+    #[case] orig: T,
+    #[case] converted: Certificate,
+) where
     T: Serialize,
 {
     let bytes = bincode_codec().serialize(&orig).unwrap();
-    let decoded = Certificate::decode(&bytes).unwrap();
+    let decoded = LegacyCertificate::decode(&bytes).unwrap();
 
-    assert_eq!(converted, decoded);
+    assert_eq!(converted, Certificate::from(decoded));
 }
 
 /// Regression test for the storage-v1 migration boundary: legacy v5 proof
@@ -412,7 +418,7 @@ fn regression_certificate_v1_decode_preserves_legacy_v5_vkey_hash() {
     };
 
     let bytes = bincode_codec().serialize(&certificate).unwrap();
-    let decoded = Certificate::decode(&bytes).unwrap();
+    let decoded = Certificate::from(LegacyCertificate::decode(&bytes).unwrap());
     let proof = match &decoded.aggchain_data {
         AggchainData::Generic { proof, .. } => proof,
         _ => panic!("expected Generic aggchain data after V1 decode"),
@@ -456,55 +462,84 @@ where
 #[case("n15-cert_h1")]
 #[case("n15-cert_h2")]
 #[case("n15-cert_h3")]
-fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
+fn legacy_cert_in_v0_format_decodes(#[case] cert_name: &str) {
     let from_json = sample_data::load_certificate(&format!("{cert_name}.json"));
 
     let bytes = load_sample_bytes(&format!("encoded/v0-{cert_name}.hex"));
-    let from_bytes = Certificate::decode(&bytes).expect("v0 certificate to decode successfully");
+    let from_bytes =
+        LegacyCertificate::decode(&bytes).expect("v0 certificate to decode successfully");
 
-    assert_eq!(from_bytes, from_json);
+    assert_eq!(Certificate::from(from_bytes), from_json);
 }
 
 #[rstest::rstest]
 #[case::regression_01("encoded/regression_01.hex")]
 #[case::regression_02("encoded/regression_02.hex")]
-fn regressions(#[case] cert_filename: &str) {
+fn legacy_regressions(#[case] cert_filename: &str) {
     let bytes = load_sample_bytes(cert_filename);
-    let _certificate = Certificate::decode(&bytes).expect("decoding failed");
+    let _legacy = LegacyCertificate::decode(&bytes).expect("legacy decoding failed");
 }
 
 #[test]
-fn bad_format() {
-    const NEXT_VERSION: u8 = 2;
-
+fn legacy_certificate_decode_per_byte_dispatch() {
+    // Empty input is rejected explicitly.
     assert!(matches!(
-        Certificate::decode(&[]).unwrap_err(),
+        LegacyCertificate::decode(&[]).unwrap_err(),
         CodecError::CertificateEmpty
     ));
 
-    for v in 0..NEXT_VERSION {
-        assert!(matches!(
-            Certificate::decode(&[v]).unwrap_err(),
-            CodecError::Serialization(_)
-        ));
+    // Bytes 0 and 1 enter the bincode path; with no payload, bincode
+    // produces a serialization error.
+    for v in 0..=1 {
+        assert!(
+            matches!(
+                LegacyCertificate::decode(&[v]).unwrap_err(),
+                CodecError::Serialization(_)
+            ),
+            "expected bincode serialization error for byte {v:#x}"
+        );
     }
 
-    for v in NEXT_VERSION..=u8::MAX {
-        assert!(matches!(
-            Certificate::decode(&[v]).unwrap_err(),
-            CodecError::ProtobufDeserialization(_) | CodecError::Conversion(_)
-        ));
+    // Other bytes enter the proto path. The legacy CF carried proto rows
+    // between #1519 and this PR, so this branch must be live. With no
+    // payload the proto decoder either rejects the bytes outright or
+    // produces a default-valued message that fails `Certificate::try_from`.
+    for v in 2..=u8::MAX {
+        let err = LegacyCertificate::decode(&[v]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                CodecError::ProtobufDeserialization(_) | CodecError::Conversion(_)
+            ),
+            "expected proto decode/conversion error for byte {v:#x}, got {err:?}"
+        );
     }
+}
+
+#[test]
+fn certificate_proto_decode_rejects_empty_bytes() {
+    // The proto codec must not silently accept zero-length payloads as a
+    // legacy fallback. A real proto-encoded certificate always contains the
+    // required `prev_local_exit_root`/`new_local_exit_root` fields, so an
+    // empty input is unambiguously corrupt.
+    let err = <Certificate as crate::schema::Codec>::decode(&[]).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CodecError::Conversion(_) | CodecError::ProtobufDeserialization(_)
+        ),
+        "unexpected error variant: {err:?}"
+    );
 }
 
 /// Smoke test: malformed bytes must surface as a recoverable `CodecError`,
 /// never as a process-level panic. Covers the common case where bincode
 /// returns its own error (no panic reached).
 #[test]
-fn decode_of_corrupt_bytes_returns_codec_error() {
+fn legacy_decode_of_corrupt_bytes_returns_codec_error() {
     // A valid v1 version byte followed by junk that bincode rejects.
     let bytes = [0x01u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-    let err = <Certificate as crate::schema::Codec>::decode(&bytes)
+    let err = <LegacyCertificate as crate::schema::Codec>::decode(&bytes)
         .expect_err("expected decode to fail, not panic");
     assert!(
         matches!(err, crate::schema::CodecError::Serialization(_)),
@@ -665,7 +700,7 @@ fn certificate_proto_rejects_malformed_nested_submessages() {
 #[test]
 fn legacy_v0_decode_proto_roundtrip_stays_lossless() {
     let bytes = load_sample_bytes("encoded/v0-n15-cert_h0.hex");
-    let typed = Certificate::decode(&bytes).unwrap();
+    let typed = Certificate::from(LegacyCertificate::decode(&bytes).unwrap());
 
     let proto = proto::Certificate::try_from(&typed).unwrap();
     let roundtrip = Certificate::try_from(proto).unwrap();

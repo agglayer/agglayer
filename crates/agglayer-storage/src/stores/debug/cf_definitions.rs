@@ -11,6 +11,3 @@ pub const DEBUG_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<DebugCertificatesColumn>(),
     ColumnDescriptor::new::<DebugCertificatesProtoColumn>(),
 ];
-
-pub const DEBUG_CERTIFICATE_PROTO_CFS: &[ColumnDescriptor] =
-    &[ColumnDescriptor::new::<DebugCertificatesProtoColumn>()];

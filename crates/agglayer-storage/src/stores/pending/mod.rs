@@ -16,10 +16,11 @@ use crate::{
         proof_per_certificate::ProofPerCertificateColumn,
     },
     error::Error,
+    schema::ColumnDescriptor,
     storage::DB,
 };
 
-mod cf_definitions;
+pub(crate) mod cf_definitions;
 
 #[cfg(test)]
 mod tests;
@@ -34,7 +35,7 @@ impl PendingStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
         DB::builder(path, cf_definitions::PENDING_DB_V0)?
             .add_cfs(
-                cf_definitions::PENDING_CERTIFICATE_PROTO_CFS,
+                &[ColumnDescriptor::new::<PendingQueueProtoColumn>()],
                 backfill_pending_certificates_proto_from_legacy_bincode,
             )?
             .finalize(cf_definitions::PENDING_DB)
@@ -50,24 +51,21 @@ impl PendingStore {
 }
 
 /// Migration step for the certificate serialization switch from the legacy
-/// bincode pending queue CF to the proto-backed CF.
+/// pending queue CF to the proto-backed CF.
 ///
-/// The legacy CF stays in place for this PR, but runtime reads and writes only
-/// use the proto CF after this backfill completes.
+/// Delegates to
+/// [`super::migration_helpers::copy_legacy_certificate_cf_into_proto`],
+/// which streams the legacy keyspace, skips and logs rows whose bytes cannot
+/// be decoded as a certificate, and copies the rest into the proto CF. The
+/// legacy CF stays in place for this PR; runtime reads and writes only use
+/// the proto CF after this backfill completes.
 fn backfill_pending_certificates_proto_from_legacy_bincode(
     db: &crate::storage::DbAccess,
 ) -> Result<(), crate::storage::DBMigrationErrorDetails> {
-    let keys = db
-        .keys::<PendingQueueColumn>()?
-        .collect::<Result<Vec<_>, _>>()?;
-
-    for key in keys {
-        if let Some(certificate) = db.get::<PendingQueueColumn>(&key)? {
-            db.put::<PendingQueueProtoColumn>(&key, &certificate)?;
-        }
-    }
-
-    Ok(())
+    super::migration_helpers::copy_legacy_certificate_cf_into_proto::<
+        PendingQueueColumn,
+        PendingQueueProtoColumn,
+    >(db, "pending")
 }
 
 impl PendingCertificateWriter for PendingStore {

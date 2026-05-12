@@ -24,6 +24,3 @@ pub const PENDING_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<PendingQueueProtoColumn>(),
     ColumnDescriptor::new::<ProofPerCertificateColumn>(),
 ];
-
-pub const PENDING_CERTIFICATE_PROTO_CFS: &[ColumnDescriptor] =
-    &[ColumnDescriptor::new::<PendingQueueProtoColumn>()];
