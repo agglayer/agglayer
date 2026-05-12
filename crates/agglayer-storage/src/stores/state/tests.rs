@@ -15,12 +15,15 @@ use pessimistic_proof::{
 use rstest::{fixture, rstest};
 use tracing::info;
 
+use super::cf_definitions;
 use crate::{
     backup::BackupClient,
     columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     error::Error,
+    schema::ColumnSchema as _,
+    storage::DB,
     stores::{state::StateStore, StateReader as _, StateWriter as _},
     tests::TempDBDir,
 };
@@ -28,6 +31,68 @@ use crate::{
 mod disabled_networks;
 mod metadata;
 mod settlement;
+
+#[test]
+fn init_db_adds_legacy_missing_cfs() {
+    use std::collections::BTreeSet;
+
+    use crate::columns::{
+        disabled_networks::DisabledNetworksColumn,
+        settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
+        settlement_attempt_results::SettlementAttemptResultsColumn,
+        settlement_attempts::SettlementAttemptsColumn,
+        settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
+    };
+
+    // Simulate a pre-`disabled_networks_cf` snapshot: an existing rocksdb
+    // directory whose schema is exactly STATE_DB_V0. The current binary
+    // must open it without UnexpectedSchema and end up with every CF
+    // declared in STATE_DB.
+    let tmp = TempDBDir::new();
+    {
+        let _legacy = DB::open_cf(tmp.path.as_path(), cf_definitions::STATE_DB_V0)
+            .expect("V0 schema initialization should succeed");
+    }
+
+    let db = StateStore::init_db(tmp.path.as_path())
+        .expect("init_db should ensure the missing legacy CFs are added");
+
+    // After init_db, every CF in STATE_DB_LEGACY_ADD_CFS exists on disk.
+    let post_cfs: BTreeSet<&str> =
+        rocksdb::DB::list_cf(&rocksdb::Options::default(), tmp.path.as_path())
+            .expect("list_cf should succeed after init_db")
+            .into_iter()
+            .map(|s| Box::leak(s.into_boxed_str()) as &str)
+            .collect();
+
+    for expected in [
+        DisabledNetworksColumn::COLUMN_FAMILY_NAME,
+        SettlementJobsColumn::COLUMN_FAMILY_NAME,
+        SettlementJobResultsColumn::COLUMN_FAMILY_NAME,
+        SettlementAttemptsColumn::COLUMN_FAMILY_NAME,
+        SettlementAttemptResultsColumn::COLUMN_FAMILY_NAME,
+        SettlementAttemptPerWalletColumn::COLUMN_FAMILY_NAME,
+    ] {
+        assert!(
+            post_cfs.contains(expected),
+            "expected legacy-add CF {expected:?} to be present after init_db; got {post_cfs:?}"
+        );
+    }
+    drop(db);
+}
+
+#[test]
+fn init_db_is_idempotent_on_current_schema() {
+    // Opening init_db twice on a fresh DB must succeed: after the first
+    // open records the ensure_cfs step, the second call sees the current
+    // schema and skips that already-recorded step.
+    let tmp = TempDBDir::new();
+    let db = StateStore::init_db(tmp.path.as_path()).expect("first init_db");
+    drop(db);
+    let db = StateStore::init_db(tmp.path.as_path())
+        .expect("second init_db should be a no-op on the already-current schema");
+    drop(db);
+}
 
 #[test]
 fn can_retrieve_list_of_network() {

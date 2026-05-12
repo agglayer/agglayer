@@ -1,4 +1,4 @@
-use super::sample::*;
+use super::{lock_sample_migration_tests, sample::*};
 use crate::{storage::migration::Builder, tests::TempDBDir};
 
 #[rstest::rstest]
@@ -12,6 +12,7 @@ fn partial_migration(
     // what kind of failure to issue
     #[values("panic", "return(simulated_fail)")] fail_mode: &str,
 ) -> Result<(), eyre::Error> {
+    let _guard = lock_sample_migration_tests();
     let scenario = fail::FailScenario::setup();
 
     let temp_dir = TempDBDir::new();

@@ -17,8 +17,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  # temporary image for v11 that support dockerv2::contracts::all build: https://github.com/agglayer/agglayer-contracts/pull/570/files
-  ZKEVM_CONTRACT_GIT_REF: pr-570v11-all
 
 jobs:
   unit:
@@ -51,23 +49,20 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v6
 
-      - name: Load image
-        run: |
-          docker pull ghcr.io/agglayer/agglayer-contracts:${{ env.ZKEVM_CONTRACT_GIT_REF }}
-          docker tag ghcr.io/agglayer/agglayer-contracts:${{ env.ZKEVM_CONTRACT_GIT_REF }} hermeznetwork/geth-zkevm-contracts
-          docker image ls -a
-
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make,nextest,protoc,cargo-hack
+
+      - name: Load image
+        run: cargo make integration-l1-image
 
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: nextest,protoc,cargo-hack
 
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1

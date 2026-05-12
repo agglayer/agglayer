@@ -271,6 +271,7 @@ dependencies = [
  "agglayer-storage",
  "agglayer-types",
  "alloy",
+ "async-trait",
  "axum 0.8.8",
  "eyre",
  "http 1.4.0",
@@ -308,6 +309,7 @@ name = "agglayer-grpc-types"
 version = "0.1.0"
 dependencies = [
  "agglayer-interop",
+ "agglayer-sp1",
  "agglayer-types",
  "bolero",
  "eyre",
@@ -564,10 +566,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "agglayer-sp1"
+version = "0.1.0"
+dependencies = [
+ "agglayer-interop-types",
+ "sp1-sdk",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "agglayer-storage"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-sp1",
  "agglayer-storage",
  "agglayer-tries",
  "agglayer-types",
