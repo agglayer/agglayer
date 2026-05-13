@@ -23,6 +23,14 @@ impl From<&[Option<Signature>]> for Payload {
     }
 }
 
+impl From<agglayer_interop_types::aggchain_proof::MultisigPayload> for Payload {
+    fn from(value: agglayer_interop_types::aggchain_proof::MultisigPayload) -> Self {
+        Self {
+            signatures: value.0,
+        }
+    }
+}
+
 impl From<&agglayer_interop_types::aggchain_proof::MultisigPayload> for Payload {
     fn from(value: &agglayer_interop_types::aggchain_proof::MultisigPayload) -> Self {
         Self {
