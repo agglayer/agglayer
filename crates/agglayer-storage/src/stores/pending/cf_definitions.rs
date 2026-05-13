@@ -1,13 +1,26 @@
-use rocksdb::ColumnFamilyDescriptor;
+use crate::{
+    columns::{
+        latest_pending_certificate_per_network::LatestPendingCertificatePerNetworkColumn,
+        latest_proven_certificate_per_network::LatestProvenCertificatePerNetworkColumn,
+        pending_queue::{PendingQueueColumn, PendingQueueProtoColumn},
+        proof_per_certificate::ProofPerCertificateColumn,
+    },
+    schema::ColumnDescriptor,
+};
 
-pub const CFS: [&str; 4] = [
-    crate::columns::LATEST_PROVEN_CERTIFICATE_PER_NETWORK_CF,
-    crate::columns::LATEST_PENDING_CERTIFICATE_PER_NETWORK_CF,
-    crate::columns::PENDING_QUEUE_CF,
-    crate::columns::PROOF_PER_CERTIFICATE_CF,
+/// Legacy definitions for the pending queue storage.
+pub const PENDING_DB_V0: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<LatestProvenCertificatePerNetworkColumn>(),
+    ColumnDescriptor::new::<LatestPendingCertificatePerNetworkColumn>(),
+    ColumnDescriptor::new::<PendingQueueColumn>(),
+    ColumnDescriptor::new::<ProofPerCertificateColumn>(),
 ];
 
-/// Definitions for the column families in the pending queue storage.
-pub fn pending_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    crate::schema::default_db_cf_definitions(&CFS)
-}
+/// Definitions for the pending queue storage.
+pub const PENDING_DB: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<LatestProvenCertificatePerNetworkColumn>(),
+    ColumnDescriptor::new::<LatestPendingCertificatePerNetworkColumn>(),
+    ColumnDescriptor::new::<PendingQueueColumn>(),
+    ColumnDescriptor::new::<PendingQueueProtoColumn>(),
+    ColumnDescriptor::new::<ProofPerCertificateColumn>(),
+];

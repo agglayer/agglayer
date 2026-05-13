@@ -1,0 +1,16 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/get_epoch_configuration.rs
+expression: json
+snapshot_kind: text
+---
+{
+  "error": {
+    "code": -32603,
+    "data": {
+      "internal": "AggLayer isn't configured with a BlockClock configuration, thus no EpochConfiguration is available"
+    },
+    "message": "Internal error: AggLayer isn't configured with a BlockClock configuration, thus no EpochConfiguration is available"
+  },
+  "id": 0,
+  "jsonrpc": "2.0"
+}

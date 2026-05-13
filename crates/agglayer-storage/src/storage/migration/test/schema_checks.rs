@@ -1,4 +1,4 @@
-use super::sample::*;
+use super::{lock_sample_migration_tests, sample::*};
 use crate::{
     storage::{Builder, DBOpenError},
     tests::TempDBDir,
@@ -6,6 +6,7 @@ use crate::{
 
 #[test_log::test]
 fn fewer_steps_declared_than_recorded() -> Result<(), eyre::Error> {
+    let _guard = lock_sample_migration_tests();
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
