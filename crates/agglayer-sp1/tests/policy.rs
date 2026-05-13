@@ -1,7 +1,8 @@
 use agglayer_interop_types::aggchain_proof::{Proof, SP1StarkWithContext};
 use agglayer_sp1::{
-    current_sp1_stark_with_context, AcceptancePolicy, ProofError, ProofExt, Sp1ProofVersion,
+    v6_sp1_stark_with_context, AcceptancePolicy, ProofError, ProofExt, Sp1ProofVersion,
 };
+use serde::{ser::Error as _, Serialize, Serializer};
 use sp1_sdk::{
     blocking::{Prover, ProverClient},
     ProvingKey,
@@ -9,6 +10,17 @@ use sp1_sdk::{
 
 const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
 const EMPTY_ELF_V5: &[u8] = include_bytes!("empty_v5.elf");
+
+struct FailingSerializeProof;
+
+impl Serialize for FailingSerializeProof {
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        Err(S::Error::custom("proof serialization failed"))
+    }
+}
 
 fn mock_proof(version: &str) -> Proof {
     match agglayer_sp1::version_kind(version) {
@@ -51,7 +63,9 @@ fn mock_proof(version: &str) -> Proof {
             .try_as_compressed()
             .unwrap();
 
-            Proof::SP1Stark(current_sp1_stark_with_context(proof.as_ref(), &vkey, version).unwrap())
+            let mut sp1 = v6_sp1_stark_with_context(proof.as_ref(), &vkey, "v6.1.0").unwrap();
+            sp1.version = version.to_owned();
+            Proof::SP1Stark(sp1)
         }
     }
 }
@@ -120,6 +134,18 @@ fn proof_reports_execute_specific_error_for_unknown_major() {
 }
 
 #[test]
+fn executable_sp1_uses_explicit_acceptance_policy() {
+    let err = mock_proof("v5.2.2")
+        .executable_sp1(&AcceptancePolicy::DEFAULT)
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        ProofError::UnsupportedExecutableSp1Version { .. }
+    ));
+}
+
+#[test]
 fn proof_error_exposes_unsupported_version_for_write_rejections() {
     let err = mock_proof("v5.2.2")
         .ensure_writable(&AcceptancePolicy::DEFAULT)
@@ -160,4 +186,60 @@ fn proof_vkey_hash_helpers_report_deserialization_errors() {
 
     let err = proof.vkey_hash_bytes().unwrap_err();
     assert!(matches!(err, ProofError::DeserializeSp1Vkey { .. }));
+}
+
+#[test]
+fn v6_sp1_stark_with_context_reports_proof_serialization_errors() {
+    let client = ProverClient::builder().mock().build();
+    let proving_key = client.setup(sp1_sdk::Elf::Static(EMPTY_ELF)).unwrap();
+    let vkey = proving_key.verifying_key();
+
+    let err = v6_sp1_stark_with_context(&FailingSerializeProof, vkey, "v6.1.0").unwrap_err();
+
+    assert!(matches!(err, ProofError::SerializeSp1Proof { .. }));
+}
+
+#[test]
+fn v6_sp1_stark_with_context_rejects_v5_versions() {
+    let client = ProverClient::builder().mock().build();
+    let proving_key = client.setup(sp1_sdk::Elf::Static(EMPTY_ELF)).unwrap();
+    let vkey = proving_key.verifying_key();
+    let proof = mock_proof("v6.1.0");
+    let Proof::SP1Stark(sp1) = proof;
+
+    let err = v6_sp1_stark_with_context(&sp1.proof, vkey, "v5.2.2").unwrap_err();
+
+    assert!(matches!(
+        err,
+        ProofError::UnsupportedWritableSp1Version { .. }
+    ));
+}
+
+#[test]
+fn verifying_key_rejects_v5_envelopes_before_deserializing() {
+    let client = ProverClient::builder().mock().build();
+    let proving_key = client.setup(sp1_sdk::Elf::Static(EMPTY_ELF)).unwrap();
+    let vkey = proving_key.verifying_key();
+    let proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
+        proving_key.verifying_key(),
+        sp1_sdk::SP1PublicValues::new(),
+        sp1_sdk::SP1ProofMode::Compressed,
+        sp1_sdk::SP1_CIRCUIT_VERSION,
+    )
+    .proof
+    .try_as_compressed()
+    .unwrap();
+    let mut sp1 = v6_sp1_stark_with_context(proof.as_ref(), vkey, "v6.1.0").unwrap();
+    sp1.version = "v5.2.2".to_owned();
+    let proof = Proof::SP1Stark(sp1);
+
+    let err = match proof.verifying_key() {
+        Ok(_) => panic!("v5 envelope unexpectedly deserialized as a v6 verifying key"),
+        Err(err) => err,
+    };
+
+    assert!(matches!(
+        err,
+        ProofError::UnsupportedReadableSp1Version { .. }
+    ));
 }

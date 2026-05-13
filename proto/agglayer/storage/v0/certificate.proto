@@ -57,9 +57,9 @@ message BridgeExit {
 // A Merkle proof.
 message MerkleProof {
   // Root of the Merkle tree.
-  MerkleRoot root = 1;
+  Digest root = 1;
   // Path from the leaf to the root.
-  repeated MerkleRoot siblings = 2;
+  repeated Digest siblings = 2;
 }
 
 // A leaf of the L1 info tree.

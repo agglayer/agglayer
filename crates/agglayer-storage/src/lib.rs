@@ -8,6 +8,7 @@ pub mod backup;
 // Domain-specific modules.
 #[macro_use]
 pub mod columns;
+pub mod diagnostics;
 pub mod error;
 pub mod stores;
 pub mod types;

@@ -50,9 +50,9 @@ message MainnetExitRoot {
   bytes value = 1;
 }
 
-// Merkle root or sibling hash (32 bytes).
-message MerkleRoot {
-  // bytes representation of the root/hash.
+// Generic 32-byte digest used as a hash wrapper (e.g. Merkle path nodes).
+message Digest {
+  // bytes representation of the digest.
   bytes value = 1;
 }
 

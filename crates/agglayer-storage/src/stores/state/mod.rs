@@ -55,7 +55,17 @@ pub struct StateStore {
 
 impl StateStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::STATE_DB)
+        // V0 is the eight-CF schema that pre-dates `disabled_networks_cf`
+        // and the settlement family. Legacy production snapshots still
+        // have only those CFs; running the current binary against them
+        // would fail the migration framework's schema gate without this
+        // path. `ensure_cfs` is idempotent: passing the full `STATE_DB`
+        // list creates whatever is missing on disk and is a no-op when
+        // every CF is already present, so legacy V0 DBs converge to the
+        // current schema and existing post-V0 DBs are unaffected.
+        DB::builder(path, cf_definitions::STATE_DB_V0)?
+            .ensure_cfs(cf_definitions::STATE_DB)?
+            .finalize(cf_definitions::STATE_DB)
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {

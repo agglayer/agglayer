@@ -31,7 +31,6 @@ agglayer-sp1.workspace = true
 agglayer-types.workspace = true
 agglayer-tries.workspace = true
 pessimistic-proof.workspace = true
-sp1-sdk-v5.workspace = true
 
 mockall = { workspace = true, optional = true }
 
@@ -46,6 +45,7 @@ serde-reflection.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
 sp1-sdk.workspace = true
+sp1-sdk-v5.workspace = true
 test-log.workspace = true
 tokio.workspace = true
 

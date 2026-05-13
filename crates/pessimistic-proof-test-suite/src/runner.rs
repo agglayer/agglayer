@@ -66,12 +66,13 @@ impl Runner {
         Ok((output, report))
     }
 
-    pub fn get_vkey(&self) -> SP1VerifyingKey {
-        self.client
+    pub fn get_vkey(&self) -> eyre::Result<SP1VerifyingKey> {
+        Ok(self
+            .client
             .setup(Elf::Static(PESSIMISTIC_PROOF_ELF))
-            .unwrap()
+            .map_err(|e| eyre!(e))?
             .verifying_key()
-            .clone()
+            .clone())
     }
 
     /// Generate one plonk proof.

@@ -296,7 +296,7 @@ pub fn dummy_sp1_stark_proof_with_version(
             .expect("legacy v5 mock-proof thread should not panic")
         }
         _ => {
-            use agglayer_sp1::{current_sp1_stark_with_context, CurrentSp1StarkProof};
+            use agglayer_sp1::{v6_sp1_stark_with_context, V6Sp1StarkProof};
             use sp1_sdk::{blocking::Prover, ProvingKey};
 
             let (proof, vkey) = {
@@ -309,14 +309,13 @@ pub fn dummy_sp1_stark_proof_with_version(
                     sp1_sdk::SP1ProofMode::Compressed,
                     sp1_sdk::SP1_CIRCUIT_VERSION,
                 );
-                let proof: Box<CurrentSp1StarkProof> =
-                    dummy_proof.proof.try_as_compressed().unwrap();
+                let proof: Box<V6Sp1StarkProof> = dummy_proof.proof.try_as_compressed().unwrap();
                 (proof, verif_key)
             };
 
-            agglayer_interop_types::aggchain_proof::Proof::SP1Stark(
-                current_sp1_stark_with_context(proof.as_ref(), &vkey, version).unwrap(),
-            )
+            let mut sp1 = v6_sp1_stark_with_context(proof.as_ref(), &vkey, "v6.1.0").unwrap();
+            sp1.version = version.to_owned();
+            agglayer_interop_types::aggchain_proof::Proof::SP1Stark(sp1)
         }
     }
 }

@@ -26,6 +26,10 @@ impl Payload {
     pub fn aggchain_vkey_hash_u32(&self) -> Result<[u32; 8], ProofError> {
         self.proof.vkey_hash_u32()
     }
+
+    pub fn aggchain_vkey_hashes(&self) -> Result<([u8; 32], [u32; 8]), ProofError> {
+        self.proof.vkey_hashes()
+    }
 }
 
 /// Aggchain proof data from the L1 and enforced by the agglayer.
@@ -56,17 +60,16 @@ mod tests {
     use crate::{certificate::dummy_sp1_stark_proof_with_version, Digest};
 
     #[test]
-    fn legacy_v5_vkey_hash_helpers_work() {
+    fn aggchain_vkey_hashes_returns_consistent_hash_formats() {
         let payload = Payload {
             proof: dummy_sp1_stark_proof_with_version("v5.2.2"),
             aggchain_params: Digest::default(),
             public_values: None,
         };
 
-        let bytes = payload.aggchain_vkey_hash_bytes().unwrap();
-        let words = payload.aggchain_vkey_hash_u32().unwrap();
+        let (bytes, words) = payload.aggchain_vkey_hashes().unwrap();
 
-        assert_eq!(bytes.len(), 32);
-        assert_eq!(words.len(), 8);
+        assert_eq!(bytes, payload.aggchain_vkey_hash_bytes().unwrap());
+        assert_eq!(words, payload.aggchain_vkey_hash_u32().unwrap());
     }
 }
