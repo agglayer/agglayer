@@ -123,7 +123,7 @@ impl Forest {
             .map(|(token, amount)| exit_to_b(token, amount))
             .collect();
 
-        // Append all the leafs in LET A (mainnet)
+        // Append all the leaves in LET A (mainnet)
         for exit in &exits {
             self.local_exit_tree_data_a.add_leaf(exit.hash()).unwrap();
         }

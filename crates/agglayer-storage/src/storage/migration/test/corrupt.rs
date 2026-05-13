@@ -1,10 +1,12 @@
+use agglayer_types::NetworkId;
 use rocksdb::DB as RocksDB;
 
-use super::{
-    super::{Builder, DBOpenError},
-    sample::*,
+use super::{lock_sample_migration_tests, sample::*};
+use crate::{
+    schema::{ColumnDescriptor, ColumnSchema},
+    storage::migration::{migration_cf::MigrationRecordColumn, Builder, DBOpenError},
+    tests::TempDBDir,
 };
-use crate::{storage::migration::migration_cf::MigrationRecordColumn, tests::TempDBDir};
 
 #[test_log::test]
 fn default_cf_not_empty() -> Result<(), eyre::Error> {
@@ -36,6 +38,7 @@ fn default_cf_not_empty() -> Result<(), eyre::Error> {
 
 #[test_log::test]
 fn migration_record_gap() -> Result<(), eyre::Error> {
+    let _guard = lock_sample_migration_tests();
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
@@ -69,6 +72,36 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
+fn noop_ensure_cfs_does_not_create_migration_gap() -> Result<(), eyre::Error> {
+    let _guard = lock_sample_migration_tests();
+    let temp_dir = TempDBDir::new();
+    let db_path = &temp_dir.path;
+
+    // Phase 1: Create a database whose declared baseline schema is already V1.
+    {
+        Builder::open_sample_v1(db_path)?.finalize(CFS_V1)?;
+    }
+
+    // Phase 2: Reopen, declare a no-op ensure step, then run a later migration.
+    {
+        Builder::open_sample_v1(db_path)?
+            .ensure_cfs(CFS_V1)?
+            .sample_migrate_v1_v2()?
+            .finalize(CFS_V2)?;
+    }
+
+    // Phase 3: Reopen again with the same declared steps.
+    {
+        Builder::open_sample_v1(db_path)?
+            .ensure_cfs(CFS_V1)?
+            .sample_migrate_v1_v2()?
+            .finalize(CFS_V2)?;
+    }
+
+    Ok(())
+}
+
+#[test_log::test]
 fn unexpected_schema() -> Result<(), eyre::Error> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
@@ -89,6 +122,46 @@ fn unexpected_schema() -> Result<(), eyre::Error> {
         match result {
             Err(DBOpenError::UnexpectedSchema) => (),
             other => panic!("Expected UnexpectedSchema error, got: {other:?}"),
+        }
+    }
+
+    Ok(())
+}
+
+#[test_log::test]
+fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
+    let temp_dir = TempDBDir::new();
+    let db_path = &temp_dir.path;
+
+    // Phase 1: Initialize database with V0 schema and add some data
+    {
+        let db = Builder::open_sample(db_path)?.finalize(CFS_V0)?;
+        db.put::<NetworkInfoV0Column>(&NetworkId::new(42), &DATA_V0[0].1)?;
+    }
+
+    // Phase 2: Try to migrate but write to the old (read-only) CF
+    {
+        let result = Builder::open_sample(db_path)?.add_cfs(
+            &[ColumnDescriptor::new::<NetworkInfoV1Column>()],
+            |db| {
+                // This should FAIL - trying to write to old CF during migration
+                let v0_value = &DATA_V0[1].1;
+                db.put::<NetworkInfoV0Column>(&NetworkId::new(42), v0_value)
+            },
+        );
+
+        match result {
+            Err(DBOpenError::Migration(migration_err)) => {
+                // Check that the error is WritingReadOnlyCf
+                match migration_err.details {
+                    crate::storage::DBMigrationErrorDetails::WritingReadOnlyCf(cf) => {
+                        assert_eq!(NetworkInfoV0Column::COLUMN_FAMILY_NAME, cf);
+                    }
+                    err => panic!("Unexpected error {err:?}"),
+                }
+            }
+            Err(err) => panic!("Unexpected error {err:?}"),
+            Ok(_) => panic!("Expected error"),
         }
     }
 

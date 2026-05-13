@@ -1,8 +1,13 @@
-use rocksdb::ColumnFamilyDescriptor;
+use crate::{
+    columns::debug_certificates::{DebugCertificatesColumn, DebugCertificatesProtoColumn},
+    schema::ColumnDescriptor,
+};
 
-pub const CFS: [&str; 1] = [crate::columns::DEBUG_CERTIFICATES_CF];
+/// Legacy definitions for the column families in the debug storage.
+pub const DEBUG_DB_V0: &[ColumnDescriptor] = &[ColumnDescriptor::new::<DebugCertificatesColumn>()];
 
 /// Definitions for the column families in the debug storage.
-pub fn debug_db_cf_definitions() -> Vec<ColumnFamilyDescriptor> {
-    crate::schema::default_db_cf_definitions(&CFS)
-}
+pub const DEBUG_DB: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<DebugCertificatesColumn>(),
+    ColumnDescriptor::new::<DebugCertificatesProtoColumn>(),
+];

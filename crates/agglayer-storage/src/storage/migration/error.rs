@@ -40,6 +40,9 @@ pub enum DBMigrationErrorDetails {
     #[error(transparent)]
     Database(#[from] DBError),
 
+    #[error("Writing in a read-only column family {0:?}")]
+    WritingReadOnlyCf(String),
+
     #[error("Custom migration error")]
     Custom(#[source] eyre::Error),
 }

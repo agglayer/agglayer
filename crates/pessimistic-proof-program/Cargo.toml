@@ -4,12 +4,18 @@ version = "9.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
+# Standalone workspace: this crate is excluded from the host workspace and
+# builds with the SP1 zkVM toolchain. An explicit [workspace] section prevents
+# Cargo from auto-discovering the parent workspace, which breaks in nested
+# git-worktree checkouts.
+[workspace]
+
 [dependencies]
 pessimistic-proof-core = { path = "../pessimistic-proof-core", default-features = false }
-sp1-zkvm = { version = "=5.2.2", features = ["verify"] }
+sp1-zkvm = { version = "=5.2.4", features = ["verify"] }
 
 [build-dependencies]
-sp1-cli = "=5.2.2"
+sp1-cli = "=5.2.4"
 
 [profile.release]
 panic = "abort"

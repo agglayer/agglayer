@@ -1,0 +1,10 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/get_latest_known_certificate_header.rs
+expression: json
+snapshot_kind: text
+---
+{
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": null
+}

@@ -3,3 +3,5 @@ tests/kurtosis
 tests/tmp
 __fuzz__
 fuzz.log
+docs/knowledge-base/book/
+.DS_Store
