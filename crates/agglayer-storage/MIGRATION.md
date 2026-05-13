@@ -9,16 +9,30 @@ Database migration happens during storage initialization and may take some time,
 The `Builder` type provides a fluent API for defining and executing database migrations:
 
 ```rust
-use agglayer_storage::storage::DB;
+use agglayer_storage::{
+    storage::DB,
+    schema::ColumnDescriptor,
+};
+
+// Define column descriptors for the migration
+const ADDED_CFS: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<NewCf1Column>(),
+    ColumnDescriptor::new::<NewCf2Column>(),
+];
+
+const DROPPED_CFS: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<OldCf1Column>(),
+    ColumnDescriptor::new::<OldCf2Column>(),
+];
 
 // Initialize builder with path and initial schema
 let db = DB::builder(db_path, initial_schema)?
     // Apply migration steps
-    .add_cfs(&["new_cf_1", "new_cf_2"], |db| {
+    .add_cfs(ADDED_CFS, |db| {
         // Migration logic here to populate new CFs
         Ok(())
     })?
-    .drop_cfs(&["old_cf_1", "old_cf_2"])?
+    .drop_cfs(DROPPED_CFS)?
     // Finalize with expected final schema
     .finalize(final_schema)?;
 ```
@@ -30,15 +44,20 @@ For concrete examples, see the `test::sample` module implementations such as `sa
 The DB builder is initialized with the very first version schema. This represents the baseline state from which all migrations are applied:
 
 ```rust
-DB::builder(db_path, &["cf_v0_1", "cf_v0_2"])
+const INITIAL_SCHEMA: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<CfV0_1Column>(),
+    ColumnDescriptor::new::<CfV0_2Column>(),
+];
+
+DB::builder(db_path, INITIAL_SCHEMA)
 ```
 
 ### Migration Steps
 
 Migrations consist of a sequence of two operation types:
 
-- `.add_cfs(&[...cfs], |db| { ... })`: Create new column families and populate them with data
-- `.drop_cfs(&[...cfs])`: Remove old column families
+- `.add_cfs(&[ColumnDescriptor], |db| { ... })`: Create new column families and populate them with data
+- `.drop_cfs(&[ColumnDescriptor])`: Remove old column families
 
 Each step is tracked individually, allowing recovery from partial migrations.
 
@@ -64,21 +83,24 @@ Avoid modifying values in place, as this makes recovery from interruptions diffi
 Example:
 
 ```rust
-DB::builder(db_path, &["data"])
+const DATA_V1: &[ColumnDescriptor] = &[ColumnDescriptor::new::<DataColumn>()];
+const DATA_V2: &[ColumnDescriptor] = &[ColumnDescriptor::new::<DataV2Column>()];
+
+DB::builder(db_path, DATA_V1)
     // Step 1: Create new CF and migrate data
-    .add_cfs(&["data_v2"], |db| {
+    .add_cfs(DATA_V2, |db| {
         // Read from "data", write to "data_v2"
-        for key in db.keys::<OldColumn>()? {
+        for key in db.keys::<DataColumn>()? {
             let key = key?;
-            let value = db.get::<OldColumn>(&key)?;
+            let value = db.get::<DataColumn>(&key)?;
             let (new_key, new_value) = transform(key, value);
-            db.put::<NewColumn>(&new_key, &new_value)?;
+            db.put::<DataV2Column>(&new_key, &new_value)?;
         }
         Ok(())
     })?
     // Step 2: Remove old CF
-    .drop_cfs(&["data"])?
-    .finalize(&["data_v2"])?
+    .drop_cfs(DATA_V1)?
+    .finalize(DATA_V2)?
 ```
 
 ### Final Schema Validation

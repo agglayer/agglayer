@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+// ECDSA signature with recovery byte (65 bytes).
+message Signature {
+  // bytes representation of the signature.
+  bytes value = 1;
+}
+
+// Local exit root (32 bytes).
+message LocalExitRoot {
+  // bytes representation of the root.
+  bytes value = 1;
+}
+
+// Pessimistic root (32 bytes).
+message PessimisticRoot {
+  // bytes representation of the root.
+  bytes value = 1;
+}
+
+// L1 info root (32 bytes).
+message L1InfoRoot {
+  // bytes representation of the root.
+  bytes value = 1;
+}
+
+// Aggchain hash (32 bytes).
+message AggchainHash {
+  // bytes representation of the hash.
+  bytes value = 1;
+}
+
+// Global exit root (32 bytes).
+message GlobalExitRoot {
+  // bytes representation of the root.
+  bytes value = 1;
+}
+
+// Rollup exit root (32 bytes).
+message RollupExitRoot {
+  // bytes representation of the root.
+  bytes value = 1;
+}
+
+// Mainnet exit root (32 bytes).
+message MainnetExitRoot {
+  // bytes representation of the root.
+  bytes value = 1;
+}
+
+// Generic 32-byte digest used as a hash wrapper (e.g. Merkle path nodes).
+message Digest {
+  // bytes representation of the digest.
+  bytes value = 1;
+}
+
+// Token amount (32-byte big-endian unsigned integer).
+message Amount {
+  // bytes representation of the amount.
+  bytes value = 1;
+}
+
+// Certificate or bridge metadata digest (32 bytes).
+message Metadata {
+  // bytes representation of the metadata digest.
+  bytes value = 1;
+}
+
+// Commitment to imported bridge exits (32 bytes).
+message CommitImportedBridgeExits {
+  // bytes representation of the commitment.
+  bytes value = 1;
+}
+
+// Aggchain params (32 bytes).
+message AggchainParams {
+  // bytes representation of the params.
+  bytes value = 1;
+}
+
+// Proof system that produced the opaque payload bytes.
+enum ProofSystem {
+  // Default value, should not be used.
+  PROOF_SYSTEM_UNSPECIFIED = 0;
+  // SP1 proof system.
+  PROOF_SYSTEM_SP1 = 1;
+}
+
+// Mode of the SP1 proof.
+enum ProofMode {
+  // Default value, should not be used.
+  PROOF_MODE_UNSPECIFIED = 0;
+  // Compressed (STARK) SP1 proof.
+  PROOF_MODE_COMPRESSED = 1;
+  // Plonk SNARK wrapper over an SP1 proof.
+  PROOF_MODE_PLONK = 2;
+  // Groth16 SNARK wrapper over an SP1 proof.
+  PROOF_MODE_GROTH16 = 3;
+}
+
+// Pessimistic proof outputs committed by SP1 public values.
+message PessimisticProofOutput {
+  // Previous local exit root.
+  LocalExitRoot prev_local_exit_root = 1;
+  // Previous pessimistic root.
+  PessimisticRoot prev_pessimistic_root = 2;
+  // L1 info root.
+  L1InfoRoot l1_info_root = 3;
+  // Origin network id for which the proof was generated.
+  uint32 origin_network = 4;
+  // Aggchain hash.
+  AggchainHash aggchain_hash = 5;
+  // New local exit root.
+  LocalExitRoot new_local_exit_root = 6;
+  // New pessimistic root.
+  PessimisticRoot new_pessimistic_root = 7;
+}
+
+// Public values committed to by an aggchain proof.
+message AggchainProofPublicValues {
+  // Previous local exit root.
+  LocalExitRoot prev_local_exit_root = 1;
+  // New local exit root.
+  LocalExitRoot new_local_exit_root = 2;
+  // L1 info root used to import bridge exits.
+  L1InfoRoot l1_info_root = 3;
+  // Origin network id for which the proof was generated.
+  uint32 origin_network = 4;
+  // Commitment to the imported bridge-exit indices.
+  CommitImportedBridgeExits commit_imported_bridge_exits = 5;
+  // Chain-specific commitment forwarded by the pessimistic proof.
+  AggchainParams aggchain_params = 6;
+}
+
+// Storage envelope for a zero-knowledge proof.
+//
+// The protobuf envelope is stable and self-contained.
+// The payload bytes are opaque to protobuf, but their encoding is selected by
+// `proof_system`, `mode`, and `version`.
+// For SP1 proofs, the payload fields currently store version-specific
+// Rust-serialized proof-system data rather than a generic cross-SDK format.
+message Proof {
+  // Which proof system produced this proof.
+  ProofSystem proof_system = 1;
+
+  // Preserved end to end and used to select the payload deserializer.
+  string version = 2;
+
+  // Proof mode inside the selected proof system.
+  ProofMode mode = 3;
+
+  // Opaque serialized proof payload.
+  // Decoding requires `proof_system`, `mode`, and `version`.
+  bytes proof = 4;
+
+  // Opaque serialized verifying key.
+  // Decoding requires `proof_system`, `mode`, and `version`.
+  bytes vkey = 5;
+
+}
+
+// Aggchain proof persisted with its shared public values.
+message AggchainStoredProof {
+  // Shared proof envelope.
+  Proof proof = 1;
+  // Public values committed to by the aggchain proof.
+  AggchainProofPublicValues public_values = 2;
+}
+
+// Pessimistic proof persisted with its agglayer-owned public values.
+message PessimisticStoredProof {
+  // Shared proof envelope.
+  Proof proof = 1;
+  // Public values committed to by the pessimistic proof.
+  PessimisticProofOutput public_values = 2;
+}

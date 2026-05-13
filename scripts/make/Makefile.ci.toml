@@ -11,6 +11,7 @@ dependencies = [
     "ci-format",
     "ci-clippy",
     "ci-clippy-program",
+    "ci-typos",
     "ci-format-program",
 ]
 
@@ -41,3 +42,8 @@ cwd = "crates/pessimistic-proof-program"
 command = "cargo"
 toolchain = "nightly"
 args = ["fmt", "--all", "--check"]
+
+# install it with cargo install typos-cli --locked
+[tasks.ci-typos]
+category = "CI - CHECK"
+command = "typos"

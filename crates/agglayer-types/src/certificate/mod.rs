@@ -27,7 +27,7 @@ pub use id::CertificateId;
 pub use index::CertificateIndex;
 pub use metadata::Metadata;
 #[cfg(feature = "testutils")]
-pub use testutils::{compute_signature_info, EMPTY_ELF};
+pub use testutils::{compute_signature_info, dummy_sp1_stark_proof_with_version, EMPTY_ELF};
 
 /// Represents the data submitted by the chains to the AggLayer.
 ///
@@ -60,7 +60,7 @@ pub struct Certificate {
     pub imported_bridge_exits: Vec<ImportedBridgeExit>,
     /// Fixed size field of arbitrary data for the chain needs.
     pub metadata: Metadata,
-    /// Aggchain data which is either one ECDSA or Generic proof.
+    /// Aggchain data for the certificate.
     #[serde(flatten)]
     pub aggchain_data: AggchainData,
     #[serde(default)]

@@ -5,7 +5,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened]
   push:
     branches:
       - main
@@ -28,14 +28,23 @@ jobs:
 
       - uses: taiki-e/install-action@protoc
 
+      - name: Install mdBook
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: latest
+
+      - name: Build Knowledge Base
+        run: mdbook build docs/knowledge-base/
+
       - name: Build Documentation
         run: cargo doc --no-deps --all --all-features
 
-      - name: Add index file
+      - name: Assemble hosted documentation
         run: |
-          mkdir host-docs
-          echo "<meta http-equiv=\"refresh\" content=\"0; url=agglayer\">" > target/doc/index.html
-          cp -r target/doc/* ./host-docs
+          mkdir -p host-docs/rustdoc
+          cp -r docs/knowledge-base/book/. ./host-docs/
+          cp -r target/doc/. ./host-docs/rustdoc/
+          echo "<meta http-equiv=\"refresh\" content=\"0; url=agglayer\">" > host-docs/rustdoc/index.html
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v4
@@ -47,7 +56,7 @@ jobs:
   deploy-gh-pages:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !github.event.repository.fork
     permissions:
       pages: write
       id-token: write
@@ -70,20 +79,17 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
-  deploy-cloudflare:
-    name: Deploy to Cloudflare Workers
+  deploy-cloudflare-pages:
+    name: Deploy to Cloudflare Pages
     needs: build
-    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
       issues: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
       - name: Download documentation artifact
         uses: actions/download-artifact@v5
         with:
@@ -98,12 +104,13 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler
 
-      - name: Update wrangler.toml for PR
+      - name: Deploy to Cloudflare Pages
+        id: deploy
         run: |
-          sed -e "s/{{REPOSITORY_NAME}}/${{ github.event.repository.name }}/g" -e "s/{{PR_NUMBER}}/${{ github.event.number }}/g" wrangler.toml.template > wrangler.toml
-
-      - name: Deploy to Cloudflare Workers
-        run: wrangler deploy --env staging
+          OUTPUT=$(wrangler pages deploy docs --project-name=agglayer-node-docs --branch="${{ github.head_ref }}")
+          echo "$OUTPUT"
+          DEPLOYMENT_URL=$(echo "$OUTPUT" | grep -oP 'https://[^\s]+\.pages\.dev' | tail -1)
+          echo "url=${DEPLOYMENT_URL:-https://${{ github.head_ref }}.agglayer-node-docs.pages.dev}" >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}
@@ -112,9 +119,9 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const deploymentComment = `📖 Documentation deployed to: https://${{ github.event.repository.name }}-pr-${{ github.event.number }}-rust-docs.agglayer.dev`;
+            const url = '${{ steps.deploy.outputs.url }}' || `https://${{ github.head_ref }}.agglayer-node-docs.pages.dev`;
+            const deploymentComment = `📖 Documentation deployed to: ${url}`;
 
-            // Check if we already have a deployment comment
             const comments = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -126,7 +133,6 @@ jobs:
             );
 
             if (existingComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 comment_id: existingComment.id,
                 owner: context.repo.owner,
@@ -134,7 +140,6 @@ jobs:
                 body: deploymentComment
               });
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
@@ -142,26 +147,3 @@ jobs:
                 body: deploymentComment
               });
             }
-
-  cleanup-cloudflare:
-    name: Cleanup Cloudflare deployment
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-
-      - name: Install Wrangler
-        run: npm install -g wrangler
-
-      - name: Delete worker
-        run: |
-          wrangler delete --name ${{ github.event.repository.name }}-rust-docs-pr-${{ github.event.number }}-staging --force || echo "Worker may not exist"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKER_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_WORKER_ACCOUNT_ID }}

@@ -113,7 +113,7 @@ async fn certificate_error_message(#[future] raw_rpc: RawRpcContext) {
     let json = serde_json::to_string_pretty(&json).unwrap();
 
     assert_snapshot!(
-        "get_certificate_header::not_found",
+        "get_certificate_header__not_found",
         json,
         &serde_json::to_string_pretty(&json!({
             "payload": payload,
@@ -158,7 +158,7 @@ async fn certificate_header(#[future] raw_rpc: RawRpcContext) {
     let json = serde_json::to_string_pretty(&json).unwrap();
 
     assert_snapshot!(
-        "get_certificate_header::found",
+        "get_certificate_header__found",
         json,
         &serde_json::to_string_pretty(&json!({
             "payload": payload,

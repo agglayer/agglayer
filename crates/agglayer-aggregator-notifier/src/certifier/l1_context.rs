@@ -46,7 +46,7 @@ where
 
         let l1_info_root = self.fetch_l1_info_root(certificate).await?;
 
-        let aggchain_data_paylaod = CertificateAggchainData::try_from(
+        let aggchain_data_payload = CertificateAggchainData::try_from(
             certificate.aggchain_data.clone(),
         )
         .map_err(|source| CertificationError::Types {
@@ -62,7 +62,7 @@ where
 
         // Fetch context based on the aggchain data type that we received from the
         // chain.
-        let aggchain_data_ctx: CertificateAggchainDataCtx = match aggchain_data_paylaod {
+        let aggchain_data_ctx: CertificateAggchainDataCtx = match aggchain_data_payload {
             CertificateAggchainData::LegacyEcdsa { .. } => {
                 let signer = self
                     .l1_rpc
