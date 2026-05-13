@@ -1,25 +1,24 @@
-use std::collections::BTreeSet;
-
 use tracing::error;
 
 use crate::{
-    schema::ColumnSchema,
+    schema::{ColumnDescriptor, ColumnSchema},
     storage::{iterators::KeysIterator, migration::DBMigrationErrorDetails as Error, DB},
 };
 
 /// Restricted interface to provide access to the database during migration.
 pub struct DbAccess<'a> {
     db: &'a DB,
-    writable: &'a BTreeSet<&'a str>,
+    writable: &'a [ColumnDescriptor],
 }
 
 impl<'a> DbAccess<'a> {
-    pub fn new(db: &'a DB, writable: &'a BTreeSet<&'a str>) -> Self {
+    pub fn new(db: &'a DB, writable: &'a [ColumnDescriptor]) -> Self {
         Self { db, writable }
     }
 
     fn is_writable<C: ColumnSchema>(&self) -> bool {
-        self.writable.contains(C::COLUMN_FAMILY_NAME)
+        let mut iter = self.writable.iter();
+        iter.any(|d| d.name() == C::COLUMN_FAMILY_NAME)
     }
 
     /// Try to get the value for the given key.

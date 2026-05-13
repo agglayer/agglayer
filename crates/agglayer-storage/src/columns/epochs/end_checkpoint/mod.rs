@@ -16,4 +16,6 @@ impl crate::schema::ColumnSchema for EndCheckpointColumn {
     type Value = Height;
 
     const COLUMN_FAMILY_NAME: &'static str = PER_EPOCH_END_CHECKPOINT_CF;
+    const COLUMN_OPTIONS: crate::schema::options::ColumnOptions =
+        crate::columns::CHECKPOINT_COLUMN_OPTIONS;
 }

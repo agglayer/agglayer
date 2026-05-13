@@ -32,7 +32,7 @@ pub fn main() {
 
     let recovered_signer = aggchain_ecdsa
         .signature
-        .recover_address_from_prehash(&B256::new(combined_hash.try_into().unwrap()))
+        .recover_address_from_prehash(&B256::new(combined_hash))
         .expect("Invalid signature");
 
     assert_eq!(recovered_signer.as_slice(), aggchain_ecdsa.signer);

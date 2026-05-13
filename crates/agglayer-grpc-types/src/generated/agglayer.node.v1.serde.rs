@@ -1128,6 +1128,7 @@ impl serde::Serialize for SubmitCertificateErrorKind {
             Self::InvalidData => "SUBMIT_CERTIFICATE_ERROR_KIND_INVALID_DATA",
             Self::SignatureVerification => "SUBMIT_CERTIFICATE_ERROR_KIND_SIGNATURE_VERIFICATION",
             Self::UnableToReplacePendingCertificate => "SUBMIT_CERTIFICATE_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE",
+            Self::UnsupportedProofVersion => "SUBMIT_CERTIFICATE_ERROR_KIND_UNSUPPORTED_PROOF_VERSION",
         };
         serializer.serialize_str(variant)
     }
@@ -1144,6 +1145,7 @@ impl<'de> serde::Deserialize<'de> for SubmitCertificateErrorKind {
             "SUBMIT_CERTIFICATE_ERROR_KIND_INVALID_DATA",
             "SUBMIT_CERTIFICATE_ERROR_KIND_SIGNATURE_VERIFICATION",
             "SUBMIT_CERTIFICATE_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE",
+            "SUBMIT_CERTIFICATE_ERROR_KIND_UNSUPPORTED_PROOF_VERSION",
         ];
 
         struct GeneratedVisitor;
@@ -1189,6 +1191,7 @@ impl<'de> serde::Deserialize<'de> for SubmitCertificateErrorKind {
                     "SUBMIT_CERTIFICATE_ERROR_KIND_INVALID_DATA" => Ok(SubmitCertificateErrorKind::InvalidData),
                     "SUBMIT_CERTIFICATE_ERROR_KIND_SIGNATURE_VERIFICATION" => Ok(SubmitCertificateErrorKind::SignatureVerification),
                     "SUBMIT_CERTIFICATE_ERROR_KIND_UNABLE_TO_REPLACE_PENDING_CERTIFICATE" => Ok(SubmitCertificateErrorKind::UnableToReplacePendingCertificate),
+                    "SUBMIT_CERTIFICATE_ERROR_KIND_UNSUPPORTED_PROOF_VERSION" => Ok(SubmitCertificateErrorKind::UnsupportedProofVersion),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

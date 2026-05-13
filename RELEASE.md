@@ -14,7 +14,12 @@ Our release strategy supports two distinct types of releases, each serving diffe
 Minor releases represent our primary feature delivery mechanism, originating from the `main` branch and following the version format `vX.Y.0` (such as `v1.2.0`). These releases incorporate new features, enhancements, and non-breaking changes that have been developed and tested on the main development branch. We create minor releases manually based on feature readiness and business needs, typically averaging every 12 to 13 weeks, allowing for thorough feature development and quality assurance.
 
 ### Patch Releases
-Patch releases address critical bug fixes, security vulnerabilities, and other urgent issues that need to be deployed without waiting for the next minor release cycle. These releases use the version format `vX.Y.Z` (such as `v1.2.1`) and are created from existing release branches (`release/vX.Y`). Patch releases are created on-demand as issues arise, ensuring we can respond quickly to production problems while maintaining stability.
+Patch releases address critical bug fixes, security vulnerabilities, and other urgent issues
+that need to be deployed without waiting for the next minor release cycle.
+These releases use the version format `vX.Y.Z` (such as `v1.2.1`) and are created from
+existing release branches (`release/X.Y`).
+Patch releases are created on-demand as issues arise, ensuring we can respond quickly to
+production problems while maintaining stability.
 
 ## Release Process
 
@@ -30,13 +35,24 @@ This diagram illustrates our complete release workflow: minor releases branch fr
 
 ### Step 1: Release Initiation
 
-The release process begins when a codeowner determines that the codebase is ready for a new release. This decision is typically made after evaluating completed features, bug fixes, and overall code stability. Codeowners initiate the release through GitHub's manual workflow dispatch interface, selecting only the target branch (`main` for minor releases or `release/vX.Y` for patch releases).
+The release process begins when a codeowner determines that the codebase is ready for a new
+release.
+This decision is typically made after evaluating completed features, bug fixes, and overall
+code stability.
+Codeowners initiate the release through GitHub's manual workflow dispatch interface,
+selecting only the target branch (`main` for minor releases or `release/X.Y` for patch
+releases).
 
 The system automatically determines the appropriate version number by reading the current version from `Cargo.toml` and applying our semantic versioning rules. This eliminates manual version input errors and ensures consistency with our established versioning strategy.
 
 ### Step 2: Automated Release Preparation
 
-Once triggered, our automated system creates a dedicated release branch following our naming convention (`release/vX.Y` for minor releases). The system then performs several critical tasks: it reads the current version from `Cargo.toml` to determine the release version, generates a comprehensive changelog using `git-cliff` based on our conventional commit history, and creates a pull request tagged with the `release` label.
+Once triggered, our automated system creates a dedicated release branch following our naming
+convention (`release/X.Y` for minor releases).
+The system then performs several critical tasks: it reads the current version from
+`Cargo.toml` to determine the release version, generates a comprehensive changelog using
+`git-cliff` based on our conventional commit history, and creates a pull request tagged with
+the `release` label.
 
 This automation ensures that all release preparations follow identical procedures, reducing human error and maintaining consistency across all releases. The generated changelog provides a clear overview of what changes will be included in the release, enabling informed review decisions.
 
@@ -72,7 +88,11 @@ Following each minor release from main, our automation immediately increments th
 
 ### Release Branch Strategy
 
-Release branches represent long-lived maintenance streams that support our commitment to providing ongoing support for published versions. Each minor release from main automatically creates a corresponding release branch following the naming convention `release/vX.Y`, where the branch name directly corresponds to the minor version line it supports.
+Release branches represent long-lived maintenance streams that support our commitment to
+providing ongoing support for published versions.
+Each minor release from main automatically creates a corresponding release branch following
+the naming convention `release/X.Y`, where the branch name directly corresponds to the minor
+version line it supports.
 
 These branches serve multiple critical functions: they provide a stable foundation for patch releases, enable selective backporting of critical fixes, and allow for maintenance work that doesn't interfere with ongoing main branch development. The isolation provided by release branches ensures that patch development can proceed independently of new feature work, reducing complexity and risk.
 
@@ -87,7 +107,7 @@ Release branches are preserved to support ongoing maintenance of active release 
 | Release From | Current Version | Next Dev Version |
 |--------------|----------------|------------------|
 | `main` | `v1.2.0` | `v1.3.0` |
-| `release/v1.2` | `v1.2.3` | `v1.2.4` |
+| `release/1.2` | `v1.2.3` | `v1.2.4` |
 
 
 ## Release Candidates
