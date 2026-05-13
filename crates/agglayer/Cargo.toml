@@ -21,6 +21,7 @@ agglayer-node.workspace = true
 agglayer-storage.workspace = true
 pessimistic-proof.workspace = true
 prover-executor.workspace = true
+rustls.workspace = true
 
 [dev-dependencies]
 assert_cmd = "2.2.0"
