@@ -776,7 +776,8 @@ mod tests {
 
     #[test]
     fn required_settlement_head_number_is_inclusive_of_receipt_block() {
-        // Confirmations count the receipt block itself, and saturate rather than overflow.
+        // Confirmations count the receipt block itself, and saturate rather than
+        // overflow.
         for (receipt_block, confirmations, required_head) in [
             (10, 0, 10),
             (10, 1, 10),

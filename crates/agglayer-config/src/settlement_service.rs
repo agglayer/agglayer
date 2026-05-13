@@ -277,7 +277,8 @@ pub struct SettlementServiceConfig {
 /// This configuration controls how the Agglayer settlement service interacts
 /// with the L1 blockchain for settling certificates.
 /// It provides transaction configuration for certificate settlements, allowing
-/// fine-grained control over gas prices, retries, and confirmation requirements.
+/// fine-grained control over gas prices, retries, and confirmation
+/// requirements.
 ///
 /// # Configuration Structure
 ///
