@@ -7,7 +7,7 @@ use crate::{
     stores::state::StateStore,
     tests::TempDBDir,
     types::{
-        generated::agglayer::storage::v0::{Address, Nonce, SettlementAttempt, TxHash, Uint128},
+        generated::agglayer::storage::v0::{Address, Nonce, SettlementAttempt, TxHash},
         settlement::attempt::{Key, Value},
     },
 };
@@ -68,12 +68,6 @@ fn mk_settlement_attempt(seed: u64) -> SettlementAttempt {
             address: vec![0x22; 20].into(),
         }),
         nonce: Some(Nonce { nonce: seed }),
-        max_fee_per_gas: Some(Uint128 {
-            value: vec![0x07; 16].into(),
-        }),
-        max_priority_fee_per_gas: Some(Uint128 {
-            value: vec![0x08; 16].into(),
-        }),
         tx_hash: Some(TxHash {
             hash: vec![0x66; 32].into(),
         }),

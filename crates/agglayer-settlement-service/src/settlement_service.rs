@@ -1,6 +1,6 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
-use agglayer_config::settlement_service::SettlementServiceConfig;
+use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{SettlementJob, SettlementJobResult};
 use alloy::providers::Provider;
@@ -22,6 +22,7 @@ const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 #[derive(Educe)]
 #[educe(Clone)]
 pub struct SettlementService<L1Provider, SettlementStore> {
+    tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
@@ -56,11 +57,13 @@ impl<
 {
     pub async fn start(
         _config: SettlementServiceConfig,
+        tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
         cancellation_token: CancellationToken,
     ) -> eyre::Result<Self> {
         let this = Self {
+            tx_config,
             provider,
             store,
             cancellation_token,
@@ -115,9 +118,14 @@ impl<
         let (result_sender, result_receiver) = watch::channel(None);
         let (task_control_handle, task_control) =
             TaskControlHandle::new(&self.cancellation_token, admin_sender, admin_receiver);
-        let (job_id, mut task) =
-            SettlementTask::create(job, self.provider.clone(), self.store.clone(), task_control)
-                .await?;
+        let (job_id, mut task) = SettlementTask::create(
+            job,
+            self.tx_config.clone(),
+            self.provider.clone(),
+            self.store.clone(),
+            task_control,
+        )
+        .await?;
         self.task_controls
             .lock()
             .await

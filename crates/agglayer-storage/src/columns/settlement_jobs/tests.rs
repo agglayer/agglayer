@@ -40,19 +40,5 @@ fn mk_settlement_job() -> SettlementJob {
         gas_limit: Some(Uint128 {
             value: vec![0x02; 16].into(),
         }),
-        max_fee_per_gas_ceiling: Some(Uint128 {
-            value: vec![0x03; 16].into(),
-        }),
-        max_fee_per_gas_floor: Some(Uint128 {
-            value: vec![0x04; 16].into(),
-        }),
-        max_fee_per_gas_increase_percents: 10,
-        max_priority_fee_per_gas_ceiling: Some(Uint128 {
-            value: vec![0x05; 16].into(),
-        }),
-        max_priority_fee_per_gas_floor: Some(Uint128 {
-            value: vec![0x06; 16].into(),
-        }),
-        max_priority_fee_per_gas_increase_percents: 20,
     }
 }
