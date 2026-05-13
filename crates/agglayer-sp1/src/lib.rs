@@ -12,9 +12,7 @@ pub mod testutils;
 mod version;
 
 pub use error::ProofError;
-pub use ext::{
-    current_sp1_stark_with_context, CurrentSp1StarkProof, CurrentSp1StarkWithContext, ProofExt,
-};
+pub use ext::{v6_sp1_stark_with_context, ProofExt, V6Sp1StarkProof, V6Sp1StarkWithContext};
 pub use mode::ProofMode;
 pub use policy::AcceptancePolicy;
 pub use version::{version_kind, Sp1ProofVersion};

@@ -247,8 +247,10 @@ impl PendingCertificateReader for PendingStore {
             .cf_handle(ProofPerCertificateColumn::COLUMN_FAMILY_NAME)
             .ok_or(Error::from(DBError::ColumnFamilyNotFound))?;
 
-        let encoded_keys: Result<Vec<_>, _> =
-            keys.iter().map(|k| k.encode().map_err(DBError::from)).collect();
+        let encoded_keys: Result<Vec<_>, _> = keys
+            .iter()
+            .map(|k| k.encode().map_err(DBError::from))
+            .collect();
 
         let results = self
             .db
@@ -265,8 +267,8 @@ impl PendingCertificateReader for PendingStore {
                         tracing::warn!(
                             ?error,
                             ?certificate_id,
-                            "Failed to decode proof from storage during batch read, \
-                             treating as missing"
+                            "Failed to decode proof from storage during batch read, treating as \
+                             missing"
                         );
                         Ok(None)
                     }
