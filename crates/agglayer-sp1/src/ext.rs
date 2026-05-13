@@ -37,11 +37,17 @@ pub trait ProofExt {
     /// 32-byte hash of the verifying key returned as 8 big-endian u32s.
     fn vkey_hash_u32(&self) -> Result<[u32; 8], ProofError>;
 
+    /// 32-byte hash of the verifying key in both byte and u32 forms.
+    fn vkey_hashes(&self) -> Result<([u8; 32], [u32; 8]), ProofError>;
+
     /// Deserialize the current SP1 verifying key carried by this proof.
     fn verifying_key(&self) -> Result<SP1VerifyingKey, ProofError>;
 
     /// Deserialize the current executable SP1 proof and verifying key.
-    fn executable_sp1(&self) -> Result<CurrentSp1StarkWithContext, ProofError>;
+    fn executable_sp1(
+        &self,
+        policy: &AcceptancePolicy,
+    ) -> Result<CurrentSp1StarkWithContext, ProofError>;
 }
 
 pub type CurrentSp1StarkProof = sp1_core_executor::SP1RecursionProof<
@@ -120,13 +126,13 @@ pub fn current_sp1_stark_with_context<P: Serialize>(
     Ok(SP1StarkWithContext {
         proof: agglayer_interop_types::bincode::default()
             .serialize(proof)
-            .map_err(|source| ProofError::DeserializeSp1Proof {
+            .map_err(|source| ProofError::SerializeSp1Proof {
                 version: version.to_owned(),
                 source,
             })?,
         vkey: agglayer_interop_types::bincode::default()
             .serialize(vkey)
-            .map_err(|source| ProofError::DeserializeSp1Vkey {
+            .map_err(|source| ProofError::SerializeSp1Vkey {
                 version: version.to_owned(),
                 source,
             })?,
@@ -176,26 +182,26 @@ impl ProofExt for Proof {
     }
 
     fn vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError> {
-        let sp1 = self.sp1();
-        match version_kind(&sp1.version)? {
-            Sp1ProofVersion::V5 => {
-                use sp1_sdk_v5::HashableKey as _;
-
-                Ok(deserialize_legacy_v5_vkey(sp1)?.hash_bytes())
-            }
-            Sp1ProofVersion::V6 => Ok(self.verifying_key()?.hash_bytes()),
-        }
+        self.vkey_hashes().map(|(bytes, _)| bytes)
     }
 
     fn vkey_hash_u32(&self) -> Result<[u32; 8], ProofError> {
+        self.vkey_hashes().map(|(_, words)| words)
+    }
+
+    fn vkey_hashes(&self) -> Result<([u8; 32], [u32; 8]), ProofError> {
         let sp1 = self.sp1();
         match version_kind(&sp1.version)? {
             Sp1ProofVersion::V5 => {
                 use sp1_sdk_v5::HashableKey as _;
 
-                Ok(deserialize_legacy_v5_vkey(sp1)?.hash_u32())
+                let vkey = deserialize_legacy_v5_vkey(sp1)?;
+                Ok((vkey.hash_bytes(), vkey.hash_u32()))
             }
-            Sp1ProofVersion::V6 => Ok(self.verifying_key()?.hash_u32()),
+            Sp1ProofVersion::V6 => {
+                let vkey = self.verifying_key()?;
+                Ok((vkey.hash_bytes(), vkey.hash_u32()))
+            }
         }
     }
 
@@ -217,8 +223,11 @@ impl ProofExt for Proof {
         }
     }
 
-    fn executable_sp1(&self) -> Result<CurrentSp1StarkWithContext, ProofError> {
-        self.ensure_executable(&AcceptancePolicy::DEFAULT)?;
+    fn executable_sp1(
+        &self,
+        policy: &AcceptancePolicy,
+    ) -> Result<CurrentSp1StarkWithContext, ProofError> {
+        self.ensure_executable(policy)?;
 
         let sp1 = self.sp1();
         Ok(CurrentSp1StarkWithContext {

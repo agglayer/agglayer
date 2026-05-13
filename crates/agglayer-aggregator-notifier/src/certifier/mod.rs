@@ -3,7 +3,7 @@ use std::{panic::AssertUnwindSafe, sync::Arc};
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
-use agglayer_sp1::ProofExt as _;
+use agglayer_sp1::{AcceptancePolicy, ProofExt as _};
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
     aggchain_proof::AggchainData, Certificate, Digest, Height, LocalNetworkStateData, NetworkId,
@@ -223,7 +223,7 @@ where
             AggchainData::MultisigOnly { .. } => {}
             AggchainData::Generic { ref proof, .. } => {
                 let stark_proof = proof
-                    .executable_sp1()
+                    .executable_sp1(&AcceptancePolicy::DEFAULT)
                     .map_err(|source| CertificationError::Other(eyre!(source)))?;
 
                 // This operation is unwind safe: if it errors, we will discard stdin and
@@ -238,7 +238,7 @@ where
             } => {
                 let stark_proof = aggchain_proof
                     .proof
-                    .executable_sp1()
+                    .executable_sp1(&AcceptancePolicy::DEFAULT)
                     .map_err(|source| CertificationError::Other(eyre!(source)))?;
                 // This operation is unwind safe: if it errors, we will discard stdin and
                 // stark_proof anyway.
