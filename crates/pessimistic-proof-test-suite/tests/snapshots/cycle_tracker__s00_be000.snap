@@ -1,44 +1,43 @@
 ---
 source: crates/pessimistic-proof-test-suite/tests/cycle-tracker.rs
 expression: stats
-snapshot_kind: text
 ---
-gas: 404298
-opcode counts (240561 total instructions):
-    47676 addi
-    22662 ld
-    21898 lbu
-    21101 sd
-    18084 xor
-    12945 sb
-    12886 beq
-    10142 bne
-     9684 sll
-     8244 or
-     7770 and
-     7602 add
-     6936 srl
-     6717 jalr
-     5585 bltu
-     3540 auipc
+gas: 403065
+opcode counts (238791 total instructions):
+    47637 addi
+    21975 ld
+    21818 lbu
+    20362 sd
+    18063 xor
+    12951 sb
+    12863 beq
+    10111 bne
+     9686 sll
+     8249 or
+     7715 and
+     7581 add
+     7036 srl
+     6689 jalr
+     5502 bltu
+     3535 auipc
      2865 srlw
      2399 ecall
-     2340 sub
-     1856 jal
+     2325 sub
+     1850 jal
      1561 addw
-     1492 sltu
-     1014 bgeu
-     1010 lui
+     1490 sltu
+      997 lui
+      978 bgeu
       785 mul
-      737 mulhu
-      250 sh
-      212 subw
-      183 sw
-      125 lw
+      730 mulhu
+      253 sh
+      205 subw
+      186 sw
+      119 lw
       112 lh
-       65 lb
+       68 lb
        48 sra
-       25 lwu
+       37 lwu
         4 lhu
         4 blt
         2 bge
