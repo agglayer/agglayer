@@ -177,6 +177,47 @@ impl Builder {
         })?)
     }
 
+    /// Ensures that the given column families exist on disk.
+    ///
+    /// This migration step creates any column families in `cfs` that are
+    /// missing from the current database, while leaving existing ones
+    /// untouched. Unlike [`add_cfs`], it never drops a CF that already
+    /// exists, so it is safe to use on databases that may have been
+    /// created by a build that already declared these CFs in its V0
+    /// schema (no data is lost on already-present CFs).
+    ///
+    /// When all requested CFs are already present, the step is still
+    /// recorded as a no-op. This preserves a contiguous migration history
+    /// so later recorded steps cannot create gaps on reopen.
+    ///
+    /// [`add_cfs`]: Self::add_cfs
+    pub fn ensure_cfs(self, cfs: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
+        Ok(self.perform_step(move |db| {
+            let missing_cfs: Vec<_> = cfs
+                .iter()
+                .filter(|descriptor| !db.cf_exists(descriptor.name()))
+                .cloned()
+                .collect();
+
+            if missing_cfs.is_empty() {
+                debug!(
+                    "All requested column families already exist, recording no-op migration step"
+                );
+                return Ok(());
+            }
+
+            for descriptor in &missing_cfs {
+                let cf = descriptor.name();
+
+                let opts = DB::options(descriptor.options());
+                debug!("Creating missing column family {cf:?}");
+                db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
+            }
+
+            Ok(())
+        })?)
+    }
+
     /// Removes old column families from the database.
     pub fn drop_cfs(self, cfs: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
         Ok(self.perform_step(move |db| {

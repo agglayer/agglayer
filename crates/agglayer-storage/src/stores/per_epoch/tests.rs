@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, VecDeque},
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -8,20 +9,30 @@ use agglayer_types::{
     Certificate, CertificateIndex, CertificateStatus, EpochNumber, Height, NetworkId, Proof,
 };
 use parking_lot::RwLock;
+use pessimistic_proof_test_suite::sample_data;
+use prost::Message as _;
 use rstest::{fixture, rstest};
 use tracing::info;
 
 use crate::{
     backup::BackupClient,
+    columns::epochs::{
+        certificates::{CertificatePerIndexColumn, CertificatePerIndexProtoColumn},
+        end_checkpoint::EndCheckpointColumn,
+        start_checkpoint::StartCheckpointColumn,
+    },
     error::Error,
+    schema::{Codec as _, ColumnSchema as _},
     stores::{
+        epochs::EpochsStore,
         interfaces::writer::{PerEpochWriter, StateWriter},
         pending::PendingStore,
         per_epoch::PerEpochStore,
         state::StateStore,
-        PendingCertificateWriter as _, PerEpochReader as _, StateReader,
+        EpochStoreReader as _, PendingCertificateWriter as _, PerEpochReader as _, StateReader,
     },
     tests::TempDBDir,
+    types::generated::agglayer::storage::v0,
 };
 
 #[fixture]
@@ -44,6 +55,197 @@ fn store() -> PerEpochStore<PendingStore, StateStore> {
         backup_client,
     )
     .unwrap()
+}
+
+fn read_raw_legacy_epoch_certificate_bytes(
+    store: &PerEpochStore<PendingStore, StateStore>,
+    index: CertificateIndex,
+) -> Vec<u8> {
+    let key = index.encode().unwrap();
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(CertificatePerIndexColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+
+    store
+        .db
+        .raw_rocksdb()
+        .get_cf(&cf, key)
+        .unwrap()
+        .unwrap()
+        .to_vec()
+}
+
+fn read_raw_proto_epoch_certificate_bytes(
+    store: &PerEpochStore<PendingStore, StateStore>,
+    index: CertificateIndex,
+) -> Vec<u8> {
+    let key = index.encode().unwrap();
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(CertificatePerIndexProtoColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+
+    store
+        .db
+        .raw_rocksdb()
+        .get_cf(&cf, key)
+        .unwrap()
+        .unwrap()
+        .to_vec()
+}
+
+fn load_v0_certificate_bytes(name: &str) -> Vec<u8> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/types/certificate/tests/encoded")
+        .join(name);
+    let hex = std::fs::read_to_string(path).unwrap();
+    hex::decode(hex.trim()).unwrap()
+}
+
+fn write_raw_epoch_certificate_bytes(
+    path: &std::path::Path,
+    index: CertificateIndex,
+    value: Vec<u8>,
+) {
+    let db = crate::storage::DB::open_cf(path, super::cf_definitions::EPOCHS_DB_V0).unwrap();
+    let key = index.encode().unwrap();
+    let cf = db
+        .raw_rocksdb()
+        .cf_handle(CertificatePerIndexColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+
+    db.raw_rocksdb().put_cf(&cf, key, value).unwrap();
+}
+
+fn seed_epoch_checkpoints(path: &std::path::Path, network_id: NetworkId, height: Height) {
+    let db = crate::storage::DB::open_cf(path, super::cf_definitions::EPOCHS_DB_V0).unwrap();
+    db.put::<StartCheckpointColumn>(&network_id, &height)
+        .unwrap();
+    db.put::<EndCheckpointColumn>(&network_id, &height).unwrap();
+}
+
+#[rstest]
+fn add_certificate_writes_proto_bytes_to_epoch_store(
+    store: PerEpochStore<PendingStore, StateStore>,
+) {
+    let network = NetworkId::new(1);
+    let height = Height::ZERO;
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    let (_, index) = store
+        .add_certificate(certificate_id, agglayer_types::ExecutionMode::Default)
+        .unwrap();
+
+    let raw = read_raw_proto_epoch_certificate_bytes(&store, index);
+    let proto = v0::Certificate::decode(raw.as_slice())
+        .expect("epoch certificates should be stored as storage proto");
+    let decoded = Certificate::try_from(proto).unwrap();
+
+    assert_eq!(decoded, certificate);
+}
+
+#[rstest]
+fn get_certificate_at_index_does_not_read_legacy_v0_rows_after_open(
+    store: PerEpochStore<PendingStore, StateStore>,
+) {
+    let index = CertificateIndex::ZERO;
+    let key = index.encode().unwrap();
+    let value = load_v0_certificate_bytes("v0-n15-cert_h0.hex");
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(CertificatePerIndexColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+
+    store.db.raw_rocksdb().put_cf(&cf, key, value).unwrap();
+
+    assert_eq!(store.get_certificate_at_index(index).unwrap(), None);
+}
+
+#[test]
+fn reopening_epoch_store_migrates_legacy_certificate_rows_to_proto() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let epoch_number = EpochNumber::ZERO;
+    let epoch_path = config.storage.epoch_db_path(epoch_number);
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let expected = sample_data::load_certificate("n15-cert_h0.json");
+    let legacy = load_v0_certificate_bytes("v0-n15-cert_h0.hex");
+    let index = CertificateIndex::ZERO;
+    let network_id = NetworkId::new(15);
+    let height = Height::ZERO;
+
+    seed_epoch_checkpoints(&epoch_path, network_id, height);
+    write_raw_epoch_certificate_bytes(&epoch_path, index, legacy.clone());
+
+    let store = PerEpochStore::try_open(
+        config,
+        epoch_number,
+        pending_store,
+        state_store,
+        Some(std::iter::once((network_id, height)).collect()),
+        BackupClient::noop(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        store.get_certificate_at_index(index).unwrap(),
+        Some(expected.clone())
+    );
+
+    let raw = read_raw_proto_epoch_certificate_bytes(&store, index);
+    let proto = v0::Certificate::decode(raw.as_slice())
+        .expect("legacy epoch certificate rows should be copied to the proto CF on reopen");
+    let decoded = Certificate::try_from(proto).unwrap();
+
+    assert_eq!(decoded, expected);
+    assert_eq!(
+        read_raw_legacy_epoch_certificate_bytes(&store, index),
+        legacy
+    );
+}
+
+#[test]
+fn readonly_epoch_access_requires_migrated_proto_cf() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let epoch_number = EpochNumber::ZERO;
+    let epoch_path = config.storage.epoch_db_path(epoch_number);
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let epochs_store =
+        EpochsStore::new(config, pending_store, state_store, BackupClient::noop()).unwrap();
+    let legacy = load_v0_certificate_bytes("v0-n15-cert_h0.hex");
+    let index = CertificateIndex::ZERO;
+
+    write_raw_epoch_certificate_bytes(&epoch_path, index, legacy);
+
+    assert!(epochs_store.get_certificate(epoch_number, index).is_err());
 }
 
 #[rstest]
@@ -179,7 +381,7 @@ fn adding_a_certificate(
 #[case::when_state_are_empty(
     StartCheckpointState::Empty,
     EndCheckpointState::Empty,
-    VecDeque::from([|result: Result<_, Error>| result.is_ok(), |result: Result<_, Error>| result.is_ok()]),
+    VecDeque::from([|result: Result<_, Error>| result.is_ok(), |result: Result<_, Error>| result.is_err()]),
     Height::ZERO)]
 #[case::when_state_are_empty_and_starting_at_wrong_height(
     StartCheckpointState::Empty,
@@ -189,7 +391,7 @@ fn adding_a_certificate(
 #[case::when_state_is_already_full(
     StartCheckpointState::Empty,
     EndCheckpointState::WithCheckpoint(vec![(NetworkId::new(0), Height::ZERO)]),
-    VecDeque::from([|result: Result<_, Error>| result.is_ok()]),
+    VecDeque::from([|result: Result<_, Error>| result.is_err()]),
     Height::new(1))]
 #[case::when_state_contains_other_network(
     StartCheckpointState::Empty,
@@ -417,219 +619,4 @@ fn can_retrieve_proof_at_index() {
         non_existent_proof.is_none(),
         "Should return None for non-existent index"
     );
-}
-
-#[rstest]
-#[case::five_certificates(5)]
-#[case::ten_certificates(10)]
-#[case::fifty_certificates(50)]
-fn can_add_multiple_certificates_per_epoch(
-    store: PerEpochStore<PendingStore, StateStore>,
-    #[case] num_certificates: u64,
-) {
-    let pending_store = store.pending_store.clone();
-    let state_store = store.state_store.clone();
-    let network = NetworkId::new(0);
-
-    // Add multiple certificates sequentially
-    for i in 0..num_certificates {
-        let height = Height::new(i);
-        let certificate = Certificate::new_for_test(network, height);
-        let certificate_id = certificate.hash();
-
-        state_store
-            .insert_certificate_header(&certificate, CertificateStatus::Proven)
-            .unwrap();
-
-        pending_store
-            .insert_pending_certificate(network, height, &certificate)
-            .unwrap();
-
-        pending_store
-            .insert_generated_proof(&certificate_id, &Proof::dummy())
-            .unwrap();
-
-        let result = store.add_certificate(certificate_id, agglayer_types::ExecutionMode::Default);
-        assert!(
-            result.is_ok(),
-            "Failed to add certificate at height {}: {:?}",
-            i,
-            result
-        );
-
-        let (epoch_number, certificate_index) = result.unwrap();
-        assert_eq!(epoch_number, EpochNumber::ZERO);
-        assert_eq!(certificate_index, CertificateIndex::new(i));
-    }
-
-    // Verify all certificates can be retrieved
-    for i in 0..num_certificates {
-        let certificate = store
-            .get_certificate_at_index(CertificateIndex::new(i))
-            .unwrap();
-        assert!(
-            certificate.is_some(),
-            "Certificate at index {} should exist",
-            i
-        );
-
-        let cert = certificate.unwrap();
-        assert_eq!(cert.network_id, network);
-        assert_eq!(cert.height, Height::new(i));
-    }
-
-    // Verify end checkpoint is updated correctly
-    let end_checkpoint = store.get_end_checkpoint();
-    assert_eq!(
-        end_checkpoint.get(&network),
-        Some(&Height::new(num_certificates - 1))
-    );
-}
-
-#[rstest]
-fn multiple_networks_multiple_certificates_per_epoch(
-    store: PerEpochStore<PendingStore, StateStore>,
-) {
-    let pending_store = store.pending_store.clone();
-    let state_store = store.state_store.clone();
-
-    // Add 10 certificates for 3 different networks
-    let networks = [NetworkId::new(0), NetworkId::new(1), NetworkId::new(2)];
-    let certificates_per_network = 10;
-
-    for network in networks.iter() {
-        for i in 0..certificates_per_network {
-            let height = Height::new(i);
-            let certificate = Certificate::new_for_test(*network, height);
-            let certificate_id = certificate.hash();
-
-            state_store
-                .insert_certificate_header(&certificate, CertificateStatus::Proven)
-                .unwrap();
-
-            pending_store
-                .insert_pending_certificate(*network, height, &certificate)
-                .unwrap();
-
-            pending_store
-                .insert_generated_proof(&certificate_id, &Proof::dummy())
-                .unwrap();
-
-            let result =
-                store.add_certificate(certificate_id, agglayer_types::ExecutionMode::Default);
-            assert!(
-                result.is_ok(),
-                "Failed to add certificate for network {} at height {}: {:?}",
-                network,
-                i,
-                result
-            );
-        }
-    }
-
-    // Verify end checkpoints for all networks
-    let end_checkpoint = store.get_end_checkpoint();
-    for network in networks.iter() {
-        assert_eq!(
-            end_checkpoint.get(network),
-            Some(&Height::new(certificates_per_network - 1)),
-            "Network {} should have end checkpoint at height {}",
-            network,
-            certificates_per_network - 1
-        );
-    }
-
-    // Verify total number of certificates
-    let mut count = 0;
-    for i in 0..(networks.len() as u64 * certificates_per_network) {
-        if store
-            .get_certificate_at_index(CertificateIndex::new(i))
-            .unwrap()
-            .is_some()
-        {
-            count += 1;
-        }
-    }
-    assert_eq!(
-        count,
-        networks.len() as u64 * certificates_per_network,
-        "Should have {} total certificates",
-        networks.len() * certificates_per_network as usize
-    );
-}
-
-#[rstest]
-fn sequential_validation_still_enforced(store: PerEpochStore<PendingStore, StateStore>) {
-    let pending_store = store.pending_store.clone();
-    let state_store = store.state_store.clone();
-    let network = NetworkId::new(0);
-
-    // Add first certificate at height 0
-    let height0 = Height::ZERO;
-    let certificate0 = Certificate::new_for_test(network, height0);
-    let certificate_id0 = certificate0.hash();
-
-    pending_store
-        .insert_pending_certificate(network, height0, &certificate0)
-        .unwrap();
-
-    let height1 = Height::new(1);
-    let certificate1 = Certificate::new_for_test(network, height1);
-    let certificate_id1 = certificate1.hash();
-
-    pending_store
-        .insert_pending_certificate(network, height1, &certificate1)
-        .unwrap();
-
-    let height2 = Height::new(2);
-    let certificate2 = Certificate::new_for_test(network, height2);
-    let certificate_id2 = certificate2.hash();
-
-    pending_store
-        .insert_pending_certificate(network, height2, &certificate2)
-        .unwrap();
-
-    state_store
-        .insert_certificate_header(&certificate0, CertificateStatus::Proven)
-        .unwrap();
-
-    pending_store
-        .insert_generated_proof(&certificate_id0, &Proof::dummy())
-        .unwrap();
-
-    assert!(store
-        .add_certificate(certificate_id0, agglayer_types::ExecutionMode::Default)
-        .is_ok());
-
-    state_store
-        .insert_certificate_header(&certificate2, CertificateStatus::Proven)
-        .unwrap();
-
-    pending_store
-        .insert_generated_proof(&certificate_id2, &Proof::dummy())
-        .unwrap();
-
-    let result = store.add_certificate(certificate_id2, agglayer_types::ExecutionMode::Default);
-    assert!(
-        result.is_err(),
-        "Should reject certificate with gap in heights"
-    );
-    assert!(matches!(
-        result,
-        Err(Error::CertificateCandidateError(
-            crate::error::CertificateCandidateError::UnexpectedHeight(_, _, _)
-        ))
-    ));
-
-    state_store
-        .insert_certificate_header(&certificate1, CertificateStatus::Proven)
-        .unwrap();
-
-    pending_store
-        .insert_generated_proof(&certificate_id1, &Proof::dummy())
-        .unwrap();
-
-    assert!(store
-        .add_certificate(certificate_id1, agglayer_types::ExecutionMode::Default)
-        .is_ok());
 }

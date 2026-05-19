@@ -18,6 +18,8 @@ pub mod pending;
 pub mod per_epoch;
 pub mod state;
 
+mod migration_helpers;
+
 macro_rules! try_digest {
     ($value:expr, $err_msg:expr) => {
         agglayer_types::Digest::try_from(&*$value).map_err(|_| {

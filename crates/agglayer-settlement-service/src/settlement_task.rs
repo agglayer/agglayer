@@ -1,9 +1,10 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
     time::{Duration, SystemTime},
 };
 
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
     SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
@@ -12,6 +13,7 @@ use agglayer_types::{
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
     primitives::Address,
+    providers::Provider,
 };
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -19,8 +21,8 @@ use ulid::Ulid;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
-pub enum StoredSettlementJob {
-    Pending(SettlementTask),
+pub enum StoredSettlementJob<L1Provider, SettlementStore> {
+    Pending(SettlementTask<L1Provider, SettlementStore>),
     Completed(SettlementJob, SettlementJobResult),
 }
 
@@ -34,9 +36,11 @@ struct ActiveSettlementAttempt {
     result: Option<SettlementAttemptResult>,
 }
 
-pub struct SettlementTask {
+pub struct SettlementTask<L1Provider, SettlementStore> {
     id: Ulid,
     job: SettlementJob,
+    provider: Arc<L1Provider>,
+    store: Arc<SettlementStore>,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
     attempts:
         BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>>,
@@ -44,9 +48,13 @@ pub struct SettlementTask {
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
 
-impl SettlementTask {
+impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + SettlementWriter>
+    SettlementTask<L1Provider, SettlementStore>
+{
     pub async fn create(
         job: SettlementJob,
+        provider: Arc<L1Provider>,
+        store: Arc<SettlementStore>,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
     ) -> eyre::Result<(Ulid, Self)> {
         let id = loop {
@@ -63,6 +71,8 @@ impl SettlementTask {
         let this = Self {
             id,
             job,
+            provider,
+            store,
             admin_commands,
             attempts: BTreeMap::new(),
         };
@@ -72,8 +82,10 @@ impl SettlementTask {
 
     pub async fn load(
         id: Ulid,
+        provider: Arc<L1Provider>,
+        store: Arc<SettlementStore>,
         admin_commands: mpsc::Receiver<TaskAdminCommand>,
-    ) -> eyre::Result<StoredSettlementJob> {
+    ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
         let (job, result) = Self::load_settlement_job_from_db(id).await?;
         if let Some(result) = result {
             Ok(StoredSettlementJob::Completed(job, result))
@@ -81,6 +93,8 @@ impl SettlementTask {
             let mut this = SettlementTask {
                 id,
                 job,
+                provider,
+                store,
                 admin_commands,
                 attempts: BTreeMap::new(),
             };
@@ -319,13 +333,14 @@ impl SettlementTask {
 
     async fn tx_hash_on_l1_for_nonce(
         &self,
-        _wallet: Address,
-        _nonce: Nonce,
+        wallet: Address,
+        nonce: Nonce,
     ) -> Option<SettlementTxHash> {
-        // TODO: delegate to the standalone `tx_hash_on_l1_for_nonce` function
-        // once a provider field is added to SettlementTask.
-        // Use retry_callback_until_success as needed.
-        todo!()
+        // TODO: add retry with backoff using
+        // self.job.settlement_config.retry_on_transient_failure
+        crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce)
+            .await
+            .unwrap()
     }
 
     async fn current_result_on_l1_for(
@@ -373,7 +388,7 @@ impl SettlementTask {
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
-        // TODO: Save the settlement job contents to L1
+        // TODO: Save the settlement job contents to DB
         // XREF: https://github.com/agglayer/agglayer/issues/1381
         todo!()
     }
@@ -381,8 +396,8 @@ impl SettlementTask {
     async fn load_settlement_job_from_db(
         _id: Ulid,
     ) -> eyre::Result<(SettlementJob, Option<SettlementJobResult>)> {
-        // TODO: Load a settlement job's contents from L1, including its result if it is
-        // completed.
+        // TODO: Load a settlement job's contents from DB, including its
+        // result if it is completed.
         // XREF: https://github.com/agglayer/agglayer/issues/1381
         todo!()
     }

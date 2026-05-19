@@ -31,6 +31,8 @@ uuid = { version = "1.22", features = ["v4"] }
 [dev-dependencies]
 agglayer-grpc-client.workspace = true
 agglayer-storage = { workspace = true, features = ["testutils"] }
+agglayer-types = { workspace = true, features = ["testutils"] }
+async-trait.workspace = true
 
 tokio = { workspace = true, features = [
     "macros",

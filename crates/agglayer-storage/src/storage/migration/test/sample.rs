@@ -109,6 +109,10 @@ impl Builder {
         Self::open(path, &cfs)
     }
 
+    pub fn open_sample_v1(path: &Path) -> Result<Self, DBOpenError> {
+        Self::open(path, CFS_V1)
+    }
+
     pub fn sample_migrate_v0_v1(self) -> Result<Self, DBOpenError> {
         // Create and populate the new V1 column family
         self.add_cfs(CFS_V1, |db| {
