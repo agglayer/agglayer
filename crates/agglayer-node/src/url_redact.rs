@@ -56,7 +56,10 @@ fn strip_reqwest_url(err: TransportError) -> TransportError {
     };
     match boxed.downcast::<reqwest::Error>() {
         Ok(re) => TransportErrorKind::custom(re.without_url()),
-        Err(other) => RpcError::Transport(TransportErrorKind::Custom(other)),
+        Err(other) => match other.downcast::<reqwest13::Error>() {
+            Ok(re) => TransportErrorKind::custom(re.without_url()),
+            Err(other) => RpcError::Transport(TransportErrorKind::Custom(other)),
+        },
     }
 }
 

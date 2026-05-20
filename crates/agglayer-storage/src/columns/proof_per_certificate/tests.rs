@@ -53,7 +53,7 @@ struct SP1ProofWithPublicValuesV3 {
 
 impl SP1ProofWithPublicValuesV3 {
     fn load(path: impl AsRef<std::path::Path>) -> eyre::Result<Self> {
-        agglayer_types::bincode::sp1v4()
+        agglayer_types::bincode::sp1_compatible()
             .deserialize_from(std::fs::File::open(path).expect("failed to open file"))
             .map_err(Into::into)
     }
