@@ -31,7 +31,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tower.workspace = true
-tonic = { workspace = true, features = ["zstd"] }
 tracing.workspace = true
 
 sp1-sdk.workspace = true
