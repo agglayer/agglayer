@@ -1,8 +1,7 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
+    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
-use ulid::Ulid;
 
 use super::StateStore;
 use crate::{
@@ -23,7 +22,7 @@ use crate::{
 impl StateStore {
     fn with_settlement_write_lock<T>(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         callback: impl FnOnce() -> Result<T, Error>,
     ) -> Result<T, Error> {
         let key_lock = {
@@ -48,7 +47,10 @@ impl StateStore {
 }
 
 impl SettlementReader for StateStore {
-    fn get_settlement_job(&self, settlement_job_id: &Ulid) -> Result<Option<SettlementJob>, Error> {
+    fn get_settlement_job(
+        &self,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<Option<SettlementJob>, Error> {
         Ok(self
             .db
             .get::<SettlementJobsColumn>(settlement_job_id)?
@@ -58,7 +60,7 @@ impl SettlementReader for StateStore {
 
     fn get_settlement_job_result(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
     ) -> Result<Option<SettlementJobResult>, Error> {
         Ok(self
             .db
@@ -69,7 +71,7 @@ impl SettlementReader for StateStore {
 
     fn list_settlement_attempts(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
     ) -> Result<Vec<(u64, SettlementAttempt)>, Error> {
         let mut iterator = self.db.iter_with_direction::<SettlementAttemptsColumn>(
             ReadOptions::default(),
@@ -98,7 +100,7 @@ impl SettlementReader for StateStore {
 
     fn list_settlement_attempt_results(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
     ) -> Result<Vec<(u64, SettlementAttemptResult)>, Error> {
         let mut iterator = self
             .db
@@ -133,7 +135,7 @@ impl SettlementReader for StateStore {
 impl SettlementWriter for StateStore {
     fn insert_settlement_job(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         settlement_job: &SettlementJob,
     ) -> Result<(), Error> {
         let settlement_job: v0::SettlementJob = settlement_job.into();
@@ -157,7 +159,7 @@ impl SettlementWriter for StateStore {
 
     fn insert_settlement_job_result(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         tx_result: &SettlementJobResult,
     ) -> Result<(), Error> {
         let tx_result: v0::SettlementJobResult = tx_result.into();
@@ -191,7 +193,7 @@ impl SettlementWriter for StateStore {
 
     fn insert_settlement_attempt(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         attempt_sequence_number: u64,
         settlement_attempt: &SettlementAttempt,
     ) -> Result<(), Error> {
@@ -253,7 +255,7 @@ impl SettlementWriter for StateStore {
 
     fn insert_settlement_attempt_result(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         attempt_sequence_number: u64,
         tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error> {

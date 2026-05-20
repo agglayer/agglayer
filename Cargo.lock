@@ -695,6 +695,7 @@ dependencies = [
  "sp1-sdk",
  "strum_macros 0.28.0",
  "thiserror 2.0.18",
+ "ulid",
  "unified-bridge",
 ]
 

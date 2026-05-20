@@ -31,5 +31,5 @@ pub use proof_modes::{ExecutionMode, GenerationType};
 pub use settlement::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Nonce,
     SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
-    SettlementJobResult,
+    SettlementJobId, SettlementJobResult,
 };

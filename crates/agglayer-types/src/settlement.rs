@@ -4,6 +4,38 @@ use alloy::primitives::Bytes;
 
 use crate::{Address, SettlementTxHash, B256, U256};
 
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[serde(transparent)]
+pub struct SettlementJobId(ulid::Ulid);
+
+impl SettlementJobId {
+    pub const fn new(value: ulid::Ulid) -> Self {
+        Self(value)
+    }
+
+    pub const fn as_ulid(&self) -> &ulid::Ulid {
+        &self.0
+    }
+
+    pub const fn into_ulid(self) -> ulid::Ulid {
+        self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, derive_more::Display)]
 pub struct SettlementAttemptNumber(pub u64);
 

@@ -1,4 +1,4 @@
-use ulid::Ulid;
+use agglayer_types::SettlementJobId;
 
 use crate::{
     schema::Codec as _,
@@ -14,7 +14,7 @@ use crate::{
 #[test]
 fn settlement_attempt_result_roundtrip_codec() {
     let key = attempt::Key {
-        settlement_job_id: Ulid::from(7u128),
+        settlement_job_id: SettlementJobId::from(ulid::Ulid::from(7u128)),
         attempt_sequence_number: 3,
     };
     let value = SettlementAttemptResult::contract_call_success_for_test(23);
