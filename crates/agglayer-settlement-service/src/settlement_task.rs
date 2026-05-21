@@ -587,7 +587,9 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
             .get_transaction_receipt(provider_tx_hash)
             .await?;
         let Some(receipt) = receipt else {
-            return Err(WaitForSettlementError::NotSettledYet);
+            // The caller only waits after observing this transaction on L1, so
+            // a missing receipt is a reorg/drop signal.
+            return Ok(None);
         };
 
         let Some(block_hash) = receipt.block_hash() else {
