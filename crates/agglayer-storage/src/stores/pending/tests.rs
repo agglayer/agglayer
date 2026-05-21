@@ -10,6 +10,7 @@ use crate::{
         pending_queue::{PendingQueueColumn, PendingQueueKey, PendingQueueProtoColumn},
         proof_per_certificate::ProofPerCertificateColumn,
     },
+    error::Error,
     schema::{Codec as _, ColumnSchema as _},
     stores::{PendingCertificateReader as _, PendingCertificateWriter as _},
     tests::TempDBDir,
@@ -164,17 +165,19 @@ fn reopening_pending_store_migrates_legacy_rows_to_proto() {
 }
 
 #[test]
-fn get_proof_ignores_unreadable_pending_proof() {
+fn get_proof_reports_unreadable_pending_proof() {
     let (_tmp, store) = store();
     let certificate_id = CertificateId::new([7; 32].into());
 
     write_raw_proof_bytes(&store, certificate_id, b"not a proof".to_vec());
 
-    assert!(store.get_proof(certificate_id).unwrap().is_none());
+    let err = store.get_proof(certificate_id).unwrap_err();
+
+    assert!(matches!(err, Error::UnreadableProof { id, .. } if id == certificate_id));
 }
 
 #[test]
-fn multi_get_proof_ignores_unreadable_pending_proofs() {
+fn multi_get_proof_reports_unreadable_pending_proofs() {
     let (_tmp, store) = store();
     let valid_id = CertificateId::new([8; 32].into());
     let invalid_id = CertificateId::new([9; 32].into());
@@ -184,7 +187,7 @@ fn multi_get_proof_ignores_unreadable_pending_proofs() {
         .unwrap();
     write_raw_proof_bytes(&store, invalid_id, b"not a proof".to_vec());
 
-    let proofs = store.multi_get_proof(&[valid_id, invalid_id]).unwrap();
+    let err = store.multi_get_proof(&[valid_id, invalid_id]).unwrap_err();
 
-    assert!(matches!(proofs.as_slice(), [Some(Proof::SP1(_)), None]));
+    assert!(matches!(err, Error::UnreadableProof { id, .. } if id == invalid_id));
 }

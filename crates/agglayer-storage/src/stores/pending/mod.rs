@@ -49,6 +49,13 @@ impl PendingStore {
         Ok(Self::new(Arc::new(Self::init_db(path)?)))
     }
 
+    fn decode_readable_proof(certificate_id: CertificateId, bytes: &[u8]) -> Result<Proof, Error> {
+        Proof::decode(bytes).map_err(|source| Error::UnreadableProof {
+            id: certificate_id,
+            source: DBError::from(source),
+        })
+    }
+
     fn get_readable_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
         let key = certificate_id.encode().map_err(DBError::from)?;
         let cf = self
@@ -66,17 +73,7 @@ impl PendingStore {
             return Ok(None);
         };
 
-        match Proof::decode(&bytes) {
-            Ok(proof) => Ok(Some(proof)),
-            Err(error) => {
-                tracing::warn!(
-                    ?error,
-                    ?certificate_id,
-                    "Failed to decode proof from storage, treating as missing"
-                );
-                Ok(None)
-            }
-        }
+        Self::decode_readable_proof(certificate_id, &bytes).map(Some)
     }
 }
 
@@ -261,18 +258,7 @@ impl PendingCertificateReader for PendingStore {
             .into_iter()
             .zip(keys.iter())
             .map(|(result, certificate_id)| match result {
-                Ok(Some(bytes)) => match Proof::decode(&bytes[..]) {
-                    Ok(proof) => Ok(Some(proof)),
-                    Err(error) => {
-                        tracing::warn!(
-                            ?error,
-                            ?certificate_id,
-                            "Failed to decode proof from storage during batch read, treating as \
-                             missing"
-                        );
-                        Ok(None)
-                    }
-                },
+                Ok(Some(bytes)) => Self::decode_readable_proof(*certificate_id, &bytes).map(Some),
                 Ok(None) => Ok(None),
                 Err(error) => Err(Error::from(DBError::from(error))),
             })

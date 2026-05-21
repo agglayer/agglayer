@@ -222,37 +222,28 @@ where
         // At this point, we have the proof and the verifying key coming from the chain
         // The witness execution already checked that the vk in the proof is valid and
         // the multibatch header is configured to use the hash from L1
-        let stdin = match &certificate.aggchain_data {
-            AggchainData::ECDSA { .. } => stdin,
-            AggchainData::MultisigOnly { .. } => stdin,
-            AggchainData::Generic { proof, .. } => {
-                let proof = proof.clone();
-                // This operation is unwind safe: if it errors, we will discard stdin and
-                // stark_proof anyway.
-                sp1_blocking(AssertUnwindSafe(move || {
-                    let mut stdin = stdin;
-                    let stark_proof = proof.executable_sp1(&AcceptancePolicy::DEFAULT)?;
-                    stdin.write_proof(stark_proof.proof.clone(), stark_proof.vkey.vk.clone());
-                    Ok::<_, ProofError>(stdin)
-                }))
-                .await
-                .map_err(CertificationError::Other)?
-                .map_err(|source| CertificationError::Other(eyre!(source)))?
-            }
+        let aggchain_proof = match &certificate.aggchain_data {
+            AggchainData::ECDSA { .. } | AggchainData::MultisigOnly { .. } => None,
+            AggchainData::Generic { proof, .. } => Some(proof.clone()),
             AggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
-                let proof = aggchain_proof.proof.clone();
-                // This operation is unwind safe: if it errors, we will discard stdin and
-                // stark_proof anyway.
-                sp1_blocking(AssertUnwindSafe(move || {
-                    let mut stdin = stdin;
-                    let stark_proof = proof.executable_sp1(&AcceptancePolicy::DEFAULT)?;
-                    stdin.write_proof(stark_proof.proof.clone(), stark_proof.vkey.vk.clone());
-                    Ok::<_, ProofError>(stdin)
-                }))
-                .await
-                .map_err(CertificationError::Other)?
-                .map_err(|source| CertificationError::Other(eyre!(source)))?
+                Some(aggchain_proof.proof.clone())
             }
+        };
+
+        let stdin = if let Some(proof) = aggchain_proof {
+            // This operation is unwind safe: if it errors, we will discard stdin and
+            // stark_proof anyway.
+            sp1_blocking(AssertUnwindSafe(move || {
+                let mut stdin = stdin;
+                let stark_proof = proof.executable_sp1(&AcceptancePolicy::DEFAULT)?;
+                stdin.write_proof(stark_proof.proof, stark_proof.vkey.vk);
+                Ok::<_, ProofError>(stdin)
+            }))
+            .await
+            .map_err(CertificationError::Other)?
+            .map_err(|source| CertificationError::Other(eyre!(source)))?
+        } else {
+            stdin
         };
 
         // SP1 native execution which includes the aggchain proof stark verification

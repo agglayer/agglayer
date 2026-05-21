@@ -49,3 +49,18 @@ impl From<SP1VerificationError> for ProofVerificationError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_unexpected_exit_code_to_other_for_serialization_compatibility() {
+        let err = ProofVerificationError::from(SP1VerificationError::UnexpectedExitCode(42));
+
+        assert_eq!(
+            err,
+            ProofVerificationError::Other("Unexpected exit code: 42".into())
+        );
+    }
+}
