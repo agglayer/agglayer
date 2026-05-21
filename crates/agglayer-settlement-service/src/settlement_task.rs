@@ -62,7 +62,6 @@ impl From<TransportError> for WaitForSettlementError {
         Self::Transport(error)
     }
 }
-
 #[derive(Debug, thiserror::Error)]
 #[error(
     "assumed non-recoverable in settlement task {settlement_task_id} at {file}:{line}: \
