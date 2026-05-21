@@ -3,7 +3,7 @@ use std::{panic::AssertUnwindSafe, sync::Arc};
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
-use agglayer_sp1::{AcceptancePolicy, ProofExt as _};
+use agglayer_sp1::{AcceptancePolicy, ProofError, ProofExt as _};
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
     aggchain_proof::AggchainData, Certificate, Digest, Height, LocalNetworkStateData, NetworkId,
@@ -94,7 +94,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         })
     }
 
-    fn verify_proof(
+    async fn verify_proof(
         verifier: Arc<EnvProver>,
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
@@ -106,9 +106,13 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
                 .map_err(eyre::Error::from)
         );
 
-        Ok(sp1_fast(AssertUnwindSafe(|| {
-            verifier.verify(proof, verifying_key, None)
+        let verifying_key = verifying_key.clone();
+        let proof = proof.clone();
+
+        Ok(sp1_blocking(AssertUnwindSafe(move || {
+            verifier.verify(&proof, &verifying_key, None)
         }))
+        .await
         .context("Failed verifying sp1 proof")??)
     }
 }
@@ -206,7 +210,7 @@ where
         );
 
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
-        let mut stdin = sp1_fast(|| {
+        let stdin = sp1_fast(|| {
             let mut stdin = SP1Stdin::new();
             stdin.write(&network_state);
             stdin.write(&multi_batch_header);
@@ -218,34 +222,36 @@ where
         // At this point, we have the proof and the verifying key coming from the chain
         // The witness execution already checked that the vk in the proof is valid and
         // the multibatch header is configured to use the hash from L1
-        match certificate.aggchain_data {
-            AggchainData::ECDSA { .. } => {}
-            AggchainData::MultisigOnly { .. } => {}
-            AggchainData::Generic { ref proof, .. } => {
-                let stark_proof = proof
-                    .executable_sp1(&AcceptancePolicy::DEFAULT)
-                    .map_err(|source| CertificationError::Other(eyre!(source)))?;
-
+        let stdin = match &certificate.aggchain_data {
+            AggchainData::ECDSA { .. } => stdin,
+            AggchainData::MultisigOnly { .. } => stdin,
+            AggchainData::Generic { proof, .. } => {
+                let proof = proof.clone();
                 // This operation is unwind safe: if it errors, we will discard stdin and
                 // stark_proof anyway.
-                sp1_fast(AssertUnwindSafe(|| {
-                    stdin.write_proof(stark_proof.proof.clone(), stark_proof.vkey.vk.clone())
-                }))
-                .map_err(CertificationError::Other)?;
-            }
-            AggchainData::MultisigAndAggchainProof {
-                ref aggchain_proof, ..
-            } => {
-                let stark_proof = aggchain_proof
-                    .proof
-                    .executable_sp1(&AcceptancePolicy::DEFAULT)
-                    .map_err(|source| CertificationError::Other(eyre!(source)))?;
-                // This operation is unwind safe: if it errors, we will discard stdin and
-                // stark_proof anyway.
-                sp1_fast(AssertUnwindSafe(|| {
+                sp1_blocking(AssertUnwindSafe(move || {
+                    let mut stdin = stdin;
+                    let stark_proof = proof.executable_sp1(&AcceptancePolicy::DEFAULT)?;
                     stdin.write_proof(stark_proof.proof.clone(), stark_proof.vkey.vk.clone());
+                    Ok::<_, ProofError>(stdin)
                 }))
-                .map_err(CertificationError::Other)?;
+                .await
+                .map_err(CertificationError::Other)?
+                .map_err(|source| CertificationError::Other(eyre!(source)))?
+            }
+            AggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
+                let proof = aggchain_proof.proof.clone();
+                // This operation is unwind safe: if it errors, we will discard stdin and
+                // stark_proof anyway.
+                sp1_blocking(AssertUnwindSafe(move || {
+                    let mut stdin = stdin;
+                    let stark_proof = proof.executable_sp1(&AcceptancePolicy::DEFAULT)?;
+                    stdin.write_proof(stark_proof.proof.clone(), stark_proof.vkey.vk.clone());
+                    Ok::<_, ProofError>(stdin)
+                }))
+                .await
+                .map_err(CertificationError::Other)?
+                .map_err(|source| CertificationError::Other(eyre!(source)))?
             }
         };
 
@@ -331,7 +337,7 @@ where
 
         debug!("Verifying the generated p-proof...");
 
-        if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify) {
+        if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify).await {
             error!("Failed to verify the p-proof: {:?}", error);
             match error.downcast::<SP1VerificationError>() {
                 Ok(error) => Err(CertificationError::ProofVerificationFailed {

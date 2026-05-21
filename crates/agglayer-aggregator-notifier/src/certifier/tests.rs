@@ -16,6 +16,7 @@ use fail::FailScenario;
 use mockall::predicate::{always, eq};
 use pessimistic_proof_test_suite::forest::Forest;
 use prover_config::{MockProverConfig, ProverType};
+use prover_executor::sp1_blocking;
 use serial_test::serial;
 use sp1_sdk::{
     blocking::{EnvProver, Prover, ProverClient},
@@ -26,9 +27,9 @@ use tower::buffer::Buffer;
 
 use crate::{CertifierClient, ELF};
 
-#[test]
+#[test_log::test(tokio::test)]
 #[serial]
-fn failpoint_mock_verifier_preserves_sp1_error_type() {
+async fn failpoint_mock_verifier_preserves_sp1_error_type() {
     let scenario = FailScenario::setup();
 
     fail::cfg(
@@ -37,21 +38,29 @@ fn failpoint_mock_verifier_preserves_sp1_error_type() {
     )
     .unwrap();
 
-    let verifier = EnvProver::Mock(ProverClient::builder().mock().build());
-    let proving_key = verifier.setup(Elf::Static(ELF)).unwrap();
-    let mut proof = SP1ProofWithPublicValues::create_mock_proof(
-        proving_key.verifying_key(),
-        SP1PublicValues::new(),
-        SP1ProofMode::Plonk,
-        SP1_CIRCUIT_VERSION,
-    );
-    proof.public_values = SP1PublicValues::from(&[1_u8]);
+    let (verifier, verifying_key, proof) = sp1_blocking(|| {
+        let verifier = EnvProver::Mock(ProverClient::builder().mock().build());
+        let proving_key = verifier.setup(Elf::Static(ELF)).unwrap();
+        let verifying_key = proving_key.verifying_key().clone();
+        let mut proof = SP1ProofWithPublicValues::create_mock_proof(
+            &verifying_key,
+            SP1PublicValues::new(),
+            SP1ProofMode::Plonk,
+            SP1_CIRCUIT_VERSION,
+        );
+        proof.public_values = SP1PublicValues::from(&[1_u8]);
+
+        (verifier, verifying_key, proof)
+    })
+    .await
+    .unwrap();
 
     let error = CertifierClient::<MockPendingStore, MockL1Rpc>::verify_proof(
         Arc::new(verifier),
-        proving_key.verifying_key(),
+        &verifying_key,
         &proof,
     )
+    .await
     .unwrap_err();
 
     assert!(matches!(
