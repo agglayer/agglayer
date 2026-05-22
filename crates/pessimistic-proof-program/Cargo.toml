@@ -1,6 +1,6 @@
 [package]
 name = "pessimistic-proof-program"
-version = "12.0.0"
+version = "13.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
@@ -25,7 +25,7 @@ overflow-checks = true
 
 [patch.crates-io]
 # The `sp1-6.0.0` patch tags cover the entire SP1 6.x line, including 6.2.1.
-k256 = { git = "https://github.com/sp1-patches/elliptic-curves", tag = "patch-k256-13.4-sp1-6.0.0" }
-p256 = { git = "https://github.com/sp1-patches/elliptic-curves", tag = "patch-p256-13.2-sp1-6.0.0" }
+k256 = { git = "https://github.com/sp1-patches/elliptic-curves", tag = "patch-k256-13.4-sp1-6.2.0" }
+p256 = { git = "https://github.com/sp1-patches/elliptic-curves", tag = "patch-p256-13.2-sp1-6.2.0" }
 ecdsa-core = { git = "https://github.com/sp1-patches/signatures", package = "ecdsa", tag = "patch-16.9-sp1-4.1.0" }
-tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-6.0.0" }
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-6.2.0" }
