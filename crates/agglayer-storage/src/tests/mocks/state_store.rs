@@ -130,6 +130,16 @@ mock! {
             &self,
             settlement_job_id: &Ulid,
         ) -> Result<Option<SettlementJobResult>, Error>;
+
+        fn list_settlement_attempts(
+            &self,
+            settlement_job_id: &Ulid,
+        ) -> Result<Vec<(u64, SettlementAttempt)>, Error>;
+
+        fn list_settlement_attempt_results(
+            &self,
+            settlement_job_id: &Ulid,
+        ) -> Result<Vec<(u64, SettlementAttemptResult)>, Error>;
     }
 
     impl SettlementWriter for StateStore {
