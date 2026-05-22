@@ -8,9 +8,11 @@ use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::{error, info};
 
-use crate::settlement_task::{SettlementTask, TaskAdminCommand};
+use crate::settlement_task::{
+    SettlementTask, SettlementTaskRunResult, TaskAdminCommand, TaskControlHandle,
+};
 
 const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 
@@ -21,7 +23,8 @@ const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 pub struct SettlementService<L1Provider, SettlementStore> {
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
-    admin_command_senders: Arc<Mutex<HashMap<SettlementJobId, mpsc::Sender<TaskAdminCommand>>>>,
+    cancellation_token: CancellationToken,
+    task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
     result_watchers:
         Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
 }
@@ -60,33 +63,21 @@ impl<
         let this = Self {
             provider,
             store,
-            admin_command_senders: Arc::new(Mutex::new(HashMap::new())),
+            cancellation_token,
+            task_controls: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
         };
-        tokio::task::spawn(Self::cancellation_token_proxy(
-            cancellation_token,
-            this.admin_command_senders.clone(),
-        ));
         // TODO: load all pending settlements from rocksdb and run them
         Ok(this)
     }
 
     #[tracing::instrument(skip_all)]
-    async fn cancellation_token_proxy(
-        cancellation_token: CancellationToken,
-        senders: Arc<Mutex<HashMap<SettlementJobId, mpsc::Sender<TaskAdminCommand>>>>,
-    ) {
-        cancellation_token.cancelled().await;
-        let senders = senders.lock().await;
-        for (job_id, sender) in senders.iter() {
-            if let Err(error) = sender.try_send(TaskAdminCommand::Abort) {
-                error!(
-                    ?error,
-                    ?job_id,
-                    "Failed to forward abort command to settlement task during service shutdown"
-                );
-            }
-        }
+    async fn task_control(&self, job_id: SettlementJobId) -> eyre::Result<TaskControlHandle> {
+        let task_controls = self.task_controls.lock().await;
+        let Some(task_control) = task_controls.get(&job_id) else {
+            eyre::bail!("No task control found for settlement task {job_id}");
+        };
+        Ok(task_control.clone())
     }
 
     #[tracing::instrument(skip_all)]
@@ -95,24 +86,22 @@ impl<
         job_id: SettlementJobId,
         command: TaskAdminCommand,
     ) -> eyre::Result<()> {
-        let senders = self.admin_command_senders.lock().await;
-        let Some(sender) = senders.get(&job_id) else {
-            return Err(eyre::eyre!(
-                "No admin command sender found for settlement task {job_id}"
-            ));
-        };
-        sender.try_send(command).wrap_err_with(|| {
-            format!(
-                "Failed to forward admin command to settlement task {job_id}, did it already \
-                 complete?"
-            )
-        })?;
+        self.task_control(job_id)
+            .await?
+            .try_send(command)
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to forward admin command to settlement task {job_id}, did it already \
+                     complete?"
+                )
+            })?;
         Ok(())
     }
 
     #[tracing::instrument(skip_all)]
     pub async fn admin_abort_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
-        self.admin_task(job_id, TaskAdminCommand::Abort).await
+        self.task_control(job_id).await?.cancel();
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]
@@ -128,30 +117,43 @@ impl<
     ) -> eyre::Result<SettlementJobWatcher> {
         let (admin_sender, admin_receiver) = mpsc::channel(ADMIN_CHANNEL_BUFFER_SIZE);
         let (result_sender, result_receiver) = watch::channel(None);
-        let (job_id, mut task) = SettlementTask::create(
-            job,
-            self.provider.clone(),
-            self.store.clone(),
-            admin_receiver,
-        )
-        .await?;
-        self.admin_command_senders
+        let (task_control_handle, task_control) =
+            TaskControlHandle::new(&self.cancellation_token, admin_sender, admin_receiver);
+        let (job_id, mut task) =
+            SettlementTask::create(job, self.provider.clone(), self.store.clone(), task_control)
+                .await?;
+        self.task_controls
             .lock()
             .await
-            .insert(job_id, admin_sender);
+            .insert(job_id, task_control_handle);
         self.result_watchers
             .lock()
             .await
             .insert(job_id, result_receiver.clone());
+        let task_controls = self.task_controls.clone();
+        let result_watchers = self.result_watchers.clone();
         tokio::task::spawn(async move {
-            let result = task.run().await;
-            if let Err(error) = result_sender.send(Some(result)) {
-                error!(
-                    ?error,
-                    ?job_id,
-                    "Failed to send settlement job result to watchers"
-                );
+            match task.run().await {
+                SettlementTaskRunResult::Completed(result) => {
+                    if let Err(error) = result_sender.send(Some(result)) {
+                        error!(
+                            ?error,
+                            ?job_id,
+                            "Failed to send settlement job result to watchers"
+                        );
+                    }
+                }
+                SettlementTaskRunResult::Cancelled => {
+                    info!(?job_id, "Settlement task cancelled");
+                    result_watchers.lock().await.remove(&job_id);
+                }
+                SettlementTaskRunResult::ReloadAndRestart => {
+                    result_watchers.lock().await.remove(&job_id);
+                    task_controls.lock().await.remove(&job_id);
+                    todo!("Reload and restart settlement tasks");
+                }
             }
+            task_controls.lock().await.remove(&job_id);
         });
         Ok(SettlementJobWatcher {
             watcher: result_receiver,
