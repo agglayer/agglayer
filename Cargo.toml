@@ -56,20 +56,12 @@ agglayer-tries = "0.17.0"
 unified-bridge = "0.17.0"
 
 # Provers
-# prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.4" }
-# prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.4" }
-# prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.4" }
-# prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.4" }
-# prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.4" }
-# prover-utils = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.4" }
-# Temporary version linked to pending branch
-prover-alloy = { git = "https://github.com/agglayer/provers.git", branch = "feature/vkey-generation-non-blocking" }
-prover-config = { git = "https://github.com/agglayer/provers.git", branch = "feature/vkey-generation-non-blocking" }
-prover-logger = { git = "https://github.com/agglayer/provers.git", branch = "feature/vkey-generation-non-blocking" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", branch = "feature/vkey-generation-non-blocking" }
-prover-engine = { git = "https://github.com/agglayer/provers.git", branch = "feature/vkey-generation-non-blocking" }
-prover-utils = { git = "https://github.com/agglayer/provers.git", branch = "feature/vkey-generation-non-blocking" }
-
+prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.5" }
+prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.5" }
+prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.5" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.5" }
+prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.5" }
+prprover-uti = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.5" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.

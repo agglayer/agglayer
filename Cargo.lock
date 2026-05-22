@@ -8146,7 +8146,7 @@ dependencies = [
 [[package]]
 name = "prover-alloy"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=feature%2Fvkey-generation-non-blocking#3945545eb6a18341fc4904f8655b5c0bccd9904a"
+source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.5#844ecc67dca61068459ebce8811e4bf5b0e52a2a"
 dependencies = [
  "agglayer-evm-client",
  "alloy",
@@ -8162,7 +8162,7 @@ dependencies = [
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=feature%2Fvkey-generation-non-blocking#3945545eb6a18341fc4904f8655b5c0bccd9904a"
+source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.5#844ecc67dca61068459ebce8811e4bf5b0e52a2a"
 dependencies = [
  "prover-utils",
  "serde",
@@ -8173,7 +8173,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=feature%2Fvkey-generation-non-blocking#3945545eb6a18341fc4904f8655b5c0bccd9904a"
+source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.5#844ecc67dca61068459ebce8811e4bf5b0e52a2a"
 dependencies = [
  "agglayer-telemetry 0.1.0 (git+https://github.com/agglayer/agglayer.git?tag=v0.4.4)",
  "anyhow",
@@ -8194,7 +8194,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=feature%2Fvkey-generation-non-blocking#3945545eb6a18341fc4904f8655b5c0bccd9904a"
+source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.5#844ecc67dca61068459ebce8811e4bf5b0e52a2a"
 dependencies = [
  "anyhow",
  "buildstructor 0.5.4",
@@ -8220,7 +8220,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=feature%2Fvkey-generation-non-blocking#3945545eb6a18341fc4904f8655b5c0bccd9904a"
+source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.5#844ecc67dca61068459ebce8811e4bf5b0e52a2a"
 dependencies = [
  "serde",
  "tracing",
@@ -8231,7 +8231,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?branch=feature%2Fvkey-generation-non-blocking#3945545eb6a18341fc4904f8655b5c0bccd9904a"
+source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.5#844ecc67dca61068459ebce8811e4bf5b0e52a2a"
 dependencies = [
  "humantime-serde",
  "serde",
