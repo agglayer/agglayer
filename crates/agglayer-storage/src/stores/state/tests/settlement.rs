@@ -310,6 +310,175 @@ fn get_settlement_job_result_returns_value_after_insert() {
 }
 
 #[test]
+fn list_settlement_attempts_returns_empty_vec_for_missing_job() {
+    let (_tmp, _db, store) = setup_store();
+
+    assert!(store
+        .list_settlement_attempts(&mk_ulid(16))
+        .expect("read must succeed")
+        .is_empty());
+}
+
+#[test]
+fn list_settlement_attempts_returns_all_attempts_for_job() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_ulid(17);
+    let first = mk_settlement_attempt(1);
+    let second = mk_settlement_attempt(2);
+    let third = mk_settlement_attempt(3);
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(17))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &first)
+        .expect("first attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 2, &second)
+        .expect("second attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 3, &third)
+        .expect("third attempt insert must succeed");
+
+    assert_eq!(
+        store
+            .list_settlement_attempts(&job_id)
+            .expect("read must succeed"),
+        vec![(1, first), (2, second), (3, third)]
+    );
+}
+
+#[test]
+fn list_settlement_attempts_does_not_return_attempts_from_other_jobs() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_ulid(18);
+    let other_job_id = mk_ulid(19);
+    let first = mk_settlement_attempt(1);
+    let second = mk_settlement_attempt(2);
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(18))
+        .expect("first job insert must succeed");
+    store
+        .insert_settlement_job(&other_job_id, &mk_settlement_job(19))
+        .expect("second job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &first)
+        .expect("first attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&other_job_id, 1, &mk_settlement_attempt(10))
+        .expect("other job attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 2, &second)
+        .expect("second attempt insert must succeed");
+
+    assert_eq!(
+        store
+            .list_settlement_attempts(&job_id)
+            .expect("read must succeed"),
+        vec![(1, first), (2, second)]
+    );
+}
+
+#[test]
+fn list_settlement_attempt_results_returns_empty_vec_for_missing_job() {
+    let (_tmp, _db, store) = setup_store();
+
+    assert!(store
+        .list_settlement_attempt_results(&mk_ulid(20))
+        .expect("read must succeed")
+        .is_empty());
+}
+
+#[test]
+fn list_settlement_attempt_results_returns_all_results_for_job() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_ulid(24);
+    let first_attempt = mk_settlement_attempt(1);
+    let second_attempt = mk_settlement_attempt(2);
+    let first_result = v0::SettlementAttemptResult::contract_call_success_for_test(1)
+        .try_into()
+        .expect("test tx result helper should be decodable");
+    let second_result = v0::SettlementAttemptResult::contract_call_success_for_test(2)
+        .try_into()
+        .expect("test tx result helper should be decodable");
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(24))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &first_attempt)
+        .expect("first attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 2, &second_attempt)
+        .expect("second attempt insert must succeed");
+    store
+        .insert_settlement_attempt_result(&job_id, 1, &first_result)
+        .expect("first result insert must succeed");
+    store
+        .insert_settlement_attempt_result(&job_id, 2, &second_result)
+        .expect("second result insert must succeed");
+
+    assert_eq!(
+        store
+            .list_settlement_attempt_results(&job_id)
+            .expect("read must succeed"),
+        vec![(1, first_result), (2, second_result)]
+    );
+}
+
+#[test]
+fn list_settlement_attempt_results_does_not_return_results_from_other_jobs() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_ulid(25);
+    let other_job_id = mk_ulid(26);
+    let first_result = v0::SettlementAttemptResult::contract_call_success_for_test(3)
+        .try_into()
+        .expect("test tx result helper should be decodable");
+    let second_result = v0::SettlementAttemptResult::contract_call_success_for_test(4)
+        .try_into()
+        .expect("test tx result helper should be decodable");
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(25))
+        .expect("first job insert must succeed");
+    store
+        .insert_settlement_job(&other_job_id, &mk_settlement_job(26))
+        .expect("second job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &mk_settlement_attempt(1))
+        .expect("first attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&other_job_id, 1, &mk_settlement_attempt(10))
+        .expect("other job attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 2, &mk_settlement_attempt(2))
+        .expect("second attempt insert must succeed");
+    store
+        .insert_settlement_attempt_result(&job_id, 1, &first_result)
+        .expect("first result insert must succeed");
+    store
+        .insert_settlement_attempt_result(
+            &other_job_id,
+            1,
+            &v0::SettlementAttemptResult::contract_call_success_for_test(10)
+                .try_into()
+                .expect("test tx result helper should be decodable"),
+        )
+        .expect("other job result insert must succeed");
+    store
+        .insert_settlement_attempt_result(&job_id, 2, &second_result)
+        .expect("second result insert must succeed");
+
+    assert_eq!(
+        store
+            .list_settlement_attempt_results(&job_id)
+            .expect("read must succeed"),
+        vec![(1, first_result), (2, second_result)]
+    );
+}
+
+#[test]
 fn insert_settlement_job_result_duplicate_fails() {
     let (_tmp, db, store) = setup_store();
     let job_id = mk_ulid(15);
