@@ -30,7 +30,6 @@ pub enum ConfiguredSigner {
 
 impl ConfiguredSigner {
     /// Decrypt the first local keystore specified in the configuration.
-    #[allow(clippy::result_large_err)]
     pub(crate) fn local_wallet(
         chain_id: u64,
         local: &LocalConfig,
