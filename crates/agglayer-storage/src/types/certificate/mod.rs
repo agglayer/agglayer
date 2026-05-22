@@ -37,7 +37,7 @@
 
 use std::borrow::Cow;
 
-use agglayer_interop_types_v13 as legacy_interop_types;
+use agglayer_interop_types_v13 as legacy_interop_types_v13;
 use agglayer_sp1::ProofExt as _;
 use agglayer_tries::roots::LocalExitRoot;
 use agglayer_types::{
@@ -236,18 +236,18 @@ pub enum AggchainDataV1<'a> {
     },
 
     GenericNoSignature {
-        proof: Cow<'a, legacy_interop_types::aggchain_proof::Proof>,
+        proof: Cow<'a, legacy_interop_types_v13::aggchain_proof::Proof>,
         aggchain_params: Digest,
     },
 
     GenericWithSignature {
-        proof: Cow<'a, legacy_interop_types::aggchain_proof::Proof>,
+        proof: Cow<'a, legacy_interop_types_v13::aggchain_proof::Proof>,
         aggchain_params: Digest,
         signature: Cow<'a, Box<Signature>>,
     },
 
     GenericWithPublicValues {
-        proof: Cow<'a, legacy_interop_types::aggchain_proof::Proof>,
+        proof: Cow<'a, legacy_interop_types_v13::aggchain_proof::Proof>,
         aggchain_params: Digest,
         signature: Option<Box<Signature>>,
         public_values: Cow<'a, Box<AggchainProofPublicValues>>,
@@ -259,17 +259,17 @@ pub enum AggchainDataV1<'a> {
 
     MultisigAndAggchainProof {
         multisig: Cow<'a, [Option<Signature>]>,
-        proof: Cow<'a, legacy_interop_types::aggchain_proof::Proof>,
+        proof: Cow<'a, legacy_interop_types_v13::aggchain_proof::Proof>,
         aggchain_params: Digest,
         public_values: Option<Cow<'a, Box<AggchainProofPublicValues>>>,
     },
 }
 
 fn legacy_proof_into_current(
-    proof: legacy_interop_types::aggchain_proof::Proof,
+    proof: legacy_interop_types_v13::aggchain_proof::Proof,
 ) -> Result<Proof, CodecError> {
     let proof = match proof {
-        legacy_interop_types::aggchain_proof::Proof::SP1Stark(proof) => {
+        legacy_interop_types_v13::aggchain_proof::Proof::SP1Stark(proof) => {
             Proof::SP1Stark(SP1StarkWithContext {
                 version: proof.version,
                 proof: agglayer_types::bincode::default().serialize(proof.proof.as_ref())?,

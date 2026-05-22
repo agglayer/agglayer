@@ -8,4 +8,7 @@ pub enum BackupError {
 
     #[error("IO Error: {0}")]
     IO(#[from] std::io::Error),
+
+    #[error("Backup task failed to join: {0}")]
+    BackupTaskJoin(#[from] tokio::task::JoinError),
 }

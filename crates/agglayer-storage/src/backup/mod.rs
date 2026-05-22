@@ -21,6 +21,34 @@ mod error;
 
 pub use error::BackupError;
 
+#[cfg(test)]
+mod test_hooks {
+    use std::{sync::Mutex, thread, time::Duration};
+
+    static BACKUP_STARTED: Mutex<Option<std::sync::mpsc::Sender<String>>> = Mutex::new(None);
+
+    pub(super) fn observe_backup_started(sender: std::sync::mpsc::Sender<String>) {
+        *BACKUP_STARTED.lock().expect("backup hook lock poisoned") = Some(sender);
+    }
+
+    pub(super) fn backup_started() {
+        let Some(sender) = BACKUP_STARTED
+            .lock()
+            .expect("backup hook lock poisoned")
+            .take()
+        else {
+            return;
+        };
+
+        let thread_name = thread::current().name().unwrap_or("unnamed").to_string();
+        sender
+            .send(thread_name)
+            .expect("backup hook receiver should be alive");
+
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
 /// Request to create a new backup.
 pub struct BackupRequest {
     /// Optional epoch db to backup.
@@ -133,6 +161,9 @@ impl BackupEngine {
     /// Create a new backup for the state, pending and epochs databases.
     /// This function will also purge old backups as configured.
     pub fn create_new_backup(&mut self, request: &BackupRequest) -> Result<(), BackupError> {
+        #[cfg(test)]
+        test_hooks::backup_started();
+
         info!("Creating new backup");
 
         if let Some((db, epoch_number)) = request.epoch_db.as_ref() {
@@ -196,7 +227,16 @@ impl BackupEngine {
                     break;
                 }
                 Some(request) = self.backup_request.recv() =>{
-                    self.create_new_backup(&request)?;
+                    let (backup_engine, result) = tokio::task::spawn_blocking(move || {
+                        let mut backup_engine = self;
+                        let result = backup_engine.create_new_backup(&request);
+
+                        (backup_engine, result)
+                    })
+                    .await?;
+
+                    self = backup_engine;
+                    result?;
                 }
             }
         }
@@ -356,5 +396,66 @@ impl BackupReport {
 
     pub fn get_epoch(&self, epoch: u64) -> Option<&Vec<BackupEngineInfo>> {
         self.epochs.get(&epoch)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    };
+
+    use tokio_util::sync::CancellationToken;
+
+    use super::*;
+    use crate::{
+        stores::{pending::PendingStore, state::StateStore},
+        tests::TempDBDir,
+    };
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn backup_creation_does_not_block_the_async_runtime_worker() {
+        let tmp = TempDBDir::new();
+        let state_db = Arc::new(
+            StateStore::init_db(&tmp.path.join("state")).expect("state db should initialize"),
+        );
+        let pending_db = Arc::new(
+            PendingStore::init_db(&tmp.path.join("pending")).expect("pending db should initialize"),
+        );
+        let cancellation_token = CancellationToken::new();
+        let (backup_engine, backup_client) = BackupEngine::new(
+            &tmp.path.join("backup"),
+            state_db,
+            pending_db,
+            10,
+            10,
+            cancellation_token.clone(),
+        )
+        .expect("backup engine should initialize");
+
+        let (started_sender, started_receiver) = std::sync::mpsc::channel();
+        test_hooks::observe_backup_started(started_sender);
+
+        let backup_handle = tokio::spawn(backup_engine.run());
+        let started_at = Instant::now();
+        backup_client
+            .backup(BackupRequest { epoch_db: None })
+            .expect("backup request should be queued");
+
+        let _backup_thread = tokio::task::spawn_blocking(move || {
+            started_receiver.recv_timeout(Duration::from_secs(1))
+        })
+        .await
+        .expect("backup started receiver task should complete")
+        .expect("backup should start");
+
+        assert!(
+            started_at.elapsed() < Duration::from_millis(100),
+            "backup creation ran on the async runtime worker and delayed unrelated async tasks"
+        );
+
+        cancellation_token.cancel();
+        backup_handle.abort();
     }
 }

@@ -1,4 +1,4 @@
-use agglayer_interop_types_v13 as legacy_interop_types;
+use agglayer_interop_types_v13 as legacy_interop_types_v13;
 use agglayer_sp1::ProofExt as _;
 use agglayer_types::{
     aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof},
@@ -72,7 +72,7 @@ fn digest(byte: u8) -> Digest {
 
 const EMPTY_ELF: &[u8] = agglayer_types::testutils::EMPTY_ELF_V5;
 
-fn legacy_sp1_proof(version: &str) -> legacy_interop_types::aggchain_proof::Proof {
+fn legacy_sp1_proof(version: &str) -> legacy_interop_types_v13::aggchain_proof::Proof {
     use sp1_sdk_v5::Prover as _;
 
     let client = sp1_sdk_v5::ProverClient::builder().mock().build();
@@ -87,8 +87,8 @@ fn legacy_sp1_proof(version: &str) -> legacy_interop_types::aggchain_proof::Proo
     .try_as_compressed()
     .unwrap();
 
-    legacy_interop_types::aggchain_proof::Proof::SP1Stark(
-        legacy_interop_types::aggchain_proof::SP1StarkWithContext {
+    legacy_interop_types_v13::aggchain_proof::Proof::SP1Stark(
+        legacy_interop_types_v13::aggchain_proof::SP1StarkWithContext {
             proof,
             vkey,
             version: version.to_owned(),
@@ -202,7 +202,7 @@ fn proto_certificate(aggchain_data: proto::AggchainData) -> proto::Certificate {
 }
 
 impl AggchainDataV1<'static> {
-    fn proof0() -> legacy_interop_types::aggchain_proof::Proof {
+    fn proof0() -> legacy_interop_types_v13::aggchain_proof::Proof {
         legacy_sp1_proof(sp1_sdk_v5::SP1_CIRCUIT_VERSION)
     }
 
@@ -412,7 +412,9 @@ fn regression_certificate_v1_decode_preserves_legacy_v5_vkey_hash() {
     let certificate = CertificateV1::test1();
     let expected = match &certificate.aggchain_data {
         AggchainDataV1::GenericWithSignature { proof, .. } => match proof.as_ref() {
-            legacy_interop_types::aggchain_proof::Proof::SP1Stark(proof) => proof.vkey.hash_bytes(),
+            legacy_interop_types_v13::aggchain_proof::Proof::SP1Stark(proof) => {
+                proof.vkey.hash_bytes()
+            }
         },
         _ => panic!("expected GenericWithSignature fixture"),
     };
