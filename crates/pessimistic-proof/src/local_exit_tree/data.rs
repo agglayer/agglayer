@@ -153,9 +153,8 @@ mod tests {
     #[test]
     fn test_data_vs_frontier_add_leaf() -> Result<(), LocalExitTreeError> {
         let num_leaves = rng().random_range(1usize..100.min(1 << TREE_DEPTH));
-        let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
         let mut local_exit_tree_data: LocalExitTreeData<TREE_DEPTH> =
-            LocalExitTreeData::from_leaves(leaves.into_iter())?;
+            LocalExitTreeData::from_leaves((0..num_leaves).map(|_| random()))?;
         let mut local_exit_tree_frontier: LocalExitTree<TREE_DEPTH> =
             LocalExitTree::try_from(&local_exit_tree_data)?;
         assert_eq!(
