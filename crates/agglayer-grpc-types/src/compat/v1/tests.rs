@@ -153,8 +153,8 @@ fn multisig_only_certificate_proto() -> v1::Certificate {
 }
 
 #[rstest::rstest]
-#[case::generic(proof_certificate_proto(ProofCarrier::Generic, "v5.2.2"))]
-#[case::multisig_and_proof(proof_certificate_proto(ProofCarrier::MultisigAndProof, "v5.2.2"))]
+#[case::generic(proof_certificate_proto(ProofCarrier::Generic, "v6.1.0"))]
+#[case::multisig_and_proof(proof_certificate_proto(ProofCarrier::MultisigAndProof, "v6.1.0"))]
 fn accepts_writable_proof_versions_in_certificate_ingress(#[case] certificate: v1::Certificate) {
     let result = Certificate::try_from(certificate);
 
@@ -165,15 +165,15 @@ fn accepts_writable_proof_versions_in_certificate_ingress(#[case] certificate: v
 }
 
 #[rstest::rstest]
-#[case::generic(proof_certificate_proto(ProofCarrier::Generic, "v6.0.1"))]
-#[case::multisig_and_proof(proof_certificate_proto(ProofCarrier::MultisigAndProof, "v6.0.1"))]
+#[case::generic(proof_certificate_proto(ProofCarrier::Generic, "v5.2.2"))]
+#[case::multisig_and_proof(proof_certificate_proto(ProofCarrier::MultisigAndProof, "v5.2.2"))]
 fn rejects_non_writable_proof_versions_in_certificate_ingress(
     #[case] certificate: v1::Certificate,
 ) {
     let result = Certificate::try_from(certificate);
     let error = result.expect_err("non-writable proof version should be rejected");
 
-    assert_eq!(error.unsupported_proof_version(), Some("v6.0.1"));
+    assert_eq!(error.unsupported_proof_version(), Some("v5.2.2"));
 }
 
 #[test]

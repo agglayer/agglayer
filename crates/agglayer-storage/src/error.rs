@@ -23,6 +23,13 @@ pub enum Error {
     #[error("No proof found")]
     NoProof,
 
+    #[error("Unreadable proof for certificate {id}: {source}")]
+    UnreadableProof {
+        id: CertificateId,
+        #[source]
+        source: DBError,
+    },
+
     #[error("The store is already in packing mode")]
     AlreadyInPackingMode,
 

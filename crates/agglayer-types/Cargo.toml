@@ -8,8 +8,10 @@ license.workspace = true
 default = []
 testutils = [
     "dep:arbitrary",
+    "dep:sp1-sdk-v5",
     "pessimistic-proof/testutils",
     "agglayer-interop-types/testutils",
+    "agglayer-sp1/testutils",
 ]
 
 [[bench]]
@@ -17,6 +19,7 @@ name = "criterion"
 harness = false
 
 [dependencies]
+agglayer-sp1.workspace = true
 agglayer-primitives.workspace = true
 agglayer-tries.workspace = true
 agglayer-interop-types.workspace = true
@@ -30,6 +33,7 @@ hex.workspace = true
 serde.workspace = true
 serde_with.workspace = true
 sp1-sdk.workspace = true
+sp1-sdk-v5 = { workspace = true, optional = true }
 sp1-core-machine.workspace = true
 sp1-prover.workspace = true
 thiserror.workspace = true

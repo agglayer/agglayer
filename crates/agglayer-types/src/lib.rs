@@ -15,9 +15,9 @@ mod settlement;
 
 #[cfg(feature = "testutils")]
 pub mod testutils {
-    pub use crate::certificate::{
-        compute_signature_info, dummy_sp1_stark_proof_with_version, EMPTY_ELF,
-    };
+    pub use agglayer_sp1::testutils::{EMPTY_ELF, EMPTY_ELF_V5};
+
+    pub use crate::certificate::{compute_signature_info, dummy_sp1_stark_proof_with_version};
 }
 pub use certificate::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Height,

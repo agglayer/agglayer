@@ -3,6 +3,7 @@ use std::{panic::AssertUnwindSafe, sync::Arc};
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
 use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
+use agglayer_sp1::{AcceptancePolicy, ProofError, ProofExt as _};
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
 use agglayer_types::{
     aggchain_proof::AggchainData, Certificate, Digest, Height, LocalNetworkStateData, NetworkId,
@@ -21,7 +22,8 @@ use pessimistic_proof::{
 };
 use prover_executor::{sp1_blocking, sp1_fast};
 use sp1_sdk::{
-    CpuProver, Prover, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
+    blocking::{EnvProver, Prover, ProverClient},
+    Elf, ProvingKey, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
 };
 use tower::{buffer::Buffer, util::BoxCloneService, Service, ServiceExt};
 use tracing::{debug, error, info, instrument, warn};
@@ -42,7 +44,7 @@ pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The pending store to fetch and store certificates and proofs.
     pending_store: Arc<PendingStore>,
     /// The local CPU verifier to verify the generated proofs.
-    verifier: Arc<CpuProver>,
+    verifier: Arc<EnvProver>,
     /// The verifying key of the SP1 proof system.
     verifying_key: SP1VerifyingKey,
     /// The prover service to generate pessimistic-proofs.
@@ -62,18 +64,19 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         debug!("Initializing the CertifierClient verifier...");
         let (verifier, verifying_key) = sp1_blocking({
             let mock_verifier = config.mock_verifier;
-            move || {
+            move || -> eyre::Result<(EnvProver, SP1VerifyingKey)> {
                 let verifier = if mock_verifier {
-                    sp1_sdk::ProverClient::builder().mock().build()
+                    EnvProver::Mock(ProverClient::builder().mock().build())
                 } else {
-                    sp1_sdk::ProverClient::builder().cpu().build()
+                    EnvProver::Light(ProverClient::builder().light().build())
                 };
-                let (_, verifying_key) = verifier.setup(ELF);
-                (verifier, verifying_key)
+                let proving_key = verifier.setup(Elf::Static(ELF)).map_err(|e| eyre!(e))?;
+                let verifying_key = proving_key.verifying_key().clone();
+                Ok((verifier, verifying_key))
             }
         })
         .await
-        .context("Failed setting up SP1 verifier")?;
+        .context("Failed setting up SP1 verifier")??;
         prover
             .ready()
             .await
@@ -91,24 +94,77 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         })
     }
 
-    fn verify_proof(
-        verifier: Arc<CpuProver>,
+    async fn verify_proof(
+        verifier: Arc<EnvProver>,
         verifying_key: &SP1VerifyingKey,
         proof: &SP1ProofWithPublicValues,
     ) -> eyre::Result<()> {
-        // This fail_point is used to make the verification pass or fail
+        #[cfg(any(test, feature = "testutils"))]
         fail::fail_point!(
             "notifier::certifier::certify::before_verifying_proof",
-            |_| {
-                let verifier = sp1_sdk::ProverClient::builder().mock().build();
-                let (_, verifying_key) = verifier.setup(ELF);
-
-                Ok(verifier.verify(proof, &verifying_key)?)
-            }
+            |_| testutils::verify_mock_proof_inputs(verifying_key, proof)
+                .map_err(eyre::Error::from)
         );
 
-        Ok(sp1_fast(|| verifier.verify(proof, verifying_key))
-            .context("Failed verifying sp1 proof")??)
+        let verifying_key = verifying_key.clone();
+        let proof = proof.clone();
+
+        Ok(sp1_blocking(AssertUnwindSafe(move || {
+            verifier.verify(&proof, &verifying_key, None)
+        }))
+        .await
+        .context("Failed verifying sp1 proof")??)
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+mod testutils {
+    use anyhow::{anyhow, Result};
+    use sp1_sdk::{
+        HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1VerificationError, SP1VerifyingKey,
+    };
+
+    fn verify_mock_public_inputs(
+        verifying_key: &SP1VerifyingKey,
+        proof: &SP1ProofWithPublicValues,
+        public_inputs: &[String; 5],
+    ) -> Result<()> {
+        let expected_vkey_hash = verifying_key.hash_bn254().to_string();
+        if public_inputs[0] != expected_vkey_hash {
+            return Err(anyhow!(
+                "vkey hash mismatch: expected {}, got {}",
+                expected_vkey_hash,
+                public_inputs[0]
+            ));
+        }
+
+        let expected_public_values_hash = proof.public_values.hash_bn254().to_string();
+        if public_inputs[1] != expected_public_values_hash {
+            return Err(anyhow!(
+                "public values hash mismatch: expected {}, got {}",
+                expected_public_values_hash,
+                public_inputs[1]
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn verify_mock_proof_inputs(
+        verifying_key: &SP1VerifyingKey,
+        proof: &SP1ProofWithPublicValues,
+    ) -> Result<(), SP1VerificationError> {
+        match &proof.proof {
+            SP1Proof::Plonk(plonk) => {
+                verify_mock_public_inputs(verifying_key, proof, &plonk.public_inputs)
+                    .map_err(SP1VerificationError::Plonk)
+            }
+            SP1Proof::Groth16(groth16) => {
+                verify_mock_public_inputs(verifying_key, proof, &groth16.public_inputs)
+                    .map_err(SP1VerificationError::Groth16)
+            }
+            _ => Ok(()),
+        }
     }
 }
 
@@ -154,7 +210,7 @@ where
         );
 
         let network_state = pessimistic_proof::NetworkState::from(initial_state);
-        let mut stdin = sp1_fast(|| {
+        let stdin = sp1_fast(|| {
             let mut stdin = SP1Stdin::new();
             stdin.write(&network_state);
             stdin.write(&multi_batch_header);
@@ -166,47 +222,44 @@ where
         // At this point, we have the proof and the verifying key coming from the chain
         // The witness execution already checked that the vk in the proof is valid and
         // the multibatch header is configured to use the hash from L1
-        match certificate.aggchain_data {
-            AggchainData::ECDSA { .. } => {}
-            AggchainData::MultisigOnly { .. } => {}
-            AggchainData::Generic { ref proof, .. } => {
-                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) = proof;
+        let aggchain_proof = match &certificate.aggchain_data {
+            AggchainData::ECDSA { .. } | AggchainData::MultisigOnly { .. } => None,
+            AggchainData::Generic { proof, .. } => Some(proof.clone()),
+            AggchainData::MultisigAndAggchainProof { aggchain_proof, .. } => {
+                Some(aggchain_proof.proof.clone())
+            }
+        };
 
-                // This operation is unwind safe: if it errors, we will discard stdin and
-                // stark_proof anyway.
-                sp1_fast(AssertUnwindSafe(|| {
-                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone())
-                }))
-                .map_err(CertificationError::Other)?;
-            }
-            AggchainData::MultisigAndAggchainProof {
-                ref aggchain_proof, ..
-            } => {
-                let agglayer_types::aggchain_proof::Proof::SP1Stark(stark_proof) =
-                    &aggchain_proof.proof;
-                // This operation is unwind safe: if it errors, we will discard stdin and
-                // stark_proof anyway.
-                sp1_fast(AssertUnwindSafe(|| {
-                    stdin.write_proof((*stark_proof.proof).clone(), stark_proof.vkey.vk.clone());
-                }))
-                .map_err(CertificationError::Other)?;
-            }
+        let stdin = if let Some(proof) = aggchain_proof {
+            // This operation is unwind safe: if it errors, we will discard stdin and
+            // stark_proof anyway.
+            sp1_blocking(AssertUnwindSafe(move || {
+                let mut stdin = stdin;
+                let stark_proof = proof.executable_sp1(&AcceptancePolicy::DEFAULT)?;
+                stdin.write_proof(stark_proof.proof, stark_proof.vkey.vk);
+                Ok::<_, ProofError>(stdin)
+            }))
+            .await
+            .map_err(CertificationError::Other)?
+            .map_err(|source| CertificationError::Other(eyre!(source)))?
+        } else {
+            stdin
         };
 
         // SP1 native execution which includes the aggchain proof stark verification
         let (pv_sp1_execute, _report) = {
             // Do not verify the deferred proof if we are in mock mode
             let deferred_proof_verification = !self.config.mock_verifier;
-            let (pv, report) = sp1_blocking({
+            let (pv, report) = sp1_blocking(AssertUnwindSafe({
                 let verifier = self.verifier.clone();
                 let stdin = stdin.clone();
                 move || {
                     verifier
-                        .execute(ELF, &stdin)
+                        .execute(Elf::Static(ELF), stdin)
                         .deferred_proof_verification(deferred_proof_verification)
                         .run()
                 }
-            })
+            }))
             .await
             .map_err(CertificationError::Other)?
             .map_err(|e| CertificationError::Sp1ExecuteFailed(eyre!(e)))?;
@@ -275,7 +328,7 @@ where
 
         debug!("Verifying the generated p-proof...");
 
-        if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify) {
+        if let Err(error) = Self::verify_proof(verifier, &verifying_key, proof_to_verify).await {
             error!("Failed to verify the p-proof: {:?}", error);
             match error.downcast::<SP1VerificationError>() {
                 Ok(error) => Err(CertificationError::ProofVerificationFailed {

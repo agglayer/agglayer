@@ -1,7 +1,7 @@
 use agglayer_interop_types::aggchain_proof::Proof;
 use agglayer_primitives::Digest;
+use agglayer_sp1::{ProofError, ProofExt as _};
 use pessimistic_proof::core;
-use sp1_sdk::SP1VerifyingKey;
 use unified_bridge::AggchainProofPublicValues;
 
 use crate::aggchain_data::PayloadWithCtx;
@@ -19,9 +19,16 @@ pub struct Payload {
 }
 
 impl Payload {
-    pub fn aggchain_vkey_from_proof(&self) -> SP1VerifyingKey {
-        let Proof::SP1Stark(sp1_reduce_proof) = &self.proof;
-        sp1_reduce_proof.vkey.clone()
+    pub fn aggchain_vkey_hash_bytes(&self) -> Result<[u8; 32], ProofError> {
+        self.proof.vkey_hash_bytes()
+    }
+
+    pub fn aggchain_vkey_hash_u32(&self) -> Result<[u32; 8], ProofError> {
+        self.proof.vkey_hash_u32()
+    }
+
+    pub fn aggchain_vkey_hashes(&self) -> Result<([u8; 32], [u32; 8]), ProofError> {
+        self.proof.vkey_hashes()
     }
 }
 
@@ -44,5 +51,25 @@ impl From<PayloadWithCtx<Payload, Context>> for core::AggchainProof {
             aggchain_params,
             aggchain_vkey,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Payload;
+    use crate::{certificate::dummy_sp1_stark_proof_with_version, Digest};
+
+    #[test]
+    fn aggchain_vkey_hashes_returns_consistent_hash_formats() {
+        let payload = Payload {
+            proof: dummy_sp1_stark_proof_with_version("v5.2.2"),
+            aggchain_params: Digest::default(),
+            public_values: None,
+        };
+
+        let (bytes, words) = payload.aggchain_vkey_hashes().unwrap();
+
+        assert_eq!(bytes, payload.aggchain_vkey_hash_bytes().unwrap());
+        assert_eq!(words, payload.aggchain_vkey_hash_u32().unwrap());
     }
 }
