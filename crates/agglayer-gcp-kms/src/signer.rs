@@ -8,8 +8,7 @@ use alloy::{
 };
 use alloy_primitives::{Address, ChainId, Signature, B256};
 use async_trait::async_trait;
-
-use crate::Error;
+use eyre::Context as _;
 
 /// A wrapper around [`GcpSigner`] providing additional functionality
 /// for signing messages and transactions.
@@ -29,24 +28,22 @@ impl KmsSigner {
     pub async fn sign_message<S: Send + Sync + AsRef<[u8]>>(
         &self,
         message: S,
-    ) -> Result<Signature, Error> {
+    ) -> eyre::Result<Signature> {
         self.signer
             .sign_message(message.as_ref())
             .await
-            .map_err(|e| Error::KmsError(eyre::Error::new(e).wrap_err("Unable to sign message")))
+            .wrap_err("Unable to sign message")
     }
 
     /// Signs a transaction using the internal signer, this method can fail if
     /// the signer fails to create the digest.
-    pub async fn sign_transaction(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
+    pub async fn sign_transaction(&self, tx: &TypedTransaction) -> eyre::Result<Signature> {
         // Convert the TypedTransaction to a mutable dyn SignableTransaction
         let mut tx_clone = tx.clone();
         self.signer
             .sign_transaction(&mut tx_clone)
             .await
-            .map_err(|e| {
-                Error::KmsError(eyre::Error::new(e).wrap_err("Unable to sign transaction"))
-            })
+            .wrap_err("Unable to sign transaction")
     }
 
     /// Returns the address associated with the signer.
