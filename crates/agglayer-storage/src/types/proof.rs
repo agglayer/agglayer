@@ -150,37 +150,17 @@ impl TryFrom<proto::Proof> for TypedProof {
 #[cfg(test)]
 mod tests {
     use agglayer_sp1::ProofError;
-    use agglayer_types::aggchain_proof::{Proof as TypedProof, SP1StarkWithContext};
-    use sp1_sdk::Prover;
+    use agglayer_types::{
+        aggchain_proof::{Proof as TypedProof, SP1StarkWithContext},
+        testutils::dummy_sp1_stark_proof_with_version,
+    };
 
     use super::*;
     use crate::types::generated::agglayer::storage::v0::{ProofMode, ProofSystem};
 
-    const EMPTY_ELF: &[u8] = include_bytes!("certificate/tests/empty.elf");
-
-    fn mock_proof(version: &str) -> TypedProof {
-        let client = sp1_sdk::ProverClient::builder().mock().build();
-        let (proving_key, vkey) = client.setup(EMPTY_ELF);
-        let proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
-            &proving_key,
-            sp1_sdk::SP1PublicValues::new(),
-            sp1_sdk::SP1ProofMode::Compressed,
-            sp1_sdk::SP1_CIRCUIT_VERSION,
-        )
-        .proof
-        .try_as_compressed()
-        .unwrap();
-
-        TypedProof::SP1Stark(SP1StarkWithContext {
-            proof,
-            vkey,
-            version: version.to_owned(),
-        })
-    }
-
     #[test]
     fn proof_proto_roundtrip_is_lossless_for_writable_versions() {
-        let proof = mock_proof("v5.2.2");
+        let proof = dummy_sp1_stark_proof_with_version("v5.2.2");
 
         let proto = proto::Proof::try_from(&proof).unwrap();
         let decoded = TypedProof::try_from(proto).unwrap();
@@ -190,7 +170,7 @@ mod tests {
 
     #[test]
     fn proof_proto_reads_supported_read_only_versions() {
-        let proof = mock_proof("v5.2.2");
+        let proof = dummy_sp1_stark_proof_with_version("v5.2.2");
         let TypedProof::SP1Stark(expected) = proof.clone();
 
         let mut proto = proto::Proof::try_from(&proof).unwrap();
@@ -209,7 +189,7 @@ mod tests {
 
     #[test]
     fn proof_proto_rejects_writes_for_read_only_versions() {
-        let proof = mock_proof("v6.0.1");
+        let proof = dummy_sp1_stark_proof_with_version("v6.0.1");
 
         let err = proto::Proof::try_from(&proof).unwrap_err();
 
@@ -221,7 +201,11 @@ mod tests {
 
     #[test]
     fn proof_proto_rejects_unknown_write_version() {
-        let err = proto::Proof::try_from(&mock_proof("v7.0.0")).unwrap_err();
+        let mut proof = dummy_sp1_stark_proof_with_version("v6.0.1");
+        let TypedProof::SP1Stark(sp1) = &mut proof;
+        sp1.version = "v7.0.0".to_owned();
+
+        let err = proto::Proof::try_from(&proof).unwrap_err();
 
         assert!(matches!(
             err,
@@ -231,7 +215,7 @@ mod tests {
 
     #[test]
     fn proof_proto_rejects_unknown_read_version() {
-        let proof = mock_proof("v5.2.2");
+        let proof = dummy_sp1_stark_proof_with_version("v5.2.2");
         let mut proto = proto::Proof::try_from(&proof).unwrap();
         proto.version = "v7.0.0".to_owned();
 

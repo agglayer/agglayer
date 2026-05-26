@@ -98,12 +98,22 @@
     <div class="kpi"><div class="kpi-label">Processed</div><div class="kpi-value success">{{ epochs.processed }}</div></div>
     <div class="kpi"><div class="kpi-label">Successful</div><div class="kpi-value success">{{ epochs.successful }}</div></div>
     <div class="kpi"><div class="kpi-label">Failed</div><div class="kpi-value {{ epochs.failed_class }}">{{ epochs.failed_count }}</div></div>
+    <div class="kpi"><div class="kpi-label">Diagnostics failed</div><div class="kpi-value warning">{{ epochs.diagnostics_failure_count }}</div></div>
     <div class="kpi"><div class="kpi-label">Duration</div><div class="kpi-value success">{{ epochs.duration }}</div></div>
   </div>
+  {% if epochs.has_discovery_error %}<div class="fatal">{{ epochs.discovery_error }}</div>{% endif %}
   {% if epochs.has_failures %}
   <h3>Failed epochs ({{ epochs.failed_count }})</h3>
   <table><thead><tr><th>Epoch</th><th>Error</th></tr></thead><tbody>
   {% for f in epochs.failures %}
+    <tr><td class="num"><strong>{{ f.epoch }}</strong></td><td>{{ f.error }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  {% endif %}
+  {% if epochs.has_diagnostics_failures %}
+  <h3>Diagnostics warnings ({{ epochs.diagnostics_failure_count }})</h3>
+  <table><thead><tr><th>Epoch</th><th>Error</th></tr></thead><tbody>
+  {% for f in epochs.diagnostics_failures %}
     <tr><td class="num"><strong>{{ f.epoch }}</strong></td><td>{{ f.error }}</td></tr>
   {% endfor %}
   </tbody></table>

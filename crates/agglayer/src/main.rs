@@ -100,19 +100,7 @@ fn main() -> eyre::Result<()> {
         } => {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
 
-            // Default the env_label to the storage parent directory's
-            // basename so concatenated reports across environments stay
-            // distinguishable without requiring the operator to set it
-            // explicitly.
-            let env_label = env_label.unwrap_or_else(|| {
-                cfg.storage
-                    .pending_db_path
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("snapshot")
-                    .to_string()
-            });
+            let env_label = env_label.unwrap_or_else(default_env_label);
 
             let opts = agglayer_storage::migrate::MigrateOptions {
                 state_db_path: Some(cfg.storage.state_db_path.clone()),
@@ -161,15 +149,7 @@ fn main() -> eyre::Result<()> {
             html_file,
         }) => {
             let cfg = agglayer_config::Config::try_load(&cfg)?;
-            let env_label = env_label.unwrap_or_else(|| {
-                cfg.storage
-                    .pending_db_path
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("snapshot")
-                    .to_string()
-            });
+            let env_label = env_label.unwrap_or_else(default_env_label);
 
             let mut rows = Vec::new();
             rows.extend(scan_or_warn(
@@ -247,6 +227,10 @@ fn scan_or_warn(
     }
 }
 
+fn default_env_label() -> String {
+    "local".to_string()
+}
+
 /// Common version information about the executed agglayer binary.
 pub fn version() -> String {
     let pkg_name = env!("CARGO_PKG_NAME");
@@ -264,10 +248,17 @@ pub async fn compute_program_vkey(program: &'static [u8]) -> eyre::Result<String
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn installs_a_default_rustls_crypto_provider() {
-        super::install_default_crypto_provider();
+        install_default_crypto_provider();
 
         assert!(rustls::crypto::CryptoProvider::get_default().is_some());
+    }
+
+    #[test]
+    fn default_env_label_is_local() {
+        assert_eq!(default_env_label(), "local");
     }
 }

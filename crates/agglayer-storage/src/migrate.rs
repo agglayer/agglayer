@@ -17,7 +17,9 @@
 //! data flow and exposes [`MigrateOutcome`] for the CLI to render.
 
 use std::{
+    ffi::OsString,
     fs,
+    num::NonZeroU64,
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
@@ -51,7 +53,7 @@ pub struct MigrateOptions {
     /// names first). Useful for operator spot-checks where the active
     /// data is at the latest epochs and the lowest-numbered ones are
     /// typically empty.
-    pub latest_epochs: Option<u64>,
+    pub latest_epochs: Option<NonZeroU64>,
 }
 
 /// Outcome of a migration run. Aggregates per-store results and a flag
@@ -88,6 +90,8 @@ pub struct EpochsResult {
     pub discovered: usize,
     pub processed: usize,
     pub successful: usize,
+    /// Error raised while reading the epoch root before per-epoch discovery.
+    pub discovery_error: Option<String>,
     pub failed: Vec<EpochFailure>,
     pub duration: Duration,
     pub skipped_reason: Option<&'static str>,
@@ -95,12 +99,21 @@ pub struct EpochsResult {
     /// successfully migrated. Each entry's `source` field carries the
     /// epoch number (e.g. `"epoch 1234"`).
     pub unparsable_rows: Vec<UnparsableRow>,
+    /// Non-fatal diagnostics scan failures for epochs that migrated
+    /// successfully but could not be inspected for unparsable legacy rows.
+    pub diagnostics_failures: Vec<EpochFailure>,
 }
 
 #[derive(Debug)]
 pub struct EpochFailure {
     pub epoch: u64,
     pub error: String,
+}
+
+struct EpochDirEntry {
+    file_name: OsString,
+    path: PathBuf,
+    is_dir: bool,
 }
 
 impl MigrateOutcome {
@@ -113,7 +126,7 @@ impl MigrateOutcome {
                 n += 1;
             }
         }
-        n + self.epochs.failed.len()
+        n + usize::from(self.epochs.discovery_error.is_some()) + self.epochs.failed.len()
     }
 
     pub fn is_success(&self) -> bool {
@@ -236,7 +249,7 @@ fn scan_or_warn(
     }
 }
 
-fn migrate_epochs(epochs_dir: &Path, latest_epochs: Option<u64>) -> EpochsResult {
+fn migrate_epochs(epochs_dir: &Path, latest_epochs: Option<NonZeroU64>) -> EpochsResult {
     let started = Instant::now();
     let mut result = EpochsResult {
         epochs_dir: Some(epochs_dir.to_path_buf()),
@@ -245,22 +258,45 @@ fn migrate_epochs(epochs_dir: &Path, latest_epochs: Option<u64>) -> EpochsResult
 
     let entries = match fs::read_dir(epochs_dir) {
         Ok(it) => it,
-        Err(_) => {
+        Err(error) => {
+            result.discovery_error = Some(format!(
+                "failed to read epoch directory at {}: {error}",
+                epochs_dir.display()
+            ));
             result.duration = started.elapsed();
             return result;
         }
     };
 
     // Discover every numeric epoch directory.
-    let mut numeric_dirs: Vec<(u64, PathBuf)> = entries
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .filter_map(|e| {
-            let name = e.file_name();
-            let n = name.to_str().and_then(|s| s.parse::<u64>().ok())?;
-            Some((n, e.path()))
+    let mut numeric_dirs = match collect_numeric_epoch_dirs(entries.map(|entry| {
+        let entry = entry.map_err(|error| {
+            format!(
+                "failed to read epoch directory entry under {}: {error}",
+                epochs_dir.display()
+            )
+        })?;
+        let path = entry.path();
+        let file_type = entry.file_type().map_err(|error| {
+            format!(
+                "failed to read file type for epoch directory entry {}: {error}",
+                path.display()
+            )
+        })?;
+
+        Ok(EpochDirEntry {
+            file_name: entry.file_name(),
+            path,
+            is_dir: file_type.is_dir(),
         })
-        .collect();
+    })) {
+        Ok(dirs) => dirs,
+        Err(error) => {
+            result.discovery_error = Some(error);
+            result.duration = started.elapsed();
+            return result;
+        }
+    };
     result.discovered = numeric_dirs.len();
 
     // For `latest_epochs`, pick the N highest-numbered epochs (operator
@@ -272,7 +308,8 @@ fn migrate_epochs(epochs_dir: &Path, latest_epochs: Option<u64>) -> EpochsResult
     let to_process: Vec<_> = match latest_epochs {
         Some(cap) => {
             numeric_dirs.sort_by_key(|(n, _)| std::cmp::Reverse(*n));
-            let mut taken: Vec<_> = numeric_dirs.into_iter().take(cap as usize).collect();
+            let cap = usize::try_from(cap.get()).unwrap_or(usize::MAX);
+            let mut taken: Vec<_> = numeric_dirs.into_iter().take(cap).collect();
             taken.sort_by_key(|(n, _)| *n);
             taken
         }
@@ -282,12 +319,16 @@ fn migrate_epochs(epochs_dir: &Path, latest_epochs: Option<u64>) -> EpochsResult
         }
     };
 
-    for (n, path) in to_process {
+    let mut successful_epoch_dirs = Vec::new();
+    for (n, path) in &to_process {
         result.processed += 1;
-        match PerEpochStore::<(), ()>::init_db(&path) {
-            Ok(_) => result.successful += 1,
+        match PerEpochStore::<(), ()>::init_db(path) {
+            Ok(_) => {
+                result.successful += 1;
+                successful_epoch_dirs.push((*n, path.clone()));
+            }
             Err(e) => result.failed.push(EpochFailure {
-                epoch: n,
+                epoch: *n,
                 error: format_chain(&e),
             }),
         }
@@ -301,15 +342,63 @@ fn migrate_epochs(epochs_dir: &Path, latest_epochs: Option<u64>) -> EpochsResult
         }
     }
 
-    // Diagnostic scan over the whole epochs directory, regardless of
-    // `latest_epochs` (the operator wants to see every currently-unparsable
-    // row, not just the ones in the subset they chose to re-migrate this
-    // run).
-    result.unparsable_rows =
-        scan_or_warn(diagnostics::scan_unparsable_epoch_rows(epochs_dir), "epoch");
+    // Keep diagnostics bounded to the same selected epochs as migration.
+    let (unparsable_rows, diagnostics_failures) = collect_epoch_diagnostics(
+        &successful_epoch_dirs,
+        diagnostics::scan_unparsable_epoch_dir,
+    );
+    result.unparsable_rows = unparsable_rows;
+    result.diagnostics_failures = diagnostics_failures;
 
     result.duration = started.elapsed();
     result
+}
+
+fn collect_epoch_diagnostics<F>(
+    epoch_dirs: &[(u64, PathBuf)],
+    mut scan_epoch: F,
+) -> (Vec<UnparsableRow>, Vec<EpochFailure>)
+where
+    F: FnMut(u64, &Path) -> Result<Vec<UnparsableRow>, diagnostics::ScanError>,
+{
+    let mut rows = Vec::new();
+    let mut failures = Vec::new();
+    for (epoch, path) in epoch_dirs {
+        match scan_epoch(*epoch, path) {
+            Ok(mut epoch_rows) => rows.append(&mut epoch_rows),
+            Err(error) => {
+                let error = format_chain(&error);
+                tracing::warn!(
+                    epoch,
+                    %error,
+                    "diagnostics scan for unparsable legacy epoch rows failed",
+                );
+                failures.push(EpochFailure {
+                    epoch: *epoch,
+                    error,
+                });
+            }
+        }
+    }
+    (rows, failures)
+}
+
+fn collect_numeric_epoch_dirs<I>(entries: I) -> Result<Vec<(u64, PathBuf)>, String>
+where
+    I: IntoIterator<Item = Result<EpochDirEntry, String>>,
+{
+    let mut numeric_dirs = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        if !entry.is_dir {
+            continue;
+        }
+        let Some(n) = entry.file_name.to_str().and_then(|s| s.parse::<u64>().ok()) else {
+            continue;
+        };
+        numeric_dirs.push((n, entry.path));
+    }
+    Ok(numeric_dirs)
 }
 
 fn format_chain(error: &dyn std::error::Error) -> String {
@@ -340,13 +429,16 @@ fn format_chain(error: &dyn std::error::Error) -> String {
 #[cfg(test)]
 #[cfg(feature = "testutils")]
 mod tests {
-    use agglayer_types::{Height, NetworkId};
+    use std::num::NonZeroU64;
+
+    use agglayer_types::{CertificateIndex, Height, NetworkId};
 
     use super::*;
     use crate::{
+        columns::epochs::certificates::CertificatePerIndexColumn,
         columns::pending_queue::{PendingQueueColumn, PendingQueueKey},
         schema::{Codec as _, ColumnSchema as _},
-        stores::pending::cf_definitions::PENDING_DB_V0,
+        stores::{pending::cf_definitions::PENDING_DB_V0, per_epoch::cf_definitions::EPOCHS_DB_V0},
         tests::TempDBDir,
     };
 
@@ -359,6 +451,109 @@ mod tests {
         db.raw_rocksdb()
             .put_cf(&cf, key.encode().unwrap(), value)
             .unwrap();
+    }
+
+    fn seed_corrupt_epoch_row(path: &Path, key: CertificateIndex, value: Vec<u8>) {
+        let db = crate::storage::DB::open_cf(path, EPOCHS_DB_V0).unwrap();
+        let cf = db
+            .raw_rocksdb()
+            .cf_handle(CertificatePerIndexColumn::COLUMN_FAMILY_NAME)
+            .unwrap();
+        db.raw_rocksdb()
+            .put_cf(&cf, key.encode().unwrap(), value)
+            .unwrap();
+    }
+
+    #[test]
+    fn missing_epochs_directory_is_a_fatal_outcome() {
+        let tmp = TempDBDir::new();
+        let epochs_path = tmp.path.join("missing-epochs");
+
+        let outcome = run(MigrateOptions {
+            state_db_path: None,
+            pending_db_path: None,
+            debug_db_path: None,
+            epochs_db_path: Some(epochs_path),
+            env_label: "test".into(),
+            skip_epochs: false,
+            latest_epochs: None,
+        });
+
+        assert_eq!(outcome.fatal_count(), 1);
+        assert!(!outcome.is_success());
+    }
+
+    #[test]
+    fn epoch_discovery_propagates_entry_errors() {
+        let entries: [Result<EpochDirEntry, String>; 1] = [Err("entry read failed".into())];
+
+        let error = collect_numeric_epoch_dirs(entries).unwrap_err();
+
+        assert_eq!(error, "entry read failed");
+    }
+
+    #[test]
+    fn latest_epochs_limits_epoch_diagnostics_to_processed_subset() {
+        let tmp = TempDBDir::new();
+        let epochs_dir = tmp.path.join("epochs");
+        std::fs::create_dir_all(&epochs_dir).unwrap();
+
+        seed_corrupt_epoch_row(
+            &epochs_dir.join("42"),
+            CertificateIndex::new(7),
+            vec![0xff_u8; 16],
+        );
+        std::fs::create_dir_all(epochs_dir.join("99")).unwrap();
+
+        let outcome = run(MigrateOptions {
+            state_db_path: None,
+            pending_db_path: None,
+            debug_db_path: None,
+            epochs_db_path: Some(epochs_dir),
+            env_label: "test".into(),
+            skip_epochs: false,
+            latest_epochs: Some(NonZeroU64::new(1).unwrap()),
+        });
+
+        assert_eq!(outcome.epochs.discovered, 2);
+        assert_eq!(outcome.epochs.processed, 1);
+        assert!(
+            outcome.epochs.unparsable_rows.is_empty(),
+            "diagnostics should not scan epochs outside the selected latest subset"
+        );
+    }
+
+    #[test]
+    fn epoch_diagnostics_preserve_rows_when_one_epoch_scan_fails() {
+        let good_path = PathBuf::from("42");
+        let bad_path = PathBuf::from("99");
+        let expected_rows = vec![UnparsableRow {
+            source: "epoch 42".into(),
+            cf: CertificatePerIndexColumn::COLUMN_FAMILY_NAME,
+            key_hex: "0000000000000007".into(),
+            error: "decode error".into(),
+        }];
+
+        let (rows, failures) =
+            collect_epoch_diagnostics(&[(42, good_path), (99, bad_path.clone())], |epoch, path| {
+                if epoch == 42 {
+                    Ok(expected_rows.clone())
+                } else {
+                    Err(diagnostics::ScanError::EpochDir {
+                        path: path.to_path_buf(),
+                        source: std::io::Error::new(
+                            std::io::ErrorKind::PermissionDenied,
+                            "scan failed",
+                        ),
+                    })
+                }
+            });
+
+        assert_eq!(rows, expected_rows);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].epoch, 99);
+        assert!(failures[0].error.contains("failed to read epoch directory"));
+        assert!(failures[0].error.contains(&bad_path.display().to_string()));
     }
 
     #[test]

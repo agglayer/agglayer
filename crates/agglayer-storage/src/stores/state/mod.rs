@@ -59,11 +59,22 @@ impl StateStore {
         // and the settlement family. Legacy production snapshots still
         // have only those CFs; running the current binary against them
         // would fail the migration framework's schema gate without this
-        // path. `ensure_cfs` is idempotent: passing the full `STATE_DB`
-        // list creates whatever is missing on disk and is a no-op when
-        // every CF is already present, so legacy V0 DBs converge to the
-        // current schema and existing post-V0 DBs are unaffected.
-        DB::builder(path, cf_definitions::STATE_DB_V0)?
+        // path. Some pre-migration snapshots were already at the current
+        // CF set but still lacked `migration_record_v0_cf`; accept that
+        // exact schema as a second baseline, but keep rejecting partial or
+        // unknown no-record schemas.
+        let builder = match DB::builder(path, cf_definitions::STATE_DB_V0) {
+            Ok(builder) => builder,
+            Err(crate::storage::DBOpenError::UnexpectedSchema) => {
+                DB::builder(path, cf_definitions::STATE_DB)?
+            }
+            Err(error) => return Err(error),
+        };
+
+        // `ensure_cfs` is idempotent: passing the full `STATE_DB` list
+        // creates whatever is missing on disk and is a no-op when every CF
+        // is already present.
+        builder
             .ensure_cfs(cf_definitions::STATE_DB)?
             .finalize(cf_definitions::STATE_DB)
     }

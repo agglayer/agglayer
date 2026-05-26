@@ -15,6 +15,13 @@ Migration run at {{ started_at }} UTC, total {{ overall_duration }}. Status: **{
 - {{ fatal.label }}: {{ fatal.error }}
 {% endfor %}
 {% endif -%}
+{% if !diagnostics_warnings.is_empty() -%}
+**Diagnostics warnings**
+
+{% for warning in diagnostics_warnings -%}
+- epoch {{ warning.epoch }}: {{ warning.error }}
+{% endfor %}
+{% endif -%}
 {% if has_unparsable -%}
 **Unparsable rows ({{ unparsable_count }})**
 

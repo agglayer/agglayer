@@ -95,6 +95,35 @@ fn init_db_is_idempotent_on_current_schema() {
 }
 
 #[test]
+fn init_db_accepts_current_schema_without_migration_record() {
+    let tmp = TempDBDir::new();
+    {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+        let cf_names = cf_definitions::STATE_DB
+            .iter()
+            .map(crate::schema::ColumnDescriptor::name);
+        let _db = rocksdb::DB::open_cf(&options, tmp.path.as_path(), cf_names)
+            .expect("current schema without migration records should be created");
+    }
+
+    let db = StateStore::init_db(tmp.path.as_path())
+        .expect("init_db should accept current schema before migration tracking existed");
+    drop(db);
+
+    let post_cfs: std::collections::BTreeSet<_> =
+        rocksdb::DB::list_cf(&rocksdb::Options::default(), tmp.path.as_path())
+            .expect("list_cf should succeed after init_db")
+            .into_iter()
+            .collect();
+    assert!(
+        post_cfs.contains("migration_record_v0_cf"),
+        "init_db should initialize migration tracking for current-schema DBs; got {post_cfs:?}"
+    );
+}
+
+#[test]
 fn can_retrieve_list_of_network() {
     let tmp = TempDBDir::new();
     let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());

@@ -58,6 +58,7 @@ struct MarkdownReport<'a> {
     status_label: &'static str,
     rows: Vec<RowVm>,
     fatals: Vec<FatalVm>,
+    diagnostics_warnings: Vec<EpochFailureVm>,
     unparsable: Vec<UnparsableRowVm>,
     unparsable_count: usize,
     has_unparsable: bool,
@@ -107,12 +108,27 @@ impl<'a> MarkdownReport<'a> {
                 });
             }
         }
+        if let Some(err) = &o.epochs.discovery_error {
+            fatals.push(FatalVm {
+                label: "epochs".into(),
+                error: err.clone(),
+            });
+        }
         for f in &o.epochs.failed {
             fatals.push(FatalVm {
                 label: format!("epoch {}", f.epoch),
                 error: f.error.clone(),
             });
         }
+        let diagnostics_warnings = o
+            .epochs
+            .diagnostics_failures
+            .iter()
+            .map(|f| EpochFailureVm {
+                epoch: f.epoch,
+                error: f.error.clone(),
+            })
+            .collect::<Vec<_>>();
 
         let unparsable = collect_unparsable(o);
         let unparsable_count = unparsable.len();
@@ -125,6 +141,7 @@ impl<'a> MarkdownReport<'a> {
             status_label,
             rows,
             fatals,
+            diagnostics_warnings,
             has_unparsable: !unparsable.is_empty(),
             unparsable_count,
             unparsable,
@@ -207,6 +224,14 @@ fn epochs_row(epochs: &EpochsResult) -> RowVm {
             notes: reason.to_string(),
         };
     }
+    if let Some(error) = &epochs.discovery_error {
+        return RowVm {
+            label: "epochs".into(),
+            status: "❌ FAILED".into(),
+            duration: format_duration(epochs.duration),
+            notes: error.clone(),
+        };
+    }
     let status = if epochs.failed.is_empty() {
         "✅ OK"
     } else {
@@ -221,6 +246,10 @@ fn epochs_row(epochs: &EpochsResult) -> RowVm {
     let unparsable_count = epochs.unparsable_rows.len();
     if unparsable_count > 0 {
         notes.push_str(&format!("; {unparsable_count} unparsable"));
+    }
+    let diagnostics_failure_count = epochs.diagnostics_failures.len();
+    if diagnostics_failure_count > 0 {
+        notes.push_str(&format!("; {diagnostics_failure_count} diagnostics failed"));
     }
     RowVm {
         label: "epochs".into(),
@@ -282,8 +311,13 @@ struct EpochsCardVm {
     failed_count: usize,
     failed_class: &'static str,
     duration: String,
+    has_discovery_error: bool,
+    discovery_error: String,
     has_failures: bool,
     failures: Vec<EpochFailureVm>,
+    has_diagnostics_failures: bool,
+    diagnostics_failure_count: usize,
+    diagnostics_failures: Vec<EpochFailureVm>,
     has_unparsable: bool,
     unparsable_count: usize,
     unparsable: Vec<UnparsableRowVm>,
@@ -452,8 +486,13 @@ fn epochs_card(epochs: &EpochsResult) -> EpochsCardVm {
             failed_count: 0,
             failed_class: "success",
             duration: String::new(),
+            has_discovery_error: false,
+            discovery_error: String::new(),
             has_failures: false,
             failures: Vec::new(),
+            has_diagnostics_failures: false,
+            diagnostics_failure_count: 0,
+            diagnostics_failures: Vec::new(),
             has_unparsable: false,
             unparsable_count: 0,
             unparsable: Vec::new(),
@@ -477,25 +516,40 @@ fn epochs_card(epochs: &EpochsResult) -> EpochsCardVm {
             failed_count: 0,
             failed_class: "success",
             duration: String::new(),
+            has_discovery_error: false,
+            discovery_error: String::new(),
             has_failures: false,
             failures: Vec::new(),
+            has_diagnostics_failures: false,
+            diagnostics_failure_count: 0,
+            diagnostics_failures: Vec::new(),
             has_unparsable: !unparsable.is_empty(),
             unparsable_count: unparsable.len(),
             unparsable,
         };
     }
-    let (badge_class, badge_label) = if epochs.failed.is_empty() {
+    let has_discovery_error = epochs.discovery_error.is_some();
+    let (badge_class, badge_label) = if !has_discovery_error && epochs.failed.is_empty() {
         ("success", "OK")
     } else {
         ("destructive", "FAILED")
     };
-    let failed_class = if epochs.failed.is_empty() {
+    let failed_count = epochs.failed.len() + usize::from(has_discovery_error);
+    let failed_class = if failed_count == 0 {
         "success"
     } else {
         "destructive"
     };
     let failures = epochs
         .failed
+        .iter()
+        .map(|f| EpochFailureVm {
+            epoch: f.epoch,
+            error: f.error.clone(),
+        })
+        .collect::<Vec<_>>();
+    let diagnostics_failures = epochs
+        .diagnostics_failures
         .iter()
         .map(|f| EpochFailureVm {
             epoch: f.epoch,
@@ -516,11 +570,16 @@ fn epochs_card(epochs: &EpochsResult) -> EpochsCardVm {
         discovered: epochs.discovered,
         processed: epochs.processed,
         successful: epochs.successful,
-        failed_count: epochs.failed.len(),
+        failed_count,
         failed_class,
         duration: format_duration(epochs.duration),
+        has_discovery_error,
+        discovery_error: epochs.discovery_error.clone().unwrap_or_default(),
         has_failures: !epochs.failed.is_empty(),
         failures,
+        has_diagnostics_failures: !diagnostics_failures.is_empty(),
+        diagnostics_failure_count: diagnostics_failures.len(),
+        diagnostics_failures,
         has_unparsable: !unparsable.is_empty(),
         unparsable_count: unparsable.len(),
         unparsable,
@@ -620,10 +679,12 @@ mod tests {
                 discovered: 5,
                 processed: 5,
                 successful: 5,
+                discovery_error: None,
                 failed: Vec::new(),
                 duration: Duration::from_millis(800),
                 skipped_reason: None,
                 unparsable_rows: Vec::new(),
+                diagnostics_failures: Vec::new(),
             },
         }
     }
@@ -642,6 +703,7 @@ mod tests {
                 discovered: 3,
                 processed: 3,
                 successful: 1,
+                discovery_error: None,
                 failed: vec![
                     EpochFailure {
                         epoch: 17,
@@ -655,6 +717,7 @@ mod tests {
                 duration: Duration::from_millis(500),
                 skipped_reason: None,
                 unparsable_rows: Vec::new(),
+                diagnostics_failures: Vec::new(),
             },
             ..outcome_all_ok()
         }
@@ -684,6 +747,26 @@ mod tests {
         assert!(md.contains("- state: schema mismatch"));
         assert!(md.contains("- epoch 17: missing CF debug_certificates"));
         assert!(md.contains("- epoch 42: decode error"));
+    }
+
+    #[test]
+    fn epoch_discovery_errors_render_as_fatal() {
+        let mut o = outcome_all_ok();
+        o.epochs = EpochsResult {
+            epochs_dir: Some(PathBuf::from("/var/agglayer/epochs")),
+            discovery_error: Some("failed to read epoch directory".into()),
+            duration: Duration::from_millis(10),
+            ..EpochsResult::default()
+        };
+
+        let md = render_markdown(&o);
+        assert!(md.contains("Status: **FAILED**"));
+        assert!(md.contains("| epochs | ❌ FAILED |"));
+        assert!(md.contains("- epochs: failed to read epoch directory"));
+
+        let html = render_html(&o);
+        assert!(html.contains("class=\"badge destructive\">FAILED"));
+        assert!(html.contains("failed to read epoch directory"));
     }
 
     #[test]
@@ -726,6 +809,28 @@ mod tests {
         assert!(html.contains("<h3>Failed epochs (2)</h3>"));
         assert!(html.contains("<strong>17</strong>"));
         assert!(html.contains("<strong>42</strong>"));
+    }
+
+    #[test]
+    fn diagnostics_failures_render_as_warnings_without_failing_run() {
+        let mut o = outcome_all_ok();
+        o.epochs.diagnostics_failures = vec![EpochFailure {
+            epoch: 99,
+            error: "read-only diagnostics open failed".into(),
+        }];
+
+        assert!(o.is_success());
+
+        let md = render_markdown(&o);
+        assert!(md.contains("Status: **OK**"));
+        assert!(md.contains("1 diagnostics failed"));
+        assert!(md.contains("**Diagnostics warnings**"));
+        assert!(md.contains("- epoch 99: read-only diagnostics open failed"));
+
+        let html = render_html(&o);
+        assert!(html.contains("class=\"badge success\">OK"));
+        assert!(html.contains("Diagnostics warnings (1)"));
+        assert!(html.contains("read-only diagnostics open failed"));
     }
 
     #[test]

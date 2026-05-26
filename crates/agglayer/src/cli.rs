@@ -1,5 +1,8 @@
 //! Agglayer command line interface.
-use std::path::{Path, PathBuf};
+use std::{
+    num::NonZeroU64,
+    path::{Path, PathBuf},
+};
 
 use clap::{Parser, Subcommand, ValueHint};
 
@@ -78,7 +81,7 @@ pub(crate) enum Commands {
         /// data lives at the latest epochs while the lowest-numbered
         /// ones are typically empty.
         #[arg(long)]
-        latest_epochs: Option<u64>,
+        latest_epochs: Option<NonZeroU64>,
 
         /// Write the markdown report to this file path. By default the
         /// markdown is printed to stdout; pass this flag to redirect it
@@ -219,9 +222,25 @@ fn parse_db_kind_version(s: &str) -> Result<(DbKind, u32), String> {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
+
     use agglayer_config::Config;
 
     use super::*;
+
+    #[test]
+    fn migrate_storage_rejects_zero_latest_epochs() {
+        let err = match Cli::try_parse_from(["agglayer", "migrate-storage", "--latest-epochs", "0"])
+        {
+            Ok(_) => panic!("zero latest-epochs should be rejected at the CLI boundary"),
+            Err(err) => err,
+        };
+
+        assert!(
+            err.to_string().contains("latest-epochs"),
+            "error should mention the rejected flag, got {err}"
+        );
+    }
 
     #[test]
     fn testing_path_state() {
