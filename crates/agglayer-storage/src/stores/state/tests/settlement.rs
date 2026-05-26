@@ -4,9 +4,9 @@ use std::{
 };
 
 use agglayer_types::{
-    Address, Digest, Nonce, SettlementAttempt, SettlementJob, SettlementTxHash, U256,
+    Address, Digest, Nonce, SettlementAttempt, SettlementJob, SettlementJobId, SettlementTxHash,
+    U256,
 };
-use ulid::Ulid;
 
 use crate::{
     backup::BackupClient,
@@ -30,8 +30,8 @@ use crate::{
     },
 };
 
-fn mk_ulid(seed: u128) -> Ulid {
-    Ulid::from(seed)
+fn mk_job_id(seed: u128) -> SettlementJobId {
+    SettlementJobId::from(ulid::Ulid::from(seed))
 }
 
 fn mk_settlement_job(seed: u8) -> SettlementJob {
@@ -71,14 +71,14 @@ fn setup_store() -> (TempDBDir, Arc<crate::storage::DB>, StateStore) {
 fn insert_settlement_job_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
     assert!(store
-        .insert_settlement_job(&mk_ulid(1), &mk_settlement_job(1))
+        .insert_settlement_job(&mk_job_id(1), &mk_settlement_job(1))
         .is_ok());
 }
 
 #[test]
 fn insert_settlement_job_duplicate_fails() {
     let (_tmp, db, store) = setup_store();
-    let job_id = mk_ulid(2);
+    let job_id = mk_job_id(2);
     let first = mk_settlement_job(2);
     let second = mk_settlement_job(3);
     store
@@ -96,7 +96,7 @@ fn insert_settlement_job_duplicate_fails() {
 #[test]
 fn insert_settlement_attempt_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(3);
+    let job_id = mk_job_id(3);
     store
         .insert_settlement_job(&job_id, &mk_settlement_job(3))
         .expect("job insert must succeed");
@@ -108,7 +108,7 @@ fn insert_settlement_attempt_succeeds_once() {
 #[test]
 fn insert_settlement_attempt_duplicate_fails() {
     let (_tmp, db, store) = setup_store();
-    let job_id = mk_ulid(4);
+    let job_id = mk_job_id(4);
     let first = mk_settlement_attempt(1);
     let second = mk_settlement_attempt(2);
     store
@@ -132,14 +132,14 @@ fn insert_settlement_attempt_duplicate_fails() {
 #[test]
 fn insert_settlement_attempt_without_job_fails() {
     let (_tmp, _db, store) = setup_store();
-    let res = store.insert_settlement_attempt(&mk_ulid(404), 1, &mk_settlement_attempt(1));
+    let res = store.insert_settlement_attempt(&mk_job_id(404), 1, &mk_settlement_attempt(1));
     assert!(matches!(res, Err(Error::UnprocessedAction(_))));
 }
 
 #[test]
 fn insert_settlement_attempt_result_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(5);
+    let job_id = mk_job_id(5);
     store
         .insert_settlement_job(&job_id, &mk_settlement_job(5))
         .expect("job insert must succeed");
@@ -160,7 +160,7 @@ fn insert_settlement_attempt_result_succeeds_once() {
 #[test]
 fn insert_settlement_attempt_result_duplicate_fails() {
     let (_tmp, db, store) = setup_store();
-    let job_id = mk_ulid(6);
+    let job_id = mk_job_id(6);
     let first = v0::SettlementAttemptResult::contract_call_success_for_test(1)
         .try_into()
         .expect("test tx result helper should be decodable");
@@ -191,7 +191,7 @@ fn insert_settlement_attempt_result_duplicate_fails() {
 #[test]
 fn insert_settlement_attempt_result_without_attempt_fails() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(405);
+    let job_id = mk_job_id(405);
     store
         .insert_settlement_job(&job_id, &mk_settlement_job(42))
         .expect("job insert must succeed");
@@ -209,7 +209,7 @@ fn insert_settlement_attempt_result_without_attempt_fails() {
 #[test]
 fn insert_settlement_attempt_indexes_by_wallet_and_nonce() {
     let (_tmp, db, store) = setup_store();
-    let job_id = mk_ulid(406);
+    let job_id = mk_job_id(406);
     let seq = 3;
     let attempt = mk_settlement_attempt(seq);
     let wallet_bytes = attempt.sender_wallet.into_array();
@@ -241,7 +241,7 @@ fn get_settlement_job_returns_none_when_missing() {
     let (_tmp, _db, store) = setup_store();
     assert_eq!(
         store
-            .get_settlement_job(&mk_ulid(10))
+            .get_settlement_job(&mk_job_id(10))
             .expect("read must succeed"),
         None
     );
@@ -250,7 +250,7 @@ fn get_settlement_job_returns_none_when_missing() {
 #[test]
 fn get_settlement_job_returns_value_after_insert() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(11);
+    let job_id = mk_job_id(11);
     let job = mk_settlement_job(11);
     store
         .insert_settlement_job(&job_id, &job)
@@ -268,7 +268,7 @@ fn get_settlement_job_result_returns_none_when_missing() {
     let (_tmp, _db, store) = setup_store();
     assert_eq!(
         store
-            .get_settlement_job_result(&mk_ulid(12))
+            .get_settlement_job_result(&mk_job_id(12))
             .expect("read must succeed"),
         None
     );
@@ -278,7 +278,7 @@ fn get_settlement_job_result_returns_none_when_missing() {
 fn insert_settlement_job_result_without_job_fails() {
     let (_tmp, _db, store) = setup_store();
     let res = store.insert_settlement_job_result(
-        &mk_ulid(13),
+        &mk_job_id(13),
         &v0::SettlementJobResult::contract_call_success_for_test(13)
             .try_into()
             .expect("test tx result helper should be decodable"),
@@ -289,7 +289,7 @@ fn insert_settlement_job_result_without_job_fails() {
 #[test]
 fn get_settlement_job_result_returns_value_after_insert() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(14);
+    let job_id = mk_job_id(14);
     let result = v0::SettlementJobResult::contract_call_success_for_test(14)
         .try_into()
         .expect("test tx result helper should be decodable");
@@ -314,7 +314,7 @@ fn list_settlement_attempts_returns_empty_vec_for_missing_job() {
     let (_tmp, _db, store) = setup_store();
 
     assert!(store
-        .list_settlement_attempts(&mk_ulid(16))
+        .list_settlement_attempts(&mk_job_id(16))
         .expect("read must succeed")
         .is_empty());
 }
@@ -322,7 +322,7 @@ fn list_settlement_attempts_returns_empty_vec_for_missing_job() {
 #[test]
 fn list_settlement_attempts_returns_all_attempts_for_job() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(17);
+    let job_id = mk_job_id(17);
     let first = mk_settlement_attempt(1);
     let second = mk_settlement_attempt(2);
     let third = mk_settlement_attempt(3);
@@ -351,8 +351,8 @@ fn list_settlement_attempts_returns_all_attempts_for_job() {
 #[test]
 fn list_settlement_attempts_does_not_return_attempts_from_other_jobs() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(18);
-    let other_job_id = mk_ulid(19);
+    let job_id = mk_job_id(18);
+    let other_job_id = mk_job_id(19);
     let first = mk_settlement_attempt(1);
     let second = mk_settlement_attempt(2);
 
@@ -385,7 +385,7 @@ fn list_settlement_attempt_results_returns_empty_vec_for_missing_job() {
     let (_tmp, _db, store) = setup_store();
 
     assert!(store
-        .list_settlement_attempt_results(&mk_ulid(20))
+        .list_settlement_attempt_results(&mk_job_id(20))
         .expect("read must succeed")
         .is_empty());
 }
@@ -393,7 +393,7 @@ fn list_settlement_attempt_results_returns_empty_vec_for_missing_job() {
 #[test]
 fn list_settlement_attempt_results_returns_all_results_for_job() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(24);
+    let job_id = mk_job_id(24);
     let first_attempt = mk_settlement_attempt(1);
     let second_attempt = mk_settlement_attempt(2);
     let first_result = v0::SettlementAttemptResult::contract_call_success_for_test(1)
@@ -430,8 +430,8 @@ fn list_settlement_attempt_results_returns_all_results_for_job() {
 #[test]
 fn list_settlement_attempt_results_does_not_return_results_from_other_jobs() {
     let (_tmp, _db, store) = setup_store();
-    let job_id = mk_ulid(25);
-    let other_job_id = mk_ulid(26);
+    let job_id = mk_job_id(25);
+    let other_job_id = mk_job_id(26);
     let first_result = v0::SettlementAttemptResult::contract_call_success_for_test(3)
         .try_into()
         .expect("test tx result helper should be decodable");
@@ -481,7 +481,7 @@ fn list_settlement_attempt_results_does_not_return_results_from_other_jobs() {
 #[test]
 fn insert_settlement_job_result_duplicate_fails() {
     let (_tmp, db, store) = setup_store();
-    let job_id = mk_ulid(15);
+    let job_id = mk_job_id(15);
     let first = v0::SettlementJobResult::contract_call_success_for_test(15)
         .try_into()
         .expect("test tx result helper should be decodable");
@@ -509,7 +509,7 @@ fn insert_settlement_job_result_duplicate_fails() {
 #[test]
 fn job_attempt_result_can_be_read_back_together() {
     let (_tmp, db, store) = setup_store();
-    let job_id = mk_ulid(21);
+    let job_id = mk_job_id(21);
     let job = mk_settlement_job(21);
     let attempt = mk_settlement_attempt(5);
     let attempt_result = v0::SettlementAttemptResult::contract_call_success_for_test(21)
@@ -558,7 +558,7 @@ fn job_attempt_result_can_be_read_back_together() {
 #[test]
 fn result_absent_does_not_imply_attempt_absent() {
     let (_tmp, db, store) = setup_store();
-    let job_id = mk_ulid(22);
+    let job_id = mk_job_id(22);
     let attempt = mk_settlement_attempt(1);
     store
         .insert_settlement_job(&job_id, &mk_settlement_job(22))
@@ -588,7 +588,7 @@ fn result_absent_does_not_imply_attempt_absent() {
 #[test]
 fn duplicate_insert_preserves_original_value() {
     let (_tmp, db, store) = setup_store();
-    let job_id = mk_ulid(23);
+    let job_id = mk_job_id(23);
     let first = v0::SettlementAttemptResult::contract_call_success_for_test(1)
         .try_into()
         .expect("test tx result helper should be decodable");
