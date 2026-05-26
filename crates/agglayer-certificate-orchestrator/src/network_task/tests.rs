@@ -1,6 +1,8 @@
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
 use agglayer_storage::{
+    error as storage_error,
+    storage::DBError,
     stores::{PendingCertificateReader, PendingCertificateWriter, StateWriter},
     tests::{
         mocks::{MockPendingStore, MockStateStore},
@@ -193,6 +195,150 @@ async fn start_from_zero() {
     .unwrap();
 
     assert_eq!(next_expected_height, Height::new(1));
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(1))]
+async fn repeated_unreadable_proof_errors_certificate() {
+    let mut pending = MockPendingStore::new();
+    let mut state = MockStateStore::new();
+    let mut certifier = MockCertifier::new();
+    let mut settlement_client = MockSettlementClient::new();
+    let clock_ref = clock();
+    let network_id = 1.into();
+    let (sender, certificate_stream) = mpsc::channel(1);
+
+    let certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let certificate_id = certificate.hash();
+
+    pending
+        .expect_get_certificate()
+        .once()
+        .with(eq(network_id), eq(Height::ZERO))
+        .returning(|network_id, height| Ok(Some(Certificate::new_for_test(network_id, height))));
+
+    pending
+        .expect_set_latest_proven_certificate_per_network()
+        .times(2)
+        .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
+        .returning(|_, _, _| Ok(()));
+
+    pending
+        .expect_remove_generated_proof()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|_| Ok(()));
+
+    state
+        .expect_get_latest_settled_certificate_per_network()
+        .once()
+        .with(eq(network_id))
+        .returning(|_| Ok(None));
+
+    state
+        .expect_get_certificate_header()
+        .once()
+        .with(eq(certificate_id))
+        .returning(|certificate_id| {
+            Ok(Some(agglayer_types::CertificateHeader {
+                network_id: 1.into(),
+                height: Height::ZERO,
+                epoch_number: None,
+                certificate_index: None,
+                certificate_id: *certificate_id,
+                prev_local_exit_root: [1; 32].into(),
+                new_local_exit_root: [0; 32].into(),
+                metadata: Metadata::ZERO,
+                status: CertificateStatus::Pending,
+                settlement_tx_hash: None,
+            }))
+        });
+
+    let certificate_for_certifier = certificate.clone();
+    certifier
+        .expect_certify()
+        .times(2)
+        .with(always(), eq(network_id), eq(Height::ZERO))
+        .returning(move |new_state, network_id, _height| {
+            Ok(CertifierOutput {
+                certificate: certificate_for_certifier.clone(),
+                height: Height::ZERO,
+                new_state,
+                network: network_id,
+                new_pp_root: Digest::ZERO,
+            })
+        });
+
+    state
+        .expect_read_local_network_state()
+        .once()
+        .returning(|_| Ok(Default::default()));
+
+    state
+        .expect_update_certificate_header_status()
+        .times(4)
+        .withf(move |id, status| {
+            if *id != certificate_id {
+                return false;
+            }
+            matches!(
+                status,
+                CertificateStatus::Pending | CertificateStatus::Proven
+            ) || matches!(status, CertificateStatus::InError { error }
+                    if matches!(&**error, CertificateStatusError::InternalError(_)))
+        })
+        .returning(|_, _| Ok(()));
+
+    settlement_client
+        .expect_submit_certificate_settlement()
+        .times(2)
+        .withf(move |i, _| *i == certificate_id)
+        .returning(move |_, _| {
+            Err(Error::Storage(storage_error::Error::UnreadableProof {
+                id: certificate_id,
+                source: DBError::ColumnFamilyNotFound,
+            }))
+        });
+
+    settlement_client
+        .expect_fetch_last_settled_pp_root()
+        .times(2)
+        .with(eq(network_id))
+        .returning(|_| Ok(None));
+
+    let mut task = NetworkTask::new(
+        Arc::new(pending),
+        Arc::new(state),
+        Arc::new(certifier),
+        Arc::new(settlement_client),
+        clock_ref,
+        network_id,
+        certificate_stream,
+    )
+    .expect("Failed to create a new network task");
+
+    let mut epochs = task.clock_ref.subscribe().unwrap();
+    let mut next_expected_height = Height::ZERO;
+
+    let _ = sender
+        .send(NewCertificate {
+            certificate_id,
+            height: Height::ZERO,
+        })
+        .await;
+
+    let mut first_run = true;
+    task.make_progress(
+        &mut epochs,
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(next_expected_height, Height::ZERO);
 }
 
 #[rstest]

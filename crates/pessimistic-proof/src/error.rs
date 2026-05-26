@@ -42,7 +42,25 @@ impl From<SP1VerificationError> for ProofVerificationError {
             SP1VerificationError::InvalidPublicValues => {
                 ProofVerificationError::InvalidPublicValues
             }
+            SP1VerificationError::UnexpectedExitCode(code) => {
+                ProofVerificationError::Other(format!("Unexpected exit code: {code}"))
+            }
             SP1VerificationError::Other(error) => ProofVerificationError::Other(error.to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_unexpected_exit_code_to_other_for_serialization_compatibility() {
+        let err = ProofVerificationError::from(SP1VerificationError::UnexpectedExitCode(42));
+
+        assert_eq!(
+            err,
+            ProofVerificationError::Other("Unexpected exit code: 42".into())
+        );
     }
 }

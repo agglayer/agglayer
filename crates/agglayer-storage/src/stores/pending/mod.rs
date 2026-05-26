@@ -16,8 +16,8 @@ use crate::{
         proof_per_certificate::ProofPerCertificateColumn,
     },
     error::Error,
-    schema::ColumnDescriptor,
-    storage::DB,
+    schema::{Codec as _, ColumnDescriptor, ColumnSchema as _},
+    storage::{DBError, DB},
 };
 
 pub(crate) mod cf_definitions;
@@ -47,6 +47,33 @@ impl PendingStore {
 
     pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
         Ok(Self::new(Arc::new(Self::init_db(path)?)))
+    }
+
+    fn decode_readable_proof(certificate_id: CertificateId, bytes: &[u8]) -> Result<Proof, Error> {
+        Proof::decode(bytes).map_err(|source| Error::UnreadableProof {
+            id: certificate_id,
+            source: DBError::from(source),
+        })
+    }
+
+    fn get_readable_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
+        let key = certificate_id.encode().map_err(DBError::from)?;
+        let cf = self
+            .db
+            .raw_rocksdb()
+            .cf_handle(ProofPerCertificateColumn::COLUMN_FAMILY_NAME)
+            .ok_or(DBError::ColumnFamilyNotFound)?;
+
+        let Some(bytes) = self
+            .db
+            .raw_rocksdb()
+            .get_cf(&cf, key)
+            .map_err(DBError::from)?
+        else {
+            return Ok(None);
+        };
+
+        Self::decode_readable_proof(certificate_id, &bytes).map(Some)
     }
 }
 
@@ -168,7 +195,7 @@ impl PendingCertificateReader for PendingStore {
     }
 
     fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
-        Ok(self.db.get::<ProofPerCertificateColumn>(&certificate_id)?)
+        self.get_readable_proof(certificate_id)
     }
 
     fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error> {
@@ -211,8 +238,30 @@ impl PendingCertificateReader for PendingStore {
     }
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error> {
-        Ok(self
+        let cf = self
             .db
-            .multi_get::<ProofPerCertificateColumn>(keys.iter().copied())?)
+            .raw_rocksdb()
+            .cf_handle(ProofPerCertificateColumn::COLUMN_FAMILY_NAME)
+            .ok_or(Error::from(DBError::ColumnFamilyNotFound))?;
+
+        let encoded_keys: Result<Vec<_>, _> = keys
+            .iter()
+            .map(|k| k.encode().map_err(DBError::from))
+            .collect();
+
+        let results = self
+            .db
+            .raw_rocksdb()
+            .batched_multi_get_cf(cf, &encoded_keys?, false);
+
+        results
+            .into_iter()
+            .zip(keys.iter())
+            .map(|(result, certificate_id)| match result {
+                Ok(Some(bytes)) => Self::decode_readable_proof(*certificate_id, &bytes).map(Some),
+                Ok(None) => Ok(None),
+                Err(error) => Err(Error::from(DBError::from(error))),
+            })
+            .collect()
     }
 }

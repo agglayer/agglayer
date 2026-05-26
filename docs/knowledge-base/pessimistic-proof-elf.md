@@ -10,7 +10,7 @@ and guarded by snapshot tests.
 ## Key files
 
 - **Cached ELF binary**:
-  `crates/pessimistic-proof/elf/riscv32im-succinct-zkvm-elf`
+  `crates/pessimistic-proof/elf/riscv64im-succinct-zkvm-elf`
 - **Vkey snapshot**:
   `crates/pessimistic-proof-test-suite/tests/snapshots/vkey_selector__vkey_snapshot.snap`
 - **Build script**: `crates/pessimistic-proof/build.rs`
