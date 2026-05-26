@@ -38,7 +38,7 @@ pub const SETTLEMENT_JOB_RESULTS_CF: &str = "settlement_job_results_cf";
 pub const SETTLEMENT_ATTEMPTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
     prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
-        size: 16, // settlement_job_id (Ulid)
+        size: 16, // settlement_job_id (raw Ulid bytes)
     },
 };
 

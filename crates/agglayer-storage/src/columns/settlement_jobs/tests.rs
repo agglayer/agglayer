@@ -12,10 +12,13 @@ use crate::{
 
 #[test]
 fn settlement_job_roundtrip_codec() {
-    let key = SettlementJobId::from(ulid::Ulid::from(42u128));
+    let job_id = SettlementJobId::from(ulid::Ulid::from(42u128));
+    let key = job_id;
     let value = mk_settlement_job();
 
     let encoded_key = key.encode().expect("Unable to encode key");
+    assert_eq!(encoded_key, job_id.as_ulid().to_bytes());
+
     let decoded_key = Key::decode(&encoded_key).expect("Unable to decode key");
     assert_eq!(decoded_key, key);
 

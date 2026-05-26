@@ -21,6 +21,13 @@ fn settlement_attempt_roundtrip_codec() {
     let value = mk_settlement_attempt(2);
 
     let encoded_key = key.encode().expect("Unable to encode key");
+    let expected_key = [
+        key.settlement_job_id.as_ulid().to_bytes().as_slice(),
+        &2_u64.to_be_bytes(),
+    ]
+    .concat();
+    assert_eq!(encoded_key, expected_key);
+
     let decoded_key = Key::decode(&encoded_key).expect("Unable to decode key");
     assert_eq!(decoded_key.settlement_job_id, key.settlement_job_id);
     assert_eq!(

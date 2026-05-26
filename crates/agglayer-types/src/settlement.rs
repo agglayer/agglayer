@@ -36,6 +36,15 @@ impl SettlementJobId {
     }
 }
 
+#[cfg(feature = "testutils")]
+impl<'a> arbitrary::Arbitrary<'a> for SettlementJobId {
+    fn arbitrary(input: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self(ulid::Ulid::from(
+            <u128 as arbitrary::Arbitrary>::arbitrary(input)?,
+        )))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, derive_more::Display)]
 pub struct SettlementAttemptNumber(pub u64);
 

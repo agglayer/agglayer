@@ -1,16 +1,21 @@
+use std::io;
+
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 pub use super::generated::agglayer::storage::v0;
 use crate::{
-    schema::CodecError,
+    schema::{Codec, CodecError},
     types::network_info::v0::{
         network_info_value::{self, ValueDiscriminants},
         NetworkType,
     },
 };
 
-#[derive(Clone, Serialize, Deserialize)]
+const NETWORK_ID_LEN: usize = crate::schema::U32_LEN;
+const KEY_LEN: usize = NETWORK_ID_LEN + crate::schema::U32_LEN;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Key {
     pub(crate) network_id: u32,
     pub(crate) kind: ValueDiscriminants,
@@ -26,6 +31,27 @@ impl Key {
 }
 
 pub type Value = super::generated::agglayer::storage::v0::NetworkInfoValue;
+
+impl Codec for Key {
+    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), CodecError> {
+        writer.write_all(&self.network_id.to_be_bytes())?;
+        writer.write_all(&(self.kind as u32).to_be_bytes())?;
+
+        Ok(())
+    }
+
+    fn decode(buf: &[u8]) -> Result<Self, CodecError> {
+        let key = crate::schema::fixed_bytes::<KEY_LEN>(buf, "network info key")?;
+        let network_id =
+            crate::schema::decode_u32_be(&key[..NETWORK_ID_LEN], "network info network id")?;
+        let kind = crate::schema::decode_u32_be(&key[NETWORK_ID_LEN..], "network info kind")?;
+        let kind = ValueDiscriminants::from_repr(kind as usize).ok_or_else(|| {
+            CodecError::InvalidEnumVariant(format!("invalid network info key kind {kind}"))
+        })?;
+
+        Ok(Self { network_id, kind })
+    }
+}
 
 crate::schema::impl_codec_using_protobuf_for!(Value);
 
@@ -49,7 +75,21 @@ impl TryFrom<v0::NetworkType> for agglayer_types::NetworkType {
 mod tests {
     use strum::EnumCount;
 
+    use super::Key;
     use crate::types::network_info::v0::network_info_value::ValueDiscriminants;
+
+    impl<'a> arbitrary::Arbitrary<'a> for Key {
+        fn arbitrary(input: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+            let kind_index = <u8 as arbitrary::Arbitrary>::arbitrary(input)? as usize
+                % ValueDiscriminants::COUNT;
+
+            Ok(Self {
+                network_id: <u32 as arbitrary::Arbitrary>::arbitrary(input)?,
+                kind: ValueDiscriminants::from_repr(kind_index)
+                    .expect("modulo keeps discriminant in range"),
+            })
+        }
+    }
 
     #[test]
     fn test_discriminant_from_u32() {
@@ -74,4 +114,9 @@ mod tests {
             }
         }
     }
+
+    crate::types::codec_tests::codec_tests!(Key {
+        network_id: 0x01020304,
+        kind: ValueDiscriminants::SettledClaim,
+    });
 }

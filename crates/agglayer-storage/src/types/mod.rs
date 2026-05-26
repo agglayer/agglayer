@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 mod certificate;
 pub(crate) use certificate::LegacyCertificate;
+#[cfg(test)]
+pub(crate) mod codec_tests;
 pub(crate) mod disabled_network;
 pub mod generated; // TODO: remove "pub" once implementation of storage is completed
 pub(crate) mod network_info;
@@ -74,9 +76,4 @@ crate::schema::impl_codec_using_bincode_for!(
     Proof,
     SmtKey,
     SmtValue,
-    network_info::Key,
-    settlement::job::Key,
-    settlement::attempt::Key,
-    settlement::attempt_per_wallet::Key,
-    settlement::attempt_per_wallet::Value,
 );
