@@ -222,9 +222,8 @@ fn parse_db_kind_version(s: &str) -> Result<(DbKind, u32), String> {
 
 #[cfg(test)]
 mod tests {
-    use clap::Parser;
-
     use agglayer_config::Config;
+    use clap::Parser;
 
     use super::*;
 

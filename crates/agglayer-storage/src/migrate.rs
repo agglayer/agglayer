@@ -435,8 +435,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        columns::epochs::certificates::CertificatePerIndexColumn,
-        columns::pending_queue::{PendingQueueColumn, PendingQueueKey},
+        columns::{
+            epochs::certificates::CertificatePerIndexColumn,
+            pending_queue::{PendingQueueColumn, PendingQueueKey},
+        },
         schema::{Codec as _, ColumnSchema as _},
         stores::{pending::cf_definitions::PENDING_DB_V0, per_epoch::cf_definitions::EPOCHS_DB_V0},
         tests::TempDBDir,
