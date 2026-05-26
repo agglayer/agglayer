@@ -1,15 +1,16 @@
 use agglayer_sp1::ProofMode;
-use sp1_sdk::{Prover, ProverClient, SP1ProofMode};
+use sp1_sdk::{
+    blocking::{Prover, ProverClient},
+    ProvingKey, SP1ProofMode,
+};
 
-/// A minimal valid RISC-V ELF. The mock prover's `setup` pipeline parses the
-/// ELF header, so `b"\x7fELF"` alone is not enough — we reuse the same empty
-/// ELF artifact the rest of the workspace ships for mock-proof tests.
 const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
 
 fn mock_proof(mode: SP1ProofMode) -> sp1_sdk::SP1ProofWithPublicValues {
     let client = ProverClient::builder().mock().build();
+    let proving_key = client.setup(sp1_sdk::Elf::Static(EMPTY_ELF)).unwrap();
     sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
-        &client.setup(EMPTY_ELF).0,
+        proving_key.verifying_key(),
         sp1_sdk::SP1PublicValues::new(),
         mode,
         sp1_sdk::SP1_CIRCUIT_VERSION,

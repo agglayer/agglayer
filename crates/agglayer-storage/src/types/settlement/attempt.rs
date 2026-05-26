@@ -1,8 +1,9 @@
+use agglayer_types::SettlementJobId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Key {
-    pub(crate) settlement_job_id: ulid::Ulid,
+    pub(crate) settlement_job_id: SettlementJobId,
     pub(crate) attempt_sequence_number: u64,
 }
 

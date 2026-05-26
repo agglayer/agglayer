@@ -1,7 +1,6 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
+    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
 };
-use ulid::Ulid;
 
 use crate::error::Error;
 
@@ -16,7 +15,7 @@ pub trait SettlementWriter: Send + Sync {
     /// `settlement_job_id` already exists.
     fn insert_settlement_job(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         settlement_job: &SettlementJob,
     ) -> Result<(), Error>;
 
@@ -27,7 +26,7 @@ pub trait SettlementWriter: Send + Sync {
     /// job must already exist.
     fn insert_settlement_job_result(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         tx_result: &SettlementJobResult,
     ) -> Result<(), Error>;
 
@@ -38,7 +37,7 @@ pub trait SettlementWriter: Send + Sync {
     /// already exists. The parent settlement job must already exist.
     fn insert_settlement_attempt(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         attempt_sequence_number: u64,
         settlement_attempt: &SettlementAttempt,
     ) -> Result<(), Error>;
@@ -50,7 +49,7 @@ pub trait SettlementWriter: Send + Sync {
     /// already exists. The corresponding settlement attempt must already exist.
     fn insert_settlement_attempt_result(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         attempt_sequence_number: u64,
         tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error>;

@@ -1,4 +1,4 @@
-use ulid::Ulid;
+use agglayer_types::SettlementJobId;
 
 use crate::{
     schema::Codec as _,
@@ -12,7 +12,7 @@ use crate::{
 
 #[test]
 fn settlement_job_roundtrip_codec() {
-    let key = Ulid::from(42u128);
+    let key = SettlementJobId::from(ulid::Ulid::from(42u128));
     let value = mk_settlement_job();
 
     let encoded_key = key.encode().expect("Unable to encode key");

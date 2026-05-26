@@ -9,7 +9,7 @@ use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
     SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
-    SettlementJobResult, SettlementTxHash,
+    SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 use alloy::{
     consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
@@ -21,8 +21,8 @@ use alloy::{
 };
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+
 use tracing::{debug, error, warn};
-use ulid::Ulid;
 
 use crate::utils::RetryCallbackError;
 
@@ -68,7 +68,7 @@ impl From<TransportError> for WaitForSettlementError {
      {error_message}"
 )]
 struct NonRecoverableError {
-    settlement_task_id: Ulid,
+    settlement_task_id: SettlementJobId,
     file: &'static str,
     line: u32,
     error_message: String,
@@ -141,7 +141,7 @@ struct ActiveSettlementAttempt {
 }
 
 pub struct SettlementTask<L1Provider, SettlementStore> {
-    id: Ulid,
+    id: SettlementJobId,
     job: SettlementJob,
     tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
@@ -162,7 +162,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
         control: TaskControl,
-    ) -> eyre::Result<(Ulid, Self)> {
+    ) -> eyre::Result<(SettlementJobId, Self)> {
         let id = loop {
             if let Ok(id) = ID_GENERATOR
                 .get_or_init(|| std::sync::Mutex::new(ulid::Generator::new()))
@@ -170,7 +170,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                 .unwrap()
                 .generate()
             {
-                break id;
+                break SettlementJobId::from(id);
             }
             tokio::time::sleep(std::time::Duration::from_micros(100)).await;
         };
@@ -188,7 +188,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
     }
 
     pub async fn load(
-        id: Ulid,
+        id: SettlementJobId,
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
@@ -719,7 +719,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
     }
 
     async fn load_settlement_job_from_db(
-        _id: Ulid,
+        _id: SettlementJobId,
     ) -> eyre::Result<(SettlementJob, Option<SettlementJobResult>)> {
         // TODO: Load a settlement job's contents from DB, including its
         // result if it is completed.

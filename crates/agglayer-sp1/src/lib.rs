@@ -7,10 +7,12 @@ mod error;
 mod ext;
 mod mode;
 mod policy;
+#[cfg(any(test, feature = "testutils"))]
+pub mod testutils;
 mod version;
 
 pub use error::ProofError;
-pub use ext::ProofExt;
+pub use ext::{v6_sp1_stark_with_context, ProofExt, V6Sp1StarkProof, V6Sp1StarkWithContext};
 pub use mode::ProofMode;
 pub use policy::AcceptancePolicy;
 pub use version::{version_kind, Sp1ProofVersion};

@@ -2,14 +2,13 @@ use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
-use agglayer_types::{SettlementJob, SettlementJobResult};
+use agglayer_types::{SettlementJob, SettlementJobId, SettlementJobResult};
 use alloy::providers::Provider;
 use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use ulid::Ulid;
 
 use crate::settlement_task::{
     SettlementTask, SettlementTaskRunResult, TaskAdminCommand, TaskControlHandle,
@@ -26,13 +25,14 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
-    task_controls: Arc<Mutex<HashMap<Ulid, TaskControlHandle>>>,
-    result_watchers: Arc<Mutex<HashMap<Ulid, watch::Receiver<Option<SettlementJobResult>>>>>,
+    task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
+    result_watchers:
+        Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
 }
 
 pub struct SettlementJobWatcher {
     watcher: watch::Receiver<Option<SettlementJobResult>>,
-    job_id: Ulid,
+    job_id: SettlementJobId,
 }
 
 impl SettlementJobWatcher {
@@ -40,7 +40,7 @@ impl SettlementJobWatcher {
         &mut self.watcher
     }
 
-    pub fn job_id(&self) -> Ulid {
+    pub fn job_id(&self) -> SettlementJobId {
         self.job_id
     }
 }
@@ -75,7 +75,7 @@ impl<
     }
 
     #[tracing::instrument(skip_all)]
-    async fn task_control(&self, job_id: Ulid) -> eyre::Result<TaskControlHandle> {
+    async fn task_control(&self, job_id: SettlementJobId) -> eyre::Result<TaskControlHandle> {
         let task_controls = self.task_controls.lock().await;
         let Some(task_control) = task_controls.get(&job_id) else {
             eyre::bail!("No task control found for settlement task {job_id}");
@@ -84,7 +84,11 @@ impl<
     }
 
     #[tracing::instrument(skip_all)]
-    async fn admin_task(&self, job_id: Ulid, command: TaskAdminCommand) -> eyre::Result<()> {
+    async fn admin_task(
+        &self,
+        job_id: SettlementJobId,
+        command: TaskAdminCommand,
+    ) -> eyre::Result<()> {
         self.task_control(job_id)
             .await?
             .try_send(command)
@@ -98,13 +102,13 @@ impl<
     }
 
     #[tracing::instrument(skip_all)]
-    pub async fn admin_abort_task(&self, job_id: Ulid) -> eyre::Result<()> {
+    pub async fn admin_abort_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
         self.task_control(job_id).await?.cancel();
         Ok(())
     }
 
     #[tracing::instrument(skip_all)]
-    pub async fn admin_reload_and_restart_task(&self, job_id: Ulid) -> eyre::Result<()> {
+    pub async fn admin_reload_and_restart_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
         self.admin_task(job_id, TaskAdminCommand::ReloadAndRestart)
             .await
     }
@@ -168,7 +172,7 @@ impl<
     #[tracing::instrument(skip(self))]
     pub async fn retrieve_settlement_result(
         &self,
-        job_id: Ulid,
+        job_id: SettlementJobId,
     ) -> eyre::Result<RetrievedSettlementResult> {
         if let Some(watcher) = self.result_watchers.lock().await.get(&job_id) {
             return match watcher.borrow().as_ref() {
@@ -208,7 +212,7 @@ impl<
     }
 }
 
-pub struct RetrieveSettlementResult(pub Ulid);
+pub struct RetrieveSettlementResult(pub SettlementJobId);
 
 impl<
         L1Provider: Provider + 'static,
@@ -233,8 +237,8 @@ impl<
 }
 
 pub enum AdminCommand {
-    AbortTask(Ulid),
-    ReloadAndRestartTask(Ulid),
+    AbortTask(SettlementJobId),
+    ReloadAndRestartTask(SettlementJobId),
 }
 
 impl<

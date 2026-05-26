@@ -9,8 +9,8 @@ fn parses_v5_major() {
 
 #[test]
 fn parses_v6_major() {
-    assert_eq!(version_kind("v6.0.1").unwrap(), Sp1ProofVersion::V6);
-    assert_eq!(version_kind("6.0.1").unwrap(), Sp1ProofVersion::V6);
+    assert_eq!(version_kind("v6.1.0").unwrap(), Sp1ProofVersion::V6);
+    assert_eq!(version_kind("6.1.0").unwrap(), Sp1ProofVersion::V6);
 }
 
 #[test]

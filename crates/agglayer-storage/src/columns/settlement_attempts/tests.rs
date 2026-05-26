@@ -1,5 +1,5 @@
+use agglayer_types::SettlementJobId;
 use rocksdb::{Direction, ReadOptions};
-use ulid::Ulid;
 
 use super::SettlementAttemptsColumn;
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
 #[test]
 fn settlement_attempt_roundtrip_codec() {
     let key = Key {
-        settlement_job_id: Ulid::from(24u128),
+        settlement_job_id: SettlementJobId::from(ulid::Ulid::from(24u128)),
         attempt_sequence_number: 2,
     };
     let value = mk_settlement_attempt(2);
@@ -38,7 +38,7 @@ fn settlement_attempt_key_ordering_is_stable_for_same_job() {
     let tmp = TempDBDir::new();
     let db = StateStore::init_db(tmp.path.as_path()).expect("Unable to init db");
 
-    let settlement_job_id = Ulid::from(99u128);
+    let settlement_job_id = SettlementJobId::from(ulid::Ulid::from(99u128));
     for seq in [1u64, 2, 3, 4, 5] {
         let key = Key {
             settlement_job_id,

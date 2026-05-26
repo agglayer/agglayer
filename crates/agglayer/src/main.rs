@@ -10,6 +10,8 @@ use sp1_sdk::HashableKey as _;
 mod cli;
 
 fn main() -> eyre::Result<()> {
+    install_default_crypto_provider();
+
     dotenvy::dotenv().ok();
 
     let cli = Cli::parse();
@@ -89,6 +91,12 @@ fn main() -> eyre::Result<()> {
     Ok(())
 }
 
+fn install_default_crypto_provider() {
+    // rustls cannot infer a provider when transitive dependencies enable both
+    // built-in crypto backends. Install one before any TLS client is built.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
 /// Common version information about the executed agglayer binary.
 pub fn version() -> String {
     let pkg_name = env!("CARGO_PKG_NAME");
@@ -102,4 +110,14 @@ pub async fn compute_program_vkey(program: &'static [u8]) -> eyre::Result<String
         .await
         .context("Failed to compute program vkey")?;
     Ok(vkey.bytes32())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn installs_a_default_rustls_crypto_provider() {
+        super::install_default_crypto_provider();
+
+        assert!(rustls::crypto::CryptoProvider::get_default().is_some());
+    }
 }

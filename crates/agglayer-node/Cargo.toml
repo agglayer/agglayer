@@ -20,6 +20,7 @@ http.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
 pin-project.workspace = true
 reqwest = "0.12"
+reqwest13 = { package = "reqwest", version = "0.13" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
