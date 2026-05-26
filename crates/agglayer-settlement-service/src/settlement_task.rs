@@ -570,6 +570,15 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         })
     }
 
+    #[tracing::instrument(
+        level = "debug",
+        skip_all,
+        fields(
+            task_id = ?self.id,
+            ?tx_hash,
+            settlement_policy = ?self.tx_config.settlement_policy,
+        )
+    )]
     async fn check_settlement_once(
         &self,
         tx_hash: SettlementTxHash,
@@ -578,6 +587,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         // against a head that was already acceptable for the configured policy.
         let settlement_head_number = self.settlement_head_number().await?;
         let Some(settlement_head_number) = settlement_head_number else {
+            debug!("Waiting for selected settlement head before checking settlement transaction");
             return Err(WaitForSettlementError::NotSettledYet);
         };
 
@@ -589,13 +599,25 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         let Some(receipt) = receipt else {
             // The caller only waits after observing this transaction on L1, so
             // a missing receipt is a reorg/drop signal.
+            debug!(
+                settlement_head_number,
+                "Settlement transaction receipt missing after inclusion; treating as reorg or drop"
+            );
             return Ok(None);
         };
 
         let Some(block_hash) = receipt.block_hash() else {
+            debug!(
+                settlement_head_number,
+                "Waiting for settlement transaction receipt block hash"
+            );
             return Err(WaitForSettlementError::NotSettledYet);
         };
         let Some(block_number) = receipt.block_number() else {
+            debug!(
+                ?block_hash,
+                settlement_head_number, "Waiting for settlement transaction receipt block number"
+            );
             return Err(WaitForSettlementError::NotSettledYet);
         };
 
@@ -603,11 +625,9 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
             required_settlement_head_number(block_number, self.tx_config.confirmations);
         if settlement_head_number < required_head_number {
             debug!(
-                ?tx_hash,
                 block_number,
                 settlement_head_number,
                 required_head_number,
-                settlement_policy = ?self.tx_config.settlement_policy,
                 "Waiting for settlement transaction finality"
             );
             return Err(WaitForSettlementError::NotSettledYet);
@@ -618,6 +638,12 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
             .get_block_by_number(BlockNumberOrTag::Number(block_number))
             .await?;
         let Some(canonical_block) = canonical_block else {
+            debug!(
+                block_number,
+                ?block_hash,
+                settlement_head_number,
+                "Waiting for settlement transaction block to be available"
+            );
             return Err(WaitForSettlementError::NotSettledYet);
         };
 
@@ -625,6 +651,14 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         // block hash is a reorg signal, not a transient "wait longer" condition.
         let canonical_block_hash = canonical_block.header().hash;
         if canonical_block_hash != block_hash {
+            debug!(
+                block_number,
+                ?block_hash,
+                ?canonical_block_hash,
+                settlement_head_number,
+                "Settlement transaction receipt block hash differs from canonical block; treating \
+                 as reorg"
+            );
             return Ok(None);
         }
 
