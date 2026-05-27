@@ -22,6 +22,7 @@ tracing.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]
+agglayer-storage = { workspace = true, features = ["testutils"] }
 alloy = { workspace = true, features = ["node-bindings"] }
 serde_json.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
