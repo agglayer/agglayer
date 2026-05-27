@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 use crate::schema::{Codec, CodecError};
 
 const ADDRESS_LEN: usize = 20;
-const KEY_LEN: usize =
-    ADDRESS_LEN + crate::schema::U64_LEN + crate::schema::RAW_ULID_LEN + crate::schema::U64_LEN;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Key {
@@ -17,6 +15,13 @@ pub struct Key {
     pub(crate) attempt_sequence_number: u64,
 }
 
+impl Key {
+    pub(crate) const ADDRESS_LEN: usize = ADDRESS_LEN;
+    pub(crate) const PREFIX_LEN: usize = Self::ADDRESS_LEN + crate::schema::U64_LEN;
+    pub(crate) const LEN: usize =
+        Self::PREFIX_LEN + SettlementJobId::BYTE_LEN + crate::schema::U64_LEN;
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Value;
 
@@ -24,32 +29,36 @@ impl Codec for Key {
     fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), CodecError> {
         writer.write_all(&self.address)?;
         writer.write_all(&self.nonce.to_be_bytes())?;
-        writer.write_all(&self.settlement_job_id.as_ulid().to_bytes())?;
+        writer.write_all(&self.settlement_job_id.to_be_bytes())?;
         writer.write_all(&self.attempt_sequence_number.to_be_bytes())?;
 
         Ok(())
     }
 
     fn decode(buf: &[u8]) -> Result<Self, CodecError> {
-        let key = crate::schema::fixed_bytes::<KEY_LEN>(buf, "settlement attempt per wallet key")?;
-        let address_end = ADDRESS_LEN;
-        let nonce_end = address_end + crate::schema::U64_LEN;
-        let job_id_end = nonce_end + crate::schema::RAW_ULID_LEN;
+        let key =
+            crate::schema::fixed_bytes::<{ Self::LEN }>(buf, "settlement attempt per wallet key")?;
 
-        let address = crate::schema::fixed_bytes::<ADDRESS_LEN>(
-            &key[..address_end],
-            "settlement sender wallet",
+        let (address, rest) = key.split_at(Self::ADDRESS_LEN);
+        let (nonce, rest) = rest.split_at(crate::schema::U64_LEN);
+        let (settlement_job_id, attempt_sequence_number) = rest.split_at(SettlementJobId::BYTE_LEN);
+
+        let address =
+            crate::schema::fixed_bytes::<ADDRESS_LEN>(address, "settlement sender wallet")?;
+        let nonce = crate::schema::decode_u64_be(nonce, "settlement nonce")?;
+        let settlement_job_id = SettlementJobId::from(crate::schema::decode_u128_be(
+            settlement_job_id,
+            "settlement job id",
+        )?);
+        let attempt_sequence_number = crate::schema::decode_u64_be(
+            attempt_sequence_number,
+            "settlement attempt sequence number",
         )?;
-        let nonce = crate::schema::decode_u64_be(&key[address_end..nonce_end], "settlement nonce")?;
-        let settlement_job_id =
-            crate::schema::decode_raw_ulid(&key[nonce_end..job_id_end], "settlement job id")?;
-        let attempt_sequence_number =
-            crate::schema::decode_u64_be(&key[job_id_end..], "settlement attempt sequence number")?;
 
         Ok(Self {
             address,
             nonce,
-            settlement_job_id: SettlementJobId::from(settlement_job_id),
+            settlement_job_id,
             attempt_sequence_number,
         })
     }
@@ -76,12 +85,12 @@ impl Codec for Value {
 mod tests {
     use agglayer_types::SettlementJobId;
 
-    use super::{Key, Value, ADDRESS_LEN};
+    use super::{Key, Value};
 
     impl<'a> arbitrary::Arbitrary<'a> for Key {
         fn arbitrary(input: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
             Ok(Self {
-                address: <[u8; ADDRESS_LEN] as arbitrary::Arbitrary>::arbitrary(input)?,
+                address: <[u8; Key::ADDRESS_LEN] as arbitrary::Arbitrary>::arbitrary(input)?,
                 nonce: <u64 as arbitrary::Arbitrary>::arbitrary(input)?,
                 settlement_job_id: <SettlementJobId as arbitrary::Arbitrary>::arbitrary(input)?,
                 attempt_sequence_number: <u64 as arbitrary::Arbitrary>::arbitrary(input)?,
@@ -92,9 +101,7 @@ mod tests {
     crate::types::codec_tests::codec_tests!(Key {
         address: std::array::from_fn(|index| 0xa0_u8 + index as u8),
         nonce: 0x0102030405060708,
-        settlement_job_id: SettlementJobId::from(ulid::Ulid::from(
-            0x1112131415161718191a1b1c1d1e1f20_u128
-        )),
+        settlement_job_id: SettlementJobId::from(0x1112131415161718191a1b1c1d1e1f20_u128),
         attempt_sequence_number: 0x2122232425262728,
     });
 

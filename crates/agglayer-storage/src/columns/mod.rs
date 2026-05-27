@@ -38,21 +38,21 @@ pub const SETTLEMENT_JOB_RESULTS_CF: &str = "settlement_job_results_cf";
 pub const SETTLEMENT_ATTEMPTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
     prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
-        size: 16, // settlement_job_id (raw Ulid bytes)
+        size: crate::types::settlement::attempt::Key::PREFIX_LEN,
     },
 };
 
 pub const SETTLEMENT_ATTEMPT_RESULTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
     prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
-        size: 16, // settlement_job_id (Ulid)
+        size: crate::types::settlement::attempt::Key::PREFIX_LEN,
     },
 };
 
 pub const SETTLEMENT_ATTEMPT_PER_WALLET_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
     prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
-        size: 28, // address (20 bytes) + nonce (u64)
+        size: crate::types::settlement::attempt_per_wallet::Key::PREFIX_LEN,
     },
 };
 

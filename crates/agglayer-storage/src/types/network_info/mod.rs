@@ -12,9 +12,6 @@ use crate::{
     },
 };
 
-const NETWORK_ID_LEN: usize = crate::schema::U32_LEN;
-const KEY_LEN: usize = NETWORK_ID_LEN + crate::schema::U32_LEN;
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Key {
     pub(crate) network_id: u32,
@@ -22,6 +19,9 @@ pub struct Key {
 }
 
 impl Key {
+    pub(crate) const NETWORK_ID_LEN: usize = crate::schema::U32_LEN;
+    pub(crate) const LEN: usize = Self::NETWORK_ID_LEN + crate::schema::U32_LEN;
+
     pub(crate) fn all_keys_for_network(
         network_id: agglayer_types::NetworkId,
     ) -> impl ExactSizeIterator<Item = Self> + Clone {
@@ -41,10 +41,10 @@ impl Codec for Key {
     }
 
     fn decode(buf: &[u8]) -> Result<Self, CodecError> {
-        let key = crate::schema::fixed_bytes::<KEY_LEN>(buf, "network info key")?;
+        let key = crate::schema::fixed_bytes::<{ Key::LEN }>(buf, "network info key")?;
         let network_id =
-            crate::schema::decode_u32_be(&key[..NETWORK_ID_LEN], "network info network id")?;
-        let kind = crate::schema::decode_u32_be(&key[NETWORK_ID_LEN..], "network info kind")?;
+            crate::schema::decode_u32_be(&key[..Key::NETWORK_ID_LEN], "network info network id")?;
+        let kind = crate::schema::decode_u32_be(&key[Key::NETWORK_ID_LEN..], "network info kind")?;
         let kind = ValueDiscriminants::from_repr(kind as usize).ok_or_else(|| {
             CodecError::InvalidEnumVariant(format!("invalid network info key kind {kind}"))
         })?;

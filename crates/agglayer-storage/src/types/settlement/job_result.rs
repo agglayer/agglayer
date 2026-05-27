@@ -38,9 +38,7 @@ mod tests {
     mod key {
         use super::Key;
 
-        crate::types::codec_tests::codec_tests!(Key::from(ulid::Ulid::from(
-            0x0102030405060708090a0b0c0d0e0f10_u128
-        )));
+        crate::types::codec_tests::codec_tests!(Key::from(0x0102030405060708090a0b0c0d0e0f10_u128));
     }
 
     impl<'a> arbitrary::Arbitrary<'a> for Value {
