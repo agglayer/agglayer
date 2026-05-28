@@ -211,6 +211,7 @@ dependencies = [
 name = "agglayer-contracts"
 version = "0.1.0"
 dependencies = [
+ "agglayer-errors",
  "agglayer-primitives 0.17.0",
  "agglayer-types",
  "alloy",
@@ -239,6 +240,16 @@ dependencies = [
  "clap",
  "eyre",
  "sp1-build 6.2.1",
+]
+
+[[package]]
+name = "agglayer-errors"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c200cf3fcda8030120bba292208e4b2f4f9ec5e86af035992053f6dab1d659a6"
+dependencies = [
+ "eyre",
+ "tracing",
 ]
 
 [[package]]
@@ -627,6 +638,7 @@ name = "agglayer-storage"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
+ "agglayer-errors",
  "agglayer-interop-types 0.13.0",
  "agglayer-sp1",
  "agglayer-storage",
@@ -671,13 +683,13 @@ version = "0.1.0"
 dependencies = [
  "axum 0.8.8",
  "buildstructor 0.6.0",
+ "eyre",
  "futures",
  "lazy_static",
  "opentelemetry 0.31.0",
  "opentelemetry-prometheus 0.31.0",
  "opentelemetry_sdk 0.31.0",
  "prometheus",
- "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
