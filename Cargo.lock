@@ -633,6 +633,8 @@ dependencies = [
  "agglayer-tries 0.17.0",
  "agglayer-types",
  "alloy-primitives",
+ "arbitrary",
+ "bolero",
  "chrono",
  "criterion",
  "eyre",
@@ -661,7 +663,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "ulid",
 ]
 
 [[package]]

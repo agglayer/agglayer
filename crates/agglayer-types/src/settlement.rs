@@ -23,6 +23,8 @@ use crate::{Address, SettlementTxHash, B256, U256};
 pub struct SettlementJobId(ulid::Ulid);
 
 impl SettlementJobId {
+    pub const BYTE_LEN: usize = std::mem::size_of::<u128>();
+
     pub const fn new(value: ulid::Ulid) -> Self {
         Self(value)
     }
@@ -33,6 +35,29 @@ impl SettlementJobId {
 
     pub const fn into_ulid(self) -> ulid::Ulid {
         self.0
+    }
+
+    pub const fn from_be_bytes(bytes: [u8; Self::BYTE_LEN]) -> Self {
+        Self(ulid::Ulid::from_bytes(bytes))
+    }
+
+    pub const fn to_be_bytes(&self) -> [u8; Self::BYTE_LEN] {
+        self.0.to_bytes()
+    }
+}
+
+impl From<u128> for SettlementJobId {
+    fn from(value: u128) -> Self {
+        Self(ulid::Ulid::from(value))
+    }
+}
+
+#[cfg(feature = "testutils")]
+impl<'a> arbitrary::Arbitrary<'a> for SettlementJobId {
+    fn arbitrary(input: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self(ulid::Ulid::from(
+            <u128 as arbitrary::Arbitrary>::arbitrary(input)?,
+        )))
     }
 }
 
