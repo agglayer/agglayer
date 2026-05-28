@@ -1,0 +1,6 @@
+---
+source: crates/agglayer-storage/src/types/network_info/mod.rs
+expression: encoded_hex
+snapshot_kind: text
+---
+0102030400000002

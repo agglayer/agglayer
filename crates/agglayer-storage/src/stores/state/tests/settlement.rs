@@ -31,7 +31,7 @@ use crate::{
 };
 
 fn mk_job_id(seed: u128) -> SettlementJobId {
-    SettlementJobId::from(ulid::Ulid::from(seed))
+    SettlementJobId::from(seed)
 }
 
 fn mk_settlement_job(seed: u8) -> SettlementJob {
