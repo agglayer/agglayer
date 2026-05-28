@@ -18,7 +18,10 @@
 //! (for rollback) but unused at runtime; their contents are exactly what
 //! the scan reports on.
 
-use std::path::{Path, PathBuf};
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     columns::{
@@ -64,27 +67,41 @@ pub enum ScanError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("failed to iterate {cf} for {source}: {error}")]
+    LegacyCfIterator {
+        source: String,
+        cf: &'static str,
+        #[source]
+        error: rocksdb::Error,
+    },
+}
+
+struct EpochDirEntry {
+    file_name: OsString,
+    path: PathBuf,
+    is_dir: bool,
 }
 
 /// Scan the legacy `pending_queue` CF in the pending DB and return rows
 /// whose value bytes fail to decode as a `LegacyCertificate`.
 pub fn scan_unparsable_pending_rows(db_path: &Path) -> Result<Vec<UnparsableRow>, ScanError> {
     let db = open_readonly_v0(db_path, PENDING_DB_V0)?;
-    Ok(scan_legacy_cf(
+    scan_legacy_cf(
         &db,
         PendingQueueColumn::COLUMN_FAMILY_NAME,
         "pending".into(),
-    ))
+    )
 }
 
 /// Scan the legacy `debug_certificates` CF in the debug DB.
 pub fn scan_unparsable_debug_rows(db_path: &Path) -> Result<Vec<UnparsableRow>, ScanError> {
     let db = open_readonly_v0(db_path, DEBUG_DB_V0)?;
-    Ok(scan_legacy_cf(
+    scan_legacy_cf(
         &db,
         DebugCertificatesColumn::COLUMN_FAMILY_NAME,
         "debug".into(),
-    ))
+    )
 }
 
 /// Scan the legacy `epoch_certificate_per_index` CF in every numeric
@@ -96,26 +113,66 @@ pub fn scan_unparsable_epoch_rows(epochs_db_path: &Path) -> Result<Vec<Unparsabl
         source,
     })?;
 
-    let mut numeric_dirs: Vec<(u64, PathBuf)> = entries
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .filter_map(|e| {
-            let n = e.file_name().to_str()?.parse::<u64>().ok()?;
-            Some((n, e.path()))
+    let mut numeric_dirs = collect_numeric_epoch_dirs(entries.map(|entry| {
+        let entry = entry.map_err(|source| ScanError::EpochDir {
+            path: epochs_db_path.to_path_buf(),
+            source,
+        })?;
+        let path = entry.path();
+        let file_type = entry.file_type().map_err(|source| ScanError::EpochDir {
+            path: path.clone(),
+            source,
+        })?;
+
+        Ok(EpochDirEntry {
+            file_name: entry.file_name(),
+            path,
+            is_dir: file_type.is_dir(),
         })
-        .collect();
+    }))?;
     numeric_dirs.sort_by_key(|(n, _)| *n);
 
+    scan_unparsable_epoch_dirs(&numeric_dirs)
+}
+
+fn collect_numeric_epoch_dirs<I>(entries: I) -> Result<Vec<(u64, PathBuf)>, ScanError>
+where
+    I: IntoIterator<Item = Result<EpochDirEntry, ScanError>>,
+{
+    let mut numeric_dirs = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        if !entry.is_dir {
+            continue;
+        }
+        let Some(n) = entry.file_name.to_str().and_then(|s| s.parse::<u64>().ok()) else {
+            continue;
+        };
+        numeric_dirs.push((n, entry.path));
+    }
+    Ok(numeric_dirs)
+}
+
+pub(crate) fn scan_unparsable_epoch_dirs(
+    numeric_dirs: &[(u64, PathBuf)],
+) -> Result<Vec<UnparsableRow>, ScanError> {
     let mut out = Vec::new();
     for (n, path) in numeric_dirs {
-        let db = open_readonly_v0(&path, EPOCHS_DB_V0)?;
-        out.extend(scan_legacy_cf(
-            &db,
-            CertificatePerIndexColumn::COLUMN_FAMILY_NAME,
-            format!("epoch {n}"),
-        ));
+        out.extend(scan_unparsable_epoch_dir(*n, path)?);
     }
     Ok(out)
+}
+
+pub(crate) fn scan_unparsable_epoch_dir(
+    epoch: u64,
+    db_path: &Path,
+) -> Result<Vec<UnparsableRow>, ScanError> {
+    let db = open_readonly_v0(db_path, EPOCHS_DB_V0)?;
+    scan_legacy_cf(
+        &db,
+        CertificatePerIndexColumn::COLUMN_FAMILY_NAME,
+        format!("epoch {epoch}"),
+    )
 }
 
 fn open_readonly_v0(
@@ -132,12 +189,16 @@ fn open_readonly_v0(
 /// value decoding upfront), then attempt `LegacyCertificate::decode` on
 /// each value. Decode failures land in the returned vector with the raw
 /// key bytes as hex; success rows are silently dropped.
-fn scan_legacy_cf(db: &DB, cf_name: &'static str, source: String) -> Vec<UnparsableRow> {
+fn scan_legacy_cf(
+    db: &DB,
+    cf_name: &'static str,
+    source: String,
+) -> Result<Vec<UnparsableRow>, ScanError> {
     let Some(cf) = db.raw_rocksdb().cf_handle(cf_name) else {
         // CF missing on disk: nothing to scan. Shouldn't happen when
         // we've opened with the V0 schema (which lists the legacy CFs),
         // but treat defensively.
-        return Vec::new();
+        return Ok(Vec::new());
     };
 
     let mut iter = db.raw_rocksdb().raw_iterator_cf(&cf);
@@ -157,7 +218,14 @@ fn scan_legacy_cf(db: &DB, cf_name: &'static str, source: String) -> Vec<Unparsa
         }
         iter.next();
     }
-    out
+
+    iter.status().map_err(|error| ScanError::LegacyCfIterator {
+        source,
+        cf: cf_name,
+        error,
+    })?;
+
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -405,6 +473,19 @@ mod tests {
 
         let result = scan_unparsable_epoch_rows(&epochs_dir).unwrap();
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn epoch_scan_discovery_propagates_entry_errors() {
+        let path = PathBuf::from("epochs");
+        let entries: [Result<EpochDirEntry, ScanError>; 1] = [Err(ScanError::EpochDir {
+            path: path.clone(),
+            source: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "entry failed"),
+        })];
+
+        let error = collect_numeric_epoch_dirs(entries).unwrap_err();
+
+        assert!(matches!(error, ScanError::EpochDir { path: p, .. } if p == path));
     }
 
     #[test]

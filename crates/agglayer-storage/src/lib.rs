@@ -10,6 +10,7 @@ pub mod backup;
 pub mod columns;
 pub mod diagnostics;
 pub mod error;
+pub mod migrate;
 pub mod stores;
 pub mod types;
 
