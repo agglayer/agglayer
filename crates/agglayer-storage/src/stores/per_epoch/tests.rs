@@ -19,10 +19,11 @@ use crate::{
     columns::epochs::{
         certificates::{CertificatePerIndexColumn, CertificatePerIndexProtoColumn},
         end_checkpoint::EndCheckpointColumn,
+        proofs::{ProofPerIndexColumn, ProofPerIndexProtoColumn},
         start_checkpoint::StartCheckpointColumn,
     },
     error::Error,
-    schema::{Codec as _, ColumnSchema as _},
+    schema::{bincode_codec, Codec as _, ColumnSchema as _},
     stores::{
         epochs::EpochsStore,
         interfaces::writer::{PerEpochWriter, StateWriter},
@@ -97,6 +98,26 @@ fn read_raw_proto_epoch_certificate_bytes(
         .to_vec()
 }
 
+fn read_raw_proto_epoch_proof_bytes(
+    store: &PerEpochStore<PendingStore, StateStore>,
+    index: CertificateIndex,
+) -> Vec<u8> {
+    let key = index.encode().unwrap();
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(ProofPerIndexProtoColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+
+    store
+        .db
+        .raw_rocksdb()
+        .get_cf(&cf, key)
+        .unwrap()
+        .unwrap()
+        .to_vec()
+}
+
 fn load_v0_certificate_bytes(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src/types/certificate/tests/encoded")
@@ -120,11 +141,37 @@ fn write_raw_epoch_certificate_bytes(
     db.raw_rocksdb().put_cf(&cf, key, value).unwrap();
 }
 
+fn write_raw_epoch_legacy_proof_bytes(
+    path: &std::path::Path,
+    index: CertificateIndex,
+    value: Vec<u8>,
+) {
+    let db = crate::storage::DB::open_cf(path, super::cf_definitions::EPOCHS_DB_V0).unwrap();
+    let key = index.encode().unwrap();
+    let cf = db
+        .raw_rocksdb()
+        .cf_handle(ProofPerIndexColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+
+    db.raw_rocksdb().put_cf(&cf, key, value).unwrap();
+}
+
 fn seed_epoch_checkpoints(path: &std::path::Path, network_id: NetworkId, height: Height) {
     let db = crate::storage::DB::open_cf(path, super::cf_definitions::EPOCHS_DB_V0).unwrap();
     db.put::<StartCheckpointColumn>(&network_id, &height)
         .unwrap();
     db.put::<EndCheckpointColumn>(&network_id, &height).unwrap();
+}
+
+fn load_legacy_proof_bytes(proof: &Proof) -> Vec<u8> {
+    bincode_codec().serialize(proof).unwrap()
+}
+
+fn assert_same_proof(left: &Proof, right: &Proof) {
+    assert_eq!(
+        bincode_codec().serialize(left).unwrap(),
+        bincode_codec().serialize(right).unwrap()
+    );
 }
 
 #[rstest]
@@ -160,6 +207,46 @@ fn add_certificate_writes_proto_bytes_to_epoch_store(
     let decoded = Certificate::try_from(proto).unwrap();
 
     assert_eq!(decoded, certificate);
+}
+
+#[rstest]
+fn add_certificate_writes_proto_proof_bytes_to_epoch_store(
+    store: PerEpochStore<PendingStore, StateStore>,
+) {
+    let network = NetworkId::new(2);
+    let height = Height::ZERO;
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let expected = Proof::dummy();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+
+    pending_store
+        .insert_generated_proof(&certificate_id, &expected)
+        .unwrap();
+
+    let (_, index) = store
+        .add_certificate(certificate_id, agglayer_types::ExecutionMode::Default)
+        .unwrap();
+
+    let raw = read_raw_proto_epoch_proof_bytes(&store, index);
+    let proto = v0::PessimisticStoredProof::decode(raw.as_slice())
+        .expect("epoch proofs should be stored as proto");
+    let decoded = Proof::decode(raw.as_slice()).unwrap();
+
+    assert_same_proof(&decoded, &expected);
+    assert_eq!(
+        proto.proof.unwrap().proof_system,
+        v0::ProofSystem::Sp1 as i32
+    );
 }
 
 #[rstest]
@@ -224,6 +311,50 @@ fn reopening_epoch_store_migrates_legacy_certificate_rows_to_proto() {
     assert_eq!(
         read_raw_legacy_epoch_certificate_bytes(&store, index),
         legacy
+    );
+}
+
+#[test]
+fn reopening_epoch_store_migrates_legacy_proof_rows_to_proto() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let epoch_number = EpochNumber::ZERO;
+    let epoch_path = config.storage.epoch_db_path(epoch_number);
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let expected = Proof::dummy();
+    let index = CertificateIndex::ZERO;
+    let network_id = NetworkId::new(15);
+    let height = Height::ZERO;
+
+    seed_epoch_checkpoints(&epoch_path, network_id, height);
+    write_raw_epoch_legacy_proof_bytes(&epoch_path, index, load_legacy_proof_bytes(&expected));
+
+    let store = PerEpochStore::try_open(
+        config,
+        epoch_number,
+        pending_store,
+        state_store,
+        Some(std::iter::once((network_id, height)).collect()),
+        BackupClient::noop(),
+    )
+    .unwrap();
+
+    let migrated = store.get_proof_at_index(index).unwrap().unwrap();
+    assert_same_proof(&migrated, &expected);
+
+    let raw = read_raw_proto_epoch_proof_bytes(&store, index);
+    let proto = v0::PessimisticStoredProof::decode(raw.as_slice())
+        .expect("legacy epoch proof rows should migrate");
+    let decoded = Proof::decode(raw.as_slice()).unwrap();
+
+    assert_same_proof(&decoded, &expected);
+    assert_eq!(
+        proto.proof.unwrap().proof_system,
+        v0::ProofSystem::Sp1 as i32
     );
 }
 
