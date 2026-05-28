@@ -61,7 +61,6 @@ prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0
 prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
 prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
 prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
-prprover-uti = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
