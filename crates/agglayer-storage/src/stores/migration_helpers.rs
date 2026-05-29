@@ -103,7 +103,8 @@ where
 }
 
 /// Stream every row in the legacy proof CF `L` into the proto CF `P`, skipping
-/// rows whose bytes cannot be decoded as a proof.
+/// rows whose bytes cannot be decoded as a proof or re-encoded into the proto
+/// envelope.
 pub(crate) fn copy_legacy_proof_cf_into_proto<L, P>(
     db: &DbAccess,
     label: &str,
@@ -121,8 +122,23 @@ where
         match db.get::<L>(&key) {
             Ok(Some(legacy)) => {
                 let proof = Proof::from(legacy);
-                db.put::<P>(&key, &proof)?;
-                migrated += 1;
+                match db.put::<P>(&key, &proof) {
+                    Ok(()) => migrated += 1,
+                    Err(DBMigrationErrorDetails::Database(DBError::CodecError(codec_error))) => {
+                        error!(
+                            legacy_cf = L::COLUMN_FAMILY_NAME,
+                            proto_cf = P::COLUMN_FAMILY_NAME,
+                            label,
+                            ?key,
+                            error = %codec_error,
+                            "skipping legacy proof row that cannot be re-encoded into the proto \
+                             CF; the legacy bytes remain on disk for operator cleanup, but runtime \
+                             reads will not surface this proof after migration",
+                        );
+                        skipped += 1;
+                    }
+                    Err(other) => return Err(other),
+                }
             }
             Ok(None) => {
                 debug!(

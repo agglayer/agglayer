@@ -98,6 +98,23 @@ fn read_raw_proto_proof_bytes(store: &PendingStore, certificate_id: CertificateI
         .to_vec()
 }
 
+fn read_raw_legacy_proof_bytes(store: &PendingStore, certificate_id: CertificateId) -> Vec<u8> {
+    let key = certificate_id.encode().unwrap();
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(ProofPerCertificateColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+
+    store
+        .db
+        .raw_rocksdb()
+        .get_cf(&cf, key)
+        .unwrap()
+        .unwrap()
+        .to_vec()
+}
+
 fn write_raw_legacy_proof_bytes(
     path: &std::path::Path,
     certificate_id: CertificateId,
@@ -138,6 +155,14 @@ fn load_v0_certificate_bytes(name: &str) -> Vec<u8> {
 
 fn load_legacy_proof_bytes(proof: &Proof) -> Vec<u8> {
     bincode_codec().serialize(proof).unwrap()
+}
+
+fn malformed_legacy_proof_bytes() -> Vec<u8> {
+    let mut proof = Proof::dummy();
+    let Proof::SP1(sp1) = &mut proof;
+    sp1.public_values
+        .write_slice(b"not a pessimistic proof output");
+    load_legacy_proof_bytes(&proof)
 }
 
 fn assert_same_proof(left: &Proof, right: &Proof) {
@@ -301,4 +326,22 @@ fn reopening_pending_store_skips_unparsable_legacy_proof_rows() {
 
     assert_same_proof(&store.get_proof(good_id).unwrap().unwrap(), &expected);
     assert!(store.get_proof(bad_id).unwrap().is_none());
+}
+
+#[test]
+fn reopening_pending_store_skips_legacy_proof_rows_that_fail_proto_reencode() {
+    let tmp = TempDBDir::new();
+    let good_id = CertificateId::new([0x33; 32].into());
+    let bad_id = CertificateId::new([0x44; 32].into());
+    let expected = Proof::dummy();
+    let bad_legacy = malformed_legacy_proof_bytes();
+
+    write_raw_legacy_proof_bytes(&tmp.path, good_id, load_legacy_proof_bytes(&expected));
+    write_raw_legacy_proof_bytes(&tmp.path, bad_id, bad_legacy.clone());
+
+    let store = PendingStore::new_with_path(&tmp.path).expect("migration should not abort");
+
+    assert_same_proof(&store.get_proof(good_id).unwrap().unwrap(), &expected);
+    assert!(store.get_proof(bad_id).unwrap().is_none());
+    assert_eq!(read_raw_legacy_proof_bytes(&store, bad_id), bad_legacy);
 }

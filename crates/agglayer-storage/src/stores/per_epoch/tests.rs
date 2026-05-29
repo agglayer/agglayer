@@ -118,6 +118,26 @@ fn read_raw_proto_epoch_proof_bytes(
         .to_vec()
 }
 
+fn read_raw_legacy_epoch_proof_bytes(
+    store: &PerEpochStore<PendingStore, StateStore>,
+    index: CertificateIndex,
+) -> Vec<u8> {
+    let key = index.encode().unwrap();
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(ProofPerIndexColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+
+    store
+        .db
+        .raw_rocksdb()
+        .get_cf(&cf, key)
+        .unwrap()
+        .unwrap()
+        .to_vec()
+}
+
 fn load_v0_certificate_bytes(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src/types/certificate/tests/encoded")
@@ -165,6 +185,14 @@ fn seed_epoch_checkpoints(path: &std::path::Path, network_id: NetworkId, height:
 
 fn load_legacy_proof_bytes(proof: &Proof) -> Vec<u8> {
     bincode_codec().serialize(proof).unwrap()
+}
+
+fn malformed_legacy_proof_bytes() -> Vec<u8> {
+    let mut proof = Proof::dummy();
+    let Proof::SP1(sp1) = &mut proof;
+    sp1.public_values
+        .write_slice(b"not a pessimistic proof output");
+    load_legacy_proof_bytes(&proof)
 }
 
 fn assert_same_proof(left: &Proof, right: &Proof) {
@@ -355,6 +383,49 @@ fn reopening_epoch_store_migrates_legacy_proof_rows_to_proto() {
     assert_eq!(
         proto.proof.unwrap().proof_system,
         v0::ProofSystem::Sp1 as i32
+    );
+}
+
+#[test]
+fn reopening_epoch_store_skips_legacy_proof_rows_that_fail_proto_reencode() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let epoch_number = EpochNumber::ZERO;
+    let epoch_path = config.storage.epoch_db_path(epoch_number);
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let expected = Proof::dummy();
+    let good_index = CertificateIndex::ZERO;
+    let bad_index = CertificateIndex::new(1);
+    let bad_legacy = malformed_legacy_proof_bytes();
+    let network_id = NetworkId::new(15);
+    let height = Height::ZERO;
+
+    seed_epoch_checkpoints(&epoch_path, network_id, height);
+    write_raw_epoch_legacy_proof_bytes(&epoch_path, good_index, load_legacy_proof_bytes(&expected));
+    write_raw_epoch_legacy_proof_bytes(&epoch_path, bad_index, bad_legacy.clone());
+
+    let store = PerEpochStore::try_open(
+        config,
+        epoch_number,
+        pending_store,
+        state_store,
+        Some(std::iter::once((network_id, height)).collect()),
+        BackupClient::noop(),
+    )
+    .expect("migration should not abort");
+
+    assert_same_proof(
+        &store.get_proof_at_index(good_index).unwrap().unwrap(),
+        &expected,
+    );
+    assert!(store.get_proof_at_index(bad_index).unwrap().is_none());
+    assert_eq!(
+        read_raw_legacy_epoch_proof_bytes(&store, bad_index),
+        bad_legacy
     );
 }
 
