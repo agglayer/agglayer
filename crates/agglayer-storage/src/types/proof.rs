@@ -19,10 +19,7 @@ pub enum ProofConversionError {
     MissingField(&'static str),
 
     #[error("invalid data for `{field}`: {reason}")]
-    InvalidData {
-        field: &'static str,
-        reason: String,
-    },
+    InvalidData { field: &'static str, reason: String },
 
     #[error("unsupported proof system `{proof_system}`")]
     UnsupportedProofSystem { proof_system: i32 },
@@ -44,10 +41,12 @@ fn expect_bytes<const N: usize>(
     bytes: &[u8],
     field: &'static str,
 ) -> Result<[u8; N], ProofConversionError> {
-    bytes.try_into().map_err(|_| ProofConversionError::InvalidData {
-        field,
-        reason: format!("expected {N} bytes, got {}", bytes.len()),
-    })
+    bytes
+        .try_into()
+        .map_err(|_| ProofConversionError::InvalidData {
+            field,
+            reason: format!("expected {N} bytes, got {}", bytes.len()),
+        })
 }
 
 fn stored_proof_mode(proof: &StoredProof) -> i32 {
@@ -510,8 +509,8 @@ mod tests {
         let proof = sample_stored_proof();
 
         let bytes = proof.encode().unwrap();
-        let proto = <proto::PessimisticStoredProof as prost::Message>::decode(bytes.as_slice())
-            .unwrap();
+        let proto =
+            <proto::PessimisticStoredProof as prost::Message>::decode(bytes.as_slice()).unwrap();
         let decoded = StoredProof::decode(bytes.as_slice()).unwrap();
 
         assert_same_stored_proof(&decoded, &proof);
@@ -528,12 +527,15 @@ mod tests {
         let proof = StoredProof::dummy();
 
         let bytes = proof.encode().unwrap();
-        let proto = <proto::PessimisticStoredProof as prost::Message>::decode(bytes.as_slice())
-            .unwrap();
+        let proto =
+            <proto::PessimisticStoredProof as prost::Message>::decode(bytes.as_slice()).unwrap();
         let decoded = StoredProof::decode(bytes.as_slice()).unwrap();
 
         assert_same_stored_proof(&decoded, &proof);
         assert!(proto.public_values.is_none());
-        assert_eq!(proto.proof.unwrap().mode, proto::ProofMode::Unspecified as i32);
+        assert_eq!(
+            proto.proof.unwrap().mode,
+            proto::ProofMode::Unspecified as i32
+        );
     }
 }
