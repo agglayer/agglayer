@@ -135,9 +135,10 @@ where
                 loop {
                     tick.tick().await;
 
+                    let finalization_requirement = BlockNumberOrTag::Safe;
                     finalized_block_number = self
                         .rpc
-                        .get_block(BlockId::Number(BlockNumberOrTag::Finalized))
+                        .get_block(BlockId::Number(finalization_requirement))
                         .await
                         .ok()
                         .flatten()
@@ -145,9 +146,9 @@ where
                         .ok_or(L1RpcError::LatestFinalizedBlockNotFound)?;
 
                     debug!(
-                        "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \
-                         Latest finalized block: {}",
-                        l1_leaf_count, event_block_number, finalized_block_number,
+                        "Awaiting L1 info tree leaf count ({l1_leaf_count}) set at block \
+                         {event_block_number} to be {finalization_requirement}. Latest \
+                         {finalization_requirement} block: {finalized_block_number}",
                     );
 
                     // Check whether the block number containing the event is now finalized.
