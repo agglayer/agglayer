@@ -1,12 +1,13 @@
 use std::time::Duration;
 
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{CertificateId, CertificateStatus};
+use agglayer_types::{CertificateId, CertificateStatus, CertificateStatusError};
 use fail::FailScenario;
 use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
+use tokio_util::sync::CancellationToken;
 
 #[rstest]
 #[tokio::test]
@@ -17,6 +18,7 @@ async fn transaction_with_receipt_status_0(#[case] state: Forest) {
     // Certificate should become `InError`.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
 
     fail::cfg(
         "notifier::packer::settle_certificate::receipt_future_ended::status_0",
@@ -25,7 +27,8 @@ async fn transaction_with_receipt_status_0(#[case] state: Forest) {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (agglayer_shutdowned, _l1, client) =
+        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
 
@@ -40,6 +43,9 @@ async fn transaction_with_receipt_status_0(#[case] state: Forest) {
 
     assert!(matches!(result.status, CertificateStatus::InError { .. }));
 
+    cancellation_token.cancel();
+    _ = agglayer_shutdowned.await;
+
     scenario.teardown();
 }
 
@@ -52,6 +58,7 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
     // retry it. Transaction should be settled eventually.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
 
     fail::cfg(
         "notifier::packer::settle_certificate::gas_estimate::low_gas",
@@ -60,7 +67,8 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (agglayer_shutdowned, _l1, client) =
+        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
 
@@ -91,6 +99,9 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
 
     assert!(matches!(result.status, CertificateStatus::Settled));
 
+    cancellation_token.cancel();
+    _ = agglayer_shutdowned.await;
+
     scenario.teardown();
 }
 
@@ -102,6 +113,7 @@ async fn transaction_without_receipt_status(#[case] state: Forest) {
     // If transaction is lost or not included,
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
 
     fail::cfg(
         "notifier::packer::settle_certificate::receipt_future_ended::no_receipt",
@@ -110,7 +122,8 @@ async fn transaction_without_receipt_status(#[case] state: Forest) {
     .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (agglayer_shutdowned, _l1, client) =
+        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
 
@@ -125,6 +138,9 @@ async fn transaction_without_receipt_status(#[case] state: Forest) {
 
     assert!(matches!(result.status, CertificateStatus::InError { .. }));
 
+    cancellation_token.cancel();
+    _ = agglayer_shutdowned.await;
+
     scenario.teardown();
 }
 
@@ -138,6 +154,7 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
     // too many transactions
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
 
     fail::cfg(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
@@ -149,7 +166,12 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
     config.outbound.rpc.settle_cert.confirmations = 50;
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, Some(config), None).await;
+    let (agglayer_shutdowned, _l1, client) = setup_network(
+        &tmp_dir.path,
+        Some(config),
+        Some(cancellation_token.clone()),
+    )
+    .await;
 
     let withdrawals = vec![];
 
@@ -166,17 +188,22 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
     // transactions
     match result.status {
         CertificateStatus::InError { error } => {
-            let error_message = error.to_string();
             assert!(
-                error_message.contains(
-                    "Too many different settlement transactions submitted for the same certificate"
+                matches!(
+                    &*error,
+                    CertificateStatusError::SettlementError(detail)
+                        if detail.starts_with(
+                            "Too many different settlement transactions submitted for the same certificate:"
+                        )
                 ),
-                "Expected error message about too many settlement transactions, but got: \
-                 {error_message}"
+                "Expected settlement error about too many transactions, but got: {error:?}"
             );
         }
         status => panic!("Expected InError status, but got: {status:?}"),
     }
+
+    cancellation_token.cancel();
+    _ = agglayer_shutdowned.await;
 
     scenario.teardown();
 }
@@ -190,6 +217,7 @@ async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
     // then the certificate should be settled
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
 
     fail::cfg(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
@@ -201,7 +229,12 @@ async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
     config.outbound.rpc.settle_cert.confirmations = 2;
 
     // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, Some(config), None).await;
+    let (agglayer_shutdowned, _l1, client) = setup_network(
+        &tmp_dir.path,
+        Some(config),
+        Some(cancellation_token.clone()),
+    )
+    .await;
 
     let withdrawals = vec![];
 
@@ -215,6 +248,9 @@ async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
 
     assert!(matches!(result.status, CertificateStatus::Settled));
+
+    cancellation_token.cancel();
+    _ = agglayer_shutdowned.await;
 
     scenario.teardown();
 }

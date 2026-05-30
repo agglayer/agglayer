@@ -1,25 +1,71 @@
-use std::time::Duration;
+use std::path::PathBuf;
 
+use alloy::{
+    network::Ethereum,
+    node_bindings::{Anvil, AnvilInstance},
+    providers::{Provider as _, RootProvider},
+};
 use tokio::process::Command;
 
+const L1_BACKEND_ENV: &str = "AGGLAYER_INTEGRATION_L1_BACKEND";
+const L1_FIXTURE_ENV: &str = "AGGLAYER_INTEGRATION_L1_FIXTURE";
+const ANVIL_BACKEND: &str = "anvil";
+const DOCKER_BACKEND: &str = "docker";
+const DEFAULT_ANVIL_FIXTURE: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/anvil-l1/state.hex");
+
+enum L1Instance {
+    Docker { id: String },
+    Anvil { _instance: AnvilInstance },
+}
+
 pub struct L1Docker {
-    id: String,
+    inner: L1Instance,
     pub ws: String,
     pub rpc: String,
 }
 
 impl L1Docker {
     pub async fn new(name: String) -> Self {
-        let ws_port = next_available_addr().port();
-        let rpc_port = next_available_addr().port();
+        match std::env::var(L1_BACKEND_ENV) {
+            Ok(backend) if backend == ANVIL_BACKEND => Self::new_anvil().await,
+            Ok(backend) if backend == DOCKER_BACKEND => Self::new_docker(name).await,
+            Ok(backend) => panic!(
+                "Unsupported L1 backend `{backend}`. Supported values: `{ANVIL_BACKEND}`, \
+                 `{DOCKER_BACKEND}`, or unset"
+            ),
+            Err(std::env::VarError::NotPresent) => Self::new_anvil().await,
+            Err(error) => panic!("Failed to read {L1_BACKEND_ENV}: {error}"),
+        }
+    }
 
+    async fn new_anvil() -> Self {
+        let anvil = Anvil::new()
+            .chain_id(1337u64)
+            .block_time(1u64)
+            .arg("--auto-impersonate")
+            .spawn();
+
+        let rpc = anvil.endpoint_url().to_string();
+        let ws = anvil.ws_endpoint();
+        wait_for_rpc(&rpc).await;
+        load_anvil_fixture(&rpc).await;
+
+        Self {
+            inner: L1Instance::Anvil { _instance: anvil },
+            ws,
+            rpc,
+        }
+    }
+
+    async fn new_docker(name: String) -> Self {
         let docker = Command::new("docker")
             .args([
                 "run",
                 "-p",
-                &format!("{rpc_port}:8545"),
+                "127.0.0.1::8545",
                 "-p",
-                &format!("{ws_port}:8546"),
+                "127.0.0.1::8546",
                 "-d",
                 "--name",
                 &name,
@@ -36,23 +82,122 @@ impl L1Docker {
         }
 
         let id = String::from_utf8(docker.stdout).unwrap().replace('\n', "");
+        let rpc_port = docker_published_port(&id, "8545/tcp").await;
+        let ws_port = docker_published_port(&id, "8546/tcp").await;
         let ws = format!("ws://127.0.0.1:{ws_port}");
         let rpc = format!("http://127.0.0.1:{rpc_port}");
 
-        // Add delay to ensure the container is ready
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        Self { id, ws, rpc }
+        wait_for_rpc(&rpc).await;
+
+        Self {
+            inner: L1Instance::Docker { id },
+            ws,
+            rpc,
+        }
     }
+}
+
+async fn docker_published_port(id: &str, container_port: &str) -> u16 {
+    let output = Command::new("docker")
+        .args(["port", id, container_port])
+        .output()
+        .await
+        .unwrap_or_else(|error| panic!("Failed to inspect Docker port {container_port}: {error}"));
+
+    if !output.status.success() {
+        panic!(
+            "Failed to inspect Docker port {container_port}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let binding = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .next()
+        .unwrap_or_else(|| panic!("Missing published port for {container_port}"))
+        .trim()
+        .to_owned();
+
+    binding
+        .rsplit(':')
+        .next()
+        .unwrap_or_else(|| panic!("Unexpected Docker port binding: {binding}"))
+        .parse()
+        .unwrap_or_else(|error| panic!("Invalid Docker published port in `{binding}`: {error}"))
 }
 
 impl Drop for L1Docker {
     fn drop(&mut self) {
-        println!("Removing docker container {}", self.id);
-        std::process::Command::new("docker")
-            .args(["rm", "-f", &self.id])
-            .output()
-            .expect("Failed to remove docker container");
+        if let L1Instance::Docker { id } = &self.inner {
+            println!("Removing docker container {id}");
+            std::process::Command::new("docker")
+                .args(["rm", "-f", id])
+                .output()
+                .expect("Failed to remove docker container");
+        }
     }
+}
+
+fn fixture_path() -> PathBuf {
+    std::env::var_os(L1_FIXTURE_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ANVIL_FIXTURE))
+}
+
+async fn load_anvil_fixture(rpc: &str) {
+    let fixture_path = fixture_path();
+    let fixture = std::fs::read_to_string(&fixture_path).unwrap_or_else(|error| {
+        panic!(
+            "Failed to read Anvil fixture {}: {error}",
+            fixture_path.display()
+        )
+    });
+    let fixture = fixture.trim().trim_matches('"');
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(rpc)
+        .json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "anvil_loadState",
+            "params": [fixture],
+        }))
+        .send()
+        .await
+        .unwrap_or_else(|error| panic!("Failed to load Anvil fixture over {rpc}: {error}"));
+    let status = response.status();
+    let payload: serde_json::Value = response
+        .json()
+        .await
+        .unwrap_or_else(|error| panic!("Failed to decode Anvil fixture load response: {error}"));
+
+    if !status.is_success() {
+        panic!("Anvil fixture load failed with status {status}: {payload}");
+    }
+
+    if let Some(error) = payload.get("error") {
+        panic!("Anvil fixture load returned RPC error: {error}");
+    }
+
+    wait_for_rpc(rpc).await;
+}
+
+async fn wait_for_rpc(rpc: &str) {
+    let url = reqwest::Url::parse(rpc).unwrap();
+
+    for _ in 0..60 {
+        let provider = RootProvider::<Ethereum>::new_http(url.clone());
+
+        if provider.get_block_number().await.is_ok() {
+            return;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+
+    panic!("L1 RPC endpoint never became ready: {rpc}");
 }
 
 pub fn next_available_addr() -> std::net::SocketAddr {
