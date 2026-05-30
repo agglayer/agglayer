@@ -15,7 +15,7 @@ impl ExecutionMode {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, thiserror::Error, PartialEq, Eq)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum GenerationType {
     Native,
     Prover,
