@@ -40,12 +40,6 @@ fn mk_settlement_job(seed: u8) -> SettlementJob {
         calldata: vec![seed, seed.wrapping_add(1)].into(),
         eth_value: U256::from_be_bytes([seed; 32]),
         gas_limit: u128::from_be_bytes([seed; 16]),
-        max_fee_per_gas_ceiling: u128::from_be_bytes([seed.wrapping_add(1); 16]),
-        max_fee_per_gas_floor: u128::from_be_bytes([seed.wrapping_add(2); 16]),
-        max_fee_per_gas_increase_percents: 10,
-        max_priority_fee_per_gas_ceiling: u128::from_be_bytes([seed.wrapping_add(3); 16]),
-        max_priority_fee_per_gas_floor: u128::from_be_bytes([seed.wrapping_add(4); 16]),
-        max_priority_fee_per_gas_increase_percents: 20,
     }
 }
 
@@ -53,8 +47,6 @@ fn mk_settlement_attempt(seed: u64) -> SettlementAttempt {
     SettlementAttempt {
         sender_wallet: Address::from([(seed as u8).wrapping_add(1); 20]),
         nonce: Nonce(seed),
-        max_fee_per_gas: u128::from_be_bytes([(seed as u8).wrapping_add(2); 16]),
-        max_priority_fee_per_gas: u128::from_be_bytes([(seed as u8).wrapping_add(3); 16]),
         hash: SettlementTxHash::new(Digest::from([(seed as u8).wrapping_add(4); 32])),
         submission_time: SystemTime::UNIX_EPOCH + Duration::from_secs(seed),
     }

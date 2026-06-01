@@ -4,7 +4,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use agglayer_config::settlement_service::TxRetryPolicy;
+use agglayer_config::settlement_service::{SettlementPolicy, SettlementTransactionConfig};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
@@ -12,19 +12,55 @@ use agglayer_types::{
     SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 use alloy::{
-    consensus::{EthereumTxEnvelope, TxEip4844Variant},
-    primitives::Address,
+    consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
+    eips::BlockNumberOrTag,
+    network::{BlockResponse as _, ReceiptResponse as _},
+    primitives::{Address, TxHash},
     providers::Provider,
     transports::TransportError,
 };
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use crate::utils::RetryCallbackError;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
+/// Returns the minimum selected settlement-head block number required for a
+/// transaction receipt to be considered settled.
+///
+/// `receipt_block_number` is the block that included the transaction.
+/// `confirmations` is inclusive of that block, so 0 or 1 confirmations settle
+/// at `receipt_block_number`, while 2 confirmations require the selected head
+/// (`latest`, `safe`, or `finalized`) to be at least one block later.
+fn required_settlement_head_number(receipt_block_number: u64, confirmations: usize) -> u64 {
+    let confirmation_offset = confirmations.saturating_sub(1);
+    let confirmation_offset = confirmation_offset.try_into().unwrap_or(u64::MAX);
+
+    receipt_block_number.saturating_add(confirmation_offset)
+}
+
+#[derive(Debug)]
+enum WaitForSettlementError {
+    NotSettledYet,
+    Transport(TransportError),
+}
+
+impl WaitForSettlementError {
+    fn is_transient(&self) -> bool {
+        match self {
+            Self::NotSettledYet => true,
+            Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
+        }
+    }
+}
+
+impl From<TransportError> for WaitForSettlementError {
+    fn from(error: TransportError) -> Self {
+        Self::Transport(error)
+    }
+}
 #[derive(Debug, thiserror::Error)]
 #[error(
     "assumed non-recoverable in settlement task {settlement_task_id} at {file}:{line}: \
@@ -106,6 +142,7 @@ struct ActiveSettlementAttempt {
 pub struct SettlementTask<L1Provider, SettlementStore> {
     id: SettlementJobId,
     job: SettlementJob,
+    tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     control: TaskControl,
@@ -120,6 +157,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
 {
     pub async fn create(
         job: SettlementJob,
+        tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
         control: TaskControl,
@@ -138,6 +176,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         let this = Self {
             id,
             job,
+            tx_config,
             provider,
             store,
             control,
@@ -149,6 +188,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
 
     pub async fn load(
         id: SettlementJobId,
+        tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
         control: TaskControl,
@@ -160,6 +200,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
             let mut this = SettlementTask {
                 id,
                 job,
+                tx_config,
                 provider,
                 store,
                 control,
@@ -235,7 +276,11 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                         reverts.insert((wallet, nonce), (attempt_number, tx_hash, tx_result));
                         continue 'nonces;
                     }
-                    let Some(settled_result) = self.wait_for_settlement_of(tx_hash).await else {
+                    let settlement_result = retry!(
+                        self.wait_for_settlement_of(tx_hash).await,
+                        "waiting for settlement of tx {tx_hash}",
+                    );
+                    let Some(settled_result) = settlement_result else {
                         continue 'start; // reorg
                     };
                     if settled_result != tx_result {
@@ -300,7 +345,11 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                     .clone();
                 for (wallet, nonce) in self.all_used_nonces() {
                     if let Some(tx_hash) = nonces_used_externally.remove(&(wallet, nonce)) {
-                        if self.wait_for_settlement_of(tx_hash).await.is_none() {
+                        let settlement_result = retry!(
+                            self.wait_for_settlement_of(tx_hash).await,
+                            "waiting for settlement of externally-used tx {tx_hash}",
+                        );
+                        if settlement_result.is_none() {
                             continue 'start; // reorg
                         }
                         self.write_nonce_used_externally_to_db(wallet, nonce, tx_hash)
@@ -308,8 +357,11 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                     } else if let Some((attempt_number, tx_hash, result)) =
                         reverts.remove(&(wallet, nonce))
                     {
-                        let Some(settled_result) = self.wait_for_settlement_of(tx_hash).await
-                        else {
+                        let settlement_result = retry!(
+                            self.wait_for_settlement_of(tx_hash).await,
+                            "waiting for settlement of reverting tx {tx_hash}",
+                        );
+                        let Some(settled_result) = settlement_result else {
                             continue 'start; // reorg
                         };
                         if settled_result != result {
@@ -474,9 +526,8 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         wallet: Address,
         nonce: Nonce,
     ) -> Result<Option<SettlementTxHash>, RetryCallbackError<TransportError>> {
-        let retry_policy = TxRetryPolicy::default_on_transient_failure();
         crate::utils::retry_alloy_callback_until_success(
-            &retry_policy,
+            &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce),
         )
@@ -495,12 +546,145 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
 
     async fn wait_for_settlement_of(
         &self,
-        _tx_hash: SettlementTxHash,
-    ) -> Option<ContractCallResult> {
-        // TODO: Wait for the settlement of tx_hash, and then return its result on L1.
-        // If a reorg is detected during the waiting, return None.
-        // XREF: https://github.com/agglayer/agglayer/issues/1316
-        todo!()
+        tx_hash: SettlementTxHash,
+    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>> {
+        // Let the shared retry helper own polling; this callback only distinguishes
+        // "not settled yet" from terminal reorg and RPC outcomes.
+        let result = crate::utils::retry_callback_until_success(
+            &self.tx_config.retry_on_not_included_on_l1,
+            &self.control.cancellation_token,
+            || self.check_settlement_once(tx_hash),
+            WaitForSettlementError::is_transient,
+        )
+        .await;
+
+        result.map_err(|error| match error {
+            RetryCallbackError::Cancelled => RetryCallbackError::Cancelled,
+            RetryCallbackError::Error(WaitForSettlementError::Transport(error)) => {
+                RetryCallbackError::Error(error)
+            }
+            RetryCallbackError::Error(WaitForSettlementError::NotSettledYet) => {
+                unreachable!("not-settled-yet errors are always transient")
+            }
+        })
+    }
+
+    #[tracing::instrument(
+        level = "debug",
+        skip_all,
+        fields(
+            task_id = ?self.id,
+            ?tx_hash,
+            settlement_policy = ?self.tx_config.settlement_policy,
+        )
+    )]
+    async fn check_settlement_once(
+        &self,
+        tx_hash: SettlementTxHash,
+    ) -> Result<Option<ContractCallResult>, WaitForSettlementError> {
+        // Read the settlement head first so any later receipt lookup is checked
+        // against a head that was already acceptable for the configured policy.
+        let settlement_head_number = self.settlement_head_number().await?;
+        let Some(settlement_head_number) = settlement_head_number else {
+            debug!("Waiting for selected settlement head before checking settlement transaction");
+            return Err(WaitForSettlementError::NotSettledYet);
+        };
+
+        let provider_tx_hash: TxHash = tx_hash.into();
+        let receipt = self
+            .provider
+            .get_transaction_receipt(provider_tx_hash)
+            .await?;
+        let Some(receipt) = receipt else {
+            // The caller only waits after observing this transaction on L1, so
+            // a missing receipt is a reorg/drop signal.
+            debug!(
+                settlement_head_number,
+                "Settlement transaction receipt missing after inclusion; treating as reorg or drop"
+            );
+            return Ok(None);
+        };
+
+        let Some(block_hash) = receipt.block_hash() else {
+            debug!(
+                settlement_head_number,
+                "Waiting for settlement transaction receipt block hash"
+            );
+            return Err(WaitForSettlementError::NotSettledYet);
+        };
+        let Some(block_number) = receipt.block_number() else {
+            debug!(
+                ?block_hash,
+                settlement_head_number, "Waiting for settlement transaction receipt block number"
+            );
+            return Err(WaitForSettlementError::NotSettledYet);
+        };
+
+        let required_head_number =
+            required_settlement_head_number(block_number, self.tx_config.confirmations);
+        if settlement_head_number < required_head_number {
+            debug!(
+                block_number,
+                settlement_head_number,
+                required_head_number,
+                "Waiting for settlement transaction finality"
+            );
+            return Err(WaitForSettlementError::NotSettledYet);
+        }
+
+        let canonical_block = self
+            .provider
+            .get_block_by_number(BlockNumberOrTag::Number(block_number))
+            .await?;
+        let Some(canonical_block) = canonical_block else {
+            debug!(
+                block_number,
+                ?block_hash,
+                settlement_head_number,
+                "Waiting for settlement transaction block to be available"
+            );
+            return Err(WaitForSettlementError::NotSettledYet);
+        };
+
+        // A receipt whose block number no longer resolves to the same canonical
+        // block hash is a reorg signal, not a transient "wait longer" condition.
+        let canonical_block_hash = canonical_block.header().hash;
+        if canonical_block_hash != block_hash {
+            debug!(
+                block_number,
+                ?block_hash,
+                ?canonical_block_hash,
+                settlement_head_number,
+                "Settlement transaction receipt block hash differs from canonical block; treating \
+                 as reorg"
+            );
+            return Ok(None);
+        }
+
+        Ok(self.current_result_on_l1_for(tx_hash).await)
+    }
+
+    async fn settlement_head_number(&self) -> Result<Option<u64>, WaitForSettlementError> {
+        match self.tx_config.settlement_policy {
+            SettlementPolicy::LatestBlock => self
+                .provider
+                .get_block_number()
+                .await
+                .map(Some)
+                .map_err(WaitForSettlementError::Transport),
+            SettlementPolicy::SafeBlock => self
+                .provider
+                .get_block_by_number(BlockNumberOrTag::Safe)
+                .await
+                .map(|block| block.map(|block| block.header().number()))
+                .map_err(WaitForSettlementError::Transport),
+            SettlementPolicy::FinalizedBlock => self
+                .provider
+                .get_block_by_number(BlockNumberOrTag::Finalized)
+                .await
+                .map(|block| block.map(|block| block.header().number()))
+                .map_err(WaitForSettlementError::Transport),
+        }
     }
 
     fn build_next_attempt_with_nonce(
@@ -617,5 +801,27 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         // no need to update them, but maybe run a sanity-check.
         // XREF: https://github.com/agglayer/agglayer/issues/1317
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn required_settlement_head_number_is_inclusive_of_receipt_block() {
+        // Confirmations count the receipt block itself, and saturate rather than
+        // overflow.
+        for (receipt_block, confirmations, required_head) in [
+            (10, 0, 10),
+            (10, 1, 10),
+            (10, 12, 21),
+            (10, usize::MAX, u64::MAX),
+        ] {
+            assert_eq!(
+                required_settlement_head_number(receipt_block, confirmations),
+                required_head
+            );
+        }
     }
 }

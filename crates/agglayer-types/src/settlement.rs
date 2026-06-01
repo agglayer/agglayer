@@ -79,12 +79,6 @@ pub struct SettlementJob {
     pub calldata: Bytes,
     pub eth_value: U256,
     pub gas_limit: u128,
-    pub max_fee_per_gas_ceiling: u128,
-    pub max_fee_per_gas_floor: u128,
-    pub max_fee_per_gas_increase_percents: u32,
-    pub max_priority_fee_per_gas_ceiling: u128,
-    pub max_priority_fee_per_gas_floor: u128,
-    pub max_priority_fee_per_gas_increase_percents: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -147,8 +141,6 @@ pub enum ContractCallOutcome {
 pub struct SettlementAttempt {
     pub sender_wallet: Address,
     pub nonce: Nonce,
-    pub max_fee_per_gas: u128,
-    pub max_priority_fee_per_gas: u128,
     pub hash: SettlementTxHash,
     pub submission_time: SystemTime,
 }
