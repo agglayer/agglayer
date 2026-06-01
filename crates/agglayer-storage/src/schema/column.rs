@@ -30,8 +30,4 @@ impl ColumnDescriptor {
     pub const fn options(&self) -> &'static ColumnOptions {
         self.options
     }
-
-    pub fn to_rocksdb_descriptor(&self) -> rocksdb::ColumnFamilyDescriptor {
-        rocksdb::ColumnFamilyDescriptor::new(self.name, self.options.into())
-    }
 }

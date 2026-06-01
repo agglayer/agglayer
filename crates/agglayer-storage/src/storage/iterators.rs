@@ -86,41 +86,20 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
         }
     }
 
+    /// Seeks to the first entry whose key is greater than or equal to `key`.
+    pub fn seek(&mut self, key: &C::Key) -> Result<(), DBError> {
+        let encoded = C::Key::encode(key)?;
+        self.iter.seek(&encoded);
+        self.status = IteratorStatus::Initialized;
+
+        Ok(())
+    }
+
     fn parse_key_value(&self) -> KeyValueResult<C::Key, C::Value> {
         let key = self.iter.key().map(C::Key::decode).transpose()?;
         let value = self.iter.value().map(C::Value::decode).transpose()?;
 
         Ok(key.zip(value))
-    }
-
-    /// Seeks to the first key.
-    #[allow(unused)]
-    pub fn seek_to_first(&mut self) {
-        self.iter.seek_to_first();
-    }
-
-    /// Seeks to the last key.
-    #[allow(unused)]
-    pub fn seek_to_last(&mut self) {
-        self.iter.seek_to_last();
-    }
-
-    /// Seeks for the first key (binary equal to or greater)
-    #[allow(unused)]
-    pub fn seek(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
-        let key = seek_key.encode()?;
-        self.iter.seek(&key);
-
-        Ok(())
-    }
-
-    /// Seeks for the last key (binary equal to or less)
-    #[allow(unused)]
-    pub fn seek_for_prev(&mut self, seek_key: &C::Key) -> Result<(), DBError> {
-        let key = seek_key.encode()?;
-        self.iter.seek_for_prev(&key);
-
-        Ok(())
     }
 }
 

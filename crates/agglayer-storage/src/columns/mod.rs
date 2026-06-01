@@ -22,10 +22,39 @@ pub const METADATA_CF: &str = "metadata_cf";
 
 // epochs related CFs
 pub const PER_EPOCH_CERTIFICATES_CF: &str = "per_epoch_certificates_cf";
+pub const PER_EPOCH_CERTIFICATES_PROTO_CF: &str = "per_epoch_certificates_proto_cf";
 pub const PER_EPOCH_METADATA_CF: &str = "per_epoch_metadata_cf";
 pub const PER_EPOCH_PROOFS_CF: &str = "per_epoch_proofs_cf";
 pub const PER_EPOCH_END_CHECKPOINT_CF: &str = "per_epoch_end_checkpoint_cf";
 pub const PER_EPOCH_START_CHECKPOINT_CF: &str = "per_epoch_start_checkpoint_cf";
+
+// Settlement related CFs
+pub const SETTLEMENT_ATTEMPTS_CF: &str = "settlement_attempts_cf";
+pub const SETTLEMENT_ATTEMPT_PER_WALLET_CF: &str = "settlement_attempt_per_wallet_cf";
+pub const SETTLEMENT_ATTEMPT_RESULTS_CF: &str = "settlement_attempt_results_cf";
+pub const SETTLEMENT_JOBS_CF: &str = "settlement_jobs_cf";
+pub const SETTLEMENT_JOB_RESULTS_CF: &str = "settlement_job_results_cf";
+
+pub const SETTLEMENT_ATTEMPTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: crate::types::settlement::attempt::Key::PREFIX_LEN,
+    },
+};
+
+pub const SETTLEMENT_ATTEMPT_RESULTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: crate::types::settlement::attempt::Key::PREFIX_LEN,
+    },
+};
+
+pub const SETTLEMENT_ATTEMPT_PER_WALLET_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: crate::types::settlement::attempt_per_wallet::Key::PREFIX_LEN,
+    },
+};
 
 // Column options for checkpoint columns (start and end checkpoints).
 pub const CHECKPOINT_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
@@ -37,10 +66,12 @@ pub const CHECKPOINT_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
 
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
+pub const PENDING_QUEUE_PROTO_CF: &str = "pending_queue_proto_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 
 // debug CFs
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
+pub const DEBUG_CERTIFICATES_PROTO_CF: &str = "debug_certificates_proto_cf";
 
 // State
 pub(crate) mod balance_tree_per_network;
@@ -63,6 +94,12 @@ pub(crate) mod metadata;
 
 // Debug
 pub(crate) mod debug_certificates;
+
+pub(crate) mod settlement_attempt_per_wallet;
+pub(crate) mod settlement_attempt_results;
+pub(crate) mod settlement_attempts;
+pub(crate) mod settlement_job_results;
+pub(crate) mod settlement_jobs;
 
 // PerEpoch
 pub mod epochs {

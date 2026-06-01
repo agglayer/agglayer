@@ -1,8 +1,9 @@
-use super::sample::*;
+use super::{lock_sample_migration_tests, sample::*};
 use crate::{storage::migration::Builder, tests::TempDBDir};
 
 #[test_log::test]
-fn sample_migration() -> Result<(), eyre::Error> {
+fn sample_migration() -> eyre::Result<()> {
+    let _guard = lock_sample_migration_tests();
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 

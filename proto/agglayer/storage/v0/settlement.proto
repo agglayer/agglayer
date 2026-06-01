@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package agglayer.storage.v0;
+
+import "agglayer/storage/v0/ethereum_types.proto";
+import "google/protobuf/timestamp.proto";
+
+// Settlement job data.
+message SettlementJob {
+  // ----- Transaction details -----
+
+  // Contract address to which to submit the transaction.
+  Address contract_address = 1;
+
+  // Transaction calldata.
+  Calldata calldata = 2;
+
+  // Eth value to send with the transaction.
+  EthValue eth_value = 3;
+
+  // Gas limit for each settlement attempt.
+  Uint128 gas_limit = 4;
+}
+
+// Result of one settlement attempt.
+message SettlementAttemptResult {
+  // Attempt execution result.
+  oneof result {
+    // Error encountered while attempting to submit the transaction,
+    // that didn't lead to an on-chain result.
+    ClientError client_error = 1;
+
+    // Result of a successfully-executed contract call.
+    ContractCallResult contract_call_result = 2;
+  }
+}
+
+// Terminal result of a settlement job.
+message SettlementJobResult {
+  // Result of the final on-chain contract call for the job.
+  ContractCallResult contract_call_result = 1;
+}
+
+// Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
+message ClientError {
+  // Type of error.
+  ClientErrorType error_type = 1;
+
+  // Error message.
+  string error_message = 2;
+}
+
+// Type of client error.
+enum ClientErrorType {
+  // Unspecified error type.
+  CLIENT_ERROR_TYPE_UNSPECIFIED = 0;
+
+  // Nonce already used and finalized in other tx.
+  CLIENT_ERROR_TYPE_NONCE_ALREADY_USED = 1;
+}
+
+// Result for a successfully-executed contract call.
+message ContractCallResult {
+  // The outcome of the contract call.
+  ContractCallOutcome outcome = 1;
+
+  // Additional metadata about the call outcome.
+  //
+  // This will be either the success outcome or the raw revert reason.
+  // At this stage we cannot parse this further, due to not knowing which ABI was used.
+  ContractCallMetadata metadata = 2;
+
+  // Block hash where the transaction was included.
+  BlockHash block_hash = 3;
+
+  // Block number where the transaction was included.
+  BlockNumber block_number = 4;
+
+  // TODO: introduce index-in-block
+
+  // Transaction hash of the settlement transaction.
+  TxHash tx_hash = 5;
+}
+
+// On-chain outcome of the contract call.
+enum ContractCallOutcome {
+  // Unspecified outcome. This should never be used.
+  CONTRACT_CALL_OUTCOME_UNSPECIFIED = 0;
+
+  // The call was successful.
+  CONTRACT_CALL_OUTCOME_SUCCESS = 1;
+
+  // The call reverted.
+  CONTRACT_CALL_OUTCOME_REVERT = 2;
+}
+
+// Additional metadata about the call outcome.
+//
+// For successful calls, this is the ABI-encoded return data.
+// For reverted calls, this is the ABI-encoded revert reason.
+message ContractCallMetadata {
+  // Raw bytes of the metadata.
+  bytes metadata = 1;
+}
+
+// Sequence number of a settlement attempt within a settlement job.
+message AttemptSequenceNumber {
+  // Sequence number.
+  uint64 number = 1;
+}
+
+// Contents of the settlement attempts CF.
+message SettlementAttempt {
+  // Sender wallet.
+  Address sender_wallet = 1;
+
+  // Nonce reserved for the transaction.
+  Nonce nonce = 2;
+
+  // Hash of the submitted transaction.
+  TxHash tx_hash = 5;
+
+  // Timestamp at which the attempt was submitted to L1.
+  google.protobuf.Timestamp submission_time = 6;
+}

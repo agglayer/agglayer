@@ -12,7 +12,7 @@ use agglayer_types::{
 };
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::ReadOptions;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, instrument, warn};
 
 use super::{
     interfaces::reader::PerEpochReader, MetadataWriter, PendingCertificateReader,
@@ -21,16 +21,19 @@ use super::{
 use crate::{
     backup::BackupClient,
     columns::epochs::{
-        certificates::CertificatePerIndexColumn, end_checkpoint::EndCheckpointColumn,
-        metadata::PerEpochMetadataColumn, proofs::ProofPerIndexColumn,
+        certificates::{CertificatePerIndexColumn, CertificatePerIndexProtoColumn},
+        end_checkpoint::EndCheckpointColumn,
+        metadata::PerEpochMetadataColumn,
+        proofs::ProofPerIndexColumn,
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
+    schema::ColumnDescriptor,
     storage::DB,
     types::{PerEpochMetadataKey, PerEpochMetadataValue},
 };
 
-mod cf_definitions;
+pub(crate) mod cf_definitions;
 
 #[cfg(test)]
 mod tests;
@@ -52,7 +55,12 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::EPOCHS_DB)
+        DB::builder(path, cf_definitions::EPOCHS_DB_V0)?
+            .add_cfs(
+                &[ColumnDescriptor::new::<CertificatePerIndexProtoColumn>()],
+                backfill_epoch_certificates_proto_from_legacy_bincode,
+            )?
+            .finalize(cf_definitions::EPOCHS_DB)
     }
 
     pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
@@ -175,9 +183,12 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             // For readonly access, we don't need to track the next index
             AtomicU64::new(0)
         } else {
-            // For read-write access, calculate the next index from existing certificates
+            // For read-write access, calculate the next index from existing certificates.
+            // The proto-backed CF is the single source of truth at runtime: legacy rows
+            // are backfilled into it during `init_db`, so consulting the legacy CF here
+            // would only re-read data that has already been migrated.
             if let Some(Ok((index, _))) = db
-                .iter_with_direction::<CertificatePerIndexColumn>(
+                .iter_with_direction::<CertificatePerIndexProtoColumn>(
                     ReadOptions::default(),
                     rocksdb::Direction::Reverse,
                 )?
@@ -241,11 +252,30 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     }
 }
 
+/// Migration step for the certificate serialization switch from the legacy
+/// epoch certificate CF to the proto-backed CF.
+///
+/// Delegates to
+/// [`super::migration_helpers::copy_legacy_certificate_cf_into_proto`],
+/// which streams the legacy keyspace, skips and logs rows whose bytes cannot
+/// be decoded as a certificate, and copies the rest into the proto CF. The
+/// original CF is left untouched so we can finish validation before
+/// removing it in a later cleanup step.
+fn backfill_epoch_certificates_proto_from_legacy_bincode(
+    db: &crate::storage::DbAccess,
+) -> Result<(), crate::storage::DBMigrationErrorDetails> {
+    super::migration_helpers::copy_legacy_certificate_cf_into_proto::<
+        CertificatePerIndexColumn,
+        CertificatePerIndexProtoColumn,
+    >(db, "epoch")
+}
+
 impl<PendingStore, StateStore> PerEpochWriter for PerEpochStore<PendingStore, StateStore>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     StateStore: MetadataWriter + StateWriter + StateReader,
 {
+    #[instrument(skip(self), fields(epoch_number = %self.epoch_number))]
     fn add_certificate(
         &self,
         certificate_id: CertificateId,
@@ -397,7 +427,7 @@ where
 
         // Adding the certificate and proof to the current epoch store
         self.db
-            .put::<CertificatePerIndexColumn>(&certificate_index, &certificate)?;
+            .put::<CertificatePerIndexProtoColumn>(&certificate_index, &certificate)?;
 
         self.db
             .put::<ProofPerIndexColumn>(&certificate_index, &proof)?;
@@ -407,10 +437,7 @@ where
 
         self.pending_store
             .remove_pending_certificate(network_id, height)?;
-        debug!(
-            %certificate_id,
-            "Certificate and proof removed from pending store"
-        );
+        debug!("Certificate and proof removed from pending store");
 
         self.state_store.assign_certificate_to_epoch(
             &certificate_id,
@@ -418,11 +445,7 @@ where
             &certificate_index,
         )?;
 
-        debug!(
-            %certificate_id,
-            epoch_number = %self.epoch_number,
-            "Certificate assigned to epoch"
-        );
+        debug!("Certificate assigned to epoch");
         if let Some(height) = end_checkpoint_entry_assignment {
             let entry = end_checkpoint_entry.or_default();
             *entry = height;
@@ -490,7 +513,7 @@ where
         &self,
         index: CertificateIndex,
     ) -> Result<Option<Certificate>, Error> {
-        Ok(self.db.get::<CertificatePerIndexColumn>(&index)?)
+        Ok(self.db.get::<CertificatePerIndexProtoColumn>(&index)?)
     }
 
     fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error> {

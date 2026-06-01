@@ -17,8 +17,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  # temporary image for v11 that support dockerv2::contracts::all build: https://github.com/agglayer/agglayer-contracts/pull/570/files
-  ZKEVM_CONTRACT_GIT_REF: pr-570v11-all
 
 jobs:
   unit:
@@ -46,28 +44,25 @@ jobs:
   integrations:
     name: Integration tests
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout sources
         uses: actions/checkout@v6
 
-      - name: Load image
-        run: |
-          docker pull ghcr.io/agglayer/agglayer-contracts:${{ env.ZKEVM_CONTRACT_GIT_REF }}
-          docker tag ghcr.io/agglayer/agglayer-contracts:${{ env.ZKEVM_CONTRACT_GIT_REF }} hermeznetwork/geth-zkevm-contracts
-          docker image ls -a
-
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make,nextest,protoc,cargo-hack
+
+      - name: Load image
+        run: cargo make integration-l1-image
 
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: nextest,protoc,cargo-hack
 
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
@@ -87,26 +82,32 @@ jobs:
       local-artifact-name: "docker-image"
       local-artifact-dir: "/tmp"
 
-  call-cdk-e2e-workflow:
-    name: E2E Tests | Kurtosis-CDK
+  call-agglayer-node-e2e-workflow:
+    name: E2E Tests | Agglayer Node
     if: ${{ contains('["merge_group", "workflow_dispatch"]', github.event_name) }}
     needs:
       - docker-build-local
-    uses: agglayer/e2e/.github/workflows/cdk-e2e.yml@2cf50f9f92eff4fdf6b2555e62fac67d76f8f290 # test/agglayer-e2e-bridge-test
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@a2a90439583b62a7dcabcda915c72193e57ec6e7 # 2026-03-20
     secrets: inherit
     with:
-      test-name: agglayer-bridging
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
-      kurtosis-cdk-ref: 17959f2f2735d8ed58d43412b413bda8056a1ce6
+      kurtosis-cdk-ref: 6f5c0f0cd2cce5cf11a025aade73b13664df8007 # 2026-03-18
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: 2cf50f9f92eff4fdf6b2555e62fac67d76f8f290 # test/agglayer-e2e-bridge-test
+      agglayer-e2e-ref: a2a90439583b62a7dcabcda915c72193e57ec6e7 # 2026-03-20
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
             "deploy_optimism_rollup": true
           },
           "args": {
+            "sequencer_type": "op-reth",
+            "l1_el_type": "reth",
+            "reth_image": "ghcr.io/paradigmxyz/reth:v1.11.3",
             "aggkit_image": "ghcr.io/agglayer/aggkit:0.5.4",
             "consensus_contract_type": "pessimistic",
             "verbosity": "debug"
@@ -120,12 +121,12 @@ jobs:
   check-e2e-result:
     name: E2E Tests | Passed
     needs:
-      - call-cdk-e2e-workflow
+      - call-agglayer-node-e2e-workflow
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: exit 1
-        if: ${{ contains(fromJSON('["failure", "cancelled"]'), needs.call-cdk-e2e-workflow.result) }}
+        if: ${{ contains(fromJSON('["failure", "cancelled"]'), needs.call-agglayer-node-e2e-workflow.result) }}
 
   check_elf:
     runs-on: ubuntu-latest-16-cores
@@ -136,7 +137,7 @@ jobs:
 
       - name: Define source checksum
         run: |
-          echo CHECKSUM="$(sha256sum crates/pessimistic-proof/elf/riscv32im-succinct-zkvm-elf | awk '{ print $1 }')" >> "$GITHUB_ENV"
+          echo CHECKSUM="$(sha256sum crates/pessimistic-proof/elf/riscv64im-succinct-zkvm-elf | awk '{ print $1 }')" >> "$GITHUB_ENV"
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -149,10 +150,10 @@ jobs:
       - uses: taiki-e/install-action@protoc
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - uses: taiki-e/install-action@protoc
 
@@ -163,7 +164,7 @@ jobs:
         run: cargo make pp-elf
 
       - name: ELF is up to date
-        run: diff <(sha256sum crates/pessimistic-proof/elf/riscv32im-succinct-zkvm-elf | awk '{ print $1 }') <( echo $CHECKSUM )
+        run: diff <(sha256sum crates/pessimistic-proof/elf/riscv64im-succinct-zkvm-elf | awk '{ print $1 }') <( echo $CHECKSUM )
 
       - name: Check vKey
         run: cargo make pp-check-vkey-change

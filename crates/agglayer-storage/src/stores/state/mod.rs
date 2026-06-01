@@ -1,21 +1,22 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     path::Path,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::SystemTime,
 };
 
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementJobId,
+    SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
     unified_bridge::LocalExitTree,
 };
 use rocksdb::{Direction, ReadOptions, WriteBatch};
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
@@ -41,6 +42,7 @@ use crate::{
 
 mod cf_definitions;
 mod network_info;
+mod settlement;
 
 #[cfg(test)]
 mod tests;
@@ -49,15 +51,30 @@ mod tests;
 pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
+    settlement_write_locks: Mutex<HashMap<SettlementJobId, Arc<Mutex<()>>>>,
 }
 
 impl StateStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::STATE_DB)
+        // V0 is the eight-CF schema that pre-dates `disabled_networks_cf`
+        // and the settlement family. Legacy production snapshots still
+        // have only those CFs; running the current binary against them
+        // would fail the migration framework's schema gate without this
+        // path. `ensure_cfs` is idempotent: passing the full `STATE_DB`
+        // list creates whatever is missing on disk and is a no-op when
+        // every CF is already present, so legacy V0 DBs converge to the
+        // current schema and existing post-V0 DBs are unaffected.
+        DB::builder(path, cf_definitions::STATE_DB_V0)?
+            .ensure_cfs(cf_definitions::STATE_DB)?
+            .finalize(cf_definitions::STATE_DB)
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
-        Self { db, backup_client }
+        Self {
+            db,
+            backup_client,
+            settlement_write_locks: Mutex::new(HashMap::new()),
+        }
     }
 
     pub fn new_with_path(
@@ -65,7 +82,11 @@ impl StateStore {
         backup_client: BackupClient,
     ) -> Result<Self, crate::storage::DBOpenError> {
         let db = Arc::new(Self::init_db(path)?);
-        Ok(Self { db, backup_client })
+        Ok(Self {
+            db,
+            backup_client,
+            settlement_write_locks: Mutex::new(HashMap::new()),
+        })
     }
 }
 
@@ -92,6 +113,7 @@ impl StateWriter for StateStore {
             .delete::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)?)
     }
 
+    #[instrument(skip(self))]
     fn update_settlement_tx_hash(
         &self,
         certificate_id: &CertificateId,
@@ -136,7 +158,6 @@ impl StateWriter for StateStore {
             }
         } else {
             info!(
-                hash = %certificate_id,
                 "Certificate header not found for certificate_id: {}",
                 certificate_id
             )
@@ -145,6 +166,7 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
@@ -178,7 +200,6 @@ impl StateWriter for StateStore {
             }
         } else {
             info!(
-                hash = %certificate_id,
                 "Certificate header not found for certificate_id: {}",
                 certificate_id
             )

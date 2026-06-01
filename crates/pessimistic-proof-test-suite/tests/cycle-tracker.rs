@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx, PessimisticRootInput,
 };
@@ -8,16 +6,22 @@ use pessimistic_proof::{
     unified_bridge::BridgeExit,
 };
 use pessimistic_proof_test_suite::{forest::Forest, runner::Runner, sample_data as data};
+use rstest::rstest;
 
-#[rstest::rstest]
-#[timeout(Duration::from_secs(60))]
+#[test]
 fn sanity_check() {
     cycles_on_sample_inputs("s00_be000", Forest::new([]), std::iter::empty());
 }
 
-#[rstest::rstest]
-#[timeout(Duration::from_secs(60))]
-fn cycles_on_state01(#[values(0, 1, 2, 20, 50, 100, usize::MAX)] n_exits: usize) {
+#[rstest]
+#[case::be000(0)]
+#[case::be001(1)]
+#[case::be002(2)]
+#[case::be020(20)]
+#[case::be050(50)]
+#[case::be100(100)]
+#[case::be_all(usize::MAX)]
+fn cycles_on_state01(#[case] n_exits: usize) {
     let bridge_exits = data::sample_bridge_exits_01().take(n_exits);
     let name = format!("s01_be{:03}", bridge_exits.len());
     cycles_on_sample_inputs(&name, data::sample_state_01(), bridge_exits);

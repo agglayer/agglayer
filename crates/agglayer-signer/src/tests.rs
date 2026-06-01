@@ -1,3 +1,4 @@
+use agglayer_config::{AuthConfig, Config, LocalConfig};
 use alloy::{
     consensus::{SignableTransaction, TxEip1559, TypedTransaction},
     signers::Signer,
@@ -85,4 +86,19 @@ fn constructor_methods_work() {
     let configured_signer = ConfiguredSigner::from_local(local_signer);
     assert!(configured_signer.is_local());
     assert!(!configured_signer.is_kms());
+}
+
+#[tokio::test]
+async fn configured_signers_reports_missing_private_key() {
+    let mut config = Config::new(std::path::Path::new("/tmp/agglayer"));
+    config.auth = AuthConfig::Local(LocalConfig {
+        private_keys: Vec::new(),
+    });
+
+    let error = ConfiguredSigners::new(&config).await.unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "no private keys specified in the configuration"
+    );
 }

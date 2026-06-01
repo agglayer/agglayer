@@ -13,10 +13,7 @@ use alloy::{
 };
 use alloy_primitives::{Address, ChainId, Signature, B256};
 use async_trait::async_trait;
-
-mod error;
-
-pub use error::Error;
+use eyre::{eyre, Context as _};
 
 /// A an alloy [`Signer`] that can house either a local keystore or a KMS
 /// signer.
@@ -33,19 +30,23 @@ pub enum ConfiguredSigner {
 
 impl ConfiguredSigner {
     /// Decrypt the first local keystore specified in the configuration.
-    #[allow(clippy::result_large_err)]
     pub(crate) fn local_wallet(
         chain_id: u64,
         local: &LocalConfig,
-    ) -> Result<(PrivateKeySigner, Option<PrivateKeySigner>), Error> {
-        let pk1 = local.private_keys.first().ok_or(Error::NoPk)?;
-        let signer1 = PrivateKeySigner::decrypt_keystore(&pk1.path, &pk1.password)?
+    ) -> eyre::Result<(PrivateKeySigner, Option<PrivateKeySigner>)> {
+        let pk1 = local
+            .private_keys
+            .first()
+            .ok_or_else(|| eyre!("no private keys specified in the configuration"))?;
+        let signer1 = PrivateKeySigner::decrypt_keystore(&pk1.path, &pk1.password)
+            .wrap_err("local signer error")?
             .with_chain_id(Some(chain_id));
 
         let mut signer2 = None;
         if let Some(pk2) = local.private_keys.get(1) {
             signer2 = Some(
-                PrivateKeySigner::decrypt_keystore(&pk2.path, &pk2.password)?
+                PrivateKeySigner::decrypt_keystore(&pk2.path, &pk2.password)
+                    .wrap_err("local signer error")?
                     .with_chain_id(Some(chain_id)),
             )
         };
@@ -81,7 +82,7 @@ pub struct ConfiguredSigners {
 
 impl ConfiguredSigners {
     /// Get either a local wallet or GCP KMS signer based on the configuration.
-    pub async fn new(config: &Config) -> Result<Self, Error> {
+    pub async fn new(config: &Config) -> eyre::Result<Self> {
         match &config.auth {
             AuthConfig::GcpKms(ref kms) => {
                 let kms = KMS::new(config.l1.chain_id, kms.clone());
@@ -185,22 +186,29 @@ impl TxSigner<Signature> for ConfiguredSigner {
 }
 
 impl ConfiguredSigner {
+    /// Signs a transaction using a local signer.
+    async fn sign_transaction_local(
+        wallet: &PrivateKeySigner,
+        tx: &TypedTransaction,
+    ) -> eyre::Result<Signature> {
+        // Convert the TypedTransaction to a mutable dyn SignableTransaction
+        let mut tx_clone = tx.clone();
+        wallet
+            .sign_transaction(&mut tx_clone)
+            .await
+            .wrap_err("signer error")
+    }
+
     /// Signs a transaction using the appropriate signer.
     ///
     /// This method provides transaction signing functionality that delegates
     /// to the underlying signer implementation.
     #[inline]
-    pub async fn sign_transaction_typed(&self, tx: &TypedTransaction) -> Result<Signature, Error> {
+    pub async fn sign_transaction_typed(&self, tx: &TypedTransaction) -> eyre::Result<Signature> {
         match self {
-            ConfiguredSigner::Local(wallet) => {
-                let mut tx_clone = tx.clone();
-                wallet
-                    .sign_transaction(&mut tx_clone)
-                    .await
-                    .map_err(Error::Signer)
-            }
+            ConfiguredSigner::Local(wallet) => Self::sign_transaction_local(wallet, tx).await,
             ConfiguredSigner::Kms(signer) => {
-                signer.sign_transaction(tx).await.map_err(Error::GcpKms)
+                signer.sign_transaction(tx).await.wrap_err("GcpKMS error")
             }
         }
     }

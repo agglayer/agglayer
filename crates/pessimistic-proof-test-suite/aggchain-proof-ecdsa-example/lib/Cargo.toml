@@ -7,6 +7,6 @@ edition = "2021"
 agglayer-tries.workspace = true
 agglayer-primitives.workspace = true
 k256 = "0.13.4"
-serde = { version = "1.0.217", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 
 unified-bridge.workspace = true

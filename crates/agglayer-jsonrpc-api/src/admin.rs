@@ -5,30 +5,84 @@ use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
     StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
+use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
-    Height, NetworkId, SettlementTxHash,
+    Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
+    CertificateStatusError, Digest, Height, NetworkId, SettlementTxHash, U256,
 };
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
-use serde::Deserialize as _;
+use pessimistic_proof::local_balance_tree::BalanceTree;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::{error, info, instrument, warn};
+use unified_bridge::TokenInfo;
 
 use super::error::RpcResult;
 use crate::{error::Error, rpc_middleware, JsonRpcService};
 
+/// Controls whether the certificate is immediately submitted for reprocessing
+/// after edits are applied.
+///
+/// Passed as the `process_now` parameter of `admin_forceEditCertificate`.
 #[derive(Debug, Eq, PartialEq, serde::Deserialize)]
 pub enum ProcessNow {
+    /// Reprocess the certificate immediately after edits.
+    ///
+    /// Sends the certificate to the orchestrator as if it had just been
+    /// submitted. Use this to recover a certificate that is stuck in an
+    /// error state after correcting its status or settlement tx hash.
     #[serde(rename = "process-now=true")]
     True,
 
+    /// Apply edits without triggering reprocessing.
     #[serde(rename = "process-now=false")]
     False,
 }
 
+use serde_with::{serde_as, DisplayFromStr};
+
+/// Token balance entry structure in order to display the balance tree values.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenBalanceEntry {
+    pub origin_network: NetworkId,
+    pub origin_token_address: Address,
+    #[serde_as(as = "DisplayFromStr")]
+    pub amount: U256,
+}
+
+impl From<(SmtPath<192>, Digest)> for TokenBalanceEntry {
+    fn from((path, leaf_value): (SmtPath<192>, Digest)) -> Self {
+        let TokenInfo {
+            origin_network,
+            origin_token_address,
+        } = TokenInfo::from_bits(&path.as_bits());
+
+        Self {
+            origin_network,
+            origin_token_address,
+            amount: U256::from_be_bytes(*leaf_value.as_bytes()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTokenBalanceResponse {
+    pub balances: Vec<TokenBalanceEntry>,
+}
+
 #[rpc(server, namespace = "admin")]
 pub(crate) trait AdminAgglayer {
+    #[method(name = "getTokenBalance")]
+    async fn get_token_balance(
+        &self,
+        network_id: NetworkId,
+        token_info: Option<TokenInfo>,
+    ) -> RpcResult<GetTokenBalanceResponse>;
+
     #[method(name = "getCertificate")]
     async fn get_certificate(
         &self,
@@ -42,6 +96,72 @@ pub(crate) trait AdminAgglayer {
         status: CertificateStatus,
     ) -> RpcResult<()>;
 
+    /// Edit a certificate's mutable fields as an administrative override.
+    ///
+    /// **JSON-RPC method:** `admin_forceEditCertificate`
+    ///
+    /// Up to two operations are applied atomically: all `from=` preconditions
+    /// are checked before any write is performed, so the certificate is never
+    /// left in a partially-updated state.
+    ///
+    /// # Parameters
+    ///
+    /// - `certificate_id` — the certificate to edit.
+    /// - `process_now` — whether to resubmit the certificate to the
+    ///   orchestrator for reprocessing once edits are applied.  Pass
+    ///   [`ProcessNow::True`] (`"process-now=true"`) to recover a stuck
+    ///   certificate after fixing its state.
+    /// - `operation_1`, `operation_2` — optional operation strings (see
+    ///   [Operation format](#operation-format) below).  Omit or pass `null` for
+    ///   unused slots.
+    ///
+    /// # Operation format
+    ///
+    /// Each operation is an ASCII string with a `from=` precondition and a
+    /// `to=` target value.  The precondition is checked against the live
+    /// certificate header **before** any write; a mismatch returns an error
+    /// and leaves the certificate unchanged.
+    ///
+    /// ## `set-status`
+    ///
+    /// ```text
+    /// set-status,from=<STATUS>,to=<STATUS>
+    /// ```
+    ///
+    /// Changes the certificate's [`CertificateStatus`].
+    ///
+    /// Valid `<STATUS>` values: `Pending`, `Proven`, `Candidate`, `InError`,
+    /// `Settled`.
+    ///
+    /// Special case for `InError`: when `from=InError` the inner error message
+    /// is **not** compared — any `InError` variant will satisfy the
+    /// precondition.  When `to=InError` the error is recorded as
+    /// `"Set to InError by administrator"`.
+    ///
+    /// ## `set-settlement-tx-hash`
+    ///
+    /// ```text
+    /// set-settlement-tx-hash,from=<HASH_OR_null>,to=<HASH_OR_null>
+    /// ```
+    ///
+    /// Sets or clears the settlement transaction hash.  Use the literal
+    /// `null` to represent the absence of a hash.  Any other value must be a
+    /// hex-encoded [`SettlementTxHash`] (a 32-byte keccak digest).
+    ///
+    /// # Guards
+    ///
+    /// - A [`CertificateStatus::Settled`] certificate cannot be edited.
+    /// - The `from=` value of every operation must exactly match the current
+    ///   state of the certificate header (with the `InError` relaxation
+    ///   described above).
+    ///
+    /// # Errors
+    ///
+    /// | Error | When |
+    /// |---|---|
+    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate |
+    /// | `ResourceNotFound` (`-10008`) | No certificate header found for `certificate_id` |
+    /// | `INTERNAL_ERROR` | Storage read/write failure; orchestrator channel failure |
     #[method(name = "forceEditCertificate")]
     async fn force_edit_certificate(
         &self,
@@ -191,7 +311,47 @@ where
     StateStore: StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
 {
-    #[instrument(skip(self), fields(hash), level = "debug")]
+    #[instrument(skip(self))]
+    async fn get_token_balance(
+        &self,
+        network_id: NetworkId,
+        token_info: Option<TokenInfo>,
+    ) -> RpcResult<GetTokenBalanceResponse> {
+        let Some(balance_tree) = self
+            .state
+            .read_local_network_state(network_id)
+            .map_err(|error| {
+                error!(?error, "Failed to read the balance tree");
+                Error::internal("Unable to read the balance tree")
+            })?
+            .map(|s| BalanceTree(s.balance_tree))
+        else {
+            return Ok(GetTokenBalanceResponse { balances: vec![] }); // empty balances, not an error
+        };
+
+        // get the balance of a given token, or return all of them
+        let balances: Vec<TokenBalanceEntry> = if let Some(token_info) = token_info {
+            let amount = balance_tree.get_balance(token_info);
+            vec![TokenBalanceEntry {
+                origin_network: token_info.origin_network,
+                origin_token_address: token_info.origin_token_address,
+                amount,
+            }]
+        } else {
+            balance_tree
+                .get_all_balances()
+                .map_err(|error| {
+                    error!(?error, "Failed to get all balances");
+                    Error::internal("Unable to get all balances")
+                })?
+                .map(TokenBalanceEntry::from)
+                .collect()
+        };
+
+        Ok(GetTokenBalanceResponse { balances })
+    }
+
+    #[instrument(skip(self))]
     async fn get_certificate(
         &self,
         certificate_id: CertificateId,
@@ -219,15 +379,13 @@ where
         }
     }
 
-    #[instrument(skip(self, certificate), level = "debug")]
+    #[instrument(skip(self), fields(certificate_id = %certificate.hash()))]
     async fn force_push_pending_certificate(
         &self,
         certificate: Certificate,
         status: CertificateStatus,
     ) -> RpcResult<()> {
         warn!(
-            hash = certificate.hash().to_string(),
-            ?certificate,
             "(ADMIN) Forcing push of pending certificate: {}",
             certificate.hash()
         );
@@ -267,7 +425,7 @@ where
         }
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn force_edit_certificate(
         &self,
         certificate_id: CertificateId,
@@ -275,13 +433,7 @@ where
         operation_1: Option<String>,
         operation_2: Option<String>,
     ) -> RpcResult<()> {
-        warn!(
-            %certificate_id,
-            ?process_now,
-            ?operation_1,
-            ?operation_2,
-            "(ADMIN) Editing certificate"
-        );
+        warn!("(ADMIN) Editing certificate");
 
         enum Operation {
             SetStatus {
@@ -472,11 +624,11 @@ where
         Ok(())
     }
 
-    #[instrument(skip(self, certificate_id), level = "debug")]
+    #[instrument(skip(self))]
     async fn set_latest_pending_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
         warn!(
-            hash = certificate_id.to_string(),
-            "(ADMIN) Setting latest pending certificate: {}", certificate_id
+            "(ADMIN) Setting latest pending certificate: {}",
+            certificate_id
         );
         let certificate = if let Some(certificate) = self
             .state
@@ -509,11 +661,11 @@ where
         }
     }
 
-    #[instrument(skip(self, certificate_id), level = "debug")]
+    #[instrument(skip(self))]
     async fn set_latest_proven_certificate(&self, certificate_id: CertificateId) -> RpcResult<()> {
         warn!(
-            hash = certificate_id.to_string(),
-            "(ADMIN) Setting latest proven certificate: {}", certificate_id
+            "(ADMIN) Setting latest proven certificate: {}",
+            certificate_id
         );
         let certificate = if let Some(certificate) = self
             .state
@@ -546,12 +698,9 @@ where
         }
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn remove_pending_proof(&self, certificate_id: CertificateId) -> RpcResult<()> {
-        warn!(
-            hash = certificate_id.to_string(),
-            "(ADMIN) Removing pending proof: {}", certificate_id
-        );
+        warn!("(ADMIN) Removing pending proof: {}", certificate_id);
 
         self.pending_store
             .remove_generated_proof(&certificate_id)
@@ -561,7 +710,7 @@ where
             })
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self), fields(certificate_id))]
     async fn remove_pending_certificate(
         &self,
         network_id: NetworkId,
@@ -585,6 +734,7 @@ where
                 "PendingCertificate({network_id:?}, {height:?})",
             )));
         };
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
         self.pending_store
             .remove_pending_certificate(network_id, height)
@@ -601,7 +751,6 @@ where
             .update_certificate_header_status(&certificate_id, &error_status)
             .map_err(|error| {
                 error!(
-                    %certificate_id,
                     ?error,
                     "Failed to update certificate status in the state store on pending removal"
                 );
@@ -615,7 +764,7 @@ where
             self.pending_store
                 .remove_generated_proof(&certificate_id)
                 .map_err(|error| {
-                    error!( %certificate_id, ?error, "Failed to remove generated proof");
+                    error!(?error, "Failed to remove generated proof");
                     Error::internal(format!(
                         "Failed to remove generated proof for certificate_id: {certificate_id}"
                     ))
@@ -625,7 +774,7 @@ where
         Ok(())
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn get_disabled_networks(&self) -> RpcResult<Vec<NetworkId>> {
         self.state.get_disabled_networks().map_err(|error| {
             error!(?error, "Failed to get disabled networks");
@@ -633,7 +782,7 @@ where
         })
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn disable_network(&self, network_id: NetworkId) -> RpcResult<()> {
         self.state
             .disable_network(&network_id, agglayer_types::network_info::DisabledBy::Admin)
@@ -643,7 +792,7 @@ where
             })
     }
 
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self))]
     async fn enable_network(&self, network_id: NetworkId) -> RpcResult<()> {
         self.state.enable_network(&network_id).map_err(|error| {
             error!(?error, "Failed to enable network {network_id}");

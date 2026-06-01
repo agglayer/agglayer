@@ -2,15 +2,19 @@ use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamily, DBPinnableSlice, Direction, Options, ReadOptions, WriteBatch, WriteOptions,
+    ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBPinnableSlice, Direction, Options,
+    ReadOptions, SliceTransform, WriteBatch, WriteOptions,
 };
 
-use crate::schema::{Codec, ColumnDescriptor, ColumnSchema};
+use crate::schema::{
+    options::{ColumnCompressionType, ColumnOptions, PrefixExtractor},
+    Codec, ColumnDescriptor, ColumnSchema,
+};
 
 pub(crate) mod iterators;
 mod migration;
 
-pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError, DbAccess};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
@@ -53,7 +57,15 @@ impl DB {
         options.create_if_missing(false); // Don't create if missing in readonly mode
         options.create_missing_column_families(false); // Don't create missing column families
 
-        let descriptors: Vec<_> = cfs.iter().map(|cd| cd.to_rocksdb_descriptor()).collect();
+        let descriptors: Vec<_> = match rocksdb::DB::list_cf(&options, path) {
+            Ok(names) => names
+                .into_iter()
+                .filter(|name| name != rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
+                .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
+                .collect(),
+            Err(_) => cfs.iter().map(Self::descriptor).collect(),
+        };
+
         Ok(DB {
             rocksdb: rocksdb::DB::open_cf_descriptors_read_only(
                 &options,
@@ -230,5 +242,32 @@ impl DB {
 
     pub(crate) fn raw_rocksdb(&self) -> &rocksdb::DB {
         &self.rocksdb
+    }
+
+    // Convert a ColumnDescriptor to a RocksDB ColumnFamilyDescriptor.
+    fn descriptor(descriptor: &ColumnDescriptor) -> ColumnFamilyDescriptor {
+        ColumnFamilyDescriptor::new(descriptor.name(), Self::options(descriptor.options()))
+    }
+
+    // Convert ColumnOptions to RocksDB Options.
+    fn options(options: &ColumnOptions) -> Options {
+        let mut opts = Options::default();
+
+        // Set compression type
+        let compression = match options.compression {
+            ColumnCompressionType::None => DBCompressionType::None,
+            ColumnCompressionType::Lz4 => DBCompressionType::Lz4,
+        };
+        opts.set_compression_type(compression);
+
+        // Set prefix extractor
+        match options.prefix_extractor {
+            PrefixExtractor::Default => {}
+            PrefixExtractor::Fixed { size } => {
+                opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(size));
+            }
+        }
+
+        opts
     }
 }
