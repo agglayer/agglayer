@@ -317,6 +317,7 @@ mod tests {
     ) -> SettlementService<impl Provider + 'static, MockStateStore> {
         SettlementService::start(
             SettlementServiceConfig::default(),
+            Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_provider()),
             store,
             CancellationToken::new(),
