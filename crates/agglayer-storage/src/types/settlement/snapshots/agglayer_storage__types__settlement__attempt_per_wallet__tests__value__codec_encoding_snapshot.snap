@@ -1,0 +1,5 @@
+---
+source: crates/agglayer-storage/src/types/settlement/attempt_per_wallet.rs
+expression: encoded_hex
+snapshot_kind: text
+---

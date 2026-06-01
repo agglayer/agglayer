@@ -1,7 +1,7 @@
 use agglayer_types::{
     SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
 };
-use rocksdb::{Direction, ReadOptions, WriteBatch};
+use rocksdb::WriteBatch;
 
 use super::StateStore;
 use crate::{
@@ -73,28 +73,16 @@ impl SettlementReader for StateStore {
         &self,
         settlement_job_id: &SettlementJobId,
     ) -> Result<Vec<(u64, SettlementAttempt)>, Error> {
-        let mut iterator = self.db.iter_with_direction::<SettlementAttemptsColumn>(
-            ReadOptions::default(),
-            Direction::Forward,
-        )?;
-        iterator.seek(&SettlementAttemptKey {
-            settlement_job_id: *settlement_job_id,
-            attempt_sequence_number: 0,
-        })?;
-
-        iterator
-            .map(|entry| -> Result<Option<(u64, SettlementAttempt)>, Error> {
+        self.db
+            .prefix_iterator::<SettlementAttemptsColumn, _>(settlement_job_id)?
+            .map(|entry| -> Result<(u64, SettlementAttempt), Error> {
                 let (key, attempt) = entry?;
-                if key.settlement_job_id != *settlement_job_id {
-                    return Ok(None);
-                }
 
-                Ok(Some((
+                Ok((
                     key.attempt_sequence_number,
                     SettlementAttempt::try_from(attempt)?,
-                )))
+                ))
             })
-            .map_while(|entry| entry.transpose())
             .collect::<Result<Vec<_>, _>>()
     }
 
@@ -102,32 +90,16 @@ impl SettlementReader for StateStore {
         &self,
         settlement_job_id: &SettlementJobId,
     ) -> Result<Vec<(u64, SettlementAttemptResult)>, Error> {
-        let mut iterator = self
-            .db
-            .iter_with_direction::<SettlementAttemptResultsColumn>(
-                ReadOptions::default(),
-                Direction::Forward,
-            )?;
-        iterator.seek(&SettlementAttemptKey {
-            settlement_job_id: *settlement_job_id,
-            attempt_sequence_number: 0,
-        })?;
+        self.db
+            .prefix_iterator::<SettlementAttemptResultsColumn, _>(settlement_job_id)?
+            .map(|entry| -> Result<(u64, SettlementAttemptResult), Error> {
+                let (key, result) = entry?;
 
-        iterator
-            .map(
-                |entry| -> Result<Option<(u64, SettlementAttemptResult)>, Error> {
-                    let (key, result) = entry?;
-                    if key.settlement_job_id != *settlement_job_id {
-                        return Ok(None);
-                    }
-
-                    Ok(Some((
-                        key.attempt_sequence_number,
-                        SettlementAttemptResult::try_from(result)?,
-                    )))
-                },
-            )
-            .map_while(|entry| entry.transpose())
+                Ok((
+                    key.attempt_sequence_number,
+                    SettlementAttemptResult::try_from(result)?,
+                ))
+            })
             .collect::<Result<Vec<_>, _>>()
     }
 }

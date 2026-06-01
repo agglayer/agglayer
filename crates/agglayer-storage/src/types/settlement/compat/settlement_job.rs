@@ -14,23 +14,6 @@ impl TryFrom<v0::SettlementJob> for SettlementJob {
             calldata: required_field!(value, calldata => into::<Vec<u8>>).into(),
             eth_value: required_field!(value, eth_value => try_into::<agglayer_types::U256>),
             gas_limit: required_field!(value, gas_limit => try_into::<u128>),
-            max_fee_per_gas_ceiling: required_field!(value, max_fee_per_gas_ceiling =>
-                try_into::<u128>
-            ),
-            max_fee_per_gas_floor: required_field!(value, max_fee_per_gas_floor =>
-                try_into::<u128>
-            ),
-            max_fee_per_gas_increase_percents: value.max_fee_per_gas_increase_percents,
-            max_priority_fee_per_gas_ceiling: required_field!(
-                value,
-                max_priority_fee_per_gas_ceiling => try_into::<u128>
-            ),
-            max_priority_fee_per_gas_floor: required_field!(
-                value,
-                max_priority_fee_per_gas_floor => try_into::<u128>
-            ),
-            max_priority_fee_per_gas_increase_percents: value
-                .max_priority_fee_per_gas_increase_percents,
         })
     }
 }
@@ -44,13 +27,6 @@ impl From<&SettlementJob> for v0::SettlementJob {
             }),
             eth_value: Some(value.eth_value.into()),
             gas_limit: Some(value.gas_limit.into()),
-            max_fee_per_gas_ceiling: Some(value.max_fee_per_gas_ceiling.into()),
-            max_fee_per_gas_floor: Some(value.max_fee_per_gas_floor.into()),
-            max_fee_per_gas_increase_percents: value.max_fee_per_gas_increase_percents,
-            max_priority_fee_per_gas_ceiling: Some(value.max_priority_fee_per_gas_ceiling.into()),
-            max_priority_fee_per_gas_floor: Some(value.max_priority_fee_per_gas_floor.into()),
-            max_priority_fee_per_gas_increase_percents: value
-                .max_priority_fee_per_gas_increase_percents,
         }
     }
 }
@@ -74,12 +50,6 @@ mod tests {
             calldata: Bytes::from(vec![1, 2, 3]),
             eth_value: agglayer_types::U256::from(3_u64),
             gas_limit: 10,
-            max_fee_per_gas_ceiling: 20,
-            max_fee_per_gas_floor: 30,
-            max_fee_per_gas_increase_percents: 125,
-            max_priority_fee_per_gas_ceiling: 40,
-            max_priority_fee_per_gas_floor: 50,
-            max_priority_fee_per_gas_increase_percents: 125,
         }
     }
 

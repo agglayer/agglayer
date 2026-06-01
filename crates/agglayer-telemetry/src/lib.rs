@@ -7,6 +7,7 @@ use axum::{
     serve::WithGracefulShutdown,
     Router,
 };
+use eyre::Context as _;
 use lazy_static::lazy_static;
 use opentelemetry::global;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
@@ -14,17 +15,12 @@ use prometheus::{Encoder as _, Registry, TextEncoder};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-use crate::{
-    constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME},
-    error::MetricsError,
-};
+use crate::constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME};
 
 mod constant;
-mod error;
 
 pub mod clock;
 
-pub use error::Error;
 pub use opentelemetry::KeyValue;
 
 lazy_static! {
@@ -110,12 +106,11 @@ impl ServerBuilder {
     /// ```
     /// # use std::sync::Arc;
     /// # use agglayer_telemetry::ServerBuilder;
-    /// # use agglayer_telemetry::Error;
     /// # use tokio_util::sync::CancellationToken;
     /// # use std::net::SocketAddr;
     /// #
     ///
-    /// async fn build_metrics() -> Result<(), Error> {
+    /// async fn build_metrics() -> eyre::Result<()> {
     ///     ServerBuilder::builder()
     ///         .addr("127.0.0.1".parse::<SocketAddr>().unwrap())
     ///         .cancellation_token(CancellationToken::new())
@@ -139,17 +134,16 @@ impl ServerBuilder {
         addr: SocketAddr,
         registry: Option<Registry>,
         cancellation_token: CancellationToken,
-    ) -> Result<
+    ) -> eyre::Result<
         WithGracefulShutdown<
             tokio::net::TcpListener,
             axum::routing::IntoMakeService<Router>,
             axum::Router,
             impl futures::Future<Output = ()>,
         >,
-        Error,
     > {
         let registry = registry.unwrap_or_default();
-        let _ = Self::init_meter_provider(&registry);
+        Self::init_meter_provider(&registry);
 
         let app = Router::new()
             .route(
@@ -168,13 +162,15 @@ impl ServerBuilder {
 
         info!("Starting metrics server on {}", addr);
 
-        let listener = tokio::net::TcpListener::bind(addr).await?;
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .wrap_err_with(|| format!("Unable to bind metrics server on {addr}"))?;
 
         Ok(axum::serve(listener, app.into_make_service())
             .with_graceful_shutdown(shutdown_signal(cancellation_token)))
     }
 
-    fn init_meter_provider(registry: &Registry) -> Result<(), MetricsError> {
+    fn init_meter_provider(registry: &Registry) {
         // configure OpenTelemetry to use the registry
         let exporter = opentelemetry_prometheus::exporter()
             .with_registry(registry.clone())
@@ -185,17 +181,18 @@ impl ServerBuilder {
         let provider = SdkMeterProvider::builder().with_reader(exporter).build();
 
         global::set_meter_provider(provider);
-        Ok(())
     }
 
-    fn gather_metrics(registry: &prometheus::Registry) -> Result<String, MetricsError> {
+    fn gather_metrics(registry: &prometheus::Registry) -> eyre::Result<String> {
         // Encode data as text or protobuf
         let encoder = TextEncoder::new();
         let metric_families = registry.gather();
         let mut result = Vec::new();
-        encoder.encode(&metric_families, &mut result)?;
+        encoder
+            .encode(&metric_families, &mut result)
+            .wrap_err("Error gathering metrics")?;
 
-        Ok(String::from_utf8(result)?)
+        String::from_utf8(result).wrap_err("Error formatting metrics")
     }
 }
 

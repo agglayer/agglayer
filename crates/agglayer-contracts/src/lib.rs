@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use agglayer_errors::ResultExt as _;
 use agglayer_primitives::U256;
 use agglayer_types::SettlementTxHash;
 use alloy::{
@@ -13,7 +14,8 @@ use alloy::{
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
 };
-use tracing::{debug, error, info};
+use eyre::{eyre, Context as _};
+use tracing::{debug, info};
 
 pub mod aggchain;
 pub mod contracts;
@@ -35,13 +37,6 @@ pub struct GasPriceParams {
     ceiling: u128,
 }
 
-#[derive(thiserror::Error, Debug)]
-#[error("Gas price floor ({floor}) must be <= to ceiling ({ceiling})")]
-pub struct GasPriceParamsError {
-    floor: u128,
-    ceiling: u128,
-}
-
 impl GasPriceParams {
     /// Create new gas price parameters.
     ///
@@ -49,10 +44,12 @@ impl GasPriceParams {
     pub fn new(
         multiplier_per_1000: u64,
         range: std::ops::RangeInclusive<u128>,
-    ) -> Result<Self, GasPriceParamsError> {
+    ) -> eyre::Result<Self> {
         let (floor, ceiling) = (*range.start(), *range.end());
         if ceiling < floor {
-            return Err(GasPriceParamsError { floor, ceiling });
+            return Err(eyre!(
+                "Gas price floor ({floor}) must be <= to ceiling ({ceiling})"
+            ));
         }
         Ok(Self {
             multiplier_per_1000,
@@ -106,14 +103,6 @@ pub struct L1RpcClient<RpcProvider> {
     /// This is to avoid hitting provider limits when querying large block
     /// ranges or errors like "query returned more than 10000 results".
     event_filter_block_range: u64,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum L1RpcInitializationError {
-    #[error("Unable to get the InitL1InfoRootMap: {0}")]
-    InitL1InfoRootMapEventNotFound(String),
-    #[error("Event InitL1InfoRootMap returned null value for L1 info root, leaf count: {0}")]
-    InvalidL1InfoRootFromEvent(u32),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -226,7 +215,7 @@ where
         gas_multiplier_factor: u32,
         gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
-    ) -> Result<Self, L1RpcInitializationError>
+    ) -> eyre::Result<Self>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
     {
@@ -248,18 +237,16 @@ where
                 .from_block(BlockNumberOrTag::Earliest);
 
             // Get logs from the contract
-            let events = rpc.get_logs(&filter).await.map_err(|error| {
-                error!(?error, "Failed to get InitL1InfoRootMap events");
-                L1RpcInitializationError::InitL1InfoRootMapEventNotFound(error.to_string())
-            })?;
+            let events = rpc
+                .get_logs(&filter)
+                .await
+                .log_err("Failed to get InitL1InfoRootMap events")
+                .wrap_err("Unable to get the InitL1InfoRootMap")?;
 
             // Get the first log and decode it
-            let first_log =
-                events
-                    .first()
-                    .ok_or(L1RpcInitializationError::InitL1InfoRootMapEventNotFound(
-                        String::from("Event InitL1InfoRootMap not found"),
-                    ))?;
+            let first_log = events.first().ok_or_else(|| {
+                eyre!("Unable to get the InitL1InfoRootMap: Event InitL1InfoRootMap not found")
+            })?;
 
             info!(
                 "Found InitL1InfoRootMap event on block {:?}",
@@ -269,9 +256,10 @@ where
             // Decode the log using alloy's generated event type
             let decoded_event =
                 InitL1InfoRootMap::decode_log(&first_log.clone().into()).map_err(|_| {
-                    L1RpcInitializationError::InitL1InfoRootMapEventNotFound(String::from(
-                        "Failed to decode InitL1InfoRootMap event",
-                    ))
+                    eyre!(
+                        "Unable to get the InitL1InfoRootMap: Failed to decode InitL1InfoRootMap \
+                         event"
+                    )
                 })?;
 
             let l1_leaf_count = decoded_event.leafCount;
@@ -279,8 +267,9 @@ where
 
             // Check that fetched l1 info root is non-zero
             if l1_info_root == [0u8; 32] {
-                return Err(L1RpcInitializationError::InvalidL1InfoRootFromEvent(
-                    l1_leaf_count,
+                return Err(eyre!(
+                    "Event InitL1InfoRootMap returned null value for L1 info root, leaf count: \
+                     {l1_leaf_count}"
                 ));
             }
 

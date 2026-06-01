@@ -20,24 +20,6 @@ message SettlementJob {
 
   // Gas limit for each settlement attempt.
   Uint128 gas_limit = 4;
-
-  // Ceiling for max fee per gas.
-  Uint128 max_fee_per_gas_ceiling = 5;
-
-  // Floor for max fee per gas.
-  Uint128 max_fee_per_gas_floor = 6;
-
-  // Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-  uint32 max_fee_per_gas_increase_percents = 7;
-
-  // Ceiling for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_ceiling = 8;
-
-  // Floor for max priority fee per gas.
-  Uint128 max_priority_fee_per_gas_floor = 9;
-
-  // Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-  uint32 max_priority_fee_per_gas_increase_percents = 10;
 }
 
 // Result of one settlement attempt.
@@ -134,12 +116,6 @@ message SettlementAttempt {
 
   // Nonce reserved for the transaction.
   Nonce nonce = 2;
-
-  // Gas price parameters used for this attempt.
-  Uint128 max_fee_per_gas = 3;
-
-  // Gas price parameters used for this attempt.
-  Uint128 max_priority_fee_per_gas = 4;
 
   // Hash of the submitted transaction.
   TxHash tx_hash = 5;
