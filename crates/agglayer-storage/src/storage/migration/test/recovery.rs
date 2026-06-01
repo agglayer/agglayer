@@ -11,7 +11,7 @@ fn partial_migration(
 
     // what kind of failure to issue
     #[values("panic", "return(simulated_fail)")] fail_mode: &str,
-) -> Result<(), eyre::Error> {
+) -> eyre::Result<()> {
     let _guard = lock_sample_migration_tests();
     let scenario = fail::FailScenario::setup();
 

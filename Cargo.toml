@@ -47,6 +47,7 @@ pessimistic-proof-core = { path = "crates/pessimistic-proof-core" }
 pessimistic-proof-test-suite = { path = "crates/pessimistic-proof-test-suite" }
 
 # Interop
+agglayer-errors = "0.18.0"
 agglayer-bincode = "0.18.0"
 agglayer-interop = "0.18.0"
 agglayer-interop-types = "0.18.0"
