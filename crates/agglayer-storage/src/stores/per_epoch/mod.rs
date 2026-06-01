@@ -522,7 +522,7 @@ where
             Err(crate::storage::DBError::ColumnFamilyNotFound) => {
                 warn!(
                     "Proto certificate CF missing for epoch {}: reading from the legacy CF",
-                    self.epoch_number, index
+                    self.epoch_number
                 );
                 Ok(self
                     .db
