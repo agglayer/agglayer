@@ -286,10 +286,9 @@ impl SettlementWriter for StateStore {
 
                 if !stored_result.can_be_replaced_by(tx_result) {
                     return Err(Error::UnprocessedAction(format!(
-                        "Cannot replace existing settlement attempt result {stored_result:?} \
-                         with new settlement attempt result {tx_result:?} for job \
-                         {settlement_job_id} and attempt sequence number \
-                         {attempt_sequence_number}",
+                        "Cannot replace existing settlement attempt result {stored_result:?} with \
+                         new settlement attempt result {tx_result:?} for job {settlement_job_id} \
+                         and attempt sequence number {attempt_sequence_number}",
                     )));
                 }
             }

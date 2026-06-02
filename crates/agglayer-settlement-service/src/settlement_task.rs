@@ -645,7 +645,8 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
     ) {
         if self.record_nonce_already_used_attempts_to_db(wallet, nonce, tx_hash, None) == 0 {
             panic!(
-                "Settlement task {} tried to record external nonce use for unknown nonce {wallet}/{nonce}",
+                "Settlement task {} tried to record external nonce use for unknown nonce \
+                 {wallet}/{nonce}",
                 self.id
             );
         }

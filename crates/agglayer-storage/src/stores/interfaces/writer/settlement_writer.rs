@@ -46,9 +46,9 @@ pub trait SettlementWriter: Send + Sync {
     /// Records a settlement attempt result under `(settlement_job_id,
     /// attempt_sequence_number)`.
     ///
-    /// This inserts missing results, accepts idempotent re-recording, and allows
-    /// a previous client error to be replaced by stronger final nonce/on-chain
-    /// evidence. Other conflicting updates must fail.
+    /// This inserts missing results, accepts idempotent re-recording, and
+    /// allows a previous client error to be replaced by stronger final
+    /// nonce/on-chain evidence. Other conflicting updates must fail.
     fn record_settlement_attempt_result(
         &self,
         settlement_job_id: &SettlementJobId,
