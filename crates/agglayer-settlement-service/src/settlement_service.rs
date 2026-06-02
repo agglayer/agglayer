@@ -297,8 +297,8 @@ mod tests {
 
     use agglayer_storage::tests::mocks::MockStateStore;
     use agglayer_types::{
-        ContractCallOutcome, ContractCallResult, Digest, SettlementJobId, SettlementJobResult,
-        SettlementTxHash, B256,
+        ContractCallOutcome, ContractCallResult, Digest, Nonce, SettlementAttemptNumber,
+        SettlementJobId, SettlementJobResult, SettlementTxHash, B256,
     };
     use alloy::providers::ProviderBuilder;
 
@@ -331,13 +331,18 @@ mod tests {
     }
 
     fn mk_result(seed: u8, outcome: ContractCallOutcome) -> SettlementJobResult {
-        SettlementJobResult::ContractCall(ContractCallResult {
-            outcome,
-            metadata: vec![seed, seed.wrapping_add(1)].into(),
-            block_hash: B256::from([seed; 32]),
-            block_number: seed as u64,
-            tx_hash: SettlementTxHash::new(Digest::from([seed.wrapping_add(2); 32])),
-        })
+        SettlementJobResult {
+            wallet: agglayer_types::Address::from([seed.wrapping_add(3); 20]),
+            nonce: Nonce(seed as u64 + 200),
+            attempt_number: SettlementAttemptNumber(seed as u64 + 300),
+            contract_call_result: ContractCallResult {
+                outcome,
+                metadata: vec![seed, seed.wrapping_add(1)].into(),
+                block_hash: B256::from([seed; 32]),
+                block_number: seed as u64,
+                tx_hash: SettlementTxHash::new(Digest::from([seed.wrapping_add(2); 32])),
+            },
+        }
     }
 
     #[tokio::test]

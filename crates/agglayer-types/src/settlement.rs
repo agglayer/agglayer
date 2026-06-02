@@ -82,8 +82,11 @@ pub struct SettlementJob {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SettlementJobResult {
-    ContractCall(ContractCallResult),
+pub struct SettlementJobResult {
+    pub wallet: Address,
+    pub nonce: Nonce,
+    pub attempt_number: SettlementAttemptNumber,
+    pub contract_call_result: ContractCallResult,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -98,10 +101,11 @@ pub struct ClientError {
     pub message: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClientErrorType {
     Unknown,
     NonceAlreadyUsed,
+    SettlementSucceededElsewhere,
 }
 
 impl ClientError {
@@ -118,6 +122,30 @@ impl ClientError {
         Self {
             kind: ClientErrorType::Unknown,
             message: "Timeout waiting for inclusion on L1".to_string(),
+        }
+    }
+
+    pub fn settlement_succeeded_elsewhere(tx_hash: SettlementTxHash) -> Self {
+        Self {
+            kind: ClientErrorType::SettlementSucceededElsewhere,
+            message: format!("Settlement succeeded in transaction {tx_hash}"),
+        }
+    }
+}
+
+impl SettlementAttemptResult {
+    pub fn can_be_replaced_by(&self, replacement: &Self) -> bool {
+        match (self, replacement) {
+            (Self::ClientError(_), Self::ContractCall(_)) => true,
+            (Self::ClientError(existing_error), Self::ClientError(replacement_error)) => {
+                existing_error.kind == ClientErrorType::Unknown
+                    && matches!(
+                        replacement_error.kind,
+                        ClientErrorType::NonceAlreadyUsed
+                            | ClientErrorType::SettlementSucceededElsewhere
+                    )
+            }
+            _ => false,
         }
     }
 }

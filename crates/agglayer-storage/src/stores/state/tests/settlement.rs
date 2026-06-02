@@ -4,8 +4,8 @@ use std::{
 };
 
 use agglayer_types::{
-    Address, Digest, Nonce, SettlementAttempt, SettlementJob, SettlementJobId, SettlementTxHash,
-    U256,
+    Address, ClientError, ClientErrorType, Digest, Nonce, SettlementAttempt,
+    SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementTxHash, U256,
 };
 
 use crate::{
@@ -129,7 +129,7 @@ fn insert_settlement_attempt_without_job_fails() {
 }
 
 #[test]
-fn insert_settlement_attempt_result_succeeds_once() {
+fn record_settlement_attempt_result_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_job_id(5);
     store
@@ -139,7 +139,7 @@ fn insert_settlement_attempt_result_succeeds_once() {
         .insert_settlement_attempt(&job_id, 1, &mk_settlement_attempt(1))
         .expect("attempt insert must succeed");
     assert!(store
-        .insert_settlement_attempt_result(
+        .record_settlement_attempt_result(
             &job_id,
             1,
             &v0::SettlementAttemptResult::contract_call_success_for_test(1)
@@ -150,13 +150,10 @@ fn insert_settlement_attempt_result_succeeds_once() {
 }
 
 #[test]
-fn insert_settlement_attempt_result_duplicate_fails() {
+fn record_settlement_attempt_result_idempotent_record_succeeds() {
     let (_tmp, db, store) = setup_store();
     let job_id = mk_job_id(6);
     let first = v0::SettlementAttemptResult::contract_call_success_for_test(1)
-        .try_into()
-        .expect("test tx result helper should be decodable");
-    let second = v0::SettlementAttemptResult::contract_call_success_for_test(2)
         .try_into()
         .expect("test tx result helper should be decodable");
     store
@@ -166,10 +163,11 @@ fn insert_settlement_attempt_result_duplicate_fails() {
         .insert_settlement_attempt(&job_id, 1, &mk_settlement_attempt(1))
         .expect("attempt insert must succeed");
     store
-        .insert_settlement_attempt_result(&job_id, 1, &first)
+        .record_settlement_attempt_result(&job_id, 1, &first)
         .expect("first insert must succeed");
-    let res = store.insert_settlement_attempt_result(&job_id, 1, &second);
-    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+    store
+        .record_settlement_attempt_result(&job_id, 1, &first)
+        .expect("idempotent record must succeed");
     assert_eq!(
         db.get::<SettlementAttemptResultsColumn>(&SettlementAttemptKey {
             settlement_job_id: job_id,
@@ -181,14 +179,14 @@ fn insert_settlement_attempt_result_duplicate_fails() {
 }
 
 #[test]
-fn insert_settlement_attempt_result_without_attempt_fails() {
+fn record_settlement_attempt_result_without_attempt_fails() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_job_id(405);
     store
         .insert_settlement_job(&job_id, &mk_settlement_job(42))
         .expect("job insert must succeed");
 
-    let res = store.insert_settlement_attempt_result(
+    let res = store.record_settlement_attempt_result(
         &job_id,
         1,
         &v0::SettlementAttemptResult::contract_call_success_for_test(1)
@@ -196,6 +194,77 @@ fn insert_settlement_attempt_result_without_attempt_fails() {
             .expect("test tx result helper should be decodable"),
     );
     assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+}
+
+#[test]
+fn record_settlement_attempt_result_replaces_client_error_with_contract_call() {
+    let (_tmp, db, store) = setup_store();
+    let job_id = mk_job_id(24);
+    let attempt = mk_settlement_attempt(1);
+    let client_error = SettlementAttemptResult::ClientError(ClientError {
+        kind: ClientErrorType::Unknown,
+        message: "submit failed".to_string(),
+    });
+    let contract_call_result = v0::SettlementAttemptResult::contract_call_success_for_test(24)
+        .try_into()
+        .expect("test tx result helper should be decodable");
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(24))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &attempt)
+        .expect("attempt insert must succeed");
+    store
+        .record_settlement_attempt_result(&job_id, 1, &client_error)
+        .expect("client error insert must succeed");
+    store
+        .record_settlement_attempt_result(&job_id, 1, &contract_call_result)
+        .expect("contract call should replace client error");
+
+    assert_eq!(
+        db.get::<SettlementAttemptResultsColumn>(&SettlementAttemptKey {
+            settlement_job_id: job_id,
+            attempt_sequence_number: 1,
+        })
+        .expect("attempt result read must succeed"),
+        Some((&contract_call_result).into())
+    );
+}
+
+#[test]
+fn record_settlement_attempt_result_rejects_conflicting_contract_calls() {
+    let (_tmp, db, store) = setup_store();
+    let job_id = mk_job_id(25);
+    let attempt = mk_settlement_attempt(1);
+    let first = v0::SettlementAttemptResult::contract_call_success_for_test(25)
+        .try_into()
+        .expect("test tx result helper should be decodable");
+    let second = v0::SettlementAttemptResult::contract_call_success_for_test(26)
+        .try_into()
+        .expect("test tx result helper should be decodable");
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(25))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &attempt)
+        .expect("attempt insert must succeed");
+    store
+        .record_settlement_attempt_result(&job_id, 1, &first)
+        .expect("first result insert must succeed");
+
+    let res = store.record_settlement_attempt_result(&job_id, 1, &second);
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+
+    assert_eq!(
+        db.get::<SettlementAttemptResultsColumn>(&SettlementAttemptKey {
+            settlement_job_id: job_id,
+            attempt_sequence_number: 1,
+        })
+        .expect("attempt result read must succeed"),
+        Some((&first).into())
+    );
 }
 
 #[test]
@@ -405,10 +474,10 @@ fn list_settlement_attempt_results_returns_all_results_for_job() {
         .insert_settlement_attempt(&job_id, 2, &second_attempt)
         .expect("second attempt insert must succeed");
     store
-        .insert_settlement_attempt_result(&job_id, 1, &first_result)
+        .record_settlement_attempt_result(&job_id, 1, &first_result)
         .expect("first result insert must succeed");
     store
-        .insert_settlement_attempt_result(&job_id, 2, &second_result)
+        .record_settlement_attempt_result(&job_id, 2, &second_result)
         .expect("second result insert must succeed");
 
     assert_eq!(
@@ -447,10 +516,10 @@ fn list_settlement_attempt_results_does_not_return_results_from_other_jobs() {
         .insert_settlement_attempt(&job_id, 2, &mk_settlement_attempt(2))
         .expect("second attempt insert must succeed");
     store
-        .insert_settlement_attempt_result(&job_id, 1, &first_result)
+        .record_settlement_attempt_result(&job_id, 1, &first_result)
         .expect("first result insert must succeed");
     store
-        .insert_settlement_attempt_result(
+        .record_settlement_attempt_result(
             &other_job_id,
             1,
             &v0::SettlementAttemptResult::contract_call_success_for_test(10)
@@ -459,7 +528,7 @@ fn list_settlement_attempt_results_does_not_return_results_from_other_jobs() {
         )
         .expect("other job result insert must succeed");
     store
-        .insert_settlement_attempt_result(&job_id, 2, &second_result)
+        .record_settlement_attempt_result(&job_id, 2, &second_result)
         .expect("second result insert must succeed");
 
     assert_eq!(
@@ -518,7 +587,7 @@ fn job_attempt_result_can_be_read_back_together() {
         .insert_settlement_attempt(&job_id, 5, &attempt)
         .expect("insert must succeed");
     store
-        .insert_settlement_attempt_result(&job_id, 5, &attempt_result)
+        .record_settlement_attempt_result(&job_id, 5, &attempt_result)
         .expect("insert must succeed");
     store
         .insert_settlement_job_result(&job_id, &job_result)
@@ -574,38 +643,5 @@ fn result_absent_does_not_imply_attempt_absent() {
         })
         .expect("attempt result read must succeed"),
         None
-    );
-}
-
-#[test]
-fn duplicate_insert_preserves_original_value() {
-    let (_tmp, db, store) = setup_store();
-    let job_id = mk_job_id(23);
-    let first = v0::SettlementAttemptResult::contract_call_success_for_test(1)
-        .try_into()
-        .expect("test tx result helper should be decodable");
-    let second = v0::SettlementAttemptResult::contract_call_success_for_test(2)
-        .try_into()
-        .expect("test tx result helper should be decodable");
-    store
-        .insert_settlement_job(&job_id, &mk_settlement_job(23))
-        .expect("job insert must succeed");
-    store
-        .insert_settlement_attempt(&job_id, 9, &mk_settlement_attempt(9))
-        .expect("attempt insert must succeed");
-
-    store
-        .insert_settlement_attempt_result(&job_id, 9, &first)
-        .expect("first insert must succeed");
-    let res = store.insert_settlement_attempt_result(&job_id, 9, &second);
-    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
-
-    assert_eq!(
-        db.get::<SettlementAttemptResultsColumn>(&SettlementAttemptKey {
-            settlement_job_id: job_id,
-            attempt_sequence_number: 9,
-        })
-        .expect("attempt result read must succeed"),
-        Some((&first).into())
     );
 }
