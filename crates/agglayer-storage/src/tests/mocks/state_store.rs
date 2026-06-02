@@ -161,7 +161,7 @@ mock! {
             settlement_attempt: &SettlementAttempt,
         ) -> Result<(), Error>;
 
-        fn insert_settlement_attempt_result(
+        fn record_settlement_attempt_result(
             &self,
             settlement_job_id: &SettlementJobId,
             attempt_sequence_number: u64,
