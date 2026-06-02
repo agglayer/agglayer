@@ -12,10 +12,13 @@ use crate::{
 
 #[test]
 fn settlement_job_roundtrip_codec() {
-    let key = SettlementJobId::from(ulid::Ulid::from(42u128));
+    let key = SettlementJobId::from(42u128);
     let value = mk_settlement_job();
 
     let encoded_key = key.encode().expect("Unable to encode key");
+    assert_eq!(encoded_key.len(), Key::BYTE_LEN);
+    assert_eq!(encoded_key, key.to_be_bytes());
+
     let decoded_key = Key::decode(&encoded_key).expect("Unable to decode key");
     assert_eq!(decoded_key, key);
 
@@ -40,19 +43,5 @@ fn mk_settlement_job() -> SettlementJob {
         gas_limit: Some(Uint128 {
             value: vec![0x02; 16].into(),
         }),
-        max_fee_per_gas_ceiling: Some(Uint128 {
-            value: vec![0x03; 16].into(),
-        }),
-        max_fee_per_gas_floor: Some(Uint128 {
-            value: vec![0x04; 16].into(),
-        }),
-        max_fee_per_gas_increase_percents: 10,
-        max_priority_fee_per_gas_ceiling: Some(Uint128 {
-            value: vec![0x05; 16].into(),
-        }),
-        max_priority_fee_per_gas_floor: Some(Uint128 {
-            value: vec![0x06; 16].into(),
-        }),
-        max_priority_fee_per_gas_increase_percents: 20,
     }
 }

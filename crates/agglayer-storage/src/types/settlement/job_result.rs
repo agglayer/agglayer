@@ -1,5 +1,6 @@
 use std::io;
 
+use agglayer_types::SettlementJobId;
 use prost::{bytes::BytesMut, Message as _};
 
 use crate::{
@@ -7,7 +8,8 @@ use crate::{
     types::generated::agglayer::storage::v0,
 };
 
-pub type Key = super::job::Key;
+pub type Key = SettlementJobId;
+
 pub type Value = v0::SettlementJobResult;
 
 impl Codec for Value {
@@ -27,4 +29,25 @@ impl Codec for Value {
     fn decode(buf: &[u8]) -> Result<Self, CodecError> {
         <Value as prost::Message>::decode(buf).map_err(Into::into)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Key, Value};
+
+    mod key {
+        use super::Key;
+
+        crate::types::codec_tests::codec_tests!(Key::from(0x0102030405060708090a0b0c0d0e0f10_u128));
+    }
+
+    impl<'a> arbitrary::Arbitrary<'a> for Value {
+        fn arbitrary(input: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+            Ok(Self::contract_call_success_for_test(
+                <u8 as arbitrary::Arbitrary>::arbitrary(input)?,
+            ))
+        }
+    }
+
+    crate::types::codec_tests::codec_tests!(Value::contract_call_success_for_test(0x17));
 }

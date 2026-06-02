@@ -94,7 +94,7 @@ where
     .await
 }
 
-fn is_transient_alloy_error(error: &TransportError) -> bool {
+pub(crate) fn is_transient_alloy_error(error: &TransportError) -> bool {
     RateLimitRetryPolicy::default().should_retry(error)
 }
 

@@ -24,6 +24,8 @@ args = [
     "test",
     "-ppessimistic-proof-test-suite",
     "--test=cycle-tracker",
+    "--",
+    "--test-threads=1",
 ]
 
 [tasks.pp-check-vkey-change]

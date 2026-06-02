@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[test_log::test]
-fn default_cf_not_empty() -> Result<(), eyre::Error> {
+fn default_cf_not_empty() -> eyre::Result<()> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
@@ -37,7 +37,7 @@ fn default_cf_not_empty() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn migration_record_gap() -> Result<(), eyre::Error> {
+fn migration_record_gap() -> eyre::Result<()> {
     let _guard = lock_sample_migration_tests();
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
@@ -72,7 +72,7 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn noop_ensure_cfs_does_not_create_migration_gap() -> Result<(), eyre::Error> {
+fn noop_ensure_cfs_does_not_create_migration_gap() -> eyre::Result<()> {
     let _guard = lock_sample_migration_tests();
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
@@ -102,7 +102,7 @@ fn noop_ensure_cfs_does_not_create_migration_gap() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn unexpected_schema() -> Result<(), eyre::Error> {
+fn unexpected_schema() -> eyre::Result<()> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
@@ -129,7 +129,7 @@ fn unexpected_schema() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
+fn write_to_readonly_cf_during_migration() -> eyre::Result<()> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 

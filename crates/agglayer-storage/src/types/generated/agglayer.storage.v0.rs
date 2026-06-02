@@ -818,24 +818,6 @@ pub struct SettlementJob {
     /// Gas limit for each settlement attempt.
     #[prost(message, optional, tag="4")]
     pub gas_limit: ::core::option::Option<Uint128>,
-    /// Ceiling for max fee per gas.
-    #[prost(message, optional, tag="5")]
-    pub max_fee_per_gas_ceiling: ::core::option::Option<Uint128>,
-    /// Floor for max fee per gas.
-    #[prost(message, optional, tag="6")]
-    pub max_fee_per_gas_floor: ::core::option::Option<Uint128>,
-    /// Percent increase for max fee per gas: each retry will multiply max fee per gas by N / 100.
-    #[prost(uint32, tag="7")]
-    pub max_fee_per_gas_increase_percents: u32,
-    /// Ceiling for max priority fee per gas.
-    #[prost(message, optional, tag="8")]
-    pub max_priority_fee_per_gas_ceiling: ::core::option::Option<Uint128>,
-    /// Floor for max priority fee per gas.
-    #[prost(message, optional, tag="9")]
-    pub max_priority_fee_per_gas_floor: ::core::option::Option<Uint128>,
-    /// Percent increase for max priority fee per gas: each retry will multiply max priority fee per gas by N / 100.
-    #[prost(uint32, tag="10")]
-    pub max_priority_fee_per_gas_increase_percents: u32,
 }
 /// Result of one settlement attempt.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -934,12 +916,6 @@ pub struct SettlementAttempt {
     /// Nonce reserved for the transaction.
     #[prost(message, optional, tag="2")]
     pub nonce: ::core::option::Option<Nonce>,
-    /// Gas price parameters used for this attempt.
-    #[prost(message, optional, tag="3")]
-    pub max_fee_per_gas: ::core::option::Option<Uint128>,
-    /// Gas price parameters used for this attempt.
-    #[prost(message, optional, tag="4")]
-    pub max_priority_fee_per_gas: ::core::option::Option<Uint128>,
     /// Hash of the submitted transaction.
     #[prost(message, optional, tag="5")]
     pub tx_hash: ::core::option::Option<TxHash>,
