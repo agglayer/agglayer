@@ -24,7 +24,7 @@ use crate::{
         certificates::{CertificatePerIndexColumn, CertificatePerIndexProtoColumn},
         end_checkpoint::EndCheckpointColumn,
         metadata::PerEpochMetadataColumn,
-        proofs::ProofPerIndexColumn,
+        proofs::{ProofPerIndexColumn, ProofPerIndexProtoColumn},
         start_checkpoint::StartCheckpointColumn,
     },
     error::{CertificateCandidateError, Error},
@@ -59,6 +59,10 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             .add_cfs(
                 &[ColumnDescriptor::new::<CertificatePerIndexProtoColumn>()],
                 backfill_epoch_certificates_proto_from_legacy_bincode,
+            )?
+            .add_cfs(
+                &[ColumnDescriptor::new::<ProofPerIndexProtoColumn>()],
+                backfill_epoch_proofs_proto_from_legacy_bincode,
             )?
             .finalize(cf_definitions::EPOCHS_DB)
     }
@@ -270,6 +274,15 @@ fn backfill_epoch_certificates_proto_from_legacy_bincode(
     >(db, "epoch")
 }
 
+fn backfill_epoch_proofs_proto_from_legacy_bincode(
+    db: &crate::storage::DbAccess,
+) -> Result<(), crate::storage::DBMigrationErrorDetails> {
+    super::migration_helpers::copy_legacy_proof_cf_into_proto::<
+        ProofPerIndexColumn,
+        ProofPerIndexProtoColumn,
+    >(db, "epoch")
+}
+
 impl<PendingStore, StateStore> PerEpochWriter for PerEpochStore<PendingStore, StateStore>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
@@ -430,7 +443,7 @@ where
             .put::<CertificatePerIndexProtoColumn>(&certificate_index, &certificate)?;
 
         self.db
-            .put::<ProofPerIndexColumn>(&certificate_index, &proof)?;
+            .put::<ProofPerIndexProtoColumn>(&certificate_index, &proof)?;
 
         // Removing the certificate and proof from the pending store
         self.pending_store.remove_generated_proof(&certificate_id)?;
@@ -517,7 +530,7 @@ where
     }
 
     fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error> {
-        Ok(self.db.get::<ProofPerIndexColumn>(&index)?)
+        Ok(self.db.get::<ProofPerIndexProtoColumn>(&index)?)
     }
 
     fn get_start_checkpoint(&self) -> &BTreeMap<NetworkId, Height> {

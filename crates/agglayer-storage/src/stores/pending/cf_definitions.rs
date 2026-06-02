@@ -3,7 +3,7 @@ use crate::{
         latest_pending_certificate_per_network::LatestPendingCertificatePerNetworkColumn,
         latest_proven_certificate_per_network::LatestProvenCertificatePerNetworkColumn,
         pending_queue::{PendingQueueColumn, PendingQueueProtoColumn},
-        proof_per_certificate::ProofPerCertificateColumn,
+        proof_per_certificate::{ProofPerCertificateColumn, ProofPerCertificateProtoColumn},
     },
     schema::ColumnDescriptor,
 };
@@ -23,4 +23,5 @@ pub const PENDING_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<PendingQueueColumn>(),
     ColumnDescriptor::new::<PendingQueueProtoColumn>(),
     ColumnDescriptor::new::<ProofPerCertificateColumn>(),
+    ColumnDescriptor::new::<ProofPerCertificateProtoColumn>(),
 ];
