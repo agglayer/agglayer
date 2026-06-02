@@ -1000,12 +1000,6 @@ mod tests {
             calldata: vec![2, 3].into(),
             eth_value: U256::from(0),
             gas_limit: 100_000,
-            max_fee_per_gas_ceiling: 100,
-            max_fee_per_gas_floor: 10,
-            max_fee_per_gas_increase_percents: 10,
-            max_priority_fee_per_gas_ceiling: 10,
-            max_priority_fee_per_gas_floor: 1,
-            max_priority_fee_per_gas_increase_percents: 10,
         }
     }
 
@@ -1033,8 +1027,6 @@ mod tests {
             attempt: SettlementAttempt {
                 sender_wallet: wallet.into(),
                 nonce,
-                max_fee_per_gas: 100,
-                max_priority_fee_per_gas: 10,
                 hash,
                 submission_time: SystemTime::UNIX_EPOCH,
             },
@@ -1052,6 +1044,7 @@ mod tests {
         SettlementTask {
             id: SettlementJobId::from(ulid::Ulid::from(1_u128)),
             job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(mk_provider()),
             store,
             control: mk_control(),
@@ -1200,12 +1193,6 @@ mod tests {
             }))
         ));
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
     #[test]
     fn required_settlement_head_number_is_inclusive_of_receipt_block() {
         // Confirmations count the receipt block itself, and saturate rather than
