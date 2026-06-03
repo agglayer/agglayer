@@ -453,9 +453,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         attempt_number: SettlementAttemptNumber,
         tx: TxEnvelope,
     ) {
-        let tx_hash = SettlementTxHash::from(Digest::from(*tx.tx_hash()));
-        self.save_attempt_to_db(wallet, nonce, attempt_number, tx_hash)
-            .await;
+        self.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
         if let Err(error) = self.submit_attempt_to_l1(tx).await {
             warn!(?error, "Failed to submit settlement attempt to L1");
             self.write_client_error_to_db(
@@ -770,16 +768,53 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         todo!()
     }
 
-    async fn save_attempt_to_db(
-        &self,
-        _wallet: Address,
-        _nonce: Nonce,
-        _attempt_number: SettlementAttemptNumber,
-        _tx: SettlementTxHash,
+    fn save_attempt_to_db(
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        attempt_number: SettlementAttemptNumber,
+        tx: &TxEnvelope,
     ) {
-        // TODO: Save a new settlement attempt to db
-        // XREF: https://github.com/agglayer/agglayer/issues/1320
-        todo!()
+        if let Some((existing_wallet, existing_nonce)) =
+            self.attempt_key_for_attempt_number(attempt_number)
+        {
+            panic!(
+                "Settlement attempt already tracked in memory for job {} attempt {} at \
+                 {existing_wallet}/{existing_nonce}",
+                self.id, attempt_number
+            );
+        }
+
+        let settlement_attempt = SettlementAttempt {
+            sender_wallet: wallet.into(),
+            nonce,
+            hash: SettlementTxHash::from(Digest::from(*tx.tx_hash())),
+            submission_time: SystemTime::now(),
+        };
+
+        self.store
+            .insert_settlement_attempt(&self.id, attempt_number.0, &settlement_attempt)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Failed to write settlement attempt for job {} attempt {}: {error:?}",
+                    self.id, attempt_number
+                )
+            });
+
+        let previous_attempt = self.attempts.entry((wallet, nonce)).or_default().insert(
+            attempt_number,
+            ActiveSettlementAttempt {
+                attempt: settlement_attempt,
+                result: None,
+            },
+        );
+        if previous_attempt.is_some() {
+            panic!(
+                "Settlement attempt was unexpectedly already tracked after DB write for job {} \
+                 attempt {}",
+                self.id, attempt_number
+            );
+        }
     }
 
     async fn write_client_error_to_db(
@@ -967,14 +1002,21 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::{
+        collections::BTreeMap,
+        panic::{catch_unwind, AssertUnwindSafe},
+    };
 
-    use agglayer_storage::tests::mocks::MockStateStore;
+    use agglayer_storage::{error::Error, tests::mocks::MockStateStore};
     use agglayer_types::{
         ClientError, ClientErrorType, ContractCallOutcome, Digest, SettlementAttemptResult, B256,
         U256,
     };
-    use alloy::providers::ProviderBuilder;
+    use alloy::{
+        consensus::{Signed, TxEip1559},
+        primitives::{Signature, TxKind},
+        providers::ProviderBuilder,
+    };
     use tokio::sync::mpsc;
 
     use super::*;
@@ -1005,6 +1047,24 @@ mod tests {
 
     fn mk_tx_hash(seed: u8) -> SettlementTxHash {
         SettlementTxHash::new(Digest::from([seed; 32]))
+    }
+
+    fn mk_tx(hash_seed: u8) -> TxEnvelope {
+        TxEnvelope::Eip1559(Signed::new_unchecked(
+            TxEip1559 {
+                chain_id: 1,
+                nonce: 2,
+                gas_limit: 100_000,
+                max_fee_per_gas: 100,
+                max_priority_fee_per_gas: 10,
+                to: TxKind::Call(Address::from([6; 20])),
+                value: U256::from(7_u64),
+                input: vec![8].into(),
+                access_list: Default::default(),
+            },
+            Signature::test_signature(),
+            B256::from([hash_seed; 32]),
+        ))
     }
 
     fn mk_contract_call_result(seed: u8, outcome: ContractCallOutcome) -> ContractCallResult {
@@ -1050,6 +1110,105 @@ mod tests {
             control: mk_control(),
             attempts,
         }
+    }
+
+    #[tokio::test]
+    async fn save_attempt_to_db_records_attempt_in_storage_and_memory() {
+        let mut store = MockStateStore::new();
+        let job_id = SettlementJobId::from(ulid::Ulid::from(1_u128));
+        let wallet = Address::from([2; 20]);
+        let expected_wallet: agglayer_types::Address = wallet.into();
+        let nonce = Nonce(7);
+        let attempt_number = SettlementAttemptNumber(3);
+        let tx = mk_tx(4);
+        let tx_hash = SettlementTxHash::from(Digest::from(*tx.tx_hash()));
+        let earliest_submission_time = SystemTime::now();
+
+        store
+            .expect_insert_settlement_attempt()
+            .once()
+            .withf(
+                move |recorded_job_id, recorded_attempt_number, recorded_attempt| {
+                    recorded_job_id == &job_id
+                        && *recorded_attempt_number == attempt_number.0
+                        && recorded_attempt.sender_wallet == expected_wallet
+                        && recorded_attempt.nonce == nonce
+                        && recorded_attempt.hash == tx_hash
+                        && recorded_attempt.submission_time >= earliest_submission_time
+                },
+            )
+            .return_once(|_, _, _| Ok(()));
+
+        let mut task = mk_task(Arc::new(store), BTreeMap::new());
+
+        task.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
+
+        let active_attempt = task
+            .attempts
+            .get(&(wallet, nonce))
+            .and_then(|attempts_for_nonce| attempts_for_nonce.get(&attempt_number))
+            .expect("attempt should be tracked in memory");
+
+        assert_eq!(active_attempt.attempt.sender_wallet, wallet.into());
+        assert_eq!(active_attempt.attempt.nonce, nonce);
+        assert_eq!(active_attempt.attempt.hash, tx_hash);
+        assert!(active_attempt.result.is_none());
+    }
+
+    #[tokio::test]
+    async fn save_attempt_to_db_does_not_track_attempt_when_storage_write_fails() {
+        let mut store = MockStateStore::new();
+        store
+            .expect_insert_settlement_attempt()
+            .once()
+            .return_once(|_, _, _| Err(Error::Unexpected("injected storage failure".to_string())));
+
+        let wallet = Address::from([2; 20]);
+        let nonce = Nonce(7);
+        let tx = mk_tx(4);
+        let mut task = mk_task(Arc::new(store), BTreeMap::new());
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            task.save_attempt_to_db(wallet, nonce, SettlementAttemptNumber(3), &tx);
+        }));
+
+        assert!(result.is_err());
+        assert!(task.attempts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn save_attempt_to_db_rejects_attempt_number_already_tracked_for_other_nonce() {
+        let store = MockStateStore::new();
+        let existing_wallet = Address::from([1; 20]);
+        let existing_nonce = Nonce(7);
+        let new_wallet = Address::from([2; 20]);
+        let new_nonce = Nonce(8);
+        let attempt_number = SettlementAttemptNumber(3);
+        let existing_hash = mk_tx_hash(9);
+
+        let attempts = BTreeMap::from([(
+            (existing_wallet, existing_nonce),
+            BTreeMap::from([(
+                attempt_number,
+                mk_attempt(existing_wallet, existing_nonce, existing_hash, None),
+            )]),
+        )]);
+        let mut task = mk_task(Arc::new(store), attempts);
+        let tx = mk_tx(4);
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            task.save_attempt_to_db(new_wallet, new_nonce, attempt_number, &tx);
+        }));
+
+        assert!(result.is_err());
+        assert_eq!(task.attempts.len(), 1);
+        assert_eq!(
+            task.attempts[&(existing_wallet, existing_nonce)][&attempt_number]
+                .attempt
+                .hash,
+            existing_hash
+        );
+        assert!(!task.attempts.contains_key(&(new_wallet, new_nonce)));
     }
 
     #[tokio::test]
