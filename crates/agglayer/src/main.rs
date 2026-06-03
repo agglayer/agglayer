@@ -1,4 +1,4 @@
-use std::process::exit;
+use std::{path::Path, process::exit};
 
 use agglayer_config::storage::backup::BackupConfig;
 use clap::Parser;
@@ -8,7 +8,6 @@ use pessimistic_proof::ELF;
 use sp1_sdk::HashableKey as _;
 
 mod cli;
-mod doctor_report;
 mod migrate_report;
 
 fn main() -> eyre::Result<()> {
@@ -91,6 +90,7 @@ fn main() -> eyre::Result<()> {
 
         cli::Commands::MigrateStorage {
             cfg,
+            storage_path,
             env_label,
             skip_epochs,
             latest_epochs,
@@ -98,15 +98,25 @@ fn main() -> eyre::Result<()> {
             html_file,
             no_fail_on_error,
         } => {
-            let cfg = agglayer_config::Config::try_load(&cfg)?;
+            let storage = match storage_path.as_deref() {
+                Some(root) => agglayer_config::storage::StorageConfig {
+                    metadata_db_path: root.join("metadata"),
+                    pending_db_path: root.join("pending"),
+                    state_db_path: root.join("state"),
+                    epochs_db_path: root.join("epochs"),
+                    debug_db_path: root.join("debug"),
+                    backup: Default::default(),
+                },
+                None => agglayer_config::Config::try_load(&cfg)?.storage,
+            };
 
-            let env_label = env_label.unwrap_or_else(default_env_label);
+            let env_label = env_label.unwrap_or_else(|| default_env_label(&storage.state_db_path));
 
             let opts = agglayer_storage::migrate::MigrateOptions {
-                state_db_path: Some(cfg.storage.state_db_path.clone()),
-                pending_db_path: Some(cfg.storage.pending_db_path.clone()),
-                debug_db_path: Some(cfg.storage.debug_db_path.clone()),
-                epochs_db_path: Some(cfg.storage.epochs_db_path.clone()),
+                state_db_path: Some(storage.state_db_path),
+                pending_db_path: Some(storage.pending_db_path),
+                debug_db_path: Some(storage.debug_db_path),
+                epochs_db_path: Some(storage.epochs_db_path),
                 env_label,
                 skip_epochs,
                 latest_epochs,
@@ -141,62 +151,6 @@ fn main() -> eyre::Result<()> {
                 exit(1);
             }
         }
-
-        cli::Commands::StorageDoctor(cli::StorageDoctor::List {
-            cfg,
-            env_label,
-            markdown_file,
-            html_file,
-        }) => {
-            let cfg = agglayer_config::Config::try_load(&cfg)?;
-            let env_label = env_label.unwrap_or_else(default_env_label);
-
-            let mut rows = Vec::new();
-            rows.extend(scan_or_warn(
-                agglayer_storage::diagnostics::scan_unparsable_pending_rows(
-                    &cfg.storage.pending_db_path,
-                ),
-                "pending",
-            ));
-            rows.extend(scan_or_warn(
-                agglayer_storage::diagnostics::scan_unparsable_debug_rows(
-                    &cfg.storage.debug_db_path,
-                ),
-                "debug",
-            ));
-            rows.extend(scan_or_warn(
-                agglayer_storage::diagnostics::scan_unparsable_epoch_rows(
-                    &cfg.storage.epochs_db_path,
-                ),
-                "epoch",
-            ));
-
-            let generated_at = std::time::SystemTime::now();
-            match markdown_file.as_deref() {
-                None => println!(
-                    "{}",
-                    doctor_report::render_markdown(&env_label, generated_at, &rows)
-                ),
-                Some(path) => {
-                    doctor_report::write_to_file(
-                        path,
-                        &doctor_report::render_markdown(&env_label, generated_at, &rows),
-                    )
-                    .with_context(|| {
-                        format!("failed to write markdown report to {}", path.display())
-                    })?;
-                    eprintln!("Markdown report: {}", path.display());
-                }
-            }
-            if let Some(path) = html_file.as_deref() {
-                doctor_report::write_to_file(
-                    path,
-                    &doctor_report::render_html(&env_label, generated_at, &rows),
-                )
-                .with_context(|| format!("failed to write HTML report to {}", path.display()))?;
-                eprintln!("HTML report:     {}", path.display());
-            }
-        }
     }
 
     Ok(())
@@ -208,27 +162,26 @@ fn install_default_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
-/// Downgrade a diagnostics scan failure to a warn-log on stderr + an
-/// empty result, matching the migrate runner's policy: a scan error
-/// never blocks the report.
-fn scan_or_warn(
-    result: Result<
-        Vec<agglayer_storage::diagnostics::UnparsableRow>,
-        agglayer_storage::diagnostics::ScanError,
-    >,
-    store: &'static str,
-) -> Vec<agglayer_storage::diagnostics::UnparsableRow> {
-    match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            eprintln!("warning: storage-doctor scan for `{store}` failed: {error}");
-            Vec::new()
-        }
-    }
-}
+fn default_env_label(state_db_path: &Path) -> String {
+    let Some(storage_dir) = state_db_path.parent() else {
+        return "local".to_string();
+    };
 
-fn default_env_label() -> String {
-    "local".to_string()
+    let label_path = if storage_dir
+        .file_name()
+        .is_some_and(|name| name == "storage")
+    {
+        storage_dir.parent().unwrap_or(storage_dir)
+    } else {
+        storage_dir
+    };
+
+    label_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("local")
+        .to_string()
 }
 
 /// Common version information about the executed agglayer binary.
@@ -258,7 +211,23 @@ mod tests {
     }
 
     #[test]
+    fn default_env_label_uses_data_directory_basename() {
+        assert_eq!(
+            default_env_label(Path::new("/var/lib/agglayer-mainnet/storage/state")),
+            "agglayer-mainnet"
+        );
+    }
+
+    #[test]
+    fn default_env_label_falls_back_to_parent_for_custom_store_layout() {
+        assert_eq!(
+            default_env_label(Path::new("/var/lib/agglayer-mainnet/state")),
+            "agglayer-mainnet"
+        );
+    }
+
+    #[test]
     fn default_env_label_is_local() {
-        assert_eq!(default_env_label(), "local");
+        assert_eq!(default_env_label(Path::new("state")), "local");
     }
 }

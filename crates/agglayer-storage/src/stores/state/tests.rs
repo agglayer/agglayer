@@ -143,6 +143,51 @@ fn can_retrieve_list_of_network() {
     assert!(store.get_active_networks().unwrap().len() == 1);
 }
 
+fn create_raw_state_v0(path: &std::path::Path) {
+    let mut options = rocksdb::Options::default();
+    options.create_if_missing(true);
+    options.create_missing_column_families(true);
+    let descriptors = cf_definitions::STATE_DB_V0
+        .iter()
+        .map(|cf| rocksdb::ColumnFamilyDescriptor::new(cf.name(), rocksdb::Options::default()));
+    let db = rocksdb::DB::open_cf_descriptors(&options, path, descriptors).unwrap();
+    drop(db);
+}
+
+#[test]
+fn migrated_or_create_state_creates_missing_storage() {
+    let tmp = TempDBDir::new();
+    let path = tmp.path.join("state");
+
+    let db = StateStore::open_migrated_or_create_db(&path).unwrap();
+    drop(db);
+
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &path).unwrap();
+    assert!(cfs.contains(
+        &crate::columns::disabled_networks::DisabledNetworksColumn::COLUMN_FAMILY_NAME.to_string()
+    ));
+}
+
+#[test]
+fn migrated_or_create_state_rejects_legacy_storage_without_mutating_it() {
+    let tmp = TempDBDir::new();
+    create_raw_state_v0(&tmp.path);
+
+    let error = match StateStore::open_migrated_or_create_db(&tmp.path) {
+        Ok(_) => panic!("migrated-or-create open should reject legacy state storage"),
+        Err(error) => error,
+    };
+
+    assert!(matches!(
+        error,
+        crate::storage::DBOpenError::StorageNeedsMigration { .. }
+    ));
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &tmp.path).unwrap();
+    assert!(!cfs.contains(
+        &crate::columns::disabled_networks::DisabledNetworksColumn::COLUMN_FAMILY_NAME.to_string()
+    ));
+}
+
 fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool {
     // local exit tree
     assert_eq!(lhs.exit_tree.leaf_count(), rhs.exit_tree.leaf_count());

@@ -5,9 +5,8 @@
 //! rows whose value bytes fail to decode through
 //! [`crate::types::LegacyCertificate`] — typically pre-existing corruption
 //! in the on-disk data that the migration helper logged-and-skipped. The
-//! scan functions in this module enumerate those rows so the operator can
-//! see them all in one pass and decide what to do (purge via the
-//! `storage-doctor` CLI, restore from backup, etc.).
+//! scan functions in this module enumerate those rows so migration reports
+//! can show operators what to inspect, purge, or restore from backup.
 //!
 //! The scan opens each store in read-only mode and re-iterates the legacy
 //! certificate CFs, attempting to decode each value. It is purely

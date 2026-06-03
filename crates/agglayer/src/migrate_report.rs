@@ -6,7 +6,7 @@
 //! report (printed to stdout by default) and an optional self-contained
 //! HTML report (when the operator passes `--html-file`).
 //!
-//! Templates live under `crates/agglayer/templates/` and are compiled
+//! Templates live under `crates/agglayer/src/templates/` and are compiled
 //! into the binary by `askama`. Anything format-related (durations,
 //! timestamps, status badges, paths) is pre-flattened into the small
 //! view-model structs below so the templates stay declarative.
@@ -19,6 +19,7 @@ use std::{
 
 use agglayer_storage::migrate::{EpochsResult, MigrateOutcome, StoreResult};
 use askama::Template;
+use chrono::{DateTime, Utc};
 
 /// Render the markdown report for a migration outcome.
 pub fn render_markdown(outcome: &MigrateOutcome) -> String {
@@ -58,7 +59,7 @@ struct MarkdownReport<'a> {
     status_label: &'static str,
     rows: Vec<RowVm>,
     fatals: Vec<FatalVm>,
-    diagnostics_warnings: Vec<EpochFailureVm>,
+    diagnostics_warnings: Vec<DiagnosticWarningVm>,
     unparsable: Vec<UnparsableRowVm>,
     unparsable_count: usize,
     has_unparsable: bool,
@@ -72,6 +73,11 @@ struct RowVm {
 }
 
 struct FatalVm {
+    label: String,
+    error: String,
+}
+
+struct DiagnosticWarningVm {
     label: String,
     error: String,
 }
@@ -120,15 +126,24 @@ impl<'a> MarkdownReport<'a> {
                 error: f.error.clone(),
             });
         }
-        let diagnostics_warnings = o
-            .epochs
-            .diagnostics_failures
+        let mut diagnostics_warnings = [&o.state, &o.pending, &o.debug]
             .iter()
-            .map(|f| EpochFailureVm {
-                epoch: f.epoch,
-                error: f.error.clone(),
+            .filter_map(|s| s.as_ref())
+            .filter_map(|s| {
+                s.diagnostics_error
+                    .as_ref()
+                    .map(|error| DiagnosticWarningVm {
+                        label: s.label.clone(),
+                        error: error.clone(),
+                    })
             })
             .collect::<Vec<_>>();
+        diagnostics_warnings.extend(o.epochs.diagnostics_failures.iter().map(|f| {
+            DiagnosticWarningVm {
+                label: format!("epoch {}", f.epoch),
+                error: f.error.clone(),
+            }
+        }));
 
         let unparsable = collect_unparsable(o);
         let unparsable_count = unparsable.len();
@@ -190,12 +205,20 @@ fn store_row(store: Option<&StoreResult>, fallback_label: &str) -> RowVm {
     let unparsable_count = r.unparsable_rows.len();
     let (status, notes) = match &r.error {
         None => {
-            let notes = if unparsable_count > 0 {
-                format!("{unparsable_count} unparsable rows")
-            } else {
-                "—".to_string()
+            let notes = match (&r.diagnostics_error, unparsable_count) {
+                (Some(error), 0) => format!("diagnostics failed: {error}"),
+                (Some(error), _) => {
+                    format!("{unparsable_count} unparsable rows; diagnostics failed: {error}")
+                }
+                (None, count) if count > 0 => format!("{count} unparsable rows"),
+                (None, _) => "—".to_string(),
             };
-            ("✅ OK".to_string(), notes)
+            let status = if r.diagnostics_error.is_some() {
+                "⚠️ INCOMPLETE"
+            } else {
+                "✅ OK"
+            };
+            (status.to_string(), notes)
         }
         Some(e) => ("❌ FAILED".to_string(), e.clone()),
     };
@@ -263,7 +286,7 @@ fn epochs_row(epochs: &EpochsResult) -> RowVm {
 // HTML
 // ---------------------------------------------------------------------------
 
-const STYLE: &str = include_str!("../templates/migration-report.css");
+const STYLE: &str = include_str!("templates/migration-report.css");
 
 #[derive(Template)]
 #[template(path = "migration-report.html")]
@@ -293,6 +316,8 @@ struct StoreCardVm {
     duration: String,
     has_error: bool,
     error: String,
+    has_diagnostics_error: bool,
+    diagnostics_error: String,
     has_unparsable: bool,
     unparsable_count: usize,
     unparsable: Vec<UnparsableRowVm>,
@@ -426,14 +451,17 @@ fn store_card(heading: &'static str, store: Option<&StoreResult>) -> StoreCardVm
             duration: String::new(),
             has_error: false,
             error: String::new(),
+            has_diagnostics_error: false,
+            diagnostics_error: String::new(),
             has_unparsable: false,
             unparsable_count: 0,
             unparsable: Vec::new(),
         };
     };
-    let (badge_class, badge_label) = match &s.error {
-        None => ("success", "OK"),
-        Some(_) => ("destructive", "FAILED"),
+    let (badge_class, badge_label) = match (&s.error, &s.diagnostics_error) {
+        (None, None) => ("success", "OK"),
+        (None, Some(_)) => ("warning", "INCOMPLETE"),
+        (Some(_), _) => ("destructive", "FAILED"),
     };
     let unparsable: Vec<UnparsableRowVm> = s
         .unparsable_rows
@@ -455,6 +483,8 @@ fn store_card(heading: &'static str, store: Option<&StoreResult>) -> StoreCardVm
         duration: format_duration(s.duration),
         has_error: s.error.is_some(),
         error: s.error.clone().unwrap_or_default(),
+        has_diagnostics_error: s.diagnostics_error.is_some(),
+        diagnostics_error: s.diagnostics_error.clone().unwrap_or_default(),
         has_unparsable: !unparsable.is_empty(),
         unparsable_count: unparsable.len(),
         unparsable,
@@ -596,33 +626,13 @@ fn format_duration(d: Duration) -> String {
     format!("{d:.2?}")
 }
 
-/// Format a `SystemTime` as `YYYY-MM-DD HH:MM:SS` UTC, matching the
-/// pre-templated renderer's output. Self-contained on purpose: we only
-/// need this in one place and don't want to take a `chrono`/`time` dep.
+/// Format a `SystemTime` as `YYYY-MM-DD HH:MM:SS` UTC.
 fn format_time(t: SystemTime) -> String {
     let secs = t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
-    let (y, m, d, hh, mm, ss) = unix_to_ymd_hms(secs);
-    format!("{y:04}-{m:02}-{d:02} {hh:02}:{mm:02}:{ss:02}")
-}
-
-fn unix_to_ymd_hms(mut secs: i64) -> (i32, u32, u32, u32, u32, u32) {
-    const SECS_PER_DAY: i64 = 86_400;
-    let days = secs.div_euclid(SECS_PER_DAY);
-    secs = secs.rem_euclid(SECS_PER_DAY);
-    let hh = (secs / 3600) as u32;
-    let mm = ((secs % 3600) / 60) as u32;
-    let ss = (secs % 60) as u32;
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
-    let y = (yoe + era * 400) as i32;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
-    let y = if m <= 2 { y + 1 } else { y };
-    (y, m, d, hh, mm, ss)
+    DateTime::<Utc>::from_timestamp(secs, 0)
+        .unwrap_or(DateTime::<Utc>::UNIX_EPOCH)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -659,6 +669,7 @@ mod tests {
                 duration: Duration::from_millis(120),
                 error: None,
                 unparsable_rows: Vec::new(),
+                diagnostics_error: None,
             }),
             pending: Some(StoreResult {
                 label: "pending".into(),
@@ -666,6 +677,7 @@ mod tests {
                 duration: Duration::from_millis(45),
                 error: None,
                 unparsable_rows: Vec::new(),
+                diagnostics_error: None,
             }),
             debug: Some(StoreResult {
                 label: "debug".into(),
@@ -673,6 +685,7 @@ mod tests {
                 duration: Duration::from_millis(30),
                 error: None,
                 unparsable_rows: Vec::new(),
+                diagnostics_error: None,
             }),
             epochs: EpochsResult {
                 epochs_dir: Some(PathBuf::from("/var/agglayer/epochs")),
@@ -697,6 +710,7 @@ mod tests {
                 duration: Duration::from_millis(120),
                 error: Some("schema mismatch".into()),
                 unparsable_rows: Vec::new(),
+                diagnostics_error: None,
             }),
             epochs: EpochsResult {
                 epochs_dir: Some(PathBuf::from("/var/agglayer/epochs")),
@@ -725,28 +739,18 @@ mod tests {
 
     #[test]
     fn markdown_all_ok_renders_expected_shape() {
-        let md = render_markdown(&outcome_all_ok());
-        // High-signal substrings (avoid pinning the whole template so
-        // whitespace tweaks don't churn the test).
-        assert!(md.contains("## mainnet"));
-        assert!(md.contains("Status: **OK**"));
-        assert!(md.contains("| state | ✅ OK |"));
-        assert!(md.contains("| pending | ✅ OK |"));
-        assert!(md.contains("| debug | ✅ OK |"));
-        assert!(md.contains("| epochs | ✅ OK |"));
-        assert!(md.contains("5 processed; 5 OK; 0 failed"));
-        assert!(md.contains("---"));
-        assert!(!md.contains("**Fatal errors**"));
+        insta::assert_snapshot!(
+            "migration_report_markdown_all_ok",
+            render_markdown(&outcome_all_ok())
+        );
     }
 
     #[test]
     fn markdown_with_failures_lists_each_fatal() {
-        let md = render_markdown(&outcome_with_failures());
-        assert!(md.contains("Status: **FAILED**"));
-        assert!(md.contains("**Fatal errors**"));
-        assert!(md.contains("- state: schema mismatch"));
-        assert!(md.contains("- epoch 17: missing CF debug_certificates"));
-        assert!(md.contains("- epoch 42: decode error"));
+        insta::assert_snapshot!(
+            "migration_report_markdown_with_failures",
+            render_markdown(&outcome_with_failures())
+        );
     }
 
     #[test]
@@ -759,31 +763,23 @@ mod tests {
             ..EpochsResult::default()
         };
 
-        let md = render_markdown(&o);
-        assert!(md.contains("Status: **FAILED**"));
-        assert!(md.contains("| epochs | ❌ FAILED |"));
-        assert!(md.contains("- epochs: failed to read epoch directory"));
+        insta::assert_snapshot!(
+            "migration_report_markdown_epoch_discovery_error",
+            render_markdown(&o)
+        );
 
-        let html = render_html(&o);
-        assert!(html.contains("class=\"badge destructive\">FAILED"));
-        assert!(html.contains("failed to read epoch directory"));
+        insta::assert_snapshot!(
+            "migration_report_html_epoch_discovery_error",
+            render_html(&o)
+        );
     }
 
     #[test]
     fn html_renders_self_contained_document() {
-        let html = render_html(&outcome_all_ok());
-        assert!(html.starts_with("<!DOCTYPE html>"));
-        assert!(html.contains("<title>Storage migration report — mainnet</title>"));
-        // CSS got inlined.
-        assert!(html.contains("--background:"));
-        assert!(html.contains("class=\"badge success\">OK"));
-        assert!(html.contains("State DB"));
-        assert!(html.contains("Pending DB"));
-        assert!(html.contains("Debug DB"));
-        assert!(html.contains("Epoch DBs"));
-        // Failures KPI shows 0 with the success class.
-        assert!(html.contains("kpi-value success\">0</div>"));
-        assert!(html.trim_end().ends_with("</html>"));
+        insta::assert_snapshot!(
+            "migration_report_html_self_contained_document",
+            render_html(&outcome_all_ok())
+        );
     }
 
     #[test]
@@ -794,21 +790,16 @@ mod tests {
             s.error = Some("oops <script>".into());
         }
         let html = render_html(&o);
-        assert!(html.contains("Storage migration report — weird &#60;env&#62; &#38; label"));
-        assert!(html.contains("oops &#60;script&#62;"));
-        assert!(!html.contains("<script>"));
+        insta::assert_snapshot!("migration_report_html_escapes_user_strings", html);
+        assert_eq!(html.find("<script>"), None);
     }
 
     #[test]
     fn html_with_failures_has_destructive_styling() {
-        let html = render_html(&outcome_with_failures());
-        assert!(html.contains("class=\"badge destructive\">FAILED"));
-        // Failure KPI flips to destructive.
-        assert!(html.contains("kpi-value destructive\">3</div>"));
-        // Failed epochs table is present.
-        assert!(html.contains("<h3>Failed epochs (2)</h3>"));
-        assert!(html.contains("<strong>17</strong>"));
-        assert!(html.contains("<strong>42</strong>"));
+        insta::assert_snapshot!(
+            "migration_report_html_with_failures",
+            render_html(&outcome_with_failures())
+        );
     }
 
     #[test]
@@ -821,16 +812,35 @@ mod tests {
 
         assert!(o.is_success());
 
-        let md = render_markdown(&o);
-        assert!(md.contains("Status: **OK**"));
-        assert!(md.contains("1 diagnostics failed"));
-        assert!(md.contains("**Diagnostics warnings**"));
-        assert!(md.contains("- epoch 99: read-only diagnostics open failed"));
+        insta::assert_snapshot!(
+            "migration_report_markdown_epoch_diagnostics_warnings",
+            render_markdown(&o)
+        );
 
-        let html = render_html(&o);
-        assert!(html.contains("class=\"badge success\">OK"));
-        assert!(html.contains("Diagnostics warnings (1)"));
-        assert!(html.contains("read-only diagnostics open failed"));
+        insta::assert_snapshot!(
+            "migration_report_html_epoch_diagnostics_warnings",
+            render_html(&o)
+        );
+    }
+
+    #[test]
+    fn per_store_diagnostics_failures_render_as_incomplete_warnings() {
+        let mut o = outcome_all_ok();
+        if let Some(pending) = o.pending.as_mut() {
+            pending.diagnostics_error = Some("pending scan failed".into());
+        }
+
+        assert!(o.is_success());
+
+        insta::assert_snapshot!(
+            "migration_report_markdown_per_store_diagnostics_warning",
+            render_markdown(&o)
+        );
+
+        insta::assert_snapshot!(
+            "migration_report_html_per_store_diagnostics_warning",
+            render_html(&o)
+        );
     }
 
     #[test]
@@ -841,11 +851,11 @@ mod tests {
             skipped_reason: Some("skipped via --skip-epochs"),
             ..EpochsResult::default()
         };
-        let md = render_markdown(&o);
-        assert!(md.contains("| epochs | — | — | skipped via --skip-epochs |"));
-        let html = render_html(&o);
-        assert!(html.contains("class=\"badge muted\">SKIPPED"));
-        assert!(html.contains("skipped via --skip-epochs"));
+        insta::assert_snapshot!(
+            "migration_report_markdown_skipped_epochs",
+            render_markdown(&o)
+        );
+        insta::assert_snapshot!("migration_report_html_skipped_epochs", render_html(&o));
     }
 
     fn outcome_with_unparsable_rows() -> MigrateOutcome {
@@ -877,62 +887,17 @@ mod tests {
 
     #[test]
     fn markdown_lists_unparsable_rows_per_store() {
-        let md = render_markdown(&outcome_with_unparsable_rows());
-
-        // Dedicated section header with total count.
-        assert!(
-            md.contains("**Unparsable rows (3)**"),
-            "missing unparsable section header in:\n{md}"
-        );
-        // Each row shown with cf, source, key, error.
-        assert!(md.contains("`pending_queue` (pending) at key `00000000000000010000000000000005`"));
-        assert!(md.contains("invalid varint"));
-        assert!(md.contains("BadCertificateVersion"));
-        assert!(md.contains("`epoch_certificate_per_index` (epoch 17) at key `0000000000000003`"));
-    }
-
-    #[test]
-    fn markdown_omits_unparsable_section_when_none() {
-        let md = render_markdown(&outcome_all_ok());
-        assert!(!md.contains("Unparsable rows"));
-    }
-
-    #[test]
-    fn markdown_per_store_row_notes_count_unparsable_rows() {
-        let md = render_markdown(&outcome_with_unparsable_rows());
-        // Pending has 2 unparsable rows; the table notes column should
-        // surface that even though init_db succeeded.
-        assert!(
-            md.contains("2 unparsable rows"),
-            "pending row should annotate unparsable count:\n{md}"
+        insta::assert_snapshot!(
+            "migration_report_markdown_with_unparsable_rows",
+            render_markdown(&outcome_with_unparsable_rows())
         );
     }
 
     #[test]
     fn html_with_unparsable_rows_renders_section_per_store() {
-        let html = render_html(&outcome_with_unparsable_rows());
-
-        // Top-level KPI exposes the total count.
-        assert!(
-            html.contains("Unparsable rows"),
-            "missing unparsable KPI label"
+        insta::assert_snapshot!(
+            "migration_report_html_with_unparsable_rows",
+            render_html(&outcome_with_unparsable_rows())
         );
-
-        // Pending card has its own per-store table.
-        assert!(html.contains("<h3>Unparsable rows (2)</h3>"));
-        // CF + key + error rendered as code.
-        assert!(html.contains("<code>pending_queue</code>"));
-        assert!(html.contains("00000000000000010000000000000005"));
-        assert!(html.contains("invalid varint"));
-
-        // Epoch card has its own.
-        assert!(html.contains("<h3>Unparsable rows (1)</h3>"));
-        assert!(html.contains("<code>epoch_certificate_per_index</code>"));
-    }
-
-    #[test]
-    fn html_omits_unparsable_section_when_none() {
-        let html = render_html(&outcome_all_ok());
-        assert!(!html.contains("<h3>Unparsable rows"));
     }
 }

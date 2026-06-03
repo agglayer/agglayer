@@ -19,7 +19,7 @@ Migration run at {{ started_at }} UTC, total {{ overall_duration }}. Status: **{
 **Diagnostics warnings**
 
 {% for warning in diagnostics_warnings -%}
-- epoch {{ warning.epoch }}: {{ warning.error }}
+- {{ warning.label }}: {{ warning.error }}
 {% endfor %}
 {% endif -%}
 {% if has_unparsable -%}

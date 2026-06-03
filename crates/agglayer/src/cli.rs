@@ -52,21 +52,26 @@ pub(crate) enum Commands {
     #[clap(subcommand)]
     Backup(Backup),
 
-    /// Run the storage migration in place against the configured data
-    /// directory. Brings every store (state, pending, debug, every
-    /// epoch) up to the current schema. Safe to invoke before starting
-    /// the node so the implicit on-startup migration becomes a no-op.
-    /// The same migration also runs on the first node start, so this
-    /// command is an opt-in optimisation rather than a required step.
+    /// Run the storage migration in place against the configured or selected
+    /// data directory. Brings every store (state, pending, debug, every epoch)
+    /// up to the current schema. Running this command may modify selected
+    /// stores.
     MigrateStorage {
         /// Path to the agglayer configuration file. Migration paths are
         /// derived from `[storage]`.
         #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "AGGLAYER_CONFIG_PATH")]
         cfg: PathBuf,
 
+        /// Override the configured storage directory. The command derives
+        /// `state`, `pending`, `debug`, and `epochs` paths directly under
+        /// this root. Running `migrate-storage` may modify those stores.
+        #[arg(long, value_hint = ValueHint::DirPath, env = "AGGLAYER_MIGRATION_STORAGE_PATH")]
+        storage_path: Option<PathBuf>,
+
         /// Operator-supplied environment label (`mainnet`, `testnet`, …)
         /// used in the markdown report's heading and filename. Defaults
-        /// to the data directory's basename.
+        /// to the configured data directory's basename, or `local` when
+        /// the basename cannot be derived.
         #[arg(long, env = "AGGLAYER_MIGRATION_ENV_LABEL")]
         env_label: Option<String>,
 
@@ -102,42 +107,6 @@ pub(crate) enum Commands {
         /// the run "advisory" (markdown report still flags failures).
         #[arg(long)]
         no_fail_on_error: bool,
-    },
-
-    /// Diagnostic tools for the legacy -> proto certificate migration.
-    /// Read-only by default: does not modify any database. Pair with
-    /// `migrate-storage` to triage rows that the migration helper
-    /// could not decode.
-    #[clap(subcommand)]
-    StorageDoctor(StorageDoctor),
-}
-
-#[derive(Subcommand)]
-pub(crate) enum StorageDoctor {
-    /// List every row in the legacy certificate CFs whose value bytes
-    /// fail to decode as a `LegacyCertificate`. Read-only; no writes
-    /// to any database.
-    List {
-        /// Path to the agglayer configuration file. Scan paths are
-        /// derived from `[storage]`.
-        #[arg(long, short, value_hint = ValueHint::FilePath, default_value = "agglayer.toml", env = "AGGLAYER_CONFIG_PATH")]
-        cfg: PathBuf,
-
-        /// Operator-supplied environment label (`mainnet`, `testnet`,
-        /// …) used in the report's heading. Defaults to the data
-        /// directory's basename.
-        #[arg(long, env = "AGGLAYER_DOCTOR_ENV_LABEL")]
-        env_label: Option<String>,
-
-        /// Write the markdown report to this file path. By default the
-        /// markdown is printed to stdout.
-        #[arg(long, value_hint = ValueHint::FilePath)]
-        markdown_file: Option<PathBuf>,
-
-        /// Write the HTML report to this file path. When unset, no
-        /// HTML is produced. The HTML is self-contained.
-        #[arg(long, value_hint = ValueHint::FilePath)]
-        html_file: Option<PathBuf>,
     },
 }
 
@@ -239,6 +208,47 @@ mod tests {
             err.to_string().contains("latest-epochs"),
             "error should mention the rejected flag, got {err}"
         );
+    }
+
+    #[test]
+    fn migrate_storage_accepts_explicit_storage_path() {
+        let cli = Cli::try_parse_from([
+            "agglayer",
+            "migrate-storage",
+            "--storage-path",
+            "/var/lib/agglayer/storage",
+        ])
+        .unwrap();
+
+        match cli.cmd {
+            Commands::MigrateStorage { storage_path, .. } => {
+                assert_eq!(
+                    storage_path.unwrap(),
+                    PathBuf::from("/var/lib/agglayer/storage")
+                );
+            }
+            _ => panic!("expected migrate-storage command"),
+        }
+    }
+
+    #[test]
+    fn migrate_storage_rejects_dry_run_flag() {
+        let err = match Cli::try_parse_from(["agglayer", "migrate-storage", "--dry-run"]) {
+            Ok(_) => panic!("dry-run should be rejected at the CLI boundary"),
+            Err(err) => err,
+        };
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_storage_doctor_subcommand() {
+        let err = match Cli::try_parse_from(["agglayer", "storage-doctor", "list"]) {
+            Ok(_) => panic!("storage-doctor should not be exposed in this CLI"),
+            Err(err) => err,
+        };
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidSubcommand);
     }
 
     #[test]

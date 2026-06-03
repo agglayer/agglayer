@@ -3,10 +3,9 @@
 //! Runs `init_db` on each storage component (state, pending, debug, every
 //! epoch) **in place** so an operator can converge the on-disk schema to
 //! the current binary's expectations as a separate step from starting the
-//! node. The same code path also runs implicitly when the live binary
-//! starts (each store's `init_db` is invoked during normal startup), so
-//! this command is an opt-in optimisation: pre-paying the migration cost
-//! during a maintenance window instead of hitting it at first read.
+//! node. This command is the explicit schema-writing entry point.
+//! Node startup creates missing current-schema stores, opens current stores,
+//! and rejects existing storage that needs migration.
 //!
 //! Designed for production maintenance windows: no staging, no row-by-row
 //! equality check, just executes the migrations and reports per-store
@@ -79,9 +78,11 @@ pub struct StoreResult {
     /// Legacy CF rows that the post-migration diagnostics scan flagged as
     /// undecodable (skipped by the migration helper). Empty when the
     /// store has no relevant legacy CF (e.g. `state`), when `init_db`
-    /// failed (we did not run the scan), or when the scan itself failed
-    /// (logged via `tracing::warn`).
+    /// failed (we did not run the scan), when the scan found no bad rows,
+    /// or when the scan itself failed (see `diagnostics_error`).
     pub unparsable_rows: Vec<UnparsableRow>,
+    /// Non-fatal diagnostics scan failure for this store.
+    pub diagnostics_error: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -144,6 +145,9 @@ pub fn run(opts: MigrateOptions) -> MigrateOutcome {
     let started_clock = SystemTime::now();
     let started = Instant::now();
 
+    // This command is the explicit schema-writing entry point. Node startup uses
+    // migrated-or-create open helpers and must not call these migration-capable
+    // paths for existing storage.
     let state = opts.state_db_path.as_deref().map(migrate_state);
 
     let pending = opts.pending_db_path.as_deref().map(migrate_pending);
@@ -187,6 +191,7 @@ fn migrate_state(path: &Path) -> StoreResult {
         duration: started.elapsed(),
         error,
         unparsable_rows: Vec::new(),
+        diagnostics_error: None,
     }
 }
 
@@ -196,10 +201,10 @@ fn migrate_pending(path: &Path) -> StoreResult {
         Ok(_) => None,
         Err(e) => Some(format_chain(&e)),
     };
-    let unparsable_rows = if error.is_none() {
+    let (unparsable_rows, diagnostics_error) = if error.is_none() {
         scan_or_warn(diagnostics::scan_unparsable_pending_rows(path), "pending")
     } else {
-        Vec::new()
+        (Vec::new(), None)
     };
     StoreResult {
         label: "pending".into(),
@@ -207,6 +212,7 @@ fn migrate_pending(path: &Path) -> StoreResult {
         duration: started.elapsed(),
         error,
         unparsable_rows,
+        diagnostics_error,
     }
 }
 
@@ -216,10 +222,10 @@ fn migrate_debug(path: &Path) -> StoreResult {
         Ok(_) => None,
         Err(e) => Some(format_chain(&e)),
     };
-    let unparsable_rows = if error.is_none() {
+    let (unparsable_rows, diagnostics_error) = if error.is_none() {
         scan_or_warn(diagnostics::scan_unparsable_debug_rows(path), "debug")
     } else {
-        Vec::new()
+        (Vec::new(), None)
     };
     StoreResult {
         label: "debug".into(),
@@ -227,24 +233,26 @@ fn migrate_debug(path: &Path) -> StoreResult {
         duration: started.elapsed(),
         error,
         unparsable_rows,
+        diagnostics_error,
     }
 }
 
-/// Run a diagnostics scan and downgrade any failure to a warn-log +
-/// empty result so a scan error never blocks the migration report.
+/// Run a diagnostics scan and carry any non-fatal scan failure into the
+/// migration report.
 fn scan_or_warn(
     result: Result<Vec<UnparsableRow>, diagnostics::ScanError>,
     store: &'static str,
-) -> Vec<UnparsableRow> {
+) -> (Vec<UnparsableRow>, Option<String>) {
     match result {
-        Ok(rows) => rows,
+        Ok(rows) => (rows, None),
         Err(error) => {
+            let error = error.to_string();
             tracing::warn!(
                 store,
                 %error,
                 "diagnostics scan for unparsable legacy rows failed; report will not include them",
             );
-            Vec::new()
+            (Vec::new(), Some(error))
         }
     }
 }

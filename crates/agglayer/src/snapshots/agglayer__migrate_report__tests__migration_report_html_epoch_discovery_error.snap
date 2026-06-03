@@ -1,4 +1,15 @@
-:root {
+---
+source: crates/agglayer/src/migrate_report.rs
+expression: render_html(&o)
+snapshot_kind: text
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storage migration report — mainnet</title>
+<style>:root {
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
   --card: 0 0% 100%;
@@ -64,6 +75,144 @@ th { font-weight: 600; color: hsl(var(--muted-foreground)); text-transform: uppe
 tbody tr { border-top: 1px solid hsl(var(--border)); }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .muted { color: hsl(var(--muted-foreground)); font-size: 0.875rem; }
+.warning { border-left: 3px solid hsl(var(--warning)); background: hsl(var(--warning) / 0.08); color: hsl(var(--warning)); padding: 0.75rem 1rem; border-radius: 6px; margin-top: 0.75rem; font-size: 0.875rem; word-break: break-word; }
 .fatal { border-left: 3px solid hsl(var(--destructive)); background: hsl(var(--destructive) / 0.08); color: hsl(var(--destructive)); padding: 0.75rem 1rem; border-radius: 6px; margin-top: 0.75rem; font-size: 0.875rem; word-break: break-word; }
 .path-key { text-align: right; width: 200px; }
 .store-key { text-align: right; width: 160px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="page-header">
+  <h1>Storage migration report</h1>
+  <div class="meta">
+    <span><span class="badge destructive">FAILED</span></span>
+    <span>env <strong>mainnet</strong></span>
+    <span>generated <strong>2024-01-15 12:31:36</strong> UTC</span>
+    <span>duration <strong>1.23s</strong></span>
+  </div>
+</header>
+
+<section><h2>Summary</h2>
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Status</div>
+    <div class="kpi-value destructive">FAILED</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Stores migrated</div>
+    <div class="kpi-value success">3</div>
+    <div class="kpi-hint">state + pending + debug + epochs</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Failures</div>
+    <div class="kpi-value destructive">1</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Total time</div>
+    <div class="kpi-value success">1.23s</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Unparsable rows</div>
+    <div class="kpi-value success">0</div>
+  </div>
+</div>
+</section>
+
+
+<section><h2>State DB</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span>state</span>
+    <span class="badge success">OK</span>
+  </div>
+  <table><tbody>
+    <tr><th class="store-key">Path</th><td><code class="mono break">/var/agglayer/state</code></td></tr>
+    <tr><th class="store-key">Duration</th><td>120.00ms</td></tr>
+  </tbody></table>
+
+
+
+</div>
+
+</section>
+
+<section><h2>Pending DB</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span>pending</span>
+    <span class="badge success">OK</span>
+  </div>
+  <table><tbody>
+    <tr><th class="store-key">Path</th><td><code class="mono break">/var/agglayer/pending</code></td></tr>
+    <tr><th class="store-key">Duration</th><td>45.00ms</td></tr>
+  </tbody></table>
+
+
+
+</div>
+
+</section>
+
+<section><h2>Debug DB</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span>debug</span>
+    <span class="badge success">OK</span>
+  </div>
+  <table><tbody>
+    <tr><th class="store-key">Path</th><td><code class="mono break">/var/agglayer/debug</code></td></tr>
+    <tr><th class="store-key">Duration</th><td>30.00ms</td></tr>
+  </tbody></table>
+
+
+
+</div>
+
+</section>
+
+
+<section><h2>Epoch DBs</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span>aggregate (/var/agglayer/epochs)</span>
+    <span class="badge destructive">FAILED</span>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Discovered</div><div class="kpi-value success">0</div></div>
+    <div class="kpi"><div class="kpi-label">Processed</div><div class="kpi-value success">0</div></div>
+    <div class="kpi"><div class="kpi-label">Successful</div><div class="kpi-value success">0</div></div>
+    <div class="kpi"><div class="kpi-label">Failed</div><div class="kpi-value destructive">1</div></div>
+    <div class="kpi"><div class="kpi-label">Diagnostics failed</div><div class="kpi-value warning">0</div></div>
+    <div class="kpi"><div class="kpi-label">Duration</div><div class="kpi-value success">10.00ms</div></div>
+  </div>
+<div class="fatal">failed to read epoch directory</div>
+
+
+
+</div>
+
+</section>
+
+<h2>Run configuration</h2>
+<table><tbody>
+  <tr><th class="path-key">Environment label</th><td>mainnet</td></tr>
+
+  <tr><th class="path-key">state path</th><td><code class="mono break">/var/agglayer/state</code></td></tr>
+
+  <tr><th class="path-key">pending path</th><td><code class="mono break">/var/agglayer/pending</code></td></tr>
+
+  <tr><th class="path-key">debug path</th><td><code class="mono break">/var/agglayer/debug</code></td></tr>
+
+  <tr><th class="path-key">epochs path</th><td><code class="mono break">/var/agglayer/epochs</code></td></tr>
+
+</tbody></table>
+
+</div>
+</body>
+</html>

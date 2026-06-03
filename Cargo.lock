@@ -48,6 +48,7 @@ dependencies = [
  "agglayer-storage",
  "askama",
  "assert_cmd",
+ "chrono",
  "clap",
  "color-eyre",
  "dirs 6.0.0",

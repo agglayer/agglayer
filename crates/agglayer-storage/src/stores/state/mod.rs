@@ -46,6 +46,8 @@ mod settlement;
 #[cfg(test)]
 mod tests;
 
+const DECLARED_MIGRATION_STEPS: u32 = 2;
+
 /// A logical store for the state.
 pub struct StateStore {
     db: Arc<DB>,
@@ -79,6 +81,16 @@ impl StateStore {
             .finalize(cf_definitions::STATE_DB)
     }
 
+    pub fn open_migrated_or_create_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
+        crate::storage::open_migrated_or_create(
+            path,
+            cf_definitions::STATE_DB_V0,
+            cf_definitions::STATE_DB,
+            DECLARED_MIGRATION_STEPS,
+            Self::init_db,
+        )
+    }
+
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
         Self {
             db,
@@ -92,6 +104,18 @@ impl StateStore {
         backup_client: BackupClient,
     ) -> Result<Self, crate::storage::DBOpenError> {
         let db = Arc::new(Self::init_db(path)?);
+        Ok(Self {
+            db,
+            backup_client,
+            settlement_write_locks: Mutex::new(HashMap::new()),
+        })
+    }
+
+    pub fn open_migrated_or_create(
+        path: &Path,
+        backup_client: BackupClient,
+    ) -> Result<Self, crate::storage::DBOpenError> {
+        let db = Arc::new(Self::open_migrated_or_create_db(path)?);
         Ok(Self {
             db,
             backup_client,
