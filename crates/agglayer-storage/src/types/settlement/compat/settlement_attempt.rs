@@ -32,8 +32,6 @@ impl From<&SettlementAttempt> for v0::SettlementAttempt {
         Self {
             sender_wallet: Some(value.sender_wallet.into()),
             nonce: Some(value.nonce.into()),
-            max_fee_per_gas: Some(value.max_fee_per_gas.into()),
-            max_priority_fee_per_gas: Some(value.max_priority_fee_per_gas.into()),
             tx_hash: Some(value.hash.into()),
             submission_time: Some(prost_types::Timestamp::from(value.submission_time)),
         }
@@ -49,10 +47,6 @@ impl TryFrom<v0::SettlementAttempt> for SettlementAttempt {
                 try_into::<agglayer_types::Address>
             ),
             nonce: required_field!(value, nonce => into::<Nonce>),
-            max_fee_per_gas: required_field!(value, max_fee_per_gas => try_into::<u128>),
-            max_priority_fee_per_gas: required_field!(value, max_priority_fee_per_gas =>
-                try_into::<u128>
-            ),
             hash: required_field!(value, tx_hash => try_into::<agglayer_types::SettlementTxHash>),
             submission_time: required_field!(value, submission_time =>
                 try_into::<std::time::SystemTime>
@@ -74,8 +68,6 @@ mod tests {
         let attempt = SettlementAttempt {
             sender_wallet: Address::from([1_u8; 20]),
             nonce: Nonce(7),
-            max_fee_per_gas: 10,
-            max_priority_fee_per_gas: 20,
             hash: SettlementTxHash::new(Digest::from([2_u8; 32])),
             submission_time: SystemTime::UNIX_EPOCH,
         };
@@ -85,11 +77,6 @@ mod tests {
 
         assert_eq!(decoded.sender_wallet, attempt.sender_wallet);
         assert_eq!(decoded.nonce, attempt.nonce);
-        assert_eq!(decoded.max_fee_per_gas, attempt.max_fee_per_gas);
-        assert_eq!(
-            decoded.max_priority_fee_per_gas,
-            attempt.max_priority_fee_per_gas
-        );
         assert_eq!(decoded.hash, attempt.hash);
         assert_eq!(decoded.submission_time, attempt.submission_time);
     }

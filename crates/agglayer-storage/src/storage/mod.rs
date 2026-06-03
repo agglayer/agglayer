@@ -232,6 +232,17 @@ impl DB {
         Ok(ColumnIterator::new(iterator, direction))
     }
 
+    pub(crate) fn prefix_iterator<C: ColumnSchema, P: Codec>(
+        &self,
+        prefix: &P,
+    ) -> Result<ColumnIterator<'_, C>, DBError> {
+        let cf = self.cf::<C>()?;
+        let prefix = prefix.encode()?;
+        let iterator = self.rocksdb.prefix_iterator_cf(&cf, prefix).into();
+
+        Ok(ColumnIterator::new(iterator, Direction::Forward))
+    }
+
     pub(crate) fn delete<C: ColumnSchema>(&self, key: &C::Key) -> Result<(), DBError> {
         let cf = self.cf::<C>()?;
         let key = key.encode()?;

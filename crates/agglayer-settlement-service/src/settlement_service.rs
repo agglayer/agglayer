@@ -1,6 +1,6 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
-use agglayer_config::settlement_service::SettlementServiceConfig;
+use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{SettlementJob, SettlementJobId, SettlementJobResult};
 use alloy::providers::Provider;
@@ -21,6 +21,7 @@ const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 #[derive(Educe)]
 #[educe(Clone)]
 pub struct SettlementService<L1Provider, SettlementStore> {
+    tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
@@ -56,11 +57,13 @@ impl<
 {
     pub async fn start(
         _config: SettlementServiceConfig,
+        tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
         cancellation_token: CancellationToken,
     ) -> eyre::Result<Self> {
         let this = Self {
+            tx_config,
             provider,
             store,
             cancellation_token,
@@ -119,9 +122,14 @@ impl<
         let (result_sender, result_receiver) = watch::channel(None);
         let (task_control_handle, task_control) =
             TaskControlHandle::new(&self.cancellation_token, admin_sender, admin_receiver);
-        let (job_id, mut task) =
-            SettlementTask::create(job, self.provider.clone(), self.store.clone(), task_control)
-                .await?;
+        let (job_id, mut task) = SettlementTask::create(
+            job,
+            self.tx_config.clone(),
+            self.provider.clone(),
+            self.store.clone(),
+            task_control,
+        )
+        .await?;
         self.task_controls
             .lock()
             .await
@@ -175,7 +183,28 @@ impl<
                 Some(result) => Ok(RetrievedSettlementResult::Completed(result.clone())),
             };
         }
-        // TODO: check rocksdb for completed settlement job results
+
+        if let Some(result) = self
+            .store
+            .get_settlement_job_result(&job_id)
+            .wrap_err_with(|| {
+                format!("Failed to read settlement job terminal result for id {job_id}")
+            })?
+        {
+            return Ok(RetrievedSettlementResult::Completed(result));
+        }
+
+        if self
+            .store
+            .get_settlement_job(&job_id)
+            .wrap_err_with(|| format!("Failed to check settlement job existence for id {job_id}"))?
+            .is_none()
+        {
+            eyre::bail!("No settlement job found for id {job_id}");
+        }
+
+        // TODO: Spawn a settlement task for a recovered pending job.
+        // XREF: https://github.com/agglayer/agglayer/issues/1230
         todo!()
     }
 }
@@ -259,5 +288,127 @@ impl<
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use agglayer_storage::tests::mocks::MockStateStore;
+    use agglayer_types::{
+        ContractCallOutcome, ContractCallResult, Digest, SettlementJobId, SettlementJobResult,
+        SettlementTxHash, B256,
+    };
+    use alloy::providers::ProviderBuilder;
+
+    use super::*;
+
+    fn mk_provider() -> impl Provider + 'static {
+        ProviderBuilder::new().connect_http(
+            "http://127.0.0.1:0"
+                .parse()
+                .expect("test provider URL should parse"),
+        )
+    }
+
+    async fn mk_service(
+        store: Arc<MockStateStore>,
+    ) -> SettlementService<impl Provider + 'static, MockStateStore> {
+        SettlementService::start(
+            SettlementServiceConfig::default(),
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            store,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("settlement service should start")
+    }
+
+    fn mk_job_id(seed: u128) -> SettlementJobId {
+        SettlementJobId::from(ulid::Ulid::from(seed))
+    }
+
+    fn mk_result(seed: u8, outcome: ContractCallOutcome) -> SettlementJobResult {
+        SettlementJobResult::ContractCall(ContractCallResult {
+            outcome,
+            metadata: vec![seed, seed.wrapping_add(1)].into(),
+            block_hash: B256::from([seed; 32]),
+            block_number: seed as u64,
+            tx_hash: SettlementTxHash::new(Digest::from([seed.wrapping_add(2); 32])),
+        })
+    }
+
+    #[tokio::test]
+    async fn retrieve_uses_in_memory_watcher_before_storage() {
+        let store = Arc::new(MockStateStore::new());
+        let service = mk_service(store.clone()).await;
+        let job_id = mk_job_id(1);
+        let in_memory_result = mk_result(2, ContractCallOutcome::Revert);
+
+        let (_sender, watcher) = watch::channel(Some(in_memory_result.clone()));
+        service.result_watchers.lock().await.insert(job_id, watcher);
+
+        let retrieved = service
+            .retrieve_settlement_result(job_id)
+            .await
+            .expect("retrieval should succeed");
+
+        match retrieved {
+            RetrievedSettlementResult::Completed(result) => assert_eq!(result, in_memory_result),
+            RetrievedSettlementResult::Pending(_) => panic!("expected completed result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn retrieve_uses_stored_terminal_result_without_watcher() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(2);
+        let stored_result = mk_result(3, ContractCallOutcome::Success);
+        let stored_result_for_store = stored_result.clone();
+
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(stored_result_for_store)));
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let retrieved = service
+            .retrieve_settlement_result(job_id)
+            .await
+            .expect("retrieval should succeed");
+
+        match retrieved {
+            RetrievedSettlementResult::Completed(result) => assert_eq!(result, stored_result),
+            RetrievedSettlementResult::Pending(_) => panic!("expected completed result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn retrieve_fails_for_unknown_job_id() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(4);
+
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let result = service.retrieve_settlement_result(job_id).await;
+        assert!(result.is_err(), "unknown job should fail");
+        let error = result.err().expect("result should be an error");
+
+        assert!(error.to_string().contains("No settlement job found for id"));
     }
 }
