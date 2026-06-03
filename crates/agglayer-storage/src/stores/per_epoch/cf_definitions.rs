@@ -3,7 +3,7 @@ use crate::{
         certificates::{CertificatePerIndexColumn, CertificatePerIndexProtoColumn},
         end_checkpoint::EndCheckpointColumn,
         metadata::PerEpochMetadataColumn,
-        proofs::ProofPerIndexColumn,
+        proofs::{ProofPerIndexColumn, ProofPerIndexProtoColumn},
         start_checkpoint::StartCheckpointColumn,
     },
     schema::ColumnDescriptor,
@@ -24,6 +24,7 @@ pub const EPOCHS_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<CertificatePerIndexProtoColumn>(),
     ColumnDescriptor::new::<PerEpochMetadataColumn>(),
     ColumnDescriptor::new::<ProofPerIndexColumn>(),
+    ColumnDescriptor::new::<ProofPerIndexProtoColumn>(),
     ColumnDescriptor::new::<StartCheckpointColumn>(),
     ColumnDescriptor::new::<EndCheckpointColumn>(),
 ];

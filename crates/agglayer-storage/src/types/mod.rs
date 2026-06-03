@@ -1,6 +1,6 @@
 use agglayer_types::{
     primitives::Digest, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    NetworkId, Proof,
+    NetworkId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +14,7 @@ pub(crate) mod settlement;
 
 #[cfg(test)]
 pub(crate) mod codec_tests;
+pub(crate) use proof::LegacyProof;
 #[cfg(test)]
 mod proto_roundtrip;
 #[cfg(any(test, feature = "testutils"))]
@@ -74,7 +75,6 @@ crate::schema::impl_codec_using_bincode_for!(
     NetworkId,
     PerEpochMetadataKey,
     PerEpochMetadataValue,
-    Proof,
     SmtKey,
     SmtValue,
 );

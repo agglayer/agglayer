@@ -13,7 +13,7 @@ use crate::{
             LatestProvenCertificatePerNetworkColumn, ProvenCertificate,
         },
         pending_queue::{PendingQueueColumn, PendingQueueKey, PendingQueueProtoColumn},
-        proof_per_certificate::ProofPerCertificateColumn,
+        proof_per_certificate::{ProofPerCertificateColumn, ProofPerCertificateProtoColumn},
     },
     error::Error,
     schema::{Codec as _, ColumnDescriptor, ColumnSchema as _},
@@ -38,6 +38,10 @@ impl PendingStore {
                 &[ColumnDescriptor::new::<PendingQueueProtoColumn>()],
                 backfill_pending_certificates_proto_from_legacy_bincode,
             )?
+            .add_cfs(
+                &[ColumnDescriptor::new::<ProofPerCertificateProtoColumn>()],
+                backfill_pending_proofs_proto_from_legacy_bincode,
+            )?
             .finalize(cf_definitions::PENDING_DB)
     }
 
@@ -61,7 +65,7 @@ impl PendingStore {
         let cf = self
             .db
             .raw_rocksdb()
-            .cf_handle(ProofPerCertificateColumn::COLUMN_FAMILY_NAME)
+            .cf_handle(ProofPerCertificateProtoColumn::COLUMN_FAMILY_NAME)
             .ok_or(DBError::ColumnFamilyNotFound)?;
 
         let Some(bytes) = self
@@ -92,6 +96,15 @@ fn backfill_pending_certificates_proto_from_legacy_bincode(
     super::migration_helpers::copy_legacy_certificate_cf_into_proto::<
         PendingQueueColumn,
         PendingQueueProtoColumn,
+    >(db, "pending")
+}
+
+fn backfill_pending_proofs_proto_from_legacy_bincode(
+    db: &crate::storage::DbAccess,
+) -> Result<(), crate::storage::DBMigrationErrorDetails> {
+    super::migration_helpers::copy_legacy_proof_cf_into_proto::<
+        ProofPerCertificateColumn,
+        ProofPerCertificateProtoColumn,
     >(db, "pending")
 }
 
@@ -148,7 +161,7 @@ impl PendingCertificateWriter for PendingStore {
     ) -> Result<(), Error> {
         Ok(self
             .db
-            .put::<ProofPerCertificateColumn>(certificate_id, proof)?)
+            .put::<ProofPerCertificateProtoColumn>(certificate_id, proof)?)
     }
 
     fn remove_generated_proof(
@@ -157,7 +170,7 @@ impl PendingCertificateWriter for PendingStore {
     ) -> Result<(), Error> {
         Ok(self
             .db
-            .delete::<ProofPerCertificateColumn>(certificate_id)?)
+            .delete::<ProofPerCertificateProtoColumn>(certificate_id)?)
     }
 
     fn set_latest_proven_certificate_per_network(
@@ -241,7 +254,7 @@ impl PendingCertificateReader for PendingStore {
         let cf = self
             .db
             .raw_rocksdb()
-            .cf_handle(ProofPerCertificateColumn::COLUMN_FAMILY_NAME)
+            .cf_handle(ProofPerCertificateProtoColumn::COLUMN_FAMILY_NAME)
             .ok_or(Error::from(DBError::ColumnFamilyNotFound))?;
 
         let encoded_keys: Result<Vec<_>, _> = keys
