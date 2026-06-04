@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, path::Path};
 
+pub use inspection::{inspect_schema, SchemaInspection, SchemaStatus};
 use rocksdb::ColumnFamilyDescriptor;
 use tracing::{debug, info, instrument, warn};
 
@@ -15,8 +16,26 @@ use crate::{
 
 mod access;
 mod error;
+mod inspection;
 mod migration_cf;
 mod record;
+
+pub(crate) fn open_migrated_or_create(
+    path: &Path,
+    cfs_v0: &[ColumnDescriptor],
+    current_cfs: &[ColumnDescriptor],
+    declared_steps: u32,
+    open: impl FnOnce(&Path) -> Result<DB, DBOpenError>,
+) -> Result<DB, DBOpenError> {
+    let inspection = inspect_schema(path, cfs_v0, current_cfs, declared_steps);
+    match inspection.status {
+        SchemaStatus::Missing | SchemaStatus::Empty | SchemaStatus::Current => open(path),
+        status => Err(DBOpenError::StorageNeedsMigration {
+            path: path.to_path_buf(),
+            status,
+        }),
+    }
+}
 
 /// Database builder taking care of database migrations.
 pub struct Builder {
