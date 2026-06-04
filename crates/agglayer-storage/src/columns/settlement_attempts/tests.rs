@@ -1,5 +1,5 @@
+use agglayer_types::SettlementJobId;
 use rocksdb::{Direction, ReadOptions};
-use ulid::Ulid;
 
 use super::SettlementAttemptsColumn;
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
     stores::state::StateStore,
     tests::TempDBDir,
     types::{
-        generated::agglayer::storage::v0::{Address, Nonce, SettlementAttempt, TxHash, Uint128},
+        generated::agglayer::storage::v0::{Address, Nonce, SettlementAttempt, TxHash},
         settlement::attempt::{Key, Value},
     },
 };
@@ -15,12 +15,20 @@ use crate::{
 #[test]
 fn settlement_attempt_roundtrip_codec() {
     let key = Key {
-        settlement_job_id: Ulid::from(24u128),
+        settlement_job_id: SettlementJobId::from(24u128),
         attempt_sequence_number: 2,
     };
     let value = mk_settlement_attempt(2);
 
     let encoded_key = key.encode().expect("Unable to encode key");
+    let expected_key = [
+        key.settlement_job_id.to_be_bytes().as_slice(),
+        &2_u64.to_be_bytes(),
+    ]
+    .concat();
+    assert_eq!(encoded_key.len(), Key::LEN);
+    assert_eq!(encoded_key, expected_key);
+
     let decoded_key = Key::decode(&encoded_key).expect("Unable to decode key");
     assert_eq!(decoded_key.settlement_job_id, key.settlement_job_id);
     assert_eq!(
@@ -38,7 +46,7 @@ fn settlement_attempt_key_ordering_is_stable_for_same_job() {
     let tmp = TempDBDir::new();
     let db = StateStore::init_db(tmp.path.as_path()).expect("Unable to init db");
 
-    let settlement_job_id = Ulid::from(99u128);
+    let settlement_job_id = SettlementJobId::from(99u128);
     for seq in [1u64, 2, 3, 4, 5] {
         let key = Key {
             settlement_job_id,
@@ -68,12 +76,6 @@ fn mk_settlement_attempt(seed: u64) -> SettlementAttempt {
             address: vec![0x22; 20].into(),
         }),
         nonce: Some(Nonce { nonce: seed }),
-        max_fee_per_gas: Some(Uint128 {
-            value: vec![0x07; 16].into(),
-        }),
-        max_priority_fee_per_gas: Some(Uint128 {
-            value: vec![0x08; 16].into(),
-        }),
         tx_hash: Some(TxHash {
             hash: vec![0x66; 32].into(),
         }),

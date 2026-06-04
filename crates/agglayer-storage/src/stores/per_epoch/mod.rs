@@ -547,7 +547,24 @@ where
         &self,
         index: CertificateIndex,
     ) -> Result<Option<Certificate>, Error> {
-        Ok(self.db.get::<CertificatePerIndexProtoColumn>(&index)?)
+        match self.db.get::<CertificatePerIndexProtoColumn>(&index) {
+            // Epoch DBs created before the proto migration and only reopened
+            // read-only since were never migrated: read-only opens never create
+            // column families, so the proto CF is absent here. Fall back to the
+            // still-present legacy CF, decoding through the same `Certificate::from`
+            // conversion the migration backfill uses.
+            Err(crate::storage::DBError::ColumnFamilyNotFound) => {
+                warn!(
+                    "Proto certificate CF missing for epoch {}: reading from the legacy CF",
+                    self.epoch_number
+                );
+                Ok(self
+                    .db
+                    .get::<CertificatePerIndexColumn>(&index)?
+                    .map(Certificate::from))
+            }
+            result => Ok(result?),
+        }
     }
 
     fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error> {

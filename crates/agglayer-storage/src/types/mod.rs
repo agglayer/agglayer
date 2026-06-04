@@ -10,9 +10,12 @@ pub(crate) mod disabled_network;
 pub mod generated; // TODO: remove "pub" once implementation of storage is completed
 pub(crate) mod network_info;
 pub(crate) mod proof;
+pub(crate) mod settlement;
+
+#[cfg(test)]
+pub(crate) mod codec_tests;
 #[cfg(test)]
 mod proto_roundtrip;
-pub(crate) mod settlement;
 #[cfg(any(test, feature = "testutils"))]
 mod testutils;
 
@@ -74,9 +77,4 @@ crate::schema::impl_codec_using_bincode_for!(
     Proof,
     SmtKey,
     SmtValue,
-    network_info::Key,
-    settlement::job::Key,
-    settlement::attempt::Key,
-    settlement::attempt_per_wallet::Key,
-    settlement::attempt_per_wallet::Value,
 );
