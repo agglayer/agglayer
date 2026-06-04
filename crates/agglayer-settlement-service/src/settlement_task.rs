@@ -286,16 +286,10 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                     if settled_result != tx_result {
                         continue 'start; // reorg
                     }
-                    self.write_job_successful_to_db(
-                        wallet,
-                        nonce,
-                        attempt_number,
-                        tx_result.clone(),
-                    )
-                    .await;
-                    return SettlementTaskRunResult::Completed(SettlementJobResult::ContractCall(
-                        tx_result,
-                    ));
+                    let job_result = self
+                        .write_job_result_to_db(wallet, nonce, attempt_number, tx_result.clone())
+                        .await;
+                    return SettlementTaskRunResult::Completed(job_result);
                 } else {
                     // If the nonce is not used on L1, we'll need to either wait more or submit a
                     // new attempt with the same nonce.
@@ -337,12 +331,18 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                 // All nonces were seen on L1, but we didn't get a successful settlement result
                 // for any of them. Also, there was at least one revert.
                 // We can wait for finalization without submitting a new attempt.
-                let earliest_revert_result = reverts
-                    .values()
-                    .map(|(_, _, result)| result)
-                    .min_by_key(|result| result.block_number)
-                    .unwrap() // No panic: we checked `!reverts.is_empty()` just before.
-                    .clone();
+                let (
+                    earliest_revert_wallet,
+                    earliest_revert_nonce,
+                    earliest_revert_attempt_number,
+                    earliest_revert_result,
+                ) = reverts
+                    .iter()
+                    .map(|(&(wallet, nonce), (attempt_number, _, result))| {
+                        (wallet, nonce, *attempt_number, result.clone())
+                    })
+                    .min_by_key(|(_, _, _, result)| result.block_number)
+                    .unwrap(); // No panic: we checked `!reverts.is_empty()` just before.
                 for (wallet, nonce) in self.all_used_nonces() {
                     if let Some(tx_hash) = nonces_used_externally.remove(&(wallet, nonce)) {
                         let settlement_result = retry!(
@@ -382,10 +382,15 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                         );
                     }
                 }
-                self.write_job_revert_to_db(&earliest_revert_result).await;
-                return SettlementTaskRunResult::Completed(SettlementJobResult::ContractCall(
-                    earliest_revert_result.clone(),
-                ));
+                let job_result = self
+                    .write_job_result_to_db(
+                        earliest_revert_wallet,
+                        earliest_revert_nonce,
+                        earliest_revert_attempt_number,
+                        earliest_revert_result,
+                    )
+                    .await;
+                return SettlementTaskRunResult::Completed(job_result);
             }
             // There was no successful attempt, and either at least one nonce was not yet
             // seen on L1 or there is no reverting attempt. So we need to wait
@@ -442,7 +447,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
     }
 
     async fn save_attempt_to_db_and_submit_to_l1(
-        &self,
+        &mut self,
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
@@ -466,6 +471,18 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
 
     fn all_used_nonces(&self) -> BTreeSet<(Address, Nonce)> {
         self.attempts.keys().cloned().collect()
+    }
+
+    fn all_attempt_keys(&self) -> Vec<(Address, Nonce, SettlementAttemptNumber)> {
+        self.attempts
+            .iter()
+            .flat_map(|(&(wallet, nonce), attempts_for_nonce)| {
+                attempts_for_nonce
+                    .keys()
+                    .copied()
+                    .map(move |attempt_number| (wallet, nonce, attempt_number))
+            })
+            .collect()
     }
 
     fn is_any_attempt_pending_for_nonce(&self, wallet: Address, nonce: Nonce) -> bool {
@@ -493,6 +510,27 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                     .find(|(_, attempt)| attempt.attempt.hash == tx_hash)
                     .map(|(attempt_number, _)| *attempt_number)
             })
+    }
+
+    fn attempt_numbers_for_nonce(
+        &self,
+        wallet: Address,
+        nonce: Nonce,
+    ) -> Vec<SettlementAttemptNumber> {
+        self.attempts
+            .get(&(wallet, nonce))
+            .map(|attempts_for_nonce| attempts_for_nonce.keys().copied().collect())
+            .unwrap_or_default()
+    }
+
+    fn attempt_key_for_attempt_number(
+        &self,
+        attempt_number: SettlementAttemptNumber,
+    ) -> Option<(Address, Nonce)> {
+        self.attempts
+            .iter()
+            .find(|(_, attempts_for_nonce)| attempts_for_nonce.contains_key(&attempt_number))
+            .map(|(key, _)| *key)
     }
 
     fn is_wallet_privkey_known(&self, _wallet: Address) -> bool {
@@ -745,69 +783,416 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
     }
 
     async fn write_client_error_to_db(
-        &self,
-        _attempt_number: SettlementAttemptNumber,
-        _result: ClientError,
+        &mut self,
+        attempt_number: SettlementAttemptNumber,
+        result: ClientError,
     ) {
-        // TODO: Record a settlement attempt as being "client error" to db
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+        self.record_attempt_result_to_db(
+            attempt_number,
+            SettlementAttemptResult::ClientError(result),
+        );
     }
 
     async fn write_nonce_revert_to_db(
-        &self,
-        _wallet: Address,
-        _nonce: Nonce,
-        _attempt_number: SettlementAttemptNumber,
-        _result: ContractCallResult,
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        attempt_number: SettlementAttemptNumber,
+        result: ContractCallResult,
     ) {
-        // TODO: Record a nonce as having seen a revert to db. `attempt_number` is the
-        // attempt that got included on L1, and all other attempts with the same nonce
-        // should be marked as nonce already used.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+        if result.outcome != ContractCallOutcome::Revert {
+            panic!(
+                "Settlement task {} tried to record a nonce revert for non-revert attempt {}",
+                self.id, attempt_number
+            );
+        }
+
+        let included_tx_hash = result.tx_hash;
+        self.record_attempt_result_to_db(
+            attempt_number,
+            SettlementAttemptResult::ContractCall(result),
+        );
+
+        self.record_nonce_already_used_attempts_to_db(
+            wallet,
+            nonce,
+            included_tx_hash,
+            Some(attempt_number),
+        );
     }
 
     async fn write_nonce_used_externally_to_db(
-        &self,
-        _wallet: Address,
-        _nonce: Nonce,
-        _tx_hash: SettlementTxHash,
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        tx_hash: SettlementTxHash,
     ) {
-        // TODO: Record a nonce as having been used externally to db. All attempts with
-        // this nonce should be marked as nonce already used.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+        if self.record_nonce_already_used_attempts_to_db(wallet, nonce, tx_hash, None) == 0 {
+            panic!(
+                "Settlement task {} tried to record external nonce use for unknown nonce \
+                 {wallet}/{nonce}",
+                self.id
+            );
+        }
     }
 
-    async fn write_job_successful_to_db(
-        &self,
-        _wallet: Address,
-        _nonce: Nonce,
-        _attempt_number: SettlementAttemptNumber,
-        _tx_result: ContractCallResult,
-    ) {
-        // TODO: Record a settlement job as successful to db, with the given result. All
-        // attempts with the same nonce should be marked as nonce already used, and
-        // attempts with different nonces as having seen a successful settlement
-        // elsewhere.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+    fn record_nonce_already_used_attempts_to_db(
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        tx_hash: SettlementTxHash,
+        excluded_attempt_number: Option<SettlementAttemptNumber>,
+    ) -> usize {
+        let mut recorded_attempt_count = 0;
+
+        for attempt_number in self.attempt_numbers_for_nonce(wallet, nonce) {
+            if Some(attempt_number) == excluded_attempt_number {
+                continue;
+            }
+
+            self.record_attempt_result_to_db(
+                attempt_number,
+                SettlementAttemptResult::ClientError(ClientError::nonce_already_used(
+                    wallet.into(),
+                    nonce,
+                    tx_hash,
+                )),
+            );
+            recorded_attempt_count += 1;
+        }
+
+        recorded_attempt_count
     }
 
-    async fn write_job_revert_to_db(&self, _result: &ContractCallResult) {
-        // TODO: Record a settlement job as reverted to db, with the given result. All
-        // attempts should already have been marked as nonce already used or revert, so
-        // no need to update them, but maybe run a sanity-check.
-        // XREF: https://github.com/agglayer/agglayer/issues/1317
-        todo!()
+    async fn write_job_result_to_db(
+        &mut self,
+        wallet: Address,
+        nonce: Nonce,
+        attempt_number: SettlementAttemptNumber,
+        tx_result: ContractCallResult,
+    ) -> SettlementJobResult {
+        // TODO: Handle interrupted completion writes in the resumption path.
+        // Attempt results are persisted before the terminal job result below; if
+        // the process stops in between, loading the pending job must resume these
+        // writes before considering any new settlement submission.
+        self.record_attempt_result_to_db(
+            attempt_number,
+            SettlementAttemptResult::ContractCall(tx_result.clone()),
+        );
+
+        if tx_result.outcome == ContractCallOutcome::Success {
+            self.record_nonce_already_used_attempts_to_db(
+                wallet,
+                nonce,
+                tx_result.tx_hash,
+                Some(attempt_number),
+            );
+
+            for (attempt_wallet, attempt_nonce, other_attempt_number) in self.all_attempt_keys() {
+                if attempt_wallet == wallet && attempt_nonce == nonce {
+                    continue;
+                }
+
+                self.record_attempt_result_to_db(
+                    other_attempt_number,
+                    SettlementAttemptResult::ClientError(
+                        ClientError::settlement_succeeded_elsewhere(tx_result.tx_hash),
+                    ),
+                );
+            }
+        }
+
+        let job_result = SettlementJobResult {
+            wallet: wallet.into(),
+            nonce,
+            attempt_number,
+            contract_call_result: tx_result,
+        };
+
+        self.store
+            .insert_settlement_job_result(&self.id, &job_result)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Failed to write settlement job result for job {}: {error:?}",
+                    self.id
+                )
+            });
+
+        job_result
+    }
+
+    fn record_attempt_result_to_db(
+        &mut self,
+        attempt_number: SettlementAttemptNumber,
+        result: SettlementAttemptResult,
+    ) {
+        let Some((wallet, nonce)) = self.attempt_key_for_attempt_number(attempt_number) else {
+            panic!(
+                "Settlement task {} tried to record a result for unknown attempt {}",
+                self.id, attempt_number
+            );
+        };
+
+        let active_attempt = self
+            .attempts
+            .get_mut(&(wallet, nonce))
+            .and_then(|attempts_for_nonce| attempts_for_nonce.get_mut(&attempt_number))
+            .expect("attempt existence was checked before storage write");
+
+        if let Some(current_result) = active_attempt.result.as_ref() {
+            if current_result == &result {
+                return;
+            }
+
+            if !current_result.can_be_replaced_by(&result) {
+                panic!(
+                    "Settlement task {} tried to replace conflicting result for attempt {}",
+                    self.id, attempt_number
+                );
+            }
+        }
+
+        self.store
+            .record_settlement_attempt_result(&self.id, attempt_number.0, &result)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Failed to write settlement attempt result for job {} attempt {}: {error:?}",
+                    self.id, attempt_number
+                )
+            });
+
+        active_attempt.result = Some(result);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use agglayer_storage::tests::mocks::MockStateStore;
+    use agglayer_types::{
+        ClientError, ClientErrorType, ContractCallOutcome, Digest, SettlementAttemptResult, B256,
+        U256,
+    };
+    use alloy::providers::ProviderBuilder;
+    use tokio::sync::mpsc;
+
     use super::*;
 
+    fn mk_provider() -> impl Provider + 'static {
+        ProviderBuilder::new().connect_http(
+            "http://127.0.0.1:0"
+                .parse()
+                .expect("test provider URL should parse"),
+        )
+    }
+
+    fn mk_control() -> TaskControl {
+        let (admin_sender, admin_receiver) = mpsc::channel(1);
+        let (_handle, control) =
+            TaskControlHandle::new(&CancellationToken::new(), admin_sender, admin_receiver);
+        control
+    }
+
+    fn mk_job() -> SettlementJob {
+        SettlementJob {
+            contract_address: agglayer_types::Address::from([1; 20]),
+            calldata: vec![2, 3].into(),
+            eth_value: U256::from(0),
+            gas_limit: 100_000,
+        }
+    }
+
+    fn mk_tx_hash(seed: u8) -> SettlementTxHash {
+        SettlementTxHash::new(Digest::from([seed; 32]))
+    }
+
+    fn mk_contract_call_result(seed: u8, outcome: ContractCallOutcome) -> ContractCallResult {
+        ContractCallResult {
+            outcome,
+            metadata: vec![seed, seed.wrapping_add(1)].into(),
+            block_hash: B256::from([seed.wrapping_add(2); 32]),
+            block_number: seed as u64,
+            tx_hash: mk_tx_hash(seed.wrapping_add(3)),
+        }
+    }
+
+    fn mk_attempt(
+        wallet: Address,
+        nonce: Nonce,
+        hash: SettlementTxHash,
+        result: Option<SettlementAttemptResult>,
+    ) -> ActiveSettlementAttempt {
+        ActiveSettlementAttempt {
+            attempt: SettlementAttempt {
+                sender_wallet: wallet.into(),
+                nonce,
+                hash,
+                submission_time: SystemTime::UNIX_EPOCH,
+            },
+            result,
+        }
+    }
+
+    fn mk_task(
+        store: Arc<MockStateStore>,
+        attempts: BTreeMap<
+            (Address, Nonce),
+            BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>,
+        >,
+    ) -> SettlementTask<impl Provider + 'static, MockStateStore> {
+        SettlementTask {
+            id: SettlementJobId::from(ulid::Ulid::from(1_u128)),
+            job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
+            provider: Arc::new(mk_provider()),
+            store,
+            control: mk_control(),
+            attempts,
+        }
+    }
+
+    #[tokio::test]
+    async fn write_job_result_records_success_and_marks_other_attempts() {
+        let wallet = Address::from([1; 20]);
+        let other_wallet = Address::from([2; 20]);
+        let nonce = Nonce(7);
+        let other_nonce = Nonce(8);
+        let attempt_number = SettlementAttemptNumber(1);
+        let sibling_attempt_number = SettlementAttemptNumber(2);
+        let other_attempt_number = SettlementAttemptNumber(3);
+        let tx_result = mk_contract_call_result(10, ContractCallOutcome::Success);
+        let expected_wallet: agglayer_types::Address = wallet.into();
+        let expected_tx_result = tx_result.clone();
+
+        let mut attempts = BTreeMap::new();
+        attempts.insert(
+            (wallet, nonce),
+            BTreeMap::from([
+                (
+                    attempt_number,
+                    mk_attempt(wallet, nonce, tx_result.tx_hash, None),
+                ),
+                (
+                    sibling_attempt_number,
+                    mk_attempt(wallet, nonce, mk_tx_hash(20), None),
+                ),
+            ]),
+        );
+        attempts.insert(
+            (other_wallet, other_nonce),
+            BTreeMap::from([(
+                other_attempt_number,
+                mk_attempt(other_wallet, other_nonce, mk_tx_hash(30), None),
+            )]),
+        );
+
+        let mut store = MockStateStore::new();
+        store
+            .expect_record_settlement_attempt_result()
+            .times(3)
+            .returning(|_, _, _| Ok(()));
+        store
+            .expect_insert_settlement_job_result()
+            .once()
+            .withf(move |_, result| {
+                result.wallet == expected_wallet
+                    && result.nonce == nonce
+                    && result.attempt_number == attempt_number
+                    && result.contract_call_result == expected_tx_result
+            })
+            .returning(|_, _| Ok(()));
+
+        let mut task = mk_task(Arc::new(store), attempts);
+
+        let job_result = task
+            .write_job_result_to_db(wallet, nonce, attempt_number, tx_result.clone())
+            .await;
+
+        assert_eq!(job_result.contract_call_result, tx_result);
+        assert!(matches!(
+            task.attempts[&(wallet, nonce)][&attempt_number]
+                .result
+                .as_ref(),
+            Some(SettlementAttemptResult::ContractCall(_))
+        ));
+        assert!(matches!(
+            task.attempts[&(wallet, nonce)][&sibling_attempt_number]
+                .result
+                .as_ref(),
+            Some(SettlementAttemptResult::ClientError(ClientError {
+                kind: ClientErrorType::NonceAlreadyUsed,
+                ..
+            }))
+        ));
+        assert!(matches!(
+            task.attempts[&(other_wallet, other_nonce)][&other_attempt_number]
+                .result
+                .as_ref(),
+            Some(SettlementAttemptResult::ClientError(ClientError {
+                kind: ClientErrorType::SettlementSucceededElsewhere,
+                ..
+            }))
+        ));
+    }
+
+    #[tokio::test]
+    async fn write_nonce_revert_replaces_previous_client_error_for_finalized_attempt() {
+        let wallet = Address::from([3; 20]);
+        let nonce = Nonce(9);
+        let attempt_number = SettlementAttemptNumber(1);
+        let sibling_attempt_number = SettlementAttemptNumber(2);
+        let tx_result = mk_contract_call_result(40, ContractCallOutcome::Revert);
+
+        let attempts = BTreeMap::from([(
+            (wallet, nonce),
+            BTreeMap::from([
+                (
+                    attempt_number,
+                    mk_attempt(
+                        wallet,
+                        nonce,
+                        tx_result.tx_hash,
+                        Some(SettlementAttemptResult::ClientError(ClientError {
+                            kind: ClientErrorType::Unknown,
+                            message: "submission failed".to_string(),
+                        })),
+                    ),
+                ),
+                (
+                    sibling_attempt_number,
+                    mk_attempt(wallet, nonce, mk_tx_hash(50), None),
+                ),
+            ]),
+        )]);
+
+        let mut store = MockStateStore::new();
+        store
+            .expect_record_settlement_attempt_result()
+            .times(2)
+            .returning(|_, _, _| Ok(()));
+
+        let mut task = mk_task(Arc::new(store), attempts);
+
+        task.write_nonce_revert_to_db(wallet, nonce, attempt_number, tx_result.clone())
+            .await;
+
+        assert_eq!(
+            task.attempts[&(wallet, nonce)][&attempt_number]
+                .result
+                .as_ref(),
+            Some(&SettlementAttemptResult::ContractCall(tx_result))
+        );
+        assert!(matches!(
+            task.attempts[&(wallet, nonce)][&sibling_attempt_number]
+                .result
+                .as_ref(),
+            Some(SettlementAttemptResult::ClientError(ClientError {
+                kind: ClientErrorType::NonceAlreadyUsed,
+                ..
+            }))
+        ));
+    }
     #[test]
     fn required_settlement_head_number_is_inclusive_of_receipt_block() {
         // Confirmations count the receipt block itself, and saturate rather than

@@ -225,30 +225,19 @@ impl SettlementWriter for StateStore {
         })
     }
 
-    fn insert_settlement_attempt_result(
+    fn record_settlement_attempt_result(
         &self,
         settlement_job_id: &SettlementJobId,
         attempt_sequence_number: u64,
         tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error> {
-        let tx_result: v0::SettlementAttemptResult = tx_result.into();
+        let proto_tx_result: v0::SettlementAttemptResult = tx_result.into();
 
         self.with_settlement_write_lock(settlement_job_id, || {
             let key = SettlementAttemptKey {
                 settlement_job_id: *settlement_job_id,
                 attempt_sequence_number,
             };
-
-            if self
-                .db
-                .get::<SettlementAttemptResultsColumn>(&key)?
-                .is_some()
-            {
-                return Err(Error::UnprocessedAction(format!(
-                    "Settlement attempt result already exists for job {settlement_job_id} and \
-                     attempt sequence number {attempt_sequence_number}"
-                )));
-            }
 
             if self.db.get::<SettlementAttemptsColumn>(&key)?.is_none() {
                 return Err(Error::UnprocessedAction(format!(
@@ -257,9 +246,28 @@ impl SettlementWriter for StateStore {
                 )));
             }
 
+            if let Some(stored_result) = self
+                .db
+                .get::<SettlementAttemptResultsColumn>(&key)?
+                .map(SettlementAttemptResult::try_from)
+                .transpose()?
+            {
+                if stored_result == *tx_result {
+                    return Ok(());
+                }
+
+                if !stored_result.can_be_replaced_by(tx_result) {
+                    return Err(Error::UnprocessedAction(format!(
+                        "Cannot replace existing settlement attempt result {stored_result:?} with \
+                         new settlement attempt result {tx_result:?} for job {settlement_job_id} \
+                         and attempt sequence number {attempt_sequence_number}",
+                    )));
+                }
+            }
+
             Ok(self
                 .db
-                .put::<SettlementAttemptResultsColumn>(&key, &tx_result)?)
+                .put::<SettlementAttemptResultsColumn>(&key, &proto_tx_result)?)
         })
     }
 }
