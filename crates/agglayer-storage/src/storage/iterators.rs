@@ -128,13 +128,12 @@ impl<C: ColumnSchema> Iterator for ColumnIterator<'_, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::TempDBDir;
 
     #[test]
     fn invalid_iterator_error_converts_rocksdb_status() {
-        let missing_path = std::env::temp_dir().join(format!(
-            "agglayer-storage-missing-rocksdb-{}",
-            ulid::Ulid::new()
-        ));
+        let tmp = TempDBDir::new();
+        let missing_path = tmp.path.join("missing-rocksdb");
         let rocksdb_error =
             rocksdb::DB::open_for_read_only(&rocksdb::Options::default(), missing_path, false)
                 .expect_err("opening a missing DB read-only should fail");

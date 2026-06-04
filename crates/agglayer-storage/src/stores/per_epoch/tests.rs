@@ -230,7 +230,7 @@ fn reopening_epoch_store_migrates_legacy_certificate_rows_to_proto() {
 }
 
 #[test]
-fn readonly_epoch_access_falls_back_to_legacy_cf_when_proto_cf_absent() {
+fn readonly_epoch_access_rejects_legacy_schema_when_proto_cf_absent() {
     let tmp = TempDBDir::new();
     let config = Arc::new(Config::new(&tmp.path));
     let epoch_number = EpochNumber::ZERO;
@@ -242,18 +242,22 @@ fn readonly_epoch_access_falls_back_to_legacy_cf_when_proto_cf_absent() {
     );
     let epochs_store =
         EpochsStore::new(config, pending_store, state_store, BackupClient::noop()).unwrap();
-    let expected = sample_data::load_certificate("n15-cert_h0.json");
     let legacy = load_v0_certificate_bytes("v0-n15-cert_h0.hex");
     let index = CertificateIndex::ZERO;
 
     write_raw_epoch_certificate_bytes(&epoch_path, index, legacy);
 
-    // The read must fall back to the still-present legacy CF instead of failing
-    // with `ColumnFamilyNotFound`.
-    assert_eq!(
-        epochs_store.get_certificate(epoch_number, index).unwrap(),
-        Some(expected)
-    );
+    let error = epochs_store
+        .get_certificate(epoch_number, index)
+        .expect_err("readonly epoch access should require migration for legacy storage");
+
+    assert!(matches!(
+        error,
+        Error::DBOpenError(crate::storage::DBOpenError::StorageNeedsMigration { .. })
+    ));
+
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &epoch_path).unwrap();
+    assert!(!cfs.contains(&CertificatePerIndexProtoColumn::COLUMN_FAMILY_NAME.to_string()));
 }
 
 fn create_raw_epoch_v0(path: &std::path::Path) {

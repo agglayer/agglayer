@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, path::Path};
 
+pub use inspection::{inspect_schema, SchemaInspection, SchemaStatus};
 use rocksdb::ColumnFamilyDescriptor;
 use tracing::{debug, info, instrument, warn};
 
@@ -12,7 +13,6 @@ use crate::{
     schema::{ColumnDescriptor, ColumnSchema},
     storage::{DBError, DB},
 };
-pub use inspection::{inspect_schema, SchemaInspection, SchemaStatus};
 
 mod access;
 mod error;

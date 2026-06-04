@@ -166,7 +166,7 @@ fn recorded_steps(path: &Path) -> Result<Vec<u32>, crate::storage::DBError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{super::record::MigrationRecord, *};
     use crate::{
         columns::{metadata::MetadataColumn, network_info::NetworkInfoColumn},
         schema::{Codec as _, ColumnDescriptor},
@@ -178,8 +178,6 @@ mod tests {
         },
         tests::TempDBDir,
     };
-
-    use super::super::record::MigrationRecord;
 
     const LEGACY: &[ColumnDescriptor] = &[ColumnDescriptor::new::<MetadataColumn>()];
     const CURRENT: &[ColumnDescriptor] = &[
@@ -289,7 +287,8 @@ mod tests {
         assert_eq!(
             error.to_string(),
             format!(
-                "Storage at {} needs migration (needs migration); run `agglayer migrate-storage` before starting agglayer-node",
+                "Storage at {} needs migration (needs migration); run `agglayer migrate-storage` \
+                 before starting agglayer-node",
                 tmp.path.display()
             )
         );
