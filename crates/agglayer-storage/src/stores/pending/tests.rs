@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
 use pessimistic_proof_test_suite::sample_data;
@@ -115,6 +115,25 @@ fn insert_pending_certificate_writes_proto_bytes() {
     let decoded = Certificate::try_from(proto).unwrap();
 
     assert_eq!(decoded, certificate);
+}
+
+#[test]
+fn insert_pending_certificate_does_not_leave_latest_pointer_after_row_write_failure() {
+    let tmp = TempDBDir::new();
+    let db = crate::storage::DB::open_cf(&tmp.path, super::cf_definitions::PENDING_DB_V0).unwrap();
+    let store = PendingStore::new(Arc::new(db));
+    let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+
+    let error =
+        store.insert_pending_certificate(certificate.network_id, certificate.height, &certificate);
+
+    assert!(error.is_err());
+    assert_eq!(
+        store
+            .get_latest_pending_certificate_for_network(&certificate.network_id)
+            .unwrap(),
+        None
+    );
 }
 
 #[test]

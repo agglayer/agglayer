@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
-use rocksdb::{Direction, ReadOptions};
+use rocksdb::{Direction, ReadOptions, WriteBatch};
 
 use super::{PendingCertificateReader, PendingCertificateWriter};
 use crate::{
@@ -134,11 +134,19 @@ impl PendingCertificateWriter for PendingStore {
             }
         }
 
-        // TODO: make it batch
-        self.set_latest_pending_certificate_per_network(&network_id, &height, &certificate.hash())?;
-        Ok(self
-            .db
-            .put::<PendingQueueProtoColumn>(&PendingQueueKey(network_id, height), certificate)?)
+        let latest = PendingCertificate(certificate.hash(), height);
+        let pending_key = PendingQueueKey(network_id, height);
+        let mut batch = WriteBatch::default();
+        self.db
+            .multi_insert_batch::<LatestPendingCertificatePerNetworkColumn>(
+                [(&network_id, &latest)],
+                &mut batch,
+            )?;
+        self.db.multi_insert_batch::<PendingQueueProtoColumn>(
+            [(&pending_key, certificate)],
+            &mut batch,
+        )?;
+        Ok(self.db.write_batch(batch)?)
     }
 
     fn insert_generated_proof(
