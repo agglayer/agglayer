@@ -25,6 +25,8 @@ pub(crate) mod cf_definitions;
 #[cfg(test)]
 mod tests;
 
+const DECLARED_MIGRATION_STEPS: u32 = 2;
+
 /// A logical store for pending.
 #[derive(Clone)]
 pub struct PendingStore {
@@ -41,12 +43,26 @@ impl PendingStore {
             .finalize(cf_definitions::PENDING_DB)
     }
 
+    pub fn open_migrated_or_create_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
+        crate::storage::open_migrated_or_create(
+            path,
+            cf_definitions::PENDING_DB_V0,
+            cf_definitions::PENDING_DB,
+            DECLARED_MIGRATION_STEPS,
+            Self::init_db,
+        )
+    }
+
     pub fn new(db: Arc<DB>) -> Self {
         Self { db }
     }
 
     pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
         Ok(Self::new(Arc::new(Self::init_db(path)?)))
+    }
+
+    pub fn open_migrated_or_create(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
+        Ok(Self::new(Arc::new(Self::open_migrated_or_create_db(path)?)))
     }
 
     fn decode_readable_proof(certificate_id: CertificateId, bytes: &[u8]) -> Result<Proof, Error> {

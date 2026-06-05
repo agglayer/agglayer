@@ -192,3 +192,44 @@ fn reopening_debug_store_skips_unparsable_legacy_rows() {
         "the corrupt row should be skipped, not migrated"
     );
 }
+
+fn create_raw_debug_v0(path: &std::path::Path) {
+    let mut options = rocksdb::Options::default();
+    options.create_if_missing(true);
+    options.create_missing_column_families(true);
+    let descriptors = super::cf_definitions::DEBUG_DB_V0
+        .iter()
+        .map(|cf| rocksdb::ColumnFamilyDescriptor::new(cf.name(), rocksdb::Options::default()));
+    let db = rocksdb::DB::open_cf_descriptors(&options, path, descriptors).unwrap();
+    drop(db);
+}
+
+#[test]
+fn migrated_or_create_debug_creates_missing_storage() {
+    let tmp = TempDBDir::new();
+    let path = tmp.path.join("debug");
+
+    let db = DebugStore::open_migrated_or_create_db(&path).unwrap();
+    drop(db);
+
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &path).unwrap();
+    assert!(cfs.contains(&DebugCertificatesProtoColumn::COLUMN_FAMILY_NAME.to_string()));
+}
+
+#[test]
+fn migrated_or_create_debug_rejects_legacy_storage_without_mutating_it() {
+    let tmp = TempDBDir::new();
+    create_raw_debug_v0(&tmp.path);
+
+    let error = match DebugStore::open_migrated_or_create_db(&tmp.path) {
+        Ok(_) => panic!("migrated-or-create open should reject legacy debug storage"),
+        Err(error) => error,
+    };
+
+    assert!(matches!(
+        error,
+        crate::storage::DBOpenError::StorageNeedsMigration { .. }
+    ));
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &tmp.path).unwrap();
+    assert!(!cfs.contains(&DebugCertificatesProtoColumn::COLUMN_FAMILY_NAME.to_string()));
+}
