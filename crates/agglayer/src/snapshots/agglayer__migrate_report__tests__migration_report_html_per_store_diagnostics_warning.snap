@@ -1,0 +1,218 @@
+---
+source: crates/agglayer/src/migrate_report.rs
+expression: render_html(&o)
+snapshot_kind: text
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storage migration report — mainnet</title>
+<style>:root {
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --border: 240 5.9% 90%;
+  --success: 142 71% 35%;
+  --warning: 38 92% 45%;
+  --destructive: 0 72% 50%;
+  --radius: 0.625rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 5.9%;
+    --card-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --border: 240 3.7% 15.9%;
+    --success: 142 60% 45%;
+    --warning: 38 90% 55%;
+    --destructive: 0 70% 60%;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  margin: 0;
+  line-height: 1.5;
+  font-size: 14px;
+}
+.container { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+header.page-header { margin-bottom: 2rem; }
+header.page-header h1 { font-size: 1.875rem; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 0.4rem; }
+header.page-header .meta { color: hsl(var(--muted-foreground)); font-size: 0.875rem; display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; }
+h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.01em; margin: 2.5rem 0 1rem; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: hsl(var(--muted)); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.875em; }
+.mono.break { word-break: break-all; }
+.kpi-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1rem; }
+.kpi { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.kpi .kpi-label { color: hsl(var(--muted-foreground)); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+.kpi .kpi-value { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin-top: 0.4rem; }
+.kpi .kpi-value.success { color: hsl(var(--success)); }
+.kpi .kpi-value.warning { color: hsl(var(--warning)); }
+.kpi .kpi-value.destructive { color: hsl(var(--destructive)); }
+.kpi .kpi-hint { color: hsl(var(--muted-foreground)); margin-top: 0.25rem; font-size: 0.8125rem; }
+.card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); padding: 1.25rem 1.5rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+.card + .card { margin-top: 1rem; }
+.card .card-title { font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0 0 0.5rem; }
+.badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.badge.success { background: hsl(var(--success) / 0.12); color: hsl(var(--success)); border: 1px solid hsl(var(--success) / 0.3); }
+.badge.warning { background: hsl(var(--warning) / 0.12); color: hsl(var(--warning)); border: 1px solid hsl(var(--warning) / 0.3); }
+.badge.destructive { background: hsl(var(--destructive) / 0.12); color: hsl(var(--destructive)); border: 1px solid hsl(var(--destructive) / 0.3); }
+.badge.muted { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); border: 1px solid hsl(var(--border)); }
+table { width: 100%; border-collapse: collapse; border: 1px solid hsl(var(--border)); border-radius: var(--radius); overflow: hidden; font-size: 0.875rem; margin: 0.85rem 0; }
+thead { background: hsl(var(--muted)); }
+th, td { padding: 0.55rem 0.85rem; text-align: left; vertical-align: top; }
+th { font-weight: 600; color: hsl(var(--muted-foreground)); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.06em; }
+tbody tr { border-top: 1px solid hsl(var(--border)); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.muted { color: hsl(var(--muted-foreground)); font-size: 0.875rem; }
+.warning { border-left: 3px solid hsl(var(--warning)); background: hsl(var(--warning) / 0.08); color: hsl(var(--warning)); padding: 0.75rem 1rem; border-radius: 6px; margin-top: 0.75rem; font-size: 0.875rem; word-break: break-word; }
+.fatal { border-left: 3px solid hsl(var(--destructive)); background: hsl(var(--destructive) / 0.08); color: hsl(var(--destructive)); padding: 0.75rem 1rem; border-radius: 6px; margin-top: 0.75rem; font-size: 0.875rem; word-break: break-word; }
+.path-key { text-align: right; width: 200px; }
+.store-key { text-align: right; width: 160px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="page-header">
+  <h1>Storage migration report</h1>
+  <div class="meta">
+    <span><span class="badge success">OK</span></span>
+    <span>env <strong>mainnet</strong></span>
+    <span>generated <strong>2024-01-15 12:31:36</strong> UTC</span>
+    <span>duration <strong>1.23s</strong></span>
+  </div>
+</header>
+
+<section><h2>Summary</h2>
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Status</div>
+    <div class="kpi-value success">OK</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Stores migrated</div>
+    <div class="kpi-value success">8</div>
+    <div class="kpi-hint">state + pending + debug + epochs</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Failures</div>
+    <div class="kpi-value success">0</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Total time</div>
+    <div class="kpi-value success">1.23s</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Unparsable rows</div>
+    <div class="kpi-value success">0</div>
+  </div>
+</div>
+</section>
+
+
+<section><h2>State DB</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span>state</span>
+    <span class="badge success">OK</span>
+  </div>
+  <table><tbody>
+    <tr><th class="store-key">Path</th><td><code class="mono break">/var/agglayer/state</code></td></tr>
+    <tr><th class="store-key">Duration</th><td>120.00ms</td></tr>
+  </tbody></table>
+
+
+
+</div>
+
+</section>
+
+<section><h2>Pending DB</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span>pending</span>
+    <span class="badge warning">INCOMPLETE</span>
+  </div>
+  <table><tbody>
+    <tr><th class="store-key">Path</th><td><code class="mono break">/var/agglayer/pending</code></td></tr>
+    <tr><th class="store-key">Duration</th><td>45.00ms</td></tr>
+  </tbody></table>
+
+<div class="warning">Diagnostics failed: pending scan failed</div>
+
+</div>
+
+</section>
+
+<section><h2>Debug DB</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span>debug</span>
+    <span class="badge success">OK</span>
+  </div>
+  <table><tbody>
+    <tr><th class="store-key">Path</th><td><code class="mono break">/var/agglayer/debug</code></td></tr>
+    <tr><th class="store-key">Duration</th><td>30.00ms</td></tr>
+  </tbody></table>
+
+
+
+</div>
+
+</section>
+
+
+<section><h2>Epoch DBs</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span>aggregate (/var/agglayer/epochs)</span>
+    <span class="badge success">OK</span>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Discovered</div><div class="kpi-value success">5</div></div>
+    <div class="kpi"><div class="kpi-label">Processed</div><div class="kpi-value success">5</div></div>
+    <div class="kpi"><div class="kpi-label">Successful</div><div class="kpi-value success">5</div></div>
+    <div class="kpi"><div class="kpi-label">Failed</div><div class="kpi-value success">0</div></div>
+    <div class="kpi"><div class="kpi-label">Diagnostics failed</div><div class="kpi-value warning">0</div></div>
+    <div class="kpi"><div class="kpi-label">Duration</div><div class="kpi-value success">800.00ms</div></div>
+  </div>
+
+
+
+
+</div>
+
+</section>
+
+<h2>Run configuration</h2>
+<table><tbody>
+  <tr><th class="path-key">Environment label</th><td>mainnet</td></tr>
+
+  <tr><th class="path-key">state path</th><td><code class="mono break">/var/agglayer/state</code></td></tr>
+
+  <tr><th class="path-key">pending path</th><td><code class="mono break">/var/agglayer/pending</code></td></tr>
+
+  <tr><th class="path-key">debug path</th><td><code class="mono break">/var/agglayer/debug</code></td></tr>
+
+  <tr><th class="path-key">epochs path</th><td><code class="mono break">/var/agglayer/epochs</code></td></tr>
+
+</tbody></table>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,22 @@
+---
+source: crates/agglayer/src/migrate_report.rs
+expression: render_markdown(&outcome_with_unparsable_rows())
+---
+## mainnet
+
+Migration run at 2024-01-15 12:31:36 UTC, total 1.23s. Status: **OK**.
+
+| Store | Status | Duration | Notes |
+|---|---|---:|---|
+| state | ✅ OK | 120.00ms | — |
+| pending | ✅ OK | 45.00ms | 2 unparsable rows |
+| debug | ✅ OK | 30.00ms | — |
+| epochs | ✅ OK | 800.00ms | 5 processed; 5 OK; 0 failed; 1 unparsable |
+
+**Unparsable rows (3)**
+
+- `pending_queue` (pending) at key `00000000000000010000000000000005`: invalid varint
+- `pending_queue` (pending) at key `0000000000000002000000000000000a`: BadCertificateVersion { version: 7 }
+- `epoch_certificate_per_index` (epoch 17) at key `0000000000000003`: decode error
+
+---

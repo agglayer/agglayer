@@ -1,0 +1,20 @@
+---
+source: crates/agglayer/src/migrate_report.rs
+expression: render_markdown(&o)
+---
+## mainnet
+
+Migration run at 2024-01-15 12:31:36 UTC, total 1.23s. Status: **OK**.
+
+| Store | Status | Duration | Notes |
+|---|---|---:|---|
+| state | ✅ OK | 120.00ms | — |
+| pending | ✅ OK | 45.00ms | — |
+| debug | ✅ OK | 30.00ms | — |
+| epochs | ✅ OK | 800.00ms | 5 processed; 5 OK; 0 failed; 1 diagnostics failed |
+
+**Diagnostics warnings**
+
+- epoch 99: read-only diagnostics open failed
+
+---

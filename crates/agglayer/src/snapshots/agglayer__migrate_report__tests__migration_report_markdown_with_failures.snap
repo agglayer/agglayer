@@ -1,0 +1,22 @@
+---
+source: crates/agglayer/src/migrate_report.rs
+expression: render_markdown(&outcome_with_failures())
+---
+## mainnet
+
+Migration run at 2024-01-15 12:31:36 UTC, total 1.23s. Status: **FAILED**.
+
+| Store | Status | Duration | Notes |
+|---|---|---:|---|
+| state | ❌ FAILED | 120.00ms | schema mismatch |
+| pending | ✅ OK | 45.00ms | — |
+| debug | ✅ OK | 30.00ms | — |
+| epochs | ❌ FAILED | 500.00ms | 3 processed; 1 OK; 2 failed |
+
+**Fatal errors**
+
+- state: schema mismatch
+- epoch 17: missing CF debug_certificates
+- epoch 42: decode error
+
+---
