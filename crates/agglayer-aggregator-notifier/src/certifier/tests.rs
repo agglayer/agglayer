@@ -288,6 +288,7 @@ mockall::mock! {
             &self,
             rollup_address: agglayer_types::primitives::Address,
             aggchain_data: Bytes,
+            before_tx_hash: Option<TxHash>,
         ) -> Result<[u8; 32], L1RpcError>;
 
         async fn get_multisig_context(
