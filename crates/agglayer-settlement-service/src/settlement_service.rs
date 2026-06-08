@@ -3,7 +3,7 @@ use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{SettlementJob, SettlementJobId, SettlementJobResult};
-use alloy::providers::Provider;
+use alloy::providers::{Provider, WalletProvider};
 use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
@@ -51,7 +51,7 @@ pub enum RetrievedSettlementResult {
 }
 
 impl<
-        L1Provider: Provider + 'static,
+        L1Provider: Provider + WalletProvider + 'static,
         SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > SettlementService<L1Provider, SettlementStore>
 {
@@ -212,7 +212,7 @@ impl<
 pub struct RequestNewSettlement(pub SettlementJob);
 
 impl<
-        L1Provider: Provider + 'static,
+        L1Provider: Provider + WalletProvider + 'static,
         SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<RequestNewSettlement> for SettlementService<L1Provider, SettlementStore>
 {
@@ -236,7 +236,7 @@ impl<
 pub struct RetrieveSettlementResult(pub SettlementJobId);
 
 impl<
-        L1Provider: Provider + 'static,
+        L1Provider: Provider + WalletProvider + 'static,
         SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<RetrieveSettlementResult> for SettlementService<L1Provider, SettlementStore>
 {
@@ -263,7 +263,7 @@ pub enum AdminCommand {
 }
 
 impl<
-        L1Provider: Provider + 'static,
+        L1Provider: Provider + WalletProvider + 'static,
         SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<AdminCommand> for SettlementService<L1Provider, SettlementStore>
 {
@@ -300,21 +300,27 @@ mod tests {
         ContractCallOutcome, ContractCallResult, Digest, Nonce, SettlementAttemptNumber,
         SettlementJobId, SettlementJobResult, SettlementTxHash, B256,
     };
-    use alloy::providers::ProviderBuilder;
+    use alloy::{
+        network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner,
+    };
 
     use super::*;
 
-    fn mk_provider() -> impl Provider + 'static {
-        ProviderBuilder::new().connect_http(
-            "http://127.0.0.1:0"
-                .parse()
-                .expect("test provider URL should parse"),
-        )
+    fn mk_provider() -> impl Provider + WalletProvider + 'static {
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(
+                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+            ))
+            .connect_http(
+                "http://127.0.0.1:0"
+                    .parse()
+                    .expect("test provider URL should parse"),
+            )
     }
 
     async fn mk_service(
         store: Arc<MockStateStore>,
-    ) -> SettlementService<impl Provider + 'static, MockStateStore> {
+    ) -> SettlementService<impl Provider + WalletProvider + 'static, MockStateStore> {
         SettlementService::start(
             SettlementServiceConfig::default(),
             Arc::new(SettlementTransactionConfig::default()),
