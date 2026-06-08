@@ -3,11 +3,10 @@ use agglayer_primitives::{Address, U256};
 use alloy::{
     eips::BlockId,
     primitives::{Bytes, TxHash},
-    providers::Provider,
 };
 use tracing::error;
 
-use crate::{contracts::AggchainBase, L1RpcClient, L1RpcError};
+use crate::{block_pinning::block_before_tx, contracts::AggchainBase, L1RpcClient, L1RpcError};
 
 #[async_trait::async_trait]
 pub trait AggchainContract {
@@ -74,7 +73,12 @@ where
         before_tx_hash: Option<TxHash>,
     ) -> Result<[u8; 32], L1RpcError> {
         let at_block = match before_tx_hash {
-            Some(tx_hash) => block_before_tx(&self.rpc, tx_hash).await,
+            // A transaction that did not successfully advance the state we depend
+            // on (not mined, reverted, or whose receipt could not be fetched)
+            // leaves the current state as the one to query.
+            Some(tx_hash) => block_before_tx(&self.rpc, tx_hash)
+                .await
+                .unwrap_or_else(|_| BlockId::latest()),
             None => BlockId::latest(),
         };
 
@@ -119,77 +123,5 @@ where
         };
 
         Ok((signers, threshold))
-    }
-}
-
-/// Resolve the block at which to evaluate a view call so that it observes the
-/// L1 state immediately before `tx_hash` was included.
-///
-/// Returns the block preceding the transaction's inclusion block when the
-/// transaction is mined successfully. Falls back to `latest` when the receipt
-/// cannot be fetched, the transaction is not yet mined, or it reverted: in
-/// those cases the transaction did not advance the state we depend on, so the
-/// current state is the one to query.
-async fn block_before_tx<P: Provider>(rpc: &P, tx_hash: TxHash) -> BlockId {
-    let receipt = rpc
-        .get_transaction_receipt(tx_hash)
-        .await
-        .ok()
-        .flatten()
-        .map(|receipt| (receipt.status(), receipt.block_number));
-
-    block_before_inclusion(receipt)
-}
-
-/// Pick the block to query from a transaction's `(succeeded, inclusion_block)`.
-///
-/// A successful transaction included in block `n` resolves to block `n - 1`
-/// (saturating at zero); every other case resolves to `latest`.
-fn block_before_inclusion(receipt: Option<(bool, Option<u64>)>) -> BlockId {
-    match receipt {
-        Some((true, Some(block))) => BlockId::number(block.saturating_sub(1)),
-        _ => BlockId::latest(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{block_before_inclusion, BlockId};
-
-    #[test]
-    fn successful_receipt_resolves_to_preceding_block() {
-        assert_eq!(
-            block_before_inclusion(Some((true, Some(100)))),
-            BlockId::number(99),
-        );
-    }
-
-    #[test]
-    fn inclusion_in_genesis_block_saturates_at_zero() {
-        assert_eq!(
-            block_before_inclusion(Some((true, Some(0)))),
-            BlockId::number(0),
-        );
-    }
-
-    #[test]
-    fn reverted_transaction_falls_back_to_latest() {
-        assert_eq!(
-            block_before_inclusion(Some((false, Some(100)))),
-            BlockId::latest(),
-        );
-    }
-
-    #[test]
-    fn pending_transaction_without_block_falls_back_to_latest() {
-        assert_eq!(
-            block_before_inclusion(Some((true, None))),
-            BlockId::latest(),
-        );
-    }
-
-    #[test]
-    fn missing_receipt_falls_back_to_latest() {
-        assert_eq!(block_before_inclusion(None), BlockId::latest());
     }
 }
