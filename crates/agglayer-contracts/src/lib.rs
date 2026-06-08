@@ -18,6 +18,7 @@ use eyre::{eyre, Context as _};
 use tracing::{debug, info};
 
 pub mod aggchain;
+mod block_pinning;
 pub mod contracts;
 pub mod rollup;
 pub mod settler;
