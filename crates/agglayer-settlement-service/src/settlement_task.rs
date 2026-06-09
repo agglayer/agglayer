@@ -449,7 +449,10 @@ impl<
                 // used externally, or that we no longer have the required wallets to bump
                 // pending nonces. So we need to submit a new attempt with a new
                 // nonce.
-                let (wallet, nonce, attempt_number, tx) = self.build_next_attempt_with_new_nonce();
+                let (wallet, nonce, attempt_number, tx) = retry!(
+                    self.build_next_attempt_with_new_nonce().await,
+                    "building next settlement attempt with a new nonce",
+                );
                 self.save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
                     .await;
             }
@@ -857,12 +860,40 @@ impl<
         todo!()
     }
 
-    fn build_next_attempt_with_new_nonce(
+    /// Selects a wallet and a fresh nonce, resolves base gas parameters from
+    /// the latest L1 fee estimate, and builds a signed settlement attempt.
+    ///
+    /// Transient L1 RPC failures are retried in place using the configured
+    /// transient-failure policy; a build/sign failure is non-recoverable.
+    async fn build_next_attempt_with_new_nonce(
         &self,
-    ) -> (Address, Nonce, SettlementAttemptNumber, TxEnvelope) {
-        // TODO: Build the next attempt with correct gas and other params. Use https://docs.rs/alloy/latest/alloy/rpc/types/struct.TransactionRequest.html#method.build
-        // XREF: https://github.com/agglayer/agglayer/issues/1318
-        todo!()
+    ) -> Result<
+        (Address, Nonce, SettlementAttemptNumber, TxEnvelope),
+        RetryCallbackError<BuildAttemptError>,
+    > {
+        let wallet = self.provider.default_signer_address();
+        let attempt_number = self.next_attempt_number();
+
+        crate::utils::retry_callback_until_success(
+            &self.tx_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || async {
+                let nonce = self
+                    .provider
+                    .get_transaction_count(wallet)
+                    .pending()
+                    .await?;
+                let chain_id = self.provider.get_chain_id().await?;
+                let estimate = self.provider.estimate_eip1559_fees().await?;
+                let gas = self.resolve_base_gas_params(&estimate);
+                let tx = self
+                    .build_attempt(wallet, Nonce(nonce), chain_id, gas)
+                    .await?;
+                Ok((wallet, Nonce(nonce), attempt_number, tx))
+            },
+            BuildAttemptError::is_transient,
+        )
+        .await
     }
 
     async fn submit_attempt_to_l1(&self, _tx: TxEnvelope) -> eyre::Result<()> {
@@ -1667,5 +1698,58 @@ mod tests {
         assert_eq!(envelope.input().as_ref(), mk_job().calldata.as_ref());
         assert_eq!(envelope.to(), Some(mk_job().contract_address.into_alloy()));
         assert_eq!(envelope.recover_signer().unwrap(), wallet_address);
+    }
+
+    #[tokio::test]
+    async fn build_next_attempt_with_new_nonce_uses_pending_nonce_and_default_wallet() {
+        use alloy::{
+            consensus::Transaction as _, node_bindings::Anvil, providers::ProviderBuilder,
+            rpc::types::TransactionRequest,
+        };
+
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_address = signer.address();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        // Bump the sender's nonce to 2 by mining two transactions.
+        for _ in 0..2 {
+            let tx = TransactionRequest::default()
+                .to(anvil.addresses()[1])
+                .value(U256::from(1));
+            provider
+                .send_transaction(tx)
+                .await
+                .unwrap()
+                .get_receipt()
+                .await
+                .unwrap();
+        }
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts: BTreeMap::new(),
+        };
+
+        let (used_wallet, nonce, attempt_number, envelope) = task
+            .build_next_attempt_with_new_nonce()
+            .await
+            .expect("attempt should build");
+
+        assert_eq!(used_wallet, wallet_address);
+        assert_eq!(nonce, Nonce(2));
+        assert_eq!(attempt_number, SettlementAttemptNumber(0));
+        assert_eq!(envelope.nonce(), 2);
+        assert_eq!(envelope.to(), Some(mk_job().contract_address.into_alloy()));
+        assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
+        // Fees are within the configured bounds (defaults: floor 0, ceiling 100 gwei).
+        assert!(envelope.max_fee_per_gas() <= 100_000_000_000);
     }
 }
