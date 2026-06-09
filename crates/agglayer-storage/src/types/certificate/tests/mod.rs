@@ -382,7 +382,7 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
 
 // SP1 v6 made the legacy `CertificateV1` → `Certificate` conversion fallible
 // (`TryFrom`) and dropped the `From<&Certificate> for CertificateV1` impl, so
-// the synthesised round-trip case from #1519 is no longer expressible. The
+// the synthesised round-trip case is no longer expressible. The
 // pre-existing fixtures still exercise the legacy CF decode path.
 #[rstest::rstest]
 #[case(CertificateV0::test0(), Certificate::from(CertificateV0::test0()))]
@@ -503,7 +503,7 @@ fn legacy_certificate_decode_per_byte_dispatch() {
     }
 
     // Other bytes enter the proto path. The legacy CF carried proto rows
-    // between #1519 and this PR, so this branch must be live. With no
+    // before the proto CF split, so this branch must be live. With no
     // payload the proto decoder either rejects the bytes outright or
     // produces a default-valued message that fails `Certificate::try_from`.
     for v in 2..=u8::MAX {
