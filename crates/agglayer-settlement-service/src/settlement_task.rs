@@ -44,6 +44,8 @@ fn apply_multiplier_u128(value: u128, multiplier: Multiplier) -> u128 {
     value.saturating_mul(u128::from(multiplier.as_u64_per_1000())) / 1000
 }
 
+/// Clamps `value` into `[floor, ceiling]`. When `floor > ceiling` the ceiling
+/// wins (unlike [`Ord::clamp`], this never panics on an inverted range).
 fn clamp_u128(value: u128, floor: u128, ceiling: u128) -> u128 {
     value.max(floor).min(ceiling)
 }
@@ -769,6 +771,10 @@ impl<
             config.max_fee_per_gas_floor,
             config.max_fee_per_gas_ceiling,
         );
+        // The priority fee must never exceed the max fee, otherwise the
+        // transaction is invalid. Independent per-field floors/ceilings could
+        // otherwise produce `priority > max_fee` under misconfiguration, so we
+        // cap it here to keep the EIP-1559 invariant at the point of resolution.
         let max_priority_fee_per_gas = clamp_u128(
             apply_multiplier_u128(
                 estimate.max_priority_fee_per_gas,
@@ -776,7 +782,8 @@ impl<
             ),
             config.max_priority_fee_per_gas_floor,
             config.max_priority_fee_per_gas_ceiling,
-        );
+        )
+        .min(max_fee_per_gas);
 
         let gas_limit_ceiling = u128::try_from(config.gas_limit_ceiling).unwrap_or(u128::MAX);
         let gas_limit_u128 =
@@ -1493,18 +1500,18 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::field_reassign_with_default)] // Field-by-field config keeps the test readable.
     fn resolve_base_gas_params_applies_multiplier_floor_and_ceiling() {
-        // `Multiplier` is in scope via the module-level import + `super::*`.
-        let mut config = SettlementTransactionConfig::default();
-        config.gas_limit_multiplier_factor = Multiplier::from_u64_per_1000(2000); // 2.0x
-        config.gas_limit_ceiling = U256::from(150_000u64);
-        config.max_fee_per_gas_multiplier_factor = Multiplier::from_u64_per_1000(1000);
-        config.max_fee_per_gas_floor = 1_000_000_000; // 1 gwei
-        config.max_fee_per_gas_ceiling = 50_000_000_000; // 50 gwei
-        config.max_priority_fee_per_gas_multiplier_factor = Multiplier::from_u64_per_1000(1000);
-        config.max_priority_fee_per_gas_floor = 2_000_000_000; // 2 gwei
-        config.max_priority_fee_per_gas_ceiling = 50_000_000_000; // 50 gwei
+        let config = SettlementTransactionConfig {
+            gas_limit_multiplier_factor: Multiplier::from_u64_per_1000(2000), // 2.0x
+            gas_limit_ceiling: U256::from(150_000u64),
+            max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
+            max_fee_per_gas_floor: 1_000_000_000,    // 1 gwei
+            max_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
+            max_priority_fee_per_gas_floor: 2_000_000_000, // 2 gwei
+            max_priority_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
+            ..Default::default()
+        };
 
         let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
         task.tx_config = Arc::new(config);
@@ -1525,5 +1532,61 @@ mod tests {
         assert_eq!(gas.gas_limit, 150_000);
         assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
         assert_eq!(gas.max_priority_fee_per_gas, 2_000_000_000);
+    }
+
+    #[test]
+    fn resolve_base_gas_params_scales_fees_by_multiplier() {
+        // Multipliers scale an estimate that lands strictly inside [floor, ceiling],
+        // so this exercises the multiply path (not just clamping).
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1500), // 1.5x
+            max_fee_per_gas_floor: 1_000_000_000,                                   // 1 gwei
+            max_fee_per_gas_ceiling: 50_000_000_000,                                // 50 gwei
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1500), // 1.5x
+            max_priority_fee_per_gas_floor: 0,
+            max_priority_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
+            ..Default::default()
+        };
+
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(config);
+
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 10_000_000_000,         // 10 gwei * 1.5 -> 15 gwei
+            max_priority_fee_per_gas: 4_000_000_000, // 4 gwei * 1.5 -> 6 gwei
+        };
+
+        let gas = task.resolve_base_gas_params(&estimate);
+
+        assert_eq!(gas.max_fee_per_gas, 15_000_000_000);
+        assert_eq!(gas.max_priority_fee_per_gas, 6_000_000_000);
+    }
+
+    #[test]
+    fn resolve_base_gas_params_caps_priority_fee_at_max_fee() {
+        // A priority floor above the max-fee ceiling would otherwise produce an
+        // invalid `priority > max_fee`; the resolver must cap priority at max_fee.
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
+            max_fee_per_gas_floor: 0,
+            max_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
+            max_priority_fee_per_gas_floor: 60_000_000_000, // 60 gwei (above max-fee ceiling)
+            max_priority_fee_per_gas_ceiling: 100_000_000_000, // 100 gwei
+            ..Default::default()
+        };
+
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(config);
+
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 70_000_000_000, // -> clamps to 50 gwei ceiling
+            max_priority_fee_per_gas: 1_000_000_000, // -> raised to 60 gwei floor, then capped
+        };
+
+        let gas = task.resolve_base_gas_params(&estimate);
+
+        assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
+        assert_eq!(gas.max_priority_fee_per_gas, gas.max_fee_per_gas);
     }
 }
