@@ -17,9 +17,13 @@ use agglayer_types::{
 use alloy::{
     consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
     eips::{eip1559::Eip1559Estimation, BlockNumberOrTag},
-    network::{BlockResponse as _, ReceiptResponse as _},
+    network::{
+        BlockResponse as _, Ethereum, ReceiptResponse as _, TransactionBuilder as _,
+        TransactionBuilderError,
+    },
     primitives::{Address, TxHash},
     providers::{Provider, WalletProvider},
+    rpc::types::TransactionRequest,
     transports::TransportError,
 };
 use tokio::sync::mpsc;
@@ -48,6 +52,25 @@ fn apply_multiplier_u128(value: u128, multiplier: Multiplier) -> u128 {
 /// wins (unlike [`Ord::clamp`], this never panics on an inverted range).
 fn clamp_u128(value: u128, floor: u128, ceiling: u128) -> u128 {
     value.max(floor).min(ceiling)
+}
+
+/// Error surfaced while building a settlement attempt.
+#[derive(Debug, thiserror::Error)]
+enum BuildAttemptError {
+    #[error("L1 RPC error while building settlement attempt: {0}")]
+    Transport(#[from] TransportError),
+    #[error("failed to build or sign settlement transaction: {0}")]
+    Build(#[from] TransactionBuilderError<Ethereum>),
+}
+
+impl BuildAttemptError {
+    fn is_transient(&self) -> bool {
+        match self {
+            Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
+            // A build/sign failure with a configured wallet is non-recoverable.
+            Self::Build(_) => false,
+        }
+    }
 }
 
 /// Returns the minimum selected settlement-head block number required for a
@@ -796,6 +819,32 @@ impl<
             max_fee_per_gas,
             max_priority_fee_per_gas,
         }
+    }
+
+    /// Builds and signs an EIP-1559 settlement transaction for [`Self::job`]
+    /// with the given wallet, nonce, chain id, and resolved gas parameters.
+    ///
+    /// `wallet` sets the `from` field and must have a registered signer in the
+    /// provider's wallet; otherwise signing fails with a signer-missing error.
+    async fn build_attempt(
+        &self,
+        wallet: Address,
+        nonce: Nonce,
+        chain_id: u64,
+        gas: GasParams,
+    ) -> Result<TxEnvelope, TransactionBuilderError<Ethereum>> {
+        let request = TransactionRequest::default()
+            .from(wallet)
+            .to(self.job.contract_address.into_alloy())
+            .value(self.job.eth_value)
+            .input(self.job.calldata.clone().into())
+            .nonce(nonce.0)
+            .gas_limit(gas.gas_limit)
+            .max_fee_per_gas(gas.max_fee_per_gas)
+            .max_priority_fee_per_gas(gas.max_priority_fee_per_gas)
+            .with_chain_id(chain_id);
+
+        request.build(self.provider.wallet()).await
     }
 
     fn build_next_attempt_with_nonce(
@@ -1588,5 +1637,35 @@ mod tests {
 
         assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
         assert_eq!(gas.max_priority_fee_per_gas, gas.max_fee_per_gas);
+    }
+
+    #[tokio::test]
+    async fn build_attempt_produces_signed_eip1559_envelope() {
+        use alloy::consensus::{transaction::SignerRecoverable as _, Transaction as _};
+
+        let task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        let wallet_address = test_signer().address();
+
+        let gas = GasParams {
+            gas_limit: 100_000,
+            max_fee_per_gas: 30_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+
+        let envelope = task
+            .build_attempt(wallet_address, Nonce(9), 1337, gas)
+            .await
+            .expect("attempt should build");
+
+        assert!(matches!(envelope, TxEnvelope::Eip1559(_)));
+        assert_eq!(envelope.nonce(), 9);
+        assert_eq!(envelope.chain_id(), Some(1337));
+        assert_eq!(envelope.gas_limit(), 100_000);
+        assert_eq!(envelope.max_fee_per_gas(), 30_000_000_000);
+        assert_eq!(envelope.max_priority_fee_per_gas(), Some(1_000_000_000));
+        assert_eq!(envelope.value(), mk_job().eth_value);
+        assert_eq!(envelope.input().as_ref(), mk_job().calldata.as_ref());
+        assert_eq!(envelope.to(), Some(mk_job().contract_address.into_alloy()));
+        assert_eq!(envelope.recover_signer().unwrap(), wallet_address);
     }
 }
