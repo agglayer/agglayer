@@ -25,7 +25,7 @@ use crate::{
     schema::{Codec as _, ColumnSchema as _},
     stores::{
         epochs::EpochsStore,
-        interfaces::writer::{PerEpochWriter, StateWriter},
+        interfaces::writer::{EpochStoreWriter as _, PerEpochWriter, StateWriter},
         pending::PendingStore,
         per_epoch::PerEpochStore,
         state::StateStore,
@@ -200,13 +200,15 @@ fn reopening_epoch_store_migrates_legacy_certificate_rows_to_proto() {
     seed_epoch_checkpoints(&epoch_path, network_id, height);
     write_raw_epoch_certificate_bytes(&epoch_path, index, legacy.clone());
 
-    let store = PerEpochStore::try_open(
-        config,
+    let db = Arc::new(PerEpochStore::<PendingStore, StateStore>::init_db(&epoch_path).unwrap());
+    let store = PerEpochStore::try_open_with_db(
+        db,
         epoch_number,
         pending_store,
         state_store,
         Some(std::iter::once((network_id, height)).collect()),
         BackupClient::noop(),
+        false,
     )
     .unwrap();
 
@@ -228,7 +230,7 @@ fn reopening_epoch_store_migrates_legacy_certificate_rows_to_proto() {
 }
 
 #[test]
-fn readonly_epoch_access_falls_back_to_legacy_cf_when_proto_cf_absent() {
+fn readonly_epoch_access_rejects_legacy_schema_when_proto_cf_absent() {
     let tmp = TempDBDir::new();
     let config = Arc::new(Config::new(&tmp.path));
     let epoch_number = EpochNumber::ZERO;
@@ -240,18 +242,88 @@ fn readonly_epoch_access_falls_back_to_legacy_cf_when_proto_cf_absent() {
     );
     let epochs_store =
         EpochsStore::new(config, pending_store, state_store, BackupClient::noop()).unwrap();
-    let expected = sample_data::load_certificate("n15-cert_h0.json");
     let legacy = load_v0_certificate_bytes("v0-n15-cert_h0.hex");
     let index = CertificateIndex::ZERO;
 
     write_raw_epoch_certificate_bytes(&epoch_path, index, legacy);
 
-    // The read must fall back to the still-present legacy CF instead of failing
-    // with `ColumnFamilyNotFound`.
-    assert_eq!(
-        epochs_store.get_certificate(epoch_number, index).unwrap(),
-        Some(expected)
+    let error = epochs_store
+        .get_certificate(epoch_number, index)
+        .expect_err("readonly epoch access should require migration for legacy storage");
+
+    assert!(matches!(
+        error,
+        Error::DBOpenError(crate::storage::DBOpenError::StorageNeedsMigration { .. })
+    ));
+
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &epoch_path).unwrap();
+    assert!(!cfs.contains(&CertificatePerIndexProtoColumn::COLUMN_FAMILY_NAME.to_string()));
+}
+
+fn create_raw_epoch_v0(path: &std::path::Path) {
+    let mut options = rocksdb::Options::default();
+    options.create_if_missing(true);
+    options.create_missing_column_families(true);
+    let descriptors = super::cf_definitions::EPOCHS_DB_V0
+        .iter()
+        .map(|cf| rocksdb::ColumnFamilyDescriptor::new(cf.name(), rocksdb::Options::default()));
+    let db = rocksdb::DB::open_cf_descriptors(&options, path, descriptors).unwrap();
+    drop(db);
+}
+
+#[test]
+fn migrated_or_create_epoch_creates_missing_storage() {
+    let tmp = TempDBDir::new();
+    let path = tmp.path.join("epoch-7");
+
+    let db = PerEpochStore::<PendingStore, StateStore>::open_migrated_or_create_db(&path).unwrap();
+    drop(db);
+
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &path).unwrap();
+    assert!(cfs.contains(&CertificatePerIndexProtoColumn::COLUMN_FAMILY_NAME.to_string()));
+}
+
+#[test]
+fn epochs_store_open_creates_missing_epoch_with_current_schema() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let epoch_number = EpochNumber::ZERO;
+    let epoch_path = config.storage.epoch_db_path(epoch_number);
+    let pending_store =
+        Arc::new(PendingStore::open_migrated_or_create(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::open_migrated_or_create(&config.storage.state_db_path, BackupClient::noop())
+            .unwrap(),
     );
+    let epochs_store =
+        EpochsStore::new(config, pending_store, state_store, BackupClient::noop()).unwrap();
+
+    assert!(!epoch_path.exists());
+
+    let epoch_store = epochs_store.open(epoch_number).unwrap();
+    drop(epoch_store);
+
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &epoch_path).unwrap();
+    assert!(cfs.contains(&CertificatePerIndexProtoColumn::COLUMN_FAMILY_NAME.to_string()));
+}
+
+#[test]
+fn migrated_or_create_epoch_rejects_legacy_storage_without_mutating_it() {
+    let tmp = TempDBDir::new();
+    create_raw_epoch_v0(&tmp.path);
+
+    let error =
+        match PerEpochStore::<PendingStore, StateStore>::open_migrated_or_create_db(&tmp.path) {
+            Ok(_) => panic!("migrated-or-create open should reject legacy epoch storage"),
+            Err(error) => error,
+        };
+
+    assert!(matches!(
+        error,
+        crate::storage::DBOpenError::StorageNeedsMigration { .. }
+    ));
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &tmp.path).unwrap();
+    assert!(!cfs.contains(&CertificatePerIndexProtoColumn::COLUMN_FAMILY_NAME.to_string()));
 }
 
 #[rstest]

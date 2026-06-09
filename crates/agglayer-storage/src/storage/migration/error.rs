@@ -1,5 +1,8 @@
+use std::path::PathBuf;
+
 use thiserror::Error;
 
+use super::SchemaStatus;
 use crate::storage::DBError;
 
 #[derive(Debug, Error)]
@@ -25,6 +28,12 @@ pub enum DBOpenError {
          from the code, or an older version of agglayer-node is being used, which is not allowed."
     )]
     FewerStepsDeclared { declared: u32, recorded: u32 },
+
+    #[error(
+        "Storage at {} needs migration ({status}); run `agglayer migrate-storage` before starting agglayer-node",
+        path.display()
+    )]
+    StorageNeedsMigration { path: PathBuf, status: SchemaStatus },
 }
 
 #[derive(Debug, Error)]

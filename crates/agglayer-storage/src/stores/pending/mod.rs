@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
-use rocksdb::{Direction, ReadOptions};
+use rocksdb::{Direction, ReadOptions, WriteBatch};
 
 use super::{PendingCertificateReader, PendingCertificateWriter};
 use crate::{
@@ -25,6 +25,8 @@ pub(crate) mod cf_definitions;
 #[cfg(test)]
 mod tests;
 
+const DECLARED_MIGRATION_STEPS: u32 = 2;
+
 /// A logical store for pending.
 #[derive(Clone)]
 pub struct PendingStore {
@@ -41,12 +43,26 @@ impl PendingStore {
             .finalize(cf_definitions::PENDING_DB)
     }
 
+    pub fn open_migrated_or_create_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
+        crate::storage::open_migrated_or_create(
+            path,
+            cf_definitions::PENDING_DB_V0,
+            cf_definitions::PENDING_DB,
+            DECLARED_MIGRATION_STEPS,
+            Self::init_db,
+        )
+    }
+
     pub fn new(db: Arc<DB>) -> Self {
         Self { db }
     }
 
     pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
         Ok(Self::new(Arc::new(Self::init_db(path)?)))
+    }
+
+    pub fn open_migrated_or_create(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
+        Ok(Self::new(Arc::new(Self::open_migrated_or_create_db(path)?)))
     }
 
     fn decode_readable_proof(certificate_id: CertificateId, bytes: &[u8]) -> Result<Proof, Error> {
@@ -134,11 +150,19 @@ impl PendingCertificateWriter for PendingStore {
             }
         }
 
-        // TODO: make it batch
-        self.set_latest_pending_certificate_per_network(&network_id, &height, &certificate.hash())?;
-        Ok(self
-            .db
-            .put::<PendingQueueProtoColumn>(&PendingQueueKey(network_id, height), certificate)?)
+        let latest = PendingCertificate(certificate.hash(), height);
+        let pending_key = PendingQueueKey(network_id, height);
+        let mut batch = WriteBatch::default();
+        self.db
+            .multi_insert_batch::<LatestPendingCertificatePerNetworkColumn>(
+                [(&network_id, &latest)],
+                &mut batch,
+            )?;
+        self.db.multi_insert_batch::<PendingQueueProtoColumn>(
+            [(&pending_key, certificate)],
+            &mut batch,
+        )?;
+        Ok(self.db.write_batch(batch)?)
     }
 
     fn insert_generated_proof(

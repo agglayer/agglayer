@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
 use pessimistic_proof_test_suite::sample_data;
@@ -118,6 +118,25 @@ fn insert_pending_certificate_writes_proto_bytes() {
 }
 
 #[test]
+fn insert_pending_certificate_does_not_leave_latest_pointer_after_row_write_failure() {
+    let tmp = TempDBDir::new();
+    let db = crate::storage::DB::open_cf(&tmp.path, super::cf_definitions::PENDING_DB_V0).unwrap();
+    let store = PendingStore::new(Arc::new(db));
+    let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+
+    let error =
+        store.insert_pending_certificate(certificate.network_id, certificate.height, &certificate);
+
+    assert!(error.is_err());
+    assert_eq!(
+        store
+            .get_latest_pending_certificate_for_network(&certificate.network_id)
+            .unwrap(),
+        None
+    );
+}
+
+#[test]
 fn get_certificate_does_not_read_legacy_v0_rows_after_open() {
     let (_tmp, store) = store();
     let network_id = NetworkId::new(15);
@@ -190,4 +209,45 @@ fn multi_get_proof_reports_unreadable_pending_proofs() {
     let err = store.multi_get_proof(&[valid_id, invalid_id]).unwrap_err();
 
     assert!(matches!(err, Error::UnreadableProof { id, .. } if id == invalid_id));
+}
+
+fn create_raw_pending_v0(path: &std::path::Path) {
+    let mut options = rocksdb::Options::default();
+    options.create_if_missing(true);
+    options.create_missing_column_families(true);
+    let descriptors = super::cf_definitions::PENDING_DB_V0
+        .iter()
+        .map(|cf| rocksdb::ColumnFamilyDescriptor::new(cf.name(), rocksdb::Options::default()));
+    let db = rocksdb::DB::open_cf_descriptors(&options, path, descriptors).unwrap();
+    drop(db);
+}
+
+#[test]
+fn migrated_or_create_pending_creates_missing_storage() {
+    let tmp = TempDBDir::new();
+    let path = tmp.path.join("pending");
+
+    let db = PendingStore::open_migrated_or_create_db(&path).unwrap();
+    drop(db);
+
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &path).unwrap();
+    assert!(cfs.contains(&PendingQueueProtoColumn::COLUMN_FAMILY_NAME.to_string()));
+}
+
+#[test]
+fn migrated_or_create_pending_rejects_legacy_storage_without_mutating_it() {
+    let tmp = TempDBDir::new();
+    create_raw_pending_v0(&tmp.path);
+
+    let error = match PendingStore::open_migrated_or_create_db(&tmp.path) {
+        Ok(_) => panic!("migrated-or-create open should reject legacy pending storage"),
+        Err(error) => error,
+    };
+
+    assert!(matches!(
+        error,
+        crate::storage::DBOpenError::StorageNeedsMigration { .. }
+    ));
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &tmp.path).unwrap();
+    assert!(!cfs.contains(&PendingQueueProtoColumn::COLUMN_FAMILY_NAME.to_string()));
 }
