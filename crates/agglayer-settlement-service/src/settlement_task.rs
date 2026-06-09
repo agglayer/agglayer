@@ -487,6 +487,17 @@ impl<
             .collect()
     }
 
+    fn next_attempt_number(&self) -> SettlementAttemptNumber {
+        let next = self
+            .attempts
+            .values()
+            .flat_map(|attempts_for_nonce| attempts_for_nonce.keys())
+            .map(|attempt_number| attempt_number.0)
+            .max()
+            .map_or(0, |max| max.saturating_add(1));
+        SettlementAttemptNumber(next)
+    }
+
     fn is_any_attempt_pending_for_nonce(&self, wallet: Address, nonce: Nonce) -> bool {
         self.attempts
             .get(&(wallet, nonce))
@@ -1132,6 +1143,32 @@ mod tests {
             control: mk_control(),
             attempts,
         }
+    }
+
+    #[test]
+    fn next_attempt_number_starts_at_zero_and_increments_past_max() {
+        let store = Arc::new(MockStateStore::new());
+
+        let empty = mk_task(store.clone(), BTreeMap::new());
+        assert_eq!(empty.next_attempt_number(), SettlementAttemptNumber(0));
+
+        let wallet = Address::from([1; 20]);
+        let nonce = Nonce(7);
+        let attempts = BTreeMap::from([(
+            (wallet, nonce),
+            BTreeMap::from([
+                (
+                    SettlementAttemptNumber(2),
+                    mk_active_attempt(wallet, nonce, mk_tx_hash(1), None),
+                ),
+                (
+                    SettlementAttemptNumber(5),
+                    mk_active_attempt(wallet, nonce, mk_tx_hash(2), None),
+                ),
+            ]),
+        )]);
+        let task = mk_task(store, attempts);
+        assert_eq!(task.next_attempt_number(), SettlementAttemptNumber(6));
     }
 
     #[tokio::test]
