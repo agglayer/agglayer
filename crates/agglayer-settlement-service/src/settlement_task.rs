@@ -13,7 +13,7 @@ use agglayer_types::{
 };
 use alloy::{
     consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
-    eips::BlockNumberOrTag,
+    eips::{eip2718::Encodable2718 as _, BlockNumberOrTag},
     network::{BlockResponse as _, ReceiptResponse as _},
     primitives::{Address, TxHash},
     providers::{Provider, WalletProvider},
@@ -744,10 +744,35 @@ impl<
         todo!()
     }
 
-    async fn submit_attempt_to_l1(&self, _tx: TxEnvelope) -> eyre::Result<()> {
-        // TODO: Submit attempt to L1. Use https://docs.rs/alloy/latest/alloy/providers/trait.Provider.html#method.send_tx_envelope
-        // XREF: https://github.com/agglayer/agglayer/issues/1321
-        todo!()
+    async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> eyre::Result<()> {
+        // Encode the signed transaction once, consuming the envelope. This is the
+        // only thing `send_tx_envelope` does with it before calling
+        // `eth_sendRawTransaction`, so each retry can re-broadcast the same bytes
+        // via `send_raw_transaction` without cloning or re-encoding the envelope.
+        // Re-broadcasting is idempotent: the bytes carry the same sender, nonce, and
+        // signature, hence the same hash, so retrying cannot submit a second
+        // on-chain transaction.
+        let encoded_tx = tx.encoded_2718();
+
+        // Retry only transient network failures, mirroring `tx_hash_on_l1_for_nonce`.
+        // The returned pending-transaction handle is dropped on purpose: this helper
+        // must never wait for inclusion or settlement.
+        let _pending_tx = crate::utils::retry_alloy_callback_until_success(
+            &self.tx_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || self.provider.send_raw_transaction(&encoded_tx),
+        )
+        .await
+        .map_err(|error| match error {
+            RetryCallbackError::Cancelled => {
+                eyre::eyre!("cancelled while submitting settlement attempt to L1")
+            }
+            RetryCallbackError::Error(error) => {
+                eyre::Error::new(error).wrap_err("failed to submit settlement attempt to L1")
+            }
+        })?;
+
+        Ok(())
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
@@ -1018,7 +1043,8 @@ mod tests {
         U256,
     };
     use alloy::{
-        network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner,
+        network::EthereumWallet, node_bindings::Anvil, providers::ProviderBuilder,
+        rpc::types::TransactionRequest, signers::local::PrivateKeySigner,
     };
     use tokio::sync::mpsc;
 
@@ -1399,5 +1425,54 @@ mod tests {
             .to_string()
             .contains("without a recorded settlement attempt"));
         assert!(task.attempts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn submit_attempt_to_l1_broadcasts_signed_envelope() {
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        // Build and sign a transaction envelope through the provider's fillers so
+        // it carries a valid nonce, gas, and chain id, then hand it off as the
+        // settlement attempt to submit.
+        let tx_request = TransactionRequest::default()
+            .to(anvil.addresses()[1])
+            .value(alloy::primitives::U256::from(1));
+        let envelope = provider
+            .fill(tx_request)
+            .await
+            .expect("filling the settlement transaction should succeed")
+            .try_into_envelope()
+            .expect("a wallet-filled transaction should be a signed envelope");
+        let expected_tx_hash: TxHash = *envelope.tx_hash();
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts: BTreeMap::new(),
+        };
+
+        task.submit_attempt_to_l1(envelope)
+            .await
+            .expect("submitting the settlement attempt should succeed");
+
+        // The helper does not wait for inclusion, but the node must have accepted
+        // the broadcast, so it should know the transaction by hash.
+        let broadcast_tx = task
+            .provider
+            .get_transaction_by_hash(expected_tx_hash)
+            .await
+            .expect("querying the broadcast transaction should succeed");
+        assert!(
+            broadcast_tx.is_some(),
+            "the node should know the broadcast settlement transaction"
+        );
     }
 }
