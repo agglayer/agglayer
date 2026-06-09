@@ -41,26 +41,30 @@ fn required_settlement_head_number(receipt_block_number: u64, confirmations: usi
     receipt_block_number.saturating_add(confirmation_offset)
 }
 
+/// Error returned by the L1 polling callbacks; the "not yet" variants are
+/// transient and tell the retry loop to keep polling.
 #[derive(Debug)]
-enum WaitForSettlementError {
+enum WaitForL1Error {
     NotSettledYet,
+    NotIncludedYet,
     Transport(TransportError),
 }
 
-impl WaitForSettlementError {
+impl WaitForL1Error {
     fn is_transient(&self) -> bool {
         match self {
-            Self::NotSettledYet => true,
+            Self::NotSettledYet | Self::NotIncludedYet => true,
             Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
         }
     }
 }
 
-impl From<TransportError> for WaitForSettlementError {
+impl From<TransportError> for WaitForL1Error {
     fn from(error: TransportError) -> Self {
         Self::Transport(error)
     }
 }
+
 #[derive(Debug, thiserror::Error)]
 #[error(
     "assumed non-recoverable in settlement task {settlement_task_id} at {file}:{line}: \
@@ -252,6 +256,7 @@ impl<
             // helper markers.
             let mut nonces_used_externally = BTreeMap::new();
             let mut reverts = BTreeMap::new();
+            let mut not_included_on_l1 = BTreeSet::new();
             let mut all_nonces_seen_on_l1 = true;
             let mut need_to_submit_attempt_with_new_nonce = true;
             'nonces: for (wallet, nonce) in self.all_used_nonces() {
@@ -296,6 +301,7 @@ impl<
                     // If the nonce is not used on L1, we'll need to either wait more or submit a
                     // new attempt with the same nonce.
                     all_nonces_seen_on_l1 = false;
+                    not_included_on_l1.insert((wallet, nonce));
                     if !self.is_wallet_privkey_known(wallet) {
                         continue 'nonces; // we don't have access to the wallet
                                           // any longer, so it makes no sense to
@@ -404,6 +410,7 @@ impl<
                 // pending nonces. So we need to submit a new attempt with a new
                 // nonce.
                 let (wallet, nonce, attempt_number, tx) = self.build_next_attempt_with_new_nonce();
+                not_included_on_l1.insert((wallet, nonce));
                 self.save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
                     .await;
             }
@@ -414,7 +421,9 @@ impl<
                 .expect("There is at least one attempt but no deadline")
                 .duration_since(SystemTime::now())
                 .unwrap_or_else(|_| Duration::from_secs(0));
-            let _ = tokio::time::timeout(timeout, self.wait_for_any_nonce_on_l1()).await;
+            let _ =
+                tokio::time::timeout(timeout, self.wait_for_any_nonce_on_l1(&not_included_on_l1))
+                    .await;
         }
     }
 
@@ -553,11 +562,29 @@ impl<
             .min()
     }
 
-    async fn wait_for_any_nonce_on_l1(&self) {
-        // TODO: wait for any nonce from our known list to be included on L1 (not
-        // settled, just included) Use retry_alloy_callback_until_success as needed
-        // XREF: https://github.com/agglayer/agglayer/issues/1314
-        todo!()
+    /// Polls L1 until one of the `pending` (not-yet-included) nonces is mined.
+    /// Watching only the pending set lets the run loop wake on a *new* inclusion
+    /// rather than returning instantly on an already-included nonce.
+    async fn wait_for_any_nonce_on_l1(&self, pending: &BTreeSet<(Address, Nonce)>) {
+        // Result discarded: the caller wraps this in a timeout and re-queries under
+        // `retry!` in `'start`, which escalates non-recoverable errors there.
+        let _ = crate::utils::retry_callback_until_success(
+            &self.tx_config.retry_on_not_included_on_l1,
+            &self.control.cancellation_token,
+            || async move {
+                for &(wallet, nonce) in pending {
+                    if crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce)
+                        .await?
+                        .is_some()
+                    {
+                        return Ok(());
+                    }
+                }
+                Err(WaitForL1Error::NotIncludedYet)
+            },
+            WaitForL1Error::is_transient,
+        )
+        .await;
     }
 
     async fn tx_hash_on_l1_for_nonce(
@@ -593,17 +620,19 @@ impl<
             &self.tx_config.retry_on_not_included_on_l1,
             &self.control.cancellation_token,
             || self.check_settlement_once(tx_hash),
-            WaitForSettlementError::is_transient,
+            WaitForL1Error::is_transient,
         )
         .await;
 
         result.map_err(|error| match error {
             RetryCallbackError::Cancelled => RetryCallbackError::Cancelled,
-            RetryCallbackError::Error(WaitForSettlementError::Transport(error)) => {
+            RetryCallbackError::Error(WaitForL1Error::Transport(error)) => {
                 RetryCallbackError::Error(error)
             }
-            RetryCallbackError::Error(WaitForSettlementError::NotSettledYet) => {
-                unreachable!("not-settled-yet errors are always transient")
+            RetryCallbackError::Error(
+                WaitForL1Error::NotSettledYet | WaitForL1Error::NotIncludedYet,
+            ) => {
+                unreachable!("not-ready-yet errors are always transient")
             }
         })
     }
@@ -620,13 +649,13 @@ impl<
     async fn check_settlement_once(
         &self,
         tx_hash: SettlementTxHash,
-    ) -> Result<Option<ContractCallResult>, WaitForSettlementError> {
+    ) -> Result<Option<ContractCallResult>, WaitForL1Error> {
         // Read the settlement head first so any later receipt lookup is checked
         // against a head that was already acceptable for the configured policy.
         let settlement_head_number = self.settlement_head_number().await?;
         let Some(settlement_head_number) = settlement_head_number else {
             debug!("Waiting for selected settlement head before checking settlement transaction");
-            return Err(WaitForSettlementError::NotSettledYet);
+            return Err(WaitForL1Error::NotSettledYet);
         };
 
         let provider_tx_hash: TxHash = tx_hash.into();
@@ -649,14 +678,14 @@ impl<
                 settlement_head_number,
                 "Waiting for settlement transaction receipt block hash"
             );
-            return Err(WaitForSettlementError::NotSettledYet);
+            return Err(WaitForL1Error::NotSettledYet);
         };
         let Some(block_number) = receipt.block_number() else {
             debug!(
                 ?block_hash,
                 settlement_head_number, "Waiting for settlement transaction receipt block number"
             );
-            return Err(WaitForSettlementError::NotSettledYet);
+            return Err(WaitForL1Error::NotSettledYet);
         };
 
         let required_head_number =
@@ -668,7 +697,7 @@ impl<
                 required_head_number,
                 "Waiting for settlement transaction finality"
             );
-            return Err(WaitForSettlementError::NotSettledYet);
+            return Err(WaitForL1Error::NotSettledYet);
         }
 
         let canonical_block = self
@@ -682,7 +711,7 @@ impl<
                 settlement_head_number,
                 "Waiting for settlement transaction block to be available"
             );
-            return Err(WaitForSettlementError::NotSettledYet);
+            return Err(WaitForL1Error::NotSettledYet);
         };
 
         // A receipt whose block number no longer resolves to the same canonical
@@ -703,26 +732,26 @@ impl<
         Ok(self.current_result_on_l1_for(tx_hash).await)
     }
 
-    async fn settlement_head_number(&self) -> Result<Option<u64>, WaitForSettlementError> {
+    async fn settlement_head_number(&self) -> Result<Option<u64>, WaitForL1Error> {
         match self.tx_config.settlement_policy {
             SettlementPolicy::LatestBlock => self
                 .provider
                 .get_block_number()
                 .await
                 .map(Some)
-                .map_err(WaitForSettlementError::Transport),
+                .map_err(WaitForL1Error::Transport),
             SettlementPolicy::SafeBlock => self
                 .provider
                 .get_block_by_number(BlockNumberOrTag::Safe)
                 .await
                 .map(|block| block.map(|block| block.header().number()))
-                .map_err(WaitForSettlementError::Transport),
+                .map_err(WaitForL1Error::Transport),
             SettlementPolicy::FinalizedBlock => self
                 .provider
                 .get_block_by_number(BlockNumberOrTag::Finalized)
                 .await
                 .map(|block| block.map(|block| block.header().number()))
-                .map_err(WaitForSettlementError::Transport),
+                .map_err(WaitForL1Error::Transport),
         }
     }
 
@@ -1018,7 +1047,11 @@ mod tests {
         U256,
     };
     use alloy::{
-        network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner,
+        network::EthereumWallet,
+        node_bindings::{Anvil, AnvilInstance},
+        providers::ProviderBuilder,
+        rpc::types::TransactionRequest,
+        signers::local::PrivateKeySigner,
     };
     use tokio::sync::mpsc;
 
@@ -1131,6 +1164,28 @@ mod tests {
             store,
             control: mk_control(),
             attempts,
+        }
+    }
+
+    fn build_anvil_provider(anvil: &AnvilInstance) -> impl Provider + WalletProvider + 'static {
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url())
+    }
+
+    fn mk_task_with_provider<P: Provider + WalletProvider + 'static>(
+        provider: P,
+        tx_config: SettlementTransactionConfig,
+    ) -> SettlementTask<P, MockStateStore> {
+        SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(tx_config),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts: BTreeMap::new(),
         }
     }
 
@@ -1399,5 +1454,54 @@ mod tests {
             .to_string()
             .contains("without a recorded settlement attempt"));
         assert!(task.attempts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn wait_for_any_nonce_on_l1_returns_when_a_pending_nonce_is_included() {
+        let anvil = Anvil::new().spawn();
+        let sender = anvil.addresses()[0];
+        let provider = build_anvil_provider(&anvil);
+        provider
+            .send_transaction(TransactionRequest::default().to(anvil.addresses()[1]))
+            .await
+            .expect("send transaction")
+            .get_receipt()
+            .await
+            .expect("get receipt");
+
+        // The zero address sorts first and is never mined, so the wait must skip it
+        // and still resolve on the mined (sender, Nonce(0)).
+        let pending = BTreeSet::from([(Address::ZERO, Nonce(0)), (sender, Nonce(0))]);
+        let task = mk_task_with_provider(provider, SettlementTransactionConfig::default());
+
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            task.wait_for_any_nonce_on_l1(&pending),
+        )
+        .await
+        .expect("wait should return once a pending nonce is included");
+    }
+
+    #[tokio::test]
+    async fn wait_for_any_nonce_on_l1_keeps_waiting_when_no_pending_nonce_is_included() {
+        let anvil = Anvil::new().spawn();
+        let sender = anvil.addresses()[0];
+        let provider = build_anvil_provider(&anvil);
+
+        // No matching tx is mined. A large non-inclusion interval keeps the first
+        // poll's backoff longer than the timeout. `start_paused` is unusable here:
+        // Anvil uses real I/O and the paused clock would auto-advance the sleep.
+        let mut tx_config = SettlementTransactionConfig::default();
+        tx_config.retry_on_not_included_on_l1.initial_interval = Duration::from_secs(3600);
+
+        let pending = BTreeSet::from([(sender, Nonce(5))]);
+        let task = mk_task_with_provider(provider, tx_config);
+
+        assert!(tokio::time::timeout(
+            Duration::from_millis(300),
+            task.wait_for_any_nonce_on_l1(&pending)
+        )
+        .await
+        .is_err());
     }
 }
