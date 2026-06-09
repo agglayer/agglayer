@@ -4,7 +4,10 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use agglayer_config::settlement_service::{SettlementPolicy, SettlementTransactionConfig};
+use agglayer_config::{
+    settlement_service::{SettlementPolicy, SettlementTransactionConfig},
+    Multiplier,
+};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
@@ -13,7 +16,7 @@ use agglayer_types::{
 };
 use alloy::{
     consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
-    eips::BlockNumberOrTag,
+    eips::{eip1559::Eip1559Estimation, BlockNumberOrTag},
     network::{BlockResponse as _, ReceiptResponse as _},
     primitives::{Address, TxHash},
     providers::{Provider, WalletProvider},
@@ -26,6 +29,24 @@ use tracing::{debug, error, warn};
 use crate::utils::RetryCallbackError;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
+
+/// Fully-resolved gas parameters for a single settlement attempt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct GasParams {
+    gas_limit: u64,
+    max_fee_per_gas: u128,
+    max_priority_fee_per_gas: u128,
+}
+
+/// Multiply `value` by a [`Multiplier`] (fixed-point, scaled by 1000),
+/// saturating instead of overflowing. Mirrors `adjust_gas_estimate`.
+fn apply_multiplier_u128(value: u128, multiplier: Multiplier) -> u128 {
+    value.saturating_mul(u128::from(multiplier.as_u64_per_1000())) / 1000
+}
+
+fn clamp_u128(value: u128, floor: u128, ceiling: u128) -> u128 {
+    value.max(floor).min(ceiling)
+}
 
 /// Returns the minimum selected settlement-head block number required for a
 /// transaction receipt to be considered settled.
@@ -737,6 +758,39 @@ impl<
         }
     }
 
+    fn resolve_base_gas_params(&self, estimate: &Eip1559Estimation) -> GasParams {
+        let config = self.tx_config.as_ref();
+
+        let max_fee_per_gas = clamp_u128(
+            apply_multiplier_u128(
+                estimate.max_fee_per_gas,
+                config.max_fee_per_gas_multiplier_factor,
+            ),
+            config.max_fee_per_gas_floor,
+            config.max_fee_per_gas_ceiling,
+        );
+        let max_priority_fee_per_gas = clamp_u128(
+            apply_multiplier_u128(
+                estimate.max_priority_fee_per_gas,
+                config.max_priority_fee_per_gas_multiplier_factor,
+            ),
+            config.max_priority_fee_per_gas_floor,
+            config.max_priority_fee_per_gas_ceiling,
+        );
+
+        let gas_limit_ceiling = u128::try_from(config.gas_limit_ceiling).unwrap_or(u128::MAX);
+        let gas_limit_u128 =
+            apply_multiplier_u128(self.job.gas_limit, config.gas_limit_multiplier_factor)
+                .min(gas_limit_ceiling);
+        let gas_limit = u64::try_from(gas_limit_u128).unwrap_or(u64::MAX);
+
+        GasParams {
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+        }
+    }
+
     fn build_next_attempt_with_nonce(
         &self,
         _wallet: Address,
@@ -1436,5 +1490,40 @@ mod tests {
             .to_string()
             .contains("without a recorded settlement attempt"));
         assert!(task.attempts.is_empty());
+    }
+
+    #[test]
+    #[allow(clippy::field_reassign_with_default)] // Field-by-field config keeps the test readable.
+    fn resolve_base_gas_params_applies_multiplier_floor_and_ceiling() {
+        // `Multiplier` is in scope via the module-level import + `super::*`.
+        let mut config = SettlementTransactionConfig::default();
+        config.gas_limit_multiplier_factor = Multiplier::from_u64_per_1000(2000); // 2.0x
+        config.gas_limit_ceiling = U256::from(150_000u64);
+        config.max_fee_per_gas_multiplier_factor = Multiplier::from_u64_per_1000(1000);
+        config.max_fee_per_gas_floor = 1_000_000_000; // 1 gwei
+        config.max_fee_per_gas_ceiling = 50_000_000_000; // 50 gwei
+        config.max_priority_fee_per_gas_multiplier_factor = Multiplier::from_u64_per_1000(1000);
+        config.max_priority_fee_per_gas_floor = 2_000_000_000; // 2 gwei
+        config.max_priority_fee_per_gas_ceiling = 50_000_000_000; // 50 gwei
+
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(config);
+        task.job = SettlementJob {
+            gas_limit: 100_000,
+            ..mk_job()
+        };
+
+        // Estimate above the fee ceiling and below the priority floor.
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 80_000_000_000,       // 80 gwei -> clamps to 50 gwei
+            max_priority_fee_per_gas: 100_000_000, // 0.1 gwei -> raised to 2 gwei floor
+        };
+
+        let gas = task.resolve_base_gas_params(&estimate);
+
+        // 100_000 * 2.0 = 200_000, capped to ceiling 150_000.
+        assert_eq!(gas.gas_limit, 150_000);
+        assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
+        assert_eq!(gas.max_priority_fee_per_gas, 2_000_000_000);
     }
 }
