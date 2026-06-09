@@ -51,6 +51,15 @@ COPY --link crates crates
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
 
+# Version stamping: no `.git` is copied into the build context, so `vergen`
+# cannot derive the version and falls back to a `VERGEN_IDEMPOTENT_OUTPUT`
+# placeholder. The caller (CI) computes these from git and passes them in;
+# `version()` prefers them over the vergen-derived values.
+ARG AGGLAYER_BUILD_DESCRIBE
+ARG AGGLAYER_BUILD_TIMESTAMP
+ENV AGGLAYER_BUILD_DESCRIBE=${AGGLAYER_BUILD_DESCRIBE}
+ENV AGGLAYER_BUILD_TIMESTAMP=${AGGLAYER_BUILD_TIMESTAMP}
+
 RUN cargo build --release --bin agglayer
 
 
