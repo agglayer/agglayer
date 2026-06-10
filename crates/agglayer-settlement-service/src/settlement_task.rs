@@ -41,6 +41,28 @@ fn required_settlement_head_number(receipt_block_number: u64, confirmations: usi
     receipt_block_number.saturating_add(confirmation_offset)
 }
 
+/// Maps the result of broadcasting a settlement attempt to the caller's result.
+///
+/// Cancellation is reported as success so that an operational shutdown leaves
+/// the already-saved attempt pending and lets the task exit cleanly, instead of
+/// the caller persisting a spurious `ClientError` for an attempt that may still
+/// be broadcast.
+///
+/// A non-transient error is still surfaced. Note that a re-broadcast whose
+/// first response was lost can return an "already known"/nonce-used error that
+/// this path reports as failure even though the transaction was accepted;
+/// recognizing those responses as success depends on the RPC error
+/// classification deferred to `SettlementServiceConfig`.
+/// XREF: https://github.com/agglayer/agglayer/issues/1321
+fn submission_outcome(result: Result<(), RetryCallbackError<TransportError>>) -> eyre::Result<()> {
+    match result {
+        Ok(()) | Err(RetryCallbackError::Cancelled) => Ok(()),
+        Err(RetryCallbackError::Error(error)) => {
+            Err(eyre::Error::new(error).wrap_err("failed to submit settlement attempt to L1"))
+        }
+    }
+}
+
 #[derive(Debug)]
 enum WaitForSettlementError {
     NotSettledYet,
@@ -757,22 +779,15 @@ impl<
         // Retry only transient network failures, mirroring `tx_hash_on_l1_for_nonce`.
         // The returned pending-transaction handle is dropped on purpose: this helper
         // must never wait for inclusion or settlement.
-        let _pending_tx = crate::utils::retry_alloy_callback_until_success(
+        let submission = crate::utils::retry_alloy_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || self.provider.send_raw_transaction(&encoded_tx),
         )
         .await
-        .map_err(|error| match error {
-            RetryCallbackError::Cancelled => {
-                eyre::eyre!("cancelled while submitting settlement attempt to L1")
-            }
-            RetryCallbackError::Error(error) => {
-                eyre::Error::new(error).wrap_err("failed to submit settlement attempt to L1")
-            }
-        })?;
+        .map(drop);
 
-        Ok(())
+        submission_outcome(submission)
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
@@ -1045,6 +1060,7 @@ mod tests {
     use alloy::{
         network::EthereumWallet, node_bindings::Anvil, providers::ProviderBuilder,
         rpc::types::TransactionRequest, signers::local::PrivateKeySigner,
+        transports::TransportErrorKind,
     };
     use tokio::sync::mpsc;
 
@@ -1425,6 +1441,24 @@ mod tests {
             .to_string()
             .contains("without a recorded settlement attempt"));
         assert!(task.attempts.is_empty());
+    }
+
+    #[test]
+    fn submission_outcome_reports_success() {
+        assert!(submission_outcome(Ok(())).is_ok());
+    }
+
+    #[test]
+    fn submission_outcome_treats_cancellation_as_pending() {
+        // A shutdown mid-retry must not be recorded as a client error: the
+        // already-saved attempt has to stay pending so it can resume on reload.
+        assert!(submission_outcome(Err(RetryCallbackError::Cancelled)).is_ok());
+    }
+
+    #[test]
+    fn submission_outcome_propagates_transport_error() {
+        let error = RetryCallbackError::Error(TransportErrorKind::custom_str("boom"));
+        assert!(submission_outcome(Err(error)).is_err());
     }
 
     #[tokio::test]
