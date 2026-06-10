@@ -1,13 +1,11 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    future::IntoFuture as _,
     sync::{Arc, OnceLock},
     time::{Duration, SystemTime},
 };
 
-use agglayer_config::{
-    settlement_service::{SettlementPolicy, SettlementTransactionConfig},
-    Multiplier,
-};
+use agglayer_config::settlement_service::{SettlementPolicy, SettlementTransactionConfig};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
@@ -40,12 +38,6 @@ struct GasParams {
     gas_limit: u64,
     max_fee_per_gas: u128,
     max_priority_fee_per_gas: u128,
-}
-
-/// Multiply `value` by a [`Multiplier`] (fixed-point, scaled by 1000),
-/// saturating instead of overflowing. Mirrors `adjust_gas_estimate`.
-fn apply_multiplier_u128(value: u128, multiplier: Multiplier) -> u128 {
-    value.saturating_mul(u128::from(multiplier.as_u64_per_1000())) / 1000
 }
 
 /// Clamps `value` into `[floor, ceiling]`. When `floor > ceiling` the ceiling
@@ -790,10 +782,9 @@ impl<
         let config = self.tx_config.as_ref();
 
         let max_fee_per_gas = clamp_u128(
-            apply_multiplier_u128(
-                estimate.max_fee_per_gas,
-                config.max_fee_per_gas_multiplier_factor,
-            ),
+            config
+                .max_fee_per_gas_multiplier_factor
+                .saturating_mul_u128(estimate.max_fee_per_gas),
             config.max_fee_per_gas_floor,
             config.max_fee_per_gas_ceiling,
         );
@@ -802,19 +793,19 @@ impl<
         // otherwise produce `priority > max_fee` under misconfiguration, so we
         // cap it here to keep the EIP-1559 invariant at the point of resolution.
         let max_priority_fee_per_gas = clamp_u128(
-            apply_multiplier_u128(
-                estimate.max_priority_fee_per_gas,
-                config.max_priority_fee_per_gas_multiplier_factor,
-            ),
+            config
+                .max_priority_fee_per_gas_multiplier_factor
+                .saturating_mul_u128(estimate.max_priority_fee_per_gas),
             config.max_priority_fee_per_gas_floor,
             config.max_priority_fee_per_gas_ceiling,
         )
         .min(max_fee_per_gas);
 
         let gas_limit_ceiling = u128::try_from(config.gas_limit_ceiling).unwrap_or(u128::MAX);
-        let gas_limit_u128 =
-            apply_multiplier_u128(self.job.gas_limit, config.gas_limit_multiplier_factor)
-                .min(gas_limit_ceiling);
+        let gas_limit_u128 = config
+            .gas_limit_multiplier_factor
+            .saturating_mul_u128(self.job.gas_limit)
+            .min(gas_limit_ceiling);
         let gas_limit = u64::try_from(gas_limit_u128).unwrap_or(u64::MAX);
 
         GasParams {
@@ -878,13 +869,16 @@ impl<
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || async {
-                let nonce = self
-                    .provider
-                    .get_transaction_count(wallet)
-                    .pending()
-                    .await?;
-                let chain_id = self.provider.get_chain_id().await?;
-                let estimate = self.provider.estimate_eip1559_fees().await?;
+                // These three L1 reads are independent, so fetch them
+                // concurrently to keep each (retried) build to one round-trip.
+                let (nonce, chain_id, estimate) = tokio::try_join!(
+                    self.provider
+                        .get_transaction_count(wallet)
+                        .pending()
+                        .into_future(),
+                    self.provider.get_chain_id().into_future(),
+                    self.provider.estimate_eip1559_fees().into_future(),
+                )?;
                 let gas = self.resolve_base_gas_params(&estimate);
                 let tx = self
                     .build_attempt(wallet, Nonce(nonce), chain_id, gas)
@@ -1164,6 +1158,7 @@ impl<
 mod tests {
     use std::{collections::BTreeMap, sync::Arc};
 
+    use agglayer_config::Multiplier;
     use agglayer_storage::tests::mocks::MockStateStore;
     use agglayer_types::{
         ClientError, ClientErrorType, ContractCallOutcome, Digest, SettlementAttemptResult, B256,
