@@ -563,8 +563,9 @@ impl<
     }
 
     /// Polls L1 until one of the `pending` (not-yet-included) nonces is mined.
-    /// Watching only the pending set lets the run loop wake on a *new* inclusion
-    /// rather than returning instantly on an already-included nonce.
+    /// Watching only the pending set lets the run loop wake on a *new*
+    /// inclusion rather than returning instantly on an already-included
+    /// nonce.
     async fn wait_for_any_nonce_on_l1(&self, pending: &BTreeSet<(Address, Nonce)>) {
         // Result discarded: the caller wraps this in a timeout and re-queries under
         // `retry!` in `'start`, which escalates non-recoverable errors there.
