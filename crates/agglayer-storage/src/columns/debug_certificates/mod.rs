@@ -6,8 +6,8 @@ use crate::types::LegacyCertificate;
 /// Legacy column family for debug certificates.
 ///
 /// Kept readable so the proto migration can backfill existing rows. The CF
-/// historically received bincode rows (pre-#1519) and proto rows
-/// (#1519..this PR), so its `Value` codec is `LegacyCertificate`, which
+/// historically received both bincode rows and (later) proto rows, so its
+/// `Value` codec is `LegacyCertificate`, which
 /// accepts both. Runtime reads and writes go through
 /// [`DebugCertificatesProtoColumn`].
 ///

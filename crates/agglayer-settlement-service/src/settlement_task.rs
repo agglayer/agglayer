@@ -16,7 +16,7 @@ use alloy::{
     eips::BlockNumberOrTag,
     network::{BlockResponse as _, ReceiptResponse as _},
     primitives::{Address, TxHash},
-    providers::Provider,
+    providers::{Provider, WalletProvider},
     transports::TransportError,
 };
 use tokio::sync::mpsc;
@@ -152,8 +152,10 @@ pub struct SettlementTask<L1Provider, SettlementStore> {
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
 
-impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + SettlementWriter>
-    SettlementTask<L1Provider, SettlementStore>
+impl<
+        L1Provider: Provider + WalletProvider + 'static,
+        SettlementStore: SettlementReader + SettlementWriter,
+    > SettlementTask<L1Provider, SettlementStore>
 {
     pub async fn create(
         job: SettlementJob,
@@ -531,9 +533,8 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
             .map(|(key, _)| *key)
     }
 
-    fn is_wallet_privkey_known(&self, _wallet: Address) -> bool {
-        // TODO: tie with the configuration
-        todo!()
+    fn is_wallet_privkey_known(&self, wallet: Address) -> bool {
+        self.provider.has_signer_for(&wallet)
     }
 
     fn next_attempt_deadline_for_nonce(&self, _wallet: Address, _nonce: Nonce) -> SystemTime {
@@ -1057,19 +1058,27 @@ mod tests {
     };
     use alloy::{
         consensus::{Signed, TxEip1559},
+        network::EthereumWallet,
         primitives::{Signature, TxKind},
         providers::ProviderBuilder,
+        signers::local::PrivateKeySigner,
     };
     use tokio::sync::mpsc;
 
     use super::*;
 
-    fn mk_provider() -> impl Provider + 'static {
-        ProviderBuilder::new().connect_http(
-            "http://127.0.0.1:0"
-                .parse()
-                .expect("test provider URL should parse"),
-        )
+    fn test_signer() -> PrivateKeySigner {
+        PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key")
+    }
+
+    fn mk_provider() -> impl Provider + WalletProvider + 'static {
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(test_signer()))
+            .connect_http(
+                "http://127.0.0.1:0"
+                    .parse()
+                    .expect("test provider URL should parse"),
+            )
     }
 
     fn mk_job_id(seed: u128) -> SettlementJobId {
@@ -1163,7 +1172,7 @@ mod tests {
             (Address, Nonce),
             BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>,
         >,
-    ) -> SettlementTask<impl Provider + 'static, MockStateStore> {
+    ) -> SettlementTask<impl Provider + WalletProvider + 'static, MockStateStore> {
         mk_task_with_id(mk_job_id(1), store, attempts)
     }
 
@@ -1174,7 +1183,7 @@ mod tests {
             (Address, Nonce),
             BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>,
         >,
-    ) -> SettlementTask<impl Provider + 'static, MockStateStore> {
+    ) -> SettlementTask<impl Provider + WalletProvider + 'static, MockStateStore> {
         SettlementTask {
             id: job_id,
             job: mk_job(),
@@ -1283,6 +1292,18 @@ mod tests {
             existing_hash
         );
         assert!(!task.attempts.contains_key(&(new_wallet, new_nonce)));
+    }
+
+    #[tokio::test]
+    async fn is_wallet_privkey_known_true_for_configured_wallet() {
+        let task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        assert!(task.is_wallet_privkey_known(test_signer().address()));
+    }
+
+    #[tokio::test]
+    async fn is_wallet_privkey_known_false_for_unknown_wallet() {
+        let task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        assert!(!task.is_wallet_privkey_known(Address::repeat_byte(0xAB)));
     }
 
     #[tokio::test]

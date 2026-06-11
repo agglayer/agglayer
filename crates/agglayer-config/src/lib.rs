@@ -139,12 +139,8 @@ impl Config {
 
         let path = path
             .parent()
-            .ok_or_else(|| ConfigurationError::UnableToReadConfigFile {
-                path: path.to_path_buf(),
-                source: std::io::Error::other(
-                    "Unable to determine the parent folder of the configuration file",
-                ),
-            })?;
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
 
         let config_with_path = ConfigDeserializer { path };
 
@@ -248,7 +244,7 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
                 .storage
                 .path_contextualized(&self.path.canonicalize().map_err(|error| {
                     serde::de::Error::custom(format!(
-                        "Unable to canonicalize the storage path: {error}"
+                        "Unable to canonicalize the configuration directory: {error}"
                     ))
                 })?);
 
