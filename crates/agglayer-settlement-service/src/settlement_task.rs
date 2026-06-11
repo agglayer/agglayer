@@ -41,25 +41,38 @@ fn required_settlement_head_number(receipt_block_number: u64, confirmations: usi
     receipt_block_number.saturating_add(confirmation_offset)
 }
 
-/// Maps the result of broadcasting a settlement attempt to the caller's result.
+/// Why submitting a settlement attempt to L1 did not complete normally.
+#[derive(Debug)]
+enum SubmitAttemptError {
+    /// The task was cancelled mid-submission. The already-saved attempt is left
+    /// pending so it resumes on reload, and the runner is told to stop.
+    Cancelled,
+    /// Submission failed for a non-transient reason and should be recorded.
+    Failed(eyre::Error),
+}
+
+/// Maps the result of broadcasting a settlement attempt to a submit outcome.
 ///
-/// Cancellation is reported as success so that an operational shutdown leaves
-/// the already-saved attempt pending and lets the task exit cleanly, instead of
-/// the caller persisting a spurious `ClientError` for an attempt that may still
-/// be broadcast.
+/// Cancellation becomes [`SubmitAttemptError::Cancelled`] so the caller can
+/// leave the already-saved attempt pending and propagate a stop signal to the
+/// runner, instead of recording a spurious `ClientError` or silently continuing
+/// into the post-submit wait after shutdown.
 ///
-/// A non-transient error is still surfaced. Note that a re-broadcast whose
-/// first response was lost can return an "already known"/nonce-used error that
-/// this path reports as failure even though the transaction was accepted;
-/// recognizing those responses as success depends on the RPC error
-/// classification deferred to `SettlementServiceConfig`.
+/// A non-transient error becomes [`SubmitAttemptError::Failed`]. Note that a
+/// re-broadcast whose first response was lost can return an "already
+/// known"/nonce-used error reported here as failure even though the transaction
+/// was accepted; recognizing those responses as success depends on the RPC
+/// error classification deferred to `SettlementServiceConfig`.
 /// XREF: https://github.com/agglayer/agglayer/issues/1321
-fn submission_outcome(result: Result<(), RetryCallbackError<TransportError>>) -> eyre::Result<()> {
+fn submission_outcome(
+    result: Result<(), RetryCallbackError<TransportError>>,
+) -> Result<(), SubmitAttemptError> {
     match result {
-        Ok(()) | Err(RetryCallbackError::Cancelled) => Ok(()),
-        Err(RetryCallbackError::Error(error)) => {
-            Err(eyre::Error::new(error).wrap_err("failed to submit settlement attempt to L1"))
-        }
+        Ok(()) => Ok(()),
+        Err(RetryCallbackError::Cancelled) => Err(SubmitAttemptError::Cancelled),
+        Err(RetryCallbackError::Error(error)) => Err(SubmitAttemptError::Failed(
+            eyre::Error::new(error).wrap_err("failed to submit settlement attempt to L1"),
+        )),
     }
 }
 
@@ -347,8 +360,12 @@ impl<
                         continue 'nonces; // wait for deadline to be reached
                     }
                     let (attempt_number, tx) = self.build_next_attempt_with_nonce(wallet, nonce);
-                    self.save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
-                        .await;
+                    if let Some(run_result) = self
+                        .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
+                        .await
+                    {
+                        return run_result;
+                    }
                 }
             }
             if all_nonces_seen_on_l1 && !reverts.is_empty() {
@@ -426,8 +443,12 @@ impl<
                 // pending nonces. So we need to submit a new attempt with a new
                 // nonce.
                 let (wallet, nonce, attempt_number, tx) = self.build_next_attempt_with_new_nonce();
-                self.save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
-                    .await;
+                if let Some(run_result) = self
+                    .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
+                    .await
+                {
+                    return run_result;
+                }
             }
             // We now are sure we did at least one step to make things move forward. Wait
             // for the next external event or for the next deadline.
@@ -470,26 +491,38 @@ impl<
         }
     }
 
+    /// Saves the attempt, then submits it to L1.
+    ///
+    /// Returns `Some(SettlementTaskRunResult::Cancelled)` when submission was
+    /// interrupted by a shutdown, so the runner stops promptly while leaving
+    /// the already-saved attempt pending; returns `None` when the runner
+    /// should keep going (whether submission succeeded or failed with a
+    /// recorded client error).
     async fn save_attempt_to_db_and_submit_to_l1(
         &mut self,
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
         tx: TxEnvelope,
-    ) {
+    ) -> Option<SettlementTaskRunResult> {
         let tx_hash = SettlementTxHash::from(Digest::from(*tx.tx_hash()));
         self.save_attempt_to_db(wallet, nonce, attempt_number, tx_hash)
             .await;
-        if let Err(error) = self.submit_attempt_to_l1(tx).await {
-            warn!(?error, "Failed to submit settlement attempt to L1");
-            self.write_client_error_to_db(
-                attempt_number,
-                ClientError {
-                    kind: ClientErrorType::Unknown,
-                    message: format!("Failed to submit settlement attempt to L1: {error:?}"),
-                },
-            )
-            .await;
+        match self.submit_attempt_to_l1(tx).await {
+            Ok(()) => None,
+            Err(SubmitAttemptError::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
+            Err(SubmitAttemptError::Failed(error)) => {
+                warn!(?error, "Failed to submit settlement attempt to L1");
+                self.write_client_error_to_db(
+                    attempt_number,
+                    ClientError {
+                        kind: ClientErrorType::Unknown,
+                        message: format!("Failed to submit settlement attempt to L1: {error:?}"),
+                    },
+                )
+                .await;
+                None
+            }
         }
     }
 
@@ -766,7 +799,7 @@ impl<
         todo!()
     }
 
-    async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> eyre::Result<()> {
+    async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> Result<(), SubmitAttemptError> {
         // Encode the signed transaction once, consuming the envelope. This is the
         // only thing `send_tx_envelope` does with it before calling
         // `eth_sendRawTransaction`, so each retry can re-broadcast the same bytes
@@ -1449,16 +1482,23 @@ mod tests {
     }
 
     #[test]
-    fn submission_outcome_treats_cancellation_as_pending() {
-        // A shutdown mid-retry must not be recorded as a client error: the
-        // already-saved attempt has to stay pending so it can resume on reload.
-        assert!(submission_outcome(Err(RetryCallbackError::Cancelled)).is_ok());
+    fn submission_outcome_treats_cancellation_as_cancelled() {
+        // A shutdown mid-retry must surface as cancellation so the caller leaves
+        // the already-saved attempt pending and stops the runner, rather than
+        // recording a client error or silently continuing as success.
+        assert!(matches!(
+            submission_outcome(Err(RetryCallbackError::Cancelled)),
+            Err(SubmitAttemptError::Cancelled)
+        ));
     }
 
     #[test]
-    fn submission_outcome_propagates_transport_error() {
+    fn submission_outcome_reports_transport_error_as_failed() {
         let error = RetryCallbackError::Error(TransportErrorKind::custom_str("boom"));
-        assert!(submission_outcome(Err(error)).is_err());
+        assert!(matches!(
+            submission_outcome(Err(error)),
+            Err(SubmitAttemptError::Failed(_))
+        ));
     }
 
     #[tokio::test]
