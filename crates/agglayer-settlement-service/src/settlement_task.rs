@@ -1048,15 +1048,13 @@ mod tests {
         U256,
     };
     use alloy::{
-        network::EthereumWallet,
-        node_bindings::{Anvil, AnvilInstance},
-        providers::ProviderBuilder,
-        rpc::types::TransactionRequest,
-        signers::local::PrivateKeySigner,
+        network::EthereumWallet, node_bindings::Anvil, providers::ProviderBuilder,
+        rpc::types::TransactionRequest, signers::local::PrivateKeySigner,
     };
     use tokio::sync::mpsc;
 
     use super::*;
+    use crate::utils::build_provider;
 
     fn test_signer() -> PrivateKeySigner {
         PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key")
@@ -1166,13 +1164,6 @@ mod tests {
             control: mk_control(),
             attempts,
         }
-    }
-
-    fn build_anvil_provider(anvil: &AnvilInstance) -> impl Provider + WalletProvider + 'static {
-        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
-        ProviderBuilder::new()
-            .wallet(EthereumWallet::from(signer))
-            .connect_http(anvil.endpoint_url())
     }
 
     fn mk_task_with_provider<P: Provider + WalletProvider + 'static>(
@@ -1461,7 +1452,7 @@ mod tests {
     async fn wait_for_any_nonce_on_l1_returns_when_a_pending_nonce_is_included() {
         let anvil = Anvil::new().spawn();
         let sender = anvil.addresses()[0];
-        let provider = build_anvil_provider(&anvil);
+        let provider = build_provider(&anvil);
         provider
             .send_transaction(TransactionRequest::default().to(anvil.addresses()[1]))
             .await
@@ -1487,7 +1478,7 @@ mod tests {
     async fn wait_for_any_nonce_on_l1_keeps_waiting_when_no_pending_nonce_is_included() {
         let anvil = Anvil::new().spawn();
         let sender = anvil.addresses()[0];
-        let provider = build_anvil_provider(&anvil);
+        let provider = build_provider(&anvil);
 
         // No matching tx is mined. A large non-inclusion interval keeps the first
         // poll's backoff longer than the timeout. `start_paused` is unusable here:
