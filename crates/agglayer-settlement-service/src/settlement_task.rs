@@ -19,6 +19,7 @@ use alloy::{
     providers::{Provider, WalletProvider},
     transports::TransportError,
 };
+use eyre::Context as _;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
@@ -238,7 +239,7 @@ impl<
         store: Arc<SettlementStore>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
-        let (job, result) = Self::load_settlement_job_from_db(id).await?;
+        let (job, result) = Self::load_settlement_job_from_db(store.as_ref(), id).await?;
         if let Some(result) = result {
             Ok(StoredSettlementJob::Completed(job, result))
         } else {
@@ -792,18 +793,29 @@ impl<
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
-        // TODO: Save the settlement job contents to DB
-        // XREF: https://github.com/agglayer/agglayer/issues/1381
-        todo!()
+        self.store
+            .insert_settlement_job(&self.id, &self.job)
+            .wrap_err_with(|| format!("Failed to write settlement job {}", self.id))?;
+
+        Ok(())
     }
 
     async fn load_settlement_job_from_db(
-        _id: SettlementJobId,
+        store: &SettlementStore,
+        id: SettlementJobId,
     ) -> eyre::Result<(SettlementJob, Option<SettlementJobResult>)> {
-        // TODO: Load a settlement job's contents from DB, including its
-        // result if it is completed.
-        // XREF: https://github.com/agglayer/agglayer/issues/1381
-        todo!()
+        let Some(job) = store
+            .get_settlement_job(&id)
+            .wrap_err_with(|| format!("Failed to read settlement job {id}"))?
+        else {
+            eyre::bail!("No settlement job found for id {id}");
+        };
+
+        let result = store.get_settlement_job_result(&id).wrap_err_with(|| {
+            format!("Failed to read settlement job terminal result for id {id}")
+        })?;
+
+        Ok((job, result))
     }
 
     fn load_settlement_attempts_from_db(&mut self) -> eyre::Result<()> {
@@ -847,13 +859,20 @@ impl<
                 )
             });
 
-        self.attempts.entry((wallet, nonce)).or_default().insert(
+        let previous_attempt = self.attempts.entry((wallet, nonce)).or_default().insert(
             attempt_number,
             ActiveSettlementAttempt {
                 attempt: settlement_attempt,
                 result: None,
             },
         );
+        if previous_attempt.is_some() {
+            panic!(
+                "Settlement attempt was unexpectedly already tracked after DB write for job {} \
+                 attempt {}",
+                self.id, attempt_number
+            );
+        }
     }
 
     async fn write_client_error_to_db(
@@ -1077,6 +1096,10 @@ mod tests {
             )
     }
 
+    fn mk_job_id(seed: u128) -> SettlementJobId {
+        SettlementJobId::from(ulid::Ulid::from(seed))
+    }
+
     fn mk_control() -> TaskControl {
         let (admin_sender, admin_receiver) = mpsc::channel(1);
         let (_handle, control) =
@@ -1122,6 +1145,15 @@ mod tests {
             block_hash: B256::from([seed.wrapping_add(2); 32]),
             block_number: seed as u64,
             tx_hash: mk_tx_hash(seed.wrapping_add(3)),
+        }
+    }
+
+    fn mk_job_result(seed: u8, outcome: ContractCallOutcome) -> SettlementJobResult {
+        SettlementJobResult {
+            wallet: Address::from([seed; 20]).into(),
+            nonce: Nonce(seed as u64),
+            attempt_number: SettlementAttemptNumber(seed as u64),
+            contract_call_result: mk_contract_call_result(seed, outcome),
         }
     }
 
@@ -1181,10 +1213,174 @@ mod tests {
         }
     }
 
+    async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
+        _provider: L1Provider,
+        store: &MockStateStore,
+        job_id: SettlementJobId,
+    ) -> eyre::Result<(SettlementJob, Option<SettlementJobResult>)> {
+        SettlementTask::<L1Provider, MockStateStore>::load_settlement_job_from_db(store, job_id)
+            .await
+    }
+
+    #[tokio::test]
+    async fn save_settlement_job_to_db_inserts_job() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(1);
+        let job = mk_job();
+        let expected_job = job.clone();
+
+        store
+            .expect_insert_settlement_job()
+            .once()
+            .withf(move |recorded_job_id, recorded_job| {
+                recorded_job_id == &job_id && recorded_job == &expected_job
+            })
+            .return_once(|_, _| Ok(()));
+
+        let task = mk_task(Arc::new(store), BTreeMap::new());
+
+        task.save_settlement_job_to_db()
+            .await
+            .expect("settlement job should be saved");
+    }
+
+    #[tokio::test]
+    async fn save_settlement_job_to_db_reports_storage_error() {
+        let mut store = MockStateStore::new();
+        store
+            .expect_insert_settlement_job()
+            .once()
+            .return_once(|_, _| Err(Error::Unexpected("injected storage failure".to_string())));
+
+        let task = mk_task(Arc::new(store), BTreeMap::new());
+
+        let error = task
+            .save_settlement_job_to_db()
+            .await
+            .expect_err("storage errors should be surfaced");
+
+        assert!(error.to_string().contains("Failed to write settlement job"));
+    }
+
+    #[tokio::test]
+    async fn load_settlement_job_from_db_returns_pending_job() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(2);
+        let job = mk_job();
+        let expected_job = job.clone();
+
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(|_| Ok(None));
+
+        let (loaded_job, loaded_result) = load_job_from_store(mk_provider(), &store, job_id)
+            .await
+            .expect("settlement job should load");
+
+        assert_eq!(loaded_job, expected_job);
+        assert!(loaded_result.is_none());
+    }
+
+    #[tokio::test]
+    async fn load_settlement_job_from_db_returns_completed_job() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(3);
+        let job = mk_job();
+        let job_result = mk_job_result(4, ContractCallOutcome::Success);
+        let expected_job = job.clone();
+        let expected_job_result = job_result.clone();
+
+        store
+            .expect_get_settlement_job()
+            .once()
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job_result)));
+
+        let (loaded_job, loaded_result) = load_job_from_store(mk_provider(), &store, job_id)
+            .await
+            .expect("settlement job should load");
+
+        assert_eq!(loaded_job, expected_job);
+        assert_eq!(loaded_result, Some(expected_job_result));
+    }
+
+    #[tokio::test]
+    async fn load_settlement_job_from_db_reports_missing_job() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(4);
+
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store.expect_get_settlement_job_result().never();
+
+        let error = load_job_from_store(mk_provider(), &store, job_id)
+            .await
+            .expect_err("missing settlement job should be reported");
+
+        assert!(error.to_string().contains("No settlement job found for id"));
+    }
+
+    #[tokio::test]
+    async fn load_returns_completed_settlement_job() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(5);
+        let job = mk_job();
+        let job_result = mk_job_result(6, ContractCallOutcome::Success);
+        let expected_job = job.clone();
+        let expected_job_result = job_result.clone();
+
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job_result)));
+        store.expect_list_settlement_attempts().never();
+        store.expect_list_settlement_attempt_results().never();
+
+        let loaded = SettlementTask::load(
+            job_id,
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            Arc::new(store),
+            mk_control(),
+        )
+        .await
+        .expect("completed settlement job should load");
+
+        match loaded {
+            StoredSettlementJob::Completed(loaded_job, loaded_result) => {
+                assert_eq!(loaded_job, expected_job);
+                assert_eq!(loaded_result, expected_job_result);
+            }
+            StoredSettlementJob::Pending(_) => {
+                panic!("completed settlement job should not reload as pending")
+            }
+        }
+    }
+
     #[tokio::test]
     async fn save_attempt_to_db_records_attempt_in_storage_and_memory() {
         let mut store = MockStateStore::new();
-        let job_id = SettlementJobId::from(ulid::Ulid::from(1_u128));
+        let job_id = mk_job_id(1);
         let wallet = Address::from([2; 20]);
         let expected_wallet: agglayer_types::Address = wallet.into();
         let nonce = Nonce(7);
