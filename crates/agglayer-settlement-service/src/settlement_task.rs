@@ -143,13 +143,13 @@ type ActiveSettlementAttempts =
     BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>>;
 
 fn hydrate_settlement_attempts(
-    attempts: Vec<(u64, SettlementAttempt)>,
-    results: Vec<(u64, SettlementAttemptResult)>,
+    attempts: impl IntoIterator<Item = (impl Into<SettlementAttemptNumber>, SettlementAttempt)>,
+    results: impl IntoIterator<Item = (impl Into<SettlementAttemptNumber>, SettlementAttemptResult)>,
     job_id: SettlementJobId,
 ) -> eyre::Result<ActiveSettlementAttempts> {
     let mut results_by_attempt_number = BTreeMap::new();
     for (attempt_number, result) in results {
-        let attempt_number = SettlementAttemptNumber(attempt_number);
+        let attempt_number = attempt_number.into();
         if results_by_attempt_number
             .insert(attempt_number, result)
             .is_some()
@@ -161,7 +161,7 @@ fn hydrate_settlement_attempts(
     let mut loaded_attempt_numbers = BTreeSet::new();
     let mut loaded_attempts = ActiveSettlementAttempts::new();
     for (attempt_number, attempt) in attempts {
-        let attempt_number = SettlementAttemptNumber(attempt_number);
+        let attempt_number = attempt_number.into();
         if !loaded_attempt_numbers.insert(attempt_number) {
             eyre::bail!("Duplicate settlement attempt {attempt_number} for job {job_id}",);
         }
@@ -1375,7 +1375,7 @@ mod tests {
     #[test]
     fn hydrate_settlement_attempts_rejects_result_without_attempt() {
         let error = hydrate_settlement_attempts(
-            Vec::new(),
+            std::iter::empty::<(u64, SettlementAttempt)>(),
             vec![(7, mk_client_error(5))],
             SettlementJobId::from(2u128),
         )

@@ -64,6 +64,12 @@ impl<'a> arbitrary::Arbitrary<'a> for SettlementJobId {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, derive_more::Display)]
 pub struct SettlementAttemptNumber(pub u64);
 
+impl From<u64> for SettlementAttemptNumber {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, derive_more::Display)]
 pub struct Nonce(pub u64);
 
