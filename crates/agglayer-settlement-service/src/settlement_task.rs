@@ -59,7 +59,11 @@ impl BuildAttemptError {
     fn is_transient(&self) -> bool {
         match self {
             Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
-            // A build/sign failure with a configured wallet is non-recoverable.
+            // Remote signer backends (e.g. GCP KMS) sign over the network and
+            // can fail transiently, so retry signer errors. Missing-field or
+            // unsupported-signature errors indicate a build bug or a
+            // misconfiguration and are not recoverable by retrying.
+            Self::Build(TransactionBuilderError::Signer(_)) => true,
             Self::Build(_) => false,
         }
     }
@@ -1663,6 +1667,19 @@ mod tests {
 
         assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
         assert_eq!(gas.max_priority_fee_per_gas, gas.max_fee_per_gas);
+    }
+
+    #[test]
+    fn build_attempt_error_retries_signer_failures_but_not_build_bugs() {
+        // Remote signer (e.g. KMS) failures are transient and must be retried.
+        let signer_failure = BuildAttemptError::Build(TransactionBuilderError::Signer(
+            alloy::signers::Error::message("transient remote signer failure"),
+        ));
+        assert!(signer_failure.is_transient());
+
+        // A genuine build/validation error is not recoverable by retrying.
+        let build_bug = BuildAttemptError::Build(TransactionBuilderError::UnsupportedSignatureType);
+        assert!(!build_bug.is_transient());
     }
 
     #[tokio::test]

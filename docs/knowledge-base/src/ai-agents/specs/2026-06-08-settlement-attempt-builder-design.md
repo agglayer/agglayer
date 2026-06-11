@@ -113,7 +113,8 @@ impl BuildAttemptError {
     fn is_transient(&self) -> bool {
         match self {
             Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
-            // A build/sign failure with a configured wallet is non-recoverable.
+            // Remote signer backends (e.g. GCP KMS) can fail transiently.
+            Self::Build(TransactionBuilderError::Signer(_)) => true,
             Self::Build(_) => false,
         }
     }
@@ -311,14 +312,13 @@ fn resolve_base_gas_params(&self, estimate: &Eip1559Estimation) -> GasParams {
 - Transient L1 RPC failures (nonce/chain id/fees) are retried in-place using
   the configured `retry_on_transient_failure` policy and the existing
   `retry_callback_until_success` helper.
-- A build/sign failure is treated as non-recoverable
-  (the configured wallet should always be able to sign a fully-populated
-  request); it propagates as `RetryCallbackError::Error` and becomes a
-  `NonRecoverableError` panic at the call site, matching current run-loop
-  behavior for permanent errors.
-- Known limitation: if a GCP KMS signer is later wired in, transient KMS
-  signing errors would currently be classified non-transient.
-  Revisit `BuildAttemptError::is_transient` when KMS signing lands.
+- Signer-backend failures (`TransactionBuilderError::Signer`) are treated as
+  transient and retried: remote signers such as GCP KMS sign over the network
+  and can fail transiently, so a temporary KMS outage must not stop settlement.
+- Other build failures (`InvalidTransactionRequest`, `UnsupportedSignatureType`)
+  indicate a build bug or misconfiguration; they are non-recoverable, propagate
+  as `RetryCallbackError::Error`, and become a `NonRecoverableError` panic at
+  the call site, matching the run-loop's handling of permanent errors.
 
 ## Testing strategy
 
