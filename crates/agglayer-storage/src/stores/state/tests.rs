@@ -188,6 +188,16 @@ fn migrated_or_create_state_rejects_legacy_storage_without_mutating_it() {
     ));
 }
 
+#[test]
+fn migrated_or_create_state_roundtrips_as_current() {
+    // Guards DECLARED_MIGRATION_STEPS against init_db's actual recorded-step
+    // count: storage created through the gate must re-open through the gate as
+    // Current. If a future change adds or removes a migration step in init_db
+    // without updating DECLARED_MIGRATION_STEPS, this fails in CI instead of
+    // the node rejecting freshly created storage on restart.
+    crate::tests::assert_storage_gate_roundtrips(StateStore::open_migrated_or_create_db);
+}
+
 fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool {
     // local exit tree
     assert_eq!(lhs.exit_tree.leaf_count(), rhs.exit_tree.leaf_count());
