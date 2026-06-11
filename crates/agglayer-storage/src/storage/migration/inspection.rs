@@ -359,4 +359,89 @@ mod tests {
             SchemaStatus::MigrationRecordGap(0)
         );
     }
+
+    #[test]
+    fn open_migrated_or_create_reports_inspection_failure_for_unreadable_storage() {
+        let tmp = TempDBDir::new();
+        let path = tmp.path.join("not-rocksdb");
+        std::fs::write(&path, b"not a rocksdb directory").unwrap();
+
+        let error = match open_migrated_or_create(&path, LEGACY, CURRENT, 2, open_current) {
+            Ok(_) => panic!("unreadable storage must not be opened"),
+            Err(error) => error,
+        };
+
+        // An I/O/permission failure while inspecting must not be reported as a
+        // migration requirement: migration cannot fix it and it may be transient.
+        let message = error.to_string();
+        assert!(
+            !message.contains("needs migration"),
+            "inspection failure should not be reported as needing migration: {message}"
+        );
+        assert!(
+            matches!(error, DBOpenError::StorageInspectionFailed { .. }),
+            "expected StorageInspectionFailed, got {error:?}"
+        );
+    }
+
+    #[test]
+    fn open_migrated_or_create_reports_newer_version_for_future_records() {
+        let tmp = TempDBDir::new();
+        // Current data CFs plus the migration-record CF, but with more records
+        // than this binary declares: the DB was written by a newer binary.
+        create_raw_db(
+            &tmp.path,
+            [
+                MetadataColumn::COLUMN_FAMILY_NAME,
+                NetworkInfoColumn::COLUMN_FAMILY_NAME,
+                MigrationRecordColumn::COLUMN_FAMILY_NAME,
+            ],
+        );
+        let db = rocksdb::DB::open_cf(
+            &rocksdb::Options::default(),
+            &tmp.path,
+            [
+                MetadataColumn::COLUMN_FAMILY_NAME,
+                NetworkInfoColumn::COLUMN_FAMILY_NAME,
+                MigrationRecordColumn::COLUMN_FAMILY_NAME,
+            ],
+        )
+        .unwrap();
+        let cf = db
+            .cf_handle(MigrationRecordColumn::COLUMN_FAMILY_NAME)
+            .unwrap();
+        for step in 0..3_u32 {
+            db.put_cf(
+                cf,
+                step.encode().unwrap(),
+                MigrationRecord::default().encode().unwrap(),
+            )
+            .unwrap();
+        }
+        drop(db);
+
+        let error = match open_migrated_or_create(&tmp.path, LEGACY, CURRENT, 2, open_current) {
+            Ok(_) => panic!("storage written by a newer binary must not be opened"),
+            Err(error) => error,
+        };
+
+        // Telling the operator to "run explicit storage migration" is wrong
+        // remediation here; the correct action is to upgrade the binary.
+        let message = error.to_string();
+        assert!(
+            !message.contains("needs migration"),
+            "future-version storage should not be reported as needing migration: {message}"
+        );
+        assert!(
+            matches!(
+                error,
+                DBOpenError::StorageFromNewerVersion {
+                    declared: 2,
+                    recorded: 3,
+                    ..
+                }
+            ),
+            "expected StorageFromNewerVersion {{ declared: 2, recorded: 3 }}, got {error:?}"
+        );
+    }
 }
