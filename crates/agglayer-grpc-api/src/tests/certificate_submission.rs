@@ -95,6 +95,7 @@ impl AggchainContract for L1Rpc {
         &self,
         _rollup_address: agglayer_types::Address,
         _aggchain_data: alloy::primitives::Bytes,
+        _before_tx_hash: Option<alloy::primitives::TxHash>,
     ) -> Result<[u8; 32], L1RpcError> {
         unreachable!("invalid certificates are rejected before L1 access")
     }

@@ -16,7 +16,7 @@ use alloy::{
     eips::BlockNumberOrTag,
     network::{BlockResponse as _, ReceiptResponse as _},
     primitives::{Address, TxHash},
-    providers::Provider,
+    providers::{Provider, WalletProvider},
     transports::TransportError,
 };
 use eyre::Context as _;
@@ -140,6 +140,50 @@ struct ActiveSettlementAttempt {
     result: Option<SettlementAttemptResult>,
 }
 
+type ActiveSettlementAttempts =
+    BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>>;
+
+fn hydrate_settlement_attempts(
+    attempts: impl IntoIterator<Item = (impl Into<SettlementAttemptNumber>, SettlementAttempt)>,
+    results: impl IntoIterator<Item = (impl Into<SettlementAttemptNumber>, SettlementAttemptResult)>,
+    job_id: SettlementJobId,
+) -> eyre::Result<ActiveSettlementAttempts> {
+    let mut results_by_attempt_number = BTreeMap::new();
+    for (attempt_number, result) in results {
+        let attempt_number = attempt_number.into();
+        if results_by_attempt_number
+            .insert(attempt_number, result)
+            .is_some()
+        {
+            eyre::bail!("Duplicate settlement attempt result {attempt_number} for job {job_id}",);
+        }
+    }
+
+    let mut loaded_attempt_numbers = BTreeSet::new();
+    let mut loaded_attempts = ActiveSettlementAttempts::new();
+    for (attempt_number, attempt) in attempts {
+        let attempt_number = attempt_number.into();
+        if !loaded_attempt_numbers.insert(attempt_number) {
+            eyre::bail!("Duplicate settlement attempt {attempt_number} for job {job_id}",);
+        }
+
+        let result = results_by_attempt_number.remove(&attempt_number);
+        loaded_attempts
+            .entry((attempt.sender_wallet.into_alloy(), attempt.nonce))
+            .or_default()
+            .insert(attempt_number, ActiveSettlementAttempt { attempt, result });
+    }
+
+    if let Some((attempt_number, _)) = results_by_attempt_number.first_key_value() {
+        eyre::bail!(
+            "Settlement attempt result {attempt_number} exists for job {job_id} without a \
+             recorded settlement attempt",
+        );
+    }
+
+    Ok(loaded_attempts)
+}
+
 pub struct SettlementTask<L1Provider, SettlementStore> {
     id: SettlementJobId,
     job: SettlementJob,
@@ -147,14 +191,15 @@ pub struct SettlementTask<L1Provider, SettlementStore> {
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     control: TaskControl,
-    attempts:
-        BTreeMap<(Address, Nonce), BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>>,
+    attempts: ActiveSettlementAttempts,
 }
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
 
-impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + SettlementWriter>
-    SettlementTask<L1Provider, SettlementStore>
+impl<
+        L1Provider: Provider + WalletProvider + 'static,
+        SettlementStore: SettlementReader + SettlementWriter,
+    > SettlementTask<L1Provider, SettlementStore>
 {
     pub async fn create(
         job: SettlementJob,
@@ -207,7 +252,7 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
                 control,
                 attempts: BTreeMap::new(),
             };
-            this.load_settlement_attempts_from_db().await?;
+            this.load_settlement_attempts_from_db()?;
             Ok(StoredSettlementJob::Pending(this))
         }
     }
@@ -532,9 +577,8 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
             .map(|(key, _)| *key)
     }
 
-    fn is_wallet_privkey_known(&self, _wallet: Address) -> bool {
-        // TODO: tie with the configuration
-        todo!()
+    fn is_wallet_privkey_known(&self, wallet: Address) -> bool {
+        self.provider.has_signer_for(&wallet)
     }
 
     fn next_attempt_deadline_for_nonce(&self, _wallet: Address, _nonce: Nonce) -> SystemTime {
@@ -774,51 +818,11 @@ impl<L1Provider: Provider + 'static, SettlementStore: SettlementReader + Settlem
         Ok((job, result))
     }
 
-    async fn load_settlement_attempts_from_db(&mut self) -> eyre::Result<()> {
-        let mut results_by_attempt_number = BTreeMap::new();
-        for (attempt_number, result) in self.store.list_settlement_attempt_results(&self.id)? {
-            let attempt_number = SettlementAttemptNumber(attempt_number);
-            if results_by_attempt_number
-                .insert(attempt_number, result)
-                .is_some()
-            {
-                eyre::bail!(
-                    "Duplicate settlement attempt result {attempt_number} for job {}",
-                    self.id,
-                );
-            }
-        }
+    fn load_settlement_attempts_from_db(&mut self) -> eyre::Result<()> {
+        let results = self.store.list_settlement_attempt_results(&self.id)?;
+        let attempts = self.store.list_settlement_attempts(&self.id)?;
 
-        let mut loaded_attempt_numbers = BTreeSet::new();
-        let mut loaded_attempts: BTreeMap<
-            (Address, Nonce),
-            BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>,
-        > = BTreeMap::new();
-        for (attempt_number, attempt) in self.store.list_settlement_attempts(&self.id)? {
-            let attempt_number = SettlementAttemptNumber(attempt_number);
-            if !loaded_attempt_numbers.insert(attempt_number) {
-                eyre::bail!(
-                    "Duplicate settlement attempt {attempt_number} for job {}",
-                    self.id,
-                );
-            }
-
-            let result = results_by_attempt_number.remove(&attempt_number);
-            loaded_attempts
-                .entry((attempt.sender_wallet.into_alloy(), attempt.nonce))
-                .or_default()
-                .insert(attempt_number, ActiveSettlementAttempt { attempt, result });
-        }
-
-        if let Some((attempt_number, _)) = results_by_attempt_number.first_key_value() {
-            eyre::bail!(
-                "Settlement attempt result {attempt_number} exists for job {} without a recorded \
-                 settlement attempt",
-                self.id,
-            );
-        }
-
-        self.attempts = loaded_attempts;
+        self.attempts = hydrate_settlement_attempts(attempts, results, self.id)?;
         Ok(())
     }
 
@@ -1069,19 +1073,27 @@ mod tests {
     };
     use alloy::{
         consensus::{Signed, TxEip1559},
+        network::EthereumWallet,
         primitives::{Signature, TxKind},
         providers::ProviderBuilder,
+        signers::local::PrivateKeySigner,
     };
     use tokio::sync::mpsc;
 
     use super::*;
 
-    fn mk_provider() -> impl Provider + 'static {
-        ProviderBuilder::new().connect_http(
-            "http://127.0.0.1:0"
-                .parse()
-                .expect("test provider URL should parse"),
-        )
+    fn test_signer() -> PrivateKeySigner {
+        PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key")
+    }
+
+    fn mk_provider() -> impl Provider + WalletProvider + 'static {
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(test_signer()))
+            .connect_http(
+                "http://127.0.0.1:0"
+                    .parse()
+                    .expect("test provider URL should parse"),
+            )
     }
 
     fn mk_job_id(seed: u128) -> SettlementJobId {
@@ -1180,22 +1192,16 @@ mod tests {
 
     fn mk_task(
         store: Arc<MockStateStore>,
-        attempts: BTreeMap<
-            (Address, Nonce),
-            BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>,
-        >,
-    ) -> SettlementTask<impl Provider + 'static, MockStateStore> {
-        mk_task_with_id(mk_job_id(1), store, attempts)
+        attempts: ActiveSettlementAttempts,
+    ) -> SettlementTask<impl Provider + WalletProvider + 'static, MockStateStore> {
+        mk_task_with_id(SettlementJobId::from(1u128), store, attempts)
     }
 
     fn mk_task_with_id(
         job_id: SettlementJobId,
         store: Arc<MockStateStore>,
-        attempts: BTreeMap<
-            (Address, Nonce),
-            BTreeMap<SettlementAttemptNumber, ActiveSettlementAttempt>,
-        >,
-    ) -> SettlementTask<impl Provider + 'static, MockStateStore> {
+        attempts: ActiveSettlementAttempts,
+    ) -> SettlementTask<impl Provider + WalletProvider + 'static, MockStateStore> {
         SettlementTask {
             id: job_id,
             job: mk_job(),
@@ -1207,7 +1213,7 @@ mod tests {
         }
     }
 
-    async fn load_job_from_store<L1Provider: Provider + 'static>(
+    async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
         _provider: L1Provider,
         store: &MockStateStore,
         job_id: SettlementJobId,
@@ -1471,6 +1477,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn is_wallet_privkey_known_true_for_configured_wallet() {
+        let task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        assert!(task.is_wallet_privkey_known(test_signer().address()));
+    }
+
+    #[tokio::test]
+    async fn is_wallet_privkey_known_false_for_unknown_wallet() {
+        let task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        assert!(!task.is_wallet_privkey_known(Address::repeat_byte(0xAB)));
+    }
+
+    #[tokio::test]
     async fn write_job_result_records_success_and_marks_other_attempts() {
         let wallet = Address::from([1; 20]);
         let other_wallet = Address::from([2; 20]);
@@ -1629,9 +1647,9 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn load_settlement_attempts_from_db_hydrates_attempts_and_results() {
-        let job_id = mk_job_id(1);
+    #[test]
+    fn hydrate_settlement_attempts_groups_attempts_and_results() {
+        let job_id = SettlementJobId::from(1u128);
         let wallet = Address::repeat_byte(2);
         let other_wallet = Address::repeat_byte(3);
         let nonce = Nonce(7);
@@ -1641,11 +1659,52 @@ mod tests {
         let other_attempt = mk_stored_attempt(3, other_wallet, other_nonce);
         let completed_result = mk_client_error(4);
 
-        let attempts_for_store = vec![
-            (1, pending_attempt.clone()),
-            (2, completed_attempt.clone()),
-            (3, other_attempt.clone()),
-        ];
+        let hydrated_attempts = hydrate_settlement_attempts(
+            vec![
+                (1, pending_attempt.clone()),
+                (2, completed_attempt.clone()),
+                (3, other_attempt.clone()),
+            ],
+            vec![(2, completed_result.clone())],
+            job_id,
+        )
+        .expect("stored attempts should hydrate");
+
+        let attempts_for_nonce = hydrated_attempts
+            .get(&(wallet, nonce))
+            .expect("wallet nonce should be loaded");
+        assert_eq!(attempts_for_nonce.len(), 2);
+        let loaded_pending = attempts_for_nonce
+            .get(&SettlementAttemptNumber(1))
+            .expect("pending attempt should be loaded");
+        assert_eq!(loaded_pending.attempt, pending_attempt);
+        assert_eq!(loaded_pending.result, None);
+        let loaded_completed = attempts_for_nonce
+            .get(&SettlementAttemptNumber(2))
+            .expect("completed attempt should be loaded");
+        assert_eq!(loaded_completed.attempt, completed_attempt);
+        assert_eq!(loaded_completed.result.as_ref(), Some(&completed_result));
+
+        let attempts_for_other_nonce = hydrated_attempts
+            .get(&(other_wallet, other_nonce))
+            .expect("other wallet nonce should be loaded");
+        let loaded_other = attempts_for_other_nonce
+            .get(&SettlementAttemptNumber(3))
+            .expect("other attempt should be loaded");
+        assert_eq!(loaded_other.attempt, other_attempt);
+        assert_eq!(loaded_other.result, None);
+    }
+
+    #[test]
+    fn load_settlement_attempts_from_db_hydrates_attempts_and_results() {
+        let job_id = SettlementJobId::from(1u128);
+        let wallet = Address::repeat_byte(2);
+        let nonce = Nonce(7);
+        let pending_attempt = mk_stored_attempt(1, wallet, nonce);
+        let completed_attempt = mk_stored_attempt(2, wallet, nonce);
+        let completed_result = mk_client_error(4);
+
+        let attempts_for_store = vec![(1, pending_attempt.clone()), (2, completed_attempt.clone())];
         let completed_result_for_store = completed_result.clone();
         let mut store = MockStateStore::new();
         let expected_job_id = job_id;
@@ -1664,7 +1723,6 @@ mod tests {
         let mut task = mk_task_with_id(job_id, Arc::new(store), BTreeMap::new());
 
         task.load_settlement_attempts_from_db()
-            .await
             .expect("stored attempts should hydrate");
 
         let attempts_for_nonce = task
@@ -1682,46 +1740,20 @@ mod tests {
             .expect("completed attempt should be loaded");
         assert_eq!(loaded_completed.attempt, completed_attempt);
         assert_eq!(loaded_completed.result.as_ref(), Some(&completed_result));
-
-        let attempts_for_other_nonce = task
-            .attempts
-            .get(&(other_wallet, other_nonce))
-            .expect("other wallet nonce should be loaded");
-        let loaded_other = attempts_for_other_nonce
-            .get(&SettlementAttemptNumber(3))
-            .expect("other attempt should be loaded");
-        assert_eq!(loaded_other.attempt, other_attempt);
-        assert_eq!(loaded_other.result, None);
     }
 
-    #[tokio::test]
-    async fn load_settlement_attempts_from_db_rejects_result_without_attempt() {
-        let job_id = mk_job_id(2);
-        let result = mk_client_error(5);
-        let mut store = MockStateStore::new();
-        let expected_job_id = job_id;
-        store
-            .expect_list_settlement_attempt_results()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &expected_job_id)
-            .return_once(move |_| Ok(vec![(7, result)]));
-        let expected_job_id = job_id;
-        store
-            .expect_list_settlement_attempts()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &expected_job_id)
-            .return_once(|_| Ok(Vec::new()));
-
-        let mut task = mk_task_with_id(job_id, Arc::new(store), BTreeMap::new());
-
-        let error = task
-            .load_settlement_attempts_from_db()
-            .await
-            .expect_err("orphaned attempt result should fail hydration");
+    #[test]
+    fn hydrate_settlement_attempts_rejects_result_without_attempt() {
+        let error = hydrate_settlement_attempts(
+            std::iter::empty::<(u64, SettlementAttempt)>(),
+            vec![(7, mk_client_error(5))],
+            SettlementJobId::from(2u128),
+        )
+        .err()
+        .expect("orphaned attempt result should fail hydration");
 
         assert!(error
             .to_string()
             .contains("without a recorded settlement attempt"));
-        assert!(task.attempts.is_empty());
     }
 }
