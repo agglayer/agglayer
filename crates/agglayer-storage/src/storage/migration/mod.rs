@@ -30,6 +30,23 @@ pub(crate) fn open_migrated_or_create(
     let inspection = inspect_schema(path, cfs_v0, current_cfs, declared_steps);
     match inspection.status {
         SchemaStatus::Missing | SchemaStatus::Empty | SchemaStatus::Current => open(path),
+        // A failed inspection is an I/O/permission problem, not a migration
+        // requirement: surface it as such so operators don't run a migration
+        // that cannot fix it.
+        SchemaStatus::Unreadable(reason) => Err(DBOpenError::StorageInspectionFailed {
+            path: path.to_path_buf(),
+            reason,
+        }),
+        // More recorded steps than this binary declares means the storage was
+        // written by a newer agglayer-node; the fix is to upgrade the binary,
+        // not to migrate forward.
+        SchemaStatus::FutureMigrationRecords { declared, recorded } => {
+            Err(DBOpenError::StorageFromNewerVersion {
+                path: path.to_path_buf(),
+                declared,
+                recorded,
+            })
+        }
         status => Err(DBOpenError::StorageNeedsMigration {
             path: path.to_path_buf(),
             status,
