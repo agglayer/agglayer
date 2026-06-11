@@ -800,6 +800,13 @@ impl<
     }
 
     async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> Result<(), SubmitAttemptError> {
+        // Don't start a new broadcast once shutdown is requested. The retry helper
+        // only observes the token while backing off after a transient error, so
+        // an already-cancelled token would otherwise still send the first tx.
+        if self.control.cancellation_token.is_cancelled() {
+            return Err(SubmitAttemptError::Cancelled);
+        }
+
         // Encode the signed transaction once, consuming the envelope. This is the
         // only thing `send_tx_envelope` does with it before calling
         // `eth_sendRawTransaction`, so each retry can re-broadcast the same bytes
@@ -1547,6 +1554,55 @@ mod tests {
         assert!(
             broadcast_tx.is_some(),
             "the node should know the broadcast settlement transaction"
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_attempt_to_l1_skips_broadcast_when_already_cancelled() {
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        let tx_request = TransactionRequest::default()
+            .to(anvil.addresses()[1])
+            .value(alloy::primitives::U256::from(1));
+        let envelope = provider
+            .fill(tx_request)
+            .await
+            .expect("filling the settlement transaction should succeed")
+            .try_into_envelope()
+            .expect("a wallet-filled transaction should be a signed envelope");
+        let expected_tx_hash: TxHash = *envelope.tx_hash();
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts: BTreeMap::new(),
+        };
+
+        // Request shutdown before submitting: the retry helper only observes the
+        // token while backing off, so without an up-front guard the first
+        // broadcast would still go out.
+        task.control.cancellation_token.cancel();
+
+        let result = task.submit_attempt_to_l1(envelope).await;
+        assert!(matches!(result, Err(SubmitAttemptError::Cancelled)));
+
+        // The transaction must never have been broadcast.
+        let broadcast_tx = task
+            .provider
+            .get_transaction_by_hash(expected_tx_hash)
+            .await
+            .expect("querying the transaction should succeed");
+        assert!(
+            broadcast_tx.is_none(),
+            "a cancelled submission must not broadcast the transaction"
         );
     }
 }
