@@ -1219,7 +1219,7 @@ mod tests {
     #[tokio::test]
     async fn save_settlement_job_to_db_inserts_job() {
         let mut store = MockStateStore::new();
-        let job_id = SettlementJobId::from(ulid::Ulid::from(1_u128));
+        let job_id = mk_job_id(1);
         let job = mk_job();
         let expected_job = job.clone();
 
@@ -1259,7 +1259,7 @@ mod tests {
     #[tokio::test]
     async fn load_settlement_job_from_db_returns_pending_job() {
         let mut store = MockStateStore::new();
-        let job_id = SettlementJobId::from(ulid::Ulid::from(2_u128));
+        let job_id = mk_job_id(2);
         let job = mk_job();
         let expected_job = job.clone();
 
@@ -1285,7 +1285,7 @@ mod tests {
     #[tokio::test]
     async fn load_settlement_job_from_db_returns_completed_job() {
         let mut store = MockStateStore::new();
-        let job_id = SettlementJobId::from(ulid::Ulid::from(3_u128));
+        let job_id = mk_job_id(3);
         let job = mk_job();
         let job_result = mk_job_result(4, ContractCallOutcome::Success);
         let expected_job = job.clone();
@@ -1312,7 +1312,7 @@ mod tests {
     #[tokio::test]
     async fn load_settlement_job_from_db_reports_missing_job() {
         let mut store = MockStateStore::new();
-        let job_id = SettlementJobId::from(ulid::Ulid::from(4_u128));
+        let job_id = mk_job_id(4);
 
         store
             .expect_get_settlement_job()
@@ -1331,7 +1331,7 @@ mod tests {
     #[tokio::test]
     async fn load_returns_completed_settlement_job() {
         let mut store = MockStateStore::new();
-        let job_id = SettlementJobId::from(ulid::Ulid::from(5_u128));
+        let job_id = mk_job_id(5);
         let job = mk_job();
         let job_result = mk_job_result(6, ContractCallOutcome::Success);
         let expected_job = job.clone();
@@ -1374,7 +1374,7 @@ mod tests {
     #[tokio::test]
     async fn save_attempt_to_db_records_attempt_in_storage_and_memory() {
         let mut store = MockStateStore::new();
-        let job_id = SettlementJobId::from(ulid::Ulid::from(1_u128));
+        let job_id = mk_job_id(1);
         let wallet = Address::from([2; 20]);
         let expected_wallet: agglayer_types::Address = wallet.into();
         let nonce = Nonce(7);
