@@ -844,20 +844,13 @@ impl<
                 )
             });
 
-        let previous_attempt = self.attempts.entry((wallet, nonce)).or_default().insert(
+        self.attempts.entry((wallet, nonce)).or_default().insert(
             attempt_number,
             ActiveSettlementAttempt {
                 attempt: settlement_attempt,
                 result: None,
             },
         );
-        if previous_attempt.is_some() {
-            panic!(
-                "Settlement attempt was unexpectedly already tracked after DB write for job {} \
-                 attempt {}",
-                self.id, attempt_number
-            );
-        }
     }
 
     async fn write_client_error_to_db(
