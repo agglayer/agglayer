@@ -415,7 +415,11 @@ where
 
             let l1_aggchain_hash = self
                 .l1_rpc
-                .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
+                .get_aggchain_hash(
+                    rollup_address,
+                    certificate.custom_chain_data.clone().into(),
+                    certificate_tx_hash.map(|digest| digest.0.into()),
+                )
                 .await
                 .map_err(CertificationError::UnableToFindAggchainHash)?
                 .into();

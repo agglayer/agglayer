@@ -14,8 +14,8 @@
 //!   column families. Encoding emits `v1` bincode (runtime code does not write
 //!   to legacy CFs after the proto migration). Decoding accepts *either* legacy
 //!   bincode (`v0`/`v1`) *or* protobuf, because the legacy CFs historically
-//!   received both: bincode rows pre-#1519 and proto rows between #1519 (proto
-//!   codec switch) and this PR (proto CF split).
+//!   received both: bincode rows from before the proto codec switch and proto
+//!   rows written before the proto CF split.
 //!
 //! Splitting the codecs is deliberate: the proto CF is byte-unambiguous and
 //! its codec is strictly proto. Format sniffing is restricted to the
@@ -397,10 +397,10 @@ impl crate::schema::Codec for Certificate {
 /// deliberately permissive about format because the legacy CFs received
 /// rows in *both* historical encodings:
 ///
-/// * Bincode `v0`/`v1` rows written before the proto codec switch (#1519).
-/// * Proto rows written between #1519 (proto codec became the default encode
-///   for `Certificate`) and this PR (which created dedicated proto-backed CFs
-///   and moved runtime writes there).
+/// * Bincode `v0`/`v1` rows written before the proto codec switch.
+/// * Proto rows written after the proto codec became the default encode for
+///   `Certificate` but before dedicated proto-backed CFs took over runtime
+///   writes.
 ///
 /// Decoding tries the bincode path on first byte `0` or `1` and falls back
 /// to proto for anything else. Encoding is intentionally unsupported because
@@ -439,8 +439,8 @@ impl crate::schema::Codec for LegacyCertificate {
             Some(0) => decode_v0(bytes)?,
             Some(1) => decode_legacy::<CertificateV1>(bytes)?,
             Some(_) => {
-                // Post-#1519 / pre-this-PR rows were proto-encoded into the
-                // legacy CF before runtime writes moved to the proto CF.
+                // These rows were proto-encoded into the legacy CF before
+                // runtime writes moved to the proto CF.
                 let proto = proto::Certificate::decode(bytes)?;
                 Certificate::try_from(proto)
                     .map_err(|error| CodecError::Conversion(error.to_string()))?

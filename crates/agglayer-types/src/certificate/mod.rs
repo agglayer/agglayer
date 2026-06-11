@@ -21,13 +21,15 @@ mod metadata;
 #[cfg(feature = "testutils")]
 mod testutils;
 
+#[cfg(feature = "testutils")]
+pub use agglayer_sp1::testutils::dummy_sp1_stark_proof_with_version;
 pub use header::{CertificateHeader, CertificateStatus, SettlementTxHash};
 pub use height::Height;
 pub use id::CertificateId;
 pub use index::CertificateIndex;
 pub use metadata::Metadata;
 #[cfg(feature = "testutils")]
-pub use testutils::{compute_signature_info, dummy_sp1_stark_proof_with_version};
+pub use testutils::compute_signature_info;
 
 /// Represents the data submitted by the chains to the AggLayer.
 ///
