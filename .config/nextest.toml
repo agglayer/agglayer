@@ -8,10 +8,13 @@ default-filter = "not package(integrations)"
 [profile.integrations]
 default-filter = "package(integrations)"
 
+# Timeout-heavy L1 settlement failure tests (all share the
+# `transaction_with_receipt` prefix) run serially so they don't pile up under CI
+# concurrency; everything else runs in the parallel resource-limited group.
 [[profile.integrations.overrides]]
-filter = 'package(integrations) and (test(transaction_with_receipt_status_0) or test(transaction_with_receipt_status_0_retry) or test(transaction_with_receipt_timeout_many_times) or test(transaction_with_receipt_timeout_2_times))'
+filter = 'package(integrations) and test(transaction_with_receipt)'
 test-group = 'integration-failpoint'
 
 [[profile.integrations.overrides]]
-filter = 'package(integrations) and not (test(transaction_with_receipt_status_0) or test(transaction_with_receipt_status_0_retry) or test(transaction_with_receipt_timeout_many_times) or test(transaction_with_receipt_timeout_2_times))'
+filter = 'package(integrations) and not test(transaction_with_receipt)'
 test-group = 'resource-limited'
