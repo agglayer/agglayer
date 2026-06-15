@@ -593,6 +593,7 @@ dependencies = [
  "educe",
  "eyre",
  "rand 0.9.3",
+ "rstest",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
