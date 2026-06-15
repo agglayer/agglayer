@@ -251,3 +251,10 @@ fn migrated_or_create_pending_rejects_legacy_storage_without_mutating_it() {
     let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &tmp.path).unwrap();
     assert!(!cfs.contains(&PendingQueueProtoColumn::COLUMN_FAMILY_NAME.to_string()));
 }
+
+#[test]
+fn migrated_or_create_pending_roundtrips_as_current() {
+    // Guards this store's DECLARED_MIGRATION_STEPS against init_db's recorded
+    // step count; see crate::tests::assert_storage_gate_roundtrips.
+    crate::tests::assert_storage_gate_roundtrips(PendingStore::open_migrated_or_create_db);
+}
