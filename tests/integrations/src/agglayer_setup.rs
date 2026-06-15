@@ -266,21 +266,34 @@ where
     }
 }
 
-pub async fn l1_block_number(l1: &L1Docker) -> u64 {
-    let url = reqwest::Url::parse(&l1.rpc).unwrap();
+pub async fn l1_block_number(l1: &L1Docker) -> Option<u64> {
+    let url = reqwest::Url::parse(&l1.rpc).ok()?;
     RootProvider::<Ethereum>::new_http(url)
         .get_block_number()
         .await
-        .unwrap()
+        .ok()
 }
 
 pub async fn wait_for_l1_blocks(l1: &L1Docker, additional_blocks: u64) {
-    let target = l1_block_number(l1).await + additional_blocks;
+    // Poll tolerantly: a transient L1 RPC error yields `None` and re-polls within
+    // the timeout budget instead of panicking through the loop. The target is
+    // anchored to the first successful block read.
+    let start = tokio::time::Instant::now();
+    let mut target = None;
 
-    wait_for_condition("L1 block advancement", DEFAULT_WAIT_TIMEOUT, || async {
-        l1_block_number(l1).await >= target
-    })
-    .await;
+    loop {
+        if let Some(current) = l1_block_number(l1).await {
+            if current >= *target.get_or_insert(current + additional_blocks) {
+                return;
+            }
+        }
+
+        if start.elapsed() >= DEFAULT_WAIT_TIMEOUT {
+            panic!("Timed out waiting for L1 to advance by {additional_blocks} blocks");
+        }
+
+        tokio::time::sleep(AGGLAYER_RPC_POLL_INTERVAL).await;
+    }
 }
 
 struct PortReservationLock {
