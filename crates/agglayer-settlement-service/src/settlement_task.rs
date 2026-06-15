@@ -13,7 +13,7 @@ use agglayer_types::{
 };
 use alloy::{
     consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
-    eips::BlockNumberOrTag,
+    eips::{eip2718::Encodable2718 as _, BlockNumberOrTag},
     network::{BlockResponse as _, ReceiptResponse as _},
     primitives::{Address, TxHash},
     providers::{Provider, WalletProvider},
@@ -40,6 +40,41 @@ fn required_settlement_head_number(receipt_block_number: u64, confirmations: usi
     let confirmation_offset = confirmation_offset.try_into().unwrap_or(u64::MAX);
 
     receipt_block_number.saturating_add(confirmation_offset)
+}
+
+/// Why submitting a settlement attempt to L1 did not complete normally.
+#[derive(Debug)]
+enum SubmitAttemptError {
+    /// The task was cancelled mid-submission. The already-saved attempt is left
+    /// pending so it resumes on reload, and the runner is told to stop.
+    Cancelled,
+    /// Submission failed for a non-transient reason and should be recorded.
+    Failed(eyre::Error),
+}
+
+/// Maps the result of broadcasting a settlement attempt to a submit outcome.
+///
+/// Cancellation becomes [`SubmitAttemptError::Cancelled`] so the caller can
+/// leave the already-saved attempt pending and propagate a stop signal to the
+/// runner, instead of recording a spurious `ClientError` or silently continuing
+/// into the post-submit wait after shutdown.
+///
+/// A non-transient error becomes [`SubmitAttemptError::Failed`]. Note that a
+/// re-broadcast whose first response was lost can return an "already
+/// known"/nonce-used error reported here as failure even though the transaction
+/// was accepted; recognizing those responses as success depends on the RPC
+/// error classification deferred to `SettlementServiceConfig`.
+/// XREF: https://github.com/agglayer/agglayer/issues/1321
+fn submission_outcome(
+    result: Result<(), RetryCallbackError<TransportError>>,
+) -> Result<(), SubmitAttemptError> {
+    match result {
+        Ok(()) => Ok(()),
+        Err(RetryCallbackError::Cancelled) => Err(SubmitAttemptError::Cancelled),
+        Err(RetryCallbackError::Error(error)) => {
+            Err(SubmitAttemptError::Failed(eyre::Error::new(error)))
+        }
+    }
 }
 
 /// Error returned by the L1 polling callbacks; the "not yet" variants are
@@ -375,8 +410,12 @@ impl<
                         continue 'nonces; // wait for deadline to be reached
                     }
                     let (attempt_number, tx) = self.build_next_attempt_with_nonce(wallet, nonce);
-                    self.save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
-                        .await;
+                    if let Some(run_result) = self
+                        .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
+                        .await
+                    {
+                        return run_result;
+                    }
                 }
             }
             if all_nonces_seen_on_l1 && !reverts.is_empty() {
@@ -455,8 +494,12 @@ impl<
                 // nonce.
                 let (wallet, nonce, attempt_number, tx) = self.build_next_attempt_with_new_nonce();
                 not_included_on_l1.insert((wallet, nonce));
-                self.save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
-                    .await;
+                if let Some(run_result) = self
+                    .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
+                    .await
+                {
+                    return run_result;
+                }
             }
             // We now are sure we did at least one step to make things move forward. Wait
             // for the next external event or for the next deadline.
@@ -501,24 +544,36 @@ impl<
         }
     }
 
+    /// Saves the attempt, then submits it to L1.
+    ///
+    /// Returns `Some(SettlementTaskRunResult::Cancelled)` when submission was
+    /// interrupted by a shutdown, so the runner stops promptly while leaving
+    /// the already-saved attempt pending; returns `None` when the runner
+    /// should keep going (whether submission succeeded or failed with a
+    /// recorded client error).
     async fn save_attempt_to_db_and_submit_to_l1(
         &mut self,
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
         tx: TxEnvelope,
-    ) {
+    ) -> Option<SettlementTaskRunResult> {
         self.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
-        if let Err(error) = self.submit_attempt_to_l1(tx).await {
-            warn!(?error, "Failed to submit settlement attempt to L1");
-            self.write_client_error_to_db(
-                attempt_number,
-                ClientError {
-                    kind: ClientErrorType::Unknown,
-                    message: format!("Failed to submit settlement attempt to L1: {error:?}"),
-                },
-            )
-            .await;
+        match self.submit_attempt_to_l1(tx).await {
+            Ok(()) => None,
+            Err(SubmitAttemptError::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
+            Err(SubmitAttemptError::Failed(error)) => {
+                warn!(?error, "Failed to submit settlement attempt to L1");
+                self.write_client_error_to_db(
+                    attempt_number,
+                    ClientError {
+                        kind: ClientErrorType::Unknown,
+                        message: format!("Failed to submit settlement attempt to L1: {error:?}"),
+                    },
+                )
+                .await;
+                None
+            }
         }
     }
 
@@ -816,10 +871,28 @@ impl<
         todo!()
     }
 
-    async fn submit_attempt_to_l1(&self, _tx: TxEnvelope) -> eyre::Result<()> {
-        // TODO: Submit attempt to L1. Use https://docs.rs/alloy/latest/alloy/providers/trait.Provider.html#method.send_tx_envelope
-        // XREF: https://github.com/agglayer/agglayer/issues/1321
-        todo!()
+    async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> Result<(), SubmitAttemptError> {
+        // Encode the signed transaction once, consuming the envelope. This is the
+        // only thing `send_tx_envelope` does with it before calling
+        // `eth_sendRawTransaction`, so each retry can re-broadcast the same bytes
+        // via `send_raw_transaction` without cloning or re-encoding the envelope.
+        // Re-broadcasting is idempotent: the bytes carry the same sender, nonce, and
+        // signature, hence the same hash, so retrying cannot submit a second
+        // on-chain transaction.
+        let encoded_tx = tx.encoded_2718();
+
+        // Retry only transient network failures, mirroring `tx_hash_on_l1_for_nonce`.
+        // The returned pending-transaction handle is dropped on purpose: this helper
+        // must never wait for inclusion or settlement.
+        let submission = crate::utils::retry_alloy_callback_until_success(
+            &self.tx_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || self.provider.send_raw_transaction(&encoded_tx),
+        )
+        .await
+        .map(drop);
+
+        submission_outcome(submission)
     }
 
     async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
@@ -1109,6 +1182,7 @@ mod tests {
         providers::ProviderBuilder,
         rpc::types::TransactionRequest,
         signers::local::PrivateKeySigner,
+        transports::TransportErrorKind,
     };
     use tokio::sync::mpsc;
 
@@ -1852,5 +1926,128 @@ mod tests {
         )
         .await
         .is_err());
+    }
+
+    #[test]
+    fn submission_outcome_reports_success() {
+        assert!(submission_outcome(Ok(())).is_ok());
+    }
+
+    #[test]
+    fn submission_outcome_treats_cancellation_as_cancelled() {
+        // A shutdown mid-retry must surface as cancellation so the caller leaves
+        // the already-saved attempt pending and stops the runner, rather than
+        // recording a client error or silently continuing as success.
+        assert!(matches!(
+            submission_outcome(Err(RetryCallbackError::Cancelled)),
+            Err(SubmitAttemptError::Cancelled)
+        ));
+    }
+
+    #[test]
+    fn submission_outcome_reports_transport_error_as_failed() {
+        let error = RetryCallbackError::Error(TransportErrorKind::custom_str("boom"));
+        assert!(matches!(
+            submission_outcome(Err(error)),
+            Err(SubmitAttemptError::Failed(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn submit_attempt_to_l1_broadcasts_signed_envelope() {
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        // Build and sign a transaction envelope through the provider's fillers so
+        // it carries a valid nonce, gas, and chain id, then hand it off as the
+        // settlement attempt to submit.
+        let tx_request = TransactionRequest::default()
+            .to(anvil.addresses()[1])
+            .value(alloy::primitives::U256::from(1));
+        let envelope = provider
+            .fill(tx_request)
+            .await
+            .expect("filling the settlement transaction should succeed")
+            .try_into_envelope()
+            .expect("a wallet-filled transaction should be a signed envelope");
+        let expected_tx_hash: TxHash = *envelope.tx_hash();
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts: BTreeMap::new(),
+        };
+
+        task.submit_attempt_to_l1(envelope)
+            .await
+            .expect("submitting the settlement attempt should succeed");
+
+        // The helper does not wait for inclusion, but the node must have accepted
+        // the broadcast, so it should know the transaction by hash.
+        let broadcast_tx = task
+            .provider
+            .get_transaction_by_hash(expected_tx_hash)
+            .await
+            .expect("querying the broadcast transaction should succeed");
+        assert!(
+            broadcast_tx.is_some(),
+            "the node should know the broadcast settlement transaction"
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_attempt_to_l1_skips_broadcast_when_already_cancelled() {
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        let tx_request = TransactionRequest::default()
+            .to(anvil.addresses()[1])
+            .value(alloy::primitives::U256::from(1));
+        let envelope = provider
+            .fill(tx_request)
+            .await
+            .expect("filling the settlement transaction should succeed")
+            .try_into_envelope()
+            .expect("a wallet-filled transaction should be a signed envelope");
+        let expected_tx_hash: TxHash = *envelope.tx_hash();
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts: BTreeMap::new(),
+        };
+
+        // Request shutdown before submitting: the retry helper only observes the
+        // token while backing off, so without an up-front guard the first
+        // broadcast would still go out.
+        task.control.cancellation_token.cancel();
+
+        let result = task.submit_attempt_to_l1(envelope).await;
+        assert!(matches!(result, Err(SubmitAttemptError::Cancelled)));
+
+        // The transaction must never have been broadcast.
+        let broadcast_tx = task
+            .provider
+            .get_transaction_by_hash(expected_tx_hash)
+            .await
+            .expect("querying the transaction should succeed");
+        assert!(
+            broadcast_tx.is_none(),
+            "a cancelled submission must not broadcast the transaction"
+        );
     }
 }

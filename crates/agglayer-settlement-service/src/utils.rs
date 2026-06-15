@@ -25,6 +25,10 @@ pub(crate) enum RetryCallbackError<E> {
 ///
 /// Transient errors are retried using the provided policy. Permanent errors are
 /// returned immediately.
+///
+/// Cancellation is observed both before and during each callback invocation, so
+/// an already-cancelled token never starts a new callback and a pending
+/// callback (for example a stalled request) is abandoned promptly.
 pub(crate) async fn retry_callback_until_success<T, E, F, Fut, I>(
     policy: &TxRetryPolicy,
     cancellation_token: &CancellationToken,
@@ -41,7 +45,15 @@ where
     let mut retry_attempt = 0_u64;
 
     loop {
-        match callback().await {
+        // Race the callback against cancellation so a shutdown is observed even
+        // while the callback future is still pending; `biased` also returns
+        // before the callback is polled when the token is already cancelled.
+        let outcome = tokio::select! {
+            biased;
+            _ = cancellation_token.cancelled() => return Err(RetryCallbackError::Cancelled),
+            outcome = callback() => outcome,
+        };
+        match outcome {
             Ok(value) => return Ok(value),
             Err(error) => {
                 if !is_transient(&error) {
@@ -150,7 +162,7 @@ mod tests {
         error::Error,
         fmt::{Display, Formatter},
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex,
         },
         time::Duration,
@@ -308,6 +320,75 @@ mod tests {
         let error = handle.await.unwrap().unwrap_err();
         assert_eq!(attempts.load(Ordering::SeqCst), 1);
         assert!(matches!(error, RetryCallbackError::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn retry_callback_until_success_returns_cancelled_before_calling_callback() {
+        let cancellation_token = CancellationToken::new();
+        cancellation_token.cancel();
+        let policy = retry_policy(
+            Duration::from_millis(10),
+            1000,
+            Duration::from_millis(10),
+            Duration::ZERO,
+        );
+        let called = Arc::new(AtomicBool::new(false));
+
+        let result = retry_callback_until_success(
+            &policy,
+            &cancellation_token,
+            {
+                let called = called.clone();
+                move || {
+                    let called = called.clone();
+                    async move {
+                        called.store(true, Ordering::SeqCst);
+                        Ok::<(), TransientTestError>(())
+                    }
+                }
+            },
+            |_| true,
+        )
+        .await;
+
+        assert!(matches!(result, Err(RetryCallbackError::Cancelled)));
+        assert!(
+            !called.load(Ordering::SeqCst),
+            "callback must not run once the token is already cancelled"
+        );
+    }
+
+    #[tokio::test]
+    async fn retry_callback_until_success_stops_when_cancelled_during_callback() {
+        let cancellation_token = CancellationToken::new();
+        let policy = retry_policy(
+            Duration::from_secs(30),
+            1000,
+            Duration::from_secs(30),
+            Duration::ZERO,
+        );
+
+        let handle = tokio::spawn({
+            let cancellation_token = cancellation_token.clone();
+            async move {
+                retry_callback_until_success(
+                    &policy,
+                    &cancellation_token,
+                    std::future::pending::<Result<(), TransientTestError>>,
+                    |_| true,
+                )
+                .await
+            }
+        });
+
+        tokio::task::yield_now().await;
+        cancellation_token.cancel();
+
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("retry must observe cancellation during a pending callback")
+            .expect("retry task should not panic");
+        assert!(matches!(result, Err(RetryCallbackError::Cancelled)));
     }
 
     #[tokio::test(start_paused = true)]
