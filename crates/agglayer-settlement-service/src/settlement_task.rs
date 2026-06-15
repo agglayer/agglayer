@@ -737,7 +737,10 @@ impl<
                 unexpected @ (WaitForSettlementError::NotSettledYet
                 | WaitForSettlementError::NotIncludedYet),
             ) => {
-                error!(?unexpected, "transient signal surfaced as terminal settlement error");
+                error!(
+                    ?unexpected,
+                    "transient signal surfaced as terminal settlement error"
+                );
                 RetryCallbackError::Error(TransportErrorKind::custom_str(
                     "settlement retry returned a transient signal as terminal",
                 ))
