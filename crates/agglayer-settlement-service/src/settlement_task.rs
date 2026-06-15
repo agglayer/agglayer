@@ -70,9 +70,9 @@ fn submission_outcome(
     match result {
         Ok(()) => Ok(()),
         Err(RetryCallbackError::Cancelled) => Err(SubmitAttemptError::Cancelled),
-        Err(RetryCallbackError::Error(error)) => Err(SubmitAttemptError::Failed(
-            eyre::Error::new(error).wrap_err("failed to submit settlement attempt to L1"),
-        )),
+        Err(RetryCallbackError::Error(error)) => {
+            Err(SubmitAttemptError::Failed(eyre::Error::new(error)))
+        }
     }
 }
 
