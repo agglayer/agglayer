@@ -17,7 +17,7 @@ use alloy::{
     network::{BlockResponse as _, ReceiptResponse as _},
     primitives::{Address, TxHash},
     providers::{Provider, WalletProvider},
-    transports::TransportError,
+    transports::{TransportError, TransportErrorKind},
 };
 use eyre::Context as _;
 use tokio::sync::mpsc;
@@ -80,13 +80,13 @@ fn submission_outcome(
 /// Error returned by the L1 polling callbacks; the "not yet" variants are
 /// transient and tell the retry loop to keep polling.
 #[derive(Debug)]
-enum WaitForL1Error {
+enum WaitForSettlementError {
     NotSettledYet,
     NotIncludedYet,
     Transport(TransportError),
 }
 
-impl WaitForL1Error {
+impl WaitForSettlementError {
     fn is_transient(&self) -> bool {
         match self {
             Self::NotSettledYet | Self::NotIncludedYet => true,
@@ -95,7 +95,7 @@ impl WaitForL1Error {
     }
 }
 
-impl From<TransportError> for WaitForL1Error {
+impl From<TransportError> for WaitForSettlementError {
     fn from(error: TransportError) -> Self {
         Self::Transport(error)
     }
@@ -678,9 +678,9 @@ impl<
                         return Ok(());
                     }
                 }
-                Err(WaitForL1Error::NotIncludedYet)
+                Err(WaitForSettlementError::NotIncludedYet)
             },
-            WaitForL1Error::is_transient,
+            WaitForSettlementError::is_transient,
         )
         .await;
     }
@@ -718,19 +718,29 @@ impl<
             &self.tx_config.retry_on_not_included_on_l1,
             &self.control.cancellation_token,
             || self.check_settlement_once(tx_hash),
-            WaitForL1Error::is_transient,
+            WaitForSettlementError::is_transient,
         )
         .await;
 
         result.map_err(|error| match error {
             RetryCallbackError::Cancelled => RetryCallbackError::Cancelled,
-            RetryCallbackError::Error(WaitForL1Error::Transport(error)) => {
+            RetryCallbackError::Error(WaitForSettlementError::Transport(error)) => {
                 RetryCallbackError::Error(error)
             }
+            // Defensive only: `is_transient` marks these always-transient, so the
+            // retry helper never returns them terminally. Listing them explicitly
+            // keeps this match exhaustive, so adding a new variant is a compile
+            // error rather than a silent fallthrough. Degrade to a transport error
+            // instead of `unreachable!()` so a future drift cannot panic the
+            // settlement loop.
             RetryCallbackError::Error(
-                WaitForL1Error::NotSettledYet | WaitForL1Error::NotIncludedYet,
+                unexpected @ (WaitForSettlementError::NotSettledYet
+                | WaitForSettlementError::NotIncludedYet),
             ) => {
-                unreachable!("not-ready-yet errors are always transient")
+                error!(?unexpected, "transient signal surfaced as terminal settlement error");
+                RetryCallbackError::Error(TransportErrorKind::custom_str(
+                    "settlement retry returned a transient signal as terminal",
+                ))
             }
         })
     }
@@ -747,13 +757,13 @@ impl<
     async fn check_settlement_once(
         &self,
         tx_hash: SettlementTxHash,
-    ) -> Result<Option<ContractCallResult>, WaitForL1Error> {
+    ) -> Result<Option<ContractCallResult>, WaitForSettlementError> {
         // Read the settlement head first so any later receipt lookup is checked
         // against a head that was already acceptable for the configured policy.
         let settlement_head_number = self.settlement_head_number().await?;
         let Some(settlement_head_number) = settlement_head_number else {
             debug!("Waiting for selected settlement head before checking settlement transaction");
-            return Err(WaitForL1Error::NotSettledYet);
+            return Err(WaitForSettlementError::NotSettledYet);
         };
 
         let provider_tx_hash: TxHash = tx_hash.into();
@@ -776,14 +786,14 @@ impl<
                 settlement_head_number,
                 "Waiting for settlement transaction receipt block hash"
             );
-            return Err(WaitForL1Error::NotSettledYet);
+            return Err(WaitForSettlementError::NotSettledYet);
         };
         let Some(block_number) = receipt.block_number() else {
             debug!(
                 ?block_hash,
                 settlement_head_number, "Waiting for settlement transaction receipt block number"
             );
-            return Err(WaitForL1Error::NotSettledYet);
+            return Err(WaitForSettlementError::NotSettledYet);
         };
 
         let required_head_number =
@@ -795,7 +805,7 @@ impl<
                 required_head_number,
                 "Waiting for settlement transaction finality"
             );
-            return Err(WaitForL1Error::NotSettledYet);
+            return Err(WaitForSettlementError::NotSettledYet);
         }
 
         let canonical_block = self
@@ -809,7 +819,7 @@ impl<
                 settlement_head_number,
                 "Waiting for settlement transaction block to be available"
             );
-            return Err(WaitForL1Error::NotSettledYet);
+            return Err(WaitForSettlementError::NotSettledYet);
         };
 
         // A receipt whose block number no longer resolves to the same canonical
@@ -830,26 +840,26 @@ impl<
         Ok(self.current_result_on_l1_for(tx_hash).await)
     }
 
-    async fn settlement_head_number(&self) -> Result<Option<u64>, WaitForL1Error> {
+    async fn settlement_head_number(&self) -> Result<Option<u64>, WaitForSettlementError> {
         match self.tx_config.settlement_policy {
             SettlementPolicy::LatestBlock => self
                 .provider
                 .get_block_number()
                 .await
                 .map(Some)
-                .map_err(WaitForL1Error::Transport),
+                .map_err(WaitForSettlementError::Transport),
             SettlementPolicy::SafeBlock => self
                 .provider
                 .get_block_by_number(BlockNumberOrTag::Safe)
                 .await
                 .map(|block| block.map(|block| block.header().number()))
-                .map_err(WaitForL1Error::Transport),
+                .map_err(WaitForSettlementError::Transport),
             SettlementPolicy::FinalizedBlock => self
                 .provider
                 .get_block_by_number(BlockNumberOrTag::Finalized)
                 .await
                 .map(|block| block.map(|block| block.header().number()))
-                .map_err(WaitForL1Error::Transport),
+                .map_err(WaitForSettlementError::Transport),
         }
     }
 
