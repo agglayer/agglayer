@@ -47,6 +47,20 @@ mod settlement;
 #[cfg(test)]
 mod tests;
 
+/// Number of migration steps `init_db` performs and records in
+/// `migration_record_v0_cf`. It must equal that recorded step count: the open
+/// gate (`open_migrated_or_create_db`) classifies freshly created storage as
+/// `Current` only when `recorded == DECLARED_MIGRATION_STEPS`.
+///
+/// Update this whenever a migration step is added to or removed from `init_db`
+/// (today: `Builder::open` records step 0 and `ensure_cfs` records step 1). A
+/// stale value cannot cause data loss, but it is not silent: the
+/// `migrated_or_create_state_roundtrips_as_current` test (via
+/// `crate::tests::assert_storage_gate_roundtrips`) creates storage through the
+/// gate and re-opens it, so a wrong value fails in CI rather than rejecting
+/// freshly created storage at node startup.
+const DECLARED_MIGRATION_STEPS: u32 = 2;
+
 /// A logical store for the state.
 pub struct StateStore {
     db: Arc<DB>,
@@ -60,13 +74,34 @@ impl StateStore {
         // and the settlement family. Legacy production snapshots still
         // have only those CFs; running the current binary against them
         // would fail the migration framework's schema gate without this
-        // path. `ensure_cfs` is idempotent: passing the full `STATE_DB`
-        // list creates whatever is missing on disk and is a no-op when
-        // every CF is already present, so legacy V0 DBs converge to the
-        // current schema and existing post-V0 DBs are unaffected.
-        DB::builder(path, cf_definitions::STATE_DB_V0)?
+        // path. Some pre-migration snapshots were already at the current
+        // CF set but still lacked `migration_record_v0_cf`; accept that
+        // exact schema as a second baseline, but keep rejecting partial or
+        // unknown no-record schemas.
+        let builder = match DB::builder(path, cf_definitions::STATE_DB_V0) {
+            Ok(builder) => builder,
+            Err(crate::storage::DBOpenError::UnexpectedSchema) => {
+                DB::builder(path, cf_definitions::STATE_DB)?
+            }
+            Err(error) => return Err(error),
+        };
+
+        // `ensure_cfs` is idempotent: passing the full `STATE_DB` list
+        // creates whatever is missing on disk and is a no-op when every CF
+        // is already present.
+        builder
             .ensure_cfs(cf_definitions::STATE_DB)?
             .finalize(cf_definitions::STATE_DB)
+    }
+
+    pub fn open_migrated_or_create_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
+        crate::storage::open_migrated_or_create(
+            path,
+            cf_definitions::STATE_DB_V0,
+            cf_definitions::STATE_DB,
+            DECLARED_MIGRATION_STEPS,
+            Self::init_db,
+        )
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
@@ -82,6 +117,18 @@ impl StateStore {
         backup_client: BackupClient,
     ) -> Result<Self, crate::storage::DBOpenError> {
         let db = Arc::new(Self::init_db(path)?);
+        Ok(Self {
+            db,
+            backup_client,
+            settlement_write_locks: Mutex::new(HashMap::new()),
+        })
+    }
+
+    pub fn open_migrated_or_create(
+        path: &Path,
+        backup_client: BackupClient,
+    ) -> Result<Self, crate::storage::DBOpenError> {
+        let db = Arc::new(Self::open_migrated_or_create_db(path)?);
         Ok(Self {
             db,
             backup_client,

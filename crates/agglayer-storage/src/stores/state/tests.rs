@@ -95,6 +95,35 @@ fn init_db_is_idempotent_on_current_schema() {
 }
 
 #[test]
+fn init_db_accepts_current_schema_without_migration_record() {
+    let tmp = TempDBDir::new();
+    {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+        let cf_names = cf_definitions::STATE_DB
+            .iter()
+            .map(crate::schema::ColumnDescriptor::name);
+        let _db = rocksdb::DB::open_cf(&options, tmp.path.as_path(), cf_names)
+            .expect("current schema without migration records should be created");
+    }
+
+    let db = StateStore::init_db(tmp.path.as_path())
+        .expect("init_db should accept current schema before migration tracking existed");
+    drop(db);
+
+    let post_cfs: std::collections::BTreeSet<_> =
+        rocksdb::DB::list_cf(&rocksdb::Options::default(), tmp.path.as_path())
+            .expect("list_cf should succeed after init_db")
+            .into_iter()
+            .collect();
+    assert!(
+        post_cfs.contains("migration_record_v0_cf"),
+        "init_db should initialize migration tracking for current-schema DBs; got {post_cfs:?}"
+    );
+}
+
+#[test]
 fn can_retrieve_list_of_network() {
     let tmp = TempDBDir::new();
     let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
@@ -112,6 +141,61 @@ fn can_retrieve_list_of_network() {
     )
     .expect("Unable to put certificate into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);
+}
+
+fn create_raw_state_v0(path: &std::path::Path) {
+    let mut options = rocksdb::Options::default();
+    options.create_if_missing(true);
+    options.create_missing_column_families(true);
+    let descriptors = cf_definitions::STATE_DB_V0
+        .iter()
+        .map(|cf| rocksdb::ColumnFamilyDescriptor::new(cf.name(), rocksdb::Options::default()));
+    let db = rocksdb::DB::open_cf_descriptors(&options, path, descriptors).unwrap();
+    drop(db);
+}
+
+#[test]
+fn migrated_or_create_state_creates_missing_storage() {
+    let tmp = TempDBDir::new();
+    let path = tmp.path.join("state");
+
+    let db = StateStore::open_migrated_or_create_db(&path).unwrap();
+    drop(db);
+
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &path).unwrap();
+    assert!(cfs.contains(
+        &crate::columns::disabled_networks::DisabledNetworksColumn::COLUMN_FAMILY_NAME.to_string()
+    ));
+}
+
+#[test]
+fn migrated_or_create_state_rejects_legacy_storage_without_mutating_it() {
+    let tmp = TempDBDir::new();
+    create_raw_state_v0(&tmp.path);
+
+    let error = match StateStore::open_migrated_or_create_db(&tmp.path) {
+        Ok(_) => panic!("migrated-or-create open should reject legacy state storage"),
+        Err(error) => error,
+    };
+
+    assert!(matches!(
+        error,
+        crate::storage::DBOpenError::StorageNeedsMigration { .. }
+    ));
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), &tmp.path).unwrap();
+    assert!(!cfs.contains(
+        &crate::columns::disabled_networks::DisabledNetworksColumn::COLUMN_FAMILY_NAME.to_string()
+    ));
+}
+
+#[test]
+fn migrated_or_create_state_roundtrips_as_current() {
+    // Guards DECLARED_MIGRATION_STEPS against init_db's actual recorded-step
+    // count: storage created through the gate must re-open through the gate as
+    // Current. If a future change adds or removes a migration step in init_db
+    // without updating DECLARED_MIGRATION_STEPS, this fails in CI instead of
+    // the node rejecting freshly created storage on restart.
+    crate::tests::assert_storage_gate_roundtrips(StateStore::open_migrated_or_create_db);
 }
 
 fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool {
