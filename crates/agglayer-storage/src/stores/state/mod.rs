@@ -47,6 +47,18 @@ mod settlement;
 #[cfg(test)]
 mod tests;
 
+/// Number of migration steps `init_db` performs and records in
+/// `migration_record_v0_cf`. It must equal that recorded step count: the open
+/// gate (`open_migrated_or_create_db`) classifies freshly created storage as
+/// `Current` only when `recorded == DECLARED_MIGRATION_STEPS`.
+///
+/// Update this whenever a migration step is added to or removed from `init_db`
+/// (today: `Builder::open` records step 0 and `ensure_cfs` records step 1). A
+/// stale value cannot cause data loss, but it is not silent: the
+/// `migrated_or_create_state_roundtrips_as_current` test (via
+/// `crate::tests::assert_storage_gate_roundtrips`) creates storage through the
+/// gate and re-opens it, so a wrong value fails in CI rather than rejecting
+/// freshly created storage at node startup.
 const DECLARED_MIGRATION_STEPS: u32 = 2;
 
 /// A logical store for the state.
