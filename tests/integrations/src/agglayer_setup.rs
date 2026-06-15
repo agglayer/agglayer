@@ -1,4 +1,8 @@
-use std::{path::Path, time::Duration};
+use std::{
+    path::Path,
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
 
 use agglayer_config::{log::LogLevel, Config};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
@@ -35,7 +39,17 @@ macro_rules! wait_for_settlement_or_error {
 }
 
 pub async fn start_l1() -> L1Docker {
-    let name = std::thread::current().name().unwrap().replace("::", "_");
+    // nextest runs each test in its own process, and the thread name is not
+    // guaranteed to be unique across those processes, so it cannot name the
+    // Docker container on its own. Combine the process id with a per-process
+    // counter so the container name stays unique even when tests run in parallel
+    // (the `resource-limited` group), avoiding `docker run --name` collisions.
+    static L1_CONTAINER_SEQ: AtomicU64 = AtomicU64::new(0);
+    let name = format!(
+        "agglayer-integration-l1-{}-{}",
+        std::process::id(),
+        L1_CONTAINER_SEQ.fetch_add(1, Ordering::Relaxed),
+    );
     l1_setup::L1Docker::new(name).await
 }
 
