@@ -20,7 +20,10 @@ use tokio_util::sync::CancellationToken;
 use crate::l1_setup::{self, next_available_addr, L1Docker};
 
 const PHRASE: &str = "test test test test test test test test test test test junk";
-const AGGLAYER_RPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+// Generous so node startup can finish when several integration tests (each
+// spinning up a multi-threaded agglayer node) run concurrently under the
+// `resource-limited` nextest group on a loaded CI runner.
+const AGGLAYER_RPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(90);
 const AGGLAYER_RPC_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const CERTIFICATE_STATUS_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const DEFAULT_WAIT_TIMEOUT: Duration = Duration::from_secs(30);

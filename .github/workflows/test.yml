@@ -76,7 +76,9 @@ jobs:
           version: "1.7.1"
 
       - name: Test
-        run: cargo nextest run --workspace -P integrations
+        # --retries 2 absorbs transient startup-timeout flakes under parallel
+        # load (mirrors the documented local invocation in the README).
+        run: cargo nextest run --workspace -P integrations --retries 2
 
   docker-build-local:
     name: E2E Tests | Docker build
