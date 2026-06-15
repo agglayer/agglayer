@@ -109,13 +109,25 @@ enum BuildAttemptError {
     Build(TransactionBuilderError<Ethereum>),
 }
 
-impl BuildAttemptError {
-    fn is_transient(&self) -> bool {
-        match self {
-            Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
-            // Remote signer backends (e.g. GCP KMS) can fail transiently.
-            Self::Build(TransactionBuilderError::Signer(_)) => true,
-            Self::Build(_) => false,
+/// Retry policy for building a settlement attempt. Transport failures retry
+/// while transient; opaque signer-backend failures retry a bounded number of
+/// times (to ride out a transient remote-signer blip without looping forever
+/// on a permanent misconfiguration); structural build errors are permanent.
+struct BuildRetryPolicy {
+    signer_failures: u32,
+}
+
+impl BuildRetryPolicy {
+    const MAX_SIGNER_BUILD_RETRIES: u32 = 3;
+
+    fn should_retry(&mut self, error: &BuildAttemptError) -> bool {
+        match error {
+            BuildAttemptError::Transport(error) => crate::utils::is_transient_alloy_error(error),
+            error if error.is_signer_backend() => {
+                self.signer_failures += 1;
+                self.signer_failures <= Self::MAX_SIGNER_BUILD_RETRIES
+            }
+            BuildAttemptError::Build(_) => false,
         }
     }
 }
@@ -312,13 +324,19 @@ fn resolve_base_gas_params(&self, estimate: &Eip1559Estimation) -> GasParams {
 - Transient L1 RPC failures (nonce/chain id/fees) are retried in-place using
   the configured `retry_on_transient_failure` policy and the existing
   `retry_callback_until_success` helper.
-- Signer-backend failures (`TransactionBuilderError::Signer`) are treated as
-  transient and retried: remote signers such as GCP KMS sign over the network
-  and can fail transiently, so a temporary KMS outage must not stop settlement.
-- Other build failures (`InvalidTransactionRequest`, `UnsupportedSignatureType`)
-  indicate a build bug or misconfiguration; they are non-recoverable, propagate
-  as `RetryCallbackError::Error`, and become a `NonRecoverableError` panic at
-  the call site, matching the run-loop's handling of permanent errors.
+- Opaque signer-backend failures (`TransactionBuilderError::Signer(Error::Other)`,
+  how a remote signer such as GCP KMS surfaces a signing error) are retried a
+  **bounded** number of times (`MAX_SIGNER_BUILD_RETRIES`). This rides out a
+  transient KMS blip without panicking the task, yet a permanent signer
+  misconfiguration (e.g. bad KMS permissions) stops retrying after the bound and
+  surfaces through the non-recoverable path instead of looping until
+  cancellation. The transient-vs-permanent signer distinction is opaque here;
+  a precise classification belongs in the signer backend (follow-up).
+- Structural signer errors (unsupported operation, chain-id mismatch, signature
+  errors) and other build failures (`InvalidTransactionRequest`,
+  `UnsupportedSignatureType`) are non-recoverable immediately: they propagate as
+  `RetryCallbackError::Error` and become a `NonRecoverableError` panic at the
+  call site, matching the run-loop's handling of permanent errors.
 
 ## Testing strategy
 

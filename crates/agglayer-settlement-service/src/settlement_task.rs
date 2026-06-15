@@ -56,15 +56,46 @@ enum BuildAttemptError {
 }
 
 impl BuildAttemptError {
-    fn is_transient(&self) -> bool {
-        match self {
-            Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
-            // Remote signer backends (e.g. GCP KMS) sign over the network and
-            // can fail transiently, so retry signer errors. Missing-field or
-            // unsupported-signature errors indicate a build bug or a
-            // misconfiguration and are not recoverable by retrying.
-            Self::Build(TransactionBuilderError::Signer(_)) => true,
-            Self::Build(_) => false,
+    /// True for an opaque signer-backend failure (e.g. a remote KMS error
+    /// wrapped in [`alloy::signers::Error::Other`]), which may be a transient
+    /// blip or a permanent misconfiguration that cannot be told apart here.
+    fn is_signer_backend(&self) -> bool {
+        matches!(
+            self,
+            Self::Build(TransactionBuilderError::Signer(
+                alloy::signers::Error::Other(_)
+            ))
+        )
+    }
+}
+
+/// Retry policy for building a settlement attempt.
+///
+/// Transport (L1 RPC) failures are retried for as long as they look transient.
+/// Opaque signer-backend failures are retried a bounded number of times — long
+/// enough to ride out a transient remote-signer (e.g. GCP KMS) blip, but not
+/// forever, so a permanent signer misconfiguration eventually surfaces through
+/// the non-recoverable path instead of looping until cancellation. Structural
+/// signer errors and other build failures are non-recoverable immediately.
+struct BuildRetryPolicy {
+    signer_failures: u32,
+}
+
+impl BuildRetryPolicy {
+    const MAX_SIGNER_BUILD_RETRIES: u32 = 3;
+
+    fn new() -> Self {
+        Self { signer_failures: 0 }
+    }
+
+    fn should_retry(&mut self, error: &BuildAttemptError) -> bool {
+        match error {
+            BuildAttemptError::Transport(error) => crate::utils::is_transient_alloy_error(error),
+            error if error.is_signer_backend() => {
+                self.signer_failures += 1;
+                self.signer_failures <= Self::MAX_SIGNER_BUILD_RETRIES
+            }
+            BuildAttemptError::Build(_) => false,
         }
     }
 }
@@ -868,6 +899,7 @@ impl<
     > {
         let wallet = self.provider.default_signer_address();
         let attempt_number = self.next_attempt_number();
+        let mut retry_policy = BuildRetryPolicy::new();
 
         crate::utils::retry_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
@@ -889,7 +921,7 @@ impl<
                     .await?;
                 Ok((wallet, Nonce(nonce), attempt_number, tx))
             },
-            BuildAttemptError::is_transient,
+            |error| retry_policy.should_retry(error),
         )
         .await
     }
@@ -1670,16 +1702,28 @@ mod tests {
     }
 
     #[test]
-    fn build_attempt_error_retries_signer_failures_but_not_build_bugs() {
-        // Remote signer (e.g. KMS) failures are transient and must be retried.
-        let signer_failure = BuildAttemptError::Build(TransactionBuilderError::Signer(
-            alloy::signers::Error::message("transient remote signer failure"),
-        ));
-        assert!(signer_failure.is_transient());
+    fn build_retry_policy_bounds_signer_failures_and_rejects_build_bugs() {
+        // `Error::message` produces an opaque `Error::Other`, mirroring how a
+        // remote signer backend (e.g. GCP KMS) surfaces a signing failure.
+        let signer_failure = || {
+            BuildAttemptError::Build(TransactionBuilderError::Signer(
+                alloy::signers::Error::message("remote signer failure"),
+            ))
+        };
 
-        // A genuine build/validation error is not recoverable by retrying.
-        let build_bug = BuildAttemptError::Build(TransactionBuilderError::UnsupportedSignatureType);
-        assert!(!build_bug.is_transient());
+        // A signer-backend failure is retried up to the bound (to ride out a
+        // transient blip), then surfaces as non-recoverable.
+        let mut policy = BuildRetryPolicy::new();
+        for _ in 0..BuildRetryPolicy::MAX_SIGNER_BUILD_RETRIES {
+            assert!(policy.should_retry(&signer_failure()));
+        }
+        assert!(!policy.should_retry(&signer_failure()));
+
+        // A structural build error is never recoverable by retrying.
+        let mut policy = BuildRetryPolicy::new();
+        assert!(!policy.should_retry(&BuildAttemptError::Build(
+            TransactionBuilderError::UnsupportedSignatureType
+        )));
     }
 
     #[tokio::test]
