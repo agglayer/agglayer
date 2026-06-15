@@ -326,6 +326,37 @@ fn migrated_or_create_epoch_rejects_legacy_storage_without_mutating_it() {
     assert!(!cfs.contains(&CertificatePerIndexProtoColumn::COLUMN_FAMILY_NAME.to_string()));
 }
 
+#[test]
+fn migrated_or_create_epoch_roundtrips_as_current() {
+    // Guards this store's DECLARED_MIGRATION_STEPS against init_db's recorded
+    // step count; see crate::tests::assert_storage_gate_roundtrips.
+    crate::tests::assert_storage_gate_roundtrips(
+        PerEpochStore::<PendingStore, StateStore>::open_migrated_or_create_db,
+    );
+}
+
+#[test]
+fn migrated_readonly_epoch_reports_inspection_failure_for_unreadable_storage() {
+    // The read-only gate must report an inspection failure distinctly, like the
+    // read-write gate, rather than collapsing it into StorageNeedsMigration.
+    let tmp = TempDBDir::new();
+    let path = tmp.path.join("not-rocksdb");
+    std::fs::write(&path, b"not a rocksdb directory").unwrap();
+
+    let error = match PerEpochStore::<PendingStore, StateStore>::open_migrated_readonly_db(&path) {
+        Ok(_) => panic!("unreadable storage must not be opened read-only"),
+        Err(error) => error,
+    };
+
+    assert!(
+        matches!(
+            error,
+            crate::storage::DBOpenError::StorageInspectionFailed { .. }
+        ),
+        "expected StorageInspectionFailed, got {error:?}"
+    );
+}
+
 #[rstest]
 fn can_start_packing_an_unpacked_epoch(store: PerEpochStore<PendingStore, StateStore>) {
     assert!(store.start_packing().is_ok());

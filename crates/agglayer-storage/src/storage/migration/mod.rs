@@ -30,27 +30,39 @@ pub(crate) fn open_migrated_or_create(
     let inspection = inspect_schema(path, cfs_v0, current_cfs, declared_steps);
     match inspection.status {
         SchemaStatus::Missing | SchemaStatus::Empty | SchemaStatus::Current => open(path),
+        status => Err(storage_gate_error(path, status)),
+    }
+}
+
+/// Maps a schema status that is not openable into the appropriate open error.
+///
+/// Shared by the read-write gate ([`open_migrated_or_create`]) and the
+/// read-only gates so that an inspection failure and storage written by a
+/// newer binary are reported distinctly from a genuine migration requirement,
+/// rather than all being collapsed into [`DBOpenError::StorageNeedsMigration`].
+pub(crate) fn storage_gate_error(path: &Path, status: SchemaStatus) -> DBOpenError {
+    match status {
         // A failed inspection is an I/O/permission problem, not a migration
-        // requirement: surface it as such so operators don't run a migration
-        // that cannot fix it.
-        SchemaStatus::Unreadable(reason) => Err(DBOpenError::StorageInspectionFailed {
+        // requirement: surface it so operators don't run a migration that
+        // cannot fix it.
+        SchemaStatus::Unreadable(reason) => DBOpenError::StorageInspectionFailed {
             path: path.to_path_buf(),
             reason,
-        }),
+        },
         // More recorded steps than this binary declares means the storage was
         // written by a newer agglayer-node; the fix is to upgrade the binary,
         // not to migrate forward.
         SchemaStatus::FutureMigrationRecords { declared, recorded } => {
-            Err(DBOpenError::StorageFromNewerVersion {
+            DBOpenError::StorageFromNewerVersion {
                 path: path.to_path_buf(),
                 declared,
                 recorded,
-            })
+            }
         }
-        status => Err(DBOpenError::StorageNeedsMigration {
+        status => DBOpenError::StorageNeedsMigration {
             path: path.to_path_buf(),
             status,
-        }),
+        },
     }
 }
 

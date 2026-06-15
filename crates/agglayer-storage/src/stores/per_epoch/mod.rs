@@ -93,10 +93,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             crate::storage::SchemaStatus::Current => {
                 Ok(DB::open_cf_readonly(path, cf_definitions::EPOCHS_DB)?)
             }
-            status => Err(crate::storage::DBOpenError::StorageNeedsMigration {
-                path: path.to_path_buf(),
-                status,
-            }),
+            status => Err(crate::storage::storage_gate_error(path, status)),
         }
     }
 
