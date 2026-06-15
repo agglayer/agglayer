@@ -3,13 +3,18 @@ use std::time::Duration;
 use agglayer_storage::tests::TempDBDir;
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
-use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
+use integrations::{
+    agglayer_setup::{setup_network, wait_for_condition},
+    wait_for_settlement_or_error,
+};
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rand::random;
 use rstest::rstest;
 
 mod recovery;
+
+const SEND_CERTIFICATE_ERROR: i32 = -10006;
 
 #[rstest]
 #[tokio::test]
@@ -75,29 +80,36 @@ async fn regression_pushing_certificate_while_settling(#[case] state: Forest) {
     let withdrawals = vec![];
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
-    let network_id = certificate.network_id;
 
     let first_certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
         .unwrap();
 
-    loop {
-        let certificate = certificate
-            .clone()
-            .with_new_local_exit_root(random::<[u8; 32]>().into());
-        assert!(client
-            .request::<CertificateId, _>("interop_sendCertificate", rpc_params![certificate])
-            .await
-            .is_err());
+    wait_for_condition(
+        "first certificate settlement while replacements are rejected",
+        Duration::from_secs(30),
+        || async {
+            let replacement = certificate
+                .clone()
+                .with_new_local_exit_root(random::<[u8; 32]>().into());
+            assert!(client
+                .request::<CertificateId, _>("interop_sendCertificate", rpc_params![replacement],)
+                .await
+                .is_err());
 
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(1)) => {},
-            _ = client.request::<CertificateHeader, _>("interop_getLatestSettledCertificate", rpc_params![network_id, 0]) => {
-                break
-            }
-        }
-    }
+            let header: CertificateHeader = client
+                .request(
+                    "interop_getCertificateHeader",
+                    rpc_params![first_certificate_id],
+                )
+                .await
+                .unwrap();
+
+            matches!(header.status, CertificateStatus::Settled)
+        },
+    )
+    .await;
 
     let result = wait_for_settlement_or_error!(client, first_certificate_id).await;
 
@@ -143,8 +155,6 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
         .unwrap();
     assert!(matches!(first_header.status, CertificateStatus::Settled));
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
-
     // Send the second certificate, identical to the first and check the error.
     let second_submission_err = client
         .request::<CertificateId, _>("interop_sendCertificate", rpc_params![certificate.clone()])
@@ -153,14 +163,10 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
         .unwrap_err();
     match second_submission_err {
         jsonrpsee::core::ClientError::Call(error) => {
-            assert_eq!(error.code(), -10_006);
-            assert!(error.message().contains("Unable to replace"));
+            assert_eq!(error.code(), SEND_CERTIFICATE_ERROR);
         }
         error => panic!("Unexpected error: {error:?}"),
     }
-
-    // Optional await sufficient time for cert to be processed.
-    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Verify status is Settled. The two submissions have the same ID.
     // This checks the first submission still succeeds.

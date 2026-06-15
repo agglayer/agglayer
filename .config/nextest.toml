@@ -1,14 +1,17 @@
 [test-groups]
 resource-limited = { max-threads = 4 }
-serial-integration = { max-threads = 1 }
+integration-failpoint = { max-threads = 1 }
 
 [profile.default]
 default-filter = "not package(integrations)"
 
 [profile.integrations]
 default-filter = "package(integrations)"
-threads-required = 3
 
 [[profile.integrations.overrides]]
-filter = 'package(integrations)'
-test-group = 'serial-integration'
+filter = 'package(integrations) and (test(transaction_with_receipt_status_0) or test(transaction_with_receipt_status_0_retry) or test(transaction_with_receipt_timeout_many_times) or test(transaction_with_receipt_timeout_2_times))'
+test-group = 'integration-failpoint'
+
+[[profile.integrations.overrides]]
+filter = 'package(integrations) and not (test(transaction_with_receipt_status_0) or test(transaction_with_receipt_status_0_retry) or test(transaction_with_receipt_timeout_many_times) or test(transaction_with_receipt_timeout_2_times))'
+test-group = 'resource-limited'
