@@ -34,6 +34,9 @@ impl From<&SettlementAttempt> for v0::SettlementAttempt {
             nonce: Some(value.nonce.into()),
             tx_hash: Some(value.hash.into()),
             submission_time: Some(prost_types::Timestamp::from(value.submission_time)),
+            // TODO(Task 2): populate from the attempt's resolved fees.
+            max_fee_per_gas: None,
+            max_priority_fee_per_gas: None,
         }
     }
 }
