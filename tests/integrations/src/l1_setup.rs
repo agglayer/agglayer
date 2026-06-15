@@ -15,12 +15,22 @@ const DEFAULT_ANVIL_FIXTURE: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/anvil-l1/state.hex");
 
 enum L1Instance {
-    Docker { id: String },
+    Docker { _container: DockerContainer },
     Anvil { _instance: AnvilInstance },
 }
 
+/// Owns a running Docker container and removes it on drop.
+///
+/// Holding this from the moment `docker run` succeeds guarantees the container
+/// is cleaned up even if a later setup step (port discovery, RPC/WS readiness)
+/// panics, instead of leaking an orphaned container that keeps holding its
+/// published ports until it is removed manually.
+struct DockerContainer {
+    id: String,
+}
+
 pub struct L1Docker {
-    inner: L1Instance,
+    _inner: L1Instance,
     pub ws: String,
     pub rpc: String,
 }
@@ -52,7 +62,7 @@ impl L1Docker {
         load_anvil_fixture(&rpc).await;
 
         Self {
-            inner: L1Instance::Anvil { _instance: anvil },
+            _inner: L1Instance::Anvil { _instance: anvil },
             ws,
             rpc,
         }
@@ -82,15 +92,24 @@ impl L1Docker {
         }
 
         let id = String::from_utf8(docker.stdout).unwrap().replace('\n', "");
-        let rpc_port = docker_published_port(&id, "8545/tcp").await;
-        let ws_port = docker_published_port(&id, "8546/tcp").await;
+
+        // Take ownership of the container immediately so that a panic in any of
+        // the following setup steps still runs `DockerContainer`'s `Drop` and
+        // removes the container instead of leaking it.
+        let container = DockerContainer { id };
+
+        let rpc_port = docker_published_port(&container.id, "8545/tcp").await;
+        let ws_port = docker_published_port(&container.id, "8546/tcp").await;
         let ws = format!("ws://127.0.0.1:{ws_port}");
         let rpc = format!("http://127.0.0.1:{rpc_port}");
 
         wait_for_rpc(&rpc).await;
+        wait_for_ws(&ws).await;
 
         Self {
-            inner: L1Instance::Docker { id },
+            _inner: L1Instance::Docker {
+                _container: container,
+            },
             ws,
             rpc,
         }
@@ -127,14 +146,16 @@ async fn docker_published_port(id: &str, container_port: &str) -> u16 {
         .unwrap_or_else(|error| panic!("Invalid Docker published port in `{binding}`: {error}"))
 }
 
-impl Drop for L1Docker {
+impl Drop for DockerContainer {
     fn drop(&mut self) {
-        if let L1Instance::Docker { id } = &self.inner {
-            println!("Removing docker container {id}");
-            std::process::Command::new("docker")
-                .args(["rm", "-f", id])
-                .output()
-                .expect("Failed to remove docker container");
+        println!("Removing docker container {}", self.id);
+        // Best-effort cleanup: never panic in `Drop`, because this can run while
+        // unwinding from a setup panic, where a second panic would abort.
+        if let Err(error) = std::process::Command::new("docker")
+            .args(["rm", "-f", &self.id])
+            .output()
+        {
+            eprintln!("Failed to remove docker container {}: {error}", self.id);
         }
     }
 }
@@ -198,6 +219,33 @@ async fn wait_for_rpc(rpc: &str) {
     }
 
     panic!("L1 RPC endpoint never became ready: {rpc}");
+}
+
+/// Waits until the L1 WebSocket endpoint accepts a JSON-RPC request.
+///
+/// The Docker L1 backend publishes the HTTP (8545) and WebSocket (8546) ports
+/// independently, so HTTP readiness does not imply the WS endpoint is up. The
+/// agglayer node connects to L1 over WS at startup (`ws_node_url`) with a short
+/// connect timeout, so startup is gated on WS readiness too to avoid spurious
+/// boot failures when 8545 becomes reachable before 8546.
+async fn wait_for_ws(ws: &str) {
+    use jsonrpsee::{core::client::ClientT as _, rpc_params, ws_client::WsClientBuilder};
+
+    for _ in 0..60 {
+        if let Ok(client) = WsClientBuilder::default().build(ws).await {
+            if client
+                .request::<serde_json::Value, _>("eth_blockNumber", rpc_params![])
+                .await
+                .is_ok()
+            {
+                return;
+            }
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+
+    panic!("L1 WS endpoint never became ready: {ws}");
 }
 
 pub fn next_available_addr() -> std::net::SocketAddr {
