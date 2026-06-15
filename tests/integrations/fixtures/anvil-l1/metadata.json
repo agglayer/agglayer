@@ -1,6 +1,7 @@
 {
   "source_image": "hermeznetwork/geth-zkevm-contracts",
-  "docker_latest_block": 149,
+  "foundry_version": "1.7.1",
+  "docker_latest_block": 148,
   "chain_id": 1337,
   "default_l1_info_root": "0x27ae5ba08d7291c96c8cbddcc148bf48a6d68c7974b94356f53754ef6171d757",
   "generated_with": "tests/integrations/scripts/generate_anvil_l1_fixture.sh",

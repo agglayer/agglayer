@@ -182,8 +182,15 @@ if [ "$init_logs" = '[]' ]; then
     exit 1
 fi
 
+# Record the anvil/foundry version that produced this fixture. anvil_dumpState's
+# serialized format is coupled to the foundry version, so the loader (and CI, via
+# foundry-toolchain in .github/workflows/test.yml) must use a matching anvil.
+anvil_version=$(anvil --version | head -n1)
+anvil_version=${anvil_version##* }
+
 jq -n \
     --arg source_image "$DOCKER_IMAGE" \
+    --arg foundry_version "$anvil_version" \
     --arg latest_block "$latest_block" \
     --arg chain_id '1337' \
     --arg default_l1_info_root "$default_l1_info_root" \
@@ -191,6 +198,7 @@ jq -n \
     --slurpfile deploy_output "$workdir/deploy_output.json" \
     '{
         source_image: $source_image,
+        foundry_version: $foundry_version,
         docker_latest_block: ($latest_block | tonumber),
         chain_id: ($chain_id | tonumber),
         default_l1_info_root: $default_l1_info_root,
