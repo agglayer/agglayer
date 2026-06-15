@@ -38,15 +38,24 @@ fn latest_backup_id(backups: &[BackupEngineInfo]) -> Option<u32> {
     backups.iter().map(|backup| backup.backup_id).max()
 }
 
-async fn wait_for_new_backups(
+/// Waits until the latest state and pending backup ids reach at least the given
+/// values.
+///
+/// Unlike [`wait_for_backup_counts`], this works under aggressive purging
+/// (where the retained backup count stays at 1) because RocksDB backup ids are
+/// monotonic. Each settled certificate produces two backups (one when the L1 tx
+/// hash is known, one when it is settled), so the Nth settled certificate's
+/// durable state has backup id `2 * N`.
+async fn wait_for_backup_ids(
     backup_dir: &std::path::Path,
-    previous_state_backup_id: Option<u32>,
-    previous_pending_backup_id: Option<u32>,
+    minimum_state_backup_id: u32,
+    minimum_pending_backup_id: u32,
 ) {
-    wait_for_condition("new backup generation", Duration::from_secs(30), || async {
+    wait_for_condition("backup id advance", Duration::from_secs(30), || async {
         let backup_report = BackupEngine::list_backups(backup_dir).unwrap();
-        latest_backup_id(backup_report.get_state()) > previous_state_backup_id
-            && latest_backup_id(backup_report.get_pending()) > previous_pending_backup_id
+        latest_backup_id(backup_report.get_state()).is_some_and(|id| id >= minimum_state_backup_id)
+            && latest_backup_id(backup_report.get_pending())
+                .is_some_and(|id| id >= minimum_pending_backup_id)
     })
     .await;
 }
@@ -84,7 +93,11 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    wait_for_backup_counts(&backup_dir.path, 1, 1).await;
+    // Each settled certificate produces two backups (tx-hash known, then
+    // settled). Wait for both so the restore captures the settled state rather
+    // than the earlier tx-hash snapshot, which would leave the certificate
+    // non-Settled after restart.
+    wait_for_backup_counts(&backup_dir.path, 2, 2).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -157,10 +170,10 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    wait_for_backup_counts(&backup_dir.path, 1, 1).await;
-    let first_backup_report = BackupEngine::list_backups(&backup_dir.path).unwrap();
-    let first_state_backup_id = latest_backup_id(first_backup_report.get_state());
-    let first_pending_backup_id = latest_backup_id(first_backup_report.get_pending());
+    // Each settled certificate produces two backups (tx-hash known, then
+    // settled). Wait for certificate1 to be fully backed up (state/pending
+    // backup id >= 2) before sending certificate2.
+    wait_for_backup_ids(&backup_dir.path, 2, 2).await;
 
     let certificate_id2: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2])
@@ -172,15 +185,12 @@ async fn purge_after_n_backup(#[case] state: Forest) {
     assert_eq!(result.status, CertificateStatus::Settled);
 
     // This configuration purges state and pending backups eagerly, so the
-    // backup count can remain at 1 after both settlements. Wait for the latest
-    // backup ids to advance to ensure certificate2 is durably included before
-    // shutting the node down.
-    wait_for_new_backups(
-        &backup_dir.path,
-        first_state_backup_id,
-        first_pending_backup_id,
-    )
-    .await;
+    // retained backup count stays at 1 after both settlements. Backup ids are
+    // monotonic, so wait for certificate2's settled backup (id >= 4) to be
+    // durable before shutting the node down; otherwise the restore can capture
+    // certificate2's pre-settlement (tx-hash) snapshot and the post-restart
+    // status assertion flakes.
+    wait_for_backup_ids(&backup_dir.path, 4, 4).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
