@@ -39,6 +39,7 @@ pub(crate) mod cf_definitions;
 mod tests;
 
 const MAX_CERTIFICATE_PER_EPOCH: u64 = 1;
+const DECLARED_MIGRATION_STEPS: u32 = 2;
 
 /// A logical store for an Epoch.
 pub struct PerEpochStore<PendingStore, StateStore> {
@@ -67,6 +68,35 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         DB::open_cf_readonly(path, cf_definitions::EPOCHS_DB)
     }
 
+    pub fn open_migrated_or_create_db(
+        path: &std::path::Path,
+    ) -> Result<DB, crate::storage::DBOpenError> {
+        crate::storage::open_migrated_or_create(
+            path,
+            cf_definitions::EPOCHS_DB_V0,
+            cf_definitions::EPOCHS_DB,
+            DECLARED_MIGRATION_STEPS,
+            Self::init_db,
+        )
+    }
+
+    pub fn open_migrated_readonly_db(
+        path: &std::path::Path,
+    ) -> Result<DB, crate::storage::DBOpenError> {
+        let inspection = crate::storage::inspect_schema(
+            path,
+            cf_definitions::EPOCHS_DB_V0,
+            cf_definitions::EPOCHS_DB,
+            DECLARED_MIGRATION_STEPS,
+        );
+        match inspection.status {
+            crate::storage::SchemaStatus::Current => {
+                Ok(DB::open_cf_readonly(path, cf_definitions::EPOCHS_DB)?)
+            }
+            status => Err(crate::storage::storage_gate_error(path, status)),
+        }
+    }
+
     #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
     pub fn try_open(
         config: Arc<agglayer_config::Config>,
@@ -77,7 +107,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         backup_client: BackupClient,
     ) -> Result<Self, Error> {
         let db = Arc::new(
-            Self::init_db(&config.storage.epoch_db_path(epoch_number))
+            Self::open_migrated_or_create_db(&config.storage.epoch_db_path(epoch_number))
                 .map_err(Error::DBOpenError)?,
         );
 
@@ -102,9 +132,10 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
     ) -> Result<Self, Error> {
-        let db = Arc::new(Self::init_db_readonly(
-            &config.storage.epoch_db_path(epoch_number),
-        )?);
+        let db = Arc::new(
+            Self::open_migrated_readonly_db(&config.storage.epoch_db_path(epoch_number))
+                .map_err(Error::DBOpenError)?,
+        );
 
         Self::try_open_with_db(
             db,

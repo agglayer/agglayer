@@ -85,8 +85,12 @@ impl Node {
         }
 
         // Initializing storage
-        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path)?);
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path)?);
+        let pending_db = Arc::new(PendingStore::open_migrated_or_create_db(
+            &config.storage.pending_db_path,
+        )?);
+        let state_db = Arc::new(StateStore::open_migrated_or_create_db(
+            &config.storage.state_db_path,
+        )?);
 
         // Initialize backup engine
         let backup_client = if let BackupConfig::Enabled {
@@ -112,7 +116,9 @@ impl Node {
         let state_store = Arc::new(StateStore::new(state_db, backup_client.clone()));
         let pending_store = Arc::new(PendingStore::new(pending_db));
         let debug_store = if config.debug_mode {
-            Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
+            Arc::new(DebugStore::open_migrated_or_create(
+                &config.storage.debug_db_path,
+            )?)
         } else {
             Arc::new(DebugStore::Disabled)
         };
