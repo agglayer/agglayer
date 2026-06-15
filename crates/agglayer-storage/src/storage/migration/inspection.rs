@@ -110,11 +110,6 @@ pub fn inspect_schema(
         return out;
     }
 
-    if data_cfs != legacy && data_cfs != current {
-        out.status = SchemaStatus::UnsupportedSchema;
-        return out;
-    }
-
     let recorded_steps = match recorded_steps(path) {
         Ok(steps) => steps,
         Err(error) => {
@@ -132,11 +127,24 @@ pub fn inspect_schema(
     }
 
     let recorded = u32::try_from(recorded_steps.len()).unwrap_or(u32::MAX);
+
+    // Check for newer-version storage before rejecting unknown CF sets: a
+    // database with more recorded steps than this binary declares was written
+    // by a newer agglayer-node, which may have added column families this
+    // binary does not recognize. Report it as a version mismatch (upgrade the
+    // binary) rather than an unsupported schema or a migration requirement.
     if recorded > declared_steps {
         out.status = SchemaStatus::FutureMigrationRecords {
             declared: declared_steps,
             recorded,
         };
+        return out;
+    }
+
+    // Records are valid and within the declared range, so the CF set must match
+    // a schema this binary recognizes.
+    if data_cfs != legacy && data_cfs != current {
+        out.status = SchemaStatus::UnsupportedSchema;
         return out;
     }
 
@@ -314,7 +322,11 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_schema_with_future_records_is_unsupported() {
+    fn future_records_with_unknown_cfs_report_newer_version() {
+        // An unknown CF set combined with more recorded steps than declared
+        // means a newer binary added that CF in a later migration. The operator
+        // should upgrade, not migrate, so this must be FutureMigrationRecords
+        // (not UnsupportedSchema).
         let tmp = TempDBDir::new();
         create_raw_db(
             &tmp.path,
@@ -339,7 +351,13 @@ mod tests {
         }
         drop(db);
 
-        assert_eq!(inspect(&tmp.path).status, SchemaStatus::UnsupportedSchema);
+        assert_eq!(
+            inspect(&tmp.path).status,
+            SchemaStatus::FutureMigrationRecords {
+                declared: 2,
+                recorded: 3,
+            }
+        );
     }
 
     #[test]
