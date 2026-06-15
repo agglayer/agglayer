@@ -800,13 +800,6 @@ impl<
     }
 
     async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> Result<(), SubmitAttemptError> {
-        // Don't start a new broadcast once shutdown is requested. The retry helper
-        // only observes the token while backing off after a transient error, so
-        // an already-cancelled token would otherwise still send the first tx.
-        if self.control.cancellation_token.is_cancelled() {
-            return Err(SubmitAttemptError::Cancelled);
-        }
-
         // Encode the signed transaction once, consuming the envelope. This is the
         // only thing `send_tx_envelope` does with it before calling
         // `eth_sendRawTransaction`, so each retry can re-broadcast the same bytes
