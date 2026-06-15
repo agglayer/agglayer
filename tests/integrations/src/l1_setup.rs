@@ -14,6 +14,13 @@ const DOCKER_BACKEND: &str = "docker";
 const DEFAULT_ANVIL_FIXTURE: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/anvil-l1/state.hex");
 
+// L1 readiness polling budget: 240 * 250ms = 60s, matching the readiness budget
+// in generate_anvil_l1_fixture.sh so a cold Docker image (the opt-in backend)
+// has time to start. Anvil is ready in well under a second, so the larger cap
+// only affects the Docker path.
+const L1_READY_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+const L1_READY_ATTEMPTS: usize = 240;
+
 enum L1Instance {
     Docker { _container: DockerContainer },
     Anvil { _instance: AnvilInstance },
@@ -202,20 +209,28 @@ async fn load_anvil_fixture(rpc: &str) {
         panic!("Anvil fixture load returned RPC error: {error}");
     }
 
+    // anvil_loadState returns `result: true` on success. A version-incompatible
+    // or empty state blob can yield `result: false` (or a missing result) with a
+    // 200 status and no error field, which would otherwise pass silently and make
+    // later tests fail with confusing "address has no code" errors.
+    if payload.get("result").and_then(serde_json::Value::as_bool) != Some(true) {
+        panic!("Anvil fixture load did not succeed (result was not true): {payload}");
+    }
+
     wait_for_rpc(rpc).await;
 }
 
 async fn wait_for_rpc(rpc: &str) {
     let url = reqwest::Url::parse(rpc).unwrap();
 
-    for _ in 0..60 {
+    for _ in 0..L1_READY_ATTEMPTS {
         let provider = RootProvider::<Ethereum>::new_http(url.clone());
 
         if provider.get_block_number().await.is_ok() {
             return;
         }
 
-        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        tokio::time::sleep(L1_READY_POLL_INTERVAL).await;
     }
 
     panic!("L1 RPC endpoint never became ready: {rpc}");
@@ -231,7 +246,7 @@ async fn wait_for_rpc(rpc: &str) {
 async fn wait_for_ws(ws: &str) {
     use jsonrpsee::{core::client::ClientT as _, rpc_params, ws_client::WsClientBuilder};
 
-    for _ in 0..60 {
+    for _ in 0..L1_READY_ATTEMPTS {
         if let Ok(client) = WsClientBuilder::default().build(ws).await {
             if client
                 .request::<serde_json::Value, _>("eth_blockNumber", rpc_params![])
@@ -242,7 +257,7 @@ async fn wait_for_ws(ws: &str) {
             }
         }
 
-        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        tokio::time::sleep(L1_READY_POLL_INTERVAL).await;
     }
 
     panic!("L1 WS endpoint never became ready: {ws}");
