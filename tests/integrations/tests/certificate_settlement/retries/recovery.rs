@@ -72,29 +72,10 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     // for the second time.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
-
-    // Pin a small, fast settlement config so this test's timing is independent of
-    // the global defaults. #1470 raised the default `confirmations` 1 -> 12 and the
-    // default receipt-wait window is max_retries(30) * retry_interval(10s) = 300s;
-    // when the node is cancelled mid-settlement it keeps retrying the receipt fetch
-    // for that whole window, which outruns the 240s #[timeout]. Each node start
-    // needs its own Config (start_agglayer fills in the L1 URLs).
-    let settlement_config = || {
-        let mut config = agglayer_config::Config::new(&tmp_dir.path);
-        config.outbound.rpc.settle_cert.confirmations = 1;
-        config.outbound.rpc.settle_cert.max_retries = 10;
-        config.outbound.rpc.settle_cert.retry_interval = Duration::from_secs(1);
-        config
-    };
-
     let cancellation_token = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) = setup_network(
-        &tmp_dir.path,
-        Some(settlement_config()),
-        Some(cancellation_token.clone()),
-    )
-    .await;
+    let (agglayer_shutdowned, l1, client) =
+        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
     let imported_bridge_events = vec![];
@@ -113,13 +94,8 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     println!("Node killed for the first time, recovering...");
 
     let cancellation_token = CancellationToken::new();
-    let (agglayer_shutdowned, client, _) = start_agglayer(
-        &tmp_dir.path,
-        &l1,
-        Some(settlement_config()),
-        Some(cancellation_token.clone()),
-    )
-    .await;
+    let (agglayer_shutdowned, client, _) =
+        start_agglayer(&tmp_dir.path, &l1, None, Some(cancellation_token.clone())).await;
 
     fail::cfg_callback(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
@@ -156,8 +132,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     .expect("Failed to configure failpoint");
 
     wait_for_l1_blocks(&l1, 2).await;
-    let (_agglayer_shutdowned, client, _) =
-        start_agglayer(&tmp_dir.path, &l1, Some(settlement_config()), None).await;
+    let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
     println!("Node recovered, waiting for settlement...");
 
