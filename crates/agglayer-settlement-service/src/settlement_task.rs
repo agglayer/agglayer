@@ -13,7 +13,7 @@ use agglayer_types::{
     SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 use alloy::{
-    consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
+    consensus::{BlockHeader as _, EthereumTxEnvelope, Transaction as _, TxEip4844Variant},
     eips::{eip1559::Eip1559Estimation, eip2718::Encodable2718 as _, BlockNumberOrTag},
     network::{
         BlockResponse as _, Ethereum, ReceiptResponse as _, TransactionBuilder as _,
@@ -1103,6 +1103,8 @@ impl<
             nonce,
             hash: SettlementTxHash::from(Digest::from(*tx.tx_hash())),
             submission_time: SystemTime::now(),
+            max_fee_per_gas: tx.max_fee_per_gas(),
+            max_priority_fee_per_gas: tx.max_priority_fee_per_gas().unwrap_or(0),
         };
 
         self.store
@@ -1428,6 +1430,8 @@ mod tests {
                 nonce,
                 hash,
                 submission_time: SystemTime::UNIX_EPOCH,
+                max_fee_per_gas: 0,
+                max_priority_fee_per_gas: 0,
             },
             result,
         }
@@ -1439,6 +1443,8 @@ mod tests {
             nonce,
             hash: mk_tx_hash(seed),
             submission_time: SystemTime::UNIX_EPOCH + Duration::from_secs(seed.into()),
+            max_fee_per_gas: 0,
+            max_priority_fee_per_gas: 0,
         }
     }
 
@@ -1685,6 +1691,8 @@ mod tests {
                         && recorded_attempt.nonce == nonce
                         && recorded_attempt.hash == tx_hash
                         && recorded_attempt.submission_time >= earliest_submission_time
+                        && recorded_attempt.max_fee_per_gas == 100
+                        && recorded_attempt.max_priority_fee_per_gas == 10
                 },
             )
             .return_once(|_, _, _| Ok(()));
@@ -1703,6 +1711,8 @@ mod tests {
         assert_eq!(active_attempt.attempt.nonce, nonce);
         assert_eq!(active_attempt.attempt.hash, tx_hash);
         assert!(active_attempt.result.is_none());
+        assert_eq!(active_attempt.attempt.max_fee_per_gas, 100);
+        assert_eq!(active_attempt.attempt.max_priority_fee_per_gas, 10);
     }
 
     #[tokio::test]
