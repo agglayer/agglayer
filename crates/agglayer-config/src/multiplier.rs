@@ -71,13 +71,16 @@ impl Multiplier {
 
     pub fn saturating_mul_duration(self, duration: Duration) -> Duration {
         Duration::from_millis(
-            (duration
-                .as_millis()
-                .saturating_mul(u128::from(self.as_u64_per_1000()))
-                / 1000)
+            self.saturating_mul_u128(duration.as_millis())
                 .try_into()
                 .unwrap_or(u64::MAX),
         )
+    }
+
+    /// Multiplies `value` by this multiplier (fixed-point, scaled by 1000),
+    /// saturating instead of overflowing.
+    pub fn saturating_mul_u128(self, value: u128) -> u128 {
+        value.saturating_mul(u128::from(self.as_u64_per_1000())) / u128::from(Self::SCALE)
     }
 
     fn scale_f64(x: f64) -> f64 {
