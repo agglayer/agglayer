@@ -977,6 +977,69 @@ impl<
         }
     }
 
+    /// Fees of the most recent recorded attempt for `(wallet, nonce)`, if any.
+    /// Returned as `(max_fee_per_gas, max_priority_fee_per_gas)`.
+    fn latest_attempt_fees_for_nonce(&self, wallet: Address, nonce: Nonce) -> Option<(u128, u128)> {
+        self.attempts
+            .get(&(wallet, nonce))?
+            .iter()
+            .next_back()
+            .map(|(_, active)| {
+                (
+                    active.attempt.max_fee_per_gas,
+                    active.attempt.max_priority_fee_per_gas,
+                )
+            })
+    }
+
+    /// Resolves gas parameters for a retry on an existing nonce, bumping both
+    /// fee fields over the previous attempt while tracking a fresh estimate.
+    ///
+    /// Returns `None` when the configured ceiling prevents a strict,
+    /// node-acceptable bump on either field — the caller then skips submitting
+    /// a duplicate/underpriced replacement.
+    fn bump_gas_params(
+        &self,
+        previous_max_fee_per_gas: u128,
+        previous_max_priority_fee_per_gas: u128,
+        estimate: &Eip1559Estimation,
+    ) -> Option<GasParams> {
+        let config = self.tx_config.as_ref();
+        let base = self.resolve_base_gas_params(estimate);
+
+        let max_fee_per_gas = bump_fee(
+            previous_max_fee_per_gas,
+            base.max_fee_per_gas,
+            config.max_fee_per_gas_multiplier_factor,
+            config.max_fee_per_gas_floor,
+            config.max_fee_per_gas_ceiling,
+        )?;
+
+        let max_priority_fee_per_gas = bump_fee(
+            previous_max_priority_fee_per_gas,
+            base.max_priority_fee_per_gas,
+            config.max_priority_fee_per_gas_multiplier_factor,
+            config.max_priority_fee_per_gas_floor,
+            config.max_priority_fee_per_gas_ceiling,
+        )?;
+
+        // Preserve the EIP-1559 invariant `priority <= max_fee`. If capping
+        // priority to max_fee drops it below its minimum replacement bump, no
+        // valid replacement exists, so signal ceiling-reached.
+        let max_priority_fee_per_gas = max_priority_fee_per_gas.min(max_fee_per_gas);
+        let required_priority_min =
+            MIN_REPLACEMENT_BUMP.saturating_mul_u128(previous_max_priority_fee_per_gas);
+        if max_priority_fee_per_gas < required_priority_min {
+            return None;
+        }
+
+        Some(GasParams {
+            gas_limit: base.gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+        })
+    }
+
     /// Builds and signs an EIP-1559 settlement transaction for [`Self::job`]
     /// with the given wallet, nonce, chain id, and resolved gas parameters.
     ///
@@ -2294,6 +2357,83 @@ mod tests {
 
         assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
         assert_eq!(gas.max_priority_fee_per_gas, gas.max_fee_per_gas);
+    }
+
+    fn bump_config() -> SettlementTransactionConfig {
+        // Wide ceilings so the bump path (not clamping) is exercised.
+        SettlementTransactionConfig {
+            max_fee_per_gas_multiplier_factor: Multiplier::ONE,
+            max_fee_per_gas_floor: 0,
+            max_fee_per_gas_ceiling: 1_000_000_000_000,
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::ONE,
+            max_priority_fee_per_gas_floor: 0,
+            max_priority_fee_per_gas_ceiling: 1_000_000_000_000,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn bump_gas_params_increases_both_fields_at_least_ten_percent() {
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(bump_config());
+
+        // Fresh estimate below the previous attempt: the prev * 1.10 path wins.
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 1_000_000_000,
+            max_priority_fee_per_gas: 100_000_000,
+        };
+        let bumped = task
+            .bump_gas_params(30_000_000_000, 1_000_000_000, &estimate)
+            .expect("bump should succeed below ceiling");
+
+        assert!(bumped.max_fee_per_gas >= 33_000_000_000); // 30 gwei * 1.10
+        assert!(bumped.max_priority_fee_per_gas >= 1_100_000_000); // 1 gwei * 1.10
+        assert!(bumped.max_priority_fee_per_gas <= bumped.max_fee_per_gas);
+        // gas_limit comes from the base resolution (job gas_limit, default 1.0x).
+        assert_eq!(bumped.gas_limit, 100_000);
+    }
+
+    #[test]
+    fn bump_gas_params_returns_none_when_max_fee_ceiling_reached() {
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_ceiling: 30_000_000_000, // == previous max fee
+            max_priority_fee_per_gas_ceiling: 1_000_000_000_000,
+            ..bump_config()
+        };
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(config);
+
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 1_000_000_000,
+            max_priority_fee_per_gas: 100_000_000,
+        };
+        // Previous max fee already sits at the ceiling, so no strict bump exists.
+        assert_eq!(
+            task.bump_gas_params(30_000_000_000, 1_000_000_000, &estimate),
+            None
+        );
+    }
+
+    #[test]
+    fn bump_gas_params_falls_back_to_base_resolution_when_no_previous_fees() {
+        // Zero previous fees model the defensive fallback used when no prior
+        // attempt is recorded; the bump then degrades to the base resolution of
+        // the fresh estimate (required_min = 0, so the fresh value wins).
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(bump_config());
+
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 5_000_000_000,
+            max_priority_fee_per_gas: 2_000_000_000,
+        };
+        let bumped = task
+            .bump_gas_params(0, 0, &estimate)
+            .expect("zero previous degrades to base resolution");
+
+        // bump_config: multiplier 1.0, floor 0, wide ceiling -> base == estimate.
+        assert_eq!(bumped.max_fee_per_gas, 5_000_000_000);
+        assert_eq!(bumped.max_priority_fee_per_gas, 2_000_000_000);
+        assert_eq!(bumped.gas_limit, 100_000);
     }
 
     #[test]
