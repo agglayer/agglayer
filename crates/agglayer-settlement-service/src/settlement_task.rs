@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    future::IntoFuture as _,
     sync::{Arc, OnceLock},
     time::{Duration, SystemTime},
 };
@@ -13,10 +14,14 @@ use agglayer_types::{
 };
 use alloy::{
     consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
-    eips::{eip2718::Encodable2718 as _, BlockNumberOrTag},
-    network::{BlockResponse as _, ReceiptResponse as _},
+    eips::{eip1559::Eip1559Estimation, eip2718::Encodable2718 as _, BlockNumberOrTag},
+    network::{
+        BlockResponse as _, Ethereum, ReceiptResponse as _, TransactionBuilder as _,
+        TransactionBuilderError,
+    },
     primitives::{Address, TxHash},
     providers::{Provider, WalletProvider},
+    rpc::types::TransactionRequest,
     transports::TransportError,
 };
 use eyre::Context as _;
@@ -27,6 +32,74 @@ use tracing::{debug, error, warn};
 use crate::utils::RetryCallbackError;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
+
+/// Fully-resolved gas parameters for a single settlement attempt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct GasParams {
+    gas_limit: u64,
+    max_fee_per_gas: u128,
+    max_priority_fee_per_gas: u128,
+}
+
+/// Clamps `value` into `[floor, ceiling]`. When `floor > ceiling` the ceiling
+/// wins (unlike [`Ord::clamp`], this never panics on an inverted range).
+fn clamp_u128(value: u128, floor: u128, ceiling: u128) -> u128 {
+    value.max(floor).min(ceiling)
+}
+
+/// Error surfaced while building a settlement attempt.
+#[derive(Debug, thiserror::Error)]
+enum BuildAttemptError {
+    #[error("L1 RPC error while building settlement attempt: {0}")]
+    Transport(#[from] TransportError),
+    #[error("failed to build or sign settlement transaction: {0}")]
+    Build(#[from] TransactionBuilderError<Ethereum>),
+}
+
+impl BuildAttemptError {
+    /// True for an opaque signer-backend failure (e.g. a remote KMS error
+    /// wrapped in [`alloy::signers::Error::Other`]), which may be a transient
+    /// blip or a permanent misconfiguration that cannot be told apart here.
+    fn is_signer_backend(&self) -> bool {
+        matches!(
+            self,
+            Self::Build(TransactionBuilderError::Signer(
+                alloy::signers::Error::Other(_)
+            ))
+        )
+    }
+}
+
+/// Retry policy for building a settlement attempt.
+///
+/// Transport (L1 RPC) failures are retried for as long as they look transient.
+/// Opaque signer-backend failures are retried a bounded number of times — long
+/// enough to ride out a transient remote-signer (e.g. GCP KMS) blip, but not
+/// forever, so a permanent signer misconfiguration eventually surfaces through
+/// the non-recoverable path instead of looping until cancellation. Structural
+/// signer errors and other build failures are non-recoverable immediately.
+struct BuildRetryPolicy {
+    signer_failures: u32,
+}
+
+impl BuildRetryPolicy {
+    const MAX_SIGNER_BUILD_RETRIES: u32 = 3;
+
+    fn new() -> Self {
+        Self { signer_failures: 0 }
+    }
+
+    fn should_retry(&mut self, error: &BuildAttemptError) -> bool {
+        match error {
+            BuildAttemptError::Transport(error) => crate::utils::is_transient_alloy_error(error),
+            error if error.is_signer_backend() => {
+                self.signer_failures += 1;
+                self.signer_failures <= Self::MAX_SIGNER_BUILD_RETRIES
+            }
+            BuildAttemptError::Build(_) => false,
+        }
+    }
+}
 
 /// Returns the minimum selected settlement-head block number required for a
 /// transaction receipt to be considered settled.
@@ -486,7 +559,10 @@ impl<
                 // used externally, or that we no longer have the required wallets to bump
                 // pending nonces. So we need to submit a new attempt with a new
                 // nonce.
-                let (wallet, nonce, attempt_number, tx) = self.build_next_attempt_with_new_nonce();
+                let (wallet, nonce, attempt_number, tx) = retry!(
+                    self.build_next_attempt_with_new_nonce().await,
+                    "building next settlement attempt with a new nonce",
+                );
                 if let Some(run_result) = self
                     .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
                     .await
@@ -582,6 +658,17 @@ impl<
                     .map(move |attempt_number| (wallet, nonce, attempt_number))
             })
             .collect()
+    }
+
+    fn next_attempt_number(&self) -> SettlementAttemptNumber {
+        let next = self
+            .attempts
+            .values()
+            .flat_map(|attempts_for_nonce| attempts_for_nonce.keys())
+            .map(|attempt_number| attempt_number.0)
+            .max()
+            .map_or(0, |max| max.saturating_add(1));
+        SettlementAttemptNumber(next)
     }
 
     fn is_any_attempt_pending_for_nonce(&self, wallet: Address, nonce: Nonce) -> bool {
@@ -854,6 +941,69 @@ impl<
         }
     }
 
+    fn resolve_base_gas_params(&self, estimate: &Eip1559Estimation) -> GasParams {
+        let config = self.tx_config.as_ref();
+
+        let max_fee_per_gas = clamp_u128(
+            config
+                .max_fee_per_gas_multiplier_factor
+                .saturating_mul_u128(estimate.max_fee_per_gas),
+            config.max_fee_per_gas_floor,
+            config.max_fee_per_gas_ceiling,
+        );
+        // The priority fee must never exceed the max fee, otherwise the
+        // transaction is invalid. Independent per-field floors/ceilings could
+        // otherwise produce `priority > max_fee` under misconfiguration, so we
+        // cap it here to keep the EIP-1559 invariant at the point of resolution.
+        let max_priority_fee_per_gas = clamp_u128(
+            config
+                .max_priority_fee_per_gas_multiplier_factor
+                .saturating_mul_u128(estimate.max_priority_fee_per_gas),
+            config.max_priority_fee_per_gas_floor,
+            config.max_priority_fee_per_gas_ceiling,
+        )
+        .min(max_fee_per_gas);
+
+        let gas_limit_ceiling = u128::try_from(config.gas_limit_ceiling).unwrap_or(u128::MAX);
+        let gas_limit_u128 = config
+            .gas_limit_multiplier_factor
+            .saturating_mul_u128(self.job.gas_limit)
+            .min(gas_limit_ceiling);
+        let gas_limit = u64::try_from(gas_limit_u128).unwrap_or(u64::MAX);
+
+        GasParams {
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+        }
+    }
+
+    /// Builds and signs an EIP-1559 settlement transaction for [`Self::job`]
+    /// with the given wallet, nonce, chain id, and resolved gas parameters.
+    ///
+    /// `wallet` sets the `from` field and must have a registered signer in the
+    /// provider's wallet; otherwise signing fails with a signer-missing error.
+    async fn build_attempt(
+        &self,
+        wallet: Address,
+        nonce: Nonce,
+        chain_id: u64,
+        gas: GasParams,
+    ) -> Result<TxEnvelope, TransactionBuilderError<Ethereum>> {
+        let request = TransactionRequest::default()
+            .from(wallet)
+            .to(self.job.contract_address.into_alloy())
+            .value(self.job.eth_value)
+            .input(self.job.calldata.clone().into())
+            .nonce(nonce.0)
+            .gas_limit(gas.gas_limit)
+            .max_fee_per_gas(gas.max_fee_per_gas)
+            .max_priority_fee_per_gas(gas.max_priority_fee_per_gas)
+            .with_chain_id(chain_id);
+
+        request.build(self.provider.wallet()).await
+    }
+
     fn build_next_attempt_with_nonce(
         &self,
         _wallet: Address,
@@ -864,12 +1014,44 @@ impl<
         todo!()
     }
 
-    fn build_next_attempt_with_new_nonce(
+    /// Selects a wallet and a fresh nonce, resolves base gas parameters from
+    /// the latest L1 fee estimate, and builds a signed settlement attempt.
+    ///
+    /// Transient L1 RPC failures are retried in place using the configured
+    /// transient-failure policy; a build/sign failure is non-recoverable.
+    async fn build_next_attempt_with_new_nonce(
         &self,
-    ) -> (Address, Nonce, SettlementAttemptNumber, TxEnvelope) {
-        // TODO: Build the next attempt with correct gas and other params. Use https://docs.rs/alloy/latest/alloy/rpc/types/struct.TransactionRequest.html#method.build
-        // XREF: https://github.com/agglayer/agglayer/issues/1318
-        todo!()
+    ) -> Result<
+        (Address, Nonce, SettlementAttemptNumber, TxEnvelope),
+        RetryCallbackError<BuildAttemptError>,
+    > {
+        let wallet = self.provider.default_signer_address();
+        let attempt_number = self.next_attempt_number();
+        let mut retry_policy = BuildRetryPolicy::new();
+
+        crate::utils::retry_callback_until_success(
+            &self.tx_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || async {
+                // These three L1 reads are independent, so fetch them
+                // concurrently to keep each (retried) build to one round-trip.
+                let (nonce, chain_id, estimate) = tokio::try_join!(
+                    self.provider
+                        .get_transaction_count(wallet)
+                        .pending()
+                        .into_future(),
+                    self.provider.get_chain_id().into_future(),
+                    self.provider.estimate_eip1559_fees().into_future(),
+                )?;
+                let gas = self.resolve_base_gas_params(&estimate);
+                let tx = self
+                    .build_attempt(wallet, Nonce(nonce), chain_id, gas)
+                    .await?;
+                Ok((wallet, Nonce(nonce), attempt_number, tx))
+            },
+            |error| retry_policy.should_retry(error),
+        )
+        .await
     }
 
     async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> Result<(), SubmitAttemptError> {
@@ -1170,6 +1352,7 @@ mod tests {
         sync::Arc,
     };
 
+    use agglayer_config::Multiplier;
     use agglayer_storage::{error::Error, tests::mocks::MockStateStore};
     use agglayer_types::{
         ClientError, ClientErrorType, ContractCallOutcome, Digest, SettlementAttemptResult, B256,
@@ -1319,6 +1502,32 @@ mod tests {
             control: mk_control(),
             attempts,
         }
+    }
+
+    #[test]
+    fn next_attempt_number_starts_at_zero_and_increments_past_max() {
+        let store = Arc::new(MockStateStore::new());
+
+        let empty = mk_task(store.clone(), BTreeMap::new());
+        assert_eq!(empty.next_attempt_number(), SettlementAttemptNumber(0));
+
+        let wallet = Address::from([1; 20]);
+        let nonce = Nonce(7);
+        let attempts = BTreeMap::from([(
+            (wallet, nonce),
+            BTreeMap::from([
+                (
+                    SettlementAttemptNumber(2),
+                    mk_active_attempt(wallet, nonce, mk_tx_hash(1), None),
+                ),
+                (
+                    SettlementAttemptNumber(5),
+                    mk_active_attempt(wallet, nonce, mk_tx_hash(2), None),
+                ),
+            ]),
+        )]);
+        let task = mk_task(store, attempts);
+        assert_eq!(task.next_attempt_number(), SettlementAttemptNumber(6));
     }
 
     async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
@@ -2044,5 +2253,204 @@ mod tests {
         // Nothing tracked for the nonce → due immediately, never in the future.
         let deadline = task.next_attempt_deadline_for_nonce(Address::from([9; 20]), Nonce(0));
         assert!(deadline <= SystemTime::now());
+    }
+
+    #[test]
+    fn resolve_base_gas_params_applies_multiplier_floor_and_ceiling() {
+        let config = SettlementTransactionConfig {
+            gas_limit_multiplier_factor: Multiplier::from_u64_per_1000(2000), // 2.0x
+            gas_limit_ceiling: U256::from(150_000u64),
+            max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
+            max_fee_per_gas_floor: 1_000_000_000,    // 1 gwei
+            max_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
+            max_priority_fee_per_gas_floor: 2_000_000_000, // 2 gwei
+            max_priority_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
+            ..Default::default()
+        };
+
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(config);
+        task.job = SettlementJob {
+            gas_limit: 100_000,
+            ..mk_job()
+        };
+
+        // Estimate above the fee ceiling and below the priority floor.
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 80_000_000_000,       // 80 gwei -> clamps to 50 gwei
+            max_priority_fee_per_gas: 100_000_000, // 0.1 gwei -> raised to 2 gwei floor
+        };
+
+        let gas = task.resolve_base_gas_params(&estimate);
+
+        // 100_000 * 2.0 = 200_000, capped to ceiling 150_000.
+        assert_eq!(gas.gas_limit, 150_000);
+        assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
+        assert_eq!(gas.max_priority_fee_per_gas, 2_000_000_000);
+    }
+
+    #[test]
+    fn resolve_base_gas_params_scales_fees_by_multiplier() {
+        // Multipliers scale an estimate that lands strictly inside [floor, ceiling],
+        // so this exercises the multiply path (not just clamping).
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1500), // 1.5x
+            max_fee_per_gas_floor: 1_000_000_000,                                   // 1 gwei
+            max_fee_per_gas_ceiling: 50_000_000_000,                                // 50 gwei
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1500), // 1.5x
+            max_priority_fee_per_gas_floor: 0,
+            max_priority_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
+            ..Default::default()
+        };
+
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(config);
+
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 10_000_000_000,         // 10 gwei * 1.5 -> 15 gwei
+            max_priority_fee_per_gas: 4_000_000_000, // 4 gwei * 1.5 -> 6 gwei
+        };
+
+        let gas = task.resolve_base_gas_params(&estimate);
+
+        assert_eq!(gas.max_fee_per_gas, 15_000_000_000);
+        assert_eq!(gas.max_priority_fee_per_gas, 6_000_000_000);
+    }
+
+    #[test]
+    fn resolve_base_gas_params_caps_priority_fee_at_max_fee() {
+        // A priority floor above the max-fee ceiling would otherwise produce an
+        // invalid `priority > max_fee`; the resolver must cap priority at max_fee.
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
+            max_fee_per_gas_floor: 0,
+            max_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
+            max_priority_fee_per_gas_floor: 60_000_000_000, // 60 gwei (above max-fee ceiling)
+            max_priority_fee_per_gas_ceiling: 100_000_000_000, // 100 gwei
+            ..Default::default()
+        };
+
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(config);
+
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 70_000_000_000, // -> clamps to 50 gwei ceiling
+            max_priority_fee_per_gas: 1_000_000_000, // -> raised to 60 gwei floor, then capped
+        };
+
+        let gas = task.resolve_base_gas_params(&estimate);
+
+        assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
+        assert_eq!(gas.max_priority_fee_per_gas, gas.max_fee_per_gas);
+    }
+
+    #[test]
+    fn build_retry_policy_bounds_signer_failures_and_rejects_build_bugs() {
+        // `Error::message` produces an opaque `Error::Other`, mirroring how a
+        // remote signer backend (e.g. GCP KMS) surfaces a signing failure.
+        let signer_failure = || {
+            BuildAttemptError::Build(TransactionBuilderError::Signer(
+                alloy::signers::Error::message("remote signer failure"),
+            ))
+        };
+
+        // A signer-backend failure is retried up to the bound (to ride out a
+        // transient blip), then surfaces as non-recoverable.
+        let mut policy = BuildRetryPolicy::new();
+        for _ in 0..BuildRetryPolicy::MAX_SIGNER_BUILD_RETRIES {
+            assert!(policy.should_retry(&signer_failure()));
+        }
+        assert!(!policy.should_retry(&signer_failure()));
+
+        // A structural build error is never recoverable by retrying.
+        let mut policy = BuildRetryPolicy::new();
+        assert!(!policy.should_retry(&BuildAttemptError::Build(
+            TransactionBuilderError::UnsupportedSignatureType
+        )));
+    }
+
+    #[tokio::test]
+    async fn build_attempt_produces_signed_eip1559_envelope() {
+        use alloy::consensus::{transaction::SignerRecoverable as _, Transaction as _};
+
+        let task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        let wallet_address = test_signer().address();
+
+        let gas = GasParams {
+            gas_limit: 100_000,
+            max_fee_per_gas: 30_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+
+        let envelope = task
+            .build_attempt(wallet_address, Nonce(9), 1337, gas)
+            .await
+            .expect("attempt should build");
+
+        assert!(matches!(envelope, TxEnvelope::Eip1559(_)));
+        assert_eq!(envelope.nonce(), 9);
+        assert_eq!(envelope.chain_id(), Some(1337));
+        assert_eq!(envelope.gas_limit(), 100_000);
+        assert_eq!(envelope.max_fee_per_gas(), 30_000_000_000);
+        assert_eq!(envelope.max_priority_fee_per_gas(), Some(1_000_000_000));
+        assert_eq!(envelope.value(), mk_job().eth_value);
+        assert_eq!(envelope.input().as_ref(), mk_job().calldata.as_ref());
+        assert_eq!(envelope.to(), Some(mk_job().contract_address.into_alloy()));
+        assert_eq!(envelope.recover_signer().unwrap(), wallet_address);
+    }
+
+    #[tokio::test]
+    async fn build_next_attempt_with_new_nonce_uses_pending_nonce_and_default_wallet() {
+        use alloy::{
+            consensus::Transaction as _, node_bindings::Anvil, providers::ProviderBuilder,
+            rpc::types::TransactionRequest,
+        };
+
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_address = signer.address();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        // Bump the sender's nonce to 2 by mining two transactions.
+        for _ in 0..2 {
+            let tx = TransactionRequest::default()
+                .to(anvil.addresses()[1])
+                .value(U256::from(1));
+            provider
+                .send_transaction(tx)
+                .await
+                .unwrap()
+                .get_receipt()
+                .await
+                .unwrap();
+        }
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts: BTreeMap::new(),
+        };
+
+        let (used_wallet, nonce, attempt_number, envelope) = task
+            .build_next_attempt_with_new_nonce()
+            .await
+            .expect("attempt should build");
+
+        assert_eq!(used_wallet, wallet_address);
+        assert_eq!(nonce, Nonce(2));
+        assert_eq!(attempt_number, SettlementAttemptNumber(0));
+        assert_eq!(envelope.nonce(), 2);
+        assert_eq!(envelope.to(), Some(mk_job().contract_address.into_alloy()));
+        assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
+        // Fees are within the configured bounds (defaults: floor 0, ceiling 100 gwei).
+        assert!(envelope.max_fee_per_gas() <= 100_000_000_000);
     }
 }
