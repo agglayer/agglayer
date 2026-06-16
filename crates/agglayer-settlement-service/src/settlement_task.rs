@@ -5,7 +5,10 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use agglayer_config::settlement_service::{SettlementPolicy, SettlementTransactionConfig};
+use agglayer_config::{
+    settlement_service::{SettlementPolicy, SettlementTransactionConfig},
+    Multiplier,
+};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
@@ -45,6 +48,33 @@ struct GasParams {
 /// wins (unlike [`Ord::clamp`], this never panics on an inverted range).
 fn clamp_u128(value: u128, floor: u128, ceiling: u128) -> u128 {
     value.max(floor).min(ceiling)
+}
+
+/// Minimum replacement bump accepted by standard execution-layer clients
+/// (geth's default `txpool.pricebump` of 10%), expressed as a multiplier.
+const MIN_REPLACEMENT_BUMP: Multiplier = Multiplier::from_u64_per_1000(1100);
+
+/// Increases one EIP-1559 fee field relative to `previous`, while tracking a
+/// rising network `fresh_adjusted` estimate and clamping to `[floor, ceiling]`.
+///
+/// The effective multiplier is at least [`MIN_REPLACEMENT_BUMP`], so a returned
+/// value is always `>= previous * 1.10` — enough for a standard node to accept
+/// the replacement. Returns `None` when the ceiling caps the result below that
+/// minimum, i.e. the fee can no longer be strictly bumped.
+fn bump_fee(
+    previous: u128,
+    fresh_adjusted: u128,
+    configured_multiplier: Multiplier,
+    floor: u128,
+    ceiling: u128,
+) -> Option<u128> {
+    let effective_multiplier = configured_multiplier.max(MIN_REPLACEMENT_BUMP);
+    let required_min = MIN_REPLACEMENT_BUMP.saturating_mul_u128(previous);
+    let target = effective_multiplier
+        .saturating_mul_u128(previous)
+        .max(fresh_adjusted);
+    let bumped = clamp_u128(target, floor, ceiling);
+    (bumped >= required_min).then_some(bumped)
 }
 
 /// Error surfaced while building a settlement attempt.
@@ -2372,5 +2402,37 @@ mod tests {
         assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
         // Fees are within the configured bounds (defaults: floor 0, ceiling 100 gwei).
         assert!(envelope.max_fee_per_gas() <= 100_000_000_000);
+    }
+
+    #[test]
+    fn bump_fee_enforces_minimum_replacement_bump_with_default_multiplier() {
+        // Default multiplier is 1.0; the helper must still bump by >= 10%.
+        assert_eq!(bump_fee(100, 0, Multiplier::ONE, 0, u128::MAX), Some(110));
+    }
+
+    #[test]
+    fn bump_fee_tracks_rising_fresh_estimate() {
+        // A higher fresh estimate wins over prev * effective_multiplier.
+        assert_eq!(
+            bump_fee(100, 200, Multiplier::from_u64_per_1000(1100), 0, u128::MAX),
+            Some(200)
+        );
+    }
+
+    #[test]
+    fn bump_fee_returns_none_when_ceiling_forbids_strict_bump() {
+        // Ceiling 105 caps below prev * 1.10 = 110, so no valid replacement.
+        assert_eq!(bump_fee(100, 0, Multiplier::ONE, 0, 105), None);
+    }
+
+    #[test]
+    fn bump_fee_applies_floor_and_honours_larger_configured_multiplier() {
+        // Floor raises the result above the minimum bump.
+        assert_eq!(bump_fee(100, 0, Multiplier::ONE, 500, u128::MAX), Some(500));
+        // A configured multiplier larger than the 10% minimum is used as-is.
+        assert_eq!(
+            bump_fee(100, 0, Multiplier::from_u64_per_1000(2000), 0, u128::MAX),
+            Some(200)
+        );
     }
 }
