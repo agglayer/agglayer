@@ -140,6 +140,21 @@ pub(crate) async fn tx_hash_on_l1_for_nonce(
         .then(|| SettlementTxHash::from(tx.tx_hash())))
 }
 
+/// Builds an Anvil-backed L1 provider signing with its first funded account.
+#[cfg(test)]
+pub(crate) fn build_provider(
+    anvil: &alloy::node_bindings::AnvilInstance,
+) -> impl Provider + alloy::providers::WalletProvider + 'static {
+    use alloy::{
+        network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner,
+    };
+
+    let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+    ProviderBuilder::new()
+        .wallet(EthereumWallet::from(signer))
+        .connect_http(anvil.endpoint_url())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -156,12 +171,10 @@ mod tests {
     use agglayer_config::Multiplier;
     use alloy::{
         consensus::Transaction as _,
-        network::EthereumWallet,
-        node_bindings::{Anvil, AnvilInstance},
+        node_bindings::Anvil,
         primitives::U256,
         providers::{Provider, ProviderBuilder},
         rpc::types::TransactionRequest,
-        signers::local::PrivateKeySigner,
         transports::{RpcError, TransportError},
     };
     use tokio::time::{advance, Instant};
@@ -194,13 +207,6 @@ mod tests {
     }
 
     impl Error for PermanentTestError {}
-
-    fn build_provider(anvil: &AnvilInstance) -> impl Provider {
-        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
-        ProviderBuilder::new()
-            .wallet(EthereumWallet::from(signer))
-            .connect_http(anvil.endpoint_url())
-    }
 
     fn retry_policy(
         initial_interval: Duration,

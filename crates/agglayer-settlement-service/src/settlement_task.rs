@@ -22,7 +22,7 @@ use alloy::{
     primitives::{Address, TxHash},
     providers::{Provider, WalletProvider},
     rpc::types::TransactionRequest,
-    transports::TransportError,
+    transports::{TransportError, TransportErrorKind},
 };
 use eyre::Context as _;
 use tokio::sync::mpsc;
@@ -150,16 +150,19 @@ fn submission_outcome(
     }
 }
 
+/// Error returned by the L1 polling callbacks; the "not yet" variants are
+/// transient and tell the retry loop to keep polling.
 #[derive(Debug)]
 enum WaitForSettlementError {
     NotSettledYet,
+    NotIncludedYet,
     Transport(TransportError),
 }
 
 impl WaitForSettlementError {
     fn is_transient(&self) -> bool {
         match self {
-            Self::NotSettledYet => true,
+            Self::NotSettledYet | Self::NotIncludedYet => true,
             Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
         }
     }
@@ -170,6 +173,7 @@ impl From<TransportError> for WaitForSettlementError {
         Self::Transport(error)
     }
 }
+
 #[derive(Debug, thiserror::Error)]
 #[error(
     "assumed non-recoverable in settlement task {settlement_task_id} at {file}:{line}: \
@@ -404,6 +408,7 @@ impl<
             // helper markers.
             let mut nonces_used_externally = BTreeMap::new();
             let mut reverts = BTreeMap::new();
+            let mut not_included_on_l1 = BTreeSet::new();
             let mut all_nonces_seen_on_l1 = true;
             let mut need_to_submit_attempt_with_new_nonce = true;
             'nonces: for (wallet, nonce) in self.all_used_nonces() {
@@ -448,6 +453,7 @@ impl<
                     // If the nonce is not used on L1, we'll need to either wait more or submit a
                     // new attempt with the same nonce.
                     all_nonces_seen_on_l1 = false;
+                    not_included_on_l1.insert((wallet, nonce));
                     if !self.is_wallet_privkey_known(wallet) {
                         continue 'nonces; // we don't have access to the wallet
                                           // any longer, so it makes no sense to
@@ -563,6 +569,7 @@ impl<
                     self.build_next_attempt_with_new_nonce().await,
                     "building next settlement attempt with a new nonce",
                 );
+                not_included_on_l1.insert((wallet, nonce));
                 if let Some(run_result) = self
                     .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
                     .await
@@ -577,7 +584,9 @@ impl<
                 .expect("There is at least one attempt but no deadline")
                 .duration_since(SystemTime::now())
                 .unwrap_or_else(|_| Duration::from_secs(0));
-            let _ = tokio::time::timeout(timeout, self.wait_for_any_nonce_on_l1()).await;
+            let _ =
+                tokio::time::timeout(timeout, self.wait_for_any_nonce_on_l1(&not_included_on_l1))
+                    .await;
         }
     }
 
@@ -768,11 +777,30 @@ impl<
             .min()
     }
 
-    async fn wait_for_any_nonce_on_l1(&self) {
-        // TODO: wait for any nonce from our known list to be included on L1 (not
-        // settled, just included) Use retry_alloy_callback_until_success as needed
-        // XREF: https://github.com/agglayer/agglayer/issues/1314
-        todo!()
+    /// Polls L1 until one of the `pending` (not-yet-included) nonces is mined.
+    /// Watching only the pending set lets the run loop wake on a *new*
+    /// inclusion rather than returning instantly on an already-included
+    /// nonce.
+    async fn wait_for_any_nonce_on_l1(&self, pending: &BTreeSet<(Address, Nonce)>) {
+        // Result discarded: the caller wraps this in a timeout and re-queries under
+        // `retry!` in `'start`, which escalates non-recoverable errors there.
+        let _ = crate::utils::retry_callback_until_success(
+            &self.tx_config.retry_on_not_included_on_l1,
+            &self.control.cancellation_token,
+            || async move {
+                for &(wallet, nonce) in pending {
+                    if crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce)
+                        .await?
+                        .is_some()
+                    {
+                        return Ok(());
+                    }
+                }
+                Err(WaitForSettlementError::NotIncludedYet)
+            },
+            WaitForSettlementError::is_transient,
+        )
+        .await;
     }
 
     async fn tx_hash_on_l1_for_nonce(
@@ -817,8 +845,23 @@ impl<
             RetryCallbackError::Error(WaitForSettlementError::Transport(error)) => {
                 RetryCallbackError::Error(error)
             }
-            RetryCallbackError::Error(WaitForSettlementError::NotSettledYet) => {
-                unreachable!("not-settled-yet errors are always transient")
+            // Defensive only: `is_transient` marks these always-transient, so the
+            // retry helper never returns them terminally. Listing them explicitly
+            // keeps this match exhaustive, so adding a new variant is a compile
+            // error rather than a silent fallthrough. Degrade to a transport error
+            // instead of `unreachable!()` so a future drift cannot panic the
+            // settlement loop.
+            RetryCallbackError::Error(
+                unexpected @ (WaitForSettlementError::NotSettledYet
+                | WaitForSettlementError::NotIncludedYet),
+            ) => {
+                error!(
+                    ?unexpected,
+                    "transient signal surfaced as terminal settlement error"
+                );
+                RetryCallbackError::Error(TransportErrorKind::custom_str(
+                    "settlement retry returned a transient signal as terminal",
+                ))
             }
         })
     }
@@ -1372,6 +1415,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::*;
+    use crate::utils::build_provider;
 
     fn test_signer() -> PrivateKeySigner {
         PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key")
@@ -1501,6 +1545,21 @@ mod tests {
             store,
             control: mk_control(),
             attempts,
+        }
+    }
+
+    fn mk_task_with_provider<P: Provider + WalletProvider + 'static>(
+        provider: P,
+        tx_config: SettlementTransactionConfig,
+    ) -> SettlementTask<P, MockStateStore> {
+        SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(tx_config),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts: BTreeMap::new(),
         }
     }
 
@@ -2072,6 +2131,55 @@ mod tests {
         assert!(error
             .to_string()
             .contains("without a recorded settlement attempt"));
+    }
+
+    #[tokio::test]
+    async fn wait_for_any_nonce_on_l1_returns_when_a_pending_nonce_is_included() {
+        let anvil = Anvil::new().spawn();
+        let sender = anvil.addresses()[0];
+        let provider = build_provider(&anvil);
+        provider
+            .send_transaction(TransactionRequest::default().to(anvil.addresses()[1]))
+            .await
+            .expect("send transaction")
+            .get_receipt()
+            .await
+            .expect("get receipt");
+
+        // The zero address sorts first and is never mined, so the wait must skip it
+        // and still resolve on the mined (sender, Nonce(0)).
+        let pending = BTreeSet::from([(Address::ZERO, Nonce(0)), (sender, Nonce(0))]);
+        let task = mk_task_with_provider(provider, SettlementTransactionConfig::default());
+
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            task.wait_for_any_nonce_on_l1(&pending),
+        )
+        .await
+        .expect("wait should return once a pending nonce is included");
+    }
+
+    #[tokio::test]
+    async fn wait_for_any_nonce_on_l1_keeps_waiting_when_no_pending_nonce_is_included() {
+        let anvil = Anvil::new().spawn();
+        let sender = anvil.addresses()[0];
+        let provider = build_provider(&anvil);
+
+        // No matching tx is mined. A large non-inclusion interval keeps the first
+        // poll's backoff longer than the timeout. `start_paused` is unusable here:
+        // Anvil uses real I/O and the paused clock would auto-advance the sleep.
+        let mut tx_config = SettlementTransactionConfig::default();
+        tx_config.retry_on_not_included_on_l1.initial_interval = Duration::from_secs(3600);
+
+        let pending = BTreeSet::from([(sender, Nonce(5))]);
+        let task = mk_task_with_provider(provider, tx_config);
+
+        assert!(tokio::time::timeout(
+            Duration::from_millis(300),
+            task.wait_for_any_nonce_on_l1(&pending)
+        )
+        .await
+        .is_err());
     }
 
     #[test]
