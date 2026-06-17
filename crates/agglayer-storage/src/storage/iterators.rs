@@ -1,5 +1,3 @@
-use tracing::debug;
-
 use super::DBError;
 use crate::schema::{Codec as _, ColumnSchema};
 
@@ -19,6 +17,10 @@ pub struct KeysIterator<'a, C: ColumnSchema> {
     status: IteratorStatus,
     direction: rocksdb::Direction,
     _phantom: std::marker::PhantomData<C>,
+}
+
+fn invalid_iterator_error(status: Result<(), rocksdb::Error>) -> Option<DBError> {
+    status.err().map(Into::into)
 }
 
 // Related issue: https://github.com/rust-lang/rust-clippy/issues/12908
@@ -58,7 +60,7 @@ impl<C: ColumnSchema> Iterator for KeysIterator<'_, C> {
         if !self.iter.valid() {
             self.status = IteratorStatus::Done;
 
-            return None;
+            return invalid_iterator_error(self.iter.status()).map(Err);
         }
 
         self.iter
@@ -115,13 +117,31 @@ impl<C: ColumnSchema> Iterator for ColumnIterator<'_, C> {
         // If the iterator is invalid, return None
         if !self.iter.valid() {
             self.status = IteratorStatus::Done;
-            if let Err(error) = self.iter.status() {
-                debug!("Invalid iterator {}", error);
-            }
 
-            return None;
+            return invalid_iterator_error(self.iter.status()).map(Err);
         }
 
         self.parse_key_value().transpose()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::TempDBDir;
+
+    #[test]
+    fn invalid_iterator_error_converts_rocksdb_status() {
+        let tmp = TempDBDir::new();
+        let missing_path = tmp.path.join("missing-rocksdb");
+        let rocksdb_error =
+            rocksdb::DB::open_for_read_only(&rocksdb::Options::default(), missing_path, false)
+                .expect_err("opening a missing DB read-only should fail");
+
+        let error = invalid_iterator_error(Err(rocksdb_error))
+            .expect("rocksdb status error should be propagated");
+
+        assert!(matches!(error, DBError::RocksDB(_)));
+        assert!(error.to_string().contains("RocksDB error"));
     }
 }
