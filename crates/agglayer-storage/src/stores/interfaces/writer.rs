@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementJobId,
+    SettlementTxHash,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -68,6 +69,17 @@ pub trait StateWriter: Send + Sync {
     ) -> Result<(), Error>;
 
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error>;
+
+    /// Inserts the settlement job id associated with `certificate_id`.
+    ///
+    /// This is an insert-only operation and must fail if `certificate_id`
+    /// already has a stored settlement job id. The settlement job must already
+    /// exist.
+    fn insert_certificate_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<(), Error>;
 
     fn insert_certificate_header(
         &self,
