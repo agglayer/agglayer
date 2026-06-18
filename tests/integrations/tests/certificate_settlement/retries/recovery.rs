@@ -97,9 +97,9 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     let (agglayer_shutdowned, client, _) =
         start_agglayer(&tmp_dir.path, &l1, None, Some(cancellation_token.clone())).await;
 
-    fail::cfg_callback(
-        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
-        move || cancellation_token.cancel(),
+    fail::cfg(
+        "network_task::make_progress::settlement_submitted",
+        "panic(killing node)",
     )
     .expect("Failed to configure failpoint");
 
@@ -125,11 +125,8 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     println!("Node killed for the second time, recovering...");
 
-    fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
-        "off",
-    )
-    .expect("Failed to configure failpoint");
+    fail::cfg("network_task::make_progress::settlement_submitted", "off")
+        .expect("Failed to configure failpoint");
 
     wait_for_l1_blocks(&l1, 2).await;
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
