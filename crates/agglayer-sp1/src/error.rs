@@ -30,6 +30,20 @@ pub enum ProofError {
         #[source]
         source: bincode::Error,
     },
+
+    #[error("failed to serialize SP1 proof bytes for version `{version}`: {source}")]
+    SerializeSp1Proof {
+        version: String,
+        #[source]
+        source: bincode::Error,
+    },
+
+    #[error("failed to serialize SP1 verifying key bytes for version `{version}`: {source}")]
+    SerializeSp1Vkey {
+        version: String,
+        #[source]
+        source: bincode::Error,
+    },
 }
 
 impl ProofError {
@@ -42,7 +56,9 @@ impl ProofError {
             | Self::UnsupportedExecutableSp1Version { .. }
             | Self::UnsupportedWritableSp1Version { .. }
             | Self::DeserializeSp1Proof { .. }
-            | Self::DeserializeSp1Vkey { .. } => None,
+            | Self::DeserializeSp1Vkey { .. }
+            | Self::SerializeSp1Proof { .. }
+            | Self::SerializeSp1Vkey { .. } => None,
         }
     }
 
@@ -54,7 +70,9 @@ impl ProofError {
             | Self::UnsupportedExecutableSp1Version { version }
             | Self::UnsupportedWritableSp1Version { version }
             | Self::DeserializeSp1Proof { version, .. }
-            | Self::DeserializeSp1Vkey { version, .. } => Some(version),
+            | Self::DeserializeSp1Vkey { version, .. }
+            | Self::SerializeSp1Proof { version, .. }
+            | Self::SerializeSp1Vkey { version, .. } => Some(version),
             Self::InvalidSp1Version { .. } => None,
         }
     }

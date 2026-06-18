@@ -14,7 +14,7 @@ use crate::schema::{
 pub(crate) mod iterators;
 mod migration;
 
-pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError};
+pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError, DbAccess};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
@@ -57,7 +57,15 @@ impl DB {
         options.create_if_missing(false); // Don't create if missing in readonly mode
         options.create_missing_column_families(false); // Don't create missing column families
 
-        let descriptors: Vec<_> = cfs.iter().map(Self::descriptor).collect();
+        let descriptors: Vec<_> = match rocksdb::DB::list_cf(&options, path) {
+            Ok(names) => names
+                .into_iter()
+                .filter(|name| name != rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
+                .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
+                .collect(),
+            Err(_) => cfs.iter().map(Self::descriptor).collect(),
+        };
+
         Ok(DB {
             rocksdb: rocksdb::DB::open_cf_descriptors_read_only(
                 &options,
@@ -222,6 +230,17 @@ impl DB {
         }
 
         Ok(ColumnIterator::new(iterator, direction))
+    }
+
+    pub(crate) fn prefix_iterator<C: ColumnSchema, P: Codec>(
+        &self,
+        prefix: &P,
+    ) -> Result<ColumnIterator<'_, C>, DBError> {
+        let cf = self.cf::<C>()?;
+        let prefix = prefix.encode()?;
+        let iterator = self.rocksdb.prefix_iterator_cf(&cf, prefix).into();
+
+        Ok(ColumnIterator::new(iterator, Direction::Forward))
     }
 
     pub(crate) fn delete<C: ColumnSchema>(&self, key: &C::Key) -> Result<(), DBError> {

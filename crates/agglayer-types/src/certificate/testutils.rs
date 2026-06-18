@@ -244,42 +244,10 @@ pub enum AggchainDataType {
     MultisigAndAggchainProof { num_signers: usize },
 }
 
-/// Empty ELF file for testing purposes.
-/// This is a minimal ELF that can be used to create dummy SP1 proofs in tests.
-pub const EMPTY_ELF: &[u8] = include_bytes!("tests/empty.elf");
-
-/// Create a dummy STARK proof for testing purposes with a specific SP1 version.
-pub fn dummy_sp1_stark_proof_with_version(
-    version: &str,
-) -> agglayer_interop_types::aggchain_proof::Proof {
-    use sp1_sdk::Prover;
-
-    let (proof, vkey) = {
-        let client = sp1_sdk::ProverClient::builder().mock().build();
-        let (proving_key, verif_key) = client.setup(EMPTY_ELF);
-        let dummy_proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
-            &proving_key,
-            sp1_sdk::SP1PublicValues::new(),
-            sp1_sdk::SP1ProofMode::Compressed,
-            sp1_sdk::SP1_CIRCUIT_VERSION,
-        );
-        let proof = dummy_proof.proof.try_as_compressed().unwrap();
-        (proof, verif_key)
-    };
-
-    agglayer_interop_types::aggchain_proof::Proof::SP1Stark(
-        agglayer_interop_types::aggchain_proof::SP1StarkWithContext {
-            proof,
-            vkey,
-            version: version.to_owned(),
-        },
-    )
-}
-
 /// Create a dummy STARK proof for testing purposes.
 /// This creates a minimal SP1 proof that can be used in tests.
 fn create_dummy_stark_proof() -> agglayer_interop_types::aggchain_proof::Proof {
-    dummy_sp1_stark_proof_with_version("test")
+    agglayer_sp1::testutils::dummy_sp1_stark_proof_with_version("test")
 }
 
 impl Certificate {

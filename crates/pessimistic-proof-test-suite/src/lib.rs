@@ -14,7 +14,7 @@ pub const PESSIMISTIC_PROOF_ELF: &[u8] = pessimistic_proof::ELF;
 
 /// The Aggchain proof ECDSA ELF example.
 pub const AGGCHAIN_PROOF_ECDSA_ELF: &[u8] =
-    include_bytes!("../aggchain-proof-ecdsa-example/program/elf/riscv32im-succinct-zkvm-elf");
+    include_bytes!("../aggchain-proof-ecdsa-example/program/elf/riscv64im-succinct-zkvm-elf");
 
 pub async fn compute_program_vkey(program: &'static [u8]) -> eyre::Result<String> {
     let vkey = prover_executor::Executor::compute_program_vkey(program)

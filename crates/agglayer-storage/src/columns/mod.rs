@@ -9,6 +9,7 @@ pub const BALANCE_TREE_PER_NETWORK_CF: &str = "balance_tree_per_network_cf";
 pub const LOCAL_EXIT_TREE_PER_NETWORK_CF: &str = "local_exit_tree_per_network_cf";
 pub const NETWORK_INFO_CF: &str = "network_info_cf";
 pub const DISABLED_NETWORKS_CF: &str = "disabled_networks_cf";
+pub const CERTIFICATE_SETTLEMENT_JOB_CF: &str = "certificate_settlement_job_cf";
 
 // Metadata CFs
 pub const CERTIFICATE_HEADER_CF: &str = "certificate_header_cf";
@@ -22,6 +23,7 @@ pub const METADATA_CF: &str = "metadata_cf";
 
 // epochs related CFs
 pub const PER_EPOCH_CERTIFICATES_CF: &str = "per_epoch_certificates_cf";
+pub const PER_EPOCH_CERTIFICATES_PROTO_CF: &str = "per_epoch_certificates_proto_cf";
 pub const PER_EPOCH_METADATA_CF: &str = "per_epoch_metadata_cf";
 pub const PER_EPOCH_PROOFS_CF: &str = "per_epoch_proofs_cf";
 pub const PER_EPOCH_END_CHECKPOINT_CF: &str = "per_epoch_end_checkpoint_cf";
@@ -37,14 +39,21 @@ pub const SETTLEMENT_JOB_RESULTS_CF: &str = "settlement_job_results_cf";
 pub const SETTLEMENT_ATTEMPTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
     prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
-        size: 16, // settlement_job_id (Ulid)
+        size: crate::types::settlement::attempt::Key::PREFIX_LEN,
+    },
+};
+
+pub const SETTLEMENT_ATTEMPT_RESULTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
+    compression: crate::schema::options::ColumnCompressionType::Lz4,
+    prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
+        size: crate::types::settlement::attempt::Key::PREFIX_LEN,
     },
 };
 
 pub const SETTLEMENT_ATTEMPT_PER_WALLET_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
     prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
-        size: 28, // address (20 bytes) + nonce (u64)
+        size: crate::types::settlement::attempt_per_wallet::Key::PREFIX_LEN,
     },
 };
 
@@ -58,14 +67,17 @@ pub const CHECKPOINT_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
 
 // Pending related CFs
 pub const PENDING_QUEUE_CF: &str = "pending_queue_cf";
+pub const PENDING_QUEUE_PROTO_CF: &str = "pending_queue_proto_cf";
 pub const PROOF_PER_CERTIFICATE_CF: &str = "proof_per_certificate_cf";
 
 // debug CFs
 pub const DEBUG_CERTIFICATES_CF: &str = "debug_certificates";
+pub const DEBUG_CERTIFICATES_PROTO_CF: &str = "debug_certificates_proto_cf";
 
 // State
 pub(crate) mod balance_tree_per_network;
 pub(crate) mod certificate_per_network;
+pub(crate) mod certificate_settlement_job;
 pub(crate) mod disabled_networks;
 pub(crate) mod local_exit_tree_per_network;
 pub(crate) mod network_info;

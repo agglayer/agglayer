@@ -1,5 +1,7 @@
+use agglayer_interop_types_v13 as legacy_interop_types_v13;
+use agglayer_sp1::ProofExt as _;
 use agglayer_types::{
-    aggchain_proof::{AggchainProof, MultisigPayload, Proof, SP1StarkWithContext},
+    aggchain_proof::{AggchainData, AggchainProof, MultisigPayload, Proof},
     bincode, Address, Digest, U256,
 };
 use alloy_primitives::Bytes;
@@ -8,7 +10,6 @@ use pessimistic_proof::unified_bridge::{
     ImportedBridgeExit, L1InfoTreeLeaf, L1InfoTreeLeafInner, LeafType, MerkleProof, TokenInfo,
 };
 use pessimistic_proof_test_suite::sample_data;
-use sp1_sdk::Prover;
 
 use super::*;
 use crate::{schema::Codec, types::generated::agglayer::storage::v0 as proto};
@@ -16,8 +17,6 @@ use crate::{schema::Codec, types::generated::agglayer::storage::v0 as proto};
 mod header;
 mod status;
 mod structure;
-
-const EMPTY_ELF: &[u8] = include_bytes!("empty.elf");
 
 #[rstest::rstest]
 #[case(0.into(), [0, 0, 0, 0])]
@@ -37,6 +36,22 @@ fn load_sample_bytes(filename: &str) -> Vec<u8> {
     hex::decode(std::fs::read(path).unwrap().trim_ascii()).unwrap()
 }
 
+impl PartialEq for AggchainDataV1<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        bincode::default().serialize(self).unwrap() == bincode::default().serialize(other).unwrap()
+    }
+}
+
+impl Eq for AggchainDataV1<'_> {}
+
+impl PartialEq for CertificateV1<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        bincode::default().serialize(self).unwrap() == bincode::default().serialize(other).unwrap()
+    }
+}
+
+impl Eq for CertificateV1<'_> {}
+
 impl From<NetworkId> for NetworkIdV0 {
     fn from(value: NetworkId) -> Self {
         let [b3, b2, b1, b0] = value.to_u32().to_be_bytes();
@@ -55,24 +70,34 @@ fn digest(byte: u8) -> Digest {
     Digest([byte; 32])
 }
 
-fn mock_sp1_proof(version: &str) -> Proof {
-    let client = sp1_sdk::ProverClient::builder().mock().build();
+const EMPTY_ELF: &[u8] = agglayer_types::testutils::EMPTY_ELF_V5;
+
+fn legacy_sp1_proof(version: &str) -> legacy_interop_types_v13::aggchain_proof::Proof {
+    use sp1_sdk_v5::Prover as _;
+
+    let client = sp1_sdk_v5::ProverClient::builder().mock().build();
     let (proving_key, vkey) = client.setup(EMPTY_ELF);
-    let proof = sp1_sdk::SP1ProofWithPublicValues::create_mock_proof(
+    let proof = sp1_sdk_v5::SP1ProofWithPublicValues::create_mock_proof(
         &proving_key,
-        sp1_sdk::SP1PublicValues::new(),
-        sp1_sdk::SP1ProofMode::Compressed,
-        sp1_sdk::SP1_CIRCUIT_VERSION,
+        sp1_sdk_v5::SP1PublicValues::new(),
+        sp1_sdk_v5::SP1ProofMode::Compressed,
+        sp1_sdk_v5::SP1_CIRCUIT_VERSION,
     )
     .proof
     .try_as_compressed()
     .unwrap();
 
-    Proof::SP1Stark(SP1StarkWithContext {
-        proof,
-        vkey,
-        version: version.to_owned(),
-    })
+    legacy_interop_types_v13::aggchain_proof::Proof::SP1Stark(
+        legacy_interop_types_v13::aggchain_proof::SP1StarkWithContext {
+            proof,
+            vkey,
+            version: version.to_owned(),
+        },
+    )
+}
+
+fn mock_sp1_proof(version: &str) -> Proof {
+    agglayer_types::testutils::dummy_sp1_stark_proof_with_version(version)
 }
 
 fn proto_aggchain_data(aggchain_data: AggchainData) -> proto::AggchainData {
@@ -177,8 +202,8 @@ fn proto_certificate(aggchain_data: proto::AggchainData) -> proto::Certificate {
 }
 
 impl AggchainDataV1<'static> {
-    fn proof0() -> Proof {
-        mock_sp1_proof("1.2.3")
+    fn proof0() -> legacy_interop_types_v13::aggchain_proof::Proof {
+        legacy_sp1_proof(sp1_sdk_v5::SP1_CIRCUIT_VERSION)
     }
 
     fn aggchain_proof_public_values0(aggchain_params: Digest) -> AggchainProofPublicValues {
@@ -346,81 +371,6 @@ impl CertificateV1<'static> {
     }
 }
 
-impl CertificateV1<'_> {
-    fn into_owned(self) -> CertificateV1<'static> {
-        let Self {
-            version,
-            network_id,
-            height,
-            prev_local_exit_root,
-            new_local_exit_root,
-            bridge_exits,
-            imported_bridge_exits,
-            aggchain_data,
-            metadata,
-            custom_chain_data,
-            l1_info_tree_leaf_count,
-        } = self;
-
-        CertificateV1 {
-            version,
-            network_id,
-            height,
-            prev_local_exit_root,
-            new_local_exit_root,
-            bridge_exits: bridge_exits.into_owned().into(),
-            imported_bridge_exits: imported_bridge_exits.into_owned().into(),
-            aggchain_data: match aggchain_data {
-                AggchainDataV1::ECDSA { signature } => AggchainDataV1::ECDSA { signature },
-                AggchainDataV1::GenericNoSignature {
-                    proof,
-                    aggchain_params,
-                } => AggchainDataV1::GenericNoSignature {
-                    proof: Cow::Owned(proof.into_owned()),
-                    aggchain_params,
-                },
-                AggchainDataV1::GenericWithSignature {
-                    proof,
-                    aggchain_params,
-                    signature,
-                } => AggchainDataV1::GenericWithSignature {
-                    proof: Cow::Owned(proof.into_owned()),
-                    aggchain_params,
-                    signature: Cow::Owned(signature.into_owned()),
-                },
-                AggchainDataV1::GenericWithPublicValues {
-                    proof,
-                    aggchain_params,
-                    signature,
-                    public_values,
-                } => AggchainDataV1::GenericWithPublicValues {
-                    proof: Cow::Owned(proof.into_owned()),
-                    aggchain_params,
-                    signature,
-                    public_values: Cow::Owned(public_values.into_owned()),
-                },
-                AggchainDataV1::MultisigOnly { multisig } => AggchainDataV1::MultisigOnly {
-                    multisig: Cow::Owned(multisig.into_owned()),
-                },
-                AggchainDataV1::MultisigAndAggchainProof {
-                    multisig,
-                    proof,
-                    aggchain_params,
-                    public_values,
-                } => AggchainDataV1::MultisigAndAggchainProof {
-                    multisig: Cow::Owned(multisig.into_owned()),
-                    proof: Cow::Owned(proof.into_owned()),
-                    aggchain_params,
-                    public_values: public_values.map(|pv| Cow::Owned(pv.into_owned())),
-                },
-            },
-            metadata,
-            custom_chain_data: Cow::Owned(custom_chain_data.into_owned()),
-            l1_info_tree_leaf_count,
-        }
-    }
-}
-
 #[rstest::rstest]
 #[case(CertificateV0::test0(), &[0x00, 0x00, 0x00, 55])]
 #[case(CertificateV0::test0().with_network_id(0x123456.into()), &[0x00, 0x12, 0x34, 0x56])]
@@ -430,19 +380,53 @@ fn encoding_starts_with(#[case] cert: impl Serialize, #[case] start: &[u8]) {
     assert!(bytes.starts_with(start));
 }
 
+// SP1 v6 made the legacy `CertificateV1` → `Certificate` conversion fallible
+// (`TryFrom`) and dropped the `From<&Certificate> for CertificateV1` impl, so
+// the synthesised round-trip case is no longer expressible. The
+// pre-existing fixtures still exercise the legacy CF decode path.
 #[rstest::rstest]
-#[case(CertificateV0::test0())]
-#[case(CertificateV1::test0())]
-#[case(CertificateV1::test1())]
-#[case(CertificateV1::test4())]
-#[case(CertificateV1::test5())]
-#[case(CertificateV1::from(&Certificate::new_for_test(74.into(), Height::new(998))).into_owned())]
-fn encoding_roundtrip_consistent_with_into(#[case] orig: impl Into<Certificate> + Serialize) {
+#[case(CertificateV0::test0(), Certificate::from(CertificateV0::test0()))]
+#[case(CertificateV1::test0(), Certificate::try_from(CertificateV1::test0()).unwrap())]
+#[case(CertificateV1::test1(), Certificate::try_from(CertificateV1::test1()).unwrap())]
+#[case(CertificateV1::test4(), Certificate::try_from(CertificateV1::test4()).unwrap())]
+#[case(CertificateV1::test5(), Certificate::try_from(CertificateV1::test5()).unwrap())]
+fn legacy_decoding_roundtrip_consistent_with_into<T>(
+    #[case] orig: T,
+    #[case] converted: Certificate,
+) where
+    T: Serialize,
+{
     let bytes = bincode_codec().serialize(&orig).unwrap();
-    let decoded = Certificate::decode(&bytes).unwrap();
-    let converted = orig.into();
+    let decoded = LegacyCertificate::decode(&bytes).unwrap();
 
-    assert_eq!(converted, decoded);
+    assert_eq!(converted, Certificate::from(decoded));
+}
+
+/// Regression test for the storage-v1 migration boundary: legacy v5 proof
+/// bytes must remain readable by downstream `agglayer-sp1` hash helpers after
+/// decoding a stored V1 certificate row.
+#[test]
+fn regression_certificate_v1_decode_preserves_legacy_v5_vkey_hash() {
+    use sp1_sdk_v5::HashableKey as _;
+
+    let certificate = CertificateV1::test1();
+    let expected = match &certificate.aggchain_data {
+        AggchainDataV1::GenericWithSignature { proof, .. } => match proof.as_ref() {
+            legacy_interop_types_v13::aggchain_proof::Proof::SP1Stark(proof) => {
+                proof.vkey.hash_bytes()
+            }
+        },
+        _ => panic!("expected GenericWithSignature fixture"),
+    };
+
+    let bytes = bincode_codec().serialize(&certificate).unwrap();
+    let decoded = Certificate::from(LegacyCertificate::decode(&bytes).unwrap());
+    let proof = match &decoded.aggchain_data {
+        AggchainData::Generic { proof, .. } => proof,
+        _ => panic!("expected Generic aggchain data after V1 decode"),
+    };
+
+    assert_eq!(proof.vkey_hash_bytes().unwrap(), expected);
 }
 
 #[rstest::rstest]
@@ -480,55 +464,84 @@ where
 #[case("n15-cert_h1")]
 #[case("n15-cert_h2")]
 #[case("n15-cert_h3")]
-fn cert_in_v0_format_decodes(#[case] cert_name: &str) {
+fn legacy_cert_in_v0_format_decodes(#[case] cert_name: &str) {
     let from_json = sample_data::load_certificate(&format!("{cert_name}.json"));
 
     let bytes = load_sample_bytes(&format!("encoded/v0-{cert_name}.hex"));
-    let from_bytes = Certificate::decode(&bytes).expect("v0 certificate to decode successfully");
+    let from_bytes =
+        LegacyCertificate::decode(&bytes).expect("v0 certificate to decode successfully");
 
-    assert_eq!(from_bytes, from_json);
+    assert_eq!(Certificate::from(from_bytes), from_json);
 }
 
 #[rstest::rstest]
 #[case::regression_01("encoded/regression_01.hex")]
 #[case::regression_02("encoded/regression_02.hex")]
-fn regressions(#[case] cert_filename: &str) {
+fn legacy_regressions(#[case] cert_filename: &str) {
     let bytes = load_sample_bytes(cert_filename);
-    let _certificate = Certificate::decode(&bytes).expect("decoding failed");
+    let _legacy = LegacyCertificate::decode(&bytes).expect("legacy decoding failed");
 }
 
 #[test]
-fn bad_format() {
-    const NEXT_VERSION: u8 = 2;
-
+fn legacy_certificate_decode_per_byte_dispatch() {
+    // Empty input is rejected explicitly.
     assert!(matches!(
-        Certificate::decode(&[]).unwrap_err(),
+        LegacyCertificate::decode(&[]).unwrap_err(),
         CodecError::CertificateEmpty
     ));
 
-    for v in 0..NEXT_VERSION {
-        assert!(matches!(
-            Certificate::decode(&[v]).unwrap_err(),
-            CodecError::Serialization(_)
-        ));
+    // Bytes 0 and 1 enter the bincode path; with no payload, bincode
+    // produces a serialization error.
+    for v in 0..=1 {
+        assert!(
+            matches!(
+                LegacyCertificate::decode(&[v]).unwrap_err(),
+                CodecError::Serialization(_)
+            ),
+            "expected bincode serialization error for byte {v:#x}"
+        );
     }
 
-    for v in NEXT_VERSION..=u8::MAX {
-        match Certificate::decode(&[v]).unwrap_err() {
-            CodecError::BadCertificateVersion { version } => assert_eq!(version, v),
-            err => panic!("Unexpected error: {err:?}"),
-        }
+    // Other bytes enter the proto path. The legacy CF carried proto rows
+    // before the proto CF split, so this branch must be live. With no
+    // payload the proto decoder either rejects the bytes outright or
+    // produces a default-valued message that fails `Certificate::try_from`.
+    for v in 2..=u8::MAX {
+        let err = LegacyCertificate::decode(&[v]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                CodecError::ProtobufDeserialization(_) | CodecError::Conversion(_)
+            ),
+            "expected proto decode/conversion error for byte {v:#x}, got {err:?}"
+        );
     }
+}
+
+#[test]
+fn certificate_proto_decode_rejects_empty_bytes() {
+    // The proto codec must not silently accept zero-length payloads as a
+    // legacy fallback. A real proto-encoded certificate always contains the
+    // required `prev_local_exit_root`/`new_local_exit_root` fields, so an
+    // empty input is unambiguously corrupt.
+    let err = <Certificate as crate::schema::Codec>::decode(&[]).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CodecError::Conversion(_) | CodecError::ProtobufDeserialization(_)
+        ),
+        "unexpected error variant: {err:?}"
+    );
 }
 
 /// Smoke test: malformed bytes must surface as a recoverable `CodecError`,
 /// never as a process-level panic. Covers the common case where bincode
 /// returns its own error (no panic reached).
 #[test]
-fn decode_of_corrupt_bytes_returns_codec_error() {
+fn legacy_decode_of_corrupt_bytes_returns_codec_error() {
     // A valid v1 version byte followed by junk that bincode rejects.
     let bytes = [0x01u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-    let err = <Certificate as crate::schema::Codec>::decode(&bytes)
+    let err = <LegacyCertificate as crate::schema::Codec>::decode(&bytes)
         .expect_err("expected decode to fail, not panic");
     assert!(
         matches!(err, crate::schema::CodecError::Serialization(_)),
@@ -689,7 +702,7 @@ fn certificate_proto_rejects_malformed_nested_submessages() {
 #[test]
 fn legacy_v0_decode_proto_roundtrip_stays_lossless() {
     let bytes = load_sample_bytes("encoded/v0-n15-cert_h0.hex");
-    let typed = Certificate::decode(&bytes).unwrap();
+    let typed = Certificate::from(LegacyCertificate::decode(&bytes).unwrap());
 
     let proto = proto::Certificate::try_from(&typed).unwrap();
     let roundtrip = Certificate::try_from(proto).unwrap();

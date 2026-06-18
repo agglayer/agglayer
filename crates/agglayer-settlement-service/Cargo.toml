@@ -13,6 +13,8 @@ alloy.workspace = true
 derive_more.workspace = true
 educe.workspace = true
 eyre.workspace = true
+rand.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tower.workspace = true
@@ -20,8 +22,10 @@ tracing.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]
+agglayer-storage = { workspace = true, features = ["testutils"] }
 alloy = { workspace = true, features = ["node-bindings"] }
-tokio = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true
