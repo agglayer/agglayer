@@ -48,6 +48,12 @@ mock! {
             certificate_id: &CertificateId,
         ) -> Result<(), Error>;
 
+        fn insert_certificate_settlement_job_id(
+            &self,
+            certificate_id: &CertificateId,
+            settlement_job_id: &SettlementJobId,
+        ) -> Result<(), Error>;
+
         fn assign_certificate_to_epoch(
             &self,
             certificate_id: &CertificateId,
@@ -105,6 +111,11 @@ mock! {
             &self,
             certificate_id: &CertificateId,
         ) -> Result<Option<CertificateHeader>, Error>;
+
+        fn get_certificate_settlement_job_id(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<Option<SettlementJobId>, Error>;
 
         fn get_certificate_header_by_cursor(
             &self,
