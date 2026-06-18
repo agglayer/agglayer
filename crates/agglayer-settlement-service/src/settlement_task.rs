@@ -732,11 +732,42 @@ impl<
         self.provider.has_signer_for(&wallet)
     }
 
-    fn next_attempt_deadline_for_nonce(&self, _wallet: Address, _nonce: Nonce) -> SystemTime {
-        // TODO: use already-available timeout config to define the next attempt
-        // deadline, considering both RPC-level retry for ClientErrors and
-        // non-inclusion-level retry for the others
-        todo!()
+    /// Returns when the next attempt for `(wallet, nonce)` is due: the most
+    /// recent attempt's submission time plus exponential backoff (the fast
+    /// transient policy after an RPC `ClientError`, else the slower
+    /// non-inclusion policy). Returns `now` when no attempt is tracked.
+    fn next_attempt_deadline_for_nonce(&self, wallet: Address, nonce: Nonce) -> SystemTime {
+        let Some(attempts_for_nonce) = self.attempts.get(&(wallet, nonce)) else {
+            return SystemTime::now();
+        };
+        let Some((_, last_attempt)) = attempts_for_nonce.last_key_value() else {
+            return SystemTime::now();
+        };
+
+        // RPC-level failures retry on the fast transient policy; an attempt still
+        // pending inclusion on L1 retries on the slow non-inclusion policy.
+        let policy = match last_attempt.result {
+            Some(SettlementAttemptResult::ClientError(_)) => {
+                &self.tx_config.retry_on_transient_failure
+            }
+            _ => &self.tx_config.retry_on_not_included_on_l1,
+        };
+
+        // Exponential backoff matching `retry_callback_until_success`: the n-th
+        // attempt waits `initial * multiplier^(n-1)`, capped per step at max_interval.
+        let retries = attempts_for_nonce.len().saturating_sub(1) as u64;
+        let interval = (0..retries).fold(policy.initial_interval, |interval, _| {
+            policy
+                .interval_multiplier_factor
+                .saturating_mul_duration(interval)
+                .min(policy.max_interval)
+        });
+
+        last_attempt
+            .attempt
+            .submission_time
+            .checked_add(interval)
+            .unwrap_or(last_attempt.attempt.submission_time)
     }
 
     fn next_overall_deadline(&self) -> Option<SystemTime> {
@@ -1380,6 +1411,7 @@ mod tests {
         signers::local::PrivateKeySigner,
         transports::TransportErrorKind,
     };
+    use rstest::rstest;
     use tokio::sync::mpsc;
 
     use super::*;
@@ -2271,6 +2303,64 @@ mod tests {
             broadcast_tx.is_none(),
             "a cancelled submission must not broadcast the transaction"
         );
+    }
+
+    /// Tracks the given per-attempt results under one `(wallet, nonce)`, every
+    /// attempt stamped at `UNIX_EPOCH` so deadlines read as seconds past epoch.
+    fn attempts_with_results(
+        wallet: Address,
+        nonce: Nonce,
+        results: impl IntoIterator<Item = Option<SettlementAttemptResult>>,
+    ) -> ActiveSettlementAttempts {
+        let for_nonce: BTreeMap<_, _> = results
+            .into_iter()
+            .enumerate()
+            .map(|(i, result)| {
+                let attempt = mk_active_attempt(wallet, nonce, mk_tx_hash(i as u8), result);
+                (SettlementAttemptNumber(i as u64), attempt)
+            })
+            .collect();
+        let mut attempts = ActiveSettlementAttempts::new();
+        attempts.insert((wallet, nonce), for_nonce);
+        attempts
+    }
+
+    // Per-attempt results → expected seconds after the last submission. The policy
+    // comes from the *last* attempt's result, then backs off
+    // `initial * multiplier^(attempts - 1)`, capped at max_interval.
+    // Defaults: transient 10s/x1.5/120s, non-inclusion 60s/x2/600s.
+    #[rstest]
+    #[case::pending(vec![None], 60)]
+    #[case::rpc_error(vec![Some(mk_client_error(1))], 10)]
+    #[case::backoff(vec![None, None, None], 240)]
+    #[case::capped(vec![None; 20], 600)]
+    #[case::last_attempt_wins(vec![Some(mk_client_error(1)), None], 120)]
+    fn deadline_is_last_submission_plus_policy_backoff(
+        #[case] results: Vec<Option<SettlementAttemptResult>>,
+        #[case] expected_secs: u64,
+    ) {
+        let wallet = Address::from([9; 20]);
+        let nonce = Nonce(0);
+        let task = mk_task(
+            Arc::new(MockStateStore::new()),
+            attempts_with_results(wallet, nonce, results),
+        );
+        assert_eq!(
+            task.next_attempt_deadline_for_nonce(wallet, nonce),
+            SystemTime::UNIX_EPOCH + Duration::from_secs(expected_secs),
+        );
+    }
+
+    #[test]
+    fn deadline_without_attempts_is_due_now() {
+        let task = mk_task(
+            Arc::new(MockStateStore::new()),
+            ActiveSettlementAttempts::new(),
+        );
+
+        // Nothing tracked for the nonce → due immediately, never in the future.
+        let deadline = task.next_attempt_deadline_for_nonce(Address::from([9; 20]), Nonce(0));
+        assert!(deadline <= SystemTime::now());
     }
 
     #[test]
