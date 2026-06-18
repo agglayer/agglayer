@@ -106,14 +106,26 @@ fn get_certificate_settlement_job_id_returns_none_when_missing() {
 }
 
 #[test]
-fn insert_certificate_settlement_job_id_requires_existing_job() {
-    let (_tmp, _db, store) = setup_store();
+fn insert_certificate_settlement_job_id_allows_missing_job() {
+    let (_tmp, db, store) = setup_store();
     let certificate_id = mk_certificate_id(2);
     let job_id = mk_job_id(200);
 
-    let res = store.insert_certificate_settlement_job_id(&certificate_id, &job_id);
+    store
+        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
+        .expect("mapping insert must not require an existing job");
 
-    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+    assert_eq!(
+        db.get::<CertificateSettlementJobColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(job_id)
+    );
+
+    assert_eq!(
+        db.get::<SettlementJobsColumn>(&job_id)
+            .expect("Unable to read stored value"),
+        None
+    );
 }
 
 #[test]
