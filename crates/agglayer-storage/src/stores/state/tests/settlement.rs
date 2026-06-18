@@ -4,20 +4,24 @@ use std::{
 };
 
 use agglayer_types::{
-    Address, ClientError, ClientErrorType, Digest, Nonce, SettlementAttempt,
+    Address, CertificateId, ClientError, ClientErrorType, Digest, Nonce, SettlementAttempt,
     SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementTxHash, U256,
 };
 
 use crate::{
     backup::BackupClient,
     columns::{
+        certificate_settlement_job::CertificateSettlementJobColumn,
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
     },
     error::Error,
-    stores::{state::StateStore, SettlementReader as _, SettlementWriter as _},
+    stores::{
+        state::StateStore, SettlementReader as _, SettlementWriter as _, StateReader as _,
+        StateWriter as _,
+    },
     tests::TempDBDir,
     types::{
         generated::agglayer::storage::v0,
@@ -32,6 +36,10 @@ use crate::{
 
 fn mk_job_id(seed: u128) -> SettlementJobId {
     SettlementJobId::from(seed)
+}
+
+fn mk_certificate_id(seed: u8) -> CertificateId {
+    CertificateId::new(Digest::from([seed; 32]))
 }
 
 fn mk_settlement_job(seed: u8) -> SettlementJob {
@@ -84,6 +92,77 @@ fn insert_settlement_job_duplicate_fails() {
         db.get::<SettlementJobsColumn>(&job_id)
             .expect("Unable to read stored value"),
         Some((&first).into())
+    );
+}
+
+#[test]
+fn get_certificate_settlement_job_id_returns_none_when_missing() {
+    let (_tmp, _db, store) = setup_store();
+
+    assert_eq!(
+        store
+            .get_certificate_settlement_job_id(&mk_certificate_id(1))
+            .expect("read must succeed"),
+        None
+    );
+}
+
+#[test]
+fn insert_certificate_settlement_job_id_requires_existing_job() {
+    let (_tmp, _db, store) = setup_store();
+    let certificate_id = mk_certificate_id(2);
+    let job_id = mk_job_id(200);
+
+    let res = store.insert_certificate_settlement_job_id(&certificate_id, &job_id);
+
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+}
+
+#[test]
+fn insert_certificate_settlement_job_id_returns_value_after_insert() {
+    let (_tmp, _db, store) = setup_store();
+    let certificate_id = mk_certificate_id(3);
+    let job_id = mk_job_id(300);
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(3))
+        .expect("job insert must succeed");
+    store
+        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
+        .expect("mapping insert must succeed");
+
+    assert_eq!(
+        store
+            .get_certificate_settlement_job_id(&certificate_id)
+            .expect("read must succeed"),
+        Some(job_id)
+    );
+}
+
+#[test]
+fn insert_certificate_settlement_job_id_duplicate_fails() {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(4);
+    let first_job_id = mk_job_id(400);
+    let second_job_id = mk_job_id(401);
+
+    store
+        .insert_settlement_job(&first_job_id, &mk_settlement_job(4))
+        .expect("first job insert must succeed");
+    store
+        .insert_settlement_job(&second_job_id, &mk_settlement_job(5))
+        .expect("second job insert must succeed");
+    store
+        .insert_certificate_settlement_job_id(&certificate_id, &first_job_id)
+        .expect("first mapping insert must succeed");
+
+    let res = store.insert_certificate_settlement_job_id(&certificate_id, &second_job_id);
+
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+    assert_eq!(
+        db.get::<CertificateSettlementJobColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(first_job_id)
     );
 }
 
