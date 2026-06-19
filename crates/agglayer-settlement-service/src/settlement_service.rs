@@ -16,6 +16,62 @@ use crate::settlement_task::{
 
 const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 
+type ResultWatchersMap =
+    Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>;
+type TaskControlsMap = Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>;
+
+async fn remove_job_from_active_tracking(
+    job_id: SettlementJobId,
+    result_watchers: &ResultWatchersMap,
+    task_controls: &TaskControlsMap,
+) {
+    result_watchers.lock().await.remove(&job_id);
+    task_controls.lock().await.remove(&job_id);
+}
+
+/// Ensures in-memory job tracking is removed when a spawned settlement task
+/// ends abnormally (e.g. panics) before explicit cleanup can run.
+struct JobTrackingGuard {
+    job_id: SettlementJobId,
+    result_watchers: ResultWatchersMap,
+    task_controls: TaskControlsMap,
+    armed: bool,
+}
+
+impl JobTrackingGuard {
+    fn new(
+        job_id: SettlementJobId,
+        result_watchers: ResultWatchersMap,
+        task_controls: TaskControlsMap,
+    ) -> Self {
+        Self {
+            job_id,
+            result_watchers,
+            task_controls,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for JobTrackingGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+
+        let job_id = self.job_id;
+        let result_watchers = self.result_watchers.clone();
+        let task_controls = self.task_controls.clone();
+        tokio::spawn(async move {
+            remove_job_from_active_tracking(job_id, &result_watchers, &task_controls).await;
+        });
+    }
+}
+
 /// The Settlement Service is responsible for managing settlement jobs and
 /// answering settlement result requests.
 #[derive(Educe)]
@@ -141,7 +197,12 @@ impl<
         let task_controls = self.task_controls.clone();
         let result_watchers = self.result_watchers.clone();
         tokio::task::spawn(async move {
-            match task.run().await {
+            let mut cleanup_guard =
+                JobTrackingGuard::new(job_id, result_watchers.clone(), task_controls.clone());
+
+            let run_result = task.run().await;
+
+            match run_result {
                 SettlementTaskRunResult::Completed(result) => {
                     if let Err(error) = result_sender.send(Some(result)) {
                         error!(
@@ -153,15 +214,16 @@ impl<
                 }
                 SettlementTaskRunResult::Cancelled => {
                     info!(?job_id, "Settlement task cancelled");
-                    result_watchers.lock().await.remove(&job_id);
                 }
                 SettlementTaskRunResult::ReloadAndRestart => {
-                    result_watchers.lock().await.remove(&job_id);
-                    task_controls.lock().await.remove(&job_id);
+                    cleanup_guard.disarm();
+                    remove_job_from_active_tracking(job_id, &result_watchers, &task_controls).await;
                     todo!("Reload and restart settlement tasks");
                 }
             }
-            task_controls.lock().await.remove(&job_id);
+
+            remove_job_from_active_tracking(job_id, &result_watchers, &task_controls).await;
+            cleanup_guard.disarm();
         });
         Ok(SettlementJobWatcher {
             watcher: result_receiver,
@@ -349,6 +411,113 @@ mod tests {
                 tx_hash: SettlementTxHash::new(Digest::from([seed.wrapping_add(2); 32])),
             },
         }
+    }
+
+    async fn insert_active_job_tracking(
+        service: &SettlementService<impl Provider + WalletProvider + 'static, MockStateStore>,
+        job_id: SettlementJobId,
+        watcher: watch::Receiver<Option<SettlementJobResult>>,
+    ) {
+        let (admin_sender, admin_receiver) = mpsc::channel(ADMIN_CHANNEL_BUFFER_SIZE);
+        let (handle, _control) =
+            TaskControlHandle::new(&CancellationToken::new(), admin_sender, admin_receiver);
+        service.task_controls.lock().await.insert(job_id, handle);
+        service.result_watchers.lock().await.insert(job_id, watcher);
+    }
+
+    #[tokio::test]
+    async fn remove_job_from_active_tracking_clears_both_maps() {
+        let store = Arc::new(MockStateStore::new());
+        let service = mk_service(store).await;
+        let job_id = mk_job_id(10);
+        let (_sender, watcher) = watch::channel(None);
+
+        insert_active_job_tracking(&service, job_id, watcher).await;
+
+        remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
+            .await;
+
+        assert!(service.result_watchers.lock().await.is_empty());
+        assert!(service.task_controls.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn retrieve_uses_storage_after_active_tracking_cleanup() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(11);
+        let stored_result = mk_result(11, ContractCallOutcome::Success);
+        let stored_result_for_store = stored_result.clone();
+
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(stored_result_for_store)));
+
+        let service = mk_service(Arc::new(store)).await;
+        let (_sender, watcher) = watch::channel(Some(stored_result.clone()));
+        insert_active_job_tracking(&service, job_id, watcher).await;
+
+        remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
+            .await;
+
+        let retrieved = service
+            .retrieve_settlement_result(job_id)
+            .await
+            .expect("retrieval should succeed");
+
+        match retrieved {
+            RetrievedSettlementResult::Completed(result) => assert_eq!(result, stored_result),
+            RetrievedSettlementResult::Pending(_) => {
+                panic!("expected completed result from storage after map cleanup")
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn caller_watcher_retains_result_after_active_tracking_cleanup() {
+        let store = Arc::new(MockStateStore::new());
+        let service = mk_service(store).await;
+        let job_id = mk_job_id(12);
+        let result = mk_result(12, ContractCallOutcome::Success);
+
+        let (sender, caller_watcher) = watch::channel(None);
+        sender
+            .send(Some(result.clone()))
+            .expect("result should be sent to watcher");
+        insert_active_job_tracking(&service, job_id, caller_watcher.clone()).await;
+
+        remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
+            .await;
+
+        assert_eq!(
+            caller_watcher.borrow().as_ref(),
+            Some(&result),
+            "caller watcher should retain the result after service map cleanup"
+        );
+    }
+
+    #[tokio::test]
+    async fn job_tracking_guard_cleans_up_on_drop_without_disarm() {
+        use std::time::Duration;
+
+        let store = Arc::new(MockStateStore::new());
+        let service = mk_service(store).await;
+        let job_id = mk_job_id(13);
+        let (_sender, watcher) = watch::channel(None);
+        insert_active_job_tracking(&service, job_id, watcher).await;
+
+        let guard = JobTrackingGuard::new(
+            job_id,
+            service.result_watchers.clone(),
+            service.task_controls.clone(),
+        );
+        drop(guard);
+
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        assert!(service.result_watchers.lock().await.is_empty());
+        assert!(service.task_controls.lock().await.is_empty());
     }
 
     #[tokio::test]
