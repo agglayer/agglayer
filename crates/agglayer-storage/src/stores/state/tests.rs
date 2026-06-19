@@ -37,6 +37,7 @@ fn init_db_adds_legacy_missing_cfs() {
     use std::collections::BTreeSet;
 
     use crate::columns::{
+        certificate_settlement_job::CertificateSettlementJobColumn,
         disabled_networks::DisabledNetworksColumn,
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
@@ -67,6 +68,7 @@ fn init_db_adds_legacy_missing_cfs() {
 
     for expected in [
         DisabledNetworksColumn::COLUMN_FAMILY_NAME,
+        CertificateSettlementJobColumn::COLUMN_FAMILY_NAME,
         SettlementJobsColumn::COLUMN_FAMILY_NAME,
         SettlementJobResultsColumn::COLUMN_FAMILY_NAME,
         SettlementAttemptsColumn::COLUMN_FAMILY_NAME,
@@ -78,6 +80,41 @@ fn init_db_adds_legacy_missing_cfs() {
             "expected legacy-add CF {expected:?} to be present after init_db; got {post_cfs:?}"
         );
     }
+    drop(db);
+}
+
+#[test]
+fn init_db_adds_certificate_settlement_job_cf_to_v1_schema() {
+    use std::collections::BTreeSet;
+
+    use crate::columns::certificate_settlement_job::CertificateSettlementJobColumn;
+
+    let tmp = TempDBDir::new();
+    {
+        let previous_schema = DB::builder(tmp.path.as_path(), cf_definitions::STATE_DB_V0)
+            .expect("V0 schema initialization should succeed")
+            .ensure_cfs(cf_definitions::STATE_DB_V1_ADDED_CFS)
+            .expect("V1 schema migration should succeed")
+            .finalize(cf_definitions::STATE_DB)
+            .expect("V1 schema finalization should succeed");
+        drop(previous_schema);
+    }
+
+    let db = StateStore::init_db(tmp.path.as_path())
+        .expect("init_db should ensure the certificate settlement job CF is added");
+
+    let post_cfs: BTreeSet<&str> =
+        rocksdb::DB::list_cf(&rocksdb::Options::default(), tmp.path.as_path())
+            .expect("list_cf should succeed after init_db")
+            .into_iter()
+            .map(|s| Box::leak(s.into_boxed_str()) as &str)
+            .collect();
+
+    assert!(
+        post_cfs.contains(CertificateSettlementJobColumn::COLUMN_FAMILY_NAME),
+        "expected CF {:?} to be present after init_db; got {post_cfs:?}",
+        CertificateSettlementJobColumn::COLUMN_FAMILY_NAME
+    );
     drop(db);
 }
 
