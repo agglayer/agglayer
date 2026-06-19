@@ -25,6 +25,65 @@ use crate::{
     wallet_nonce_locks::WalletNonceLocks,
 };
 
+type ResultWatchersMap =
+    Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>;
+type TaskControlsMap = Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>;
+
+async fn remove_job_from_active_tracking(
+    job_id: SettlementJobId,
+    result_watchers: &ResultWatchersMap,
+    task_controls: &TaskControlsMap,
+) {
+    result_watchers.lock().await.remove(&job_id);
+    task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .remove(&job_id);
+}
+
+/// Ensures in-memory job tracking is removed when a spawned settlement task
+/// ends abnormally (e.g. panics) before explicit cleanup can run.
+struct JobTrackingGuard {
+    job_id: SettlementJobId,
+    result_watchers: ResultWatchersMap,
+    task_controls: TaskControlsMap,
+    armed: bool,
+}
+
+impl JobTrackingGuard {
+    fn new(
+        job_id: SettlementJobId,
+        result_watchers: ResultWatchersMap,
+        task_controls: TaskControlsMap,
+    ) -> Self {
+        Self {
+            job_id,
+            result_watchers,
+            task_controls,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for JobTrackingGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+
+        let job_id = self.job_id;
+        let result_watchers = self.result_watchers.clone();
+        let task_controls = self.task_controls.clone();
+        tokio::spawn(async move {
+            remove_job_from_active_tracking(job_id, &result_watchers, &task_controls).await;
+        });
+    }
+}
+
 /// How the live task for a job (if any) was told about an admin mutation.
 ///
 /// Admin mutations are declarative edits of stored state; a running task only
@@ -96,6 +155,7 @@ fn tag_admin_storage_error(error: agglayer_storage::error::Error) -> eyre::Repor
     };
     eyre::Report::new(error).wrap_err(code)
 }
+
 
 /// The Settlement Service is responsible for managing settlement jobs and
 /// answering settlement result requests.
@@ -329,6 +389,8 @@ impl<
                 job_id,
                 task_controls: task_controls.clone(),
             };
+            let mut cleanup_guard =
+                JobTrackingGuard::new(job_id, result_watchers.clone(), task_controls.clone());
             loop {
                 match task.run().await {
                     SettlementTaskRunResult::Completed(result) => {
@@ -339,11 +401,14 @@ impl<
                                 "Failed to send settlement job result to watchers"
                             );
                         }
+                        result_watchers.lock().await.remove(&job_id);
+                        cleanup_guard.disarm();
                         break;
                     }
                     SettlementTaskRunResult::Cancelled => {
                         info!(?job_id, "Settlement task cancelled");
                         result_watchers.lock().await.remove(&job_id);
+                        cleanup_guard.disarm();
                         break;
                     }
                     SettlementTaskRunResult::ReloadAndRestart => {
@@ -375,6 +440,7 @@ impl<
                                         "Failed to send settlement job result to watchers"
                                     );
                                 }
+                                cleanup_guard.disarm();
                                 break;
                             }
                             Err(error) => {
@@ -385,6 +451,7 @@ impl<
                                      state"
                                 );
                                 result_watchers.lock().await.remove(&job_id);
+                                cleanup_guard.disarm();
                                 break;
                             }
                         }

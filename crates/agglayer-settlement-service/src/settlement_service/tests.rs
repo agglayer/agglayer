@@ -198,6 +198,129 @@ fn mk_result(seed: u8, outcome: ContractCallOutcome) -> SettlementJobResult {
     }
 }
 
+async fn insert_active_job_tracking(
+    service: &SettlementService<impl Provider + WalletProvider + 'static, MockStateStore>,
+    job_id: SettlementJobId,
+    watcher: watch::Receiver<Option<SettlementJobResult>>,
+) {
+    let (handle, _control) = TaskControlHandle::new(&CancellationToken::new());
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .insert(job_id, handle);
+    service.result_watchers.lock().await.insert(job_id, watcher);
+}
+
+#[tokio::test]
+async fn remove_job_from_active_tracking_clears_both_maps() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let service = mk_service(Arc::new(store)).await;
+    let job_id = mk_job_id(10);
+    let (_sender, watcher) = watch::channel(None);
+
+    insert_active_job_tracking(&service, job_id, watcher).await;
+
+    remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
+        .await;
+
+    assert!(service.result_watchers.lock().await.is_empty());
+    assert!(
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn retrieve_uses_storage_after_active_tracking_cleanup() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(11);
+    let stored_result = mk_result(11, ContractCallOutcome::Success);
+    let stored_result_for_store = stored_result.clone();
+
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(stored_result_for_store)));
+
+    let service = mk_service(Arc::new(store)).await;
+    let (_sender, watcher) = watch::channel(Some(stored_result.clone()));
+    insert_active_job_tracking(&service, job_id, watcher).await;
+
+    remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
+        .await;
+
+    let retrieved = service
+        .retrieve_settlement_result(job_id)
+        .await
+        .expect("retrieval should succeed");
+
+    match retrieved {
+        RetrievedSettlementResult::Completed(result) => assert_eq!(result, stored_result),
+        RetrievedSettlementResult::Pending(_) => {
+            panic!("expected completed result from storage after map cleanup")
+        }
+    }
+}
+
+#[tokio::test]
+async fn caller_watcher_retains_result_after_active_tracking_cleanup() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let service = mk_service(Arc::new(store)).await;
+    let job_id = mk_job_id(12);
+    let result = mk_result(12, ContractCallOutcome::Success);
+
+    let (sender, caller_watcher) = watch::channel(None);
+    sender
+        .send(Some(result.clone()))
+        .expect("result should be sent to watcher");
+    insert_active_job_tracking(&service, job_id, caller_watcher.clone()).await;
+
+    remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
+        .await;
+
+    assert_eq!(
+        caller_watcher.borrow().as_ref(),
+        Some(&result),
+        "caller watcher should retain the result after service map cleanup"
+    );
+}
+
+#[tokio::test]
+async fn job_tracking_guard_cleans_up_on_drop_without_disarm() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let service = mk_service(Arc::new(store)).await;
+    let job_id = mk_job_id(13);
+    let (_sender, watcher) = watch::channel(None);
+    insert_active_job_tracking(&service, job_id, watcher).await;
+
+    let guard = JobTrackingGuard::new(
+        job_id,
+        service.result_watchers.clone(),
+        service.task_controls.clone(),
+    );
+    drop(guard);
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    assert!(service.result_watchers.lock().await.is_empty());
+    assert!(
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .is_empty()
+    );
+}
+
 #[tokio::test]
 async fn watcher_returns_result_that_arrived_before_waiting() {
     let job_id = mk_job_id(6);
