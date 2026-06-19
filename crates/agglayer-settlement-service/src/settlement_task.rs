@@ -1063,14 +1063,22 @@ impl<
         }
     }
 
-    /// Fees of the most recent recorded attempt for `(wallet, nonce)`, if any.
-    /// Returned as `(max_fee_per_gas, max_priority_fee_per_gas)`.
-    fn latest_attempt_fees_for_nonce(&self, wallet: Address, nonce: Nonce) -> Option<(u128, u128)> {
+    /// Fees of the most recent *pending* attempt for `(wallet, nonce)` — the
+    /// live tx a replacement must out-bid — as `(max_fee_per_gas,
+    /// max_priority_fee_per_gas)`. Attempts that errored on broadcast never
+    /// reached the mempool, so they are ignored. Returns `None` when no attempt
+    /// for the nonce is still pending.
+    fn latest_pending_attempt_fees_for_nonce(
+        &self,
+        wallet: Address,
+        nonce: Nonce,
+    ) -> Option<(u128, u128)> {
         self.attempts
             .get(&(wallet, nonce))?
-            .iter()
-            .next_back()
-            .map(|(_, active)| {
+            .values()
+            .rev()
+            .find(|active| active.result.is_none())
+            .map(|active| {
                 (
                     active.attempt.max_fee_per_gas,
                     active.attempt.max_priority_fee_per_gas,
@@ -1155,7 +1163,8 @@ impl<
     /// Builds the next settlement attempt reusing an existing `nonce`.
     ///
     /// When a prior attempt for the nonce is still pending (a live tx in the
-    /// mempool), this bumps gas over that nonce's most recent attempt and
+    /// mempool), this bumps gas over that nonce's most recent *pending* attempt
+    /// (errored attempts never reached the mempool, so they are ignored) and
     /// returns `Ok(None)` if the configured ceiling prevents a strict,
     /// node-acceptable bump — the caller then keeps waiting on the
     /// already-submitted ceiling-priced attempt rather than broadcasting an
@@ -1173,15 +1182,12 @@ impl<
     ) -> Result<Option<(SettlementAttemptNumber, TxEnvelope)>, RetryCallbackError<BuildAttemptError>>
     {
         let attempt_number = self.next_attempt_number();
-        // A replacement only has to out-bid a live (pending) tx. If every prior
-        // attempt for this nonce errored on broadcast, there is nothing in the
-        // mempool to replace, so we re-broadcast at freshly-resolved fees rather
-        // than bumping over the last attempt (which could otherwise stall
-        // forever once those fees reach the ceiling).
-        let replacing_pending_tx = self.is_any_attempt_pending_for_nonce(wallet, nonce);
-        let (previous_max_fee_per_gas, previous_max_priority_fee_per_gas) = self
-            .latest_attempt_fees_for_nonce(wallet, nonce)
-            .unwrap_or((0, 0));
+        // The fees of the live tx a replacement must out-bid. Attempts that
+        // errored on broadcast never reached the mempool, so they are ignored;
+        // `None` means there is no live tx to replace, so we re-broadcast at
+        // freshly-resolved fees rather than bumping over a prior attempt (which
+        // could otherwise stall forever once those fees reach the ceiling).
+        let live_tx_fees = self.latest_pending_attempt_fees_for_nonce(wallet, nonce);
         let mut retry_policy = BuildRetryPolicy::new();
 
         crate::utils::retry_callback_until_success(
@@ -1195,19 +1201,22 @@ impl<
                     self.provider.get_chain_id().into_future(),
                     self.provider.estimate_eip1559_fees().into_future(),
                 )?;
-                let gas = if replacing_pending_tx {
-                    // Out-bid the live tx; impossible once it sits at the ceiling.
-                    let Some(gas) = self.bump_gas_params(
-                        previous_max_fee_per_gas,
-                        previous_max_priority_fee_per_gas,
-                        &estimate,
-                    ) else {
-                        return Ok(None);
-                    };
-                    gas
-                } else {
-                    // Nothing live to replace: re-broadcast at base fees.
-                    self.resolve_base_gas_params(&estimate)
+                let gas = match live_tx_fees {
+                    Some((previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) => {
+                        // Out-bid the live tx; impossible once it sits at the ceiling.
+                        let Some(gas) = self.bump_gas_params(
+                            previous_max_fee_per_gas,
+                            previous_max_priority_fee_per_gas,
+                            &estimate,
+                        ) else {
+                            return Ok(None);
+                        };
+                        gas
+                    }
+                    None => {
+                        // Nothing live to replace: re-broadcast at base fees.
+                        self.resolve_base_gas_params(&estimate)
+                    }
                 };
                 let tx = self.build_attempt(wallet, nonce, chain_id, gas).await?;
                 Ok(Some((attempt_number, tx)))
@@ -3019,35 +3028,141 @@ mod tests {
         assert!(envelope.max_priority_fee_per_gas().unwrap() <= envelope.max_fee_per_gas());
     }
 
-    #[test]
-    fn latest_attempt_fees_for_nonce_returns_highest_attempt_and_none_for_unknown() {
-        let wallet = Address::from([7; 20]);
-        let nonce = Nonce(3);
+    #[tokio::test]
+    async fn build_next_attempt_with_nonce_bumps_over_live_tx_ignoring_errored_ceiling_attempt() {
+        use alloy::consensus::Transaction as _;
 
-        let mut older = mk_active_attempt(wallet, nonce, mk_tx_hash(1), None);
-        older.attempt.max_fee_per_gas = 10_000_000_000;
-        older.attempt.max_priority_fee_per_gas = 1_000_000_000;
-        let mut newer = mk_active_attempt(wallet, nonce, mk_tx_hash(2), None);
-        newer.attempt.max_fee_per_gas = 20_000_000_000;
-        newer.attempt.max_priority_fee_per_gas = 2_000_000_000;
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_address = signer.address();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
 
-        // Insert the lower attempt number last to prove ordering (not insertion
-        // order) selects the latest attempt.
+        let nonce = Nonce(4);
+        // Live tx: a pending attempt well below the ceiling.
+        let pending = SettlementAttempt {
+            sender_wallet: wallet_address.into(),
+            nonce,
+            hash: mk_tx_hash(1),
+            submission_time: SystemTime::UNIX_EPOCH,
+            max_fee_per_gas: 10_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+        // A newer attempt that errored on broadcast at the ceiling (no live tx).
+        let errored = SettlementAttempt {
+            sender_wallet: wallet_address.into(),
+            nonce,
+            hash: mk_tx_hash(2),
+            submission_time: SystemTime::UNIX_EPOCH,
+            max_fee_per_gas: 30_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
         let attempts = BTreeMap::from([(
-            (wallet, nonce),
+            (wallet_address, nonce),
             BTreeMap::from([
-                (SettlementAttemptNumber(4), newer),
-                (SettlementAttemptNumber(1), older),
+                (
+                    SettlementAttemptNumber(0),
+                    ActiveSettlementAttempt {
+                        attempt: pending,
+                        result: None,
+                    },
+                ),
+                (
+                    SettlementAttemptNumber(1),
+                    ActiveSettlementAttempt {
+                        attempt: errored,
+                        result: Some(mk_client_error(9)),
+                    },
+                ),
             ]),
         )]);
+
+        // Ceiling at the errored attempt's fees: bumping over *it* is impossible,
+        // but the live pending tx (10 gwei) can still be out-bid below the ceiling.
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_ceiling: 30_000_000_000,
+            max_priority_fee_per_gas_ceiling: 30_000_000_000,
+            ..SettlementTransactionConfig::default()
+        };
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(config),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts,
+        };
+
+        let (attempt_number, envelope) = task
+            .build_next_attempt_with_nonce(wallet_address, nonce)
+            .await
+            .expect("build should not fail")
+            .expect("a valid replacement over the live pending tx is possible below the ceiling");
+
+        assert_eq!(attempt_number, SettlementAttemptNumber(2));
+        assert_eq!(envelope.nonce(), 4);
+        // Bumped >= 10% over the *pending* tx (10 gwei), not the errored 30 gwei one.
+        assert!(envelope.max_fee_per_gas() >= 11_000_000_000);
+        assert!(envelope.max_fee_per_gas() <= 30_000_000_000);
+        assert!(envelope.max_priority_fee_per_gas().unwrap() <= envelope.max_fee_per_gas());
+    }
+
+    #[test]
+    fn latest_pending_attempt_fees_for_nonce_ignores_errored_and_unknown() {
+        let wallet = Address::from([7; 20]);
+        let nonce = Nonce(3);
+        let errored_only_nonce = Nonce(5);
+
+        // A live pending tx, plus a higher-numbered attempt that errored on
+        // broadcast (no live tx) at higher fees.
+        let mut pending = mk_active_attempt(wallet, nonce, mk_tx_hash(1), None);
+        pending.attempt.max_fee_per_gas = 10_000_000_000;
+        pending.attempt.max_priority_fee_per_gas = 1_000_000_000;
+        let mut errored_newer =
+            mk_active_attempt(wallet, nonce, mk_tx_hash(2), Some(mk_client_error(9)));
+        errored_newer.attempt.max_fee_per_gas = 99_000_000_000;
+        errored_newer.attempt.max_priority_fee_per_gas = 9_000_000_000;
+
+        // A separate nonce whose only attempt errored.
+        let errored_only = mk_active_attempt(
+            wallet,
+            errored_only_nonce,
+            mk_tx_hash(3),
+            Some(mk_client_error(2)),
+        );
+
+        let attempts = BTreeMap::from([
+            (
+                (wallet, nonce),
+                BTreeMap::from([
+                    (SettlementAttemptNumber(4), errored_newer),
+                    (SettlementAttemptNumber(1), pending),
+                ]),
+            ),
+            (
+                (wallet, errored_only_nonce),
+                BTreeMap::from([(SettlementAttemptNumber(2), errored_only)]),
+            ),
+        ]);
         let task = mk_task(Arc::new(MockStateStore::new()), attempts);
 
-        // Highest attempt number (4) wins.
+        // The higher-numbered errored attempt is ignored; the live pending tx wins.
         assert_eq!(
-            task.latest_attempt_fees_for_nonce(wallet, nonce),
-            Some((20_000_000_000, 2_000_000_000))
+            task.latest_pending_attempt_fees_for_nonce(wallet, nonce),
+            Some((10_000_000_000, 1_000_000_000))
+        );
+        // A nonce whose only attempt errored has no live tx.
+        assert_eq!(
+            task.latest_pending_attempt_fees_for_nonce(wallet, errored_only_nonce),
+            None
         );
         // Unknown nonce -> None.
-        assert_eq!(task.latest_attempt_fees_for_nonce(wallet, Nonce(999)), None);
+        assert_eq!(
+            task.latest_pending_attempt_fees_for_nonce(wallet, Nonce(999)),
+            None
+        );
     }
 }
