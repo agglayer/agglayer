@@ -9,6 +9,7 @@
 #![allow(dead_code)] // TODO remove after settlement service is integrated in the rest of the app
 
 pub mod settlement_service;
+mod nonce_allocator;
 mod settlement_task;
 mod utils;
 
