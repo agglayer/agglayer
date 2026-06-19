@@ -3,8 +3,10 @@
 //! [`NonceAllocatorRegistry`] seeds from the chain pending count, hands out
 //! monotonic nonces, and reconciles when L1 state diverges. Production callers
 //! seed via [`NonceAllocatorRegistry::seed_if_unseeded`] after a retried L1 read,
-//! then hand out with [`NonceAllocatorRegistry::handout`]. Gas bumps must reuse
-//! an existing nonce and must not hand out again.
+//! then hand out with [`NonceAllocatorRegistry::handout`]. Call
+//! [`NonceAllocatorRegistry::release`] when a handed-out nonce never reaches the
+//! attempt store. Gas bumps must reuse an existing nonce and must not hand out
+//! again.
 //! XREF: https://github.com/agglayer/agglayer/issues/1319
 
 use std::collections::{BTreeSet, HashMap};
@@ -64,6 +66,25 @@ impl NonceAllocatorRegistry {
         state.next_nonce = state.next_nonce.saturating_add(1);
         state.reserved.insert(nonce);
         nonce
+    }
+
+    /// Rolls back a handed-out nonce that never became a saved settlement attempt.
+    ///
+    /// Returns `true` when `nonce` was removed from the reserved set. Also lowers
+    /// `next_nonce` when this handout created a gap at the low end so the nonce
+    /// can be handed out again. Has no effect after [`Self::mark_consumed`].
+    pub async fn release(&self, wallet: Address, nonce: u64) -> bool {
+        let mut guard = self.inner.lock().await;
+        let Some(state) = guard.get_mut(&wallet) else {
+            return false;
+        };
+
+        if !state.reserved.remove(&nonce) {
+            return false;
+        }
+
+        state.next_nonce = state.next_nonce.min(nonce);
+        true
     }
 
     /// Records that `nonce` is used on L1 (by us or externally).
@@ -210,5 +231,49 @@ mod tests {
         registry.reconcile_next_pending(wallet, 6).await;
         assert_eq!(registry.next_nonce_for_test(wallet).await, Some(7));
         assert_eq!(registry.handout(wallet).await, 7);
+    }
+
+    #[tokio::test]
+    async fn release_restores_next_nonce_for_single_handout() {
+        let registry = NonceAllocatorRegistry::new();
+        let wallet = test_wallet();
+        registry.seed_for_test(wallet, 5).await;
+
+        assert_eq!(registry.handout(wallet).await, 5);
+        assert_eq!(registry.next_nonce_for_test(wallet).await, Some(6));
+        assert!(registry.release(wallet, 5).await);
+        assert_eq!(registry.next_nonce_for_test(wallet).await, Some(5));
+        assert_eq!(registry.handout(wallet).await, 5);
+    }
+
+    #[tokio::test]
+    async fn release_lowest_hole_with_higher_reserved() {
+        let registry = NonceAllocatorRegistry::new();
+        let wallet = test_wallet();
+        registry.seed_for_test(wallet, 5).await;
+
+        assert_eq!(registry.handout(wallet).await, 5);
+        assert_eq!(registry.handout(wallet).await, 6);
+        assert!(registry.release(wallet, 5).await);
+        assert_eq!(registry.next_nonce_for_test(wallet).await, Some(5));
+        assert_eq!(registry.handout(wallet).await, 5);
+    }
+
+    #[tokio::test]
+    async fn release_is_noop_when_not_reserved() {
+        let registry = NonceAllocatorRegistry::new();
+        let wallet = test_wallet();
+        registry.seed_for_test(wallet, 5).await;
+
+        assert!(!registry.release(wallet, 5).await);
+        assert_eq!(registry.next_nonce_for_test(wallet).await, Some(5));
+    }
+
+    #[tokio::test]
+    async fn release_is_noop_for_unknown_wallet() {
+        let registry = NonceAllocatorRegistry::new();
+        let wallet = test_wallet();
+
+        assert!(!registry.release(wallet, 0).await);
     }
 }

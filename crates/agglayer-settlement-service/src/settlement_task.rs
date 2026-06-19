@@ -1157,8 +1157,9 @@ impl<
     /// resolves base gas parameters from the latest L1 fee estimate, and builds
     /// a signed settlement attempt.
     ///
-    /// Nonce handout happens once per call (outside the retry loop). The seeding
-    /// RPC and run-loop reconciliation use `retry_on_transient_failure`.
+    /// Nonce handout happens once per call (outside the retry loop). A failed or
+    /// cancelled build releases the handed-out nonce before returning. The
+    /// seeding RPC and run-loop reconciliation use `retry_on_transient_failure`.
     /// Transient L1 RPC failures while fetching chain id or fees are retried in
     /// place using the same policy; a build/sign failure is non-recoverable.
     async fn build_next_attempt_with_new_nonce(
@@ -1172,7 +1173,7 @@ impl<
         let nonce = self.reserve_nonce_for_build(wallet).await?;
         let mut retry_policy = BuildRetryPolicy::new();
 
-        crate::utils::retry_callback_until_success(
+        match crate::utils::retry_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || async {
@@ -1189,6 +1190,13 @@ impl<
             |error| retry_policy.should_retry(error),
         )
         .await
+        {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                self.nonce_allocator.release(wallet, nonce).await;
+                Err(error)
+            }
+        }
     }
 
     async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> Result<(), SubmitAttemptError> {
