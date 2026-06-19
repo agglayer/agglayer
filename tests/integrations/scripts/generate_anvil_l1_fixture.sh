@@ -185,8 +185,11 @@ fi
 # Record the anvil/foundry version that produced this fixture. anvil_dumpState's
 # serialized format is coupled to the foundry version, so the loader (and CI, via
 # foundry-toolchain in .github/workflows/test.yml) must use a matching anvil.
-anvil_version=$(anvil --version | head -n1)
-anvil_version=${anvil_version##* }
+# Extract the semver token from the first line rather than stripping to the last
+# whitespace-separated word: verbose build strings (e.g.
+# "anvil 1.7.1 (sha 2024-08-07T07:23:08Z)") would otherwise capture the trailing
+# timestamp instead of the version.
+anvil_version=$(anvil --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?' | head -n1)
 
 jq -n \
     --arg source_image "$DOCKER_IMAGE" \

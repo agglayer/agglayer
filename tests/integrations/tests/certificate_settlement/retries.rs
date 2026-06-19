@@ -86,9 +86,14 @@ async fn regression_pushing_certificate_while_settling(#[case] state: Forest) {
         .await
         .unwrap();
 
+    // The real backstop is the outer #[timeout(180s)]; this inner budget only
+    // exists to produce a descriptive failure message. It must stay well above
+    // realistic settlement latency under the default config (confirmations=12,
+    // retry_interval=10s) on 1s Anvil blocks, which can reach ~20-40s under the
+    // resource-limited parallel load profile.
     wait_for_condition(
         "first certificate settlement while replacements are rejected",
-        Duration::from_secs(30),
+        Duration::from_secs(150),
         || async {
             let replacement = certificate
                 .clone()
