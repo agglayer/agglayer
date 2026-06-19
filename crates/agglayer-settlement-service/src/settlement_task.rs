@@ -32,6 +32,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
+use crate::nonce_allocator::NonceAllocatorRegistry;
+use crate::nonce_allocator::NonceAllocatorError;
 use crate::utils::RetryCallbackError;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
@@ -334,6 +336,10 @@ pub struct SettlementTask<L1Provider, SettlementStore> {
     tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
+    /// Shared per-wallet nonce allocator from [`SettlementService`](crate::SettlementService).
+    /// Used by [`Self::build_next_attempt_with_new_nonce`] to reserve exclusive nonces
+    /// across concurrent tasks on the same wallet.
+    nonce_allocator: Arc<NonceAllocatorRegistry>,
     control: TaskControl,
     attempts: ActiveSettlementAttempts,
 }
@@ -396,6 +402,7 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
+        nonce_allocator: Arc<NonceAllocatorRegistry>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
         let job = resolve_settlement_gas_limit(
@@ -412,6 +419,7 @@ impl<
             tx_config,
             provider,
             store,
+            nonce_allocator,
             control,
             attempts: BTreeMap::new(),
         };
@@ -459,6 +467,7 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
+        nonce_allocator: Arc<NonceAllocatorRegistry>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
         let (job, result) = Self::load_settlement_job_from_db(store.as_ref(), id).await?;
@@ -471,6 +480,7 @@ impl<
                 tx_config,
                 provider,
                 store,
+                nonce_allocator,
                 control,
                 attempts: BTreeMap::new(),
             };
@@ -509,6 +519,13 @@ impl<
                 return run_result;
             }
 
+            retry!(
+                self.reconcile_nonce_allocator_for_tracked_wallets()
+                    .await
+                    .map_err(RetryCallbackError::Error),
+                "reconciling nonce allocator with L1 pending counts",
+            );
+
             // Process in a big loop. We'll come back here whenever a reorg is detected, and
             // after waiting when we're done with one cycle.
 
@@ -536,6 +553,7 @@ impl<
                         self.settlement_attempt_number_for(wallet, nonce, tx_hash)
                     else {
                         nonces_used_externally.insert((wallet, nonce), tx_hash);
+                        self.mark_nonce_consumed_on_allocator(wallet, nonce).await;
                         continue 'nonces;
                     };
                     let tx_result = retry!(
@@ -547,6 +565,7 @@ impl<
                     };
                     if tx_result.outcome != ContractCallOutcome::Success {
                         reverts.insert((wallet, nonce), (attempt_number, tx_hash, tx_result));
+                        self.mark_nonce_consumed_on_allocator(wallet, nonce).await;
                         continue 'nonces;
                     }
                     let settlement_result = retry!(
@@ -562,6 +581,7 @@ impl<
                     let job_result = self
                         .write_job_result_to_db(wallet, nonce, attempt_number, tx_result.clone())
                         .await;
+                    self.mark_nonce_consumed_on_allocator(wallet, nonce).await;
                     return SettlementTaskRunResult::Completed(job_result);
                 } else {
                     // If the nonce is not used on L1, we'll need to either wait more or submit a
@@ -673,6 +693,8 @@ impl<
                         earliest_revert_attempt_number,
                         earliest_revert_result,
                     )
+                    .await;
+                self.mark_nonce_consumed_on_allocator(earliest_revert_wallet, earliest_revert_nonce)
                     .await;
                 return SettlementTaskRunResult::Completed(job_result);
             }
@@ -850,6 +872,39 @@ impl<
 
     fn is_wallet_privkey_known(&self, wallet: Address) -> bool {
         self.provider.has_signer_for(&wallet)
+    }
+
+    /// Notifies the shared allocator that `nonce` is consumed on L1 for `wallet`.
+    async fn mark_nonce_consumed_on_allocator(&self, wallet: Address, nonce: Nonce) {
+        self.nonce_allocator.mark_consumed(wallet, nonce.0).await;
+    }
+
+    /// Syncs the shared allocator with each tracked wallet's chain pending count.
+    async fn reconcile_nonce_allocator_for_tracked_wallets(
+        &self,
+    ) -> Result<(), TransportError> {
+        let mut wallets: BTreeSet<Address> = self
+            .all_used_nonces()
+            .into_iter()
+            .map(|(wallet, _)| wallet)
+            .collect();
+        let default_wallet = self.provider.default_signer_address();
+        if self.is_wallet_privkey_known(default_wallet) {
+            wallets.insert(default_wallet);
+        }
+
+        for wallet in wallets {
+            let chain_pending = self
+                .provider
+                .get_transaction_count(wallet)
+                .pending()
+                .await?;
+            self.nonce_allocator
+                .reconcile_next_pending(wallet, chain_pending)
+                .await;
+        }
+
+        Ok(())
     }
 
     /// Returns when the next attempt for `(wallet, nonce)` is due: the most
@@ -1387,11 +1442,14 @@ impl<
         .await
     }
 
-    /// Selects a wallet and a fresh nonce, resolves base gas parameters from
-    /// the latest L1 fee estimate, and builds a signed settlement attempt.
+    /// Selects a wallet, reserves a fresh nonce from the shared allocator,
+    /// resolves base gas parameters from the latest L1 fee estimate, and builds
+    /// a signed settlement attempt.
     ///
-    /// Transient L1 RPC failures are retried in place using the configured
-    /// transient-failure policy; a build/sign failure is non-recoverable.
+    /// Nonce reservation happens once per call (outside the retry loop). Transient
+    /// L1 RPC failures while fetching chain id or fees are retried in place using
+    /// the configured transient-failure policy; a build/sign failure is
+    /// non-recoverable.
     async fn build_next_attempt_with_new_nonce(
         &self,
     ) -> Result<
@@ -1400,28 +1458,24 @@ impl<
     > {
         let wallet = self.provider.default_signer_address();
         let attempt_number = self.next_attempt_number();
+        let nonce = self
+            .nonce_allocator
+            .reserve(self.provider.as_ref(), wallet)
+            .await
+            .map_err(|error| match error {
+                NonceAllocatorError::Transport(error) => {
+                    RetryCallbackError::Error(BuildAttemptError::Transport(error))
+                }
+            })?;
         let mut retry_policy = BuildRetryPolicy::new();
 
         crate::utils::retry_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || async {
-                // These fetches are independent, so run them concurrently to
-                // keep each (retried) build to one round-trip.
-                let (nonce, chain_id, estimate) = tokio::try_join!(
-                    self.assign_next_nonce_for_wallet(wallet),
-                    async {
-                        self.provider
-                            .get_chain_id()
-                            .await
-                            .map_err(BuildAttemptError::from)
-                    },
-                    async {
-                        self.provider
-                            .estimate_eip1559_fees()
-                            .await
-                            .map_err(BuildAttemptError::from)
-                    },
+                let (chain_id, estimate) = tokio::try_join!(
+                    self.provider.get_chain_id().into_future(),
+                    self.provider.estimate_eip1559_fees().into_future(),
                 )?;
                 let gas = self.resolve_base_gas_params(&estimate);
                 let tx = self.build_attempt(wallet, nonce, chain_id, gas).await?;
@@ -1764,6 +1818,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::nonce_allocator::NonceAllocatorRegistry;
     use crate::utils::build_provider;
 
     fn test_signer() -> PrivateKeySigner {
@@ -1876,6 +1931,84 @@ mod tests {
         })
     }
 
+    fn mk_nonce_allocator() -> Arc<NonceAllocatorRegistry> {
+        Arc::new(NonceAllocatorRegistry::new())
+    }
+
+    #[tokio::test]
+    async fn create_stores_shared_nonce_allocator() {
+        let mut store = MockStateStore::new();
+        store
+            .expect_insert_settlement_job()
+            .once()
+            .return_once(|_, _| Ok(()));
+
+        let allocator = mk_nonce_allocator();
+        let allocator_for_assert = allocator.clone();
+
+        let (_job_id, task) = SettlementTask::create(
+            mk_job(),
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            Arc::new(store),
+            allocator,
+            mk_control(),
+        )
+        .await
+        .expect("settlement task should be created");
+
+        assert!(Arc::ptr_eq(&task.nonce_allocator, &allocator_for_assert));
+    }
+
+    #[tokio::test]
+    async fn load_pending_job_stores_shared_nonce_allocator() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(99);
+        let job = mk_job();
+
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_list_settlement_attempt_results()
+            .once()
+            .return_once(|_| Ok(vec![]));
+        store
+            .expect_list_settlement_attempts()
+            .once()
+            .return_once(|_| Ok(vec![]));
+
+        let allocator = mk_nonce_allocator();
+        let allocator_for_assert = allocator.clone();
+
+        let loaded = SettlementTask::load(
+            job_id,
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            Arc::new(store),
+            allocator,
+            mk_control(),
+        )
+        .await
+        .expect("pending settlement job should load");
+
+        match loaded {
+            StoredSettlementJob::Pending(task) => {
+                assert!(Arc::ptr_eq(&task.nonce_allocator, &allocator_for_assert));
+            }
+            StoredSettlementJob::Completed(_, _) => {
+                panic!("expected pending settlement job");
+            }
+        }
+    }
+
     fn mk_task(
         store: Arc<MockStateStore>,
         attempts: ActiveSettlementAttempts,
@@ -1911,6 +2044,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store,
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts,
         }
@@ -1926,6 +2060,7 @@ mod tests {
             tx_config: Arc::new(tx_config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts: BTreeMap::new(),
         }
@@ -2254,6 +2389,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_provider()),
             Arc::new(store),
+            mk_nonce_allocator(),
             mk_control(),
         )
         .await
@@ -2918,6 +3054,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -2964,6 +3101,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -3295,20 +3433,14 @@ mod tests {
                 .unwrap();
         }
 
-        let expected_wallet: agglayer_types::Address = wallet_address.into();
-        let mut store = MockStateStore::new();
-        store
-            .expect_max_settlement_nonce_for_wallet()
-            .once()
-            .withf(move |recorded_wallet| *recorded_wallet == expected_wallet)
-            .return_once(|_| Ok(Some(Nonce(6))));
-
+        // Allocator seeds from pending count on first reserve (expected: 2).
         let task = SettlementTask {
             id: mk_job_id(1),
             job: mk_job(),
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
-            store: Arc::new(store),
+            store: Arc::new(MockStateStore::new()),
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -3319,9 +3451,9 @@ mod tests {
             .expect("attempt should build");
 
         assert_eq!(used_wallet, wallet_address);
-        assert_eq!(nonce, Nonce(7));
+        assert_eq!(nonce, Nonce(2));
         assert_eq!(attempt_number, SettlementAttemptNumber(0));
-        assert_eq!(envelope.nonce(), 7);
+        assert_eq!(envelope.nonce(), 2);
         assert_eq!(envelope.to(), Some(mk_job().contract_address.into_alloy()));
         assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
         // Fees are within the configured bounds (defaults: floor 0, ceiling 100 gwei).

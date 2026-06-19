@@ -13,6 +13,7 @@
 
 pub mod settlement_service;
 pub mod settlement_service_trait;
+mod nonce_allocator;
 mod settlement_task;
 mod utils;
 
