@@ -1,23 +1,16 @@
 //! Per-wallet exclusive nonce allocation for concurrent settlement tasks.
 //!
 //! [`NonceAllocatorRegistry`] seeds from the chain pending count, hands out
-//! monotonic nonces, and reconciles when L1 state diverges. Only new-nonce
-//! builds call [`NonceAllocatorRegistry::reserve`]; gas bumps must reuse an
-//! existing nonce and must not reserve again.
+//! monotonic nonces, and reconciles when L1 state diverges. Production callers
+//! seed via [`NonceAllocatorRegistry::seed_if_unseeded`] after a retried L1 read,
+//! then hand out with [`NonceAllocatorRegistry::handout`]. Gas bumps must reuse
+//! an existing nonce and must not hand out again.
 //! XREF: https://github.com/agglayer/agglayer/issues/1319
 
 use std::collections::{BTreeSet, HashMap};
 
-use alloy::{primitives::Address, providers::Provider, transports::TransportError};
-use thiserror::Error;
+use alloy::primitives::Address;
 use tokio::sync::Mutex;
-
-/// Errors surfaced while reserving a settlement nonce.
-#[derive(Debug, Error)]
-pub enum NonceAllocatorError {
-    #[error("L1 RPC error while reserving settlement nonce: {0}")]
-    Transport(#[from] TransportError),
-}
 
 #[derive(Debug, Default)]
 struct WalletNonceState {
@@ -41,47 +34,36 @@ impl NonceAllocatorRegistry {
         }
     }
 
-    /// Reserves the next exclusive nonce for `wallet`.
-    ///
-    /// On first use per wallet, seeds from `get_transaction_count(wallet).pending()`.
-    /// The mutex is not held across the RPC call.
-    pub async fn reserve<P: Provider>(
-        &self,
-        provider: &P,
-        wallet: Address,
-    ) -> Result<u64, NonceAllocatorError> {
-        let needs_seed = {
-            let guard = self.inner.lock().await;
-            guard
-                .get(&wallet)
-                .map(|state| !state.seeded)
-                .unwrap_or(true)
-        };
+    /// Whether `wallet` has been seeded from chain state or tests.
+    pub async fn is_seeded(&self, wallet: Address) -> bool {
+        let guard = self.inner.lock().await;
+        guard.get(&wallet).is_some_and(|state| state.seeded)
+    }
 
-        if needs_seed {
-            let pending = provider
-                .get_transaction_count(wallet)
-                .pending()
-                .await
-                .map_err(NonceAllocatorError::Transport)?;
-
-            let mut guard = self.inner.lock().await;
-            let state = guard.entry(wallet).or_default();
-            if !state.seeded {
-                state.next_nonce = pending;
-                state.seeded = true;
-            }
+    /// Seeds `next_nonce` from `chain_pending` if not already seeded.
+    pub async fn seed_if_unseeded(&self, wallet: Address, chain_pending: u64) {
+        let mut guard = self.inner.lock().await;
+        let state = guard.entry(wallet).or_default();
+        if !state.seeded {
+            state.next_nonce = chain_pending;
+            state.seeded = true;
         }
+    }
 
+    /// Hands out the next exclusive nonce for `wallet`.
+    ///
+    /// The wallet must already be seeded via [`Self::seed_if_unseeded`] or
+    /// [`Self::seed_for_test`].
+    pub async fn handout(&self, wallet: Address) -> u64 {
         let mut guard = self.inner.lock().await;
         let state = guard
             .get_mut(&wallet)
-            .expect("wallet nonce state exists after seeding");
+            .expect("wallet must be seeded before nonce handout");
 
         let nonce = state.next_nonce;
         state.next_nonce = state.next_nonce.saturating_add(1);
         state.reserved.insert(nonce);
-        Ok(nonce)
+        nonce
     }
 
     /// Records that `nonce` is used on L1 (by us or externally).
@@ -149,17 +131,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reserve_twice_returns_consecutive_nonces() {
+    async fn handout_twice_returns_consecutive_nonces() {
         let registry = NonceAllocatorRegistry::new();
         let wallet = test_wallet();
         registry.seed_for_test(wallet, 5).await;
 
-        assert_eq!(registry.reserve_seeded(wallet).await, 5);
-        assert_eq!(registry.reserve_seeded(wallet).await, 6);
+        assert_eq!(registry.handout(wallet).await, 5);
+        assert_eq!(registry.handout(wallet).await, 6);
     }
 
     #[tokio::test]
-    async fn concurrent_reserve_returns_distinct_nonces() {
+    async fn concurrent_handout_returns_distinct_nonces() {
         let registry = Arc::new(NonceAllocatorRegistry::new());
         let wallet = test_wallet();
         registry.seed_for_test(wallet, 0).await;
@@ -167,9 +149,7 @@ mod tests {
         let mut handles = Vec::new();
         for _ in 0..10 {
             let registry = registry.clone();
-            handles.push(tokio::spawn(async move {
-                registry.reserve_seeded(wallet).await
-            }));
+            handles.push(tokio::spawn(async move { registry.handout(wallet).await }));
         }
 
         let mut nonces: Vec<u64> = Vec::new();
@@ -179,6 +159,18 @@ mod tests {
 
         nonces.sort_unstable();
         assert_eq!(nonces, (0..10).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn seed_if_unseeded_is_idempotent() {
+        let registry = NonceAllocatorRegistry::new();
+        let wallet = test_wallet();
+
+        registry.seed_if_unseeded(wallet, 5).await;
+        registry.seed_if_unseeded(wallet, 9).await;
+
+        assert_eq!(registry.next_nonce_for_test(wallet).await, Some(5));
+        assert_eq!(registry.handout(wallet).await, 5);
     }
 
     #[tokio::test]
@@ -192,7 +184,7 @@ mod tests {
 
         registry.reconcile_next_pending(wallet, 12).await;
         assert_eq!(registry.next_nonce_for_test(wallet).await, Some(12));
-        assert_eq!(registry.reserve_seeded(wallet).await, 12);
+        assert_eq!(registry.handout(wallet).await, 12);
     }
 
     #[tokio::test]
@@ -201,9 +193,9 @@ mod tests {
         let wallet = test_wallet();
         registry.seed_for_test(wallet, 5).await;
 
-        assert_eq!(registry.reserve_seeded(wallet).await, 5);
+        assert_eq!(registry.handout(wallet).await, 5);
         registry.mark_consumed(wallet, 5).await;
-        assert_eq!(registry.reserve_seeded(wallet).await, 6);
+        assert_eq!(registry.handout(wallet).await, 6);
     }
 
     #[tokio::test]
@@ -212,24 +204,11 @@ mod tests {
         let wallet = test_wallet();
         registry.seed_for_test(wallet, 5).await;
 
-        assert_eq!(registry.reserve_seeded(wallet).await, 5);
-        assert_eq!(registry.reserve_seeded(wallet).await, 6);
+        assert_eq!(registry.handout(wallet).await, 5);
+        assert_eq!(registry.handout(wallet).await, 6);
 
         registry.reconcile_next_pending(wallet, 6).await;
         assert_eq!(registry.next_nonce_for_test(wallet).await, Some(7));
-        assert_eq!(registry.reserve_seeded(wallet).await, 7);
-    }
-
-    impl NonceAllocatorRegistry {
-        async fn reserve_seeded(&self, wallet: Address) -> u64 {
-            let mut guard = self.inner.lock().await;
-            let state = guard
-                .get_mut(&wallet)
-                .expect("wallet should be seeded for test");
-            let nonce = state.next_nonce;
-            state.next_nonce = state.next_nonce.saturating_add(1);
-            state.reserved.insert(nonce);
-            nonce
-        }
+        assert_eq!(registry.handout(wallet).await, 7);
     }
 }

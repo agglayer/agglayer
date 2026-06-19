@@ -30,7 +30,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::nonce_allocator::NonceAllocatorRegistry;
-use crate::nonce_allocator::NonceAllocatorError;
 use crate::utils::RetryCallbackError;
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
@@ -305,7 +304,7 @@ pub struct SettlementTask<L1Provider, SettlementStore> {
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     /// Shared per-wallet nonce allocator from [`SettlementService`](crate::SettlementService).
-    /// Used by [`Self::build_next_attempt_with_new_nonce`] to reserve exclusive nonces
+    /// Used by [`Self::build_next_attempt_with_new_nonce`] to hand out exclusive nonces
     /// across concurrent tasks on the same wallet.
     nonce_allocator: Arc<NonceAllocatorRegistry>,
     control: TaskControl,
@@ -410,9 +409,7 @@ impl<
             }
 
             retry!(
-                self.reconcile_nonce_allocator_for_tracked_wallets()
-                    .await
-                    .map_err(RetryCallbackError::Error),
+                self.reconcile_nonce_allocator_for_tracked_wallets().await,
                 "reconciling nonce allocator with L1 pending counts",
             );
 
@@ -766,7 +763,7 @@ impl<
     /// Syncs the shared allocator with each tracked wallet's chain pending count.
     async fn reconcile_nonce_allocator_for_tracked_wallets(
         &self,
-    ) -> Result<(), TransportError> {
+    ) -> Result<(), RetryCallbackError<TransportError>> {
         let mut wallets: BTreeSet<Address> = self
             .all_used_nonces()
             .into_iter()
@@ -778,17 +775,50 @@ impl<
         }
 
         for wallet in wallets {
-            let chain_pending = self
-                .provider
-                .get_transaction_count(wallet)
-                .pending()
-                .await?;
+            let chain_pending = self.pending_transaction_count(wallet).await?;
             self.nonce_allocator
                 .reconcile_next_pending(wallet, chain_pending)
                 .await;
         }
 
         Ok(())
+    }
+
+    async fn pending_transaction_count(
+        &self,
+        wallet: Address,
+    ) -> Result<u64, RetryCallbackError<TransportError>> {
+        crate::utils::retry_alloy_callback_until_success(
+            &self.tx_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || self
+                .provider
+                .get_transaction_count(wallet)
+                .pending()
+                .into_future(),
+        )
+        .await
+    }
+
+    async fn reserve_nonce_for_build(
+        &self,
+        wallet: Address,
+    ) -> Result<u64, RetryCallbackError<BuildAttemptError>> {
+        if !self.nonce_allocator.is_seeded(wallet).await {
+            let chain_pending = self
+                .pending_transaction_count(wallet)
+                .await
+                .map_err(|error| match error {
+                    RetryCallbackError::Cancelled => RetryCallbackError::Cancelled,
+                    RetryCallbackError::Error(transport) => {
+                        RetryCallbackError::Error(BuildAttemptError::Transport(transport))
+                    }
+                })?;
+            self.nonce_allocator
+                .seed_if_unseeded(wallet, chain_pending)
+                .await;
+        }
+        Ok(self.nonce_allocator.handout(wallet).await)
     }
 
     /// Returns when the next attempt for `(wallet, nonce)` is due: the most
@@ -1111,7 +1141,7 @@ impl<
     /// Builds a gas-bumped retry for an existing `(wallet, nonce)`.
     ///
     /// Must reuse the same nonce and must **not** call
-    /// [`NonceAllocatorRegistry::reserve`](crate::nonce_allocator::NonceAllocatorRegistry::reserve).
+    /// [`Self::reserve_nonce_for_build`].
     /// XREF: https://github.com/agglayer/agglayer/issues/1319
     fn build_next_attempt_with_nonce(
         &self,
@@ -1127,10 +1157,10 @@ impl<
     /// resolves base gas parameters from the latest L1 fee estimate, and builds
     /// a signed settlement attempt.
     ///
-    /// Nonce reservation happens once per call (outside the retry loop). Transient
-    /// L1 RPC failures while fetching chain id or fees are retried in place using
-    /// the configured transient-failure policy; a build/sign failure is
-    /// non-recoverable.
+    /// Nonce handout happens once per call (outside the retry loop). The seeding
+    /// RPC and run-loop reconciliation use `retry_on_transient_failure`.
+    /// Transient L1 RPC failures while fetching chain id or fees are retried in
+    /// place using the same policy; a build/sign failure is non-recoverable.
     async fn build_next_attempt_with_new_nonce(
         &self,
     ) -> Result<
@@ -1139,15 +1169,7 @@ impl<
     > {
         let wallet = self.provider.default_signer_address();
         let attempt_number = self.next_attempt_number();
-        let nonce = self
-            .nonce_allocator
-            .reserve(self.provider.as_ref(), wallet)
-            .await
-            .map_err(|error| match error {
-                NonceAllocatorError::Transport(error) => {
-                    RetryCallbackError::Error(BuildAttemptError::Transport(error))
-                }
-            })?;
+        let nonce = self.reserve_nonce_for_build(wallet).await?;
         let mut retry_policy = BuildRetryPolicy::new();
 
         crate::utils::retry_callback_until_success(
@@ -2693,7 +2715,7 @@ mod tests {
                 .unwrap();
         }
 
-        // Allocator seeds from pending count on first reserve (expected: 2).
+        // Allocator seeds from pending count on first handout (expected: 2).
         let task = SettlementTask {
             id: mk_job_id(1),
             job: mk_job(),
