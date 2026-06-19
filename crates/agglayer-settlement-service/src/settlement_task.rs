@@ -428,7 +428,11 @@ impl<
                         nonces_used_externally.insert((wallet, nonce), tx_hash);
                         continue 'nonces;
                     };
-                    let Some(tx_result) = self.current_result_on_l1_for(tx_hash).await else {
+                    let tx_result = retry!(
+                        self.current_result_on_l1_for(tx_hash).await,
+                        "querying current result on L1 for tx {tx_hash}",
+                    );
+                    let Some(tx_result) = tx_result else {
                         continue 'start; // reorg
                     };
                     if tx_result.outcome != ContractCallOutcome::Success {
@@ -818,12 +822,14 @@ impl<
 
     async fn current_result_on_l1_for(
         &self,
-        _tx_hash: SettlementTxHash,
-    ) -> Option<ContractCallResult> {
-        // TODO: return the result on L1 if the tx_hash is already included on L1, and
-        // None otherwise Use retry_alloy_callback_until_success as needed
-        // XREF: https://github.com/agglayer/agglayer/issues/1382
-        todo!()
+        tx_hash: SettlementTxHash,
+    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>> {
+        crate::utils::retry_alloy_callback_until_success(
+            &self.tx_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || crate::utils::contract_call_result_on_l1(self.provider.as_ref(), tx_hash),
+        )
+        .await
     }
 
     async fn wait_for_settlement_of(
@@ -958,7 +964,7 @@ impl<
             return Ok(None);
         }
 
-        Ok(self.current_result_on_l1_for(tx_hash).await)
+        Ok(crate::utils::contract_call_result_from_receipt(&receipt))
     }
 
     async fn settlement_head_number(&self) -> Result<Option<u64>, WaitForSettlementError> {
