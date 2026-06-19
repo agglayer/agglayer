@@ -1152,13 +1152,20 @@ impl<
         request.build(self.provider.wallet()).await
     }
 
-    /// Builds the next settlement attempt reusing an existing `nonce`, bumping
-    /// gas fees over that nonce's most recent attempt.
+    /// Builds the next settlement attempt reusing an existing `nonce`.
     ///
-    /// Returns `Ok(None)` when the configured ceiling prevents a strict,
-    /// node-acceptable bump: the caller keeps waiting on the already-submitted
-    /// ceiling-priced attempt rather than broadcasting an underpriced
-    /// replacement.
+    /// When a prior attempt for the nonce is still pending (a live tx in the
+    /// mempool), this bumps gas over that nonce's most recent attempt and
+    /// returns `Ok(None)` if the configured ceiling prevents a strict,
+    /// node-acceptable bump — the caller then keeps waiting on the
+    /// already-submitted ceiling-priced attempt rather than broadcasting an
+    /// underpriced replacement.
+    ///
+    /// When no attempt is pending (every prior attempt errored on broadcast, so
+    /// there is nothing in the mempool to replace), it re-broadcasts on the
+    /// same nonce at freshly-resolved base fees and always returns
+    /// `Ok(Some)`. This keeps a nonce making progress even when a failed
+    /// broadcast left its most recent attempt recorded at the ceiling.
     async fn build_next_attempt_with_nonce(
         &self,
         wallet: Address,
@@ -1166,6 +1173,12 @@ impl<
     ) -> Result<Option<(SettlementAttemptNumber, TxEnvelope)>, RetryCallbackError<BuildAttemptError>>
     {
         let attempt_number = self.next_attempt_number();
+        // A replacement only has to out-bid a live (pending) tx. If every prior
+        // attempt for this nonce errored on broadcast, there is nothing in the
+        // mempool to replace, so we re-broadcast at freshly-resolved fees rather
+        // than bumping over the last attempt (which could otherwise stall
+        // forever once those fees reach the ceiling).
+        let replacing_pending_tx = self.is_any_attempt_pending_for_nonce(wallet, nonce);
         let (previous_max_fee_per_gas, previous_max_priority_fee_per_gas) = self
             .latest_attempt_fees_for_nonce(wallet, nonce)
             .unwrap_or((0, 0));
@@ -1175,19 +1188,26 @@ impl<
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || async {
-                // The nonce is fixed for a replacement; only chain id and the
-                // fee estimate are read, concurrently, to keep each (retried)
-                // build to one round-trip.
+                // The nonce is fixed; only chain id and the fee estimate are
+                // read, concurrently, to keep each (retried) build to one
+                // round-trip.
                 let (chain_id, estimate) = tokio::try_join!(
                     self.provider.get_chain_id().into_future(),
                     self.provider.estimate_eip1559_fees().into_future(),
                 )?;
-                let Some(gas) = self.bump_gas_params(
-                    previous_max_fee_per_gas,
-                    previous_max_priority_fee_per_gas,
-                    &estimate,
-                ) else {
-                    return Ok(None);
+                let gas = if replacing_pending_tx {
+                    // Out-bid the live tx; impossible once it sits at the ceiling.
+                    let Some(gas) = self.bump_gas_params(
+                        previous_max_fee_per_gas,
+                        previous_max_priority_fee_per_gas,
+                        &estimate,
+                    ) else {
+                        return Ok(None);
+                    };
+                    gas
+                } else {
+                    // Nothing live to replace: re-broadcast at base fees.
+                    self.resolve_base_gas_params(&estimate)
                 };
                 let tx = self.build_attempt(wallet, nonce, chain_id, gas).await?;
                 Ok(Some((attempt_number, tx)))
@@ -2907,7 +2927,9 @@ mod tests {
             )]),
         )]);
 
-        // Ceilings pinned to the previous fees: no strict bump is possible.
+        // The sole attempt is still pending (`result: None` above): a live tx
+        // sits in the mempool, and the ceilings are pinned to its fees, so no
+        // strict bump is possible and waiting (not re-broadcasting) is correct.
         let config = SettlementTransactionConfig {
             max_fee_per_gas_ceiling: 30_000_000_000,
             max_priority_fee_per_gas_ceiling: 1_000_000_000,
@@ -2929,6 +2951,72 @@ mod tests {
             .await
             .expect("build should not fail");
         assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn build_next_attempt_with_nonce_rebroadcasts_errored_attempt_at_ceiling() {
+        use alloy::consensus::Transaction as _;
+
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_address = signer.address();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        // The only attempt for this nonce errored on broadcast (no live tx in the
+        // mempool) and sits at the fee ceiling. There is nothing to replace, so
+        // the task must re-broadcast on the same nonce at freshly-resolved fees
+        // rather than stall by bumping past the ceiling.
+        let nonce = Nonce(4);
+        let previous = SettlementAttempt {
+            sender_wallet: wallet_address.into(),
+            nonce,
+            hash: mk_tx_hash(1),
+            submission_time: SystemTime::UNIX_EPOCH,
+            max_fee_per_gas: 30_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+        let attempts = BTreeMap::from([(
+            (wallet_address, nonce),
+            BTreeMap::from([(
+                SettlementAttemptNumber(0),
+                ActiveSettlementAttempt {
+                    attempt: previous,
+                    result: Some(mk_client_error(7)),
+                },
+            )]),
+        )]);
+
+        // Ceilings pinned to the previous fees: a strict bump is impossible.
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_ceiling: 30_000_000_000,
+            max_priority_fee_per_gas_ceiling: 1_000_000_000,
+            ..SettlementTransactionConfig::default()
+        };
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(config),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts,
+        };
+
+        let (attempt_number, envelope) = task
+            .build_next_attempt_with_nonce(wallet_address, nonce)
+            .await
+            .expect("build should not fail")
+            .expect("an errored attempt has no live tx to replace, so it must re-broadcast");
+
+        assert_eq!(attempt_number, SettlementAttemptNumber(1));
+        assert_eq!(envelope.nonce(), 4);
+        assert!(matches!(envelope, TxEnvelope::Eip1559(_)));
+        // Re-broadcast at base fees, within the configured ceiling; no strict bump.
+        assert!(envelope.max_fee_per_gas() <= 30_000_000_000);
+        assert!(envelope.max_priority_fee_per_gas().unwrap() <= envelope.max_fee_per_gas());
     }
 
     #[test]
