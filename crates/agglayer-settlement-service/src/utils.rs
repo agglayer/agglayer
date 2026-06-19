@@ -1,10 +1,10 @@
 use std::{future::Future, time::Duration};
 
 use agglayer_config::settlement_service::TxRetryPolicy;
-use agglayer_types::{Nonce, SettlementTxHash};
+use agglayer_types::{ContractCallOutcome, ContractCallResult, Nonce, SettlementTxHash};
 use alloy::{
-    network::TransactionResponse as _,
-    primitives::Address,
+    network::{ReceiptResponse, TransactionResponse as _},
+    primitives::{Address, Bytes},
     providers::Provider,
     transports::{
         layers::{RateLimitRetryPolicy, RetryPolicy},
@@ -140,6 +140,41 @@ pub(crate) async fn tx_hash_on_l1_for_nonce(
         .then(|| SettlementTxHash::from(tx.tx_hash())))
 }
 
+/// Builds the [`ContractCallResult`] for a mined transaction receipt, or
+/// `None` if the receipt has no block info yet.
+///
+/// The metadata (return data or revert reason) is not available in receipts,
+/// so it is left empty.
+pub(crate) fn contract_call_result_from_receipt(
+    receipt: &impl ReceiptResponse,
+) -> Option<ContractCallResult> {
+    let block_hash = receipt.block_hash()?;
+    let block_number = receipt.block_number()?;
+    Some(ContractCallResult {
+        outcome: if receipt.status() {
+            ContractCallOutcome::Success
+        } else {
+            ContractCallOutcome::Revert
+        },
+        metadata: Bytes::new(),
+        block_hash,
+        block_number,
+        tx_hash: SettlementTxHash::from(receipt.transaction_hash()),
+    })
+}
+
+/// Returns the [`ContractCallResult`] for a transaction currently included on
+/// L1, or `None` if it is not included (missing receipt or no block info).
+pub(crate) async fn contract_call_result_on_l1(
+    provider: &impl Provider,
+    tx_hash: SettlementTxHash,
+) -> TransportResult<Option<ContractCallResult>> {
+    let Some(receipt) = provider.get_transaction_receipt(tx_hash.into()).await? else {
+        return Ok(None);
+    };
+    Ok(contract_call_result_from_receipt(&receipt))
+}
+
 /// Builds an Anvil-backed L1 provider signing with its first funded account.
 #[cfg(test)]
 pub(crate) fn build_provider(
@@ -171,8 +206,9 @@ mod tests {
     use agglayer_config::Multiplier;
     use alloy::{
         consensus::Transaction as _,
+        network::TransactionBuilder as _,
         node_bindings::Anvil,
-        primitives::U256,
+        primitives::{B256, U256},
         providers::{Provider, ProviderBuilder},
         rpc::types::TransactionRequest,
         transports::{RpcError, TransportError},
@@ -688,6 +724,78 @@ mod tests {
         let result = tx_hash_on_l1_for_nonce(&provider, sender, Nonce(0))
             .await
             .unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn contract_call_result_on_l1_returns_success_for_mined_tx() {
+        let anvil = Anvil::new().spawn();
+        let provider = build_provider(&anvil);
+
+        let tx = TransactionRequest::default()
+            .to(anvil.addresses()[1])
+            .value(U256::from(1));
+        let receipt = provider
+            .send_transaction(tx)
+            .await
+            .unwrap()
+            .get_receipt()
+            .await
+            .unwrap();
+
+        let tx_hash = SettlementTxHash::from(receipt.transaction_hash);
+        let result = contract_call_result_on_l1(&provider, tx_hash)
+            .await
+            .unwrap()
+            .expect("mined tx should have a result");
+
+        assert_eq!(result.outcome, ContractCallOutcome::Success);
+        assert_eq!(result.metadata, Bytes::new());
+        assert_eq!(Some(result.block_hash), receipt.block_hash);
+        assert_eq!(Some(result.block_number), receipt.block_number);
+        assert_eq!(result.tx_hash, tx_hash);
+        assert_eq!(contract_call_result_from_receipt(&receipt), Some(result));
+    }
+
+    #[tokio::test]
+    async fn contract_call_result_on_l1_returns_revert_for_reverted_tx() {
+        let anvil = Anvil::new().spawn();
+        let provider = build_provider(&anvil);
+
+        // Deployment whose initcode immediately reverts (PUSH1 0 PUSH1 0 REVERT),
+        // with an explicit gas limit so the failing tx skips estimation and gets
+        // mined.
+        let tx = TransactionRequest::default()
+            .into_create()
+            .input(Bytes::from_static(&[0x60, 0x00, 0x60, 0x00, 0xfd]).into())
+            .gas_limit(100_000);
+        let receipt = provider
+            .send_transaction(tx)
+            .await
+            .unwrap()
+            .get_receipt()
+            .await
+            .unwrap();
+        assert!(!receipt.status());
+
+        let result =
+            contract_call_result_on_l1(&provider, SettlementTxHash::from(receipt.transaction_hash))
+                .await
+                .unwrap()
+                .expect("mined reverted tx should have a result");
+
+        assert_eq!(result.outcome, ContractCallOutcome::Revert);
+    }
+
+    #[tokio::test]
+    async fn contract_call_result_on_l1_returns_none_for_unknown_tx() {
+        let anvil = Anvil::new().spawn();
+        let provider = build_provider(&anvil);
+
+        let result =
+            contract_call_result_on_l1(&provider, SettlementTxHash::from(B256::repeat_byte(0x42)))
+                .await
+                .unwrap();
         assert_eq!(result, None);
     }
 
