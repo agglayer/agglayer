@@ -10,6 +10,7 @@ use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+use crate::nonce_allocator::NonceAllocatorRegistry;
 use crate::settlement_task::{
     SettlementTask, SettlementTaskRunResult, TaskAdminCommand, TaskControlHandle,
 };
@@ -28,6 +29,7 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
     result_watchers:
         Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
+    nonce_allocators: Arc<NonceAllocatorRegistry>,
 }
 
 pub struct SettlementJobWatcher {
@@ -69,8 +71,11 @@ impl<
             cancellation_token,
             task_controls: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
+            nonce_allocators: Arc::new(NonceAllocatorRegistry::new()),
         };
         // TODO: load all pending settlements from rocksdb and run them
+        // When spawning recovered tasks, pass `nonce_allocators` and seed from DB + RPC.
+        // XREF: https://github.com/agglayer/agglayer/issues/1230
         Ok(this)
     }
 
@@ -127,6 +132,7 @@ impl<
             self.tx_config.clone(),
             self.provider.clone(),
             self.store.clone(),
+            self.nonce_allocators.clone(),
             task_control,
         )
         .await?;
@@ -421,5 +427,216 @@ mod tests {
         let error = result.err().expect("result should be an error");
 
         assert!(error.to_string().contains("No settlement job found for id"));
+    }
+
+    mod nonce_allocator_integration {
+        use std::{
+            sync::{Arc, Mutex},
+            time::Duration,
+        };
+
+        use agglayer_storage::tests::mocks::MockStateStore;
+        use agglayer_types::{Nonce, SettlementJob};
+        use alloy::{
+            node_bindings::Anvil,
+            primitives::U256,
+            providers::{Provider, WalletProvider},
+            rpc::types::TransactionRequest,
+        };
+
+        use super::*;
+        use crate::utils::build_provider;
+
+        fn mk_settlement_job() -> SettlementJob {
+            SettlementJob {
+                contract_address: agglayer_types::Address::from([1; 20]),
+                calldata: vec![2, 3].into(),
+                eth_value: U256::from(0),
+                gas_limit: 100_000,
+            }
+        }
+
+        fn mock_store_recording_attempts(
+            job_count: usize,
+            attempt_count: usize,
+            captured_nonces: Arc<Mutex<Vec<u64>>>,
+        ) -> MockStateStore {
+            let mut store = MockStateStore::new();
+            store
+                .expect_insert_settlement_job()
+                .times(job_count)
+                .returning(|_, _| Ok(()));
+            store
+                .expect_insert_settlement_attempt()
+                .times(attempt_count)
+                .returning(move |_, _, attempt| {
+                    captured_nonces.lock().unwrap().push(attempt.nonce.0);
+                    Ok(())
+                });
+            store
+        }
+
+        async fn mk_anvil_service(
+            provider: Arc<impl Provider + WalletProvider + 'static>,
+            store: Arc<MockStateStore>,
+        ) -> SettlementService<impl Provider + WalletProvider + 'static, MockStateStore> {
+            SettlementService::start(
+                SettlementServiceConfig::default(),
+                Arc::new(SettlementTransactionConfig::default()),
+                provider,
+                store,
+                CancellationToken::new(),
+            )
+            .await
+            .expect("settlement service should start")
+        }
+
+        async fn wait_for_recorded_nonces(captured_nonces: &Arc<Mutex<Vec<u64>>>, count: usize) {
+            tokio::time::timeout(Duration::from_secs(10), async {
+                loop {
+                    if captured_nonces.lock().unwrap().len() >= count {
+                        return;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("timed out waiting for settlement attempts to be recorded");
+        }
+
+        #[tokio::test]
+        async fn concurrent_jobs_receive_distinct_nonces() {
+            let anvil = Anvil::new().spawn();
+            let provider = Arc::new(build_provider(&anvil));
+            let captured_nonces = Arc::new(Mutex::new(Vec::new()));
+            let store = Arc::new(mock_store_recording_attempts(
+                2,
+                2,
+                captured_nonces.clone(),
+            ));
+            let service = Arc::new(mk_anvil_service(provider, store).await);
+
+            let service_a = service.clone();
+            let service_b = service.clone();
+            let (watcher_a, watcher_b) = tokio::join!(
+                async {
+                    service_a
+                        .request_new_settlement(mk_settlement_job())
+                        .await
+                        .expect("job a")
+                },
+                async {
+                    service_b
+                        .request_new_settlement(mk_settlement_job())
+                        .await
+                        .expect("job b")
+                },
+            );
+
+            wait_for_recorded_nonces(&captured_nonces, 2).await;
+
+            service
+                .admin_abort_task(watcher_a.job_id())
+                .await
+                .expect("abort job a");
+            service
+                .admin_abort_task(watcher_b.job_id())
+                .await
+                .expect("abort job b");
+
+            let mut nonces = captured_nonces.lock().unwrap().clone();
+            nonces.sort_unstable();
+            assert_eq!(nonces.len(), 2, "expected two recorded attempts");
+            assert_ne!(nonces[0], nonces[1], "concurrent jobs must not share a nonce");
+            assert_eq!(
+                nonces[1],
+                nonces[0] + 1,
+                "concurrent jobs should receive gap-free nonces"
+            );
+        }
+
+        #[tokio::test]
+        async fn sequential_jobs_increment_nonce() {
+            let anvil = Anvil::new().spawn();
+            let provider = Arc::new(build_provider(&anvil));
+            let captured_nonces = Arc::new(Mutex::new(Vec::new()));
+            let store = Arc::new(mock_store_recording_attempts(
+                2,
+                2,
+                captured_nonces.clone(),
+            ));
+            let service = Arc::new(mk_anvil_service(provider, store).await);
+
+            let watcher_a = service
+                .request_new_settlement(mk_settlement_job())
+                .await
+                .expect("job a");
+            wait_for_recorded_nonces(&captured_nonces, 1).await;
+            service
+                .admin_abort_task(watcher_a.job_id())
+                .await
+                .expect("abort job a");
+
+            let watcher_b = service
+                .request_new_settlement(mk_settlement_job())
+                .await
+                .expect("job b");
+            wait_for_recorded_nonces(&captured_nonces, 2).await;
+            service
+                .admin_abort_task(watcher_b.job_id())
+                .await
+                .expect("abort job b");
+
+            let nonces = captured_nonces.lock().unwrap().clone();
+            assert_eq!(nonces.len(), 2);
+            assert_eq!(nonces[1], nonces[0] + 1);
+        }
+
+        #[tokio::test]
+        async fn external_nonce_use_advances_allocator() {
+            let anvil = Anvil::new().spawn();
+            let provider = Arc::new(build_provider(&anvil));
+            let store = Arc::new(MockStateStore::new());
+            let service = mk_anvil_service(provider.clone(), store).await;
+            let wallet = provider.default_signer_address();
+
+            let reserved = service
+                .nonce_allocators
+                .reserve(provider.as_ref(), wallet)
+                .await
+                .expect("reserve first nonce");
+            assert_eq!(reserved, 0);
+
+            provider
+                .send_transaction(
+                    TransactionRequest::default()
+                        .to(anvil.addresses()[1])
+                        .value(U256::from(1))
+                        .nonce(reserved),
+                )
+                .await
+                .expect("send external transaction")
+                .get_receipt()
+                .await
+                .expect("mine external transaction");
+
+            let chain_pending = provider
+                .get_transaction_count(wallet)
+                .pending()
+                .await
+                .expect("read pending nonce");
+            service
+                .nonce_allocators
+                .reconcile_next_pending(wallet, chain_pending)
+                .await;
+
+            let next = service
+                .nonce_allocators
+                .reserve(provider.as_ref(), wallet)
+                .await
+                .expect("reserve after external nonce use");
+            assert_eq!(next, reserved + 1);
+            assert_eq!(next, Nonce(1).0);
+        }
     }
 }
