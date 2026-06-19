@@ -985,11 +985,16 @@ mod tests {
             let service = mk_anvil_service(provider.clone(), store).await;
             let wallet = provider.default_signer_address();
 
-            let reserved = service
-                .nonce_allocators
-                .reserve(provider.as_ref(), wallet)
+            let chain_pending = provider
+                .get_transaction_count(wallet)
+                .pending()
                 .await
-                .expect("reserve first nonce");
+                .expect("read pending nonce for seed");
+            service
+                .nonce_allocators
+                .seed_if_unseeded(wallet, chain_pending)
+                .await;
+            let reserved = service.nonce_allocators.handout(wallet).await;
             assert_eq!(reserved, 0);
 
             provider
@@ -1015,11 +1020,7 @@ mod tests {
                 .reconcile_next_pending(wallet, chain_pending)
                 .await;
 
-            let next = service
-                .nonce_allocators
-                .reserve(provider.as_ref(), wallet)
-                .await
-                .expect("reserve after external nonce use");
+            let next = service.nonce_allocators.handout(wallet).await;
             assert_eq!(next, reserved + 1);
             assert_eq!(next, Nonce(1).0);
         }
