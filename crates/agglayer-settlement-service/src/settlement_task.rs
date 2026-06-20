@@ -1420,8 +1420,6 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
-    use super::*;
-
     use agglayer_config::Multiplier;
     use agglayer_storage::{error::Error, tests::mocks::MockStateStore};
     use agglayer_types::{
@@ -1440,6 +1438,7 @@ mod tests {
     };
     use rstest::rstest;
 
+    use super::*;
     use crate::utils::build_provider;
 
     fn test_signer() -> PrivateKeySigner {
