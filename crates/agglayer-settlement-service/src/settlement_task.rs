@@ -194,6 +194,8 @@ pub enum TaskAdminCommand {
     ReloadAndRestart,
 }
 
+const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
+
 pub struct TaskControl {
     cancellation_token: CancellationToken,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
@@ -206,11 +208,8 @@ pub struct TaskControlHandle {
 }
 
 impl TaskControlHandle {
-    pub fn new(
-        parent_cancellation_token: &CancellationToken,
-        admin_commands: mpsc::Sender<TaskAdminCommand>,
-        admin_command_receiver: mpsc::Receiver<TaskAdminCommand>,
-    ) -> (Self, TaskControl) {
+    pub fn new(parent_cancellation_token: &CancellationToken) -> (Self, TaskControl) {
+        let (admin_commands, admin_command_receiver) = mpsc::channel(ADMIN_CHANNEL_BUFFER_SIZE);
         let cancellation_token = parent_cancellation_token.child_token();
         (
             Self {
@@ -1421,6 +1420,8 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
+    use super::*;
+
     use agglayer_config::Multiplier;
     use agglayer_storage::{error::Error, tests::mocks::MockStateStore};
     use agglayer_types::{
@@ -1438,9 +1439,7 @@ mod tests {
         transports::TransportErrorKind,
     };
     use rstest::rstest;
-    use tokio::sync::mpsc;
 
-    use super::*;
     use crate::utils::build_provider;
 
     fn test_signer() -> PrivateKeySigner {
@@ -1462,9 +1461,7 @@ mod tests {
     }
 
     fn mk_control() -> TaskControl {
-        let (admin_sender, admin_receiver) = mpsc::channel(1);
-        let (_handle, control) =
-            TaskControlHandle::new(&CancellationToken::new(), admin_sender, admin_receiver);
+        let (_handle, control) = TaskControlHandle::new(&CancellationToken::new());
         control
     }
 

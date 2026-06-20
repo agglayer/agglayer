@@ -94,6 +94,31 @@ fn insert_settlement_job_duplicate_fails() {
 }
 
 #[test]
+fn list_settlement_job_ids_returns_all_jobs_in_key_order() {
+    let (_tmp, _db, store) = setup_store();
+    let first_job_id = mk_job_id(1);
+    let second_job_id = mk_job_id(2);
+    let third_job_id = mk_job_id(3);
+
+    store
+        .insert_settlement_job(&third_job_id, &mk_settlement_job(3))
+        .expect("third job insert must succeed");
+    store
+        .insert_settlement_job(&first_job_id, &mk_settlement_job(1))
+        .expect("first job insert must succeed");
+    store
+        .insert_settlement_job(&second_job_id, &mk_settlement_job(2))
+        .expect("second job insert must succeed");
+
+    assert_eq!(
+        store
+            .list_settlement_job_ids()
+            .expect("job id scan must succeed"),
+        vec![first_job_id, second_job_id, third_job_id]
+    );
+}
+
+#[test]
 fn get_certificate_settlement_job_id_returns_none_when_missing() {
     let (_tmp, _db, store) = setup_store();
 
