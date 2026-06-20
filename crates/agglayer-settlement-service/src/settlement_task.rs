@@ -321,7 +321,7 @@ impl<
         store: Arc<SettlementStore>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
-        let id = Self::settlement_job_id_for(store.as_ref(), certificate_id).await?;
+        let id = Self::reserve_settlement_job_id(store.as_ref(), certificate_id).await?;
         let this = Self {
             id,
             job,
@@ -335,7 +335,7 @@ impl<
         Ok((id, this))
     }
 
-    async fn settlement_job_id_for(
+    async fn reserve_settlement_job_id(
         store: &SettlementStore,
         certificate_id: Option<CertificateId>,
     ) -> eyre::Result<SettlementJobId> {
