@@ -84,7 +84,7 @@ Proof outputs include previous and new pessimistic roots.
 ## Proof mode
 
 The verification mode configured for a network,
-for example legacy ECDSA, multisig, or STARK plus multisig.
+for example multisig or STARK plus multisig.
 Mode selection determines which checks run for each certificate.
 
 ## Settlement

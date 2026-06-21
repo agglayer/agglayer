@@ -9,17 +9,16 @@ The PP has a public input called `aggchain_hash`. As of version 0.3.5, all paths
 
 Each case corresponds to what the chain may submit to the agglayer.
 
-| #   | Case             | Verified in Agglayer | Verified in PP   | Commitment Version           |
-| --- | ---------------- | -------------------- | ---------------- | ---------------------------- |
-| 1   | Legacy ECDSA     | ECDSA                | Multisig 1-of-1  | V2, post-migration: V3 or V5 |
-| 2   | Multisig only    | Multisig             | Multisig         | V5                           |
-| 3   | STARK + Multisig | STARK + Multisig     | STARK + Multisig | V5                           |
+| #   | Case             | Verified in Agglayer | Verified in PP   | Commitment Version |
+| --- | ---------------- | -------------------- | ---------------- | ------------------ |
+| 1   | Multisig only    | Multisig             | Multisig         | V5                 |
+| 2   | STARK + Multisig | STARK + Multisig     | STARK + Multisig | V5                 |
 
 Notes:
 
-- Case 1 corresponds to all chains with a simple ECDSA performed by the trusted sequencer.
-  - For each of them, the signer is registered in the L1 as a multisig 1-of-1.
-- Katana fits in case 3
+- Chains that previously used legacy ECDSA now submit multisig 1-of-1.
+  The signer is registered in the L1 as a multisig 1-of-1.
+- Katana fits in case 2
   - Single signer is registered in the L1 as a multisig 1-of-1.
   - Agglayer and PP verify this multisig alongside the FEP aggchain proof.
 

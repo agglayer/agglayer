@@ -34,8 +34,6 @@ pub enum DisabledBy {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkType {
     Unspecified = 0,
-    /// ECDSA-based network type.
-    Ecdsa = 1,
     /// Generic network type.
     Generic = 2,
     /// Multisig-only network type.
@@ -47,7 +45,7 @@ pub enum NetworkType {
 impl From<&aggchain_proof::AggchainData> for NetworkType {
     fn from(value: &aggchain_proof::AggchainData) -> Self {
         match value {
-            aggchain_proof::AggchainData::ECDSA { .. } => NetworkType::Ecdsa,
+            aggchain_proof::AggchainData::ECDSA { .. } => NetworkType::MultisigOnly,
             aggchain_proof::AggchainData::Generic { .. } => NetworkType::Generic,
             aggchain_proof::AggchainData::MultisigOnly { .. } => NetworkType::MultisigOnly,
             aggchain_proof::AggchainData::MultisigAndAggchainProof { .. } => {

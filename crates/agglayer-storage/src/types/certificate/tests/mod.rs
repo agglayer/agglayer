@@ -612,9 +612,6 @@ fn certificate_proto_roundtrip_preserves_nested_certificate_data() {
 }
 
 #[rstest::rstest]
-#[case(proto_aggchain_data(AggchainData::ECDSA {
-    signature: sig(0x80, 0x81),
-}))]
 #[case(proto_aggchain_data(AggchainData::Generic {
     proof: mock_sp1_proof("v5.2.2"),
     aggchain_params: digest(0x82),
@@ -692,8 +689,8 @@ fn certificate_proto_rejects_malformed_nested_submessages() {
                 },
             )),
         }],
-        ..proto_certificate(proto_aggchain_data(AggchainData::ECDSA {
-            signature: sig(0x99, 0x9a),
+        ..proto_certificate(proto_aggchain_data(AggchainData::MultisigOnly {
+            multisig: MultisigPayload(vec![Some(sig(0x99, 0x9a))]),
         }))
     };
     assert!(Certificate::try_from(missing_l1_leaf_inner).is_err());

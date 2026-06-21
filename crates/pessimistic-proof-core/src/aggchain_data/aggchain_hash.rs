@@ -5,7 +5,7 @@ use agglayer_primitives::{
 };
 use hex_literal::hex;
 
-use crate::aggchain_data::{aggchain_proof::AggchainProof, AggchainData, MultiSignature, Vkey};
+use crate::aggchain_data::{aggchain_proof::AggchainProof, AggchainData, Vkey};
 
 struct ConsensusType(u32);
 
@@ -73,16 +73,6 @@ impl AggchainHashValues {
 impl From<&AggchainData> for AggchainHashValues {
     fn from(value: &AggchainData) -> Self {
         match value {
-            AggchainData::LegacyEcdsa { signer, signature } => AggchainHashValues::ConsensusType1 {
-                aggchain_vkey: None,
-                aggchain_params: None,
-                multisig_hash: MultiSignature {
-                    signatures: vec![Some(*signature)],
-                    expected_signers: vec![*signer],
-                    threshold: 1,
-                }
-                .multisig_hash(),
-            },
             AggchainData::MultisigOnly(multisig) => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: None,
                 aggchain_params: None,

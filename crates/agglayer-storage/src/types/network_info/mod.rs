@@ -62,7 +62,6 @@ impl TryFrom<v0::NetworkType> for agglayer_types::NetworkType {
         match value {
             NetworkType::Generic => Ok(agglayer_types::NetworkType::Generic),
             NetworkType::Unspecified => Ok(agglayer_types::NetworkType::Unspecified),
-            NetworkType::Ecdsa => Ok(agglayer_types::NetworkType::Ecdsa),
             NetworkType::MultisigOnly => Ok(agglayer_types::NetworkType::MultisigOnly),
             NetworkType::MultisigAndAggchainProof => {
                 Ok(agglayer_types::NetworkType::MultisigAndAggchainProof)

@@ -1,25 +1,21 @@
 use std::time::Duration;
 
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{
-    aggchain_proof::AggchainData, testutils::compute_signature_info, CertificateId,
-    CertificateStatus,
-};
+use agglayer_types::{testutils::sign_multisig_1_of_1, CertificateId, CertificateStatus};
 use fail::FailScenario;
 use integrations::{
     agglayer_setup::{setup_network, start_agglayer},
     wait_for_settlement_or_error,
 };
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
-use pessimistic_proof::core::commitment::SignatureCommitmentVersion;
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
 #[rstest]
-#[case::cert_task_type_0_ecdsa(
+#[case::cert_task_type_1_multisig(
     &["certificate_task::process_impl::about_to_record_candidate", "network_task::make_progress::settlement_submitted"],
-    crate::common::type_0_ecdsa_forest()
+    crate::common::type_1_multisig_forest()
 )]
 #[tokio::test]
 #[timeout(Duration::from_secs(90))]
@@ -64,7 +60,7 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(240))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     // Settle one certificate, shutdown node.
     // Send other certificate settlement tx and on timeout (but tx has settled in
@@ -105,16 +101,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     let mut certificate2 = state.apply_events(&imported_bridge_events, &withdrawals);
     certificate2.height = 1.into();
-    let (_, signature2, _) = compute_signature_info(
-        certificate2.new_local_exit_root,
-        &certificate2.imported_bridge_exits,
-        &state.wallet,
-        certificate2.height,
-        SignatureCommitmentVersion::V3,
-    );
-    certificate2.aggchain_data = AggchainData::ECDSA {
-        signature: signature2,
-    };
+    sign_multisig_1_of_1(&mut certificate2, &state.wallet);
 
     let certificate2_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2.clone()])
@@ -145,7 +132,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(120))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
     // Submit a certificate, inject an invalid tx hash in the header, then shutdown
     // node. Recover on startup and verify the node can detect and recover from

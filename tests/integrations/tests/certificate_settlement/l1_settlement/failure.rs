@@ -11,7 +11,7 @@ use rstest::rstest;
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn transaction_with_receipt_status_0(#[case] state: Forest) {
     // Process the transaction with the execution status 0 (it is reverted).
     // Certificate should become `InError`.
@@ -46,7 +46,7 @@ async fn transaction_with_receipt_status_0(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
     // If transaction failed (reverted) due to low gas, settlement logic should
     // retry it. Transaction should be settled eventually.
@@ -97,7 +97,7 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn transaction_without_receipt_status(#[case] state: Forest) {
     // If transaction is lost or not included,
     let tmp_dir = TempDBDir::new();
@@ -131,7 +131,7 @@ async fn transaction_without_receipt_status(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
     // Retry the settlement transaction limited number of times,
     // then the certificate should be in InError status with a SettlementError about
@@ -184,7 +184,7 @@ async fn transaction_with_receipt_timeout_many_times(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
     // Retry the settlement transaction 2 times because of induced timeouts,
     // then the certificate should be settled

@@ -18,7 +18,7 @@ use rstest::rstest;
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn successfully_push_certificate(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -45,12 +45,11 @@ async fn successfully_push_certificate(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(200))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn send_multiple_certificates(#[case] mut state: Forest) {
     use agglayer_contracts::contracts::PolygonRollupManager::VerifyPessimisticStateTransition;
-    use agglayer_types::{aggchain_proof::AggchainData, testutils::compute_signature_info};
+    use agglayer_types::testutils::sign_multisig_1_of_1;
     use alloy::providers::Provider as _;
-    use pessimistic_proof::core::commitment::SignatureCommitmentVersion;
     use tokio_util::sync::CancellationToken;
 
     let tmp_dir = TempDBDir::new();
@@ -65,14 +64,7 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
 
         let mut certificate = state.apply_events(&[], &withdrawals);
         certificate.height = i.into();
-        let (_, signature, _) = compute_signature_info(
-            certificate.new_local_exit_root,
-            &certificate.imported_bridge_exits,
-            &state.wallet,
-            certificate.height,
-            SignatureCommitmentVersion::V3,
-        );
-        certificate.aggchain_data = AggchainData::ECDSA { signature };
+        sign_multisig_1_of_1(&mut certificate, &state.wallet);
 
         let certificate_id: CertificateId = client
             .request("interop_sendCertificate", rpc_params![certificate.clone()])

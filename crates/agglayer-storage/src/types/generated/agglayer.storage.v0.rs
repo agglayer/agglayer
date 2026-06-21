@@ -440,8 +440,6 @@ pub struct LatestPendingCertificateId {
 pub enum NetworkType {
     /// Unspecified network type.
     Unspecified = 0,
-    /// ECDSA-based network type.
-    Ecdsa = 1,
     /// Generic network type.
     Generic = 2,
     /// / Multisig-only network type.
@@ -457,7 +455,6 @@ impl NetworkType {
     pub fn as_str_name(&self) -> &'static str {
         match self {
             Self::Unspecified => "NETWORK_TYPE_UNSPECIFIED",
-            Self::Ecdsa => "NETWORK_TYPE_ECDSA",
             Self::Generic => "NETWORK_TYPE_GENERIC",
             Self::MultisigOnly => "NETWORK_TYPE_MULTISIG_ONLY",
             Self::MultisigAndAggchainProof => "NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF",
@@ -467,7 +464,6 @@ impl NetworkType {
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
             "NETWORK_TYPE_UNSPECIFIED" => Some(Self::Unspecified),
-            "NETWORK_TYPE_ECDSA" => Some(Self::Ecdsa),
             "NETWORK_TYPE_GENERIC" => Some(Self::Generic),
             "NETWORK_TYPE_MULTISIG_ONLY" => Some(Self::MultisigOnly),
             "NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF" => Some(Self::MultisigAndAggchainProof),
@@ -665,7 +661,7 @@ pub struct MultisigOnly {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AggchainData {
     /// Active aggchain-data variant.
-    #[prost(oneof="aggchain_data::Data", tags="1, 2, 3, 4")]
+    #[prost(oneof="aggchain_data::Data", tags="2, 3, 4")]
     pub data: ::core::option::Option<aggchain_data::Data>,
 }
 /// Nested message and enum types in `AggchainData`.
@@ -673,9 +669,6 @@ pub mod aggchain_data {
     /// Active aggchain-data variant.
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Data {
-        /// Legacy single-signer ECDSA payload.
-        #[prost(message, tag="1")]
-        Ecdsa(super::Signature),
         /// Generic aggchain proof payload.
         #[prost(message, tag="2")]
         Generic(super::Generic),

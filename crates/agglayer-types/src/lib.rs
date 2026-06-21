@@ -17,7 +17,10 @@ mod settlement;
 pub mod testutils {
     pub use agglayer_sp1::testutils::{EMPTY_ELF, EMPTY_ELF_V5};
 
-    pub use crate::certificate::{compute_signature_info, dummy_sp1_stark_proof_with_version};
+    pub use crate::certificate::{
+        compute_signature_info, dummy_sp1_stark_proof_with_version, multisig_1_of_1_ctx,
+        resign_loaded_certificate_as_multisig_1_of_1, sign_multisig_1_of_1,
+    };
 }
 pub use certificate::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Height,

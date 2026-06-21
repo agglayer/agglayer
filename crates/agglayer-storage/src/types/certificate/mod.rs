@@ -169,7 +169,9 @@ impl From<CertificateV0> for Certificate {
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            aggchain_data: AggchainData::ECDSA { signature },
+            aggchain_data: AggchainData::MultisigOnly {
+                multisig: MultisigPayload(vec![Some(signature)]),
+            },
             metadata,
             custom_chain_data: vec![],
             l1_info_tree_leaf_count: None,
@@ -290,7 +292,9 @@ impl TryFrom<AggchainDataV1<'_>> for AggchainData {
 
     fn try_from(proof: AggchainDataV1) -> Result<Self, Self::Error> {
         Ok(match proof {
-            AggchainDataV1::ECDSA { signature } => Self::ECDSA { signature },
+            AggchainDataV1::ECDSA { signature } => Self::MultisigOnly {
+                multisig: MultisigPayload(vec![Some(signature)]),
+            },
             AggchainDataV1::GenericNoSignature {
                 proof,
                 aggchain_params,

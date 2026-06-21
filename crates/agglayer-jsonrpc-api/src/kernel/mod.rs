@@ -563,7 +563,9 @@ where
         &self,
         cert: &agglayer_types::Certificate,
     ) -> Result<(), SignatureVerificationError> {
-        use agglayer_types::{aggchain_data::MultisigCtx, aggchain_proof::AggchainData};
+        use agglayer_types::{
+            aggchain_data::MultisigCtx, aggchain_proof::AggchainData, SignerError,
+        };
 
         let sequencer_address = self
             .get_trusted_sequencer_address(u32::from(cert.network_id))
@@ -576,8 +578,12 @@ where
         };
 
         match &cert.aggchain_data {
-            AggchainData::ECDSA { signature } => {
-                cert.verify_legacy_ecdsa(sequencer_address, signature)
+            AggchainData::ECDSA { .. } => {
+                return Err(SignatureVerificationError::from_signer_error(
+                    SignerError::InvalidPessimisticProofSignature {
+                        expected_signer: sequencer_address,
+                    },
+                ));
             }
             AggchainData::Generic { signature, .. } => {
                 cert.verify_aggchain_proof_signature(sequencer_address, signature)

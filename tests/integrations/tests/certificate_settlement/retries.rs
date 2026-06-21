@@ -14,7 +14,7 @@ mod recovery;
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn retry_on_error(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -64,7 +64,7 @@ async fn retry_on_error(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn regression_pushing_certificate_while_settling(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -111,7 +111,7 @@ async fn regression_pushing_certificate_while_settling(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
