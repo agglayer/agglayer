@@ -13,7 +13,7 @@ use rstest::rstest;
 #[timeout(Duration::from_secs(180))]
 #[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn schedule_two_certs(#[case] mut state: Forest) {
-    use agglayer_types::Height;
+    use agglayer_types::{testutils::sign_multisig_1_of_1, Height};
 
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -26,6 +26,7 @@ async fn schedule_two_certs(#[case] mut state: Forest) {
     let certificate_one = state.apply_events(&[], &withdrawals);
     let mut certificate_two = state.apply_events(&[], &withdrawals);
     certificate_two.height = Height::new(1);
+    sign_multisig_1_of_1(&mut certificate_two, &state.wallet);
 
     let certificate_one_id: CertificateId = client
         .request(

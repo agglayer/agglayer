@@ -1,6 +1,26 @@
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
+use agglayer_contracts::contracts::{AggchainBase, PolygonRollupManager};
+use alloy::{
+    network::EthereumWallet,
+    primitives::U256,
+    providers::ProviderBuilder,
+    signers::{local::PrivateKeySigner, Signer},
+};
 use tokio::process::Command;
+
+/// Rollup ID for integration tests on the L1 Docker image.
+///
+/// Rollup 3 is deployed with `CONSENSUS_TYPE = 1` (multisig) and supports
+/// `getAggchainHash` for multisig-only certificates. Rollup 2 is legacy ECDSA;
+/// rollup 1 is AggchainFEP and reverts on `getAggchainHash`.
+pub const INTEGRATION_ROLLUP_ID: u32 = 3;
+
+const L1_DOCKER_CHAIN_ID: u64 = 1337;
+const ROLLUP_MANAGER_ADDRESS: &str = "0x0B306BF915C4d645ff596e518fAf3F9669b97016";
+/// Hardhat/Anvil account #0 — admin on rollups in the L1 Docker image.
+const L1_DEPLOYER_PRIVATE_KEY: &str =
+    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 pub struct L1Docker {
     id: String,
@@ -41,7 +61,10 @@ impl L1Docker {
 
         // Add delay to ensure the container is ready
         tokio::time::sleep(Duration::from_secs(5)).await;
-        Self { id, ws, rpc }
+
+        let l1 = Self { id, ws, rpc };
+        configure_integration_multisig(&l1).await;
+        l1
     }
 }
 
@@ -53,6 +76,50 @@ impl Drop for L1Docker {
             .output()
             .expect("Failed to remove docker container");
     }
+}
+
+/// Configure multisig 1-of-1 on the integration rollup using the L1 deployer key.
+async fn configure_integration_multisig(l1: &L1Docker) {
+    let deployer = PrivateKeySigner::from_str(L1_DEPLOYER_PRIVATE_KEY)
+        .expect("valid deployer private key")
+        .with_chain_id(Some(L1_DOCKER_CHAIN_ID));
+    let signer_address = deployer.address();
+
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(deployer))
+        .connect_http(
+            l1.rpc
+                .parse()
+                .expect("valid l1 rpc url"),
+        );
+
+    let rollup_manager = PolygonRollupManager::new(
+        ROLLUP_MANAGER_ADDRESS
+            .parse()
+            .expect("valid rollup manager address"),
+        provider.clone(),
+    );
+
+    let rollup_data = rollup_manager
+        .rollupIDToRollupData(INTEGRATION_ROLLUP_ID)
+        .call()
+        .await
+        .expect("rollup data for integration network");
+
+    let aggchain = AggchainBase::new(rollup_data.rollupContract, provider);
+
+    aggchain
+        .updateSignersAndThreshold(
+            vec![],
+            vec![(signer_address, "http://localhost".to_string()).into()],
+            U256::from(1),
+        )
+        .send()
+        .await
+        .expect("send updateSignersAndThreshold")
+        .get_receipt()
+        .await
+        .expect("updateSignersAndThreshold receipt");
 }
 
 pub fn next_available_addr() -> std::net::SocketAddr {
