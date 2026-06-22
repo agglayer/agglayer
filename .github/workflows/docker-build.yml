@@ -36,7 +36,7 @@ jobs:
       tags: ${{ steps.meta.outputs.tags }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Full history + tags so `git describe --tags` resolves a real
           # version for the build-args below (default checkout is shallow).
