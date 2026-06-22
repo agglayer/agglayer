@@ -18,7 +18,7 @@ fn deserialize_default_settlement_tx_config() {
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(10)
     );
-    assert_eq!(config.confirmations, 32);
+    assert_eq!(config.confirmations, 12);
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
     assert_eq!(config.gas_limit_ceiling, U256::from(60_000_000_u64));
     assert_eq!(config.max_fee_per_gas_ceiling, 100_000_000_000_u128);
@@ -62,7 +62,7 @@ fn deserialize_custom_config_2() {
     let content = std::fs::read_to_string(input).unwrap();
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
-    // Assert custom validium values
+    // Assert custom latest-block values
     assert_eq!(
         config.retry_on_transient_failure.initial_interval,
         Duration::from_secs(5)
@@ -124,41 +124,6 @@ fn deserialize_full_settlement_config() {
         1.2
     );
 
-    // Assert validium config
-    assert_eq!(
-        config
-            .validium_tx_config
-            .retry_on_transient_failure
-            .initial_interval,
-        Duration::from_secs(5)
-    );
-    assert_eq!(config.validium_tx_config.confirmations, 16);
-    assert_eq!(
-        config.validium_tx_config.settlement_policy,
-        SettlementPolicy::LatestBlock
-    );
-    assert_eq!(
-        config.validium_tx_config.gas_limit_ceiling,
-        U256::from(30_000_000_u64)
-    );
-    assert_eq!(
-        config.validium_tx_config.max_fee_per_gas_floor,
-        2_000_000_000_u128
-    );
-    assert_eq!(
-        config.validium_tx_config.max_fee_per_gas_ceiling,
-        50_000_000_000_u128
-    );
-
-    // Assert validium multipliers
-    assert_eq!(
-        config
-            .validium_tx_config
-            .gas_limit_multiplier_factor
-            .as_f64(),
-        1.05
-    );
-
     assert_toml_snapshot!(config);
 }
 
@@ -180,7 +145,7 @@ fn test_settlement_policy_safe() {
     let config: SettlementTransactionConfig = toml::from_str(&content).unwrap();
 
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
-    assert_eq!(config.confirmations, 32);
+    assert_eq!(config.confirmations, 12);
 
     assert_toml_snapshot!(config);
 }
@@ -216,7 +181,7 @@ fn test_settlement_transaction_config_defaults() {
     );
 
     // Test confirmation and finality
-    assert_eq!(config.confirmations, 32);
+    assert_eq!(config.confirmations, 12);
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
 
     // Test gas configuration

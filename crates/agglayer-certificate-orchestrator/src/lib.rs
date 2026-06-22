@@ -79,9 +79,7 @@ pub struct CertificateOrchestrator<
     PerEpochStore,
     StateStore,
     SettlementSvc,
-> where
-    SettlementSvc: SettlementServiceTrait,
-{
+> {
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
     /// Certifier task builder.

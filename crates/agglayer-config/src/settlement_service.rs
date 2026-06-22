@@ -275,19 +275,17 @@ pub struct SettlementServiceConfig {
 /// The Agglayer settlement configuration.
 ///
 /// This configuration controls how the Agglayer settlement service interacts
-/// with the L1 blockchain for settling certificates and validium transactions.
-/// It provides separate transaction configurations for certificate settlements
-/// and validium settlements, allowing fine-grained control over gas prices,
-/// retries, and confirmation requirements.
+/// with the L1 blockchain for settling certificates.
+/// It provides transaction configuration for certificate settlements, allowing
+/// fine-grained control over gas prices, retries, and confirmation
+/// requirements.
 ///
 /// # Configuration Structure
 ///
-/// The settlement configuration is organized into three main components:
+/// The settlement configuration is organized into two main components:
 ///
 /// - **Certificate Transaction Config**: Controls settlement transactions for
 ///   certificates with pessimistic proofs (proofs of state transitions).
-/// - **Validium Transaction Config**: Controls settlement transactions for
-///   validium data (off-chain data availability).
 /// - **Settlement Service Config**: General settlement service configuration.
 ///
 /// # Gas Price Configuration
@@ -327,14 +325,6 @@ pub struct SettlementConfig {
     #[serde(default)]
     pub pessimistic_proof_tx_config: SettlementTransactionConfig,
 
-    /// Configuration for validium settlement transactions.
-    ///
-    /// This controls how validium data (off-chain data availability proofs)
-    /// are submitted to the L1 settlement layer. Validium transactions may
-    /// have different gas and retry requirements than certificate transactions.
-    #[serde(default)]
-    pub validium_tx_config: SettlementTransactionConfig,
-
     /// General settlement service configuration.
     ///
     /// Contains service-wide settings that apply to the overall settlement
@@ -346,7 +336,7 @@ pub struct SettlementConfig {
 /// Default number of confirmations required
 /// for the transaction to resolve a receipt.
 const fn default_confirmations() -> usize {
-    32
+    12
 }
 
 fn default_gas_limit_ceiling() -> U256 {

@@ -1,12 +1,9 @@
-use ulid::Ulid;
+use agglayer_types::SettlementJobId;
 
 use crate::{
     schema::Codec as _,
     types::{
-        generated::agglayer::storage::v0::{
-            tx_result, BlockHash, BlockNumber, ContractCallMetadata, ContractCallOutcome,
-            ContractCallResult, TxHash, TxResult,
-        },
+        generated::agglayer::storage::v0::SettlementAttemptResult,
         settlement::{
             attempt,
             attempt_result::{Key, Value},
@@ -17,12 +14,20 @@ use crate::{
 #[test]
 fn settlement_attempt_result_roundtrip_codec() {
     let key = attempt::Key {
-        settlement_job_id: Ulid::from(7u128),
+        settlement_job_id: SettlementJobId::from(7u128),
         attempt_sequence_number: 3,
     };
-    let value = mk_tx_result_success();
+    let value = SettlementAttemptResult::contract_call_success_for_test(23);
 
     let encoded_key = key.encode().expect("Unable to encode key");
+    let expected_key = [
+        key.settlement_job_id.to_be_bytes().as_slice(),
+        &3_u64.to_be_bytes(),
+    ]
+    .concat();
+    assert_eq!(encoded_key.len(), Key::LEN);
+    assert_eq!(encoded_key, expected_key);
+
     let decoded_key = Key::decode(&encoded_key).expect("Unable to decode key");
     assert_eq!(decoded_key.settlement_job_id, key.settlement_job_id);
     assert_eq!(
@@ -33,24 +38,4 @@ fn settlement_attempt_result_roundtrip_codec() {
     let encoded_value = value.encode().expect("Unable to encode value");
     let decoded_value = Value::decode(&encoded_value).expect("Unable to decode value");
     assert_eq!(decoded_value, value);
-}
-
-fn mk_tx_result_success() -> TxResult {
-    TxResult {
-        tx_result: Some(tx_result::TxResult::ContractCallResult(
-            ContractCallResult {
-                outcome: ContractCallOutcome::Success as i32,
-                metadata: Some(ContractCallMetadata {
-                    metadata: vec![0xab, 0xcd].into(),
-                }),
-                block_hash: Some(BlockHash {
-                    hash: vec![0x44; 32].into(),
-                }),
-                block_number: Some(BlockNumber { number: 123 }),
-                tx_hash: Some(TxHash {
-                    hash: vec![0x55; 32].into(),
-                }),
-            },
-        )),
-    }
 }

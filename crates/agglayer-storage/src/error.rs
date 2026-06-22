@@ -23,6 +23,13 @@ pub enum Error {
     #[error("No proof found")]
     NoProof,
 
+    #[error("Unreadable proof for certificate {id}: {source}")]
+    UnreadableProof {
+        id: CertificateId,
+        #[source]
+        source: DBError,
+    },
+
     #[error("The store is already in packing mode")]
     AlreadyInPackingMode,
 
@@ -46,6 +53,15 @@ pub enum Error {
 
     #[error("Smt node not found")]
     SmtNodeNotFound,
+
+    #[error(transparent)]
+    SettlementCompat(#[from] crate::types::settlement::compat::Error),
+
+    #[error(
+        "Invalid pending certificate height for network {0}: attempted to insert height {1}, but \
+         latest pending height is {2}"
+    )]
+    InvalidPendingHeight(NetworkId, Height, Height),
 }
 
 impl From<Error> for CertificateStatusError {

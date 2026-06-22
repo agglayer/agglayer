@@ -8,7 +8,7 @@ use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
-use agglayer_settlement_service::SettlementService;
+use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_signer::{ConfiguredSigner, ConfiguredSigners};
 use agglayer_storage::{
     backup::{BackupClient, BackupEngine},
@@ -30,6 +30,33 @@ use tracing::{debug, error, info, warn};
 use crate::epoch_synchronizer::EpochSynchronizer;
 
 pub(crate) mod api;
+
+/// Inert settlement service used while the certificate orchestrator is wired to
+/// the settlement service structurally only.
+///
+/// TODO: replace with the real
+/// [`agglayer_settlement_service::SettlementService`] once the orchestrator
+/// builds real settlement calldata. Until then this never reaches L1: any
+/// certificate that gets this far fails fast with a clear error rather than
+/// submitting placeholder data.
+struct NoopSettlementService;
+
+#[async_trait::async_trait]
+impl SettlementServiceTrait for NoopSettlementService {
+    async fn submit_settlement_job(
+        &self,
+        _job: agglayer_types::SettlementJob,
+    ) -> eyre::Result<agglayer_types::SettlementJobId> {
+        eyre::bail!("settlement service is not wired into the node yet (structural refresh)")
+    }
+
+    async fn wait_for_settlement(
+        &self,
+        _job_id: agglayer_types::SettlementJobId,
+    ) -> eyre::Result<agglayer_types::SettlementJobResult> {
+        eyre::bail!("settlement service is not wired into the node yet (structural refresh)")
+    }
+}
 
 pub(crate) struct Node {
     pub(crate) rpc_handle: JoinHandle<()>,
@@ -110,8 +137,8 @@ impl Node {
         } else {
             BackupClient::noop()
         };
-        let state_store = Arc::new(StateStore::new(state_db.clone(), backup_client.clone()));
-        let pending_store = Arc::new(PendingStore::new(pending_db.clone()));
+        let state_store = Arc::new(StateStore::new(state_db, backup_client.clone()));
+        let pending_store = Arc::new(PendingStore::new(pending_db));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
         } else {
@@ -261,11 +288,11 @@ impl Node {
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
 
-        let settlement_service = Arc::new(
-            SettlementService::start(config.settlement.clone(), cancellation_token.clone())
-                .await
-                .context("Failed starting settlement service")?,
-        );
+        // TODO: construct the real `SettlementService` (needs an L1 provider and
+        // the settlement store) and submit real settlement calldata. For now the
+        // orchestrator is wired to the settlement service structurally only, via
+        // an inert implementation that never reaches L1.
+        let settlement_service = Arc::new(NoopSettlementService);
 
         let (data_sender, data_receiver) = mpsc::channel(
             config

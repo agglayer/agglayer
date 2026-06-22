@@ -16,12 +16,64 @@ use fail::FailScenario;
 use mockall::predicate::{always, eq};
 use pessimistic_proof_test_suite::forest::Forest;
 use prover_config::{MockProverConfig, ProverType};
+use prover_executor::sp1_blocking;
+use serial_test::serial;
+use sp1_sdk::{
+    blocking::{EnvProver, Prover, ProverClient},
+    Elf, ProvingKey, SP1ProofMode, SP1ProofWithPublicValues, SP1PublicValues, SP1VerificationError,
+    SP1_CIRCUIT_VERSION,
+};
 use tower::buffer::Buffer;
 
 use crate::{CertifierClient, ELF};
 
+#[test_log::test(tokio::test)]
+#[serial]
+async fn failpoint_mock_verifier_preserves_sp1_error_type() {
+    let scenario = FailScenario::setup();
+
+    fail::cfg(
+        "notifier::certifier::certify::before_verifying_proof",
+        "return()",
+    )
+    .unwrap();
+
+    let (verifier, verifying_key, proof) = sp1_blocking(|| {
+        let verifier = EnvProver::Mock(ProverClient::builder().mock().build());
+        let proving_key = verifier.setup(Elf::Static(ELF)).unwrap();
+        let verifying_key = proving_key.verifying_key().clone();
+        let mut proof = SP1ProofWithPublicValues::create_mock_proof(
+            &verifying_key,
+            SP1PublicValues::new(),
+            SP1ProofMode::Plonk,
+            SP1_CIRCUIT_VERSION,
+        );
+        proof.public_values = SP1PublicValues::from(&[1_u8]);
+
+        (verifier, verifying_key, proof)
+    })
+    .await
+    .unwrap();
+
+    let error = CertifierClient::<MockPendingStore, MockL1Rpc>::verify_proof(
+        Arc::new(verifier),
+        &verifying_key,
+        &proof,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        error.downcast::<SP1VerificationError>().unwrap(),
+        SP1VerificationError::Plonk(_)
+    ));
+
+    scenario.teardown();
+}
+
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
+#[serial]
 async fn happy_path() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
@@ -111,6 +163,7 @@ async fn happy_path() {
 #[rstest::rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(60))]
+#[serial]
 async fn prover_timeout() {
     let scenario = FailScenario::setup();
     let base_path = TempDBDir::new();
@@ -235,6 +288,7 @@ mockall::mock! {
             &self,
             rollup_address: agglayer_types::primitives::Address,
             aggchain_data: Bytes,
+            before_tx_hash: Option<TxHash>,
         ) -> Result<[u8; 32], L1RpcError>;
 
         async fn get_multisig_context(

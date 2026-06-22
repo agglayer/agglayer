@@ -8,7 +8,8 @@ use std::{
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementJobId,
+    SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -25,12 +26,14 @@ use crate::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
+        certificate_settlement_job::CertificateSettlementJobColumn,
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        settlement_jobs::SettlementJobsColumn,
     },
     error::Error,
     schema::ColumnSchema,
@@ -50,12 +53,22 @@ mod tests;
 pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
-    settlement_write_locks: Mutex<HashMap<ulid::Ulid, Arc<Mutex<()>>>>,
+    settlement_write_locks: Mutex<HashMap<SettlementJobId, Arc<Mutex<()>>>>,
 }
 
 impl StateStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::STATE_DB)
+        // V0 is the eight-CF schema that pre-dates `disabled_networks_cf`
+        // and the settlement family. Legacy production snapshots still
+        // have only those CFs; running the current binary against them
+        // would fail the migration framework's schema gate without this
+        // path. Each `ensure_cfs` call is a recorded migration step, so new
+        // catch-up CFs must be added in a new step instead of changing an
+        // already-recorded target list.
+        DB::builder(path, cf_definitions::STATE_DB_V0)?
+            .ensure_cfs(cf_definitions::STATE_DB_V1_ADDED_CFS)?
+            .ensure_cfs(cf_definitions::STATE_DB_V2_ADDED_CFS)?
+            .finalize(cf_definitions::STATE_DB)
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
@@ -195,6 +208,36 @@ impl StateWriter for StateStore {
         }
 
         Ok(())
+    }
+
+    fn insert_certificate_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<(), Error> {
+        if self
+            .db
+            .get::<CertificateSettlementJobColumn>(certificate_id)?
+            .is_some()
+        {
+            return Err(Error::UnprocessedAction(format!(
+                "Certificate {certificate_id} already has a settlement job id"
+            )));
+        }
+
+        if self
+            .db
+            .get::<SettlementJobsColumn>(settlement_job_id)?
+            .is_none()
+        {
+            return Err(Error::UnprocessedAction(format!(
+                "Settlement job does not exist for id {settlement_job_id}"
+            )));
+        }
+
+        Ok(self
+            .db
+            .put::<CertificateSettlementJobColumn>(certificate_id, settlement_job_id)?)
     }
 
     fn assign_certificate_to_epoch(
@@ -581,6 +624,15 @@ impl StateReader for StateStore {
         certificate_id: &CertificateId,
     ) -> Result<Option<CertificateHeader>, Error> {
         Ok(self.db.get::<CertificateHeaderColumn>(certificate_id)?)
+    }
+
+    fn get_certificate_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<SettlementJobId>, Error> {
+        Ok(self
+            .db
+            .get::<CertificateSettlementJobColumn>(certificate_id)?)
     }
 
     fn get_certificate_header_by_cursor(

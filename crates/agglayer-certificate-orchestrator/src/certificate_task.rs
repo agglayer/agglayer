@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_config::settlement_service::SettlementTransactionConfig;
-use agglayer_settlement_service::{
-    ContractCallOutcome, SettlementJobResult, SettlementServiceTrait,
-};
+use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
     UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
@@ -11,8 +9,10 @@ use agglayer_storage::stores::{
 #[cfg(feature = "testutils")]
 use agglayer_types::SettlementTxHash;
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
+    Address, Certificate, CertificateHeader, CertificateStatus, CertificateStatusError,
+    ContractCallOutcome, Digest, SettlementJob, SettlementJobResult, U256,
 };
+use alloy::primitives::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -26,10 +26,7 @@ use crate::{network_task::NetworkTaskMessage, Certifier, Error};
 /// related to the certificate until it gets finalized, including exchanging the
 /// required messages with the network task to both get required information
 /// from it and notify it of certificate progress.
-pub struct CertificateTask<StateStore, PendingStore, CertifierClient, SettlementSvc>
-where
-    SettlementSvc: SettlementServiceTrait,
-{
+pub struct CertificateTask<StateStore, PendingStore, CertifierClient, SettlementSvc> {
     certificate: Certificate,
     header: CertificateHeader,
 
@@ -58,9 +55,9 @@ where
         state_store: Arc<StateStore>,
         pending_store: Arc<PendingStore>,
         certifier_client: Arc<CertifierClient>,
-        cancellation_token: CancellationToken,
         settlement_service: Arc<SettlementSvc>,
         settlement_config: Arc<SettlementTransactionConfig>,
+        cancellation_token: CancellationToken,
     ) -> Result<Self, Error> {
         let certificate_id = certificate.hash();
         tracing::Span::current().record("certificate_id", certificate_id.to_string());
@@ -236,9 +233,15 @@ where
     }
 
     async fn process_from_pending(&mut self) -> Result<(), CertificateStatusError> {
+        self.certify_pending().await?;
+
+        self.process_from_proven().await
+    }
+
+    async fn certify_pending(&mut self) -> Result<(), CertificateStatusError> {
         if self.header.status != CertificateStatus::Pending {
             return Err(CertificateStatusError::InternalError(format!(
-                "CertificateTask::process_from_pending called with cert status {}",
+                "CertificateTask::certify_pending called with cert status {}",
                 self.header.status,
             )));
         }
@@ -279,7 +282,7 @@ where
         })
         .await?;
 
-        self.process_from_proven().await
+        Ok(())
     }
 
     async fn process_from_proven(&mut self) -> Result<(), CertificateStatusError> {
@@ -292,75 +295,54 @@ where
 
         let certificate_id = self.header.certificate_id;
 
-        // Submit settlement request
-        let job = agglayer_settlement_service::SettlementJob::new(self.settlement_config.clone());
-        let mut watcher = self
+        // Hand settlement off to the settlement service and remember the job id.
+        //
+        // The settlement service is agnostic of certificates, so the
+        // certificate <-> settlement-job link lives here. We persist it and move
+        // to Candidate *before* waiting for the result, so that a reboot resumes
+        // from `process_from_candidate` using the stored job id.
+        let job = self.build_settlement_job();
+        let job_id = self
             .settlement_service
-            .request_new_settlement(job)
+            .submit_settlement_job(job)
             .await
-            .map_err(|e| {
-                CertificateStatusError::SettlementError(format!("Failed to submit: {e}"))
+            .map_err(|error| {
+                CertificateStatusError::SettlementError(format!(
+                    "Failed to submit settlement job: {error}"
+                ))
             })?;
+        info!(%job_id, "Settlement job submitted");
 
-        let job_id = watcher.job_id();
-        info!("Settlement job {} submitted", job_id);
+        self.state_store
+            .insert_certificate_settlement_job_id(&certificate_id, &job_id)?;
+        self.set_status(CertificateStatus::Candidate)?;
 
-        // Wait for result — the settlement service owns its own timeouts
-        let result = watcher
-            .wait_for_result()
-            .await
-            .map_err(|e| CertificateStatusError::SettlementError(e.to_string()))?;
+        #[cfg(feature = "testutils")]
+        testutils::inject_fail_points_after_proving(
+            &certificate_id,
+            &mut self.header,
+            &self.state_store,
+        );
 
-        match result {
-            SettlementJobResult::ContractCall(contract_result)
-                if contract_result.outcome == ContractCallOutcome::Revert =>
-            {
-                Err(CertificateStatusError::SettlementError(format!(
-                    "Settlement tx {} reverted",
-                    contract_result.tx_hash
-                )))
-            }
-            SettlementJobResult::ContractCall(contract_result) => {
-                let tx_hash = contract_result.tx_hash;
-                info!("Settlement successful: {}", tx_hash);
+        self.process_from_candidate().await
+    }
 
-                self.header.settlement_tx_hash = Some(tx_hash);
-
-                // The settlement service may have already marked the
-                // certificate as Settled (e.g. RpcSettlementClient's
-                // wait_for_settlement assigns it to the epoch). Tolerate the
-                // "already settled" error and skip straight to finalization in
-                // that case.
-                match self.state_store.update_settlement_tx_hash(
-                    &certificate_id,
-                    tx_hash,
-                    UpdateEvenIfAlreadyPresent::Yes,
-                    UpdateStatusToCandidate::Yes,
-                ) {
-                    Ok(()) => {
-                        self.header.status = CertificateStatus::Candidate;
-
-                        #[cfg(feature = "testutils")]
-                        testutils::inject_fail_points_after_proving(
-                            &certificate_id,
-                            &mut self.header,
-                            &self.state_store,
-                        );
-
-                        self.process_from_candidate().await
-                    }
-                    Err(_) => {
-                        // Certificate already settled by the settlement
-                        // service — go straight to finalization.
-                        debug!("Certificate already settled by service, finalizing");
-                        self.finalize_settlement().await
-                    }
-                }
-            }
-            SettlementJobResult::ClientError(error) => {
-                error!("Settlement failed: {}", error.message);
-                Err(CertificateStatusError::SettlementError(error.message))
-            }
+    /// Build the settlement job handed to the settlement service.
+    ///
+    /// TODO: build the real `verifyPessimisticTrustedAggregator` calldata from
+    /// the certificate proof. For now the job carries placeholder call data;
+    /// the node wires an inert settlement service so this is never
+    /// submitted to L1. Real call data (and constructing the production
+    /// settlement service) is a follow-up.
+    fn build_settlement_job(&self) -> SettlementJob {
+        SettlementJob {
+            contract_address: Address::ZERO,
+            calldata: Bytes::new(),
+            eth_value: U256::ZERO,
+            gas_limit: self
+                .settlement_config
+                .gas_limit_ceiling
+                .saturating_to::<u128>(),
         }
     }
 
@@ -371,6 +353,50 @@ where
                 self.header.status,
             )));
         }
+
+        let certificate_id = self.header.certificate_id;
+
+        // The settlement job id is the only link the orchestrator keeps to the
+        // in-flight settlement, and it survives reboots.
+        let job_id = self
+            .state_store
+            .get_certificate_settlement_job_id(&certificate_id)?
+            .ok_or_else(|| {
+                CertificateStatusError::SettlementError(
+                    "Candidate certificate has no settlement job id".into(),
+                )
+            })?;
+
+        // Wait for the settlement to reach a terminal result. The service owns
+        // its own timeouts and reorg handling; here we only react to the outcome.
+        let result: SettlementJobResult = self
+            .settlement_service
+            .wait_for_settlement(job_id)
+            .await
+            .map_err(|error| CertificateStatusError::SettlementError(error.to_string()))?;
+
+        // Success is the only happy path; revert (and any future outcome) is an
+        // error, so we never accidentally settle on a non-success result.
+        let contract_call = result.contract_call_result;
+        if contract_call.outcome != ContractCallOutcome::Success {
+            return Err(CertificateStatusError::SettlementError(format!(
+                "Settlement tx {} did not succeed: {:?}",
+                contract_call.tx_hash, contract_call.outcome
+            )));
+        }
+
+        let tx_hash = contract_call.tx_hash;
+        info!(%tx_hash, "Settlement successful");
+
+        // Record the settlement tx hash before marking Settled: the storage
+        // layer rejects tx-hash updates on already-settled certificates.
+        self.header.settlement_tx_hash = Some(tx_hash);
+        self.state_store.update_settlement_tx_hash(
+            &certificate_id,
+            tx_hash,
+            UpdateEvenIfAlreadyPresent::Yes,
+            UpdateStatusToCandidate::No,
+        )?;
 
         self.finalize_settlement().await
     }

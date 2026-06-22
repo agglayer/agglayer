@@ -11,10 +11,13 @@ mod error;
 mod local_network_state;
 pub mod network_info;
 mod proof_modes;
+mod settlement;
 
 #[cfg(feature = "testutils")]
 pub mod testutils {
-    pub use crate::certificate::{compute_signature_info, EMPTY_ELF};
+    pub use agglayer_sp1::testutils::{EMPTY_ELF, EMPTY_ELF_V5};
+
+    pub use crate::certificate::{compute_signature_info, dummy_sp1_stark_proof_with_version};
 }
 pub use certificate::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Height,
@@ -25,3 +28,8 @@ pub use error::{CertificateStatusError, Error, SignerError};
 pub use local_network_state::{L1WitnessCtx, LocalNetworkStateData, PessimisticRootInput};
 pub use network_info::{NetworkInfo, NetworkStatus, NetworkType, SettledClaim};
 pub use proof_modes::{ExecutionMode, GenerationType};
+pub use settlement::{
+    ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Nonce,
+    SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
+    SettlementJobId, SettlementJobResult,
+};

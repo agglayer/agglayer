@@ -2,7 +2,7 @@ FROM --platform=${BUILDPLATFORM} rust:slim-bookworm AS chef
 
 ARG CIRCUIT_ARTIFACTS_URL_BASE=https://sp1-circuits.s3-us-east-2.amazonaws.com
 ARG CIRCUIT_TYPE=plonk
-ARG CIRCUIT_VERSION=v5.0.0
+ARG CIRCUIT_VERSION=v6.1.0
 ARG PROTOC_VERSION=28.2
 ARG CHEF_VERSION=0.1.68
 
@@ -50,6 +50,15 @@ RUN curl -s -o /tmp/circuits.tar.gz ${CIRCUIT_ARTIFACTS_URL_BASE}/${CIRCUIT_VERS
 COPY --link crates crates
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
+
+# Version stamping: no `.git` is copied into the build context, so `vergen`
+# cannot derive the version and falls back to a `VERGEN_IDEMPOTENT_OUTPUT`
+# placeholder. The caller (CI) computes these from git and passes them in;
+# `version()` prefers them over the vergen-derived values.
+ARG AGGLAYER_BUILD_DESCRIBE
+ARG AGGLAYER_BUILD_TIMESTAMP
+ENV AGGLAYER_BUILD_DESCRIBE=${AGGLAYER_BUILD_DESCRIBE}
+ENV AGGLAYER_BUILD_TIMESTAMP=${AGGLAYER_BUILD_TIMESTAMP}
 
 RUN cargo build --release --bin agglayer
 

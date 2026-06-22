@@ -1,14 +1,8 @@
 use std::time::Duration;
 
-use agglayer_settlement_service::{
-    testutils::{mock_settlement_revert, mock_settlement_success},
-    MockSettlementServiceTrait,
-};
+use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
-    stores::{
-        PendingCertificateReader, PendingCertificateWriter, StateWriter,
-        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
-    },
+    stores::{PendingCertificateReader, PendingCertificateWriter, SettlementWriter, StateWriter},
     tests::TempDBDir,
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
@@ -116,7 +110,7 @@ fn setup_certify_mock(
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(2))]
-async fn from_pending_to_settle() {
+async fn from_pending_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
 
@@ -145,10 +139,12 @@ async fn from_pending_to_settle() {
     setup_certify_mock(&mut certifier, storage.pending.clone(), network_id);
 
     let mut settlement_service = MockSettlementServiceTrait::new();
-    settlement_service
-        .expect_request_new_settlement()
-        .once()
-        .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_TEST)));
+    mock_settlement_persisting(
+        &mut settlement_service,
+        Arc::clone(&storage.state),
+        SETTLEMENT_TX_HASH_TEST,
+        ContractCallOutcome::Success,
+    );
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -163,9 +159,11 @@ async fn from_pending_to_settle() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
+        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -216,10 +214,12 @@ async fn from_proven_to_settled() {
     setup_certify_mock(&mut certifier, storage.pending.clone(), network_id);
 
     let mut settlement_service = MockSettlementServiceTrait::new();
-    settlement_service
-        .expect_request_new_settlement()
-        .once()
-        .returning(|_| Ok(mock_settlement_success(SETTLEMENT_TX_HASH_TEST)));
+    mock_settlement_persisting(
+        &mut settlement_service,
+        Arc::clone(&storage.state),
+        SETTLEMENT_TX_HASH_TEST,
+        ContractCallOutcome::Success,
+    );
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -234,9 +234,11 @@ async fn from_proven_to_settled() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
+        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -258,7 +260,7 @@ async fn from_proven_to_settled() {
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(2))]
-async fn from_candidate_to_settle() {
+async fn from_candidate_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
 
@@ -285,21 +287,29 @@ async fn from_candidate_to_settle() {
         .insert_certificate_header(&certificate, CertificateStatus::Candidate)
         .expect("Failed to insert certificate header");
 
+    // Recovered Candidate certificate: it already has a persisted settlement job
+    // id (set when it first moved to Candidate). `process_from_candidate` looks
+    // the id up and waits for the settlement result.
     storage
         .state
-        .update_settlement_tx_hash(
-            &certificate_id,
-            SettlementTxHash::for_tests(),
-            UpdateEvenIfAlreadyPresent::No,
-            UpdateStatusToCandidate::Yes,
-        )
+        .insert_settlement_job(&job_id(1), &dummy_settlement_job())
+        .unwrap();
+    storage
+        .state
+        .insert_certificate_settlement_job_id(&certificate_id, &job_id(1))
         .unwrap();
 
     setup_witness_generation_mock(&mut certifier, certificate_id, signer);
 
-    // Recovery path: no cached job_id, so settlement verification is skipped
-    // and we finalize directly.
-    let settlement_service = MockSettlementServiceTrait::new();
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    settlement_service
+        .expect_wait_for_settlement()
+        .returning(|_| {
+            Ok(settlement_result(
+                SETTLEMENT_TX_HASH_TEST,
+                ContractCallOutcome::Success,
+            ))
+        });
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -314,9 +324,11 @@ async fn from_candidate_to_settle() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
+        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -365,20 +377,28 @@ async fn from_candidate_to_settle_via_pending() {
         .insert_certificate_header(&certificate, CertificateStatus::Candidate)
         .expect("Failed to insert certificate header");
 
+    // Recovered Candidate certificate with a persisted settlement job id;
+    // `process_from_candidate` recomputes state then waits for the result.
     storage
         .state
-        .update_settlement_tx_hash(
-            &certificate_id,
-            SettlementTxHash::for_tests(),
-            UpdateEvenIfAlreadyPresent::No,
-            UpdateStatusToCandidate::Yes,
-        )
+        .insert_settlement_job(&job_id(1), &dummy_settlement_job())
+        .unwrap();
+    storage
+        .state
+        .insert_certificate_settlement_job_id(&certificate_id, &job_id(1))
         .unwrap();
 
     setup_witness_generation_mock(&mut certifier, certificate_id, signer);
 
-    // Recovery path: no cached job_id, so settlement verification is skipped.
-    let settlement_service = MockSettlementServiceTrait::new();
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    settlement_service
+        .expect_wait_for_settlement()
+        .returning(|_| {
+            Ok(settlement_result(
+                SETTLEMENT_TX_HASH_TEST,
+                ContractCallOutcome::Success,
+            ))
+        });
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -393,9 +413,11 @@ async fn from_candidate_to_settle_via_pending() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
+        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -417,7 +439,7 @@ async fn from_candidate_to_settle_via_pending() {
 #[rstest]
 #[test_log::test(tokio::test)]
 #[timeout(Duration::from_secs(2))]
-async fn from_settle_to_settle() {
+async fn from_settled_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
 
@@ -455,9 +477,11 @@ async fn from_settle_to_settle() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::new(1);
     let mut first_run = true;
     task.make_progress(
+        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -508,10 +532,12 @@ async fn from_proven_settlement_revert_goes_to_error() {
     setup_certify_mock(&mut certifier, storage.pending.clone(), network_id);
 
     let mut settlement_service = MockSettlementServiceTrait::new();
-    settlement_service
-        .expect_request_new_settlement()
-        .once()
-        .returning(|_| Ok(mock_settlement_revert(SETTLEMENT_TX_HASH_TEST)));
+    mock_settlement_persisting(
+        &mut settlement_service,
+        Arc::clone(&storage.state),
+        SETTLEMENT_TX_HASH_TEST,
+        ContractCallOutcome::Revert,
+    );
 
     let mut task = NetworkTask::new(
         Arc::clone(&storage.pending),
@@ -526,9 +552,11 @@ async fn from_proven_settlement_revert_goes_to_error() {
     )
     .expect("Failed to create a new network task");
 
+    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
+        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),

@@ -10,10 +10,9 @@ async-trait.workspace = true
 eyre.workspace = true
 gcloud-sdk.workspace = true
 serde = { workspace = true, features = ["derive"] }
-thiserror.workspace = true
 tracing.workspace = true
 
 agglayer-config.workspace = true
 
 [dev-dependencies]
-serial_test = "3.2.0"
+serial_test = "3.4.0"

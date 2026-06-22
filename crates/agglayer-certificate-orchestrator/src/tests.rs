@@ -26,7 +26,8 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementJobId,
+    SettlementTxHash,
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
@@ -140,6 +141,14 @@ impl StateReader for DummyPendingStore {
             .get(certificate_id)
             .cloned())
     }
+
+    fn get_certificate_settlement_job_id(
+        &self,
+        _certificate_id: &CertificateId,
+    ) -> Result<Option<SettlementJobId>, agglayer_storage::error::Error> {
+        unimplemented!()
+    }
+
     fn get_current_settled_height(
         &self,
     ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
@@ -318,6 +327,14 @@ impl StateWriter for DummyPendingStore {
         _certificate_id: &CertificateId,
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
+    }
+
+    fn insert_certificate_settlement_job_id(
+        &self,
+        _certificate_id: &CertificateId,
+        _settlement_job_id: &SettlementJobId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        unimplemented!()
     }
 
     fn assign_certificate_to_epoch(

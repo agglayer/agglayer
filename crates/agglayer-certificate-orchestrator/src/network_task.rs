@@ -12,10 +12,11 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
-    CertificateId, CertificateStatusError, ExecutionMode, Height, LocalNetworkStateData, NetworkId,
+    CertificateId, CertificateStatusError, EpochNumber, ExecutionMode, Height,
+    LocalNetworkStateData, NetworkId,
 };
 use arc_swap::ArcSwap;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -81,10 +82,7 @@ pub(crate) struct NetworkTask<
     StateStore,
     SettlementSvc,
     PerEpochStoreT,
-> where
-    SettlementSvc: SettlementServiceTrait,
-    PerEpochStoreT: PerEpochWriter + PerEpochReader + 'static,
-{
+> {
     /// The network id for the network task.
     network_id: NetworkId,
     /// The pending store to read and write the pending certificates.
@@ -95,11 +93,14 @@ pub(crate) struct NetworkTask<
     certifier_client: Arc<CertifierClient>,
     /// The local network state of the network task.
     local_state: Box<LocalNetworkStateData>,
+
     /// The clock reference to subscribe to the epoch events and check for
     /// current epoch.
     clock_ref: ClockRef,
     /// The stream of new certificates to certify.
     certificate_stream: mpsc::Receiver<NewCertificate>,
+    /// Flag to indicate if the network is at capacity for the current epoch.
+    at_capacity_for_epoch: bool,
     /// latest certificate settled
     latest_settled: Option<SettledCertificate>,
     /// The settlement service for submitting settlement jobs
@@ -157,6 +158,7 @@ where
             local_state,
             clock_ref,
             certificate_stream,
+            at_capacity_for_epoch: false,
             latest_settled,
             settlement_service,
             current_epoch,
@@ -177,6 +179,8 @@ where
     ) -> Result<NetworkId, Error> {
         info!("Starting the network task for network {}", self.network_id);
 
+        let mut stream_epoch = self.clock_ref.subscribe()?;
+
         let current_epoch = self.clock_ref.current_epoch();
 
         // Start from the latest settled certificate to define the next expected height
@@ -190,6 +194,7 @@ where
                 debug!("Current network height is {}", current_height);
                 if epoch == current_epoch {
                     debug!("Already settled for the epoch {current_epoch}");
+                    self.at_capacity_for_epoch = true;
                 }
 
                 current_height.next()
@@ -208,7 +213,7 @@ where
                     return Ok(self.network_id);
                 }
 
-                result = self.make_progress(&mut next_expected_height, &mut first_run, &cancellation_token) => {
+                result = self.make_progress(&mut stream_epoch, &mut next_expected_height, &mut first_run, &cancellation_token) => {
                     if let Err(error)= result {
                         error!("Error during the certification process: {}", error);
 
@@ -222,9 +227,10 @@ where
         }
     }
 
-    #[instrument(skip(self, cancellation_token), fields(certificate_id))]
+    #[instrument(skip(self, stream_epoch, cancellation_token), fields(certificate_id))]
     async fn make_progress(
         &mut self,
+        stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
         next_expected_height: &mut Height,
         first_run: &mut bool,
         cancellation_token: &CancellationToken,
@@ -233,7 +239,39 @@ where
             *first_run = false;
         } else {
             tokio::select! {
-                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv() => {
+                event = stream_epoch.recv() => {
+                    let network_id = self.network_id;
+                    match event {
+                        Ok(agglayer_clock::Event::EpochEnded(epoch)) => {
+                            info!("Received an epoch event: {}", epoch);
+
+                            let current_epoch = self.clock_ref.current_epoch();
+                            if epoch != EpochNumber::ZERO && epoch.next() < current_epoch {
+                                warn!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
+
+                                return Ok(());
+                            }
+                            match self.latest_settled {
+                                Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
+                                    warn!("Network {network_id} is at capacity for the epoch {current_epoch}");
+                                    return Ok(());
+                                },
+                                _ => {
+                                    self.at_capacity_for_epoch = false;
+                                }
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(num_skipped)) => {
+                            warn!("Network {network_id} skipped {num_skipped} epoch ticks");
+                            return Ok(());
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            error!("Epoch channel closed for network {network_id}");
+                            return Err(Error::InternalError("epoch channel closed".into()));
+                        }
+                    }
+                }
+                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
                     info!(
                         hash = certificate_id.to_string(),
                         "Received a certificate event for {certificate_id} at height {height}"
@@ -288,15 +326,15 @@ where
             .map(|exit| exit.hash())
             .collect::<Vec<Digest>>();
         let task = tokio::spawn(
-            CertificateTask::<_, _, _, SettlementSvc>::new(
+            CertificateTask::new(
                 certificate,
                 sender,
                 self.state_store.clone(),
                 self.pending_store.clone(),
                 self.certifier_client.clone(),
-                cancellation_token.clone(),
                 self.settlement_service.clone(),
                 self.settlement_config.clone(),
+                cancellation_token.clone(),
             )?
             .process(),
         );
@@ -335,6 +373,9 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateSettled { height, certificate_id }) => {
+                        // One certificate settles per network per epoch: stop
+                        // accepting new certificates until the next epoch event.
+                        self.at_capacity_for_epoch = true;
                         next_expected_height.increment();
                         debug!("Certification process completed");
 
@@ -344,6 +385,11 @@ where
                                 self.local_state.get_roots().display_to_hex()
                             )));
                         };
+                        debug!(
+                            old_state = self.local_state.get_roots().display_to_hex(),
+                            new_state = new.get_roots().display_to_hex(),
+                            "Updated the state following certificate settlement",
+                        );
                         self.local_state = new;
 
                         self.state_store
@@ -357,33 +403,36 @@ where
                                 error: e.to_string(),
                             })?;
 
+                        // Assign the settled certificate to the current epoch,
+                        // retrying a bounded number of times to ride out a
+                        // transient epoch rollover (packed epoch or add failure).
                         const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
-                        let mut max_retries = MAX_EPOCH_ASSIGNMENT_RETRIES;
-                        let (epoch_number, certificate_index) = loop {
-                            max_retries -= 1;
-                            let related_epoch = self.current_epoch.load_full();
-                            if related_epoch.is_epoch_packed() {
-                                drop(related_epoch);
-                                warn!("Epoch already packed, delay and retry assignment");
-                                tokio::time::sleep(Duration::from_secs(1)).await;
-                                continue;
-                            }
-                            match related_epoch.add_certificate(certificate_id, ExecutionMode::Default) {
-                                Err(error) if max_retries == 0 => {
-                                    error!(%error, "CRITICAL: Failed to add certificate to epoch after retries");
-                                    return Err(Error::PersistenceError {
-                                        certificate_id,
-                                        error: format!("Failed to add certificate to epoch: {error}"),
-                                    });
+                        let (epoch_number, certificate_index) = 'assign: {
+                            for attempt in 1..=MAX_EPOCH_ASSIGNMENT_RETRIES {
+                                let related_epoch = self.current_epoch.load_full();
+                                if related_epoch.is_epoch_packed() {
+                                    drop(related_epoch);
+                                    warn!(attempt, "Epoch already packed, delay and retry assignment");
+                                    tokio::time::sleep(Duration::from_secs(1)).await;
+                                    continue;
                                 }
-                                Err(error) => {
-                                    warn!(%error, "Failed to add certificate to epoch (retrying)");
-                                }
-                                Ok((epoch_number, certificate_index)) => {
-                                    info!("Certificate added to epoch {epoch_number} with index {certificate_index}");
-                                    break (epoch_number, certificate_index);
+                                match related_epoch
+                                    .add_certificate(certificate_id, ExecutionMode::Default)
+                                {
+                                    Ok((epoch_number, certificate_index)) => {
+                                        info!("Certificate added to epoch {epoch_number} with index {certificate_index}");
+                                        break 'assign (epoch_number, certificate_index);
+                                    }
+                                    Err(error) => {
+                                        warn!(%error, attempt, "Failed to add certificate to epoch (retrying)");
+                                    }
                                 }
                             }
+                            error!("CRITICAL: Failed to add certificate to epoch after {MAX_EPOCH_ASSIGNMENT_RETRIES} retries");
+                            return Err(Error::PersistenceError {
+                                certificate_id,
+                                error: "Failed to add certificate to epoch after retries".to_string(),
+                            });
                         };
 
                         self.state_store
@@ -403,6 +452,7 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateErrored { .. }) => {
                         // The certificate task already logged everything that should be logged.
+                        self.at_capacity_for_epoch = false;
                         break;
                     }
                 }

@@ -12,14 +12,18 @@ use crate::{
         latest_proven_certificate_per_network::{
             LatestProvenCertificatePerNetworkColumn, ProvenCertificate,
         },
-        pending_queue::{PendingQueueColumn, PendingQueueKey},
+        pending_queue::{PendingQueueColumn, PendingQueueKey, PendingQueueProtoColumn},
         proof_per_certificate::ProofPerCertificateColumn,
     },
     error::Error,
-    storage::DB,
+    schema::{Codec as _, ColumnDescriptor, ColumnSchema as _},
+    storage::{DBError, DB},
 };
 
-mod cf_definitions;
+pub(crate) mod cf_definitions;
+
+#[cfg(test)]
+mod tests;
 
 /// A logical store for pending.
 #[derive(Clone)]
@@ -29,7 +33,12 @@ pub struct PendingStore {
 
 impl PendingStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::open_cf(path, cf_definitions::PENDING_DB)
+        DB::builder(path, cf_definitions::PENDING_DB_V0)?
+            .add_cfs(
+                &[ColumnDescriptor::new::<PendingQueueProtoColumn>()],
+                backfill_pending_certificates_proto_from_legacy_bincode,
+            )?
+            .finalize(cf_definitions::PENDING_DB)
     }
 
     pub fn new(db: Arc<DB>) -> Self {
@@ -39,6 +48,51 @@ impl PendingStore {
     pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
         Ok(Self::new(Arc::new(Self::init_db(path)?)))
     }
+
+    fn decode_readable_proof(certificate_id: CertificateId, bytes: &[u8]) -> Result<Proof, Error> {
+        Proof::decode(bytes).map_err(|source| Error::UnreadableProof {
+            id: certificate_id,
+            source: DBError::from(source),
+        })
+    }
+
+    fn get_readable_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
+        let key = certificate_id.encode().map_err(DBError::from)?;
+        let cf = self
+            .db
+            .raw_rocksdb()
+            .cf_handle(ProofPerCertificateColumn::COLUMN_FAMILY_NAME)
+            .ok_or(DBError::ColumnFamilyNotFound)?;
+
+        let Some(bytes) = self
+            .db
+            .raw_rocksdb()
+            .get_cf(&cf, key)
+            .map_err(DBError::from)?
+        else {
+            return Ok(None);
+        };
+
+        Self::decode_readable_proof(certificate_id, &bytes).map(Some)
+    }
+}
+
+/// Migration step for the certificate serialization switch from the legacy
+/// pending queue CF to the proto-backed CF.
+///
+/// Delegates to
+/// [`super::migration_helpers::copy_legacy_certificate_cf_into_proto`],
+/// which streams the legacy keyspace, skips and logs rows whose bytes cannot
+/// be decoded as a certificate, and copies the rest into the proto CF. The
+/// legacy CF stays in place for now; runtime reads and writes only use
+/// the proto CF after this backfill completes.
+fn backfill_pending_certificates_proto_from_legacy_bincode(
+    db: &crate::storage::DbAccess,
+) -> Result<(), crate::storage::DBMigrationErrorDetails> {
+    super::migration_helpers::copy_legacy_certificate_cf_into_proto::<
+        PendingQueueColumn,
+        PendingQueueProtoColumn,
+    >(db, "pending")
 }
 
 impl PendingCertificateWriter for PendingStore {
@@ -47,9 +101,8 @@ impl PendingCertificateWriter for PendingStore {
         network_id: NetworkId,
         height: Height,
     ) -> Result<(), Error> {
-        Ok(self
-            .db
-            .delete::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?)
+        let key = PendingQueueKey(network_id, height);
+        Ok(self.db.delete::<PendingQueueProtoColumn>(&key)?)
     }
     fn set_latest_pending_certificate_per_network(
         &self,
@@ -73,13 +126,10 @@ impl PendingCertificateWriter for PendingStore {
             self.get_latest_pending_certificate_for_network(&network_id)?
         {
             if latest_height > height {
-                // TODO: This is technically not Candidate error,
-                return Err(Error::CertificateCandidateError(
-                    crate::error::CertificateCandidateError::UnexpectedHeight(
-                        network_id,
-                        height,
-                        latest_height,
-                    ),
+                return Err(Error::InvalidPendingHeight(
+                    network_id,
+                    height,
+                    latest_height,
                 ));
             }
         }
@@ -88,7 +138,7 @@ impl PendingCertificateWriter for PendingStore {
         self.set_latest_pending_certificate_per_network(&network_id, &height, &certificate.hash())?;
         Ok(self
             .db
-            .put::<PendingQueueColumn>(&PendingQueueKey(network_id, height), certificate)?)
+            .put::<PendingQueueProtoColumn>(&PendingQueueKey(network_id, height), certificate)?)
     }
 
     fn insert_generated_proof(
@@ -141,11 +191,11 @@ impl PendingCertificateReader for PendingStore {
     ) -> Result<Option<Certificate>, Error> {
         Ok(self
             .db
-            .get::<PendingQueueColumn>(&PendingQueueKey(network_id, height))?)
+            .get::<PendingQueueProtoColumn>(&PendingQueueKey(network_id, height))?)
     }
 
     fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
-        Ok(self.db.get::<ProofPerCertificateColumn>(&certificate_id)?)
+        self.get_readable_proof(certificate_id)
     }
 
     fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error> {
@@ -181,14 +231,37 @@ impl PendingCertificateReader for PendingStore {
         &self,
         keys: &[(NetworkId, Height)],
     ) -> Result<Vec<Option<Certificate>>, Error> {
-        Ok(self
-            .db
-            .multi_get::<PendingQueueColumn>(keys.iter().map(|(n, h)| PendingQueueKey(*n, *h)))?)
+        Ok(self.db.multi_get::<PendingQueueProtoColumn>(
+            keys.iter()
+                .map(|(network_id, height)| PendingQueueKey(*network_id, *height)),
+        )?)
     }
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error> {
-        Ok(self
+        let cf = self
             .db
-            .multi_get::<ProofPerCertificateColumn>(keys.iter().copied())?)
+            .raw_rocksdb()
+            .cf_handle(ProofPerCertificateColumn::COLUMN_FAMILY_NAME)
+            .ok_or(Error::from(DBError::ColumnFamilyNotFound))?;
+
+        let encoded_keys: Result<Vec<_>, _> = keys
+            .iter()
+            .map(|k| k.encode().map_err(DBError::from))
+            .collect();
+
+        let results = self
+            .db
+            .raw_rocksdb()
+            .batched_multi_get_cf(cf, &encoded_keys?, false);
+
+        results
+            .into_iter()
+            .zip(keys.iter())
+            .map(|(result, certificate_id)| match result {
+                Ok(Some(bytes)) => Self::decode_readable_proof(*certificate_id, &bytes).map(Some),
+                Ok(None) => Ok(None),
+                Err(error) => Err(Error::from(DBError::from(error))),
+            })
+            .collect()
     }
 }

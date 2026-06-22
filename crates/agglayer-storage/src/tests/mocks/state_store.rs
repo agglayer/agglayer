@@ -1,6 +1,7 @@
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementTxHash,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementAttempt,
+    SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 use mockall::mock;
 
@@ -8,8 +9,8 @@ use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
     stores::{
-        MetadataReader, MetadataWriter, NetworkInfoReader, StateReader, StateWriter,
-        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        MetadataReader, MetadataWriter, NetworkInfoReader, SettlementReader, SettlementWriter,
+        StateReader, StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
 };
 mock! {
@@ -45,6 +46,12 @@ mock! {
         fn remove_settlement_tx_hash(
             &self,
             certificate_id: &CertificateId,
+        ) -> Result<(), Error>;
+
+        fn insert_certificate_settlement_job_id(
+            &self,
+            certificate_id: &CertificateId,
+            settlement_job_id: &SettlementJobId,
         ) -> Result<(), Error>;
 
         fn assign_certificate_to_epoch(
@@ -105,6 +112,11 @@ mock! {
             certificate_id: &CertificateId,
         ) -> Result<Option<CertificateHeader>, Error>;
 
+        fn get_certificate_settlement_job_id(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<Option<SettlementJobId>, Error>;
+
         fn get_certificate_header_by_cursor(
             &self,
             network_id: NetworkId,
@@ -116,5 +128,55 @@ mock! {
             &self,
             network_id: NetworkId,
         ) -> Result<Option<LocalNetworkStateData>, Error>;
+    }
+
+    impl SettlementReader for StateStore {
+        fn get_settlement_job(
+            &self,
+            settlement_job_id: &SettlementJobId,
+        ) -> Result<Option<SettlementJob>, Error>;
+
+        fn get_settlement_job_result(
+            &self,
+            settlement_job_id: &SettlementJobId,
+        ) -> Result<Option<SettlementJobResult>, Error>;
+
+        fn list_settlement_attempts(
+            &self,
+            settlement_job_id: &SettlementJobId,
+        ) -> Result<Vec<(u64, SettlementAttempt)>, Error>;
+
+        fn list_settlement_attempt_results(
+            &self,
+            settlement_job_id: &SettlementJobId,
+        ) -> Result<Vec<(u64, SettlementAttemptResult)>, Error>;
+    }
+
+    impl SettlementWriter for StateStore {
+        fn insert_settlement_job(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            settlement_job: &SettlementJob,
+        ) -> Result<(), Error>;
+
+        fn insert_settlement_job_result(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            tx_result: &SettlementJobResult,
+        ) -> Result<(), Error>;
+
+        fn insert_settlement_attempt(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            attempt_sequence_number: u64,
+            settlement_attempt: &SettlementAttempt,
+        ) -> Result<(), Error>;
+
+        fn record_settlement_attempt_result(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            attempt_sequence_number: u64,
+            tx_result: &SettlementAttemptResult,
+        ) -> Result<(), Error>;
     }
 }
