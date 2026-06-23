@@ -129,6 +129,12 @@ message SettlementAttempt {
   // Nonce reserved for the transaction.
   Nonce nonce = 2;
 
+  // Max fee per gas of the submitted transaction (EIP-1559).
+  Uint128 max_fee_per_gas = 3;
+
+  // Max priority fee per gas of the submitted transaction (EIP-1559).
+  Uint128 max_priority_fee_per_gas = 4;
+
   // Hash of the submitted transaction.
   TxHash tx_hash = 5;
 

@@ -97,6 +97,10 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     let (agglayer_shutdowned, client, _) =
         start_agglayer(&tmp_dir.path, &l1, None, Some(cancellation_token.clone())).await;
 
+    // Let the restarted node finish recovery (epoch-checkpoint re-seeding) before
+    // submitting the next certificate, otherwise it races and latches in error.
+    tokio::time::sleep(Duration::from_secs(20)).await;
+
     fail::cfg_callback(
         "notifier::packer::settle_certificate::receipt_future_ended::timeout",
         move || cancellation_token.cancel(),

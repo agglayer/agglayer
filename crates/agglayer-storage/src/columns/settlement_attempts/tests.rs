@@ -80,5 +80,7 @@ fn mk_settlement_attempt(seed: u64) -> SettlementAttempt {
             hash: vec![0x66; 32].into(),
         }),
         submission_time: None,
+        max_fee_per_gas: None,
+        max_priority_fee_per_gas: None,
     }
 }
