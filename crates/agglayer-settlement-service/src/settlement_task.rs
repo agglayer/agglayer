@@ -459,7 +459,7 @@ impl<
                         continue 'nonces;
                     };
                     let tx_result = retry!(
-                        self.current_result_on_l1_for(tx_hash).await,
+                        self.current_result_on_l1_for(wallet, nonce, tx_hash).await,
                         "querying current result on L1 for tx {tx_hash}",
                     );
                     let Some(tx_result) = tx_result else {
@@ -856,33 +856,28 @@ impl<
         .await
     }
 
-    async fn current_result_on_l1_for(
+    /// Polls an L1 settlement check until it yields a terminal answer, retrying
+    /// transient "not ready yet" signals with the not-included backoff. The
+    /// inner check returns `Ok(None)` to report a reorg, which the caller turns
+    /// into a fresh cycle.
+    async fn retry_l1_check<Check, Fut>(
         &self,
-        tx_hash: SettlementTxHash,
-    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>> {
-        crate::utils::retry_alloy_callback_until_success(
-            &self.tx_config.retry_on_transient_failure,
-            &self.control.cancellation_token,
-            || crate::utils::contract_call_result_on_l1(self.provider.as_ref(), tx_hash),
-        )
-        .await
-    }
-
-    async fn wait_for_settlement_of(
-        &self,
-        tx_hash: SettlementTxHash,
-    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>> {
-        // Let the shared retry helper own polling; this callback only distinguishes
-        // "not settled yet" from terminal reorg and RPC outcomes.
-        let result = crate::utils::retry_callback_until_success(
+        check: Check,
+    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>>
+    where
+        Check: FnMut() -> Fut,
+        Fut: std::future::Future<
+            Output = Result<Option<ContractCallResult>, WaitForSettlementError>,
+        >,
+    {
+        crate::utils::retry_callback_until_success(
             &self.tx_config.retry_on_not_included_on_l1,
             &self.control.cancellation_token,
-            || self.check_settlement_once(tx_hash),
+            check,
             WaitForSettlementError::is_transient,
         )
-        .await;
-
-        result.map_err(|error| match error {
+        .await
+        .map_err(|error| match error {
             RetryCallbackError::Cancelled => RetryCallbackError::Cancelled,
             RetryCallbackError::Error(WaitForSettlementError::Transport(error)) => {
                 RetryCallbackError::Error(error)
@@ -906,6 +901,56 @@ impl<
                 ))
             }
         })
+    }
+
+    /// Reads the current result of `tx_hash` on L1 without waiting for
+    /// finality.
+    ///
+    /// A missing receipt for a nonce that still maps to `tx_hash` is indexing
+    /// lag (`NotSettledYet`, retried with backoff). If the nonce no longer maps
+    /// to `tx_hash`, the transaction was reorged out and we report `Ok(None)`
+    /// so the caller restarts its cycle.
+    async fn current_result_once(
+        &self,
+        wallet: Address,
+        nonce: Nonce,
+        tx_hash: SettlementTxHash,
+    ) -> Result<Option<ContractCallResult>, WaitForSettlementError> {
+        if let Some(receipt) = self
+            .provider
+            .get_transaction_receipt(tx_hash.into())
+            .await?
+        {
+            return match crate::utils::contract_call_result_from_receipt(&receipt) {
+                Some(result) => Ok(Some(result)),
+                None => Err(WaitForSettlementError::NotSettledYet),
+            };
+        }
+        let still_mined =
+            crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce).await?;
+        if still_mined == Some(tx_hash) {
+            Err(WaitForSettlementError::NotSettledYet)
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn current_result_on_l1_for(
+        &self,
+        wallet: Address,
+        nonce: Nonce,
+        tx_hash: SettlementTxHash,
+    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>> {
+        self.retry_l1_check(|| self.current_result_once(wallet, nonce, tx_hash))
+            .await
+    }
+
+    async fn wait_for_settlement_of(
+        &self,
+        tx_hash: SettlementTxHash,
+    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>> {
+        self.retry_l1_check(|| self.check_settlement_once(tx_hash))
+            .await
     }
 
     #[tracing::instrument(
@@ -2359,6 +2404,57 @@ mod tests {
         )
         .await
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn current_result_once_returns_result_for_mined_tx() {
+        let anvil = Anvil::new().spawn();
+        let sender = anvil.addresses()[0];
+        let provider = build_provider(&anvil);
+        let receipt = provider
+            .send_transaction(TransactionRequest::default().to(anvil.addresses()[1]))
+            .await
+            .expect("send transaction")
+            .get_receipt()
+            .await
+            .expect("get receipt");
+        let tx_hash = SettlementTxHash::from(receipt.transaction_hash);
+
+        let task = mk_task_with_provider(provider, SettlementTransactionConfig::default());
+        let result = task
+            .current_result_once(sender, Nonce(0), tx_hash)
+            .await
+            .expect("query should succeed")
+            .expect("mined tx should have a result");
+
+        assert_eq!(result.outcome, ContractCallOutcome::Success);
+        assert_eq!(result.tx_hash, tx_hash);
+        assert_eq!(Some(result.block_number), receipt.block_number);
+        assert!(result.metadata.is_empty());
+    }
+
+    #[tokio::test]
+    async fn current_result_once_reports_none_when_nonce_no_longer_maps() {
+        // A receipt is missing and the nonce no longer resolves to this tx, so it
+        // was reorged out (here: never mined). The lag branch -- receipt missing
+        // but the nonce still maps -- needs a node that is inconsistent between
+        // `eth_getTransactionReceipt` and sender+nonce lookup, which anvil is not.
+        let anvil = Anvil::new().arg("--no-mining").spawn();
+        let sender = anvil.addresses()[0];
+        let provider = build_provider(&anvil);
+        let pending = provider
+            .send_transaction(TransactionRequest::default().to(anvil.addresses()[1]))
+            .await
+            .expect("send transaction");
+        let tx_hash = SettlementTxHash::from(*pending.tx_hash());
+
+        let task = mk_task_with_provider(provider, SettlementTransactionConfig::default());
+        let result = task
+            .current_result_once(sender, Nonce(0), tx_hash)
+            .await
+            .expect("query should succeed");
+
+        assert_eq!(result, None);
     }
 
     #[test]
