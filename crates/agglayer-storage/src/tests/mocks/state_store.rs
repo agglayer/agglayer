@@ -9,8 +9,9 @@ use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
     stores::{
-        MetadataReader, MetadataWriter, NetworkInfoReader, SettlementReader, SettlementWriter,
-        StateReader, StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        MetadataReader, MetadataWriter, NetworkInfoReader, SettlementJobReserver, SettlementReader,
+        SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+        UpdateStatusToCandidate,
     },
 };
 mock! {
@@ -46,12 +47,6 @@ mock! {
         fn remove_settlement_tx_hash(
             &self,
             certificate_id: &CertificateId,
-        ) -> Result<(), Error>;
-
-        fn insert_certificate_settlement_job_id(
-            &self,
-            certificate_id: &CertificateId,
-            settlement_job_id: &SettlementJobId,
         ) -> Result<(), Error>;
 
         fn assign_certificate_to_epoch(
@@ -95,6 +90,13 @@ mock! {
             disabled_by: agglayer_types::network_info::DisabledBy,
         ) -> Result<(), Error>;
         fn enable_network(&self, network_id: &NetworkId) -> Result<(), Error>;
+    }
+
+    impl SettlementJobReserver for StateStore {
+        fn reserve_settlement_job(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<SettlementJobId, Error>;
     }
 
     impl StateReader for StateStore {

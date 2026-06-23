@@ -6,9 +6,9 @@ pub use interfaces::{
         EpochStoreReader, MetadataReader, PendingCertificateReader, PerEpochReader, StateReader,
     },
     writer::{
-        settlement_writer::SettlementWriter, DebugWriter, EpochStoreWriter, MetadataWriter,
-        PendingCertificateWriter, PerEpochWriter, StateWriter, UpdateEvenIfAlreadyPresent,
-        UpdateStatusToCandidate,
+        settlement_reserver::SettlementJobReserver, settlement_writer::SettlementWriter,
+        DebugWriter, EpochStoreWriter, MetadataWriter, PendingCertificateWriter, PerEpochWriter,
+        StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
 };
 

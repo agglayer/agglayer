@@ -19,8 +19,8 @@ use crate::{
     },
     error::Error,
     stores::{
-        state::StateStore, SettlementReader as _, SettlementWriter as _, StateReader as _,
-        StateWriter as _,
+        state::StateStore, SettlementJobReserver as _, SettlementReader as _,
+        SettlementWriter as _, StateReader as _,
     },
     tests::TempDBDir,
     types::{
@@ -133,41 +133,26 @@ fn get_certificate_settlement_job_id_returns_none_when_missing() {
 }
 
 #[test]
-fn insert_certificate_settlement_job_id_allows_missing_job() {
+fn reserve_settlement_job_creates_forward_and_reverse_mapping() {
+    use crate::columns::certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn;
+
     let (_tmp, db, store) = setup_store();
     let certificate_id = mk_certificate_id(2);
-    let job_id = mk_job_id(200);
 
-    store
-        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
-        .expect("mapping insert must not require an existing job");
+    let job_id = store
+        .reserve_settlement_job(&certificate_id)
+        .expect("reserve must succeed");
 
     assert_eq!(
         db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
-            .expect("Unable to read stored value"),
+            .expect("read forward"),
         Some(job_id)
     );
-
     assert_eq!(
-        db.get::<SettlementJobsColumn>(&job_id)
-            .expect("Unable to read stored value"),
-        None
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
+            .expect("read reverse"),
+        Some(certificate_id)
     );
-}
-
-#[test]
-fn insert_certificate_settlement_job_id_returns_value_after_insert() {
-    let (_tmp, _db, store) = setup_store();
-    let certificate_id = mk_certificate_id(3);
-    let job_id = mk_job_id(300);
-
-    store
-        .insert_settlement_job(&job_id, &mk_settlement_job(3))
-        .expect("job insert must succeed");
-    store
-        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
-        .expect("mapping insert must succeed");
-
     assert_eq!(
         store
             .get_certificate_settlement_job_id(&certificate_id)
@@ -177,29 +162,20 @@ fn insert_certificate_settlement_job_id_returns_value_after_insert() {
 }
 
 #[test]
-fn insert_certificate_settlement_job_id_duplicate_fails() {
-    let (_tmp, db, store) = setup_store();
-    let certificate_id = mk_certificate_id(4);
-    let first_job_id = mk_job_id(400);
-    let second_job_id = mk_job_id(401);
+fn reserve_settlement_job_is_idempotent_per_certificate() {
+    let (_tmp, _db, store) = setup_store();
+    let certificate_id = mk_certificate_id(3);
 
-    store
-        .insert_settlement_job(&first_job_id, &mk_settlement_job(4))
-        .expect("first job insert must succeed");
-    store
-        .insert_settlement_job(&second_job_id, &mk_settlement_job(5))
-        .expect("second job insert must succeed");
-    store
-        .insert_certificate_settlement_job_id(&certificate_id, &first_job_id)
-        .expect("first mapping insert must succeed");
+    let first = store
+        .reserve_settlement_job(&certificate_id)
+        .expect("first reserve must succeed");
+    let second = store
+        .reserve_settlement_job(&certificate_id)
+        .expect("second reserve must return the existing id");
 
-    let res = store.insert_certificate_settlement_job_id(&certificate_id, &second_job_id);
-
-    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
     assert_eq!(
-        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
-            .expect("Unable to read stored value"),
-        Some(first_job_id)
+        first, second,
+        "reserve must be get-or-create per certificate"
     );
 }
 
