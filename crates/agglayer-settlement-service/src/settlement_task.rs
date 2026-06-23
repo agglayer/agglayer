@@ -9,10 +9,10 @@ use agglayer_config::{
     settlement_service::{SettlementPolicy, SettlementTransactionConfig},
     Multiplier,
 };
-use agglayer_storage::stores::{SettlementReader, SettlementWriter};
+use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
 use agglayer_types::{
-    ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
-    SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
+    CertificateId, ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest,
+    Nonce, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
     SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 use alloy::{
@@ -340,27 +340,18 @@ static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter,
+        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter,
     > SettlementTask<L1Provider, SettlementStore>
 {
     pub async fn create(
+        certificate_id: Option<CertificateId>,
         job: SettlementJob,
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
-        let id = loop {
-            if let Ok(id) = ID_GENERATOR
-                .get_or_init(|| std::sync::Mutex::new(ulid::Generator::new()))
-                .lock()
-                .unwrap()
-                .generate()
-            {
-                break SettlementJobId::from(id);
-            }
-            tokio::time::sleep(std::time::Duration::from_micros(100)).await;
-        };
+        let id = Self::reserve_settlement_job_id(store.as_ref(), certificate_id).await?;
         let this = Self {
             id,
             job,
@@ -372,6 +363,41 @@ impl<
         };
         this.save_settlement_job_to_db().await?;
         Ok((id, this))
+    }
+
+    async fn reserve_settlement_job_id(
+        store: &SettlementStore,
+        certificate_id: Option<CertificateId>,
+    ) -> eyre::Result<SettlementJobId> {
+        let Some(certificate_id) = certificate_id else {
+            return Ok(Self::generate_settlement_job_id().await);
+        };
+
+        let settlement_job_id = Self::generate_settlement_job_id().await;
+        store
+            .insert_certificate_settlement_job_id(&certificate_id, &settlement_job_id)
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to write settlement job id {settlement_job_id} for certificate \
+                     {certificate_id}"
+                )
+            })?;
+
+        Ok(settlement_job_id)
+    }
+
+    async fn generate_settlement_job_id() -> SettlementJobId {
+        loop {
+            if let Ok(id) = ID_GENERATOR
+                .get_or_init(|| std::sync::Mutex::new(ulid::Generator::new()))
+                .lock()
+                .unwrap()
+                .generate()
+            {
+                return SettlementJobId::from(id);
+            }
+            tokio::time::sleep(std::time::Duration::from_micros(100)).await;
+        }
     }
 
     pub async fn load(
@@ -1608,14 +1634,14 @@ mod tests {
     use std::{
         collections::BTreeMap,
         panic::{catch_unwind, AssertUnwindSafe},
-        sync::Arc,
+        sync::{Arc, Mutex},
     };
 
     use agglayer_config::Multiplier;
     use agglayer_storage::{error::Error, tests::mocks::MockStateStore};
     use agglayer_types::{
-        ClientError, ClientErrorType, ContractCallOutcome, Digest, SettlementAttemptResult, B256,
-        U256,
+        CertificateId, ClientError, ClientErrorType, ContractCallOutcome, Digest,
+        SettlementAttemptResult, B256, U256,
     };
     use alloy::{
         consensus::{Signed, TxEip1559},
@@ -1838,6 +1864,133 @@ mod tests {
         task.save_settlement_job_to_db()
             .await
             .expect("settlement job should be saved");
+    }
+
+    #[tokio::test]
+    async fn create_generates_settlement_job_id() {
+        let mut store = MockStateStore::new();
+        let job = mk_job();
+        let expected_job = job.clone();
+        let recorded_job_id = Arc::new(Mutex::new(None));
+        let recorded_job_id_for_store = recorded_job_id.clone();
+
+        store
+            .expect_insert_settlement_job()
+            .once()
+            .withf(move |_, recorded_job| recorded_job == &expected_job)
+            .return_once(move |recorded_job_id, _| {
+                *recorded_job_id_for_store.lock().unwrap() = Some(*recorded_job_id);
+                Ok(())
+            });
+
+        let (job_id, task) = SettlementTask::create(
+            None,
+            job,
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            Arc::new(store),
+            mk_control(),
+        )
+        .await
+        .expect("settlement task should be created");
+
+        assert_eq!(task.id, job_id);
+        assert_eq!(*recorded_job_id.lock().unwrap(), Some(job_id));
+    }
+
+    #[tokio::test]
+    async fn create_records_certificate_link_before_settlement_job() {
+        let mut store = MockStateStore::new();
+        let certificate_id = CertificateId::new(Digest::from([7; 32]));
+        let job = mk_job();
+        let expected_job = job.clone();
+        let recorded_job_id = Arc::new(Mutex::new(None));
+        let ordering = Arc::new(Mutex::new(Vec::new()));
+
+        store
+            .expect_insert_certificate_settlement_job_id()
+            .once()
+            .withf(move |recorded_certificate_id, _| recorded_certificate_id == &certificate_id)
+            .return_once({
+                let ordering = ordering.clone();
+                let recorded_job_id = recorded_job_id.clone();
+                move |_, settlement_job_id| {
+                    ordering.lock().unwrap().push("write_link");
+                    *recorded_job_id.lock().unwrap() = Some(*settlement_job_id);
+                    Ok(())
+                }
+            });
+
+        store
+            .expect_insert_settlement_job()
+            .once()
+            .withf(move |_, recorded_job| recorded_job == &expected_job)
+            .return_once({
+                let ordering = ordering.clone();
+                let recorded_job_id = recorded_job_id.clone();
+                move |settlement_job_id, _| {
+                    ordering.lock().unwrap().push("write_job");
+                    assert_eq!(*recorded_job_id.lock().unwrap(), Some(*settlement_job_id));
+                    Ok(())
+                }
+            });
+
+        let (job_id, task) = SettlementTask::create(
+            Some(certificate_id),
+            job,
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            Arc::new(store),
+            mk_control(),
+        )
+        .await
+        .expect("settlement task should be created");
+
+        assert_eq!(task.id, job_id);
+        assert_eq!(*recorded_job_id.lock().unwrap(), Some(job_id));
+        assert_eq!(
+            ordering.lock().unwrap().as_slice(),
+            ["write_link", "write_job"]
+        );
+    }
+
+    #[tokio::test]
+    async fn create_fails_when_certificate_link_already_exists() {
+        let mut store = MockStateStore::new();
+        let certificate_id = CertificateId::new(Digest::from([8; 32]));
+        let job = mk_job();
+
+        store
+            .expect_insert_certificate_settlement_job_id()
+            .once()
+            .withf(move |recorded_certificate_id, _| recorded_certificate_id == &certificate_id)
+            .return_once(|_, _| {
+                Err(Error::Unexpected(
+                    "Certificate already has a settlement job id".to_string(),
+                ))
+            });
+
+        store.expect_insert_settlement_job().never();
+
+        let result = SettlementTask::create(
+            Some(certificate_id),
+            job,
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            Arc::new(store),
+            mk_control(),
+        )
+        .await;
+
+        let error = result
+            .err()
+            .expect("duplicate certificate link should fail");
+        assert!(
+            error
+                .to_string()
+                .contains("Failed to write settlement job id"),
+            "{error:?}"
+        );
     }
 
     #[tokio::test]
