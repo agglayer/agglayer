@@ -7,9 +7,9 @@ use agglayer_storage::{
     tests::mocks::{MockDebugStore, MockEpochsStore, MockPendingStore, MockStateStore},
 };
 use agglayer_types::{
-    aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateHeader, CertificateIndex,
-    Digest, EpochNumber, Height, L1WitnessCtx, Metadata, NetworkId, NetworkInfo,
-    PessimisticRootInput,
+    aggchain_data::CertificateAggchainDataCtx, testutils::multisig_1_of_1_ctx, Certificate,
+    CertificateHeader, CertificateIndex, Digest, EpochNumber, Height, L1WitnessCtx, Metadata,
+    NetworkId, NetworkInfo, PessimisticRootInput,
 };
 use alloy::providers::{
     mock::{Asserter, MockTransport},
@@ -169,7 +169,10 @@ fn pending_certificate_defined() {
                 prev_pessimistic_root: PessimisticRootInput::Computed(
                     PessimisticRootCommitmentVersion::V2,
                 ),
-                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(multisig_1_of_1_ctx(
+                    &settled_certificate,
+                    signer,
+                )),
             },
         )
         .unwrap();

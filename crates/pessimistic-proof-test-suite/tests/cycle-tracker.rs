@@ -1,5 +1,6 @@
 use agglayer_types::{
-    aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx, PessimisticRootInput,
+    aggchain_data::CertificateAggchainDataCtx, testutils::multisig_1_of_1_ctx, L1WitnessCtx,
+    PessimisticRootInput,
 };
 use pessimistic_proof::{
     core::commitment::{PessimisticRootCommitmentVersion, SignatureCommitmentVersion},
@@ -47,9 +48,10 @@ fn cycles_on_sample_inputs(
                 prev_pessimistic_root: PessimisticRootInput::Computed(
                     PessimisticRootCommitmentVersion::V2,
                 ),
-                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa {
-                    signer: state.get_signer(),
-                },
+                aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(multisig_1_of_1_ctx(
+                    &certificate,
+                    state.get_signer(),
+                )),
             },
         )
         .unwrap();
@@ -59,7 +61,7 @@ fn cycles_on_sample_inputs(
         .expect("execution failed");
 
     // Double check the roots match what is calculated by the proof-external state.
-    state.assert_output_matches(&new_roots);
+    state.assert_output_matches(&new_roots, certificate.height.as_u64());
 
     insta::assert_snapshot!(name, stats);
 }

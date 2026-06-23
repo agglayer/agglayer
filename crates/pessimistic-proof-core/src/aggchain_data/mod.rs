@@ -3,10 +3,10 @@
 //! The aggchain-proof is the extra custom logic which is verified within the
 //! pessimistic-proof.
 //!
-//! For now, this is constraint to be either one ECDSA signature, or one SP1
-//! stark proof proving a specified statement which can be abstracted here.
+//! For now, this is constraint to be either multisig, or one SP1 stark proof
+//! proving a specified statement which can be abstracted here.
 
-use agglayer_primitives::{Address, Digest, Signature};
+use agglayer_primitives::Digest;
 use serde::{Deserialize, Serialize};
 
 pub use crate::aggchain_data::{
@@ -15,9 +15,7 @@ pub use crate::aggchain_data::{
     multisig::{MultiSignature, MultisigError},
 };
 use crate::{
-    local_state::commitment::{
-        PessimisticRootCommitmentVersion, SignatureCommitmentValues, SignatureCommitmentVersion,
-    },
+    local_state::commitment::{PessimisticRootCommitmentVersion, SignatureCommitmentValues},
     proof::ConstrainedValues,
     ProofError,
 };
@@ -32,13 +30,6 @@ pub type Vkey = [u32; 8];
 /// Explicit enum which forbid the case where we have none of them.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AggchainData {
-    /// Legacy signature with migration logic
-    LegacyEcdsa {
-        /// Signer committing to the state transition.
-        signer: Address,
-        /// Signature committing to the state transition.
-        signature: Signature,
-    },
     /// Multisig only
     MultisigOnly(MultiSignature),
     /// Multisig and an aggchain proof
@@ -63,9 +54,6 @@ impl AggchainData {
         let prev_pp_root_version = constrained_values.prev_pessimistic_root_version;
 
         let target_pp_root_version = match self {
-            AggchainData::LegacyEcdsa { signer, signature } => {
-                AggchainData::legacy_ecdsa(signer, signature, constrained_values)?
-            }
             AggchainData::MultisigOnly(multisig) => {
                 let commitment =
                     SignatureCommitmentValues::new(&constrained_values, None).multisig_commitment();
@@ -100,8 +88,6 @@ impl AggchainData {
         };
 
         match (prev_pp_root_version, target_pp_root_version) {
-            // From V2 to V2: OK
-            (PessimisticRootCommitmentVersion::V2, PessimisticRootCommitmentVersion::V2) => {}
             // From V3 to V3: OK
             (PessimisticRootCommitmentVersion::V3, PessimisticRootCommitmentVersion::V3) => {}
             // From V2 to V3: OK (migration)
@@ -109,37 +95,6 @@ impl AggchainData {
             // Inconsistent signed payload.
             _ => return Err(ProofError::InconsistentSignedPayload),
         }
-
-        Ok(target_pp_root_version)
-    }
-}
-
-impl AggchainData {
-    /// Returns the target PP root version based on the signature.
-    pub fn legacy_ecdsa(
-        signer: &Address,
-        signature: &Signature,
-        constrained_values: ConstrainedValues,
-    ) -> Result<PessimisticRootCommitmentVersion, ProofError> {
-        let signature_values = SignatureCommitmentValues::new(&constrained_values, None);
-
-        let is_signed_with_version = |version: SignatureCommitmentVersion| {
-            let prehash = signature_values.commitment(version);
-            signature
-                .recover_address_from_prehash(&prehash)
-                .map(|recovered| *signer == recovered)
-                .map_err(|_| ProofError::InvalidSignature)
-        };
-
-        let target_pp_root_version = if is_signed_with_version(SignatureCommitmentVersion::V3)?
-            || is_signed_with_version(SignatureCommitmentVersion::V5)?
-        {
-            PessimisticRootCommitmentVersion::V3
-        } else if is_signed_with_version(SignatureCommitmentVersion::V2)? {
-            PessimisticRootCommitmentVersion::V2
-        } else {
-            return Err(ProofError::InvalidSignature);
-        };
 
         Ok(target_pp_root_version)
     }

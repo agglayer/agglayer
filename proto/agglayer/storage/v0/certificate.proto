@@ -170,8 +170,6 @@ message MultisigOnly {
 message AggchainData {
   // Active aggchain-data variant.
   oneof data {
-    // Legacy single-signer ECDSA payload.
-    Signature ecdsa = 1;
     // Generic aggchain proof payload.
     Generic generic = 2;
     // Multisig-only payload.
@@ -179,6 +177,8 @@ message AggchainData {
     // Multisig combined with an aggchain proof.
     MultisigAndAggchainProof multisig_and_aggchain_proof = 4;
   }
+  reserved 1;
+  reserved "ecdsa";
 }
 
 // Stored certificate envelope.

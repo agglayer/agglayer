@@ -1,14 +1,17 @@
 use agglayer_tries::smt::Smt;
 use agglayer_types::{
-    aggchain_proof::AggchainData,
+    aggchain_proof::{AggchainData, MultisigPayload},
     primitives::{keccak::keccak256, Hashable},
-    testutils::compute_signature_info,
+    testutils::sign_multisig_1_of_1,
     Address, Certificate, Digest, Height, LocalNetworkStateData, Signature, U256,
 };
 use alloy::signers::{local::PrivateKeySigner, SignerSync};
 use ecdsa_proof_lib::AggchainECDSA;
 use pessimistic_proof::{
-    core::commitment::{SignatureCommitmentValues, SignatureCommitmentVersion},
+    core::commitment::{
+        PessimisticRootCommitmentValues, PessimisticRootCommitmentVersion,
+        SignatureCommitmentValues, SignatureCommitmentVersion,
+    },
     keccak::keccak256_combine,
     local_exit_tree::{data::LocalExitTreeData, LocalExitTree},
     local_state::LocalNetworkState,
@@ -195,7 +198,7 @@ impl Forest {
         &mut self,
         imported_bridge_events: impl IntoIterator<Item = (TokenInfo, U256)>,
         bridge_exits: impl IntoIterator<Item = BridgeExit>,
-        version: SignatureCommitmentVersion,
+        _version: SignatureCommitmentVersion,
     ) -> Certificate {
         let prev_local_exit_root = self.state_b.exit_tree.get_root().into();
 
@@ -210,26 +213,23 @@ impl Forest {
         let new_local_exit_root = self.state_b.exit_tree.get_root().into();
 
         let height = Height::ZERO;
-        let (_combined_hash, signature, _signer) = compute_signature_info(
-            new_local_exit_root,
-            &imported_bridge_exits,
-            &self.wallet,
-            height,
-            version,
-        );
 
-        Certificate {
+        let mut certificate = Certificate {
             network_id: self.network_id.into(),
             height,
             prev_local_exit_root,
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            aggchain_data: AggchainData::ECDSA { signature },
+            aggchain_data: AggchainData::MultisigOnly {
+                multisig: MultisigPayload(vec![None]),
+            },
             metadata: Default::default(),
             custom_chain_data: vec![],
             l1_info_tree_leaf_count: None,
-        }
+        };
+        sign_multisig_1_of_1(&mut certificate, &self.wallet);
+        certificate
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].
@@ -241,7 +241,7 @@ impl Forest {
         self.apply_events_with_version(
             imported_bridge_events,
             bridge_events,
-            SignatureCommitmentVersion::V2,
+            SignatureCommitmentVersion::V5,
         )
     }
 
@@ -269,20 +269,24 @@ impl Forest {
             SignatureCommitmentVersion::V5,
         );
 
-        let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
+        let agglayer_types::aggchain_proof::AggchainData::MultisigOnly { ref multisig } =
             certificate.aggchain_data
         else {
             panic!("inconsistent test data")
         };
+        let signature = multisig
+            .0
+            .iter()
+            .find_map(|signature| signature.as_ref())
+            .copied()
+            .expect("multisig signature");
 
         let (aggchain_proof, aggchain_vkey, aggchain_params) =
             compute_aggchain_proof(AggchainECDSA {
-                signer: certificate
-                    .retrieve_signer(SignatureCommitmentVersion::V2)
-                    .unwrap(),
+                signer: certificate.retrieve_signer(SignatureCommitmentVersion::V5).unwrap(),
                 signature,
                 commit_imported_bridge_exits: SignatureCommitmentValues::from(&certificate)
-                    .commitment(SignatureCommitmentVersion::V2)
+                    .multisig_commitment()
                     .0,
                 prev_local_exit_root: certificate.prev_local_exit_root,
                 new_local_exit_root: certificate.new_local_exit_root,
@@ -304,19 +308,26 @@ impl Forest {
     }
 
     /// Check the current state corresponds to given proof output.
-    pub fn assert_output_matches(&self, output: &PessimisticProofOutput) {
+    pub fn assert_output_matches(
+        &self,
+        output: &PessimisticProofOutput,
+        certificate_height: u64,
+    ) {
         assert_eq!(
             output.new_local_exit_root,
             zero_if_empty_local_exit_root(self.state_b.exit_tree.get_root().into())
         );
-        assert_eq!(
-            output.new_pessimistic_root,
-            keccak256_combine([
-                self.state_b.balance_tree.root.as_slice(),
-                self.state_b.nullifier_tree.root.as_slice(),
-                self.state_b.exit_tree.leaf_count().to_le_bytes().as_slice(),
-            ])
-        );
+        let new_pp_root = PessimisticRootCommitmentValues {
+            balance_root: self.state_b.balance_tree.root.into(),
+            nullifier_root: self.state_b.nullifier_tree.root.into(),
+            ler_leaf_count: self.state_b.exit_tree.leaf_count(),
+            height: certificate_height
+                .checked_add(1)
+                .expect("certificate height overflow"),
+            origin_network: self.network_id.into(),
+        }
+        .compute_pp_root(PessimisticRootCommitmentVersion::V3);
+        assert_eq!(output.new_pessimistic_root, new_pp_root);
     }
 }
 

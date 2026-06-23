@@ -4,8 +4,9 @@ use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{L1RpcError, L1TransactionFetcher, Settler};
 use agglayer_storage::tests::mocks::{MockPendingStore, MockPerEpochStore, MockStateStore};
 use agglayer_types::{
-    aggchain_data::CertificateAggchainDataCtx, Address, CertificateHeader, CertificateStatus,
-    Height, L1WitnessCtx, Metadata, PessimisticRootInput, Proof, SettlementTxHash,
+    aggchain_data::CertificateAggchainDataCtx, testutils::multisig_1_of_1_ctx, Address,
+    CertificateHeader, CertificateStatus, Height, L1WitnessCtx, Metadata, PessimisticRootInput,
+    Proof, SettlementTxHash,
 };
 use alloy::{
     primitives::{Bytes, FixedBytes, TxHash},
@@ -94,7 +95,10 @@ async fn epoch_packer_can_settle_one_certificate() {
                 prev_pessimistic_root: PessimisticRootInput::Computed(
                     PessimisticRootCommitmentVersion::V2,
                 ),
-                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(multisig_1_of_1_ctx(
+                    &certificate,
+                    signer,
+                )),
             },
         )
         .unwrap();

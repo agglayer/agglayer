@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use agglayer_types::{
-    aggchain_data::CertificateAggchainDataCtx, primitives::Hashable as _, Certificate,
-    CertificateId, CertificateIndex, Digest, EpochNumber, Height, L1WitnessCtx,
+    aggchain_data::CertificateAggchainDataCtx, primitives::Hashable as _, testutils::{
+        multisig_1_of_1_ctx, resign_loaded_certificate_as_multisig_1_of_1,
+    }, Certificate, CertificateId, CertificateIndex, Digest, EpochNumber, Height, L1WitnessCtx,
     LocalNetworkStateData, NetworkId, PessimisticRootInput,
 };
 use pessimistic_proof::{
@@ -283,6 +284,8 @@ fn can_read(network_id: NetworkId, store: StateStore) {
     let mut lns = LocalNetworkStateData::default();
 
     for (idx, certificate) in certificates.iter().enumerate() {
+        let mut certificate = certificate.clone();
+        resign_loaded_certificate_as_multisig_1_of_1(&mut certificate);
         info!(
             "Certificate ({idx}|{}) | {}, nib:{} b:{}",
             certificate.height,
@@ -292,7 +295,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         );
 
         let signer = certificate
-            .retrieve_signer(SignatureCommitmentVersion::V2)
+            .retrieve_signer(SignatureCommitmentVersion::V5)
             .unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
@@ -301,11 +304,13 @@ fn can_read(network_id: NetworkId, store: StateStore) {
             prev_pessimistic_root: PessimisticRootInput::Computed(
                 PessimisticRootCommitmentVersion::V2,
             ),
-            aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(multisig_1_of_1_ctx(
+                &certificate, signer,
+            )),
         };
 
         let multi_batch_header = lns
-            .make_multi_batch_header(certificate, ctx_from_l1.clone())
+            .make_multi_batch_header(&certificate, ctx_from_l1.clone())
             .unwrap();
 
         info!("Certificate {idx}: successful witness generation");
@@ -317,7 +322,7 @@ fn can_read(network_id: NetworkId, store: StateStore) {
         for b in &certificate.bridge_exits {
             leaves.push(b.hash());
         }
-        lns.apply_certificate(certificate, ctx_from_l1).unwrap();
+        lns.apply_certificate(&certificate, ctx_from_l1).unwrap();
         info!("Certificate {idx}: successful state transition, waiting for the next");
     }
 
@@ -376,6 +381,8 @@ fn import_native_tokens() {
     let mut lns = LocalNetworkStateData::default();
 
     for (idx, certificate) in certificates.iter().enumerate() {
+        let mut certificate = certificate.clone();
+        resign_loaded_certificate_as_multisig_1_of_1(&mut certificate);
         info!(
             "Certificate ({idx}|{}) | {}, nib:{} b:{}",
             certificate.height,
@@ -385,7 +392,7 @@ fn import_native_tokens() {
         );
 
         let signer = certificate
-            .retrieve_signer(SignatureCommitmentVersion::V2)
+            .retrieve_signer(SignatureCommitmentVersion::V5)
             .unwrap();
         let l1_info_root = certificate.l1_info_root().unwrap().unwrap_or_default();
 
@@ -394,10 +401,12 @@ fn import_native_tokens() {
             prev_pessimistic_root: PessimisticRootInput::Computed(
                 PessimisticRootCommitmentVersion::V2,
             ),
-            aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(multisig_1_of_1_ctx(
+                &certificate, signer,
+            )),
         };
         let multi_batch_header = lns
-            .make_multi_batch_header(certificate, ctx_from_l1.clone())
+            .make_multi_batch_header(&certificate, ctx_from_l1.clone())
             .unwrap();
 
         info!("Certificate {idx}: successful witness generation");
@@ -406,7 +415,7 @@ fn import_native_tokens() {
         generate_pessimistic_proof(initial_state.into(), &multi_batch_header).unwrap();
         info!("Certificate {idx}: successful native execution");
 
-        lns.apply_certificate(certificate, ctx_from_l1).unwrap();
+        lns.apply_certificate(&certificate, ctx_from_l1).unwrap();
         info!("Certificate {idx}: successful state transition, waiting for the next");
     }
 }

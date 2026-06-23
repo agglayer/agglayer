@@ -64,17 +64,6 @@ where
         // Fetch context based on the aggchain data type that we received from the
         // chain.
         let aggchain_data_ctx: CertificateAggchainDataCtx = match aggchain_data_payload {
-            CertificateAggchainData::LegacyEcdsa { .. } => {
-                let signer = self
-                    .l1_rpc
-                    .get_trusted_sequencer_address(
-                        network_id.to_u32(),
-                        self.config.proof_signers.clone(),
-                    )
-                    .await
-                    .map_err(|_| CertificationError::TrustedSequencerNotFound(network_id))?;
-                CertificateAggchainDataCtx::LegacyEcdsa { signer }
-            }
             CertificateAggchainData::MultisigOnly(_) => CertificateAggchainDataCtx::MultisigOnly(
                 self.fetch_multisig_ctx(rollup_address, certificate).await?,
             ),

@@ -11,8 +11,8 @@ use agglayer_storage::{
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{
-    aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateStatus, L1WitnessCtx,
-    Metadata, PessimisticRootInput,
+    aggchain_data::CertificateAggchainDataCtx, testutils::multisig_1_of_1_ctx, Certificate,
+    CertificateStatus, L1WitnessCtx, Metadata, PessimisticRootInput,
 };
 use mockall::predicate::{always, eq, in_iter};
 use pessimistic_proof::core::commitment::PessimisticRootCommitmentVersion;
@@ -1341,7 +1341,7 @@ async fn process_next_certificate() {
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
 
-            let signer = agglayer_types::Address::new([0; 20]);
+            let signer = certificate.get_signer();
             let ctx_from_l1 = L1WitnessCtx {
                 l1_info_root: certificate
                     .l1_info_root()
@@ -1350,7 +1350,9 @@ async fn process_next_certificate() {
                 prev_pessimistic_root: PessimisticRootInput::Computed(
                     PessimisticRootCommitmentVersion::V2,
                 ),
-                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(multisig_1_of_1_ctx(
+                    &certificate, signer,
+                )),
             };
 
             let _ = new_state

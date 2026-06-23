@@ -48,14 +48,14 @@ message SettledClaim {
 enum NetworkType {
   // Unspecified network type.
   NETWORK_TYPE_UNSPECIFIED = 0;
-  // ECDSA-based network type.
-  NETWORK_TYPE_ECDSA = 1;
   // Generic network type.
   NETWORK_TYPE_GENERIC = 2;
   /// Multisig-only network type.
   NETWORK_TYPE_MULTISIG_ONLY = 3;
   /// Multisig and aggchain proof network type.
   NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF = 4;
+  reserved 1;
+  reserved "NETWORK_TYPE_ECDSA";
 }
 
 // Status of the particular network, as seen by this node.

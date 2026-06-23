@@ -45,7 +45,7 @@ async fn start_l1_network() {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(crate::common::type_1_multisig_forest())]
 async fn deconstruct_reconstruct_transaction(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();

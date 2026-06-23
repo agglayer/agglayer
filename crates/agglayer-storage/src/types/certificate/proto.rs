@@ -451,9 +451,6 @@ impl TryFrom<proto::AggchainData> for AggchainData {
 
     fn try_from(value: proto::AggchainData) -> Result<Self, Self::Error> {
         Ok(match required_field!(value, data)? {
-            proto::aggchain_data::Data::Ecdsa(signature) => Self::ECDSA {
-                signature: parse_signature(signature, "aggchain_data.ecdsa")?,
-            },
             proto::aggchain_data::Data::Generic(generic) => Self::Generic {
                 proof: Proof::try_from(required_field!(
                     generic.proof,
@@ -518,9 +515,6 @@ impl TryFrom<&AggchainData> for proto::AggchainData {
     fn try_from(value: &AggchainData) -> Result<Self, Self::Error> {
         Ok(Self {
             data: Some(match value {
-                AggchainData::ECDSA { signature } => {
-                    proto::aggchain_data::Data::Ecdsa((*signature).into())
-                }
                 AggchainData::Generic {
                     proof,
                     aggchain_params,
@@ -551,6 +545,12 @@ impl TryFrom<&AggchainData> for proto::AggchainData {
                             .map(|value| (**value).clone().into()),
                     },
                 ),
+                AggchainData::ECDSA { .. } => {
+                    return Err(CertificateConversionError::InvalidData {
+                        field: "aggchain_data",
+                        reason: "legacy ECDSA aggchain data is no longer supported".to_string(),
+                    });
+                }
             }),
         })
     }

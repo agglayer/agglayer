@@ -317,9 +317,21 @@ fn certificate_keeps_canonical_metadata_and_aggchain_tags() {
 
     let aggchain_only = Certificate {
         aggchain_data: Some(AggchainData {
-            data: Some(aggchain_data::Data::Ecdsa(
-                crate::types::generated::agglayer::storage::v0::Signature {
-                    value: vec![0xCD; 65].into(),
+            data: Some(aggchain_data::Data::MultisigOnly(
+                crate::types::generated::agglayer::storage::v0::MultisigOnly {
+                    multisig: Some(
+                        crate::types::generated::agglayer::storage::v0::MultisigPayload {
+                            signatures: vec![
+                                crate::types::generated::agglayer::storage::v0::MultisigEntry {
+                                    signature: Some(
+                                        crate::types::generated::agglayer::storage::v0::Signature {
+                                            value: vec![0xCD; 65].into(),
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
                 },
             )),
         }),

@@ -20,7 +20,7 @@ mod common;
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(common::type_1_multisig_forest())]
 async fn recover_with_backup(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let backup_dir = TempDBDir::new();
@@ -86,7 +86,7 @@ async fn recover_with_backup(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(common::type_1_multisig_forest())]
 async fn purge_after_n_backup(#[case] state: Forest) {
     use agglayer_types::Height;
 
@@ -181,7 +181,7 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(common::type_1_multisig_forest())]
 async fn report_contains_all_backups(#[case] state: Forest) {
     use agglayer_types::Height;
 
@@ -275,7 +275,7 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(360))]
-#[case::type_0_ecdsa(common::type_0_ecdsa_forest())]
+#[case::type_1_multisig(common::type_1_multisig_forest())]
 async fn restore_at_particular_level(#[case] state: Forest) {
     use agglayer_types::Height;
 

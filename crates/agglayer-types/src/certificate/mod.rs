@@ -29,7 +29,10 @@ pub use id::CertificateId;
 pub use index::CertificateIndex;
 pub use metadata::Metadata;
 #[cfg(feature = "testutils")]
-pub use testutils::compute_signature_info;
+    pub use testutils::{
+        compute_signature_info, multisig_1_of_1_ctx, resign_loaded_certificate_as_multisig_1_of_1,
+        sign_multisig_1_of_1,
+    };
 
 /// Represents the data submitted by the chains to the AggLayer.
 ///
@@ -126,32 +129,6 @@ impl Certificate {
 
     pub fn signature_commitment_values(&self) -> SignatureCommitmentValues {
         SignatureCommitmentValues::from(self)
-    }
-
-    pub fn verify_legacy_ecdsa(
-        &self,
-        expected_signer: Address,
-        signature: &Signature,
-    ) -> Result<(), SignerError> {
-        let signature_commitment_values = self.signature_commitment_values();
-
-        let recovered_expected_signer = [
-            SignatureCommitmentVersion::V5,
-            SignatureCommitmentVersion::V3,
-            SignatureCommitmentVersion::V2,
-        ]
-        .iter()
-        .any(|version| {
-            let commitment = signature_commitment_values.commitment(*version);
-            match signature.recover_address_from_prehash(&commitment) {
-                Ok(recovered) => recovered == expected_signer,
-                Err(_) => false,
-            }
-        });
-
-        recovered_expected_signer
-            .then_some(())
-            .ok_or(SignerError::InvalidPessimisticProofSignature { expected_signer })
     }
 
     pub fn verify_aggchain_proof_signature(

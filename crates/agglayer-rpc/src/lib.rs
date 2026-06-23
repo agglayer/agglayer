@@ -14,7 +14,7 @@ use agglayer_storage::{
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
     CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId, NetworkInfo,
-    NetworkStatus, NetworkType, SettledClaim, U256,
+    NetworkStatus, NetworkType, SettledClaim, SignerError, U256,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
@@ -861,8 +861,12 @@ where
         };
 
         match &cert.aggchain_data {
-            AggchainData::ECDSA { signature } => {
-                cert.verify_legacy_ecdsa(fetch_sequencer_address().await?, signature)
+            AggchainData::ECDSA { .. } => {
+                return Err(SignatureVerificationError::from_signer_error(
+                    SignerError::InvalidPessimisticProofSignature {
+                        expected_signer: fetch_sequencer_address().await?,
+                    },
+                ));
             }
             AggchainData::Generic { signature, .. } => {
                 cert.verify_aggchain_proof_signature(fetch_sequencer_address().await?, signature)

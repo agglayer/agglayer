@@ -27,7 +27,9 @@ impl TryFrom<AggchainData> for global::Payload {
     type Error = AggchainDataError;
     fn try_from(value: AggchainData) -> Result<Self, Self::Error> {
         Ok(match value {
-            AggchainData::ECDSA { signature } => global::Payload::LegacyEcdsa { signature },
+            AggchainData::ECDSA { .. } => {
+                return Err(AggchainDataError::LegacyEcdsaUnsupported);
+            }
             AggchainData::Generic {
                 proof,
                 aggchain_params,

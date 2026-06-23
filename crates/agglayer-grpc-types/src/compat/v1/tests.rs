@@ -102,8 +102,12 @@ fn certificate_proto_fixture(aggchain_data: AggchainData) -> v1::Certificate {
 
 fn default_certificate_signature() -> agglayer_types::primitives::Signature {
     match Certificate::default().aggchain_data {
-        AggchainData::ECDSA { signature } => signature,
-        other => panic!("expected ECDSA certificate, got {other:?}"),
+        AggchainData::MultisigOnly { multisig } => multisig
+            .0
+            .iter()
+            .find_map(|signature| signature.as_ref().copied())
+            .expect("default certificate should have a multisig signature"),
+        other => panic!("expected MultisigOnly certificate, got {other:?}"),
     }
 }
 
@@ -188,8 +192,16 @@ fn invalid_proof_versions_remain_invalid_certificate_errors() {
     );
 }
 
+fn default_multisig_certificate_proto() -> v1::Certificate {
+    let mut certificate =
+        v1::Certificate::try_from(Certificate::default()).expect("test certificate should serialize");
+    // Multisig ingress rejects certificates that carry metadata on the wire.
+    certificate.metadata = None;
+    certificate
+}
+
 #[rstest::rstest]
-#[case::ecdsa(v1::Certificate::try_from(Certificate::default()).expect("test certificate should serialize"))]
+#[case::default_multisig(default_multisig_certificate_proto())]
 #[case::multisig_only(multisig_only_certificate_proto())]
 fn non_proof_certificate_variants_are_unaffected(#[case] certificate: v1::Certificate) {
     let result = Certificate::try_from(certificate);

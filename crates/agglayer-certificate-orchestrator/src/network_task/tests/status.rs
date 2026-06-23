@@ -8,7 +8,9 @@ use agglayer_storage::{
     tests::TempDBDir,
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
-use agglayer_types::{aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx};
+use agglayer_types::{
+    aggchain_data::CertificateAggchainDataCtx, testutils::multisig_1_of_1_ctx, L1WitnessCtx,
+};
 use mockall::predicate::{always, eq};
 use pessimistic_proof::{
     core::{commitment::PessimisticRootCommitmentVersion, generate_pessimistic_proof},
@@ -62,7 +64,7 @@ async fn from_pending_to_settled() {
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
 
-            let signer = agglayer_types::Address::new([0; 20]);
+            let signer = certificate.get_signer();
             let ctx_from_l1 = L1WitnessCtx {
                 l1_info_root: certificate
                     .l1_info_root()
@@ -71,7 +73,9 @@ async fn from_pending_to_settled() {
                 prev_pessimistic_root: PessimisticRootInput::Computed(
                     PessimisticRootCommitmentVersion::V2,
                 ),
-                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(multisig_1_of_1_ctx(
+                    &certificate, signer,
+                )),
             };
 
             let _ = new_state
@@ -195,7 +199,7 @@ async fn from_proven_to_settled() {
                 .get_certificate(network, height)
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
-            let signer = agglayer_types::Address::new([0; 20]);
+            let signer = certificate.get_signer();
 
             let ctx_from_l1 = L1WitnessCtx {
                 l1_info_root: certificate
@@ -205,7 +209,9 @@ async fn from_proven_to_settled() {
                 prev_pessimistic_root: PessimisticRootInput::Computed(
                     PessimisticRootCommitmentVersion::V2,
                 ),
-                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(multisig_1_of_1_ctx(
+                    &certificate, signer,
+                )),
             };
 
             let _ = new_state
@@ -302,7 +308,6 @@ async fn from_candidate_to_settled() {
     let (_sender, certificate_stream) = mpsc::channel(100);
 
     let mut forest = Forest::default();
-    let signer = forest.get_signer();
 
     let certificate = forest.apply_events(
         &[(USDC, 10.try_into().unwrap())],
@@ -337,6 +342,7 @@ async fn from_candidate_to_settled() {
         .returning(move |cert, state, _tx_hash| {
             let initial = LocalNetworkState::from(state.clone());
             let l1_info_root = cert.l1_info_root().unwrap().unwrap_or_default();
+            let signer = cert.get_signer();
 
             let batch = state
                 .apply_certificate(
@@ -346,7 +352,9 @@ async fn from_candidate_to_settled() {
                         prev_pessimistic_root: PessimisticRootInput::Computed(
                             PessimisticRootCommitmentVersion::V2,
                         ),
-                        aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                        aggchain_data_ctx: CertificateAggchainDataCtx::MultisigOnly(
+                            multisig_1_of_1_ctx(cert, signer),
+                        ),
                     },
                 )
                 .unwrap();
