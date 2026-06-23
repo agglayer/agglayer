@@ -581,14 +581,13 @@ mod tests {
             });
 
         let cancellation_token = CancellationToken::new();
-        let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+        cancellation_token.cancel();
+        let service = mk_service_with_token(Arc::new(store), cancellation_token).await;
 
         let watcher = service
             .request_new_settlement(Some(certificate_id), job)
             .await
             .expect("settlement request should be accepted");
-
-        cancellation_token.cancel();
 
         assert_eq!(*recorded_job_id.lock().unwrap(), Some(watcher.job_id()));
         assert_eq!(

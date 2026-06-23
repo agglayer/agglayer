@@ -11,7 +11,7 @@ use alloy::{
     signers::local::PrivateKeySigner,
 };
 use fail::FailScenario;
-use integrations::agglayer_setup::{get_signer, setup_network, start_l1};
+use integrations::agglayer_setup::{get_signer, setup_network, start_l1, wait_for_l1_blocks};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 use tracing::info;
@@ -34,9 +34,17 @@ async fn start_l1_network() {
     // Create a provider to check the L1 chain
     let provider = RootProvider::<Ethereum>::new_http(reqwest::Url::parse(&l1.rpc).unwrap());
 
-    // Get current block number
     let current_block = provider.get_block_number().await.unwrap();
+    wait_for_l1_blocks(&l1, 1).await;
+    let next_block = provider.get_block_number().await.unwrap();
+
     info!("Current block number: {}", current_block);
+    info!("Next block number: {}", next_block);
+
+    assert!(
+        next_block > current_block,
+        "expected L1 block number to advance, but it stayed at {current_block}",
+    );
 
     info!("Test completed successfully");
     scenario.teardown();
