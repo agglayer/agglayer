@@ -2,6 +2,7 @@ use crate::{
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
+        certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn,
         certificate_per_network::CertificatePerNetworkColumn,
         disabled_networks::DisabledNetworksColumn,
         latest_settled_certificate_per_network::LatestSettledCertificatePerNetworkColumn,
@@ -46,8 +47,10 @@ pub const STATE_DB_V1_ADDED_CFS: &[ColumnDescriptor] = &[
 ];
 
 /// CFs added by the second catch-up migration.
-pub const STATE_DB_V2_ADDED_CFS: &[ColumnDescriptor] =
-    &[ColumnDescriptor::new::<SettlementJobIdPerCertificateIdColumn>()];
+pub const STATE_DB_V2_ADDED_CFS: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<SettlementJobIdPerCertificateIdColumn>(),
+    ColumnDescriptor::new::<CertificateIdPerSettlementJobIdColumn>(),
+];
 
 /// Definitions for the column families in the state storage. The
 /// authoritative target schema: `init_db` ensures every CF listed here
@@ -64,6 +67,7 @@ pub const STATE_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<NetworkInfoColumn>(),
     ColumnDescriptor::new::<DisabledNetworksColumn>(),
     ColumnDescriptor::new::<SettlementJobIdPerCertificateIdColumn>(),
+    ColumnDescriptor::new::<CertificateIdPerSettlementJobIdColumn>(),
     // Settlement related CFs
     ColumnDescriptor::new::<SettlementJobsColumn>(),
     ColumnDescriptor::new::<SettlementJobResultsColumn>(),

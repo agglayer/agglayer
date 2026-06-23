@@ -10,6 +10,7 @@ pub const LOCAL_EXIT_TREE_PER_NETWORK_CF: &str = "local_exit_tree_per_network_cf
 pub const NETWORK_INFO_CF: &str = "network_info_cf";
 pub const DISABLED_NETWORKS_CF: &str = "disabled_networks_cf";
 pub const SETTLEMENT_JOB_ID_PER_CERTIFICATE_ID_CF: &str = "settlement_job_id_per_certificate_id_cf";
+pub const CERTIFICATE_ID_PER_SETTLEMENT_JOB_ID_CF: &str = "certificate_id_per_settlement_job_id_cf";
 
 // Metadata CFs
 pub const CERTIFICATE_HEADER_CF: &str = "certificate_header_cf";
@@ -76,6 +77,7 @@ pub const DEBUG_CERTIFICATES_PROTO_CF: &str = "debug_certificates_proto_cf";
 
 // State
 pub(crate) mod balance_tree_per_network;
+pub(crate) mod certificate_id_per_settlement_job_id;
 pub(crate) mod certificate_per_network;
 pub(crate) mod disabled_networks;
 pub(crate) mod local_exit_tree_per_network;
