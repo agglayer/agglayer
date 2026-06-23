@@ -53,19 +53,28 @@ impl SettlementJobId {
     }
 
     /// Mint a new, unique, monotonically-increasing settlement job id.
-    pub fn generate() -> SettlementJobId {
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the global generator mutex is poisoned (i.e. a thread
+    /// previously panicked while generating an id).
+    #[must_use]
+    pub fn generate() -> Self {
         loop {
-            if let Ok(id) = SETTLEMENT_JOB_ID_GENERATOR
-                .get_or_init(|| Mutex::new(ulid::Generator::new()))
-                .lock()
-                .expect("settlement job id generator mutex poisoned")
-                .generate()
-            {
-                return SettlementJobId::from(id);
+            let result = {
+                let mut generator = SETTLEMENT_JOB_ID_GENERATOR
+                    .get_or_init(|| Mutex::new(ulid::Generator::new()))
+                    .lock()
+                    .expect("settlement job id generator mutex poisoned");
+                generator.generate()
+            }; // guard dropped here, before any sleep
+
+            match result {
+                Ok(id) => return Self::from(id),
+                // Monotonic overflow within a millisecond is extraordinarily rare;
+                // back off briefly so the timestamp component advances, then retry.
+                Err(_) => std::thread::sleep(std::time::Duration::from_micros(100)),
             }
-            // Monotonic overflow within a millisecond is extraordinarily rare;
-            // back off briefly so the timestamp component advances, then retry.
-            std::thread::sleep(std::time::Duration::from_micros(100));
         }
     }
 }
