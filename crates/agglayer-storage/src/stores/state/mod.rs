@@ -26,13 +26,13 @@ use crate::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
-        certificate_settlement_job::CertificateSettlementJobColumn,
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
     },
     error::Error,
     schema::ColumnSchema,
@@ -216,7 +216,7 @@ impl StateWriter for StateStore {
     ) -> Result<(), Error> {
         if self
             .db
-            .get::<CertificateSettlementJobColumn>(certificate_id)?
+            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
             .is_some()
         {
             return Err(Error::UnprocessedAction(format!(
@@ -226,7 +226,7 @@ impl StateWriter for StateStore {
 
         Ok(self
             .db
-            .put::<CertificateSettlementJobColumn>(certificate_id, settlement_job_id)?)
+            .put::<SettlementJobIdPerCertificateIdColumn>(certificate_id, settlement_job_id)?)
     }
 
     fn assign_certificate_to_epoch(
@@ -621,7 +621,7 @@ impl StateReader for StateStore {
     ) -> Result<Option<SettlementJobId>, Error> {
         Ok(self
             .db
-            .get::<CertificateSettlementJobColumn>(certificate_id)?)
+            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?)
     }
 
     fn get_certificate_header_by_cursor(
