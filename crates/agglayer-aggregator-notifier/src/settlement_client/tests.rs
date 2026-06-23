@@ -129,6 +129,10 @@ async fn epoch_packer_can_settle_one_certificate() {
             }))
         });
 
+    state_store
+        .expect_reserve_settlement_job()
+        .returning(|_| Ok(agglayer_types::SettlementJobId::generate()));
+
     let mut l1_rpc = MockL1Rpc::new();
 
     l1_rpc

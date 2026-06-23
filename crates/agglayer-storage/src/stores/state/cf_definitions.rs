@@ -2,8 +2,8 @@ use crate::{
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
+        certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn,
         certificate_per_network::CertificatePerNetworkColumn,
-        certificate_settlement_job::CertificateSettlementJobColumn,
         disabled_networks::DisabledNetworksColumn,
         latest_settled_certificate_per_network::LatestSettledCertificatePerNetworkColumn,
         local_exit_tree_per_network::LocalExitTreePerNetworkColumn, metadata::MetadataColumn,
@@ -11,6 +11,7 @@ use crate::{
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
+        settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
     },
     schema::ColumnDescriptor,
@@ -46,8 +47,10 @@ pub const STATE_DB_V1_ADDED_CFS: &[ColumnDescriptor] = &[
 ];
 
 /// CFs added by the second catch-up migration.
-pub const STATE_DB_V2_ADDED_CFS: &[ColumnDescriptor] =
-    &[ColumnDescriptor::new::<CertificateSettlementJobColumn>()];
+pub const STATE_DB_V2_ADDED_CFS: &[ColumnDescriptor] = &[
+    ColumnDescriptor::new::<SettlementJobIdPerCertificateIdColumn>(),
+    ColumnDescriptor::new::<CertificateIdPerSettlementJobIdColumn>(),
+];
 
 /// Definitions for the column families in the state storage. The
 /// authoritative target schema: `init_db` ensures every CF listed here
@@ -63,7 +66,8 @@ pub const STATE_DB: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<NullifierTreePerNetworkColumn>(),
     ColumnDescriptor::new::<NetworkInfoColumn>(),
     ColumnDescriptor::new::<DisabledNetworksColumn>(),
-    ColumnDescriptor::new::<CertificateSettlementJobColumn>(),
+    ColumnDescriptor::new::<SettlementJobIdPerCertificateIdColumn>(),
+    ColumnDescriptor::new::<CertificateIdPerSettlementJobIdColumn>(),
     // Settlement related CFs
     ColumnDescriptor::new::<SettlementJobsColumn>(),
     ColumnDescriptor::new::<SettlementJobResultsColumn>(),
