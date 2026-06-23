@@ -163,18 +163,6 @@ pub(crate) fn contract_call_result_from_receipt(
     })
 }
 
-/// Returns the [`ContractCallResult`] for a transaction currently included on
-/// L1, or `None` if it is not included (missing receipt or no block info).
-pub(crate) async fn contract_call_result_on_l1(
-    provider: &impl Provider,
-    tx_hash: SettlementTxHash,
-) -> TransportResult<Option<ContractCallResult>> {
-    let Some(receipt) = provider.get_transaction_receipt(tx_hash.into()).await? else {
-        return Ok(None);
-    };
-    Ok(contract_call_result_from_receipt(&receipt))
-}
-
 /// Builds an Anvil-backed L1 provider signing with its first funded account.
 #[cfg(test)]
 pub(crate) fn build_provider(
@@ -208,7 +196,7 @@ mod tests {
         consensus::Transaction as _,
         network::TransactionBuilder as _,
         node_bindings::Anvil,
-        primitives::{B256, U256},
+        primitives::U256,
         providers::{Provider, ProviderBuilder},
         rpc::types::TransactionRequest,
         transports::{RpcError, TransportError},
@@ -728,37 +716,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn contract_call_result_on_l1_returns_success_for_mined_tx() {
-        let anvil = Anvil::new().spawn();
-        let provider = build_provider(&anvil);
-
-        let tx = TransactionRequest::default()
-            .to(anvil.addresses()[1])
-            .value(U256::from(1));
-        let receipt = provider
-            .send_transaction(tx)
-            .await
-            .unwrap()
-            .get_receipt()
-            .await
-            .unwrap();
-
-        let tx_hash = SettlementTxHash::from(receipt.transaction_hash);
-        let result = contract_call_result_on_l1(&provider, tx_hash)
-            .await
-            .unwrap()
-            .expect("mined tx should have a result");
-
-        assert_eq!(result.outcome, ContractCallOutcome::Success);
-        assert_eq!(result.metadata, Bytes::new());
-        assert_eq!(Some(result.block_hash), receipt.block_hash);
-        assert_eq!(Some(result.block_number), receipt.block_number);
-        assert_eq!(result.tx_hash, tx_hash);
-        assert_eq!(contract_call_result_from_receipt(&receipt), Some(result));
-    }
-
-    #[tokio::test]
-    async fn contract_call_result_on_l1_returns_revert_for_reverted_tx() {
+    async fn contract_call_result_from_receipt_maps_revert() {
         let anvil = Anvil::new().spawn();
         let provider = build_provider(&anvil);
 
@@ -778,25 +736,9 @@ mod tests {
             .unwrap();
         assert!(!receipt.status());
 
-        let result =
-            contract_call_result_on_l1(&provider, SettlementTxHash::from(receipt.transaction_hash))
-                .await
-                .unwrap()
-                .expect("mined reverted tx should have a result");
-
+        let result = contract_call_result_from_receipt(&receipt)
+            .expect("mined reverted tx should have a result");
         assert_eq!(result.outcome, ContractCallOutcome::Revert);
-    }
-
-    #[tokio::test]
-    async fn contract_call_result_on_l1_returns_none_for_unknown_tx() {
-        let anvil = Anvil::new().spawn();
-        let provider = build_provider(&anvil);
-
-        let result =
-            contract_call_result_on_l1(&provider, SettlementTxHash::from(B256::repeat_byte(0x42)))
-                .await
-                .unwrap();
-        assert_eq!(result, None);
     }
 
     // Manual run for any custom L1 RPC endpoint:

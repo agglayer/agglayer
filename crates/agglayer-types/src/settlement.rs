@@ -177,4 +177,10 @@ pub struct SettlementAttempt {
     pub nonce: Nonce,
     pub hash: SettlementTxHash,
     pub submission_time: SystemTime,
+    /// `max_fee_per_gas` (wei) of the signed attempt; the baseline a retry
+    /// bumps from.
+    pub max_fee_per_gas: u128,
+    /// `max_priority_fee_per_gas` (wei) of the signed attempt; the baseline a
+    /// retry bumps from.
+    pub max_priority_fee_per_gas: u128,
 }

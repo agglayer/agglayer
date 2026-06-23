@@ -57,6 +57,8 @@ fn mk_settlement_attempt(seed: u64) -> SettlementAttempt {
         nonce: Nonce(seed),
         hash: SettlementTxHash::new(Digest::from([(seed as u8).wrapping_add(4); 32])),
         submission_time: SystemTime::UNIX_EPOCH + Duration::from_secs(seed),
+        max_fee_per_gas: 30_000_000_000 + seed as u128,
+        max_priority_fee_per_gas: 1_000_000_000 + seed as u128,
     }
 }
 
