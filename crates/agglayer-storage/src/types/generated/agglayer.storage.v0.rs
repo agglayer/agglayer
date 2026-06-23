@@ -916,6 +916,12 @@ pub struct SettlementAttempt {
     /// Nonce reserved for the transaction.
     #[prost(message, optional, tag="2")]
     pub nonce: ::core::option::Option<Nonce>,
+    /// Max fee per gas of the submitted transaction (EIP-1559).
+    #[prost(message, optional, tag="3")]
+    pub max_fee_per_gas: ::core::option::Option<Uint128>,
+    /// Max priority fee per gas of the submitted transaction (EIP-1559).
+    #[prost(message, optional, tag="4")]
+    pub max_priority_fee_per_gas: ::core::option::Option<Uint128>,
     /// Hash of the submitted transaction.
     #[prost(message, optional, tag="5")]
     pub tx_hash: ::core::option::Option<TxHash>,

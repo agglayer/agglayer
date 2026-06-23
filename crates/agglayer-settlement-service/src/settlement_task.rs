@@ -5,7 +5,10 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use agglayer_config::settlement_service::{SettlementPolicy, SettlementTransactionConfig};
+use agglayer_config::{
+    settlement_service::{SettlementPolicy, SettlementTransactionConfig},
+    Multiplier,
+};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
@@ -13,7 +16,7 @@ use agglayer_types::{
     SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 use alloy::{
-    consensus::{BlockHeader as _, EthereumTxEnvelope, TxEip4844Variant},
+    consensus::{BlockHeader as _, EthereumTxEnvelope, Transaction as _, TxEip4844Variant},
     eips::{eip1559::Eip1559Estimation, eip2718::Encodable2718 as _, BlockNumberOrTag},
     network::{
         BlockResponse as _, Ethereum, ReceiptResponse as _, TransactionBuilder as _,
@@ -45,6 +48,33 @@ struct GasParams {
 /// wins (unlike [`Ord::clamp`], this never panics on an inverted range).
 fn clamp_u128(value: u128, floor: u128, ceiling: u128) -> u128 {
     value.max(floor).min(ceiling)
+}
+
+/// Minimum replacement bump accepted by standard execution-layer clients
+/// (geth's default `txpool.pricebump` of 10%), expressed as a multiplier.
+const MIN_REPLACEMENT_BUMP: Multiplier = Multiplier::from_u64_per_1000(1100);
+
+/// Increases one EIP-1559 fee field relative to `previous`, while tracking a
+/// rising network `fresh_adjusted` estimate and clamping to `[floor, ceiling]`.
+///
+/// The effective multiplier is at least [`MIN_REPLACEMENT_BUMP`], so a returned
+/// value is always `>= previous * 1.10` — enough for a standard node to accept
+/// the replacement. Returns `None` when the ceiling caps the result below that
+/// minimum, i.e. the fee can no longer be strictly bumped.
+fn bump_fee(
+    previous: u128,
+    fresh_adjusted: u128,
+    configured_multiplier: Multiplier,
+    floor: u128,
+    ceiling: u128,
+) -> Option<u128> {
+    let effective_multiplier = configured_multiplier.max(MIN_REPLACEMENT_BUMP);
+    let required_min = MIN_REPLACEMENT_BUMP.saturating_mul_u128(previous);
+    let target = effective_multiplier
+        .saturating_mul_u128(previous)
+        .max(fresh_adjusted);
+    let bumped = clamp_u128(target, floor, ceiling);
+    (bumped >= required_min).then_some(bumped)
 }
 
 /// Error surfaced while building a settlement attempt.
@@ -486,7 +516,13 @@ impl<
                     if deadline > SystemTime::now() {
                         continue 'nonces; // wait for deadline to be reached
                     }
-                    let (attempt_number, tx) = self.build_next_attempt_with_nonce(wallet, nonce);
+                    let Some((attempt_number, tx)) = retry!(
+                        self.build_next_attempt_with_nonce(wallet, nonce).await,
+                        "building next settlement attempt for wallet {wallet} / nonce {nonce}",
+                    ) else {
+                        continue 'nonces; // ceiling reached; keep waiting on
+                                          // the existing attempt
+                    };
                     if let Some(run_result) = self
                         .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
                         .await
@@ -1027,6 +1063,77 @@ impl<
         }
     }
 
+    /// Fees of the most recent *pending* attempt for `(wallet, nonce)` — the
+    /// live tx a replacement must out-bid — as `(max_fee_per_gas,
+    /// max_priority_fee_per_gas)`. Attempts that errored on broadcast never
+    /// reached the mempool, so they are ignored. Returns `None` when no attempt
+    /// for the nonce is still pending.
+    fn latest_pending_attempt_fees_for_nonce(
+        &self,
+        wallet: Address,
+        nonce: Nonce,
+    ) -> Option<(u128, u128)> {
+        self.attempts
+            .get(&(wallet, nonce))?
+            .values()
+            .rev()
+            .find(|active| active.result.is_none())
+            .map(|active| {
+                (
+                    active.attempt.max_fee_per_gas,
+                    active.attempt.max_priority_fee_per_gas,
+                )
+            })
+    }
+
+    /// Resolves gas parameters for a retry on an existing nonce, bumping both
+    /// fee fields over the previous attempt while tracking a fresh estimate.
+    ///
+    /// Returns `None` when the configured ceiling prevents a strict,
+    /// node-acceptable bump on either field — the caller then skips submitting
+    /// a duplicate/underpriced replacement.
+    fn bump_gas_params(
+        &self,
+        previous_max_fee_per_gas: u128,
+        previous_max_priority_fee_per_gas: u128,
+        estimate: &Eip1559Estimation,
+    ) -> Option<GasParams> {
+        let config = self.tx_config.as_ref();
+        let base = self.resolve_base_gas_params(estimate);
+
+        let max_fee_per_gas = bump_fee(
+            previous_max_fee_per_gas,
+            base.max_fee_per_gas,
+            config.max_fee_per_gas_multiplier_factor,
+            config.max_fee_per_gas_floor,
+            config.max_fee_per_gas_ceiling,
+        )?;
+
+        let max_priority_fee_per_gas = bump_fee(
+            previous_max_priority_fee_per_gas,
+            base.max_priority_fee_per_gas,
+            config.max_priority_fee_per_gas_multiplier_factor,
+            config.max_priority_fee_per_gas_floor,
+            config.max_priority_fee_per_gas_ceiling,
+        )?;
+
+        // Preserve the EIP-1559 invariant `priority <= max_fee`. If capping
+        // priority to max_fee drops it below its minimum replacement bump, no
+        // valid replacement exists, so signal ceiling-reached.
+        let max_priority_fee_per_gas = max_priority_fee_per_gas.min(max_fee_per_gas);
+        let required_priority_min =
+            MIN_REPLACEMENT_BUMP.saturating_mul_u128(previous_max_priority_fee_per_gas);
+        if max_priority_fee_per_gas < required_priority_min {
+            return None;
+        }
+
+        Some(GasParams {
+            gas_limit: base.gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+        })
+    }
+
     /// Builds and signs an EIP-1559 settlement transaction for [`Self::job`]
     /// with the given wallet, nonce, chain id, and resolved gas parameters.
     ///
@@ -1053,14 +1160,70 @@ impl<
         request.build(self.provider.wallet()).await
     }
 
-    fn build_next_attempt_with_nonce(
+    /// Builds the next settlement attempt reusing an existing `nonce`.
+    ///
+    /// When a prior attempt for the nonce is still pending (a live tx in the
+    /// mempool), this bumps gas over that nonce's most recent *pending* attempt
+    /// (errored attempts never reached the mempool, so they are ignored) and
+    /// returns `Ok(None)` if the configured ceiling prevents a strict,
+    /// node-acceptable bump — the caller then keeps waiting on the
+    /// already-submitted ceiling-priced attempt rather than broadcasting an
+    /// underpriced replacement.
+    ///
+    /// When no attempt is pending (every prior attempt errored on broadcast, so
+    /// there is nothing in the mempool to replace), it re-broadcasts on the
+    /// same nonce at freshly-resolved base fees and always returns
+    /// `Ok(Some)`. This keeps a nonce making progress even when a failed
+    /// broadcast left its most recent attempt recorded at the ceiling.
+    async fn build_next_attempt_with_nonce(
         &self,
-        _wallet: Address,
-        _nonce: Nonce,
-    ) -> (SettlementAttemptNumber, TxEnvelope) {
-        // TODO: Build the next attempt with correct gas and other params. Use https://docs.rs/alloy/latest/alloy/rpc/types/struct.TransactionRequest.html#method.build
-        // XREF: https://github.com/agglayer/agglayer/issues/1319
-        todo!()
+        wallet: Address,
+        nonce: Nonce,
+    ) -> Result<Option<(SettlementAttemptNumber, TxEnvelope)>, RetryCallbackError<BuildAttemptError>>
+    {
+        let attempt_number = self.next_attempt_number();
+        // The fees of the live tx a replacement must out-bid. Attempts that
+        // errored on broadcast never reached the mempool, so they are ignored;
+        // `None` means there is no live tx to replace, so we re-broadcast at
+        // freshly-resolved fees rather than bumping over a prior attempt (which
+        // could otherwise stall forever once those fees reach the ceiling).
+        let live_tx_fees = self.latest_pending_attempt_fees_for_nonce(wallet, nonce);
+        let mut retry_policy = BuildRetryPolicy::new();
+
+        crate::utils::retry_callback_until_success(
+            &self.tx_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || async {
+                // The nonce is fixed; only chain id and the fee estimate are
+                // read, concurrently, to keep each (retried) build to one
+                // round-trip.
+                let (chain_id, estimate) = tokio::try_join!(
+                    self.provider.get_chain_id().into_future(),
+                    self.provider.estimate_eip1559_fees().into_future(),
+                )?;
+                let gas = match live_tx_fees {
+                    Some((previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) => {
+                        // Out-bid the live tx; impossible once it sits at the ceiling.
+                        let Some(gas) = self.bump_gas_params(
+                            previous_max_fee_per_gas,
+                            previous_max_priority_fee_per_gas,
+                            &estimate,
+                        ) else {
+                            return Ok(None);
+                        };
+                        gas
+                    }
+                    None => {
+                        // Nothing live to replace: re-broadcast at base fees.
+                        self.resolve_base_gas_params(&estimate)
+                    }
+                };
+                let tx = self.build_attempt(wallet, nonce, chain_id, gas).await?;
+                Ok(Some((attempt_number, tx)))
+            },
+            |error| retry_policy.should_retry(error),
+        )
+        .await
     }
 
     /// Selects a wallet and a fresh nonce, resolves base gas parameters from
@@ -1183,6 +1346,8 @@ impl<
             nonce,
             hash: SettlementTxHash::from(Digest::from(*tx.tx_hash())),
             submission_time: SystemTime::now(),
+            max_fee_per_gas: tx.max_fee_per_gas(),
+            max_priority_fee_per_gas: tx.max_priority_fee_per_gas().unwrap_or(0),
         };
 
         self.store
@@ -1510,6 +1675,8 @@ mod tests {
                 nonce,
                 hash,
                 submission_time: SystemTime::UNIX_EPOCH,
+                max_fee_per_gas: 0,
+                max_priority_fee_per_gas: 0,
             },
             result,
         }
@@ -1521,6 +1688,8 @@ mod tests {
             nonce,
             hash: mk_tx_hash(seed),
             submission_time: SystemTime::UNIX_EPOCH + Duration::from_secs(seed.into()),
+            max_fee_per_gas: 0,
+            max_priority_fee_per_gas: 0,
         }
     }
 
@@ -1782,6 +1951,8 @@ mod tests {
                         && recorded_attempt.nonce == nonce
                         && recorded_attempt.hash == tx_hash
                         && recorded_attempt.submission_time >= earliest_submission_time
+                        && recorded_attempt.max_fee_per_gas == 100
+                        && recorded_attempt.max_priority_fee_per_gas == 10
                 },
             )
             .return_once(|_, _, _| Ok(()));
@@ -1800,6 +1971,8 @@ mod tests {
         assert_eq!(active_attempt.attempt.nonce, nonce);
         assert_eq!(active_attempt.attempt.hash, tx_hash);
         assert!(active_attempt.result.is_none());
+        assert_eq!(active_attempt.attempt.max_fee_per_gas, 100);
+        assert_eq!(active_attempt.attempt.max_priority_fee_per_gas, 10);
     }
 
     #[tokio::test]
@@ -2460,6 +2633,83 @@ mod tests {
         assert_eq!(gas.max_priority_fee_per_gas, gas.max_fee_per_gas);
     }
 
+    fn bump_config() -> SettlementTransactionConfig {
+        // Wide ceilings so the bump path (not clamping) is exercised.
+        SettlementTransactionConfig {
+            max_fee_per_gas_multiplier_factor: Multiplier::ONE,
+            max_fee_per_gas_floor: 0,
+            max_fee_per_gas_ceiling: 1_000_000_000_000,
+            max_priority_fee_per_gas_multiplier_factor: Multiplier::ONE,
+            max_priority_fee_per_gas_floor: 0,
+            max_priority_fee_per_gas_ceiling: 1_000_000_000_000,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn bump_gas_params_increases_both_fields_at_least_ten_percent() {
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(bump_config());
+
+        // Fresh estimate below the previous attempt: the prev * 1.10 path wins.
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 1_000_000_000,
+            max_priority_fee_per_gas: 100_000_000,
+        };
+        let bumped = task
+            .bump_gas_params(30_000_000_000, 1_000_000_000, &estimate)
+            .expect("bump should succeed below ceiling");
+
+        assert!(bumped.max_fee_per_gas >= 33_000_000_000); // 30 gwei * 1.10
+        assert!(bumped.max_priority_fee_per_gas >= 1_100_000_000); // 1 gwei * 1.10
+        assert!(bumped.max_priority_fee_per_gas <= bumped.max_fee_per_gas);
+        // gas_limit comes from the base resolution (job gas_limit, default 1.0x).
+        assert_eq!(bumped.gas_limit, 100_000);
+    }
+
+    #[test]
+    fn bump_gas_params_returns_none_when_max_fee_ceiling_reached() {
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_ceiling: 30_000_000_000, // == previous max fee
+            max_priority_fee_per_gas_ceiling: 1_000_000_000_000,
+            ..bump_config()
+        };
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(config);
+
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 1_000_000_000,
+            max_priority_fee_per_gas: 100_000_000,
+        };
+        // Previous max fee already sits at the ceiling, so no strict bump exists.
+        assert_eq!(
+            task.bump_gas_params(30_000_000_000, 1_000_000_000, &estimate),
+            None
+        );
+    }
+
+    #[test]
+    fn bump_gas_params_falls_back_to_base_resolution_when_no_previous_fees() {
+        // Zero previous fees model the defensive fallback used when no prior
+        // attempt is recorded; the bump then degrades to the base resolution of
+        // the fresh estimate (required_min = 0, so the fresh value wins).
+        let mut task = mk_task(Arc::new(MockStateStore::new()), BTreeMap::new());
+        task.tx_config = Arc::new(bump_config());
+
+        let estimate = Eip1559Estimation {
+            max_fee_per_gas: 5_000_000_000,
+            max_priority_fee_per_gas: 2_000_000_000,
+        };
+        let bumped = task
+            .bump_gas_params(0, 0, &estimate)
+            .expect("zero previous degrades to base resolution");
+
+        // bump_config: multiplier 1.0, floor 0, wide ceiling -> base == estimate.
+        assert_eq!(bumped.max_fee_per_gas, 5_000_000_000);
+        assert_eq!(bumped.max_priority_fee_per_gas, 2_000_000_000);
+        assert_eq!(bumped.gas_limit, 100_000);
+    }
+
     #[test]
     fn build_retry_policy_bounds_signer_failures_and_rejects_build_bugs() {
         // `Error::message` produces an opaque `Error::Other`, mirroring how a
@@ -2566,5 +2816,353 @@ mod tests {
         assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
         // Fees are within the configured bounds (defaults: floor 0, ceiling 100 gwei).
         assert!(envelope.max_fee_per_gas() <= 100_000_000_000);
+    }
+
+    #[test]
+    fn bump_fee_enforces_minimum_replacement_bump_with_default_multiplier() {
+        // Default multiplier is 1.0; the helper must still bump by >= 10%.
+        assert_eq!(bump_fee(100, 0, Multiplier::ONE, 0, u128::MAX), Some(110));
+    }
+
+    #[test]
+    fn bump_fee_tracks_rising_fresh_estimate() {
+        // A higher fresh estimate wins over prev * effective_multiplier.
+        assert_eq!(
+            bump_fee(100, 200, Multiplier::from_u64_per_1000(1100), 0, u128::MAX),
+            Some(200)
+        );
+    }
+
+    #[test]
+    fn bump_fee_returns_none_when_ceiling_forbids_strict_bump() {
+        // Ceiling 105 caps below prev * 1.10 = 110, so no valid replacement.
+        assert_eq!(bump_fee(100, 0, Multiplier::ONE, 0, 105), None);
+    }
+
+    #[test]
+    fn bump_fee_applies_floor_and_honours_larger_configured_multiplier() {
+        // Floor raises the result above the minimum bump.
+        assert_eq!(bump_fee(100, 0, Multiplier::ONE, 500, u128::MAX), Some(500));
+        // A configured multiplier larger than the 10% minimum is used as-is.
+        assert_eq!(
+            bump_fee(100, 0, Multiplier::from_u64_per_1000(2000), 0, u128::MAX),
+            Some(200)
+        );
+    }
+
+    #[tokio::test]
+    async fn build_next_attempt_with_nonce_bumps_fees_over_previous_attempt() {
+        use alloy::consensus::Transaction as _;
+
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_address = signer.address();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        // A previous attempt for nonce 4 with known fees to bump from.
+        let nonce = Nonce(4);
+        let previous = SettlementAttempt {
+            sender_wallet: wallet_address.into(),
+            nonce,
+            hash: mk_tx_hash(1),
+            submission_time: SystemTime::UNIX_EPOCH,
+            max_fee_per_gas: 30_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+        let attempts = BTreeMap::from([(
+            (wallet_address, nonce),
+            BTreeMap::from([(
+                SettlementAttemptNumber(0),
+                ActiveSettlementAttempt {
+                    attempt: previous,
+                    result: None,
+                },
+            )]),
+        )]);
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(SettlementTransactionConfig::default()),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts,
+        };
+
+        let (attempt_number, envelope) = task
+            .build_next_attempt_with_nonce(wallet_address, nonce)
+            .await
+            .expect("build should not fail")
+            .expect("bump should produce an attempt below the ceiling");
+
+        assert_eq!(attempt_number, SettlementAttemptNumber(1));
+        assert_eq!(envelope.nonce(), 4);
+        assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
+        // Strictly bumped by >= 10% over the previous attempt on both fields.
+        assert!(envelope.max_fee_per_gas() >= 33_000_000_000);
+        assert!(envelope.max_priority_fee_per_gas().unwrap() >= 1_100_000_000);
+        assert!(envelope.max_priority_fee_per_gas().unwrap() <= envelope.max_fee_per_gas());
+    }
+
+    #[tokio::test]
+    async fn build_next_attempt_with_nonce_returns_none_at_ceiling() {
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_address = signer.address();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        let nonce = Nonce(4);
+        let previous = SettlementAttempt {
+            sender_wallet: wallet_address.into(),
+            nonce,
+            hash: mk_tx_hash(1),
+            submission_time: SystemTime::UNIX_EPOCH,
+            max_fee_per_gas: 30_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+        let attempts = BTreeMap::from([(
+            (wallet_address, nonce),
+            BTreeMap::from([(
+                SettlementAttemptNumber(0),
+                ActiveSettlementAttempt {
+                    attempt: previous,
+                    result: None,
+                },
+            )]),
+        )]);
+
+        // The sole attempt is still pending (`result: None` above): a live tx
+        // sits in the mempool, and the ceilings are pinned to its fees, so no
+        // strict bump is possible and waiting (not re-broadcasting) is correct.
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_ceiling: 30_000_000_000,
+            max_priority_fee_per_gas_ceiling: 1_000_000_000,
+            ..SettlementTransactionConfig::default()
+        };
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(config),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts,
+        };
+
+        let result = task
+            .build_next_attempt_with_nonce(wallet_address, nonce)
+            .await
+            .expect("build should not fail");
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn build_next_attempt_with_nonce_rebroadcasts_errored_attempt_at_ceiling() {
+        use alloy::consensus::Transaction as _;
+
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_address = signer.address();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        // The only attempt for this nonce errored on broadcast (no live tx in the
+        // mempool) and sits at the fee ceiling. There is nothing to replace, so
+        // the task must re-broadcast on the same nonce at freshly-resolved fees
+        // rather than stall by bumping past the ceiling.
+        let nonce = Nonce(4);
+        let previous = SettlementAttempt {
+            sender_wallet: wallet_address.into(),
+            nonce,
+            hash: mk_tx_hash(1),
+            submission_time: SystemTime::UNIX_EPOCH,
+            max_fee_per_gas: 30_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+        let attempts = BTreeMap::from([(
+            (wallet_address, nonce),
+            BTreeMap::from([(
+                SettlementAttemptNumber(0),
+                ActiveSettlementAttempt {
+                    attempt: previous,
+                    result: Some(mk_client_error(7)),
+                },
+            )]),
+        )]);
+
+        // Ceilings pinned to the previous fees: a strict bump is impossible.
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_ceiling: 30_000_000_000,
+            max_priority_fee_per_gas_ceiling: 1_000_000_000,
+            ..SettlementTransactionConfig::default()
+        };
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(config),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts,
+        };
+
+        let (attempt_number, envelope) = task
+            .build_next_attempt_with_nonce(wallet_address, nonce)
+            .await
+            .expect("build should not fail")
+            .expect("an errored attempt has no live tx to replace, so it must re-broadcast");
+
+        assert_eq!(attempt_number, SettlementAttemptNumber(1));
+        assert_eq!(envelope.nonce(), 4);
+        assert!(matches!(envelope, TxEnvelope::Eip1559(_)));
+        // Re-broadcast at base fees, within the configured ceiling; no strict bump.
+        assert!(envelope.max_fee_per_gas() <= 30_000_000_000);
+        assert!(envelope.max_priority_fee_per_gas().unwrap() <= envelope.max_fee_per_gas());
+    }
+
+    #[tokio::test]
+    async fn build_next_attempt_with_nonce_bumps_over_live_tx_ignoring_errored_ceiling_attempt() {
+        use alloy::consensus::Transaction as _;
+
+        let anvil = Anvil::new().spawn();
+        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_address = signer.address();
+        let provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(signer))
+            .connect_http(anvil.endpoint_url());
+
+        let nonce = Nonce(4);
+        // Live tx: a pending attempt well below the ceiling.
+        let pending = SettlementAttempt {
+            sender_wallet: wallet_address.into(),
+            nonce,
+            hash: mk_tx_hash(1),
+            submission_time: SystemTime::UNIX_EPOCH,
+            max_fee_per_gas: 10_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+        // A newer attempt that errored on broadcast at the ceiling (no live tx).
+        let errored = SettlementAttempt {
+            sender_wallet: wallet_address.into(),
+            nonce,
+            hash: mk_tx_hash(2),
+            submission_time: SystemTime::UNIX_EPOCH,
+            max_fee_per_gas: 30_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        };
+        let attempts = BTreeMap::from([(
+            (wallet_address, nonce),
+            BTreeMap::from([
+                (
+                    SettlementAttemptNumber(0),
+                    ActiveSettlementAttempt {
+                        attempt: pending,
+                        result: None,
+                    },
+                ),
+                (
+                    SettlementAttemptNumber(1),
+                    ActiveSettlementAttempt {
+                        attempt: errored,
+                        result: Some(mk_client_error(9)),
+                    },
+                ),
+            ]),
+        )]);
+
+        // Ceiling at the errored attempt's fees: bumping over *it* is impossible,
+        // but the live pending tx (10 gwei) can still be out-bid below the ceiling.
+        let config = SettlementTransactionConfig {
+            max_fee_per_gas_ceiling: 30_000_000_000,
+            max_priority_fee_per_gas_ceiling: 30_000_000_000,
+            ..SettlementTransactionConfig::default()
+        };
+
+        let task = SettlementTask {
+            id: mk_job_id(1),
+            job: mk_job(),
+            tx_config: Arc::new(config),
+            provider: Arc::new(provider),
+            store: Arc::new(MockStateStore::new()),
+            control: mk_control(),
+            attempts,
+        };
+
+        let (attempt_number, envelope) = task
+            .build_next_attempt_with_nonce(wallet_address, nonce)
+            .await
+            .expect("build should not fail")
+            .expect("a valid replacement over the live pending tx is possible below the ceiling");
+
+        assert_eq!(attempt_number, SettlementAttemptNumber(2));
+        assert_eq!(envelope.nonce(), 4);
+        // Bumped >= 10% over the *pending* tx (10 gwei), not the errored 30 gwei one.
+        assert!(envelope.max_fee_per_gas() >= 11_000_000_000);
+        assert!(envelope.max_fee_per_gas() <= 30_000_000_000);
+        assert!(envelope.max_priority_fee_per_gas().unwrap() <= envelope.max_fee_per_gas());
+    }
+
+    #[test]
+    fn latest_pending_attempt_fees_for_nonce_ignores_errored_and_unknown() {
+        let wallet = Address::from([7; 20]);
+        let nonce = Nonce(3);
+        let errored_only_nonce = Nonce(5);
+
+        // A live pending tx, plus a higher-numbered attempt that errored on
+        // broadcast (no live tx) at higher fees.
+        let mut pending = mk_active_attempt(wallet, nonce, mk_tx_hash(1), None);
+        pending.attempt.max_fee_per_gas = 10_000_000_000;
+        pending.attempt.max_priority_fee_per_gas = 1_000_000_000;
+        let mut errored_newer =
+            mk_active_attempt(wallet, nonce, mk_tx_hash(2), Some(mk_client_error(9)));
+        errored_newer.attempt.max_fee_per_gas = 99_000_000_000;
+        errored_newer.attempt.max_priority_fee_per_gas = 9_000_000_000;
+
+        // A separate nonce whose only attempt errored.
+        let errored_only = mk_active_attempt(
+            wallet,
+            errored_only_nonce,
+            mk_tx_hash(3),
+            Some(mk_client_error(2)),
+        );
+
+        let attempts = BTreeMap::from([
+            (
+                (wallet, nonce),
+                BTreeMap::from([
+                    (SettlementAttemptNumber(4), errored_newer),
+                    (SettlementAttemptNumber(1), pending),
+                ]),
+            ),
+            (
+                (wallet, errored_only_nonce),
+                BTreeMap::from([(SettlementAttemptNumber(2), errored_only)]),
+            ),
+        ]);
+        let task = mk_task(Arc::new(MockStateStore::new()), attempts);
+
+        // The higher-numbered errored attempt is ignored; the live pending tx wins.
+        assert_eq!(
+            task.latest_pending_attempt_fees_for_nonce(wallet, nonce),
+            Some((10_000_000_000, 1_000_000_000))
+        );
+        // A nonce whose only attempt errored has no live tx.
+        assert_eq!(
+            task.latest_pending_attempt_fees_for_nonce(wallet, errored_only_nonce),
+            None
+        );
+        // Unknown nonce -> None.
+        assert_eq!(
+            task.latest_pending_attempt_fees_for_nonce(wallet, Nonce(999)),
+            None
+        );
     }
 }
