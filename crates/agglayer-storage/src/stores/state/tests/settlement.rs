@@ -11,10 +11,10 @@ use agglayer_types::{
 use crate::{
     backup::BackupClient,
     columns::{
-        certificate_settlement_job::CertificateSettlementJobColumn,
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
+        settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
     },
     error::Error,
@@ -118,7 +118,7 @@ fn insert_certificate_settlement_job_id_allows_missing_job() {
         .expect("mapping insert must not require an existing job");
 
     assert_eq!(
-        db.get::<CertificateSettlementJobColumn>(&certificate_id)
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
             .expect("Unable to read stored value"),
         Some(job_id)
     );
@@ -172,7 +172,7 @@ fn insert_certificate_settlement_job_id_duplicate_fails() {
 
     assert!(matches!(res, Err(Error::UnprocessedAction(_))));
     assert_eq!(
-        db.get::<CertificateSettlementJobColumn>(&certificate_id)
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
             .expect("Unable to read stored value"),
         Some(first_job_id)
     );
