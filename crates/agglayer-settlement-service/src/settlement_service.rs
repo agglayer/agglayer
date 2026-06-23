@@ -1,8 +1,8 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
-use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
-use agglayer_types::{CertificateId, SettlementJob, SettlementJobId, SettlementJobResult};
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
+use agglayer_types::{SettlementJob, SettlementJobId, SettlementJobResult};
 use alloy::providers::{Provider, WalletProvider};
 use educe::Educe;
 use eyre::Context as _;
@@ -51,7 +51,7 @@ pub enum RetrievedSettlementResult {
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > SettlementService<L1Provider, SettlementStore>
 {
     pub async fn start(
@@ -203,12 +203,12 @@ impl<
     #[tracing::instrument(skip(self))]
     pub async fn request_new_settlement(
         &self,
-        certificate_id: Option<CertificateId>,
+        job_id: SettlementJobId,
         job: SettlementJob,
     ) -> eyre::Result<SettlementJobWatcher> {
         let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
-        let (job_id, task) = SettlementTask::create(
-            certificate_id,
+        let task = SettlementTask::create(
+            job_id,
             job,
             self.tx_config.clone(),
             self.provider.clone(),
@@ -267,13 +267,13 @@ impl<
 
 #[derive(Debug)]
 pub struct RequestNewSettlement {
-    pub certificate_id: Option<CertificateId>,
+    pub job_id: SettlementJobId,
     pub job: SettlementJob,
 }
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<RequestNewSettlement> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = SettlementJobWatcher;
@@ -289,10 +289,7 @@ impl<
 
     fn call(&mut self, req: RequestNewSettlement) -> Self::Future {
         let this = self.clone();
-        Box::pin(async move {
-            this.request_new_settlement(req.certificate_id, req.job)
-                .await
-        })
+        Box::pin(async move { this.request_new_settlement(req.job_id, req.job).await })
     }
 }
 
@@ -300,7 +297,7 @@ pub struct RetrieveSettlementResult(pub SettlementJobId);
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<RetrieveSettlementResult> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = RetrievedSettlementResult;
@@ -327,7 +324,7 @@ pub enum AdminCommand {
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<AdminCommand> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = ();
@@ -356,13 +353,12 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     use agglayer_storage::tests::mocks::MockStateStore;
     use agglayer_types::{
-        CertificateId, ContractCallOutcome, ContractCallResult, Digest, Nonce,
-        SettlementAttemptNumber, SettlementJob, SettlementJobId, SettlementJobResult,
-        SettlementTxHash, B256, U256,
+        ContractCallOutcome, ContractCallResult, Digest, Nonce, SettlementAttemptNumber,
+        SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash, B256, U256,
     };
     use alloy::{
         network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner,
@@ -543,56 +539,30 @@ mod tests {
         assert!(error.to_string().contains("No settlement job found for id"));
     }
     #[tokio::test]
-    async fn request_new_settlement_records_certificate_link_before_job() {
+    async fn request_new_settlement_uses_provided_job_id() {
         let mut store = MockStateStore::new();
         expect_empty_startup_recovery(&mut store);
-        let certificate_id = CertificateId::new(Digest::from([7; 32]));
         let job = mk_job(7);
         let expected_job = job.clone();
-        let recorded_job_id = Arc::new(Mutex::new(None));
-        let ordering = Arc::new(Mutex::new(Vec::new()));
-
-        store
-            .expect_insert_certificate_settlement_job_id()
-            .once()
-            .withf(move |recorded_certificate_id, _| recorded_certificate_id == &certificate_id)
-            .return_once({
-                let ordering = ordering.clone();
-                let recorded_job_id = recorded_job_id.clone();
-                move |_, settlement_job_id| {
-                    ordering.lock().unwrap().push("write_link");
-                    *recorded_job_id.lock().unwrap() = Some(*settlement_job_id);
-                    Ok(())
-                }
-            });
+        let job_id = mk_job_id(7);
 
         store
             .expect_insert_settlement_job()
             .once()
-            .withf(move |_, recorded_job| recorded_job == &expected_job)
-            .return_once({
-                let ordering = ordering.clone();
-                let recorded_job_id = recorded_job_id.clone();
-                move |settlement_job_id, _| {
-                    ordering.lock().unwrap().push("write_job");
-                    assert_eq!(*recorded_job_id.lock().unwrap(), Some(*settlement_job_id));
-                    Ok(())
-                }
-            });
+            .withf(move |recorded_job_id, recorded_job| {
+                recorded_job_id == &job_id && recorded_job == &expected_job
+            })
+            .return_once(|_, _| Ok(()));
 
         let cancellation_token = CancellationToken::new();
         cancellation_token.cancel();
         let service = mk_service_with_token(Arc::new(store), cancellation_token).await;
 
         let watcher = service
-            .request_new_settlement(Some(certificate_id), job)
+            .request_new_settlement(job_id, job)
             .await
             .expect("settlement request should be accepted");
 
-        assert_eq!(*recorded_job_id.lock().unwrap(), Some(watcher.job_id()));
-        assert_eq!(
-            ordering.lock().unwrap().as_slice(),
-            ["write_link", "write_job"]
-        );
+        assert_eq!(watcher.job_id(), job_id);
     }
 }
