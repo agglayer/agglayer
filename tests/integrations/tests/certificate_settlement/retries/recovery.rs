@@ -7,7 +7,7 @@ use agglayer_types::{
 };
 use fail::FailScenario;
 use integrations::{
-    agglayer_setup::{setup_network, start_agglayer},
+    agglayer_setup::{setup_network, start_agglayer, wait_for_l1_blocks},
     wait_for_settlement_or_error,
 };
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
@@ -214,7 +214,7 @@ async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
     fail::cfg("certificate_task::process_impl::candidate_recorded", "off")
         .expect("Failed to turn off candidate_recorded failpoint");
 
-    tokio::time::sleep(Duration::from_secs(30)).await;
+    wait_for_l1_blocks(&l1, 2).await;
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
     println!("Node recovered, waiting for settlement...");
