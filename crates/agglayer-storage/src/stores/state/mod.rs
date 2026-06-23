@@ -19,12 +19,13 @@ use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::{info, instrument, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
-use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
+use super::{MetadataReader, MetadataWriter, SettlementJobReserver, StateReader, StateWriter};
 use crate::{
     backup::{BackupClient, BackupRequest},
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
+        certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
@@ -207,26 +208,6 @@ impl StateWriter for StateStore {
         }
 
         Ok(())
-    }
-
-    fn insert_certificate_settlement_job_id(
-        &self,
-        certificate_id: &CertificateId,
-        settlement_job_id: &SettlementJobId,
-    ) -> Result<(), Error> {
-        if self
-            .db
-            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
-            .is_some()
-        {
-            return Err(Error::UnprocessedAction(format!(
-                "Certificate {certificate_id} already has a settlement job id"
-            )));
-        }
-
-        Ok(self
-            .db
-            .put::<SettlementJobIdPerCertificateIdColumn>(certificate_id, settlement_job_id)?)
     }
 
     fn assign_certificate_to_epoch(
@@ -427,6 +408,50 @@ impl StateWriter for StateStore {
         }
 
         Ok(())
+    }
+}
+
+impl SettlementJobReserver for StateStore {
+    fn reserve_settlement_job(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<SettlementJobId, Error> {
+        let _reservation_lock = self.settlement_write_locks.lock().map_err(|_| {
+            Error::Unexpected("Settlement reservation lock map is poisoned".to_string())
+        })?;
+
+        if let Some(settlement_job_id) = self
+            .db
+            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
+        {
+            return Ok(settlement_job_id);
+        }
+
+        let settlement_job_id = SettlementJobId::generate();
+        if self
+            .db
+            .get::<CertificateIdPerSettlementJobIdColumn>(&settlement_job_id)?
+            .is_some()
+        {
+            return Err(Error::UnprocessedAction(format!(
+                "Settlement job id {settlement_job_id} is already assigned to a certificate"
+            )));
+        }
+
+        let mut batch = WriteBatch::default();
+        self.db
+            .multi_insert_batch::<SettlementJobIdPerCertificateIdColumn>(
+                [(certificate_id, &settlement_job_id)],
+                &mut batch,
+            )?;
+        self.db
+            .multi_insert_batch::<CertificateIdPerSettlementJobIdColumn>(
+                [(&settlement_job_id, certificate_id)],
+                &mut batch,
+            )?;
+        self.db.write_batch(batch)?;
+
+        Ok(settlement_job_id)
     }
 }
 
