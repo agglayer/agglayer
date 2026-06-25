@@ -1,7 +1,17 @@
-use std::{path::Path, time::Duration};
+use std::{
+    path::Path,
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
 
 use agglayer_config::{log::LogLevel, Config};
-use alloy::signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
+use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
+use alloy::{
+    network::Ethereum,
+    providers::{Provider as _, RootProvider},
+    signers::local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner},
+};
+use fs2::FileExt;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use prover_config::{MockProverConfig, ProverType};
 use tokio::sync::oneshot;
@@ -10,45 +20,40 @@ use tokio_util::sync::CancellationToken;
 use crate::l1_setup::{self, next_available_addr, L1Docker};
 
 const PHRASE: &str = "test test test test test test test test test test test junk";
+// Generous so node startup can finish when several integration tests (each
+// spinning up a multi-threaded agglayer node) run concurrently under the
+// `resource-limited` nextest group on a loaded CI runner.
+const AGGLAYER_RPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(90);
+const AGGLAYER_RPC_POLL_INTERVAL: Duration = Duration::from_millis(250);
+const CERTIFICATE_STATUS_POLL_INTERVAL: Duration = Duration::from_millis(250);
+const DEFAULT_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[macro_export]
 macro_rules! wait_for_settlement_or_error {
-    ($client:ident, $certificate_id:ident) => {{
+    ($client:ident, $certificate_id:expr) => {{
         async {
-            use jsonrpsee::{core::client::ClientT, rpc_params};
-            let mut result;
-            loop {
-                let response: agglayer_types::CertificateHeader = $client
-                    .request(
-                        "interop_getCertificateHeader",
-                        jsonrpsee::rpc_params![$certificate_id],
-                    )
-                    .await
-                    .unwrap();
-
-                result = response;
-
-                match result.status {
-                    agglayer_types::CertificateStatus::InError { .. }
-                    | agglayer_types::CertificateStatus::Settled => {
-                        break;
-                    }
-                    _ => {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-                    }
-                }
-            }
-
-            return result;
+            integrations::agglayer_setup::wait_for_terminal_certificate_status(
+                &$client,
+                $certificate_id,
+            )
+            .await
         }
     }};
 }
 
 pub async fn start_l1() -> L1Docker {
-    let name = std::thread::current().name().unwrap().replace("::", "_");
-    let l1 = l1_setup::L1Docker::new(name).await;
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    l1
+    // nextest runs each test in its own process, and the thread name is not
+    // guaranteed to be unique across those processes, so it cannot name the
+    // Docker container on its own. Combine the process id with a per-process
+    // counter so the container name stays unique even when tests run in parallel
+    // (the `resource-limited` group), avoiding `docker run --name` collisions.
+    static L1_CONTAINER_SEQ: AtomicU64 = AtomicU64::new(0);
+    let name = format!(
+        "agglayer-integration-l1-{}-{}",
+        std::process::id(),
+        L1_CONTAINER_SEQ.fetch_add(1, Ordering::Relaxed),
+    );
+    l1_setup::L1Docker::new(name).await
 }
 
 pub async fn start_agglayer(
@@ -88,14 +93,23 @@ pub async fn start_agglayer(
         }],
     });
 
-    let grpc_addr = next_available_addr();
-    let readrpc_addr = next_available_addr();
-    let admin_addr = next_available_addr();
+    let (grpc_addr, readrpc_addr, admin_addr, telemetry_addr) = {
+        let _port_reservation_lock = tokio::task::spawn_blocking(PortReservationLock::acquire)
+            .await
+            .expect("Port reservation lock task panicked");
+
+        (
+            next_available_addr(),
+            next_available_addr(),
+            next_available_addr(),
+            next_available_addr(),
+        )
+    };
     config.rpc.grpc_port = grpc_addr.port().into();
     config.rpc.readrpc_port = readrpc_addr.port().into();
     config.rpc.admin_port = admin_addr.port().into();
 
-    config.telemetry.addr = next_available_addr();
+    config.telemetry.addr = telemetry_addr;
     config.log.level = LogLevel::Debug;
     config.l1.node_url = l1.rpc.parse().unwrap();
     config.l1.ws_node_url = l1.ws.parse().unwrap();
@@ -121,15 +135,14 @@ pub async fn start_agglayer(
     });
     let url = format!("ws://{}/", config.readrpc_addr());
 
-    let mut interval = tokio::time::interval(Duration::from_secs(10));
-    let mut max_attempts = 20;
+    let start = tokio::time::Instant::now();
     let client = loop {
-        if max_attempts == 0 {
-            panic!("Failed to connect to the server");
-        }
-        interval.tick().await;
         if let Ok(client) = WsClientBuilder::default().build(&url).await {
             break client;
+        }
+
+        if start.elapsed() >= AGGLAYER_RPC_CONNECT_TIMEOUT {
+            panic!("Failed to connect to the server");
         }
 
         if handle.is_finished() {
@@ -138,7 +151,7 @@ pub async fn start_agglayer(
             panic!("Server has finished");
         }
 
-        max_attempts -= 1;
+        tokio::time::sleep(AGGLAYER_RPC_POLL_INTERVAL).await;
     };
 
     assert!(!handle.is_finished());
@@ -166,6 +179,149 @@ pub fn get_signer(index: u32) -> PrivateKeySigner {
         .unwrap()
         .build()
         .unwrap()
+}
+
+pub async fn wait_for_terminal_certificate_status(
+    client: &WsClient,
+    certificate_id: CertificateId,
+) -> CertificateHeader {
+    wait_for_terminal_certificate_status_with_timeout(client, certificate_id, None).await
+}
+
+pub async fn wait_for_terminal_certificate_status_with_timeout(
+    client: &WsClient,
+    certificate_id: CertificateId,
+    timeout: Option<Duration>,
+) -> CertificateHeader {
+    use jsonrpsee::{core::client::ClientT, rpc_params};
+
+    let start = tokio::time::Instant::now();
+    let mut attempts = 0usize;
+
+    loop {
+        attempts += 1;
+
+        let current_observation = match client
+            .request::<CertificateHeader, _>(
+                "interop_getCertificateHeader",
+                rpc_params![certificate_id],
+            )
+            .await
+        {
+            Ok(response) => {
+                let current_observation = format!("status={:?}", response.status);
+
+                if matches!(
+                    response.status,
+                    CertificateStatus::InError { .. } | CertificateStatus::Settled
+                ) {
+                    return response;
+                }
+
+                current_observation
+            }
+            Err(error) => {
+                if timeout.is_none() {
+                    panic!(
+                        "Failed to fetch certificate {certificate_id} status after {} attempts: \
+                         {error}",
+                        attempts,
+                    );
+                }
+
+                format!("rpc_error={error}")
+            }
+        };
+
+        if timeout.is_some_and(|timeout| start.elapsed() >= timeout) {
+            panic!(
+                "Timed out waiting for certificate {certificate_id} to settle after {} attempts. \
+                 Last observation: {}",
+                attempts, current_observation,
+            );
+        }
+
+        tokio::time::sleep(certificate_status_poll_interval()).await;
+    }
+}
+
+pub const fn certificate_status_poll_interval() -> Duration {
+    CERTIFICATE_STATUS_POLL_INTERVAL
+}
+
+pub async fn wait_for_condition<F, Fut>(description: &str, timeout: Duration, mut check: F)
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    let start = tokio::time::Instant::now();
+
+    loop {
+        if check().await {
+            return;
+        }
+
+        if start.elapsed() >= timeout {
+            panic!("Timed out waiting for {description}");
+        }
+
+        tokio::time::sleep(AGGLAYER_RPC_POLL_INTERVAL).await;
+    }
+}
+
+pub async fn l1_block_number(l1: &L1Docker) -> Option<u64> {
+    let url = reqwest::Url::parse(&l1.rpc).ok()?;
+    RootProvider::<Ethereum>::new_http(url)
+        .get_block_number()
+        .await
+        .ok()
+}
+
+pub async fn wait_for_l1_blocks(l1: &L1Docker, additional_blocks: u64) {
+    // Poll tolerantly: a transient L1 RPC error yields `None` and re-polls within
+    // the timeout budget instead of panicking through the loop. The target is
+    // anchored to the first successful block read.
+    let start = tokio::time::Instant::now();
+    let mut target = None;
+
+    loop {
+        if let Some(current) = l1_block_number(l1).await {
+            if current >= *target.get_or_insert(current + additional_blocks) {
+                return;
+            }
+        }
+
+        if start.elapsed() >= DEFAULT_WAIT_TIMEOUT {
+            panic!("Timed out waiting for L1 to advance by {additional_blocks} blocks");
+        }
+
+        tokio::time::sleep(AGGLAYER_RPC_POLL_INTERVAL).await;
+    }
+}
+
+struct PortReservationLock {
+    _file: std::fs::File,
+}
+
+impl PortReservationLock {
+    fn acquire() -> Self {
+        let path = std::env::temp_dir().join("agglayer-integrations-port.lock");
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&path)
+            .unwrap_or_else(|error| {
+                panic!("Failed to open port reservation lock {path:?}: {error}")
+            });
+
+        file.lock_exclusive().unwrap_or_else(|error| {
+            panic!("Failed to lock port reservation file {path:?}: {error}")
+        });
+
+        Self { _file: file }
+    }
 }
 
 const fn get_test_keystore_content() -> &'static str {

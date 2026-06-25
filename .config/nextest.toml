@@ -1,14 +1,22 @@
 [test-groups]
 resource-limited = { max-threads = 4 }
-serial-integration = { max-threads = 1 }
+integration-failpoint = { max-threads = 1 }
 
 [profile.default]
 default-filter = "not package(integrations)"
 
 [profile.integrations]
 default-filter = "package(integrations)"
-threads-required = 3
+
+# The L1 settlement failure tests (failure.rs `transaction_with*receipt*`) are
+# heavy (up to ~45s each, dominated by Anvil + node setup) and run serially so
+# they don't pile up under CI concurrency; everything else runs in the parallel
+# resource-limited group. The regex covers both the `transaction_with_receipt_*`
+# tests and the `transaction_without_receipt_status` sibling.
+[[profile.integrations.overrides]]
+filter = 'package(integrations) and test(/transaction_with(out)?_receipt/)'
+test-group = 'integration-failpoint'
 
 [[profile.integrations.overrides]]
-filter = 'package(integrations)'
-test-group = 'serial-integration'
+filter = 'package(integrations) and not test(/transaction_with(out)?_receipt/)'
+test-group = 'resource-limited'

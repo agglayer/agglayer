@@ -66,9 +66,19 @@ jobs:
 
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # Pinned so CI's anvil can decode the committed state.hex fixture.
+          # anvil_dumpState's format is foundry-version-coupled, so this must
+          # match the version the fixture was generated with (recorded as
+          # `foundry_version` in tests/integrations/fixtures/anvil-l1/metadata.json).
+          # To upgrade: bump here, regenerate the fixture with the same version via
+          # tests/integrations/scripts/generate_anvil_l1_fixture.sh, and commit both.
+          version: "1.7.1"
 
       - name: Test
-        run: cargo nextest run --workspace -P integrations
+        # --retries 2 absorbs transient startup-timeout flakes under parallel
+        # load (mirrors the documented local invocation in the README).
+        run: cargo nextest run --workspace -P integrations --retries 2
 
   docker-build-local:
     name: E2E Tests | Docker build
