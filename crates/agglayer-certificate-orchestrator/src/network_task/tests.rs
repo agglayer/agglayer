@@ -86,15 +86,20 @@ fn mock_settlement_persisting<S>(
     tx_hash: SettlementTxHash,
     outcome: ContractCallOutcome,
 ) where
-    S: SettlementWriter + Send + Sync + 'static,
+    S: SettlementWriter + StateWriter + Send + Sync + 'static,
 {
     let next_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
     settlement_service
         .expect_submit_settlement_job()
-        .returning(move |job| {
+        .returning(move |certificate_id, job| {
             let id = job_id(next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u128);
             store
                 .insert_settlement_job(&id, &job)
+                .map_err(|error| eyre::eyre!("{error}"))?;
+            // The real service records the certificate <-> job-id link as part of
+            // creating the job; mirror it so process_from_candidate can resume.
+            store
+                .insert_certificate_settlement_job_id(&certificate_id, &id)
                 .map_err(|error| eyre::eyre!("{error}"))?;
             Ok(id)
         });
@@ -123,9 +128,23 @@ fn create_test_certificate(forest: &mut Forest, height: Height) -> Certificate {
     }
 }
 
+/// Settlement L1-context expectations a certifier mock needs now that the
+/// orchestrator builds real settlement calldata from the certificate proof.
+fn expect_settlement_l1_context(certifier: &mut MockCertifier) {
+    certifier
+        .expect_verifier_type()
+        .returning(|_| Ok(agglayer_contracts::rollup::VerifierType::Pessimistic));
+    certifier
+        .expect_rollup_manager_address()
+        .returning(|| agglayer_types::Address::new([0; 20]));
+    certifier
+        .expect_default_l1_info_tree_leaf_count()
+        .returning(|| 0);
+}
+
 fn setup_certifier_mock(
     certifier: &mut MockCertifier,
-    pending_store: Arc<impl PendingCertificateReader + 'static>,
+    pending_store: Arc<impl PendingCertificateReader + PendingCertificateWriter + 'static>,
     network_id: NetworkId,
     times: usize,
     specific_height: Option<Height>,
@@ -149,6 +168,12 @@ fn setup_certifier_mock(
             .get_certificate(network, height)
             .expect("Failed to get certificate")
             .expect("Certificate not found");
+        pending_store
+            .insert_generated_proof(
+                &certificate.hash(),
+                &agglayer_test_suite::dummy_settlement_proof(),
+            )
+            .ok();
 
         let signer = agglayer_types::Address::new([0; 20]);
         let ctx_from_l1 = L1WitnessCtx {
@@ -181,8 +206,12 @@ fn setup_certifier_mock(
 #[timeout(Duration::from_secs(1))]
 async fn start_from_zero() {
     let mut pending = MockPendingStore::new();
+    pending
+        .expect_get_proof()
+        .returning(|_| Ok(Some(agglayer_test_suite::dummy_settlement_proof())));
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(1);
@@ -297,7 +326,7 @@ async fn start_from_zero() {
     let mut settlement_service = MockSettlementServiceTrait::new();
     settlement_service
         .expect_submit_settlement_job()
-        .returning(|_| Ok(job_id(1)));
+        .returning(|_, _| Ok(job_id(1)));
     settlement_service
         .expect_wait_for_settlement()
         .returning(move |_| {
@@ -348,8 +377,12 @@ async fn start_from_zero() {
 #[timeout(Duration::from_secs(1))]
 async fn retries() {
     let mut pending = MockPendingStore::new();
+    pending
+        .expect_get_proof()
+        .returning(|_| Ok(Some(agglayer_test_suite::dummy_settlement_proof())));
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);
@@ -550,7 +583,7 @@ async fn retries() {
     let mut settlement_service = MockSettlementServiceTrait::new();
     settlement_service
         .expect_submit_settlement_job()
-        .returning(|_| Ok(job_id(1)));
+        .returning(|_, _| Ok(job_id(1)));
     // First certificate's settlement fails; second succeeds.
     settlement_service
         .expect_wait_for_settlement()
@@ -629,8 +662,12 @@ async fn retries() {
 #[timeout(Duration::from_secs(1))]
 async fn timeout_certifier() {
     let mut pending = MockPendingStore::new();
+    pending
+        .expect_get_proof()
+        .returning(|_| Ok(Some(agglayer_test_suite::dummy_settlement_proof())));
     let mut state = MockStateStore::new();
     let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);
@@ -744,6 +781,7 @@ async fn process_next_certificate() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
     let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);
@@ -863,6 +901,7 @@ async fn multiple_certificates_per_epoch_sequential() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
     let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);
@@ -980,6 +1019,9 @@ async fn multiple_certificates_per_epoch_sequential() {
 #[timeout(Duration::from_secs(1))]
 async fn reject_non_sequential_certificates() {
     let mut pending = MockPendingStore::new();
+    pending
+        .expect_get_proof()
+        .returning(|_| Ok(Some(agglayer_test_suite::dummy_settlement_proof())));
     let mut state = MockStateStore::new();
     let certifier = MockCertifier::new();
     let clock_ref = clock();
@@ -1077,6 +1119,7 @@ async fn accept_sequential_certificates_in_order() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
     let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);
@@ -1238,6 +1281,7 @@ async fn process_multiple_certificates_across_epochs_from_pending() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
     let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
     let clock_ref = clock();
     let network_id = 1.into();
     let (sender, certificate_stream) = mpsc::channel(100);

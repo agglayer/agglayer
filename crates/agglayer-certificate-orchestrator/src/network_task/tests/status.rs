@@ -69,6 +69,12 @@ fn setup_certify_mock(
                 .get_certificate(network, height)
                 .expect("Failed to get certificate")
                 .expect("Certificate not found");
+            pending_store
+                .insert_generated_proof(
+                    &certificate.hash(),
+                    &agglayer_test_suite::dummy_settlement_proof(),
+                )
+                .expect("insert dummy settlement proof");
             let signer = agglayer_types::Address::new([0; 20]);
 
             let ctx_from_l1 = L1WitnessCtx {
@@ -105,6 +111,16 @@ fn setup_certify_mock(
                 new_pp_root: pp_root,
             })
         });
+
+    certifier
+        .expect_verifier_type()
+        .returning(|_| Ok(agglayer_contracts::rollup::VerifierType::Pessimistic));
+    certifier
+        .expect_rollup_manager_address()
+        .returning(|| agglayer_types::Address::new([0; 20]));
+    certifier
+        .expect_default_l1_info_tree_leaf_count()
+        .returning(|| 0);
 }
 
 #[rstest]

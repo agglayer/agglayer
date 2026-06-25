@@ -911,4 +911,21 @@ impl Certifier for Check {
             "unimplemented".to_string(),
         ))
     }
+
+    fn rollup_manager_address(&self) -> agglayer_types::Address {
+        agglayer_types::Address::ZERO
+    }
+
+    async fn verifier_type(
+        &self,
+        _rollup_id: u32,
+    ) -> Result<agglayer_contracts::rollup::VerifierType, CertificationError> {
+        Err(CertificationError::InternalError(
+            "unimplemented".to_string(),
+        ))
+    }
+
+    fn default_l1_info_tree_leaf_count(&self) -> u32 {
+        0
+    }
 }

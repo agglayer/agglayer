@@ -7701,6 +7701,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp1-core-machine 6.2.2",
+ "sp1-prover 6.2.2",
  "sp1-sdk 6.2.2",
  "thiserror 2.0.18",
  "tokio",

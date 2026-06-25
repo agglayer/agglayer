@@ -2,11 +2,12 @@
 //! AggLayer.
 //!
 //! This service consists of:
+//! - [`SettlementServiceTrait`]: the public API the certificate orchestrator
+//!   depends on
 //! - [`SettlementService`]: The main service orchestrating settlement
 //!   operations
-//! - [`SettlementTask`]: Worker task for processing individual settlements
-//!
-//! [`SettlementTask`]: settlement_task::SettlementTask
+//! - `SettlementTask` (internal): worker task for processing individual
+//!   settlements
 
 #![allow(dead_code)] // TODO remove after settlement service is integrated in the rest of the app
 

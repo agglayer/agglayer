@@ -8,7 +8,6 @@ use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
-use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_signer::{ConfiguredSigner, ConfiguredSigners};
 use agglayer_storage::{
     backup::{BackupClient, BackupEngine},
@@ -30,33 +29,6 @@ use tracing::{debug, error, info, warn};
 use crate::epoch_synchronizer::EpochSynchronizer;
 
 pub(crate) mod api;
-
-/// Inert settlement service used while the certificate orchestrator is wired to
-/// the settlement service structurally only.
-///
-/// TODO: replace with the real
-/// [`agglayer_settlement_service::SettlementService`] once the orchestrator
-/// builds real settlement calldata. Until then this never reaches L1: any
-/// certificate that gets this far fails fast with a clear error rather than
-/// submitting placeholder data.
-struct NoopSettlementService;
-
-#[async_trait::async_trait]
-impl SettlementServiceTrait for NoopSettlementService {
-    async fn submit_settlement_job(
-        &self,
-        _job: agglayer_types::SettlementJob,
-    ) -> eyre::Result<agglayer_types::SettlementJobId> {
-        eyre::bail!("settlement service is not wired into the node yet (structural refresh)")
-    }
-
-    async fn wait_for_settlement(
-        &self,
-        _job_id: agglayer_types::SettlementJobId,
-    ) -> eyre::Result<agglayer_types::SettlementJobResult> {
-        eyre::bail!("settlement service is not wired into the node yet (structural refresh)")
-    }
-}
 
 pub(crate) struct Node {
     pub(crate) rpc_handle: JoinHandle<()>,
@@ -288,19 +260,23 @@ impl Node {
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
 
-        // TODO: construct the real `SettlementService` (needs an L1 provider and
-        // the settlement store) and submit real settlement calldata. For now the
-        // orchestrator is wired to the settlement service structurally only, via
-        // an inert implementation that never reaches L1.
-        let settlement_service = Arc::new(NoopSettlementService);
+        let settlement_config = Arc::new(config.settlement.pessimistic_proof_tx_config.clone());
+        let settlement_service = Arc::new(
+            agglayer_settlement_service::SettlementService::start(
+                config.settlement.settlement_service_config.clone(),
+                settlement_config.clone(),
+                rpc_tx_settlement.clone(),
+                state_store.clone(),
+                cancellation_token.clone(),
+            )
+            .await?,
+        );
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
                 .certificate_orchestrator
                 .input_backpressure_buffer_size,
         );
-
-        let settlement_config = Arc::new(config.settlement.pessimistic_proof_tx_config.clone());
 
         let certificate_orchestrator_handle = CertificateOrchestrator::builder()
             .clock(clock_ref)

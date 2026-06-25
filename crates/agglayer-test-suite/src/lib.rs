@@ -3,7 +3,7 @@ mod storage;
 use std::{path::Path, sync::Arc};
 
 use agglayer_config::Config;
-pub use pessimistic_proof_test_suite::forest::Forest;
+pub use pessimistic_proof_test_suite::{dummy_settlement_proof, forest::Forest};
 
 pub mod sample_data {
     pub use pessimistic_proof_test_suite::sample_data::*;

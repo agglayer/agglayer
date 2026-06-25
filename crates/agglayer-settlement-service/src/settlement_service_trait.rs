@@ -7,8 +7,8 @@
 //!
 //! [`SettlementJobWatcher`]: crate::settlement_service::SettlementJobWatcher
 
-use agglayer_storage::stores::{SettlementReader, SettlementWriter};
-use agglayer_types::{SettlementJob, SettlementJobId, SettlementJobResult};
+use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
+use agglayer_types::{CertificateId, SettlementJob, SettlementJobId, SettlementJobResult};
 use alloy::providers::{Provider, WalletProvider};
 
 use crate::settlement_service::{RetrievedSettlementResult, SettlementService};
@@ -16,10 +16,18 @@ use crate::settlement_service::{RetrievedSettlementResult, SettlementService};
 #[cfg_attr(feature = "testutils", mockall::automock)]
 #[async_trait::async_trait]
 pub trait SettlementServiceTrait: Send + Sync {
-    /// Submit a settlement job and return its id once the service has accepted
-    /// and persisted it. The caller persists the id to link it to its
-    /// certificate, then waits for the result separately.
-    async fn submit_settlement_job(&self, job: SettlementJob) -> eyre::Result<SettlementJobId>;
+    /// Submit a settlement job for `certificate_id` and return its id once the
+    /// service has accepted and persisted it.
+    ///
+    /// The service records the certificate <-> job-id link atomically when it
+    /// creates the job and rejects a second submission for the same certificate;
+    /// that guard is what keeps settlement at-most-once across a crash/restart.
+    /// The caller waits for the result separately.
+    async fn submit_settlement_job(
+        &self,
+        certificate_id: CertificateId,
+        job: SettlementJob,
+    ) -> eyre::Result<SettlementJobId>;
 
     /// Wait for a previously submitted job to reach a terminal result.
     ///
@@ -36,10 +44,18 @@ impl<L1Provider, SettlementStore> SettlementServiceTrait
     for SettlementService<L1Provider, SettlementStore>
 where
     L1Provider: Provider + WalletProvider + 'static,
-    SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
+    SettlementStore:
+        SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
 {
-    async fn submit_settlement_job(&self, job: SettlementJob) -> eyre::Result<SettlementJobId> {
-        Ok(self.request_new_settlement(job).await?.job_id())
+    async fn submit_settlement_job(
+        &self,
+        certificate_id: CertificateId,
+        job: SettlementJob,
+    ) -> eyre::Result<SettlementJobId> {
+        Ok(self
+            .request_new_settlement(Some(certificate_id), job)
+            .await?
+            .job_id())
     }
 
     async fn wait_for_settlement(

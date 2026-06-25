@@ -8,11 +8,14 @@ use agglayer_storage::stores::{
 };
 #[cfg(feature = "testutils")]
 use agglayer_types::SettlementTxHash;
-use agglayer_types::{
-    Address, Certificate, CertificateHeader, CertificateStatus, CertificateStatusError,
-    ContractCallOutcome, Digest, SettlementJob, SettlementJobResult, U256,
+use agglayer_contracts::{
+    rollup::VerifierType, settler::verify_pessimistic_trusted_aggregator_calldata,
 };
-use alloy::primitives::Bytes;
+use agglayer_types::{
+    Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, ContractCallOutcome,
+    Digest, Proof, SettlementJob, SettlementJobResult, U256,
+};
+use pessimistic_proof::{core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR, PessimisticProofOutput};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -199,8 +202,8 @@ where
 
         debug!("Recomputing new state for already-proven certificate");
 
-        // Execute the witness generation to retrieve the new local network state
-        let (_, _, _output) = self
+        // Recompute the local network state in place; the proof output is unused here.
+        let (_, _, _) = self
             .certifier_client
             .witness_generation(
                 &self.certificate,
@@ -295,16 +298,13 @@ where
 
         let certificate_id = self.header.certificate_id;
 
-        // Hand settlement off to the settlement service and remember the job id.
-        //
-        // The settlement service is agnostic of certificates, so the
-        // certificate <-> settlement-job link lives here. We persist it and move
-        // to Candidate *before* waiting for the result, so that a reboot resumes
-        // from `process_from_candidate` using the stored job id.
-        let job = self.build_settlement_job();
+        // The settlement service records the certificate -> job-id link
+        // atomically when creating the job and rejects duplicates, so the
+        // orchestrator does not persist the link itself.
+        let job = self.build_settlement_job().await?;
         let job_id = self
             .settlement_service
-            .submit_settlement_job(job)
+            .submit_settlement_job(certificate_id, job)
             .await
             .map_err(|error| {
                 CertificateStatusError::SettlementError(format!(
@@ -313,8 +313,6 @@ where
             })?;
         info!(%job_id, "Settlement job submitted");
 
-        self.state_store
-            .insert_certificate_settlement_job_id(&certificate_id, &job_id)?;
         self.set_status(CertificateStatus::Candidate)?;
 
         #[cfg(feature = "testutils")]
@@ -327,23 +325,76 @@ where
         self.process_from_candidate().await
     }
 
-    /// Build the settlement job handed to the settlement service.
-    ///
-    /// TODO: build the real `verifyPessimisticTrustedAggregator` calldata from
-    /// the certificate proof. For now the job carries placeholder call data;
-    /// the node wires an inert settlement service so this is never
-    /// submitted to L1. Real call data (and constructing the production
-    /// settlement service) is a follow-up.
-    fn build_settlement_job(&self) -> SettlementJob {
-        SettlementJob {
-            contract_address: Address::ZERO,
-            calldata: Bytes::new(),
+    /// Build the real `verifyPessimisticTrustedAggregator` settlement calldata
+    /// from the certificate's proof, to hand to the settlement service.
+    async fn build_settlement_job(&self) -> Result<SettlementJob, CertificateStatusError> {
+        let certificate_id = self.header.certificate_id;
+
+        let proof = match self.pending_store.get_proof(certificate_id)? {
+            Some(Proof::SP1(proof)) => proof,
+            _ => {
+                return Err(CertificateStatusError::SettlementError(format!(
+                    "No SP1 proof found for certificate {certificate_id}"
+                )))
+            }
+        };
+        let output = PessimisticProofOutput::bincode_codec()
+            .deserialize::<PessimisticProofOutput>(proof.public_values.as_slice())
+            .map_err(|error| {
+                CertificateStatusError::SettlementError(format!(
+                    "Failed to deserialize proof output: {error}"
+                ))
+            })?;
+
+        let rollup_id = output.origin_network.to_u32();
+        let verifier_type = self
+            .certifier_client
+            .verifier_type(rollup_id)
+            .await
+            .map_err(|error| {
+                CertificateStatusError::SettlementError(format!(
+                    "Failed to resolve verifier type: {error}"
+                ))
+            })?;
+
+        let proof_bytes = proof.bytes();
+        let proof_with_selector: Vec<u8> = match verifier_type {
+            VerifierType::Pessimistic => proof_bytes,
+            VerifierType::ALGateway => {
+                let mut prefixed = PESSIMISTIC_PROOF_PROGRAM_SELECTOR.to_vec();
+                prefixed.extend(&proof_bytes);
+                prefixed
+            }
+            VerifierType::StateTransition => {
+                return Err(CertificateStatusError::SettlementError(
+                    "Unsupported verifier type for settlement".to_string(),
+                ))
+            }
+        };
+
+        let l1_info_tree_leaf_count = self
+            .certificate
+            .l1_info_tree_leaf_count()
+            .unwrap_or_else(|| self.certifier_client.default_l1_info_tree_leaf_count());
+
+        let calldata = verify_pessimistic_trusted_aggregator_calldata(
+            rollup_id,
+            l1_info_tree_leaf_count,
+            *output.new_local_exit_root.as_ref(),
+            *output.new_pessimistic_root,
+            proof_with_selector.into(),
+            self.certificate.custom_chain_data.clone().into(),
+        );
+
+        Ok(SettlementJob {
+            contract_address: self.certifier_client.rollup_manager_address(),
+            calldata,
             eth_value: U256::ZERO,
             gas_limit: self
                 .settlement_config
                 .gas_limit_ceiling
                 .saturating_to::<u128>(),
-        }
+        })
     }
 
     async fn process_from_candidate(&mut self) -> Result<(), CertificateStatusError> {
