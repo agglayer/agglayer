@@ -677,13 +677,24 @@ mod tests {
             .await
             .unwrap();
 
-        let result = tx_hash_on_l1_for_nonce(&provider, sender, Nonce(0))
-            .await
-            .unwrap();
-        assert_eq!(
-            result,
-            Some(SettlementTxHash::from(receipt.transaction_hash))
-        );
+        // Anvil's `eth_getTransactionBySenderAndNonce` index can briefly lag
+        // behind receipt availability under load (e.g. coverage instrumentation
+        // on CI), transiently returning `None` or a still-pending transaction
+        // for a freshly mined nonce. Poll with a bounded deadline so the test
+        // asserts eventual consistency instead of a single racy read; a genuine
+        // regression still fails once the deadline elapses.
+        let expected = SettlementTxHash::from(receipt.transaction_hash);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let result = loop {
+            let result = tx_hash_on_l1_for_nonce(&provider, sender, Nonce(0))
+                .await
+                .unwrap();
+            if result.is_some() || Instant::now() >= deadline {
+                break result;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert_eq!(result, Some(expected));
     }
 
     #[tokio::test]
