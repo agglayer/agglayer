@@ -20,9 +20,9 @@ pub trait SettlementServiceTrait: Send + Sync {
     /// service has accepted and persisted it.
     ///
     /// The service records the certificate <-> job-id link atomically when it
-    /// creates the job and rejects a second submission for the same certificate;
-    /// that guard is what keeps settlement at-most-once across a crash/restart.
-    /// The caller waits for the result separately.
+    /// creates the job and rejects a second submission for the same
+    /// certificate; that guard is what keeps settlement at-most-once across
+    /// a crash/restart. The caller waits for the result separately.
     async fn submit_settlement_job(
         &self,
         certificate_id: CertificateId,

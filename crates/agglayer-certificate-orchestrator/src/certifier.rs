@@ -47,7 +47,8 @@ pub trait Certifier: Unpin + Send + Sync + 'static {
     /// The L1 rollup-manager address settlement transactions are sent to.
     fn rollup_manager_address(&self) -> Address;
 
-    /// The on-chain verifier type for `rollup_id`, which selects the proof encoding.
+    /// The on-chain verifier type for `rollup_id`, which selects the proof
+    /// encoding.
     async fn verifier_type(&self, rollup_id: u32) -> Result<VerifierType, CertificationError>;
 
     /// Default l1-info-tree leaf count, used when the certificate carries none.

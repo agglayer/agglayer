@@ -37,6 +37,6 @@ jobs:
             - Security vulnerabilities
             - Performance regressions
             - Breaking changes to public APIs
-
+            
             Only flag high-confidence issues. Skip style nitpicks.
             Post findings as inline PR comments on the relevant lines.

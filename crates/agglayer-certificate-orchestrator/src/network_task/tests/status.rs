@@ -20,46 +20,36 @@ use crate::tests::{clock, mocks::MockCertifier};
 
 const SETTLEMENT_TX_HASH_TEST: SettlementTxHash = SettlementTxHash::new(Digest([1; 32]));
 
-/// Configure `expect_witness_generation()` on the certifier for Candidate
-/// tests.
-fn setup_witness_generation_mock(
-    certifier: &mut MockCertifier,
-    certificate_id: CertificateId,
-    signer: agglayer_types::Address,
-) {
-    certifier.expect_certify().never();
-    certifier
-        .expect_witness_generation()
-        .withf(move |c, _, _| c.hash() == certificate_id)
-        .once()
-        .returning(move |cert, state, _tx_hash| {
-            let initial = LocalNetworkState::from(state.clone());
-            let l1_info_root = cert.l1_info_root().unwrap().unwrap_or_default();
+#[rstest]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(2))]
+async fn from_pending_to_settled() {
+    let tmp = TempDBDir::new();
+    let storage = new_storage(&tmp.path);
 
-            let batch = state
-                .apply_certificate(
-                    cert,
-                    L1WitnessCtx {
-                        l1_info_root,
-                        prev_pessimistic_root: PessimisticRootInput::Computed(
-                            PessimisticRootCommitmentVersion::V2,
-                        ),
-                        aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
-                    },
-                )
-                .unwrap();
+    let mut certifier = MockCertifier::new();
+    let clock_ref = clock();
+    let network_id = 1.into();
+    let (_sender, certificate_stream) = mpsc::channel(100);
 
-            let (pv, _) = generate_pessimistic_proof(initial.clone().into(), &batch).unwrap();
-            Ok((batch, initial, pv))
-        });
-}
+    let mut forest = Forest::default();
 
-/// Configure `expect_certify()` on the certifier for Proven tests.
-fn setup_certify_mock(
-    certifier: &mut MockCertifier,
-    pending_store: Arc<agglayer_storage::stores::pending::PendingStore>,
-    network_id: NetworkId,
-) {
+    let certificate = forest.apply_events(
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
+    );
+    let certificate_id = certificate.hash();
+    storage
+        .pending
+        .insert_pending_certificate(network_id, Height::ZERO, &certificate)
+        .expect("unable to insert certificate in pending");
+
+    storage
+        .state
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .expect("Failed to insert certificate header");
+
+    let pending_store = storage.pending.clone();
     certifier
         .expect_certify()
         .times(1)
@@ -121,38 +111,6 @@ fn setup_certify_mock(
     certifier
         .expect_default_l1_info_tree_leaf_count()
         .returning(|| 0);
-}
-
-#[rstest]
-#[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(2))]
-async fn from_pending_to_settled() {
-    let tmp = TempDBDir::new();
-    let storage = new_storage(&tmp.path);
-
-    let mut certifier = MockCertifier::new();
-    let clock_ref = clock();
-    let network_id = 1.into();
-    let (_sender, certificate_stream) = mpsc::channel(100);
-
-    let mut forest = Forest::default();
-
-    let certificate = forest.apply_events(
-        &[(USDC, 10.try_into().unwrap())],
-        &[(USDC, 1.try_into().unwrap())],
-    );
-    let certificate_id = certificate.hash();
-    storage
-        .pending
-        .insert_pending_certificate(network_id, Height::ZERO, &certificate)
-        .expect("unable to insert certificate in pending");
-
-    storage
-        .state
-        .insert_certificate_header(&certificate, CertificateStatus::Pending)
-        .expect("Failed to insert certificate header");
-
-    setup_certify_mock(&mut certifier, storage.pending.clone(), network_id);
 
     let mut settlement_service = MockSettlementServiceTrait::new();
     mock_settlement_persisting(
@@ -227,7 +185,68 @@ async fn from_proven_to_settled() {
         .insert_certificate_header(&certificate, CertificateStatus::Proven)
         .expect("Failed to insert certificate header");
 
-    setup_certify_mock(&mut certifier, storage.pending.clone(), network_id);
+    let pending_store = storage.pending.clone();
+    certifier
+        .expect_certify()
+        .times(1)
+        .with(always(), eq(network_id), eq(Height::ZERO))
+        .returning(move |mut new_state, network, height| {
+            let certificate = pending_store
+                .get_certificate(network, height)
+                .expect("Failed to get certificate")
+                .expect("Certificate not found");
+            pending_store
+                .insert_generated_proof(
+                    &certificate.hash(),
+                    &agglayer_test_suite::dummy_settlement_proof(),
+                )
+                .expect("insert dummy settlement proof");
+            let signer = agglayer_types::Address::new([0; 20]);
+
+            let ctx_from_l1 = L1WitnessCtx {
+                l1_info_root: certificate
+                    .l1_info_root()
+                    .expect("Failed to get L1 info root")
+                    .unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            };
+
+            let _ = new_state
+                .apply_certificate(&certificate, ctx_from_l1)
+                .expect("Failed to apply certificate");
+            let state_commitment = new_state.get_roots();
+            let pp_commitment_values =
+                pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                    height: height.as_u64(),
+                    origin_network: network_id,
+                    ler_leaf_count: state_commitment.ler_leaf_count,
+                    balance_root: state_commitment.balance_root.into(),
+                    nullifier_root: state_commitment.nullifier_root.into(),
+                };
+            let pp_root =
+                pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
+
+            Ok(CertifierOutput {
+                certificate,
+                height,
+                new_state,
+                network,
+                new_pp_root: pp_root,
+            })
+        });
+
+    certifier
+        .expect_verifier_type()
+        .returning(|_| Ok(agglayer_contracts::rollup::VerifierType::Pessimistic));
+    certifier
+        .expect_rollup_manager_address()
+        .returning(|| agglayer_types::Address::new([0; 20]));
+    certifier
+        .expect_default_l1_info_tree_leaf_count()
+        .returning(|| 0);
 
     let mut settlement_service = MockSettlementServiceTrait::new();
     mock_settlement_persisting(
@@ -315,7 +334,31 @@ async fn from_candidate_to_settled() {
         .insert_certificate_settlement_job_id(&certificate_id, &job_id(1))
         .unwrap();
 
-    setup_witness_generation_mock(&mut certifier, certificate_id, signer);
+    certifier.expect_certify().never();
+    certifier
+        .expect_witness_generation()
+        .withf(move |c, _, _| c.hash() == certificate_id)
+        .once()
+        .returning(move |cert, state, _tx_hash| {
+            let initial = LocalNetworkState::from(state.clone());
+            let l1_info_root = cert.l1_info_root().unwrap().unwrap_or_default();
+
+            let batch = state
+                .apply_certificate(
+                    cert,
+                    L1WitnessCtx {
+                        l1_info_root,
+                        prev_pessimistic_root: PessimisticRootInput::Computed(
+                            PessimisticRootCommitmentVersion::V2,
+                        ),
+                        aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                    },
+                )
+                .unwrap();
+
+            let (pv, _) = generate_pessimistic_proof(initial.clone().into(), &batch).unwrap();
+            Ok((batch, initial, pv))
+        });
 
     let mut settlement_service = MockSettlementServiceTrait::new();
     settlement_service
@@ -404,7 +447,31 @@ async fn from_candidate_to_settle_via_pending() {
         .insert_certificate_settlement_job_id(&certificate_id, &job_id(1))
         .unwrap();
 
-    setup_witness_generation_mock(&mut certifier, certificate_id, signer);
+    certifier.expect_certify().never();
+    certifier
+        .expect_witness_generation()
+        .withf(move |c, _, _| c.hash() == certificate_id)
+        .once()
+        .returning(move |cert, state, _tx_hash| {
+            let initial = LocalNetworkState::from(state.clone());
+            let l1_info_root = cert.l1_info_root().unwrap().unwrap_or_default();
+
+            let batch = state
+                .apply_certificate(
+                    cert,
+                    L1WitnessCtx {
+                        l1_info_root,
+                        prev_pessimistic_root: PessimisticRootInput::Computed(
+                            PessimisticRootCommitmentVersion::V2,
+                        ),
+                        aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                    },
+                )
+                .unwrap();
+
+            let (pv, _) = generate_pessimistic_proof(initial.clone().into(), &batch).unwrap();
+            Ok((batch, initial, pv))
+        });
 
     let mut settlement_service = MockSettlementServiceTrait::new();
     settlement_service
@@ -545,7 +612,68 @@ async fn from_proven_settlement_revert_goes_to_error() {
         .insert_certificate_header(&certificate, CertificateStatus::Proven)
         .expect("Failed to insert certificate header");
 
-    setup_certify_mock(&mut certifier, storage.pending.clone(), network_id);
+    let pending_store = storage.pending.clone();
+    certifier
+        .expect_certify()
+        .times(1)
+        .with(always(), eq(network_id), eq(Height::ZERO))
+        .returning(move |mut new_state, network, height| {
+            let certificate = pending_store
+                .get_certificate(network, height)
+                .expect("Failed to get certificate")
+                .expect("Certificate not found");
+            pending_store
+                .insert_generated_proof(
+                    &certificate.hash(),
+                    &agglayer_test_suite::dummy_settlement_proof(),
+                )
+                .expect("insert dummy settlement proof");
+            let signer = agglayer_types::Address::new([0; 20]);
+
+            let ctx_from_l1 = L1WitnessCtx {
+                l1_info_root: certificate
+                    .l1_info_root()
+                    .expect("Failed to get L1 info root")
+                    .unwrap_or_default(),
+                prev_pessimistic_root: PessimisticRootInput::Computed(
+                    PessimisticRootCommitmentVersion::V2,
+                ),
+                aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+            };
+
+            let _ = new_state
+                .apply_certificate(&certificate, ctx_from_l1)
+                .expect("Failed to apply certificate");
+            let state_commitment = new_state.get_roots();
+            let pp_commitment_values =
+                pessimistic_proof::core::commitment::PessimisticRootCommitmentValues {
+                    height: height.as_u64(),
+                    origin_network: network_id,
+                    ler_leaf_count: state_commitment.ler_leaf_count,
+                    balance_root: state_commitment.balance_root.into(),
+                    nullifier_root: state_commitment.nullifier_root.into(),
+                };
+            let pp_root =
+                pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
+
+            Ok(CertifierOutput {
+                certificate,
+                height,
+                new_state,
+                network,
+                new_pp_root: pp_root,
+            })
+        });
+
+    certifier
+        .expect_verifier_type()
+        .returning(|_| Ok(agglayer_contracts::rollup::VerifierType::Pessimistic));
+    certifier
+        .expect_rollup_manager_address()
+        .returning(|| agglayer_types::Address::new([0; 20]));
+    certifier
+        .expect_default_l1_info_tree_leaf_count()
+        .returning(|| 0);
 
     let mut settlement_service = MockSettlementServiceTrait::new();
     mock_settlement_persisting(

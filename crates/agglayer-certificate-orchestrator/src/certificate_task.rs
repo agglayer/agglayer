@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
 use agglayer_config::settlement_service::SettlementTransactionConfig;
+use agglayer_contracts::{
+    rollup::VerifierType, settler::verify_pessimistic_trusted_aggregator_calldata,
+};
 use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
@@ -8,9 +11,6 @@ use agglayer_storage::stores::{
 };
 #[cfg(feature = "testutils")]
 use agglayer_types::SettlementTxHash;
-use agglayer_contracts::{
-    rollup::VerifierType, settler::verify_pessimistic_trusted_aggregator_calldata,
-};
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, ContractCallOutcome,
     Digest, Proof, SettlementJob, SettlementJobResult, U256,

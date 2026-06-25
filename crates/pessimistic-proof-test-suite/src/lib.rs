@@ -31,12 +31,16 @@ pub fn dummy_settlement_proof() -> agglayer_types::Proof {
     use pessimistic_proof::PessimisticProofOutput;
 
     let output = PessimisticProofOutput {
-        prev_local_exit_root: agglayer_tries::roots::LocalExitRoot::new(agglayer_types::Digest::ZERO),
+        prev_local_exit_root: agglayer_tries::roots::LocalExitRoot::new(
+            agglayer_types::Digest::ZERO,
+        ),
         prev_pessimistic_root: agglayer_types::Digest::ZERO,
         l1_info_root: agglayer_types::Digest::ZERO,
         origin_network: agglayer_types::NetworkId::new(0),
         aggchain_hash: agglayer_types::Digest::ZERO,
-        new_local_exit_root: agglayer_tries::roots::LocalExitRoot::new(agglayer_types::Digest::ZERO),
+        new_local_exit_root: agglayer_tries::roots::LocalExitRoot::new(
+            agglayer_types::Digest::ZERO,
+        ),
         new_pessimistic_root: agglayer_types::Digest::ZERO,
     };
     let public_values = PessimisticProofOutput::bincode_codec()
