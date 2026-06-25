@@ -9,6 +9,9 @@ use crate::error::Error;
 /// Point lookups return `Ok(None)` when records are missing. Prefix-scoped
 /// list reads return an empty vector when no records are found.
 pub trait SettlementReader: Send + Sync {
+    /// Returns every known settlement job id.
+    fn list_settlement_job_ids(&self) -> Result<Vec<SettlementJobId>, Error>;
+
     /// Returns the settlement job for `settlement_job_id`, if present.
     fn get_settlement_job(
         &self,

@@ -47,6 +47,13 @@ impl StateStore {
 }
 
 impl SettlementReader for StateStore {
+    fn list_settlement_job_ids(&self) -> Result<Vec<SettlementJobId>, Error> {
+        Ok(self
+            .db
+            .keys::<SettlementJobsColumn>()?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
     fn get_settlement_job(
         &self,
         settlement_job_id: &SettlementJobId,

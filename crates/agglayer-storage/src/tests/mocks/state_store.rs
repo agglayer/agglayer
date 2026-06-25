@@ -131,6 +131,8 @@ mock! {
     }
 
     impl SettlementReader for StateStore {
+        fn list_settlement_job_ids(&self) -> Result<Vec<SettlementJobId>, Error>;
+
         fn get_settlement_job(
             &self,
             settlement_job_id: &SettlementJobId,
