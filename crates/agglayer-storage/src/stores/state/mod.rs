@@ -33,7 +33,6 @@ use crate::{
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
-        settlement_jobs::SettlementJobsColumn,
     },
     error::Error,
     schema::ColumnSchema,
@@ -222,16 +221,6 @@ impl StateWriter for StateStore {
         {
             return Err(Error::UnprocessedAction(format!(
                 "Certificate {certificate_id} already has a settlement job id"
-            )));
-        }
-
-        if self
-            .db
-            .get::<SettlementJobsColumn>(settlement_job_id)?
-            .is_none()
-        {
-            return Err(Error::UnprocessedAction(format!(
-                "Settlement job does not exist for id {settlement_job_id}"
             )));
         }
 
