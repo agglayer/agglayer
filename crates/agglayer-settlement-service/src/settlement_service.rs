@@ -6,15 +6,14 @@ use agglayer_types::{CertificateId, SettlementJob, SettlementJobId, SettlementJo
 use alloy::providers::{Provider, WalletProvider};
 use educe::Educe;
 use eyre::Context as _;
-use tokio::sync::{mpsc, watch, Mutex};
+use tokio::sync::{watch, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::settlement_task::{
-    SettlementTask, SettlementTaskRunResult, TaskAdminCommand, TaskControlHandle,
+    SettlementTask, SettlementTaskRunResult, StoredSettlementJob, TaskAdminCommand,
+    TaskControlHandle,
 };
-
-const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 
 /// The Settlement Service is responsible for managing settlement jobs and
 /// answering settlement result requests.
@@ -70,8 +69,96 @@ impl<
             task_controls: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
         };
-        // TODO: load all pending settlements from rocksdb and run them
+        this.resume_pending_settlement_jobs().await?;
         Ok(this)
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn resume_pending_settlement_jobs(&self) -> eyre::Result<()> {
+        // TODO: Avoid scanning the whole settlement jobs CF on every startup.
+        // Record the latest ULID before which all settlement job ids are known
+        // to be fully complete in the metadata CF, then start future scans from
+        // that point.
+        let job_ids = self
+            .store
+            .list_settlement_job_ids()
+            .wrap_err("Failed to scan settlement job ids during startup recovery")?;
+
+        let mut completed_jobs = 0usize;
+        let mut resumed_jobs = 0usize;
+        for job_id in job_ids {
+            let (task_control_handle, task_control) =
+                TaskControlHandle::new(&self.cancellation_token);
+            match SettlementTask::load(
+                job_id,
+                self.tx_config.clone(),
+                self.provider.clone(),
+                self.store.clone(),
+                task_control,
+            )
+            .await
+            .wrap_err_with(|| {
+                format!("Failed to load settlement job {job_id} during startup recovery")
+            })? {
+                StoredSettlementJob::Completed(_, _) => {
+                    completed_jobs += 1;
+                }
+                StoredSettlementJob::Pending(task) => {
+                    self.spawn_settlement_task(job_id, task, task_control_handle)
+                        .await;
+                    resumed_jobs += 1;
+                }
+            }
+        }
+
+        info!(
+            completed_jobs,
+            resumed_jobs, "Settlement service startup recovery scan completed"
+        );
+        Ok(())
+    }
+
+    async fn spawn_settlement_task(
+        &self,
+        job_id: SettlementJobId,
+        mut task: SettlementTask<L1Provider, SettlementStore>,
+        task_control_handle: TaskControlHandle,
+    ) -> watch::Receiver<Option<SettlementJobResult>> {
+        let (result_sender, result_receiver) = watch::channel(None);
+        self.task_controls
+            .lock()
+            .await
+            .insert(job_id, task_control_handle);
+        self.result_watchers
+            .lock()
+            .await
+            .insert(job_id, result_receiver.clone());
+        let task_controls = self.task_controls.clone();
+        let result_watchers = self.result_watchers.clone();
+        tokio::task::spawn(async move {
+            match task.run().await {
+                SettlementTaskRunResult::Completed(result) => {
+                    if let Err(error) = result_sender.send(Some(result)) {
+                        error!(
+                            ?error,
+                            ?job_id,
+                            "Failed to send settlement job result to watchers"
+                        );
+                    }
+                }
+                SettlementTaskRunResult::Cancelled => {
+                    info!(?job_id, "Settlement task cancelled");
+                    result_watchers.lock().await.remove(&job_id);
+                }
+                SettlementTaskRunResult::ReloadAndRestart => {
+                    result_watchers.lock().await.remove(&job_id);
+                    task_controls.lock().await.remove(&job_id);
+                    todo!("Reload and restart settlement tasks");
+                }
+            }
+            task_controls.lock().await.remove(&job_id);
+        });
+        result_receiver
     }
 
     #[tracing::instrument(skip_all)]
@@ -119,11 +206,8 @@ impl<
         certificate_id: Option<CertificateId>,
         job: SettlementJob,
     ) -> eyre::Result<SettlementJobWatcher> {
-        let (admin_sender, admin_receiver) = mpsc::channel(ADMIN_CHANNEL_BUFFER_SIZE);
-        let (result_sender, result_receiver) = watch::channel(None);
-        let (task_control_handle, task_control) =
-            TaskControlHandle::new(&self.cancellation_token, admin_sender, admin_receiver);
-        let (job_id, mut task) = SettlementTask::create(
+        let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
+        let (job_id, task) = SettlementTask::create(
             certificate_id,
             job,
             self.tx_config.clone(),
@@ -132,39 +216,9 @@ impl<
             task_control,
         )
         .await?;
-        self.task_controls
-            .lock()
-            .await
-            .insert(job_id, task_control_handle);
-        self.result_watchers
-            .lock()
-            .await
-            .insert(job_id, result_receiver.clone());
-        let task_controls = self.task_controls.clone();
-        let result_watchers = self.result_watchers.clone();
-        tokio::task::spawn(async move {
-            match task.run().await {
-                SettlementTaskRunResult::Completed(result) => {
-                    if let Err(error) = result_sender.send(Some(result)) {
-                        error!(
-                            ?error,
-                            ?job_id,
-                            "Failed to send settlement job result to watchers"
-                        );
-                    }
-                }
-                SettlementTaskRunResult::Cancelled => {
-                    info!(?job_id, "Settlement task cancelled");
-                    result_watchers.lock().await.remove(&job_id);
-                }
-                SettlementTaskRunResult::ReloadAndRestart => {
-                    result_watchers.lock().await.remove(&job_id);
-                    task_controls.lock().await.remove(&job_id);
-                    todo!("Reload and restart settlement tasks");
-                }
-            }
-            task_controls.lock().await.remove(&job_id);
-        });
+        let result_receiver = self
+            .spawn_settlement_task(job_id, task, task_control_handle)
+            .await;
         Ok(SettlementJobWatcher {
             watcher: result_receiver,
             job_id,
@@ -328,6 +382,13 @@ mod tests {
             )
     }
 
+    fn expect_empty_startup_recovery(store: &mut MockStateStore) {
+        store
+            .expect_list_settlement_job_ids()
+            .once()
+            .return_once(|| Ok(Vec::new()));
+    }
+
     async fn mk_service(
         store: Arc<MockStateStore>,
     ) -> SettlementService<impl Provider + WalletProvider + 'static, MockStateStore> {
@@ -378,9 +439,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn start_scans_jobs_and_skips_completed_ones() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(9);
+        let job = mk_job(9);
+        let result = mk_result(9, ContractCallOutcome::Success);
+
+        store
+            .expect_list_settlement_job_ids()
+            .once()
+            .return_once(move || Ok(vec![job_id]));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(result)));
+        store.expect_list_settlement_attempts().never();
+        store.expect_list_settlement_attempt_results().never();
+
+        let service = mk_service(Arc::new(store)).await;
+
+        assert!(service.task_controls.lock().await.is_empty());
+        assert!(service.result_watchers.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn retrieve_uses_in_memory_watcher_before_storage() {
-        let store = Arc::new(MockStateStore::new());
-        let service = mk_service(store.clone()).await;
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let service = mk_service(Arc::new(store)).await;
         let job_id = mk_job_id(1);
         let in_memory_result = mk_result(2, ContractCallOutcome::Revert);
 
@@ -401,6 +493,7 @@ mod tests {
     #[tokio::test]
     async fn retrieve_uses_stored_terminal_result_without_watcher() {
         let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
         let job_id = mk_job_id(2);
         let stored_result = mk_result(3, ContractCallOutcome::Success);
         let stored_result_for_store = stored_result.clone();
@@ -427,6 +520,7 @@ mod tests {
     #[tokio::test]
     async fn retrieve_fails_for_unknown_job_id() {
         let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
         let job_id = mk_job_id(4);
 
         store
@@ -448,10 +542,10 @@ mod tests {
 
         assert!(error.to_string().contains("No settlement job found for id"));
     }
-
     #[tokio::test]
     async fn request_new_settlement_records_certificate_link_before_job() {
         let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
         let certificate_id = CertificateId::new(Digest::from([7; 32]));
         let job = mk_job(7);
         let expected_job = job.clone();
