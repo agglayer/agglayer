@@ -70,6 +70,7 @@ anvil \
     --no-mining \
     --order fifo \
     --auto-impersonate \
+    --preserve-historical-states \
     >"$workdir/anvil.log" 2>&1 &
 replay_pid=$!
 
