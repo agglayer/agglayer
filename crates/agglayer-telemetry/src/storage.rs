@@ -5,10 +5,40 @@
 //! a [`crate::runtime`] scheduler-lag spike while CPU is idle, is the signature
 //! of blocking I/O running on the async runtime.
 
+use std::{
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
+
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*};
 
 const AGGLAYER_STORAGE_OTEL_SCOPE_NAME: &str = "agglayer_storage";
+
+/// Slow-op threshold in milliseconds.
+///
+/// RocksDB point operations are expected to complete in well under a
+/// millisecond; an operation exceeding this budget while running on an async
+/// runtime thread is a strong signal that it is blocking a Tokio worker (for
+/// example a disk stall or compaction back-pressure).
+///
+/// Defaults to 25ms and is overridden once at startup from configuration via
+/// [`set_slow_op_threshold`]. A process-global is used (rather than threading
+/// the value through every `DB` constructor) to stay consistent with this
+/// crate's global instruments: it is written once during startup and only read
+/// afterwards.
+static SLOW_OP_THRESHOLD_MS: AtomicU64 = AtomicU64::new(25);
+
+/// Sets the storage slow-op threshold. Intended to be called once at startup,
+/// before databases are opened.
+pub fn set_slow_op_threshold(threshold: Duration) {
+    SLOW_OP_THRESHOLD_MS.store(threshold.as_millis() as u64, Ordering::Relaxed);
+}
+
+/// Returns the currently configured storage slow-op threshold.
+pub fn slow_op_threshold() -> Duration {
+    Duration::from_millis(SLOW_OP_THRESHOLD_MS.load(Ordering::Relaxed))
+}
 
 lazy_static! {
     /// Duration of synchronous RocksDB operations, in milliseconds.

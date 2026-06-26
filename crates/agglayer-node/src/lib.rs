@@ -74,6 +74,11 @@ pub fn main(
 
     info!("Starting agglayer node version info: {}", version);
 
+    // Apply the configured storage slow-op threshold before any database is
+    // opened, so the instrumentation in `agglayer-storage` uses it from the
+    // first operation.
+    agglayer_telemetry::storage::set_slow_op_threshold(config.telemetry.slow_storage_op_threshold);
+
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("agglayer-node-runtime")
         .enable_all()

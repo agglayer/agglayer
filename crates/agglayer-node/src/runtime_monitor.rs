@@ -16,14 +16,6 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-/// Interval between probe ticks.
-const PROBE_INTERVAL: Duration = Duration::from_millis(500);
-
-/// Scheduler lag above this is logged at WARN. On an otherwise idle node, 100ms
-/// of lag means worker threads were blocked long enough to delay unrelated work
-/// and is worth investigating.
-const LAG_WARN_THRESHOLD: Duration = Duration::from_millis(100);
-
 /// Computes how much later than `interval` a tick actually fired.
 ///
 /// Returns [`Duration::ZERO`] when the tick was on time or early, so a healthy
@@ -35,12 +27,13 @@ fn overshoot(observed: Duration, interval: Duration) -> Duration {
 /// Runs the scheduler-lag probe until `cancellation` is triggered.
 ///
 /// Spawn this on the runtime you want to observe; it reads metrics from
-/// [`tokio::runtime::Handle::current`].
-pub(crate) async fn run(cancellation: CancellationToken) {
-    run_with(PROBE_INTERVAL, LAG_WARN_THRESHOLD, cancellation).await
-}
-
-async fn run_with(interval: Duration, warn_threshold: Duration, cancellation: CancellationToken) {
+/// [`tokio::runtime::Handle::current`]. `interval` and `warn_threshold` come
+/// from configuration (see `agglayer_config::TelemetryConfig`).
+pub(crate) async fn run(
+    interval: Duration,
+    warn_threshold: Duration,
+    cancellation: CancellationToken,
+) {
     let handle = tokio::runtime::Handle::current();
     let mut last = Instant::now();
 

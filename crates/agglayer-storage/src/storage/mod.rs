@@ -1,7 +1,4 @@
-use std::{
-    path::Path,
-    time::{Duration, Instant},
-};
+use std::{path::Path, time::Instant};
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
@@ -34,16 +31,11 @@ pub enum DBError {
     ReadOnlyMode,
 }
 
-/// RocksDB point operations are expected to complete in well under a
-/// millisecond. An operation exceeding this budget while running on an async
-/// runtime thread is a strong signal that it is blocking a Tokio worker (for
-/// example a disk stall or compaction back-pressure). Kept as a constant for
-/// now; promote to configuration if per-deployment tuning is needed.
-const SLOW_OP_THRESHOLD: Duration = Duration::from_millis(25);
-
 /// Times a synchronous RocksDB operation, recording its duration to
 /// [`agglayer_telemetry::storage::OP_DURATION_MS`] and flagging operations that
-/// exceed [`SLOW_OP_THRESHOLD`] (which may be blocking a Tokio worker thread).
+/// exceed the configured slow-op threshold (see
+/// [`agglayer_telemetry::storage::slow_op_threshold`]), which may be blocking a
+/// Tokio worker thread.
 ///
 /// Note: this covers discrete point/batch operations. Long range scans driven
 /// through [`iterators`] are not timed per item; the remediation for a scan that
@@ -60,7 +52,7 @@ fn timed<T>(op: &'static str, cf: &'static str, f: impl FnOnce() -> T) -> T {
     ];
     agglayer_telemetry::storage::OP_DURATION_MS.record(elapsed_ms, &attrs);
 
-    if elapsed >= SLOW_OP_THRESHOLD {
+    if elapsed >= agglayer_telemetry::storage::slow_op_threshold() {
         agglayer_telemetry::storage::SLOW_OP.add(1, &attrs);
         tracing::warn!(
             op = op,
