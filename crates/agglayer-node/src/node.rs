@@ -338,6 +338,10 @@ impl Node {
         info!(on = %config.public_grpc_addr(), "Public gRPC listening");
         info!(on = %config.admin_rpc_addr(), "AdminRPC listening");
 
+        // Probe the node runtime for scheduler stalls (e.g. blocking RocksDB
+        // calls on async worker threads) and surface them as metrics/logs.
+        tokio::spawn(crate::runtime_monitor::run(cancellation_token.clone()));
+
         let readrpc_server = axum::serve(readrpc_listener, readrpc_router)
             .with_graceful_shutdown(cancellation_token.clone().cancelled_owned());
 
