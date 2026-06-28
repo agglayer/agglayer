@@ -12,7 +12,7 @@ const L1_FIXTURE_ENV: &str = "AGGLAYER_INTEGRATION_L1_FIXTURE";
 const ANVIL_BACKEND: &str = "anvil";
 const DOCKER_BACKEND: &str = "docker";
 const DEFAULT_ANVIL_FIXTURE: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/anvil-l1/state.hex");
+    concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/anvil-l1/state.json");
 
 // L1 readiness polling budget: 240 * 250ms = 60s, matching the readiness budget
 // in generate_anvil_l1_fixture.sh so a cold Docker image (the opt-in backend)
@@ -57,16 +57,30 @@ impl L1Docker {
     }
 
     async fn new_anvil() -> Self {
+        let fixture = fixture_path();
+        assert!(
+            fixture.exists(),
+            "Anvil L1 fixture {} not found. Regenerate it with \
+             tests/integrations/scripts/generate_anvil_l1_fixture.sh (requires Docker and a \
+             matching foundry/anvil version).",
+            fixture.display()
+        );
+
+        // Load the snapshot through the CLI `--load-state` flag rather than the
+        // `anvil_loadState` RPC: only the CLI path restores the per-block
+        // historical states captured with `--preserve-historical-states`, which
+        // `eth_getTransactionBySenderAndNonce` needs to resolve a settled nonce.
         let anvil = Anvil::new()
             .chain_id(1337u64)
             .block_time(1u64)
             .arg("--auto-impersonate")
+            .arg("--load-state")
+            .arg(fixture.to_string_lossy().into_owned())
             .spawn();
 
         let rpc = anvil.endpoint_url().to_string();
         let ws = anvil.ws_endpoint();
         wait_for_rpc(&rpc).await;
-        load_anvil_fixture(&rpc).await;
 
         Self {
             _inner: L1Instance::Anvil { _instance: anvil },
@@ -171,53 +185,6 @@ fn fixture_path() -> PathBuf {
     std::env::var_os(L1_FIXTURE_ENV)
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_ANVIL_FIXTURE))
-}
-
-async fn load_anvil_fixture(rpc: &str) {
-    let fixture_path = fixture_path();
-    let fixture = std::fs::read_to_string(&fixture_path).unwrap_or_else(|error| {
-        panic!(
-            "Failed to read Anvil fixture {}: {error}",
-            fixture_path.display()
-        )
-    });
-    let fixture = fixture.trim().trim_matches('"');
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post(rpc)
-        .json(&serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "anvil_loadState",
-            "params": [fixture],
-        }))
-        .send()
-        .await
-        .unwrap_or_else(|error| panic!("Failed to load Anvil fixture over {rpc}: {error}"));
-    let status = response.status();
-    let payload: serde_json::Value = response
-        .json()
-        .await
-        .unwrap_or_else(|error| panic!("Failed to decode Anvil fixture load response: {error}"));
-
-    if !status.is_success() {
-        panic!("Anvil fixture load failed with status {status}: {payload}");
-    }
-
-    if let Some(error) = payload.get("error") {
-        panic!("Anvil fixture load returned RPC error: {error}");
-    }
-
-    // anvil_loadState returns `result: true` on success. A version-incompatible
-    // or empty state blob can yield `result: false` (or a missing result) with a
-    // 200 status and no error field, which would otherwise pass silently and make
-    // later tests fail with confusing "address has no code" errors.
-    if payload.get("result").and_then(serde_json::Value::as_bool) != Some(true) {
-        panic!("Anvil fixture load did not succeed (result was not true): {payload}");
-    }
-
-    wait_for_rpc(rpc).await;
 }
 
 async fn wait_for_rpc(rpc: &str) {

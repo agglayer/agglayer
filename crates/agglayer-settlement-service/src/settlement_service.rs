@@ -167,7 +167,17 @@ impl<
                 SettlementTaskRunResult::ReloadAndRestart => {
                     result_watchers.lock().await.remove(&job_id);
                     task_controls.lock().await.remove(&job_id);
-                    todo!("Reload and restart settlement tasks");
+                    // #1230 stopgap: in-place reload-and-restart is not yet
+                    // implemented. Drop the task without panicking; it will be
+                    // resumed by the next startup scan or an on-demand
+                    // `retrieve_settlement_result`, which reloads the persisted
+                    // attempts (resume, not resubmit).
+                    // XREF: https://github.com/agglayer/agglayer/issues/1230
+                    tracing::warn!(
+                        ?job_id,
+                        "Settlement task requested reload-and-restart; dropping it until recovery \
+                         resumes it (#1230)"
+                    );
                 }
             }
             task_controls.lock().await.remove(&job_id);
@@ -273,9 +283,37 @@ impl<
             eyre::bail!("No settlement job found for id {job_id}");
         }
 
-        // TODO: Spawn a settlement task for a recovered pending job.
+        // #1230 stopgap: the job exists and is unfinished but has no live task
+        // (e.g. it was admin-cancelled, or queried before startup recovery ran).
+        // Resume it on demand the same way `resume_pending_settlement_jobs` does
+        // at startup, instead of panicking. A concurrent retrieve for the same
+        // job id could spawn a second task; that is acceptable until #1230
+        // hardens this path, because `load` resumes the persisted attempts rather
+        // than resubmitting a fresh nonce.
         // XREF: https://github.com/agglayer/agglayer/issues/1230
-        todo!()
+        let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
+        match SettlementTask::load(
+            job_id,
+            self.tx_config.clone(),
+            self.provider.clone(),
+            self.store.clone(),
+            task_control,
+        )
+        .await?
+        {
+            StoredSettlementJob::Completed(_, result) => {
+                Ok(RetrievedSettlementResult::Completed(result))
+            }
+            StoredSettlementJob::Pending(task) => {
+                let watcher = self
+                    .spawn_settlement_task(job_id, task, task_control_handle)
+                    .await;
+                Ok(RetrievedSettlementResult::Pending(SettlementJobWatcher {
+                    job_id,
+                    watcher,
+                }))
+            }
+        }
     }
 }
 
