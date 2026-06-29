@@ -2,8 +2,9 @@ use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBPinnableSlice, Direction, Options,
-    ReadOptions, SliceTransform, WriteBatch, WriteOptions,
+    ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBPinnableSlice, Direction,
+    IterateBounds as _, IteratorMode, Options, PrefixRange, ReadOptions, SliceTransform,
+    WriteBatch, WriteOptions,
 };
 
 use crate::schema::{
@@ -241,6 +242,29 @@ impl DB {
         let iterator = self.rocksdb.prefix_iterator_cf(&cf, prefix).into();
 
         Ok(ColumnIterator::new(iterator, Direction::Forward))
+    }
+
+    pub(crate) fn prefix_iterator_with_direction<C: ColumnSchema, P: Codec>(
+        &self,
+        prefix: &P,
+        direction: Direction,
+    ) -> Result<ColumnIterator<'_, C>, DBError> {
+        let cf = self.cf::<C>()?;
+        let prefix = prefix.encode()?;
+        let (_lower_bound, upper_bound) = PrefixRange(prefix.clone()).into_bounds();
+        let mode = match (direction, upper_bound.as_deref()) {
+            (Direction::Forward, _) => IteratorMode::From(&prefix, Direction::Forward),
+            (Direction::Reverse, Some(upper_bound)) => {
+                IteratorMode::From(upper_bound, Direction::Reverse)
+            }
+            (Direction::Reverse, None) => IteratorMode::End,
+        };
+
+        let mut read_options = ReadOptions::default();
+        read_options.set_iterate_range(PrefixRange(prefix.clone()));
+        let iterator = self.rocksdb.iterator_cf_opt(&cf, read_options, mode).into();
+
+        Ok(ColumnIterator::new(iterator, direction))
     }
 
     pub(crate) fn delete<C: ColumnSchema>(&self, key: &C::Key) -> Result<(), DBError> {

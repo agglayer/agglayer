@@ -53,7 +53,7 @@ pub const SETTLEMENT_ATTEMPT_RESULTS_COLUMN_OPTIONS: ColumnOptions = ColumnOptio
 pub const SETTLEMENT_ATTEMPT_PER_WALLET_COLUMN_OPTIONS: ColumnOptions = ColumnOptions {
     compression: crate::schema::options::ColumnCompressionType::Lz4,
     prefix_extractor: crate::schema::options::PrefixExtractor::Fixed {
-        size: crate::types::settlement::attempt_per_wallet::Key::PREFIX_LEN,
+        size: crate::types::settlement::attempt_per_wallet::Key::WALLET_PREFIX_LEN,
     },
 };
 

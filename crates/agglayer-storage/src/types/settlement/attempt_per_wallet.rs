@@ -17,9 +17,11 @@ pub struct Key {
 
 impl Key {
     pub(crate) const ADDRESS_LEN: usize = ADDRESS_LEN;
-    pub(crate) const PREFIX_LEN: usize = Self::ADDRESS_LEN + crate::schema::U64_LEN;
-    pub(crate) const LEN: usize =
-        Self::PREFIX_LEN + SettlementJobId::BYTE_LEN + crate::schema::U64_LEN;
+    pub(crate) const WALLET_PREFIX_LEN: usize = Self::ADDRESS_LEN;
+    pub(crate) const LEN: usize = Self::ADDRESS_LEN
+        + crate::schema::U64_LEN
+        + SettlementJobId::BYTE_LEN
+        + crate::schema::U64_LEN;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

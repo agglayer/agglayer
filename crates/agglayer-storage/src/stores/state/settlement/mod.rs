@@ -1,7 +1,8 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
+    Address, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
+    SettlementJobResult,
 };
-use rocksdb::WriteBatch;
+use rocksdb::{Direction, WriteBatch};
 
 use super::StateStore;
 use crate::{
@@ -108,6 +109,19 @@ impl SettlementReader for StateStore {
                 ))
             })
             .collect::<Result<Vec<_>, _>>()
+    }
+
+    fn max_settlement_nonce_for_wallet(&self, wallet: Address) -> Result<Option<Nonce>, Error> {
+        let prefix = wallet.into_array();
+        Ok(self
+            .db
+            .prefix_iterator_with_direction::<SettlementAttemptPerWalletColumn, _>(
+                &prefix,
+                Direction::Reverse,
+            )?
+            .next()
+            .transpose()?
+            .map(|(key, _)| Nonce(key.nonce)))
     }
 }
 
