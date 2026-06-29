@@ -1,5 +1,6 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
+    Address, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
+    SettlementJobResult,
 };
 
 use crate::error::Error;
@@ -35,4 +36,7 @@ pub trait SettlementReader: Send + Sync {
         &self,
         settlement_job_id: &SettlementJobId,
     ) -> Result<Vec<(u64, SettlementAttemptResult)>, Error>;
+
+    /// Returns the highest settlement attempt nonce recorded for `wallet`.
+    fn max_settlement_nonce_for_wallet(&self, wallet: Address) -> Result<Option<Nonce>, Error>;
 }
