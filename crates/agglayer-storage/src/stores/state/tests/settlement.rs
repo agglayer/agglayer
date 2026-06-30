@@ -416,6 +416,73 @@ fn insert_settlement_attempt_indexes_by_wallet_and_nonce() {
 }
 
 #[test]
+fn max_settlement_nonce_for_wallet_returns_highest_indexed_nonce() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_job_id(407);
+    let other_job_id = mk_job_id(408);
+    let wallet = Address::from([10; 20]);
+    let max_wallet = Address::from([0xff; 20]);
+    let other_wallet = Address::from([11; 20]);
+    let mut lower_nonce_attempt = mk_settlement_attempt(1);
+    let mut higher_nonce_attempt = mk_settlement_attempt(2);
+    let mut other_wallet_attempt = mk_settlement_attempt(3);
+    let mut max_wallet_lower_nonce_attempt = mk_settlement_attempt(4);
+    let mut max_wallet_higher_nonce_attempt = mk_settlement_attempt(5);
+
+    lower_nonce_attempt.sender_wallet = wallet;
+    lower_nonce_attempt.nonce = Nonce(12);
+    higher_nonce_attempt.sender_wallet = wallet;
+    higher_nonce_attempt.nonce = Nonce(14);
+    other_wallet_attempt.sender_wallet = other_wallet;
+    other_wallet_attempt.nonce = Nonce(99);
+    max_wallet_lower_nonce_attempt.sender_wallet = max_wallet;
+    max_wallet_lower_nonce_attempt.nonce = Nonce(7);
+    max_wallet_higher_nonce_attempt.sender_wallet = max_wallet;
+    max_wallet_higher_nonce_attempt.nonce = Nonce(8);
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(42))
+        .expect("first job insert must succeed");
+    store
+        .insert_settlement_job(&other_job_id, &mk_settlement_job(43))
+        .expect("second job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &lower_nonce_attempt)
+        .expect("lower nonce attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 2, &higher_nonce_attempt)
+        .expect("higher nonce attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&other_job_id, 1, &other_wallet_attempt)
+        .expect("other-wallet attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 3, &max_wallet_lower_nonce_attempt)
+        .expect("max-wallet lower nonce attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 4, &max_wallet_higher_nonce_attempt)
+        .expect("max-wallet higher nonce attempt insert must succeed");
+
+    assert_eq!(
+        store
+            .max_settlement_nonce_for_wallet(wallet)
+            .expect("max nonce lookup must succeed"),
+        Some(Nonce(14))
+    );
+    assert_eq!(
+        store
+            .max_settlement_nonce_for_wallet(max_wallet)
+            .expect("max wallet lookup must succeed"),
+        Some(Nonce(8))
+    );
+    assert_eq!(
+        store
+            .max_settlement_nonce_for_wallet(Address::from([12; 20]))
+            .expect("missing wallet lookup must succeed"),
+        None
+    );
+}
+
+#[test]
 fn get_settlement_job_returns_none_when_missing() {
     let (_tmp, _db, store) = setup_store();
     assert_eq!(

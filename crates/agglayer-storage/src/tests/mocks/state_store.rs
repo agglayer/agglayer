@@ -1,6 +1,6 @@
 use agglayer_types::{
-    primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementAttempt,
+    primitives::Digest, Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, Nonce, SettlementAttempt,
     SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 use mockall::mock;
@@ -152,6 +152,11 @@ mock! {
             &self,
             settlement_job_id: &SettlementJobId,
         ) -> Result<Vec<(u64, SettlementAttemptResult)>, Error>;
+
+        fn max_settlement_nonce_for_wallet(
+            &self,
+            wallet: Address,
+        ) -> Result<Option<Nonce>, Error>;
     }
 
     impl SettlementWriter for StateStore {

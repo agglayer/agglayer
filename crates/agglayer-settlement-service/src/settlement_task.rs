@@ -82,6 +82,8 @@ fn bump_fee(
 enum BuildAttemptError {
     #[error("L1 RPC error while building settlement attempt: {0}")]
     Transport(#[from] TransportError),
+    #[error("failed to assign settlement nonce: {0}")]
+    NonceAssignment(eyre::Error),
     #[error("failed to build or sign settlement transaction: {0}")]
     Build(#[from] TransactionBuilderError<Ethereum>),
 }
@@ -126,6 +128,7 @@ impl BuildRetryPolicy {
                 self.signer_failures += 1;
                 self.signer_failures <= Self::MAX_SIGNER_BUILD_RETRIES
             }
+            BuildAttemptError::NonceAssignment(_) => false,
             BuildAttemptError::Build(_) => false,
         }
     }
@@ -881,6 +884,37 @@ impl<
         .await
     }
 
+    async fn assign_next_nonce_for_wallet(
+        &self,
+        wallet: Address,
+    ) -> Result<Nonce, BuildAttemptError> {
+        let l1_nonce = Nonce(
+            self.provider
+                .get_transaction_count(wallet)
+                .pending()
+                .await?,
+        );
+
+        let Some(max_local_nonce) = self
+            .store
+            .max_settlement_nonce_for_wallet(wallet.into())
+            .wrap_err_with(|| {
+                format!("Failed to inspect recorded settlement attempts for wallet {wallet}")
+            })
+            .map_err(BuildAttemptError::NonceAssignment)?
+        else {
+            return Ok(l1_nonce);
+        };
+
+        let next_local_nonce = Nonce(max_local_nonce.0.checked_add(1).ok_or_else(|| {
+            BuildAttemptError::NonceAssignment(eyre::eyre!(
+                "Unable to assign settlement nonce for wallet {wallet}: nonce overflow"
+            ))
+        })?);
+
+        Ok(l1_nonce.max(next_local_nonce))
+    }
+
     /// Polls an L1 settlement check until it yields a terminal answer, retrying
     /// transient "not ready yet" signals with the not-included backoff. The
     /// inner check returns `Ok(None)` to report a reorg, which the caller turns
@@ -1343,24 +1377,34 @@ impl<
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || async {
-                // These three L1 reads are independent, so fetch them
-                // concurrently to keep each (retried) build to one round-trip.
+                // These fetches are independent, so run them concurrently to
+                // keep each (retried) build to one round-trip.
                 let (nonce, chain_id, estimate, gas_estimate) = tokio::try_join!(
-                    self.provider
-                        .get_transaction_count(wallet)
-                        .pending()
-                        .into_future(),
-                    self.provider.get_chain_id().into_future(),
-                    self.provider.estimate_eip1559_fees().into_future(),
-                    self.provider
-                        .estimate_gas(self.settlement_call_request(wallet))
-                        .into_future(),
+                    self.assign_next_nonce_for_wallet(wallet),
+                    async {
+                        self.provider
+                            .get_chain_id()
+                            .await
+                            .map_err(BuildAttemptError::from)
+                    },
+                    async {
+                        self.provider
+                            .estimate_eip1559_fees()
+                            .await
+                            .map_err(BuildAttemptError::from)
+                    },
+                    async {
+                        self.provider
+                            .estimate_gas(self.settlement_call_request(wallet))
+                            .await
+                            .map_err(BuildAttemptError::from)
+                    },
                 )?;
                 let gas = self.resolve_base_gas_params(&estimate);
                 let tx = self
-                    .build_attempt(wallet, Nonce(nonce), chain_id, gas, gas_estimate)
+                    .build_attempt(wallet, nonce, chain_id, gas, gas_estimate)
                     .await?;
-                Ok((wallet, Nonce(nonce), attempt_number, tx))
+                Ok((wallet, nonce, attempt_number, tx))
             },
             |error| retry_policy.should_retry(error),
         )
@@ -1677,8 +1721,8 @@ mod tests {
         consensus::{Signed, TxEip1559},
         network::EthereumWallet,
         node_bindings::Anvil,
-        primitives::{Signature, TxKind},
-        providers::ProviderBuilder,
+        primitives::{Signature, TxKind, U64},
+        providers::{mock::Asserter, ProviderBuilder},
         rpc::types::TransactionRequest,
         signers::local::PrivateKeySigner,
         transports::TransportErrorKind,
@@ -1810,18 +1854,35 @@ mod tests {
         store: Arc<MockStateStore>,
         attempts: ActiveSettlementAttempts,
     ) -> SettlementTask<impl Provider + WalletProvider + 'static, MockStateStore> {
+        mk_task_with_id_and_provider(job_id, mk_provider(), store, attempts)
+    }
+
+    fn mk_task_with_provider<L1Provider: Provider + WalletProvider + 'static>(
+        provider: L1Provider,
+        store: Arc<MockStateStore>,
+        attempts: ActiveSettlementAttempts,
+    ) -> SettlementTask<L1Provider, MockStateStore> {
+        mk_task_with_id_and_provider(SettlementJobId::from(1u128), provider, store, attempts)
+    }
+
+    fn mk_task_with_id_and_provider<L1Provider: Provider + WalletProvider + 'static>(
+        job_id: SettlementJobId,
+        provider: L1Provider,
+        store: Arc<MockStateStore>,
+        attempts: ActiveSettlementAttempts,
+    ) -> SettlementTask<L1Provider, MockStateStore> {
         SettlementTask {
             id: job_id,
             job: mk_job(),
             tx_config: Arc::new(SettlementTransactionConfig::default()),
-            provider: Arc::new(mk_provider()),
+            provider: Arc::new(provider),
             store,
             control: mk_control(),
             attempts,
         }
     }
 
-    fn mk_task_with_provider<P: Provider + WalletProvider + 'static>(
+    fn mk_task_with_tx_config<P: Provider + WalletProvider + 'static>(
         provider: P,
         tx_config: SettlementTransactionConfig,
     ) -> SettlementTask<P, MockStateStore> {
@@ -1860,6 +1921,14 @@ mod tests {
         )]);
         let task = mk_task(store, attempts);
         assert_eq!(task.next_attempt_number(), SettlementAttemptNumber(6));
+    }
+
+    fn mk_mock_provider_with_pending_nonce(nonce: u64) -> impl Provider + WalletProvider + 'static {
+        let asserter = Asserter::new();
+        asserter.push_success(&U64::from(nonce));
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(test_signer()))
+            .connect_mocked_client(asserter)
     }
 
     async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
@@ -2151,6 +2220,81 @@ mod tests {
                 panic!("completed settlement job should not reload as pending")
             }
         }
+    }
+
+    #[tokio::test]
+    async fn assign_next_nonce_for_wallet_uses_l1_pending_nonce_when_queue_is_empty() {
+        let wallet = Address::from([9; 20]);
+        let expected_wallet: agglayer_types::Address = wallet.into();
+        let mut store = MockStateStore::new();
+        store
+            .expect_max_settlement_nonce_for_wallet()
+            .once()
+            .withf(move |recorded_wallet| *recorded_wallet == expected_wallet)
+            .return_once(|_| Ok(None));
+
+        let task = mk_task_with_provider(
+            mk_mock_provider_with_pending_nonce(5),
+            Arc::new(store),
+            BTreeMap::new(),
+        );
+
+        let nonce = task
+            .assign_next_nonce_for_wallet(wallet)
+            .await
+            .expect("nonce assignment should succeed");
+
+        assert_eq!(nonce, Nonce(5));
+    }
+
+    #[tokio::test]
+    async fn assign_next_nonce_for_wallet_uses_next_local_nonce_when_queue_is_ahead_of_l1() {
+        let wallet = Address::from([10; 20]);
+        let expected_wallet: agglayer_types::Address = wallet.into();
+        let mut store = MockStateStore::new();
+        store
+            .expect_max_settlement_nonce_for_wallet()
+            .once()
+            .withf(move |recorded_wallet| *recorded_wallet == expected_wallet)
+            .return_once(|_| Ok(Some(Nonce(6))));
+
+        let task = mk_task_with_provider(
+            mk_mock_provider_with_pending_nonce(5),
+            Arc::new(store),
+            BTreeMap::new(),
+        );
+
+        let nonce = task
+            .assign_next_nonce_for_wallet(wallet)
+            .await
+            .expect("nonce assignment should succeed");
+
+        assert_eq!(nonce, Nonce(7));
+    }
+
+    #[tokio::test]
+    async fn assign_next_nonce_for_wallet_uses_l1_pending_nonce_when_l1_is_ahead_of_queue() {
+        let wallet = Address::from([11; 20]);
+        let expected_wallet: agglayer_types::Address = wallet.into();
+        let mut store = MockStateStore::new();
+        store
+            .expect_max_settlement_nonce_for_wallet()
+            .once()
+            .withf(move |recorded_wallet| *recorded_wallet == expected_wallet)
+            .return_once(|_| Ok(Some(Nonce(6))));
+
+        let task = mk_task_with_provider(
+            mk_mock_provider_with_pending_nonce(9),
+            Arc::new(store),
+            BTreeMap::new(),
+        );
+
+        let nonce = task
+            .assign_next_nonce_for_wallet(wallet)
+            .await
+            .expect("nonce assignment should succeed");
+
+        assert_eq!(nonce, Nonce(9));
     }
 
     #[tokio::test]
@@ -2553,7 +2697,7 @@ mod tests {
         // The zero address sorts first and is never mined, so the wait must skip it
         // and still resolve on the mined (sender, Nonce(0)).
         let pending = BTreeSet::from([(Address::ZERO, Nonce(0)), (sender, Nonce(0))]);
-        let task = mk_task_with_provider(provider, SettlementTransactionConfig::default());
+        let task = mk_task_with_tx_config(provider, SettlementTransactionConfig::default());
 
         tokio::time::timeout(
             Duration::from_secs(5),
@@ -2576,7 +2720,7 @@ mod tests {
         tx_config.retry_on_not_included_on_l1.initial_interval = Duration::from_secs(3600);
 
         let pending = BTreeSet::from([(sender, Nonce(5))]);
-        let task = mk_task_with_provider(provider, tx_config);
+        let task = mk_task_with_tx_config(provider, tx_config);
 
         assert!(tokio::time::timeout(
             Duration::from_millis(300),
@@ -2600,7 +2744,7 @@ mod tests {
             .expect("get receipt");
         let tx_hash = SettlementTxHash::from(receipt.transaction_hash);
 
-        let task = mk_task_with_provider(provider, SettlementTransactionConfig::default());
+        let task = mk_task_with_tx_config(provider, SettlementTransactionConfig::default());
         let result = task
             .current_result_once(sender, Nonce(0), tx_hash)
             .await
@@ -2628,7 +2772,7 @@ mod tests {
             .expect("send transaction");
         let tx_hash = SettlementTxHash::from(*pending.tx_hash());
 
-        let task = mk_task_with_provider(provider, SettlementTransactionConfig::default());
+        let task = mk_task_with_tx_config(provider, SettlementTransactionConfig::default());
         let result = task
             .current_result_once(sender, Nonce(0), tx_hash)
             .await
@@ -2991,7 +3135,7 @@ mod tests {
         // `Error::message` produces an opaque `Error::Other`, mirroring how a
         // remote signer backend (e.g. GCP KMS) surfaces a signing failure.
         let signer_failure = || {
-            BuildAttemptError::Build(TransactionBuilderError::Signer(
+            BuildAttemptError::from(TransactionBuilderError::Signer(
                 alloy::signers::Error::message("remote signer failure"),
             ))
         };
@@ -3006,7 +3150,7 @@ mod tests {
 
         // A structural build error is never recoverable by retrying.
         let mut policy = BuildRetryPolicy::new();
-        assert!(!policy.should_retry(&BuildAttemptError::Build(
+        assert!(!policy.should_retry(&BuildAttemptError::from(
             TransactionBuilderError::UnsupportedSignatureType
         )));
     }
@@ -3044,7 +3188,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn build_next_attempt_with_new_nonce_uses_pending_nonce_and_default_wallet() {
+    async fn build_next_attempt_with_new_nonce_uses_assigned_nonce_and_default_wallet() {
         use alloy::{
             consensus::Transaction as _, node_bindings::Anvil, providers::ProviderBuilder,
             rpc::types::TransactionRequest,
@@ -3071,12 +3215,20 @@ mod tests {
                 .unwrap();
         }
 
+        let expected_wallet: agglayer_types::Address = wallet_address.into();
+        let mut store = MockStateStore::new();
+        store
+            .expect_max_settlement_nonce_for_wallet()
+            .once()
+            .withf(move |recorded_wallet| *recorded_wallet == expected_wallet)
+            .return_once(|_| Ok(Some(Nonce(6))));
+
         let task = SettlementTask {
             id: mk_job_id(1),
             job: mk_job(),
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
-            store: Arc::new(MockStateStore::new()),
+            store: Arc::new(store),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -3087,9 +3239,9 @@ mod tests {
             .expect("attempt should build");
 
         assert_eq!(used_wallet, wallet_address);
-        assert_eq!(nonce, Nonce(2));
+        assert_eq!(nonce, Nonce(7));
         assert_eq!(attempt_number, SettlementAttemptNumber(0));
-        assert_eq!(envelope.nonce(), 2);
+        assert_eq!(envelope.nonce(), 7);
         assert_eq!(envelope.to(), Some(mk_job().contract_address.into_alloy()));
         assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
         // Fees are within the configured bounds (defaults: floor 0, ceiling 100 gwei).
