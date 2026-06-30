@@ -1153,12 +1153,9 @@ impl<
         )
         .min(max_fee_per_gas);
 
-        let gas_limit_ceiling = u128::try_from(config.gas_limit_ceiling).unwrap_or(u128::MAX);
-        let gas_limit_u128 = config
-            .gas_limit_multiplier_factor
-            .saturating_mul_u128(self.job.gas_limit)
-            .min(gas_limit_ceiling);
-        let gas_limit = u64::try_from(gas_limit_u128).unwrap_or(u64::MAX);
+        // The gas limit cap is the job's gas limit; the multiplier is applied to
+        // the live `eth_estimateGas` result in `build_attempt`, not here.
+        let gas_limit = u64::try_from(self.job.gas_limit).unwrap_or(u64::MAX);
 
         GasParams {
             gas_limit,
@@ -2965,8 +2962,6 @@ mod tests {
     #[test]
     fn resolve_base_gas_params_applies_multiplier_floor_and_ceiling() {
         let config = SettlementTransactionConfig {
-            gas_limit_multiplier_factor: Multiplier::from_u64_per_1000(2000), // 2.0x
-            gas_limit_ceiling: U256::from(150_000u64),
             max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
             max_fee_per_gas_floor: 1_000_000_000,    // 1 gwei
             max_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
@@ -2991,8 +2986,8 @@ mod tests {
 
         let gas = task.resolve_base_gas_params(&estimate);
 
-        // 100_000 * 2.0 = 200_000, capped to ceiling 150_000.
-        assert_eq!(gas.gas_limit, 150_000);
+        // gas_limit passes through the job's gas_limit unchanged.
+        assert_eq!(gas.gas_limit, 100_000);
         assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
         assert_eq!(gas.max_priority_fee_per_gas, 2_000_000_000);
     }
