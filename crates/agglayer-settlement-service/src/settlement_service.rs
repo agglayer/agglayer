@@ -17,6 +17,12 @@ use crate::settlement_task::{
 
 /// The Settlement Service is responsible for managing settlement jobs and
 /// answering settlement result requests.
+///
+/// Once startup recovery completes, every persisted settlement job without a
+/// terminal result is expected to have a running task and in-memory result
+/// watcher. The admin abort escape hatch is the current exception: it can stop
+/// a task without recording a terminal result until the admin API grows an
+/// explicit aborted result.
 #[derive(Educe)]
 #[educe(Clone)]
 pub struct SettlementService<L1Provider, SettlementStore> {
@@ -135,28 +141,76 @@ impl<
             .insert(job_id, result_receiver.clone());
         let task_controls = self.task_controls.clone();
         let result_watchers = self.result_watchers.clone();
+        let tx_config = self.tx_config.clone();
+        let provider = self.provider.clone();
+        let store = self.store.clone();
+        let cancellation_token = self.cancellation_token.clone();
         tokio::task::spawn(async move {
-            match task.run().await {
-                SettlementTaskRunResult::Completed(result) => {
-                    if let Err(error) = result_sender.send(Some(result)) {
-                        error!(
-                            ?error,
-                            ?job_id,
-                            "Failed to send settlement job result to watchers"
-                        );
+            loop {
+                match task.run().await {
+                    SettlementTaskRunResult::Completed(result) => {
+                        if let Err(error) = result_sender.send(Some(result)) {
+                            error!(
+                                ?error,
+                                ?job_id,
+                                "Failed to send settlement job result to watchers"
+                            );
+                        }
+                        task_controls.lock().await.remove(&job_id);
+                        break;
+                    }
+                    SettlementTaskRunResult::Cancelled => {
+                        info!(?job_id, "Settlement task cancelled");
+                        result_watchers.lock().await.remove(&job_id);
+                        task_controls.lock().await.remove(&job_id);
+                        break;
+                    }
+                    SettlementTaskRunResult::ReloadAndRestart => {
+                        info!(?job_id, "Reloading and restarting settlement task");
+                        let (task_control_handle, task_control) =
+                            TaskControlHandle::new(&cancellation_token);
+                        task_controls
+                            .lock()
+                            .await
+                            .insert(job_id, task_control_handle);
+                        match SettlementTask::load(
+                            job_id,
+                            tx_config.clone(),
+                            provider.clone(),
+                            store.clone(),
+                            task_control,
+                        )
+                        .await
+                        {
+                            Ok(StoredSettlementJob::Pending(reloaded_task)) => {
+                                task = reloaded_task;
+                            }
+                            Ok(StoredSettlementJob::Completed(_, result)) => {
+                                if let Err(error) = result_sender.send(Some(result)) {
+                                    error!(
+                                        ?error,
+                                        ?job_id,
+                                        "Failed to send settlement job result to watchers"
+                                    );
+                                }
+                                task_controls.lock().await.remove(&job_id);
+                                break;
+                            }
+                            Err(error) => {
+                                error!(
+                                    ?error,
+                                    ?job_id,
+                                    "Failed to reload settlement task; dropping in-memory task \
+                                     state"
+                                );
+                                result_watchers.lock().await.remove(&job_id);
+                                task_controls.lock().await.remove(&job_id);
+                                break;
+                            }
+                        }
                     }
                 }
-                SettlementTaskRunResult::Cancelled => {
-                    info!(?job_id, "Settlement task cancelled");
-                    result_watchers.lock().await.remove(&job_id);
-                }
-                SettlementTaskRunResult::ReloadAndRestart => {
-                    result_watchers.lock().await.remove(&job_id);
-                    task_controls.lock().await.remove(&job_id);
-                    todo!("Reload and restart settlement tasks");
-                }
             }
-            task_controls.lock().await.remove(&job_id);
         });
         result_receiver
     }
@@ -259,9 +313,11 @@ impl<
             eyre::bail!("No settlement job found for id {job_id}");
         }
 
-        // TODO: Spawn a settlement task for a recovered pending job.
-        // XREF: https://github.com/agglayer/agglayer/issues/1230
-        todo!()
+        error!(
+            ?job_id,
+            "Settlement service invariant broken: pending job exists without running task"
+        );
+        eyre::bail!("Pending settlement job {job_id} exists without a running task");
     }
 }
 
@@ -369,6 +425,9 @@ mod tests {
     };
 
     use super::*;
+    use crate::settlement_task::{
+        SettlementTask, StoredSettlementJob, TaskAdminCommand, TaskControlHandle,
+    };
 
     fn mk_provider() -> impl Provider + WalletProvider + 'static {
         ProviderBuilder::new()
@@ -542,6 +601,117 @@ mod tests {
 
         assert!(error.to_string().contains("No settlement job found for id"));
     }
+
+    #[tokio::test]
+    async fn retrieve_fails_when_pending_job_has_no_running_task() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(5);
+        let job = mk_job(5);
+
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let result = service.retrieve_settlement_result(job_id).await;
+        assert!(
+            result.is_err(),
+            "pending job without a watcher should fail as an invariant break"
+        );
+        let error = result.err().expect("result should be an error");
+
+        assert!(error.to_string().contains("exists without a running task"));
+    }
+
+    #[tokio::test]
+    async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(6);
+        let job = mk_job(6);
+        let completed_result = mk_result(6, ContractCallOutcome::Success);
+        let completed_result_for_store = completed_result.clone();
+        let result_reads = Arc::new(Mutex::new(0usize));
+
+        store
+            .expect_list_settlement_job_ids()
+            .once()
+            .return_once(|| Ok(Vec::new()));
+        store
+            .expect_get_settlement_job()
+            .times(2)
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning({
+                let job = job.clone();
+                move |_| Ok(Some(job.clone()))
+            });
+        store
+            .expect_get_settlement_job_result()
+            .times(2)
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(move |_| {
+                let mut result_reads = result_reads.lock().unwrap();
+                *result_reads += 1;
+                if *result_reads == 1 {
+                    Ok(None)
+                } else {
+                    Ok(Some(completed_result_for_store.clone()))
+                }
+            });
+        store
+            .expect_list_settlement_attempt_results()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+        store
+            .expect_list_settlement_attempts()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+
+        let store = Arc::new(store);
+        let service = mk_service(store).await;
+        let (task_control_handle, task_control) =
+            TaskControlHandle::new(&service.cancellation_token);
+        task_control_handle
+            .try_send(TaskAdminCommand::ReloadAndRestart)
+            .expect("reload command should fit in admin channel");
+        let task = match SettlementTask::load(
+            job_id,
+            service.tx_config.clone(),
+            service.provider.clone(),
+            service.store.clone(),
+            task_control,
+        )
+        .await
+        .expect("settlement task should load")
+        {
+            StoredSettlementJob::Pending(task) => task,
+            StoredSettlementJob::Completed(_, _) => panic!("initial load should be pending"),
+        };
+
+        let mut result_receiver = service
+            .spawn_settlement_task(job_id, task, task_control_handle)
+            .await;
+
+        result_receiver
+            .changed()
+            .await
+            .expect("reload should publish the stored terminal result");
+
+        assert_eq!(result_receiver.borrow().as_ref(), Some(&completed_result));
+        assert!(service.task_controls.lock().await.is_empty());
+        assert!(service.result_watchers.lock().await.contains_key(&job_id));
+    }
+
     #[tokio::test]
     async fn request_new_settlement_records_certificate_link_before_job() {
         let mut store = MockStateStore::new();
