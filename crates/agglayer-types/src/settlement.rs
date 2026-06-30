@@ -1,4 +1,7 @@
-use std::time::SystemTime;
+use std::{
+    sync::{Mutex, OnceLock},
+    time::SystemTime,
+};
 
 use alloy::primitives::Bytes;
 
@@ -22,6 +25,10 @@ use crate::{Address, SettlementTxHash, B256, U256};
 #[serde(transparent)]
 pub struct SettlementJobId(ulid::Ulid);
 
+/// Process-global monotonic ULID generator. A single shared instance is what
+/// guarantees strictly-increasing, unique ids across all concurrent callers.
+static SETTLEMENT_JOB_ID_GENERATOR: OnceLock<Mutex<ulid::Generator>> = OnceLock::new();
+
 impl SettlementJobId {
     pub const BYTE_LEN: usize = std::mem::size_of::<u128>();
 
@@ -43,6 +50,32 @@ impl SettlementJobId {
 
     pub const fn to_be_bytes(&self) -> [u8; Self::BYTE_LEN] {
         self.0.to_bytes()
+    }
+
+    /// Mint a new, unique, monotonically-increasing settlement job id.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the global generator mutex is poisoned (i.e. a thread
+    /// previously panicked while generating an id).
+    #[must_use]
+    pub fn generate() -> Self {
+        loop {
+            let result = {
+                let mut generator = SETTLEMENT_JOB_ID_GENERATOR
+                    .get_or_init(|| Mutex::new(ulid::Generator::new()))
+                    .lock()
+                    .expect("settlement job id generator mutex poisoned");
+                generator.generate()
+            }; // guard dropped here, before any sleep
+
+            match result {
+                Ok(id) => return Self::from(id),
+                // Monotonic overflow within a millisecond is extraordinarily rare;
+                // back off briefly so the timestamp component advances, then retry.
+                Err(_) => std::thread::sleep(std::time::Duration::from_micros(100)),
+            }
+        }
     }
 }
 
@@ -183,4 +216,46 @@ pub struct SettlementAttempt {
     /// `max_priority_fee_per_gas` (wei) of the signed attempt; the baseline a
     /// retry bumps from.
     pub max_priority_fee_per_gas: u128,
+}
+
+#[cfg(test)]
+mod generate_tests {
+    use std::collections::BTreeSet;
+
+    use super::SettlementJobId;
+
+    #[test]
+    fn generate_produces_unique_monotonic_ids() {
+        let mut seen = BTreeSet::new();
+        let mut previous: Option<SettlementJobId> = None;
+        for _ in 0..10_000 {
+            let id = SettlementJobId::generate();
+            assert!(seen.insert(id), "generated a duplicate settlement job id");
+            if let Some(previous) = previous {
+                assert!(id > previous, "settlement job ids must be increasing");
+            }
+            previous = Some(id);
+        }
+    }
+
+    #[test]
+    fn generate_is_unique_across_threads() {
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    (0..2_000)
+                        .map(|_| SettlementJobId::generate())
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+
+        let mut seen = BTreeSet::new();
+        for handle in handles {
+            for id in handle.join().expect("generator thread panicked") {
+                assert!(seen.insert(id), "generated a duplicate settlement job id");
+            }
+        }
+        assert_eq!(seen.len(), 8 * 2_000);
+    }
 }

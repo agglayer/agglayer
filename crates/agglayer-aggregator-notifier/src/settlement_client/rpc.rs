@@ -4,7 +4,7 @@ use agglayer_certificate_orchestrator::{Error, NonceInfo, SettlementClient, TxRe
 use agglayer_config::outbound::OutboundRpcSettleConfig;
 use agglayer_contracts::{rollup::VerifierType, L1TransactionFetcher, RollupContract, Settler};
 use agglayer_storage::stores::{
-    PendingCertificateReader, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+    PendingCertificateReader, PerEpochReader, PerEpochWriter, SettlementJobReserver, StateReader,
 };
 use agglayer_types::{
     CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber,
@@ -56,12 +56,16 @@ impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
     RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
-    StateStore: StateReader,
+    StateStore: StateReader + SettlementJobReserver,
     PendingStore: PendingCertificateReader,
     RollupManagerRpc: RollupContract + Settler,
     PerEpochStore: PerEpochWriter,
 {
-    #[instrument(skip(self), fields(network_id, settlement_params), level = "debug")]
+    #[instrument(
+        skip(self),
+        fields(network_id, settlement_params, settlement_job_id),
+        level = "debug"
+    )]
     async fn submit_certificate_settlement(
         &self,
         certificate_id: CertificateId,
@@ -183,6 +187,12 @@ where
             certificate.custom_chain_data.len()
         );
         tracing::Span::current().record("settlement_params", &settlement_params);
+
+        let settlement_job_id = self.state_store.reserve_settlement_job(&certificate_id)?;
+        tracing::Span::current().record(
+            "settlement_job_id",
+            tracing::field::display(settlement_job_id),
+        );
 
         // Step 6: Call the contract settlement function and get the pending transaction
         let pending_tx = match self
@@ -500,7 +510,7 @@ where
 impl<StateStore, PendingStore, PerEpochStore, RollupManagerRpc> SettlementClient
     for RpcSettlementClient<StateStore, PendingStore, PerEpochStore, RollupManagerRpc>
 where
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + SettlementJobReserver + 'static,
     PendingStore: PendingCertificateReader + 'static,
     RollupManagerRpc: RollupContract + Settler + L1TransactionFetcher + Send + Sync + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,

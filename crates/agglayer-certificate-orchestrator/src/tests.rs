@@ -333,14 +333,6 @@ impl StateWriter for DummyPendingStore {
         todo!()
     }
 
-    fn insert_certificate_settlement_job_id(
-        &self,
-        _certificate_id: &CertificateId,
-        _settlement_job_id: &SettlementJobId,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        unimplemented!()
-    }
-
     fn assign_certificate_to_epoch(
         &self,
         _certificate_id: &CertificateId,
