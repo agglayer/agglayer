@@ -12,7 +12,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
-    CertificateId, CertificateStatusError, EpochNumber, ExecutionMode, Height,
+    CertificateId, CertificateStatus, CertificateStatusError, EpochNumber, ExecutionMode, Height,
     LocalNetworkStateData, NetworkId,
 };
 use arc_swap::ArcSwap;
@@ -434,6 +434,19 @@ where
                                 error: "Failed to add certificate to epoch after retries".to_string(),
                             });
                         };
+
+                        // Persist `Settled` only now that the epoch is assigned: a failed
+                        // assignment above leaves the certificate `Candidate`, recoverable on
+                        // the next run, never durably settled with no epoch.
+                        self.state_store
+                            .update_certificate_header_status(
+                                &certificate_id,
+                                &CertificateStatus::Settled,
+                            )
+                            .map_err(|e| Error::PersistenceError {
+                                certificate_id,
+                                error: e.to_string(),
+                            })?;
 
                         self.state_store
                             .set_latest_settled_certificate_for_network(

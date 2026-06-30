@@ -150,6 +150,19 @@ where
         // issue. When we finally do the storage refactoring, we should remove
         // this.
         if self.header.status == CertificateStatus::Proven {
+            // A settlement job may already exist for this certificate if a previous
+            // run crashed after submitting it but before recording `Candidate`.
+            // Resume that job rather than re-proving and re-submitting (which the
+            // at-most-once guard rejects), so it recovers instead of erroring.
+            if let Some(job_id) = self
+                .state_store
+                .get_certificate_settlement_job_id(&certificate_id)?
+            {
+                info!(%job_id, "Proven certificate already has a settlement job; resuming");
+                self.set_status(CertificateStatus::Candidate)?;
+                return self.process_from_candidate(true).await;
+            }
+
             warn!(
                 "Certificate is already proven but we do not have the new_state anymore... \
                  reproving"
@@ -164,13 +177,11 @@ where
         match &self.header.status {
             CertificateStatus::Pending => self.process_from_pending().await,
             CertificateStatus::Proven => {
-                self.recompute_state().await?;
+                self.recompute_state(self.header.settlement_tx_hash.map(Digest::from))
+                    .await?;
                 self.process_from_proven().await
             }
-            CertificateStatus::Candidate => {
-                self.recompute_state().await?;
-                self.process_from_candidate().await
-            }
+            CertificateStatus::Candidate => self.process_from_candidate(true).await,
             CertificateStatus::Settled => {
                 warn!("Built a CertificateTask for a certificate that is already settled");
                 Ok(())
@@ -182,7 +193,10 @@ where
         }
     }
 
-    async fn recompute_state(&mut self) -> Result<(), CertificateStatusError> {
+    async fn recompute_state(
+        &mut self,
+        before_tx: Option<Digest>,
+    ) -> Result<(), CertificateStatusError> {
         // TODO: once we store network_id -> height -> state and not just network_id ->
         // state, we should not need this any longer, because the state will
         // already be recorded.
@@ -203,13 +217,8 @@ where
         debug!("Recomputing new state for already-proven certificate");
 
         // Recompute the local network state in place; the proof output is unused here.
-        let (_, _, _) = self
-            .certifier_client
-            .witness_generation(
-                &self.certificate,
-                &mut state,
-                self.header.settlement_tx_hash.map(Digest::from),
-            )
+        self.certifier_client
+            .witness_generation(&self.certificate, &mut state, before_tx)
             .await
             .map_err(|error| {
                 error!(
@@ -313,6 +322,11 @@ where
             })?;
         info!(%job_id, "Settlement job submitted");
 
+        // Test hook: crash after the job + cert->job link are persisted but before
+        // `Candidate` is recorded -- the recovery window the resume path above handles.
+        #[cfg(feature = "testutils")]
+        fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
+
         self.set_status(CertificateStatus::Candidate)?;
 
         #[cfg(feature = "testutils")]
@@ -322,7 +336,7 @@ where
             &self.state_store,
         );
 
-        self.process_from_candidate().await
+        self.process_from_candidate(false).await
     }
 
     /// Build the real `verifyPessimisticTrustedAggregator` settlement calldata
@@ -397,7 +411,10 @@ where
         })
     }
 
-    async fn process_from_candidate(&mut self) -> Result<(), CertificateStatusError> {
+    async fn process_from_candidate(
+        &mut self,
+        recompute_local_state: bool,
+    ) -> Result<(), CertificateStatusError> {
         if self.header.status != CertificateStatus::Candidate {
             return Err(CertificateStatusError::InternalError(format!(
                 "CertificateTask::process_from_candidate called with cert status {}",
@@ -439,6 +456,13 @@ where
         let tx_hash = contract_call.tx_hash;
         info!(%tx_hash, "Settlement successful");
 
+        // On reboot the executed state is lost (only persisted on settlement), so
+        // re-derive it from the hash the service actually settled -- not the header's
+        // recorded hash, which can be stale after a reboot. Skipped on the live path.
+        if recompute_local_state {
+            self.recompute_state(Some(Digest::from(tx_hash))).await?;
+        }
+
         // Record the settlement tx hash before marking Settled: the storage
         // layer rejects tx-hash updates on already-settled certificates.
         self.header.settlement_tx_hash = Some(tx_hash);
@@ -461,7 +485,10 @@ where
 
     /// Common finalization logic for all settlement completion paths.
     async fn finalize_settlement(&mut self) -> Result<(), CertificateStatusError> {
-        self.set_status(CertificateStatus::Settled)?;
+        // The network task persists `Settled` once the epoch is assigned, so a
+        // failed assignment leaves the certificate `Candidate` (recoverable) rather
+        // than durably `Settled` with no epoch. Reflect the status in memory only.
+        self.header.status = CertificateStatus::Settled;
         self.send_to_network_task(NetworkTaskMessage::CertificateSettled {
             height: self.header.height,
             certificate_id: self.header.certificate_id,

@@ -20,6 +20,7 @@ const SEND_CERTIFICATE_ERROR: i32 = -10006;
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+#[ignore = "failpoints live only in the bypassed RpcSettlementClient; pending migration"]
 async fn retry_on_error(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();

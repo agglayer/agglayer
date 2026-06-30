@@ -121,6 +121,22 @@ pub async fn start_agglayer(
             .parse()
             .unwrap();
 
+    // Tune settlement for the test L1: it mines ~1s blocks but its "safe" head
+    // lags many blocks, so the prod SafeBlock policy would idle each certificate
+    // for tens of seconds. Settle on latest with one confirmation, and poll a few
+    // seconds apart (kept above the ~1s block time so an attempt is never
+    // abandoned before it can mine, which would resubmit and double-settle).
+    {
+        let tx_config = &mut config.settlement.pessimistic_proof_tx_config;
+        tx_config.settlement_policy =
+            agglayer_config::settlement_service::SettlementPolicy::LatestBlock;
+        tx_config.confirmations = 1;
+        tx_config.retry_on_not_included_on_l1.initial_interval = std::time::Duration::from_secs(3);
+        tx_config.retry_on_not_included_on_l1.max_interval = std::time::Duration::from_secs(6);
+        tx_config.retry_on_transient_failure.initial_interval = std::time::Duration::from_secs(3);
+        tx_config.retry_on_transient_failure.max_interval = std::time::Duration::from_secs(6);
+    }
+
     let config_file = config_path.join("config.toml");
     let toml = toml::to_string_pretty(&config).unwrap();
     std::fs::write(&config_file, toml).unwrap();
