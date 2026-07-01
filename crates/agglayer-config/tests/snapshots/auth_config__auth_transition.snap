@@ -65,6 +65,9 @@ tx-settlement-key-version = 4
 
 [telemetry]
 prometheus-addr = "0.0.0.0:3000"
+slow-storage-op-threshold = "25ms"
+scheduler-lag-probe-interval = "500ms"
+scheduler-lag-warn-threshold = "100ms"
 
 [epoch.block-clock]
 epoch-duration = 6

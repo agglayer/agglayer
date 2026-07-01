@@ -643,6 +643,7 @@ dependencies = [
  "agglayer-interop-types 0.13.0",
  "agglayer-sp1",
  "agglayer-storage",
+ "agglayer-telemetry 0.1.0",
  "agglayer-tries 0.18.0",
  "agglayer-types",
  "alloy-primitives",

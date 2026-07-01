@@ -28,6 +28,7 @@ tracing.workspace = true
 
 agglayer-config.workspace = true
 agglayer-sp1.workspace = true
+agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 agglayer-tries.workspace = true
 pessimistic-proof.workspace = true

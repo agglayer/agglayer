@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::Instant};
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
@@ -30,6 +30,41 @@ pub enum DBError {
 
     #[error("Database was opened in read-only mode")]
     ReadOnlyMode,
+}
+
+/// Times a synchronous RocksDB operation, recording its duration to
+/// [`agglayer_telemetry::storage::OP_DURATION_MS`] and flagging operations that
+/// exceed the configured slow-op threshold (see
+/// [`agglayer_telemetry::storage::slow_op_threshold`]), which may be blocking a
+/// Tokio worker thread.
+///
+/// Note: this covers discrete point/batch operations. Long range scans driven
+/// through [`iterators`] are not timed per item; the remediation for a scan
+/// that shows up as scheduler lag is to run it via
+/// `tokio::task::spawn_blocking`.
+fn timed<T>(op: &'static str, cf: &'static str, f: impl FnOnce() -> T) -> T {
+    let start = Instant::now();
+    let out = f();
+    let elapsed = start.elapsed();
+    let elapsed_ms = elapsed.as_secs_f64() * 1_000.0;
+
+    let attrs = [
+        agglayer_telemetry::KeyValue::new("op", op),
+        agglayer_telemetry::KeyValue::new("cf", cf),
+    ];
+    agglayer_telemetry::storage::OP_DURATION_MS.record(elapsed_ms, &attrs);
+
+    if elapsed >= agglayer_telemetry::storage::slow_op_threshold() {
+        agglayer_telemetry::storage::SLOW_OP.add(1, &attrs);
+        tracing::warn!(
+            op = op,
+            cf = cf,
+            duration_ms = elapsed_ms,
+            "Slow RocksDB operation; may be blocking a Tokio worker thread"
+        );
+    }
+
+    out
 }
 
 /// A physical storage component with an active RocksDB.
@@ -95,12 +130,13 @@ impl DB {
         let key = key.encode()?;
         let cf = self.cf::<C>()?;
 
-        self.rocksdb
-            .get_cf(cf, &key)?
-            .map(|v| C::Value::decode(&v[..]).map_err(Into::into))
-            // If the value is not found, return None.
-            // If the value is found, decode it and wrap it in Some to propagate decode error.
-            .map_or(Ok(None), |v| v.map(Some))
+        timed("get", C::COLUMN_FAMILY_NAME, || {
+            self.rocksdb.get_cf(cf, &key)
+        })?
+        .map(|v| C::Value::decode(&v[..]).map_err(Into::into))
+        // If the value is not found, return None.
+        // If the value is found, decode it and wrap it in Some to propagate decode error.
+        .map_or(Ok(None), |v| v.map(Some))
     }
 
     pub fn atomic_multi_get<C: ColumnSchema>(
@@ -117,12 +153,14 @@ impl DB {
             .into_iter()
             .map(|k| k.encode().map(|key| (cf, key)))
             .collect();
+        let keys = keys?;
 
-        let results = snapshot
-            .multi_get_cf(keys?)
-            .into_iter()
-            .map(|r| r.map_err(DBError::from))
-            .collect::<Result<Vec<Option<_>>, _>>()?;
+        let results = timed("atomic_multi_get", C::COLUMN_FAMILY_NAME, || {
+            snapshot.multi_get_cf(keys)
+        })
+        .into_iter()
+        .map(|r| r.map_err(DBError::from))
+        .collect::<Result<Vec<Option<_>>, _>>()?;
 
         results
             .into_iter()
@@ -139,10 +177,12 @@ impl DB {
     ) -> Result<Vec<Option<C::Value>>, DBError> {
         let cf = self.cf::<C>()?;
         let keys: Result<Vec<_>, _> = keys.into_iter().map(|k| k.encode()).collect();
+        let keys = keys?;
 
-        let results: Result<Vec<Option<DBPinnableSlice>>, _> = self
-            .rocksdb
-            .batched_multi_get_cf(cf, &keys?, false)
+        let results: Result<Vec<Option<DBPinnableSlice>>, _> =
+            timed("multi_get", C::COLUMN_FAMILY_NAME, || {
+                self.rocksdb.batched_multi_get_cf(cf, &keys, false)
+            })
             .into_iter()
             .map(|r| r.map_err(DBError::from))
             .collect();
@@ -163,14 +203,19 @@ impl DB {
         let cf = self.cf::<C>()?;
 
         let write_options = self.write_options()?;
-        self.rocksdb.put_cf_opt(cf, key, value, write_options)?;
+        timed("put", C::COLUMN_FAMILY_NAME, || {
+            self.rocksdb.put_cf_opt(cf, key, value, write_options)
+        })?;
 
         Ok(())
     }
 
     pub fn write_batch(&self, batch: WriteBatch) -> Result<(), DBError> {
         let write_options = self.write_options()?;
-        self.rocksdb.write_opt(batch, write_options)?;
+        // A batch may span multiple column families, so it is tagged with `*`.
+        timed("write_batch", "*", || {
+            self.rocksdb.write_opt(batch, write_options)
+        })?;
 
         Ok(())
     }
@@ -272,7 +317,11 @@ impl DB {
         let key = key.encode()?;
 
         let write_options = self.write_options()?;
-        Ok(self.rocksdb.delete_cf_opt(&cf, key, write_options)?)
+        timed("delete", C::COLUMN_FAMILY_NAME, || {
+            self.rocksdb.delete_cf_opt(&cf, key, write_options)
+        })?;
+
+        Ok(())
     }
 
     pub(crate) fn raw_rocksdb(&self) -> &rocksdb::DB {
