@@ -31,8 +31,9 @@ pub trait SettlementServiceTrait: Send + Sync {
 
     /// Wait for a previously submitted job to reach a terminal result.
     ///
-    /// Resolves from the running task when the job is still in flight, or from
-    /// storage when it already completed (e.g. after a reboot).
+    /// Resolves from the running task while the job is in flight (the service
+    /// re-spawns a task + watcher for every pending job on startup), or from
+    /// storage when the job already reached a terminal result.
     async fn wait_for_settlement(
         &self,
         job_id: SettlementJobId,

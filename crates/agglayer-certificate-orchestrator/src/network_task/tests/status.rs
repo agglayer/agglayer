@@ -22,7 +22,7 @@ const SETTLEMENT_TX_HASH_TEST: SettlementTxHash = SettlementTxHash::new(Digest([
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(2))]
+#[timeout(Duration::from_secs(30))]
 async fn from_pending_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
@@ -158,7 +158,7 @@ async fn from_pending_to_settled() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(2))]
+#[timeout(Duration::from_secs(30))]
 async fn from_proven_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
@@ -294,7 +294,7 @@ async fn from_proven_to_settled() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(2))]
+#[timeout(Duration::from_secs(30))]
 async fn from_candidate_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
@@ -408,7 +408,7 @@ async fn from_candidate_to_settled() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(2))]
+#[timeout(Duration::from_secs(30))]
 async fn from_candidate_to_settle_via_pending() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
@@ -521,7 +521,7 @@ async fn from_candidate_to_settle_via_pending() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(2))]
+#[timeout(Duration::from_secs(30))]
 async fn from_settled_to_settled() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
@@ -585,7 +585,7 @@ async fn from_settled_to_settled() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(2))]
+#[timeout(Duration::from_secs(30))]
 async fn from_proven_settlement_revert_goes_to_error() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);

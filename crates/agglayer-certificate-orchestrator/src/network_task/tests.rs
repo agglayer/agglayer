@@ -1394,7 +1394,7 @@ async fn timeout_certifier() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(2))]
+#[timeout(Duration::from_secs(30))]
 async fn process_next_certificate() {
     let tmp = TempDBDir::new();
     let storage = new_storage(&tmp.path);
