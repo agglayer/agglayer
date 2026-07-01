@@ -37,11 +37,11 @@ fn init_db_adds_legacy_missing_cfs() {
     use std::collections::BTreeSet;
 
     use crate::columns::{
-        certificate_settlement_job::CertificateSettlementJobColumn,
         disabled_networks::DisabledNetworksColumn,
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
+        settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
     };
 
@@ -68,7 +68,7 @@ fn init_db_adds_legacy_missing_cfs() {
 
     for expected in [
         DisabledNetworksColumn::COLUMN_FAMILY_NAME,
-        CertificateSettlementJobColumn::COLUMN_FAMILY_NAME,
+        SettlementJobIdPerCertificateIdColumn::COLUMN_FAMILY_NAME,
         SettlementJobsColumn::COLUMN_FAMILY_NAME,
         SettlementJobResultsColumn::COLUMN_FAMILY_NAME,
         SettlementAttemptsColumn::COLUMN_FAMILY_NAME,
@@ -84,10 +84,10 @@ fn init_db_adds_legacy_missing_cfs() {
 }
 
 #[test]
-fn init_db_adds_certificate_settlement_job_cf_to_v1_schema() {
+fn init_db_adds_settlement_job_id_per_certificate_id_cf_to_v1_schema() {
     use std::collections::BTreeSet;
 
-    use crate::columns::certificate_settlement_job::CertificateSettlementJobColumn;
+    use crate::columns::settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn;
 
     let tmp = TempDBDir::new();
     {
@@ -111,9 +111,25 @@ fn init_db_adds_certificate_settlement_job_cf_to_v1_schema() {
             .collect();
 
     assert!(
-        post_cfs.contains(CertificateSettlementJobColumn::COLUMN_FAMILY_NAME),
+        post_cfs.contains(SettlementJobIdPerCertificateIdColumn::COLUMN_FAMILY_NAME),
         "expected CF {:?} to be present after init_db; got {post_cfs:?}",
-        CertificateSettlementJobColumn::COLUMN_FAMILY_NAME
+        SettlementJobIdPerCertificateIdColumn::COLUMN_FAMILY_NAME
+    );
+    drop(db);
+}
+
+#[test]
+fn init_db_creates_certificate_id_per_settlement_job_id_cf() {
+    use crate::columns::certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn;
+
+    let tmp = crate::tests::TempDBDir::new();
+    let db = StateStore::init_db(tmp.path.as_path()).expect("init db");
+    let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), tmp.path.as_path())
+        .expect("list cf names");
+    assert!(
+        cfs.contains(&CertificateIdPerSettlementJobIdColumn::COLUMN_FAMILY_NAME.to_string()),
+        "expected reverse CF {} to exist",
+        CertificateIdPerSettlementJobIdColumn::COLUMN_FAMILY_NAME
     );
     drop(db);
 }
