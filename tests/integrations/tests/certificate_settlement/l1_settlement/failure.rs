@@ -48,8 +48,8 @@ async fn transaction_with_receipt_status_0(#[case] state: Forest) {
 /// *corrected* certificate: a new id gets a fresh settlement job and settles.
 /// Re-sending the *same* cert can't recover -- the at-most-once job guard
 /// rejects a second job for the same id, and a deterministic revert would just
-/// repeat anyway. An empty cert's only id-affecting free field is `metadata`, so
-/// bumping it stands in for corrected content.
+/// repeat anyway. An empty cert's only id-affecting free field is `metadata`,
+/// so bumping it stands in for corrected content.
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
@@ -130,8 +130,9 @@ async fn transaction_without_receipt_settles(#[case] state: Forest) {
 }
 
 /// The nonce-based service has no "too many settlement transactions" cap: it
-/// keeps resubmitting for the nonce until one is included, so many non-inclusion
-/// cycles still end `Settled`. (The old too-many-txs -> InError give-up is gone.)
+/// keeps resubmitting for the nonce until one is included, so many
+/// non-inclusion cycles still end `Settled`. (The old too-many-txs -> InError
+/// give-up is gone.)
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
