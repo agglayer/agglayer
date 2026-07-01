@@ -38,8 +38,9 @@ pub enum DBError {
 /// Tokio worker thread.
 ///
 /// Note: this covers discrete point/batch operations. Long range scans driven
-/// through [`iterators`] are not timed per item; the remediation for a scan that
-/// shows up as scheduler lag is to run it via `tokio::task::spawn_blocking`.
+/// through [`iterators`] are not timed per item; the remediation for a scan
+/// that shows up as scheduler lag is to run it via
+/// `tokio::task::spawn_blocking`.
 fn timed<T>(op: &'static str, cf: &'static str, f: impl FnOnce() -> T) -> T {
     let start = Instant::now();
     let out = f();

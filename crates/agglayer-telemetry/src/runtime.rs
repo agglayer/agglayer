@@ -2,9 +2,9 @@
 //!
 //! These instruments surface scheduler stalls: if a worker thread is blocked
 //! (for example by a synchronous RocksDB call on an async thread), ready tasks
-//! are not polled and even a trivial endpoint such as `/health` appears to hang.
-//! They are populated by a lightweight probe and require no `tokio_unstable`
-//! build flags.
+//! are not polled and even a trivial endpoint such as `/health` appears to
+//! hang. They are populated by a lightweight probe and require no
+//! `tokio_unstable` build flags.
 
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*};
