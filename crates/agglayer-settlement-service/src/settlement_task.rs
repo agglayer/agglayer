@@ -876,6 +876,12 @@ impl<
         wallet: Address,
         nonce: Nonce,
     ) -> Result<Option<SettlementTxHash>, RetryCallbackError<TransportError>> {
+        // Test-only failpoint: pretend the nonce is not yet included on L1 so the
+        // run loop keeps waiting and resubmits. Compiled out of production builds.
+        #[cfg(feature = "testutils")]
+        if fail::eval("settlement::tx_not_included", |_| true).unwrap_or(false) {
+            return Ok(None);
+        }
         crate::utils::retry_alloy_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
@@ -975,11 +981,19 @@ impl<
         nonce: Nonce,
         tx_hash: SettlementTxHash,
     ) -> Result<Option<ContractCallResult>, WaitForSettlementError> {
-        if let Some(receipt) = self
+        let receipt = self
             .provider
             .get_transaction_receipt(tx_hash.into())
-            .await?
-        {
+            .await?;
+
+        // Test-only failpoint: hide an otherwise-available receipt so the run loop
+        // treats it as indexing lag and keeps polling. Compiled out of production.
+        #[cfg(feature = "testutils")]
+        let receipt = receipt.filter(|_| {
+            !fail::eval("settlement::receipt_transiently_unavailable", |_| true).unwrap_or(false)
+        });
+
+        if let Some(receipt) = receipt {
             return match crate::utils::contract_call_result_from_receipt(&receipt) {
                 Some(result) => Ok(Some(result)),
                 None => Err(WaitForSettlementError::NotSettledYet),

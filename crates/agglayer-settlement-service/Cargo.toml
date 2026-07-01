@@ -14,6 +14,7 @@ async-trait.workspace = true
 derive_more.workspace = true
 educe.workspace = true
 eyre.workspace = true
+fail.workspace = true
 mockall = { workspace = true, optional = true }
 rand.workspace = true
 thiserror.workspace = true
