@@ -48,6 +48,20 @@ impl SettlementJobWatcher {
     pub fn job_id(&self) -> SettlementJobId {
         self.job_id
     }
+
+    /// Wait until the job produces a result, then return it.
+    ///
+    /// Uses `wait_for(Option::is_some)` rather than `changed()` so a result
+    /// that landed before this call is not missed.
+    pub async fn wait_for_result(&mut self) -> eyre::Result<SettlementJobResult> {
+        let result = self
+            .watcher
+            .wait_for(|value| value.is_some())
+            .await
+            .map_err(|_| eyre::eyre!("settlement job watcher closed before producing a result"))?
+            .clone();
+        result.ok_or_else(|| eyre::eyre!("settlement job completed with no result"))
+    }
 }
 
 pub enum RetrievedSettlementResult {

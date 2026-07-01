@@ -40,7 +40,6 @@ cleanup() {
 trap cleanup EXIT
 
 container_id=$(docker run -d -p 127.0.0.1::8545 "$DOCKER_IMAGE")
-docker cp "$container_id":/config/genesis.json "$workdir/genesis.json"
 docker cp "$container_id":/config/deploy_output.json "$workdir/deploy_output.json"
 
 docker_binding=$(docker port "$container_id" 8545/tcp)
@@ -60,16 +59,47 @@ cast block-number --rpc-url "$docker_rpc" >/dev/null 2>&1 || {
     exit 1
 }
 
+# The Docker contracts chain keeps mining while it finishes deploying, and its
+# RPC answers well before the deployment completes (notably under slow/emulated
+# Docker, e.g. the amd64 image on arm64). Wait for the block height to stop
+# advancing before snapshotting it, so the replay captures the fully deployed
+# chain rather than a mid-deployment prefix.
+stable_count=0
+previous_block=""
+for _ in $(seq 1 240); do
+    current_block=$(cast block-number --rpc-url "$docker_rpc" 2>/dev/null || echo "")
+    if [ -n "$current_block" ] && [ "$current_block" = "$previous_block" ]; then
+        stable_count=$((stable_count + 1))
+    else
+        stable_count=0
+    fi
+    if [ "$stable_count" -ge 5 ]; then
+        break
+    fi
+    previous_block=$current_block
+    sleep 1
+done
+
+# Fail fast if the source image drifted from the deployment the committed fixture
+# and the integration tests expect: PolygonRollupManager must be deployed at the
+# address the loader looks for.
+docker_manager_code=$(cast code 0x0B306BF915C4d645ff596e518fAf3F9669b97016 --rpc-url "$docker_rpc")
+if [ "$docker_manager_code" = "0x" ]; then
+    printf 'Source image did not deploy PolygonRollupManager at the expected address (current block %s); hermeznetwork/geth-zkevm-contracts may have drifted from the committed fixture.\n' "$current_block" >&2
+    exit 1
+fi
+
 replay_rpc="http://${ANVIL_HOST}:${ANVIL_PORT}"
 
 anvil \
-    --init "$workdir/genesis.json" \
     --host "$ANVIL_HOST" \
     --port "$ANVIL_PORT" \
     --chain-id 1337 \
     --no-mining \
     --order fifo \
     --auto-impersonate \
+    --preserve-historical-states \
+    --dump-state "$FIXTURE_DIR/state.json" \
     >"$workdir/anvil.log" 2>&1 &
 replay_pid=$!
 
@@ -86,9 +116,10 @@ cast block-number --rpc-url "$replay_rpc" >/dev/null 2>&1 || {
     exit 1
 }
 
-# The shipped genesis is only the deployment base. Patch in the live Docker
-# block-0 EOAs before replaying blocks so the later transactions reproduce
-# exactly.
+# Anvil starts from its own default genesis (the Docker chain's block 0 has no
+# predeploys -- everything is deployed by the replayed transactions). Patch in the
+# live Docker block-0 EOAs before replaying blocks so the later transactions
+# reproduce exactly.
 #
 # Address groups below:
 # - the first 10 addresses are the standard Foundry mnemonic accounts
@@ -165,9 +196,6 @@ EOF
     cast rpc --rpc-url "$replay_rpc" anvil_mine 1 >/dev/null
 done
 
-state_blob=$(cast rpc --rpc-url "$replay_rpc" anvil_dumpState | tr -d '"')
-printf '%s' "$state_blob" > "$FIXTURE_DIR/state.hex"
-
 manager_code=$(cast code 0x0B306BF915C4d645ff596e518fAf3F9669b97016 --rpc-url "$replay_rpc")
 init_logs=$(cast rpc --rpc-url "$replay_rpc" eth_getLogs '{"fromBlock":"0x0","toBlock":"latest","address":"0x610178dA211FEF7D417bC0e6FeD39F05609AD788"}')
 default_l1_info_root=$(cast call 0x610178dA211FEF7D417bC0e6FeD39F05609AD788 'l1InfoRootMap(uint32)(bytes32)' 0 --rpc-url "$replay_rpc")
@@ -182,7 +210,21 @@ if [ "$init_logs" = '[]' ]; then
     exit 1
 fi
 
-# Record the anvil/foundry version that produced this fixture. anvil_dumpState's
+# Persist the chain state. Stopping anvil triggers its `--dump-state`, which --
+# unlike the `anvil_dumpState` RPC -- serializes the per-block historical states
+# kept by `--preserve-historical-states`. `eth_getTransactionBySenderAndNonce`
+# needs those to resolve a settled nonce after the fixture is reloaded with
+# `anvil --load-state`.
+kill -INT "$replay_pid"
+wait "$replay_pid" 2>/dev/null || true
+replay_pid=""
+
+if [ ! -s "$FIXTURE_DIR/state.json" ]; then
+    printf 'anvil did not write the state dump to %s/state.json\n' "$FIXTURE_DIR" >&2
+    exit 1
+fi
+
+# Record the anvil/foundry version that produced this fixture. anvil's state-dump
 # serialized format is coupled to the foundry version, so the loader (and CI, via
 # foundry-toolchain in .github/workflows/test.yml) must use a matching anvil.
 # Extract the semver token from the first line rather than stripping to the last
@@ -209,4 +251,4 @@ jq -n \
         deploy_output: $deploy_output[0]
     }' > "$FIXTURE_DIR/metadata.json"
 
-printf 'wrote %s/state.hex\n' "$FIXTURE_DIR"
+printf 'wrote %s/state.json\n' "$FIXTURE_DIR"

@@ -16,54 +16,6 @@ mod recovery;
 
 const SEND_CERTIFICATE_ERROR: i32 = -10006;
 
-#[rstest]
-#[tokio::test]
-#[timeout(Duration::from_secs(180))]
-#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
-async fn retry_on_error(#[case] state: Forest) {
-    let tmp_dir = TempDBDir::new();
-    let scenario = FailScenario::setup();
-
-    fail::cfg(
-        "notifier::packer::settle_certificate::gas_estimate::low_gas",
-        "return",
-    )
-    .expect("Failed to configure failpoint");
-
-    // L1 is a RAII guard
-    let (_handle, _l1, client) = setup_network(&tmp_dir.path, None, None).await;
-
-    let withdrawals = vec![];
-
-    let certificate = state.clone().apply_events(&[], &withdrawals);
-
-    let certificate_id: CertificateId = client
-        .request("interop_sendCertificate", rpc_params![certificate.clone()])
-        .await
-        .unwrap();
-
-    let result = wait_for_settlement_or_error!(client, certificate_id).await;
-
-    assert!(matches!(result.status, CertificateStatus::InError { .. }));
-
-    fail::cfg(
-        "notifier::packer::settle_certificate::gas_estimate::low_gas",
-        "off",
-    )
-    .expect("Failed to configure failpoint");
-
-    let certificate_id: CertificateId = client
-        .request("interop_sendCertificate", rpc_params![certificate])
-        .await
-        .unwrap();
-
-    let result = wait_for_settlement_or_error!(client, certificate_id).await;
-
-    assert!(matches!(result.status, CertificateStatus::Settled));
-
-    scenario.teardown();
-}
-
 /// Validate that a certificate that has been proven and sent to L1 can't be
 /// replaced in the pending-pool.
 #[rstest]

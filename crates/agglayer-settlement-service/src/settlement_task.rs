@@ -876,6 +876,12 @@ impl<
         wallet: Address,
         nonce: Nonce,
     ) -> Result<Option<SettlementTxHash>, RetryCallbackError<TransportError>> {
+        // Test-only failpoint: pretend the nonce is not yet included on L1 so the
+        // run loop keeps waiting and resubmits. Compiled out of production builds.
+        #[cfg(feature = "testutils")]
+        if fail::eval("settlement::tx_not_included", |_| true).unwrap_or(false) {
+            return Ok(None);
+        }
         crate::utils::retry_alloy_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
@@ -975,11 +981,19 @@ impl<
         nonce: Nonce,
         tx_hash: SettlementTxHash,
     ) -> Result<Option<ContractCallResult>, WaitForSettlementError> {
-        if let Some(receipt) = self
+        let receipt = self
             .provider
             .get_transaction_receipt(tx_hash.into())
-            .await?
-        {
+            .await?;
+
+        // Test-only failpoint: hide an otherwise-available receipt so the run loop
+        // treats it as indexing lag and keeps polling. Compiled out of production.
+        #[cfg(feature = "testutils")]
+        let receipt = receipt.filter(|_| {
+            !fail::eval("settlement::receipt_transiently_unavailable", |_| true).unwrap_or(false)
+        });
+
+        if let Some(receipt) = receipt {
             return match crate::utils::contract_call_result_from_receipt(&receipt) {
                 Some(result) => Ok(Some(result)),
                 None => Err(WaitForSettlementError::NotSettledYet),
@@ -1153,12 +1167,9 @@ impl<
         )
         .min(max_fee_per_gas);
 
-        let gas_limit_ceiling = u128::try_from(config.gas_limit_ceiling).unwrap_or(u128::MAX);
-        let gas_limit_u128 = config
-            .gas_limit_multiplier_factor
-            .saturating_mul_u128(self.job.gas_limit)
-            .min(gas_limit_ceiling);
-        let gas_limit = u64::try_from(gas_limit_u128).unwrap_or(u64::MAX);
+        // The gas limit cap is the job's gas limit; the multiplier is applied to
+        // the live `eth_estimateGas` result in `build_attempt`, not here.
+        let gas_limit = u64::try_from(self.job.gas_limit).unwrap_or(u64::MAX);
 
         GasParams {
             gas_limit,
@@ -1238,8 +1249,25 @@ impl<
         })
     }
 
+    /// The settlement contract call (`from`/`to`/`value`/`input`) without
+    /// nonce, gas, or fees — shared by gas-limit estimation and the final
+    /// attempt build.
+    fn settlement_call_request(&self, wallet: Address) -> TransactionRequest {
+        TransactionRequest::default()
+            .from(wallet)
+            .to(self.job.contract_address.into_alloy())
+            .value(self.job.eth_value)
+            .input(self.job.calldata.clone().into())
+    }
+
     /// Builds and signs an EIP-1559 settlement transaction for [`Self::job`]
     /// with the given wallet, nonce, chain id, and resolved gas parameters.
+    ///
+    /// `gas_estimate` is the `eth_estimateGas` result for the call; the gas
+    /// limit is that estimate scaled by the configured multiplier and
+    /// capped at the resolved ceiling (`gas.gas_limit`). Estimating the
+    /// limit (rather than using the raw job limit) keeps it under the L1
+    /// block gas limit.
     ///
     /// `wallet` sets the `from` field and must have a registered signer in the
     /// provider's wallet; otherwise signing fails with a signer-missing error.
@@ -1249,14 +1277,20 @@ impl<
         nonce: Nonce,
         chain_id: u64,
         gas: GasParams,
+        gas_estimate: u64,
     ) -> Result<TxEnvelope, TransactionBuilderError<Ethereum>> {
-        let request = TransactionRequest::default()
-            .from(wallet)
-            .to(self.job.contract_address.into_alloy())
-            .value(self.job.eth_value)
-            .input(self.job.calldata.clone().into())
+        let gas_limit = u64::try_from(
+            self.tx_config
+                .gas_limit_multiplier_factor
+                .saturating_mul_u128(gas_estimate as u128)
+                .min(gas.gas_limit as u128),
+        )
+        .unwrap_or(gas.gas_limit);
+
+        let request = self
+            .settlement_call_request(wallet)
             .nonce(nonce.0)
-            .gas_limit(gas.gas_limit)
+            .gas_limit(gas_limit)
             .max_fee_per_gas(gas.max_fee_per_gas)
             .max_priority_fee_per_gas(gas.max_priority_fee_per_gas)
             .with_chain_id(chain_id);
@@ -1301,9 +1335,12 @@ impl<
                 // The nonce is fixed; only chain id and the fee estimate are
                 // read, concurrently, to keep each (retried) build to one
                 // round-trip.
-                let (chain_id, estimate) = tokio::try_join!(
+                let (chain_id, estimate, gas_estimate) = tokio::try_join!(
                     self.provider.get_chain_id().into_future(),
                     self.provider.estimate_eip1559_fees().into_future(),
+                    self.provider
+                        .estimate_gas(self.settlement_call_request(wallet))
+                        .into_future(),
                 )?;
                 let gas = match live_tx_fees {
                     Some((previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) => {
@@ -1322,7 +1359,9 @@ impl<
                         self.resolve_base_gas_params(&estimate)
                     }
                 };
-                let tx = self.build_attempt(wallet, nonce, chain_id, gas).await?;
+                let tx = self
+                    .build_attempt(wallet, nonce, chain_id, gas, gas_estimate)
+                    .await?;
                 Ok(Some((attempt_number, tx)))
             },
             |error| retry_policy.should_retry(error),
@@ -1349,9 +1388,9 @@ impl<
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || async {
-                // These three L1 reads are independent, so fetch them
-                // concurrently to keep each (retried) build to one round-trip.
-                let (nonce, chain_id, estimate) = tokio::try_join!(
+                // These fetches are independent, so run them concurrently to
+                // keep each (retried) build to one round-trip.
+                let (nonce, chain_id, estimate, gas_estimate) = tokio::try_join!(
                     self.assign_next_nonce_for_wallet(wallet),
                     async {
                         self.provider
@@ -1365,9 +1404,17 @@ impl<
                             .await
                             .map_err(BuildAttemptError::from)
                     },
+                    async {
+                        self.provider
+                            .estimate_gas(self.settlement_call_request(wallet))
+                            .await
+                            .map_err(BuildAttemptError::from)
+                    },
                 )?;
                 let gas = self.resolve_base_gas_params(&estimate);
-                let tx = self.build_attempt(wallet, nonce, chain_id, gas).await?;
+                let tx = self
+                    .build_attempt(wallet, nonce, chain_id, gas, gas_estimate)
+                    .await?;
                 Ok((wallet, nonce, attempt_number, tx))
             },
             |error| retry_policy.should_retry(error),
@@ -2929,8 +2976,6 @@ mod tests {
     #[test]
     fn resolve_base_gas_params_applies_multiplier_floor_and_ceiling() {
         let config = SettlementTransactionConfig {
-            gas_limit_multiplier_factor: Multiplier::from_u64_per_1000(2000), // 2.0x
-            gas_limit_ceiling: U256::from(150_000u64),
             max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
             max_fee_per_gas_floor: 1_000_000_000,    // 1 gwei
             max_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
@@ -2955,8 +3000,8 @@ mod tests {
 
         let gas = task.resolve_base_gas_params(&estimate);
 
-        // 100_000 * 2.0 = 200_000, capped to ceiling 150_000.
-        assert_eq!(gas.gas_limit, 150_000);
+        // gas_limit passes through the job's gas_limit unchanged.
+        assert_eq!(gas.gas_limit, 100_000);
         assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
         assert_eq!(gas.max_priority_fee_per_gas, 2_000_000_000);
     }
@@ -3132,8 +3177,10 @@ mod tests {
             max_priority_fee_per_gas: 1_000_000_000,
         };
 
+        // gas_estimate == gas.gas_limit with the default 1.0x multiplier caps the
+        // resolved limit at 100_000, keeping the asserted value deterministic.
         let envelope = task
-            .build_attempt(wallet_address, Nonce(9), 1337, gas)
+            .build_attempt(wallet_address, Nonce(9), 1337, gas, 100_000)
             .await
             .expect("attempt should build");
 

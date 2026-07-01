@@ -29,13 +29,23 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
     // startup.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
 
+    // Cancel (graceful shutdown) then panic when the failpoint fires, so the node
+    // actually stops and `agglayer_shutdowned` resolves -- a plain panic only kills
+    // the runtime thread without shutting the node down.
     for f in failpoints {
-        fail::cfg(*f, "panic(killing node)").expect("Failed to configure failpoint");
+        let token = cancellation_token.clone();
+        fail::cfg_callback(*f, move || {
+            token.cancel();
+            panic!("killing node");
+        })
+        .expect("Failed to configure failpoint");
     }
 
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) = setup_network(&tmp_dir.path, None, None).await;
+    let (agglayer_shutdowned, l1, client) =
+        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
     let withdrawals = vec![];
     let imported_bridge_events = vec![];
     let certificate = state
@@ -67,9 +77,9 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     // Settle one certificate, shutdown node.
-    // Send other certificate settlement tx and on timeout (but tx has settled in
-    // the background), shutdown node. Try to recover after starting up agglayer
-    // for the second time.
+    // Submit a second certificate and shut the node down right after it is recorded
+    // `Candidate` (its settlement tx is in flight and settles in the background).
+    // Try to recover after starting up agglayer for the second time.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
     let cancellation_token = CancellationToken::new();
@@ -102,7 +112,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     tokio::time::sleep(Duration::from_secs(20)).await;
 
     fail::cfg_callback(
-        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
+        "certificate_task::process_impl::candidate_recorded",
         move || cancellation_token.cancel(),
     )
     .expect("Failed to configure failpoint");
@@ -129,11 +139,8 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     println!("Node killed for the second time, recovering...");
 
-    fail::cfg(
-        "notifier::packer::settle_certificate::receipt_future_ended::timeout",
-        "off",
-    )
-    .expect("Failed to configure failpoint");
+    fail::cfg("certificate_task::process_impl::candidate_recorded", "off")
+        .expect("Failed to configure failpoint");
 
     tokio::time::sleep(Duration::from_secs(30)).await;
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
