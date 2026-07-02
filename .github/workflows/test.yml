@@ -67,7 +67,7 @@ jobs:
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          # Pinned so CI's anvil can decode the committed state.hex fixture.
+          # Pinned so CI's anvil can decode the committed state.json fixture.
           # anvil_dumpState's format is foundry-version-coupled, so this must
           # match the version the fixture was generated with (recorded as
           # `foundry_version` in tests/integrations/fixtures/anvil-l1/metadata.json).

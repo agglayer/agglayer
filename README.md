@@ -212,7 +212,7 @@ If you need to regenerate the fixture after the contracts image changes, run:
 tests/integrations/scripts/generate_anvil_l1_fixture.sh
 ```
 
-This rebuilds `tests/integrations/fixtures/anvil-l1/state.hex`
+This rebuilds `tests/integrations/fixtures/anvil-l1/state.json`
 from `hermeznetwork/geth-zkevm-contracts`.
 
 If you need to compare behavior against the legacy backend,
@@ -222,7 +222,7 @@ set `AGGLAYER_INTEGRATION_L1_BACKEND=docker` before running the tests.
 
 If the fixture needs to be refreshed,
 re-run `tests/integrations/scripts/generate_anvil_l1_fixture.sh`
-and commit both the updated `state.hex` and `metadata.json` files.
+and commit both the updated `state.json` and `metadata.json` files.
 
 Also, there are quite a few intermittent failures in the tests, that can be helped thanks to the suggested `--retries 2`.
 
