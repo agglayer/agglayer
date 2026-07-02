@@ -274,15 +274,6 @@ impl<
         certificate_id: Option<CertificateId>,
         job: SettlementJob,
     ) -> eyre::Result<SettlementJobWatcher> {
-        // Resolve the gas limit before `create` persists the job/link, so a
-        // deterministic `estimateGas` failure fails here, not on every restart.
-        let job = crate::settlement_task::resolve_settlement_gas_limit(
-            self.provider.as_ref(),
-            self.tx_config.as_ref(),
-            job,
-            &self.cancellation_token,
-        )
-        .await?;
         let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
         let (job_id, task) = SettlementTask::create(
             certificate_id,
@@ -788,7 +779,7 @@ mod tests {
                 }
             });
 
-        // Resolution calls `estimateGas` before persisting; answer it above the
+        // `create` runs `estimateGas` before persisting; answer it above the
         // ceiling so the stored limit is unchanged. Live token for estimation,
         // then cancel to stop the spawned task.
         let cancellation_token = CancellationToken::new();

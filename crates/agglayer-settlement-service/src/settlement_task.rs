@@ -354,7 +354,7 @@ fn settlement_call_request(job: &SettlementJob, wallet: Address) -> TransactionR
 /// job and cert->job-id link are persisted, so a deterministic `estimateGas`
 /// failure fails here rather than on every restart of a persisted job.
 /// Transient RPC failures retry; deterministic ones propagate.
-pub(crate) async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
+async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
     provider: &P,
     tx_config: &SettlementTransactionConfig,
     mut job: SettlementJob,
@@ -398,6 +398,13 @@ impl<
         store: Arc<SettlementStore>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
+        let job = resolve_settlement_gas_limit(
+            provider.as_ref(),
+            tx_config.as_ref(),
+            job,
+            &control.cancellation_token,
+        )
+        .await?;
         let id = Self::reserve_settlement_job_id(store.as_ref(), certificate_id).await?;
         let this = Self {
             id,
@@ -1945,6 +1952,16 @@ mod tests {
             .connect_mocked_client(asserter)
     }
 
+    // `create` now resolves the gas limit via `eth_estimateGas`; this answers that
+    // one call so the durable-write path under test runs.
+    fn mk_mock_provider_with_gas_estimate(gas: u64) -> impl Provider + WalletProvider + 'static {
+        let asserter = Asserter::new();
+        asserter.push_success(&U64::from(gas));
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(test_signer()))
+            .connect_mocked_client(asserter)
+    }
+
     async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
         _provider: L1Provider,
         store: &MockStateStore,
@@ -1997,7 +2014,7 @@ mod tests {
             None,
             job,
             Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider()),
+            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
             mk_control(),
         )
@@ -2049,7 +2066,7 @@ mod tests {
             Some(certificate_id),
             job,
             Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider()),
+            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
             mk_control(),
         )
@@ -2086,7 +2103,7 @@ mod tests {
             Some(certificate_id),
             job,
             Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider()),
+            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
             mk_control(),
         )
