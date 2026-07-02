@@ -390,22 +390,10 @@ where
                             new_state = new.get_roots().display_to_hex(),
                             "Updated the state following certificate settlement",
                         );
-                        self.local_state = new;
-
-                        self.state_store
-                            .write_local_network_state(
-                                &self.network_id,
-                                &self.local_state,
-                                bridge_exit_hashes.as_slice(),
-                            )
-                            .map_err(|e| Error::PersistenceError {
-                                certificate_id,
-                                error: e.to_string(),
-                            })?;
-
-                        // Assign the settled certificate to the current epoch,
-                        // retrying a bounded number of times to ride out a
-                        // transient epoch rollover (packed epoch or add failure).
+                        // Assign the epoch BEFORE advancing local state: a failed
+                        // assignment then leaves the cert `Candidate` with the
+                        // pre-settlement state intact (recoverable). Retry to ride
+                        // out a transient epoch rollover.
                         const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
                         let (epoch_number, certificate_index) = 'assign: {
                             for attempt in 1..=MAX_EPOCH_ASSIGNMENT_RETRIES {
@@ -435,9 +423,22 @@ where
                             });
                         };
 
-                        // Persist `Settled` only now that the epoch is assigned: a failed
-                        // assignment above leaves the certificate `Candidate`, recoverable on
-                        // the next run, never durably settled with no epoch.
+                        // Assigned: advance and persist local state.
+                        self.local_state = new;
+                        self.state_store
+                            .write_local_network_state(
+                                &self.network_id,
+                                &self.local_state,
+                                bridge_exit_hashes.as_slice(),
+                            )
+                            .map_err(|e| Error::PersistenceError {
+                                certificate_id,
+                                error: e.to_string(),
+                            })?;
+
+                        // Kept as the sole writer of `CertificatePerNetworkColumn`
+                        // (the RPC cursor index): `assign_certificate_to_epoch` set
+                        // the status but not that index.
                         self.state_store
                             .update_certificate_header_status(
                                 &certificate_id,

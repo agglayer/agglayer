@@ -274,6 +274,15 @@ impl<
         certificate_id: Option<CertificateId>,
         job: SettlementJob,
     ) -> eyre::Result<SettlementJobWatcher> {
+        // Resolve the gas limit before `create` persists the job/link, so a
+        // deterministic `estimateGas` failure fails here, not on every restart.
+        let job = crate::settlement_task::resolve_settlement_gas_limit(
+            self.provider.as_ref(),
+            self.tx_config.as_ref(),
+            job,
+            &self.cancellation_token,
+        )
+        .await?;
         let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
         let (job_id, task) = SettlementTask::create(
             certificate_id,
@@ -435,7 +444,10 @@ mod tests {
         SettlementTxHash, B256, U256,
     };
     use alloy::{
-        network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner,
+        network::EthereumWallet,
+        primitives::U64,
+        providers::{mock::Asserter, ProviderBuilder},
+        signers::local::PrivateKeySigner,
     };
 
     use super::*;
@@ -453,6 +465,18 @@ mod tests {
                     .parse()
                     .expect("test provider URL should parse"),
             )
+    }
+
+    fn mk_provider_with_gas_estimate(
+        gas_estimate: u64,
+    ) -> impl Provider + WalletProvider + 'static {
+        let asserter = Asserter::new();
+        asserter.push_success(&U64::from(gas_estimate));
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(
+                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+            ))
+            .connect_mocked_client(asserter)
     }
 
     fn expect_empty_startup_recovery(store: &mut MockStateStore) {
@@ -764,14 +788,25 @@ mod tests {
                 }
             });
 
+        // Resolution calls `estimateGas` before persisting; answer it above the
+        // ceiling so the stored limit is unchanged. Live token for estimation,
+        // then cancel to stop the spawned task.
         let cancellation_token = CancellationToken::new();
-        cancellation_token.cancel();
-        let service = mk_service_with_token(Arc::new(store), cancellation_token).await;
+        let service = SettlementService::start(
+            SettlementServiceConfig::default(),
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider_with_gas_estimate(200_000)),
+            Arc::new(store),
+            cancellation_token.clone(),
+        )
+        .await
+        .expect("settlement service should start");
 
         let watcher = service
             .request_new_settlement(Some(certificate_id), job)
             .await
             .expect("settlement request should be accepted");
+        cancellation_token.cancel();
 
         assert_eq!(*recorded_job_id.lock().unwrap(), Some(watcher.job_id()));
         assert_eq!(
