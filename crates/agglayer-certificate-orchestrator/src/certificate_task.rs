@@ -29,7 +29,7 @@ use crate::{network_task::NetworkTaskMessage, Certifier, Error};
 /// related to the certificate until it gets finalized, including exchanging the
 /// required messages with the network task to both get required information
 /// from it and notify it of certificate progress.
-pub struct CertificateTask<StateStore, PendingStore, CertifierClient, SettlementSvc> {
+pub struct CertificateTask<StateStore, PendingStore, CertifierClient, SettlementService> {
     certificate: Certificate,
     header: CertificateHeader,
 
@@ -38,17 +38,17 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient, Settlement
     pending_store: Arc<PendingStore>,
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
-    settlement_service: Arc<SettlementSvc>,
+    settlement_service: Arc<SettlementService>,
     settlement_config: Arc<SettlementTransactionConfig>,
 }
 
-impl<StateStore, PendingStore, CertifierClient, SettlementSvc>
-    CertificateTask<StateStore, PendingStore, CertifierClient, SettlementSvc>
+impl<StateStore, PendingStore, CertifierClient, SettlementService>
+    CertificateTask<StateStore, PendingStore, CertifierClient, SettlementService>
 where
     StateStore: StateReader + StateWriter,
     PendingStore: PendingCertificateReader + PendingCertificateWriter,
     CertifierClient: Certifier,
-    SettlementSvc: SettlementServiceTrait,
+    SettlementService: SettlementServiceTrait,
 {
     #[instrument(skip_all, fields(certificate_id))]
     #[allow(clippy::too_many_arguments)]
@@ -58,7 +58,7 @@ where
         state_store: Arc<StateStore>,
         pending_store: Arc<PendingStore>,
         certifier_client: Arc<CertifierClient>,
-        settlement_service: Arc<SettlementSvc>,
+        settlement_service: Arc<SettlementService>,
         settlement_config: Arc<SettlementTransactionConfig>,
         cancellation_token: CancellationToken,
     ) -> Result<Self, Error> {

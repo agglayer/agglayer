@@ -80,8 +80,8 @@ pub(crate) struct NetworkTask<
     CertifierClient,
     PendingStore,
     StateStore,
-    SettlementSvc,
-    PerEpochStoreT,
+    SettlementService,
+    PerEpochStore,
 > {
     /// The network id for the network task.
     network_id: NetworkId,
@@ -104,21 +104,21 @@ pub(crate) struct NetworkTask<
     /// latest certificate settled
     latest_settled: Option<SettledCertificate>,
     /// The settlement service for submitting settlement jobs
-    settlement_service: Arc<SettlementSvc>,
+    settlement_service: Arc<SettlementService>,
     /// The current epoch store for epoch assignment
-    current_epoch: Arc<ArcSwap<PerEpochStoreT>>,
+    current_epoch: Arc<ArcSwap<PerEpochStore>>,
     /// Settlement transaction config
     settlement_config: Arc<SettlementTransactionConfig>,
 }
 
-impl<CertifierClient, PendingStore, StateStore, SettlementSvc, PerEpochStoreT>
-    NetworkTask<CertifierClient, PendingStore, StateStore, SettlementSvc, PerEpochStoreT>
+impl<CertifierClient, PendingStore, StateStore, SettlementService, PerEpochStore>
+    NetworkTask<CertifierClient, PendingStore, StateStore, SettlementService, PerEpochStore>
 where
     CertifierClient: 'static + Certifier,
     PendingStore: 'static + PendingCertificateReader + PendingCertificateWriter,
     StateStore: 'static + StateReader + StateWriter,
-    SettlementSvc: 'static + SettlementServiceTrait,
-    PerEpochStoreT: PerEpochWriter + PerEpochReader + 'static,
+    SettlementService: 'static + SettlementServiceTrait,
+    PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -128,8 +128,8 @@ where
         clock_ref: ClockRef,
         network_id: NetworkId,
         certificate_stream: mpsc::Receiver<NewCertificate>,
-        settlement_service: Arc<SettlementSvc>,
-        current_epoch: Arc<ArcSwap<PerEpochStoreT>>,
+        settlement_service: Arc<SettlementService>,
+        current_epoch: Arc<ArcSwap<PerEpochStore>>,
         settlement_config: Arc<SettlementTransactionConfig>,
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
@@ -398,18 +398,17 @@ where
                         let (epoch_number, certificate_index) = 'assign: {
                             for attempt in 1..=MAX_EPOCH_ASSIGNMENT_RETRIES {
                                 let related_epoch = self.current_epoch.load_full();
-                                if related_epoch.is_epoch_packed() {
-                                    drop(related_epoch);
-                                    warn!(attempt, "Epoch already packed, delay and retry assignment");
-                                    tokio::time::sleep(Duration::from_secs(1)).await;
-                                    continue;
-                                }
                                 match related_epoch
                                     .add_certificate(certificate_id, ExecutionMode::Default)
                                 {
                                     Ok((epoch_number, certificate_index)) => {
                                         info!("Certificate added to epoch {epoch_number} with index {certificate_index}");
                                         break 'assign (epoch_number, certificate_index);
+                                    }
+                                    Err(agglayer_storage::error::Error::AlreadyPacked(epoch)) => {
+                                        drop(related_epoch);
+                                        warn!(attempt, %epoch, "Epoch already packed, delay and retry assignment");
+                                        tokio::time::sleep(Duration::from_secs(1)).await;
                                     }
                                     Err(error) => {
                                         warn!(%error, attempt, "Failed to add certificate to epoch (retrying)");

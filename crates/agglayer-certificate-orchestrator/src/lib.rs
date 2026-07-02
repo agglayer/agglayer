@@ -78,7 +78,7 @@ pub struct CertificateOrchestrator<
     EpochsStore,
     PerEpochStore,
     StateStore,
-    SettlementSvc,
+    SettlementService,
 > {
     /// Epoch packing task resolver.
     epoch_packing_tasks: EpochPackingTasks,
@@ -112,24 +112,24 @@ pub struct CertificateOrchestrator<
     network_tasks: NetworkTasks,
 
     /// Settlement service for submitting settlement jobs
-    settlement_service: Arc<SettlementSvc>,
+    settlement_service: Arc<SettlementService>,
 
     /// Settlement transaction config
     settlement_config: Arc<SettlementTransactionConfig>,
 }
 
-impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementSvc>
+impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementService>
     CertificateOrchestrator<
         CertifierClient,
         PendingStore,
         EpochsStore,
         PerEpochStore,
         StateStore,
-        SettlementSvc,
+        SettlementService,
     >
 where
     PendingStore: PendingCertificateReader,
-    SettlementSvc: SettlementServiceTrait,
+    SettlementService: SettlementServiceTrait,
 {
     const DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE: usize = 1000;
 
@@ -144,7 +144,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
-        settlement_service: Arc<SettlementSvc>,
+        settlement_service: Arc<SettlementService>,
         settlement_config: Arc<SettlementTransactionConfig>,
     ) -> Result<Self, Error> {
         Ok(Self {
@@ -171,14 +171,14 @@ where
 }
 
 #[buildstructor::buildstructor]
-impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementSvc>
+impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementService>
     CertificateOrchestrator<
         CertifierClient,
         PendingStore,
         EpochsStore,
         PerEpochStore,
         StateStore,
-        SettlementSvc,
+        SettlementService,
     >
 where
     CertifierClient: Certifier,
@@ -186,7 +186,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
-    SettlementSvc: SettlementServiceTrait + 'static,
+    SettlementService: SettlementServiceTrait + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
     ///
@@ -216,7 +216,7 @@ where
         epochs_store: Arc<EpochsStore>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
-        settlement_service: Arc<SettlementSvc>,
+        settlement_service: Arc<SettlementService>,
         settlement_config: Arc<SettlementTransactionConfig>,
     ) -> eyre::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
@@ -245,14 +245,14 @@ where
     }
 }
 
-impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementSvc>
+impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementService>
     CertificateOrchestrator<
         CertifierClient,
         PendingStore,
         EpochsStore,
         PerEpochStore,
         StateStore,
-        SettlementSvc,
+        SettlementService,
     >
 where
     CertifierClient: Certifier,
@@ -260,7 +260,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-    SettlementSvc: SettlementServiceTrait + 'static,
+    SettlementService: SettlementServiceTrait + 'static,
 {
     fn spawn_network_task(&mut self, network_id: NetworkId) -> Result<(), Error> {
         if self.spawned_network_tasks.contains_key(&network_id) {
@@ -382,14 +382,14 @@ where
     fn handle_epoch_packing_result(&mut self) {}
 }
 
-impl<A, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementSvc> Future
+impl<A, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementService> Future
     for CertificateOrchestrator<
         A,
         PendingStore,
         EpochsStore,
         PerEpochStore,
         StateStore,
-        SettlementSvc,
+        SettlementService,
     >
 where
     A: Certifier,
@@ -397,7 +397,7 @@ where
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     StateStore: StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-    SettlementSvc: SettlementServiceTrait + 'static,
+    SettlementService: SettlementServiceTrait + 'static,
 {
     type Output = ();
 
