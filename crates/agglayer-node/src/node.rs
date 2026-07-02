@@ -288,7 +288,6 @@ impl Node {
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
             .settlement_service(settlement_service)
-            .settlement_config(settlement_config)
             .start()
             .await
             .context("Failed starting certificate orchestrator")?;

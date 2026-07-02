@@ -7,7 +7,6 @@ use std::{
 };
 
 use agglayer_clock::{ClockRef, Event};
-use agglayer_config::settlement_service::SettlementTransactionConfig;
 use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::{
     columns::{
@@ -113,9 +112,6 @@ pub struct CertificateOrchestrator<
 
     /// Settlement service for submitting settlement jobs
     settlement_service: Arc<SettlementService>,
-
-    /// Settlement transaction config
-    settlement_config: Arc<SettlementTransactionConfig>,
 }
 
 impl<CertifierClient, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementService>
@@ -145,7 +141,6 @@ where
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
         settlement_service: Arc<SettlementService>,
-        settlement_config: Arc<SettlementTransactionConfig>,
     ) -> Result<Self, Error> {
         Ok(Self {
             epoch_packing_tasks: FuturesUnordered::new(),
@@ -165,7 +160,6 @@ where
             spawned_network_tasks: Default::default(),
             network_tasks: FuturesUnordered::new(),
             settlement_service,
-            settlement_config,
         })
     }
 }
@@ -217,7 +211,6 @@ where
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
         state_store: Arc<StateStore>,
         settlement_service: Arc<SettlementService>,
-        settlement_config: Arc<SettlementTransactionConfig>,
     ) -> eyre::Result<JoinHandle<()>> {
         let mut orchestrator = Self::try_new(
             clock,
@@ -229,7 +222,6 @@ where
             current_epoch,
             state_store,
             settlement_service,
-            settlement_config,
         )?;
 
         // Try to spawn the certifier tasks for the next height of each network
@@ -280,7 +272,6 @@ where
             receiver,
             self.settlement_service.clone(),
             self.current_epoch.clone(),
-            self.settlement_config.clone(),
         )?;
 
         let task_future = task

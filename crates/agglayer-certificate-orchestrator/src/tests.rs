@@ -545,7 +545,6 @@ async fn test_certificate_orchestrator_can_stop() {
         Arc::new(current_epoch),
         state_store.clone(),
         Arc::new(MockSettlementServiceTrait::new()),
-        Arc::new(agglayer_config::settlement_service::SettlementTransactionConfig::default()),
     )
     .expect("Unable to create orchestrator");
 
@@ -611,7 +610,6 @@ async fn test_collect_certificates() {
         Arc::new(current_epoch),
         state_store.clone(),
         Arc::new(MockSettlementServiceTrait::new()),
-        Arc::new(agglayer_config::settlement_service::SettlementTransactionConfig::default()),
     )
     .expect("Unable to create orchestrator");
 
@@ -682,7 +680,6 @@ async fn test_collect_certificates_after_epoch() {
         Arc::new(current_epoch),
         state_store.clone(),
         Arc::new(MockSettlementServiceTrait::new()),
-        Arc::new(agglayer_config::settlement_service::SettlementTransactionConfig::default()),
     )
     .expect("Unable to create orchestrator");
 
@@ -755,7 +752,6 @@ async fn test_collect_certificates_when_empty() {
         Arc::new(current_epoch),
         state_store.clone(),
         Arc::new(MockSettlementServiceTrait::new()),
-        Arc::new(agglayer_config::settlement_service::SettlementTransactionConfig::default()),
     )
     .expect("Unable to create orchestrator");
 

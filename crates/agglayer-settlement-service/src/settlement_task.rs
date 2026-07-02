@@ -381,7 +381,7 @@ async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
     job.gas_limit = tx_config
         .gas_limit_multiplier_factor
         .saturating_mul_u128(gas_estimate as u128)
-        .min(job.gas_limit);
+        .min(tx_config.gas_limit_ceiling.saturating_to::<u128>());
     Ok(job)
 }
 
@@ -1997,7 +1997,9 @@ mod tests {
     async fn create_generates_settlement_job_id() {
         let mut store = MockStateStore::new();
         let job = mk_job();
-        let expected_job = job.clone();
+        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+        let mut expected_job = job.clone();
+        expected_job.gas_limit = 200_000;
         let recorded_job_id = Arc::new(Mutex::new(None));
         let recorded_job_id_for_store = recorded_job_id.clone();
 
@@ -2030,7 +2032,9 @@ mod tests {
         let mut store = MockStateStore::new();
         let certificate_id = CertificateId::new(Digest::from([7; 32]));
         let job = mk_job();
-        let expected_job = job.clone();
+        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+        let mut expected_job = job.clone();
+        expected_job.gas_limit = 200_000;
         let recorded_job_id = Arc::new(Mutex::new(None));
         let ordering = Arc::new(Mutex::new(Vec::new()));
 

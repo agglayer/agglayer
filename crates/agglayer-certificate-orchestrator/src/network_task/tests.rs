@@ -1,6 +1,5 @@
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
-use agglayer_config::settlement_service::SettlementTransactionConfig;
 use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
     error as storage_error,
@@ -44,10 +43,6 @@ fn mock_current_epoch() -> Arc<ArcSwap<MockPerEpochStore>> {
         .returning(|_, _| Ok((EpochNumber::ZERO, CertificateIndex::ZERO)));
     mock_epoch.expect_is_epoch_packed().returning(|| false);
     Arc::new(ArcSwap::new(Arc::new(mock_epoch)))
-}
-
-fn default_settlement_config() -> Arc<SettlementTransactionConfig> {
-    Arc::new(SettlementTransactionConfig::default())
 }
 
 fn settlement_result(
@@ -280,7 +275,6 @@ async fn start_from_zero() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -417,7 +411,6 @@ async fn repeated_unreadable_proof_errors_certificate() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -639,7 +632,6 @@ async fn one_per_epoch() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -924,7 +916,6 @@ async fn retries() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -1208,7 +1199,6 @@ async fn changing_epoch_triggers_certify() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -1365,7 +1355,6 @@ async fn timeout_certifier() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -1494,7 +1483,6 @@ async fn process_next_certificate() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -1586,7 +1574,6 @@ async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 

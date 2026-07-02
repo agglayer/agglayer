@@ -15,7 +15,7 @@ use pessimistic_proof::{
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
-use super::{default_settlement_config, mock_current_epoch, *};
+use super::{mock_current_epoch, *};
 use crate::tests::{clock, mocks::MockCertifier};
 
 const SETTLEMENT_TX_HASH_TEST: SettlementTxHash = SettlementTxHash::new(Digest([1; 32]));
@@ -129,7 +129,6 @@ async fn from_pending_to_settled() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -265,7 +264,6 @@ async fn from_proven_to_settled() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -379,7 +377,6 @@ async fn from_candidate_to_settled() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -492,7 +489,6 @@ async fn from_candidate_to_settle_via_pending() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -556,7 +552,6 @@ async fn from_settled_to_settled() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 
@@ -692,7 +687,6 @@ async fn from_proven_settlement_revert_goes_to_error() {
         certificate_stream,
         Arc::new(settlement_service),
         mock_current_epoch(),
-        default_settlement_config(),
     )
     .expect("Failed to create a new network task");
 

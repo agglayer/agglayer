@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use agglayer_config::settlement_service::SettlementTransactionConfig;
 use agglayer_contracts::{
     rollup::VerifierType, settler::verify_pessimistic_trusted_aggregator_calldata,
 };
@@ -39,7 +38,6 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient, Settlement
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
     settlement_service: Arc<SettlementService>,
-    settlement_config: Arc<SettlementTransactionConfig>,
 }
 
 impl<StateStore, PendingStore, CertifierClient, SettlementService>
@@ -59,7 +57,6 @@ where
         pending_store: Arc<PendingStore>,
         certifier_client: Arc<CertifierClient>,
         settlement_service: Arc<SettlementService>,
-        settlement_config: Arc<SettlementTransactionConfig>,
         cancellation_token: CancellationToken,
     ) -> Result<Self, Error> {
         let certificate_id = certificate.hash();
@@ -81,7 +78,6 @@ where
             certifier_client,
             cancellation_token,
             settlement_service,
-            settlement_config,
         })
     }
 
@@ -404,10 +400,8 @@ where
             contract_address: self.certifier_client.rollup_manager_address(),
             calldata,
             eth_value: U256::ZERO,
-            gas_limit: self
-                .settlement_config
-                .gas_limit_ceiling
-                .saturating_to::<u128>(),
+            // Resolved and capped at the ceiling by the settlement service.
+            gas_limit: 0,
         })
     }
 

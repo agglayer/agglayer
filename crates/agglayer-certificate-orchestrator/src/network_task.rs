@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use agglayer_clock::ClockRef;
-use agglayer_config::settlement_service::SettlementTransactionConfig;
 use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -107,8 +106,6 @@ pub(crate) struct NetworkTask<
     settlement_service: Arc<SettlementService>,
     /// The current epoch store for epoch assignment
     current_epoch: Arc<ArcSwap<PerEpochStore>>,
-    /// Settlement transaction config
-    settlement_config: Arc<SettlementTransactionConfig>,
 }
 
 impl<CertifierClient, PendingStore, StateStore, SettlementService, PerEpochStore>
@@ -130,7 +127,6 @@ where
         certificate_stream: mpsc::Receiver<NewCertificate>,
         settlement_service: Arc<SettlementService>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
-        settlement_config: Arc<SettlementTransactionConfig>,
     ) -> Result<Self, Error> {
         info!("Creating a new network task for network {}", network_id);
 
@@ -162,7 +158,6 @@ where
             latest_settled,
             settlement_service,
             current_epoch,
-            settlement_config,
         })
     }
 
@@ -333,7 +328,6 @@ where
                 self.pending_store.clone(),
                 self.certifier_client.clone(),
                 self.settlement_service.clone(),
-                self.settlement_config.clone(),
                 cancellation_token.clone(),
             )?
             .process(),

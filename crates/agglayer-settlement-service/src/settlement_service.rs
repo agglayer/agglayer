@@ -747,7 +747,9 @@ mod tests {
         expect_empty_startup_recovery(&mut store);
         let certificate_id = CertificateId::new(Digest::from([7; 32]));
         let job = mk_job(7);
-        let expected_job = job.clone();
+        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+        let mut expected_job = job.clone();
+        expected_job.gas_limit = 200_000;
         let recorded_job_id = Arc::new(Mutex::new(None));
         let ordering = Arc::new(Mutex::new(Vec::new()));
 
