@@ -158,6 +158,14 @@ async fn start_from_zero() {
             Ok(Some(certificate))
         });
 
+    // After settling height 0 the task drains the queue and looks for a
+    // pending certificate at height 1.
+    pending
+        .expect_get_certificate()
+        .once()
+        .with(eq(network_id), eq(Height::new(1)))
+        .returning(|_, _| Ok(None));
+
     state
         .expect_get_latest_settled_certificate_per_network()
         .once()
@@ -468,6 +476,13 @@ async fn retries() {
             let cert = certs.lock().unwrap().pop_front().unwrap();
             Ok(Some(cert))
         });
+
+    // Once the retried certificate settles, the drain checks height 1.
+    pending
+        .expect_get_certificate()
+        .once()
+        .with(eq(network_id), eq(Height::new(1)))
+        .returning(|_, _| Ok(None));
 
     pending
         .expect_get_certificate()
@@ -953,18 +968,7 @@ async fn process_next_certificate() {
         .await
         .expect("Failed to send second certificate");
 
-    // Process first certificate
-    task.make_progress(
-        &mut next_expected_height,
-        &mut first_run,
-        &CancellationToken::new(),
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(next_expected_height, Height::new(1));
-
-    // Process second certificate
+    // The first wake drains both queued certificates back-to-back.
     task.make_progress(
         &mut next_expected_height,
         &mut first_run,
@@ -974,4 +978,245 @@ async fn process_next_certificate() {
     .unwrap();
 
     assert_eq!(next_expected_height, Height::new(2));
+
+    // The queued event for the already-settled second certificate is a no-op.
+    task.make_progress(
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(next_expected_height, Height::new(2));
+}
+
+#[rstest]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(30))]
+async fn settles_pending_backlog_on_startup() {
+    let tmp = TempDBDir::new();
+    let storage = new_storage(&tmp.path);
+    let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
+    let clock_ref = clock();
+    let network_id = 1.into();
+    // No certificate events are ever sent: the pending store alone must be
+    // enough to catch up, as when recovering a backlog after a restart.
+    let (_sender, certificate_stream) = mpsc::channel(100);
+
+    let mut forest = Forest::default();
+
+    let certificate = forest.apply_events(
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
+    );
+    storage
+        .pending
+        .insert_pending_certificate(network_id, Height::ZERO, &certificate)
+        .expect("unable to insert certificate in pending");
+    storage
+        .state
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .expect("Failed to insert certificate header");
+
+    let certificate2 = {
+        let mut c = forest.apply_events(&[], &[(USDC, 1.try_into().unwrap())]);
+        c.height = Height::new(1);
+        c
+    };
+    storage
+        .pending
+        .insert_pending_certificate(network_id, Height::new(1), &certificate2)
+        .expect("unable to insert certificate in pending");
+    storage
+        .state
+        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
+        .expect("Failed to insert certificate header");
+
+    certifier
+        .expect_certify()
+        .times(2)
+        .with(always(), eq(network_id), always())
+        .returning({
+            let pending_store = Arc::clone(&storage.pending);
+            move |mut new_state, network, height| {
+                let certificate = pending_store
+                    .get_certificate(network, height)
+                    .expect("Failed to get certificate")
+                    .expect("Certificate not found");
+                pending_store
+                    .insert_generated_proof(&certificate.hash(), &settlement_proof())
+                    .ok();
+
+                let signer = agglayer_types::Address::new([0; 20]);
+                let ctx_from_l1 = L1WitnessCtx {
+                    l1_info_root: certificate
+                        .l1_info_root()
+                        .expect("Failed to get L1 info root")
+                        .unwrap_or_default(),
+                    prev_pessimistic_root: PessimisticRootInput::Computed(
+                        PessimisticRootCommitmentVersion::V2,
+                    ),
+                    aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                };
+
+                let _ = new_state
+                    .apply_certificate(&certificate, ctx_from_l1)
+                    .expect("Failed to apply certificate");
+
+                Ok(CertifierOutput {
+                    certificate,
+                    height,
+                    new_state,
+                    network,
+                    new_pp_root: Digest::ZERO,
+                })
+            }
+        });
+
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    mock_settlement_persisting(
+        &mut settlement_service,
+        Arc::clone(&storage.state),
+        SETTLEMENT_TX_HASH_1,
+        ContractCallOutcome::Success,
+    );
+    let mut task = NetworkTask::new(
+        Arc::clone(&storage.pending),
+        Arc::clone(&storage.state),
+        Arc::new(certifier),
+        clock_ref.clone(),
+        network_id,
+        certificate_stream,
+        Arc::new(settlement_service),
+        mock_current_epoch(),
+    )
+    .expect("Failed to create a new network task");
+
+    let mut next_expected_height = Height::ZERO;
+    let mut first_run = true;
+
+    // A single first-run pass settles the whole backlog.
+    task.make_progress(
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(next_expected_height, Height::new(2));
+}
+
+#[rstest]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(30))]
+async fn wrong_height_event_still_drains_pending() {
+    let tmp = TempDBDir::new();
+    let storage = new_storage(&tmp.path);
+    let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
+    let clock_ref = clock();
+    let network_id = 1.into();
+    let (sender, certificate_stream) = mpsc::channel(100);
+
+    let mut forest = Forest::default();
+
+    let certificate = forest.apply_events(
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
+    );
+    let certificate_id = certificate.hash();
+    storage
+        .pending
+        .insert_pending_certificate(network_id, Height::ZERO, &certificate)
+        .expect("unable to insert certificate in pending");
+    storage
+        .state
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .expect("Failed to insert certificate header");
+
+    certifier
+        .expect_certify()
+        .once()
+        .with(always(), eq(network_id), eq(Height::ZERO))
+        .returning({
+            let pending_store = Arc::clone(&storage.pending);
+            move |mut new_state, network, height| {
+                let certificate = pending_store
+                    .get_certificate(network, height)
+                    .expect("Failed to get certificate")
+                    .expect("Certificate not found");
+                pending_store
+                    .insert_generated_proof(&certificate.hash(), &settlement_proof())
+                    .ok();
+
+                let signer = agglayer_types::Address::new([0; 20]);
+                let ctx_from_l1 = L1WitnessCtx {
+                    l1_info_root: certificate
+                        .l1_info_root()
+                        .expect("Failed to get L1 info root")
+                        .unwrap_or_default(),
+                    prev_pessimistic_root: PessimisticRootInput::Computed(
+                        PessimisticRootCommitmentVersion::V2,
+                    ),
+                    aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                };
+
+                let _ = new_state
+                    .apply_certificate(&certificate, ctx_from_l1)
+                    .expect("Failed to apply certificate");
+
+                Ok(CertifierOutput {
+                    certificate,
+                    height,
+                    new_state,
+                    network,
+                    new_pp_root: Digest::ZERO,
+                })
+            }
+        });
+
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    mock_settlement_persisting(
+        &mut settlement_service,
+        Arc::clone(&storage.state),
+        SETTLEMENT_TX_HASH_1,
+        ContractCallOutcome::Success,
+    );
+    let mut task = NetworkTask::new(
+        Arc::clone(&storage.pending),
+        Arc::clone(&storage.state),
+        Arc::new(certifier),
+        clock_ref.clone(),
+        network_id,
+        certificate_stream,
+        Arc::new(settlement_service),
+        mock_current_epoch(),
+    )
+    .expect("Failed to create a new network task");
+
+    let mut next_expected_height = Height::ZERO;
+    let mut first_run = false;
+
+    // An event for a later height still wakes the task, which then finds and
+    // settles the certificate pending at the expected height.
+    sender
+        .send(NewCertificate {
+            certificate_id,
+            height: Height::new(5),
+        })
+        .await
+        .expect("Failed to send the certificate");
+
+    task.make_progress(
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(next_expected_height, Height::new(1));
 }

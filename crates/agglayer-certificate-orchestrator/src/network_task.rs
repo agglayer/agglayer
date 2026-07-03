@@ -215,7 +215,7 @@ where
         }
     }
 
-    #[instrument(skip(self, cancellation_token), fields(certificate_id))]
+    #[instrument(skip(self, cancellation_token))]
     async fn make_progress(
         &mut self,
         next_expected_height: &mut Height,
@@ -243,12 +243,36 @@ where
                         warn!(
                             hash = certificate_id.to_string(),
                             "Received a certificate event for the wrong height");
-
-                        return Ok(());
                     }
                 }
             }
         }
+
+        // Drain every certificate already queued in the pending store: this
+        // wake may be the only one for a while (e.g. when recovering a
+        // backlog after a restart), so make as much progress as possible
+        // before waiting again. A certificate that does not settle leaves
+        // the height unchanged and ends the drain, so a failing certificate
+        // cannot cause a busy loop.
+        while self
+            .process_next_pending_certificate(next_expected_height, cancellation_token)
+            .await?
+        {}
+
+        Ok(())
+    }
+
+    /// Process the pending certificate at the next expected height, if any.
+    ///
+    /// Returns `true` when the certificate settled and the height advanced,
+    /// meaning another pending certificate may already be queued behind it.
+    #[instrument(skip(self, cancellation_token), fields(certificate_id))]
+    async fn process_next_pending_certificate(
+        &mut self,
+        next_expected_height: &mut Height,
+        cancellation_token: &CancellationToken,
+    ) -> Result<bool, Error> {
+        let height_before = *next_expected_height;
 
         // Get the certificate the pending certificate for the network at the height
         let certificate = if let Some(certificate) = self
@@ -267,7 +291,7 @@ where
                 self.network_id, *next_expected_height
             );
             // There is no certificate to certify at this height for now
-            return Ok(());
+            return Ok(false);
         };
 
         let certificate_id = certificate.hash();
@@ -425,6 +449,6 @@ where
         task.await
             .map_err(|e| Error::InternalError(format!("Certificate task panicked: {e}")))?;
 
-        Ok(())
+        Ok(*next_expected_height != height_before)
     }
 }
