@@ -110,6 +110,7 @@ pub fn main(
         Node::builder()
             .config(config.clone())
             .cancellation_token(global_cancellation_token.clone())
+            .version(version.to_string())
             .start(),
     )?;
     let terminate_signal = async {
