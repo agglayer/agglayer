@@ -8,13 +8,13 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
         DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
-        PendingCertificateWriter, StateReader, StateWriter,
+        PendingCertificateWriter, SettlementReader, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
-    CertificateId, CertificateStatus, EpochConfiguration, Height, NetworkId, NetworkInfo,
-    NetworkStatus, NetworkType, SettledClaim, U256,
+    CertificateId, CertificateStatus, ContractCallOutcome, EpochConfiguration, Height, NetworkId,
+    NetworkInfo, NetworkStatus, NetworkType, SettledClaim, U256,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
@@ -672,8 +672,78 @@ where
 impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
     AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
+    StateStore: StateReader + SettlementReader + 'static,
+{
+    /// Refuse replacing a certificate whose settlement job may still settle
+    /// (or already has settled) this height on L1.
+    ///
+    /// The settlement tx hash is only recorded on the header after a terminal
+    /// success, so an in-flight or spuriously-failed settlement leaves an
+    /// `InError` certificate with no hash while its transaction is still live
+    /// on L1 (and gets re-broadcast by settlement-service startup recovery).
+    /// Replacing the certificate then races the old transaction with the
+    /// replacement's: the old one settles first (lower nonce, same wallet) and
+    /// L1 diverges from the certificate we track at this height. Only a
+    /// terminally reverted settlement job makes replacement safe.
+    // The error type is the submission pipeline's; boxing it here just to
+    // shrink this one sync fn's Result would leak the lint into the caller.
+    #[allow(clippy::result_large_err)]
+    fn ensure_no_live_settlement_job(
+        &self,
+        certificate: &Certificate,
+        pre_existing_certificate_id: CertificateId,
+        replacement_certificate_id: CertificateId,
+    ) -> Result<(), CertificateSubmissionError> {
+        let Some(settlement_job_id) = self
+            .state
+            .get_certificate_settlement_job_id(&pre_existing_certificate_id)?
+        else {
+            return Ok(());
+        };
+
+        // Replacement is the risky operation here, so the allowing arm is the
+        // strict one: only an explicit terminal revert lets it through. Any
+        // outcome added to `ContractCallOutcome` in the future must take an
+        // explicit stance on replacement to make this match exhaustive again.
+        let result = self.state.get_settlement_job_result(&settlement_job_id)?;
+        let message = match result.as_ref().map(|r| &r.contract_call_result.outcome) {
+            Some(ContractCallOutcome::Revert) => {
+                info!(
+                    %pre_existing_certificate_id,
+                    %settlement_job_id,
+                    "Settlement job of the replaced certificate terminally reverted; replacement \
+                     allowed"
+                );
+                return Ok(());
+            }
+            None => {
+                "Unable to replace a certificate in error whose settlement job is still in flight"
+            }
+            Some(ContractCallOutcome::Success) => {
+                "Unable to replace a certificate in error whose settlement job has already \
+                 succeeded"
+            }
+        };
+
+        warn!(%pre_existing_certificate_id, %settlement_job_id, message);
+        Err(
+            CertificateSubmissionError::UnableToReplacePendingCertificate {
+                reason: message.to_string(),
+                height: certificate.height,
+                network_id: certificate.network_id,
+                stored_certificate_id: pre_existing_certificate_id,
+                replacement_certificate_id,
+                source: None,
+            },
+        )
+    }
+}
+
+impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static,
 {
@@ -718,6 +788,12 @@ where
                 .state
                 .get_certificate_header(&pre_existing_certificate_id)?
             {
+                self.ensure_no_live_settlement_job(
+                    certificate,
+                    pre_existing_certificate_id,
+                    new_certificate_id,
+                )?;
+
                 match settlement_tx_hash {
                     None => {
                         info!(
