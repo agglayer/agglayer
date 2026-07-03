@@ -132,11 +132,9 @@ async fn from_pending_to_settled() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -267,11 +265,9 @@ async fn from_proven_to_settled() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -380,11 +376,9 @@ async fn from_candidate_to_settled() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -492,11 +486,9 @@ async fn from_candidate_to_settle_via_pending() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -555,11 +547,9 @@ async fn from_settled_to_settled() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::new(1);
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -690,11 +680,9 @@ async fn from_proven_settlement_revert_goes_to_error() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),

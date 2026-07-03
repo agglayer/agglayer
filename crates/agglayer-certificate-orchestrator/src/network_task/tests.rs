@@ -158,6 +158,14 @@ async fn start_from_zero() {
             Ok(Some(certificate))
         });
 
+    // After settling height 0 the task drains the queue and looks for a
+    // pending certificate at height 1.
+    pending
+        .expect_get_certificate()
+        .once()
+        .with(eq(network_id), eq(Height::new(1)))
+        .returning(|_, _| Ok(None));
+
     state
         .expect_get_latest_settled_certificate_per_network()
         .once()
@@ -278,7 +286,6 @@ async fn start_from_zero() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
 
     let _ = sender
@@ -290,7 +297,6 @@ async fn start_from_zero() {
 
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -414,7 +420,6 @@ async fn repeated_unreadable_proof_errors_certificate() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
 
     let _ = sender
@@ -426,7 +431,6 @@ async fn repeated_unreadable_proof_errors_certificate() {
 
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -435,249 +439,6 @@ async fn repeated_unreadable_proof_errors_certificate() {
     .unwrap();
 
     assert_eq!(next_expected_height, Height::ZERO);
-}
-
-#[rstest]
-#[tokio::test]
-#[timeout(Duration::from_secs(1))]
-async fn one_per_epoch() {
-    let mut pending = MockPendingStore::new();
-    pending
-        .expect_get_proof()
-        .returning(|_| Ok(Some(settlement_proof())));
-    let mut state = MockStateStore::new();
-    let mut certifier = MockCertifier::new();
-    expect_settlement_l1_context(&mut certifier);
-    let clock_ref = clock();
-    let network_id = 1.into();
-    let (sender, certificate_stream) = mpsc::channel(100);
-
-    let certificate = Certificate::new_for_test(network_id, Height::ZERO);
-    let certificate2 = Certificate::new_for_test(network_id, Height::new(1));
-    let certificate_id = certificate.hash();
-    let certificate_id2 = certificate2.hash();
-
-    pending
-        .expect_get_certificate()
-        .once()
-        .with(eq(network_id), eq(Height::ZERO))
-        .returning(|network_id, height| {
-            let c = Certificate::new_for_test(network_id, height);
-
-            Ok(Some(c))
-        });
-
-    pending
-        .expect_get_certificate()
-        .never()
-        .with(eq(network_id), eq(Height::new(1)))
-        .returning(|network_id, height| {
-            let c = Certificate::new_for_test(network_id, height);
-
-            Ok(Some(c))
-        });
-
-    state
-        .expect_get_latest_settled_certificate_per_network()
-        .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(None));
-
-    state
-        .expect_get_certificate_header()
-        .once()
-        .with(eq(certificate_id))
-        .returning(|certificate_id| {
-            Ok(Some(agglayer_types::CertificateHeader {
-                network_id: 1.into(),
-                height: Height::ZERO,
-                epoch_number: None,
-                certificate_index: None,
-                certificate_id: *certificate_id,
-                prev_local_exit_root: [1; 32].into(),
-                new_local_exit_root: [0; 32].into(),
-                metadata: Metadata::ZERO,
-                status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
-            }))
-        });
-
-    state
-        .expect_get_certificate_header()
-        .never()
-        .with(eq(certificate_id2))
-        .returning(|certificate_id| {
-            Ok(Some(agglayer_types::CertificateHeader {
-                network_id: 1.into(),
-                height: Height::new(1),
-                epoch_number: None,
-                certificate_index: None,
-                certificate_id: *certificate_id,
-                prev_local_exit_root: [1; 32].into(),
-                new_local_exit_root: [0; 32].into(),
-                metadata: Metadata::ZERO,
-                status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
-            }))
-        });
-    certifier
-        .expect_certify()
-        .once()
-        .with(always(), eq(network_id), eq(Height::ZERO))
-        .return_once(move |new_state, network_id, _height| {
-            let result = crate::CertifierOutput {
-                certificate,
-                height: Height::ZERO,
-                new_state,
-                network: network_id,
-                new_pp_root: Digest::ZERO,
-            };
-
-            Ok(result)
-        });
-
-    state
-        .expect_read_local_network_state()
-        .returning(|_| Ok(Default::default()));
-
-    state
-        .expect_write_local_network_state()
-        .returning(|_, _, _| Ok(()));
-
-    certifier
-        .expect_certify()
-        .never()
-        .with(always(), eq(network_id), eq(Height::new(1)))
-        .return_once(move |new_state, network_id, _height| {
-            let result = crate::CertifierOutput {
-                certificate: certificate2,
-                height: Height::new(1),
-                new_state,
-                network: network_id,
-                new_pp_root: Digest::ZERO,
-            };
-
-            Ok(result)
-        });
-
-    pending
-        .expect_set_latest_proven_certificate_per_network()
-        .once()
-        .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
-        .returning(|_, _, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Proven))
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_insert_certificate_settlement_job_id()
-        .returning(|_, _| Ok(()));
-    state
-        .expect_get_certificate_settlement_job_id()
-        .returning(|_| Ok(Some(job_id(1))));
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Candidate))
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
-        .returning(|_, _, _, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Settled))
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_set_latest_settled_certificate_for_network()
-        .once()
-        .with(
-            eq(network_id),
-            eq(Height::ZERO),
-            eq(certificate_id),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
-        )
-        .returning(|_, _, _, _, _| Ok(()));
-
-    let mut settlement_service = MockSettlementServiceTrait::new();
-    settlement_service
-        .expect_submit_settlement_job()
-        .once()
-        .returning(|_, _| Ok(job_id(1)));
-    settlement_service
-        .expect_wait_for_settlement()
-        .once()
-        .returning(move |_| {
-            Ok(settlement_result(
-                SETTLEMENT_TX_HASH_1,
-                ContractCallOutcome::Success,
-            ))
-        });
-
-    let mut task = NetworkTask::new(
-        Arc::new(pending),
-        Arc::new(state),
-        Arc::new(certifier),
-        clock_ref,
-        network_id,
-        certificate_stream,
-        Arc::new(settlement_service),
-        mock_current_epoch(),
-    )
-    .expect("Failed to create a new network task");
-
-    let mut epochs = task.clock_ref.subscribe().unwrap();
-    let mut next_expected_height = Height::ZERO;
-
-    sender
-        .send(NewCertificate {
-            certificate_id,
-            height: Height::ZERO,
-        })
-        .await
-        .expect("Failed to send the certificate");
-
-    sender
-        .send(NewCertificate {
-            certificate_id: certificate_id2,
-            height: Height::new(1),
-        })
-        .await
-        .expect("Failed to send the certificate");
-
-    let mut first_run = true;
-    task.make_progress(
-        &mut epochs,
-        &mut next_expected_height,
-        &mut first_run,
-        &CancellationToken::new(),
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(next_expected_height, Height::new(1));
-    tokio::time::timeout(
-        Duration::from_millis(100),
-        task.make_progress(
-            &mut epochs,
-            &mut next_expected_height,
-            &mut first_run,
-            &CancellationToken::new(),
-        ),
-    )
-    .await
-    .expect_err("Should have timed out");
-
-    assert_eq!(next_expected_height, Height::new(1));
 }
 
 #[rstest]
@@ -715,6 +476,13 @@ async fn retries() {
             let cert = certs.lock().unwrap().pop_front().unwrap();
             Ok(Some(cert))
         });
+
+    // Once the retried certificate settles, the drain checks height 1.
+    pending
+        .expect_get_certificate()
+        .once()
+        .with(eq(network_id), eq(Height::new(1)))
+        .returning(|_, _| Ok(None));
 
     pending
         .expect_get_certificate()
@@ -919,7 +687,6 @@ async fn retries() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
 
     sender
@@ -940,7 +707,6 @@ async fn retries() {
 
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -952,7 +718,6 @@ async fn retries() {
     assert_eq!(next_expected_height, Height::ZERO);
 
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -962,307 +727,6 @@ async fn retries() {
 
     // Second certificate should succeed - height advances
     assert_eq!(next_expected_height, Height::new(1));
-}
-
-#[rstest]
-#[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(1))]
-async fn changing_epoch_triggers_certify() {
-    let mut pending = MockPendingStore::new();
-    pending
-        .expect_get_proof()
-        .returning(|_| Ok(Some(settlement_proof())));
-    let mut state = MockStateStore::new();
-    let mut certifier = MockCertifier::new();
-    expect_settlement_l1_context(&mut certifier);
-    let clock_ref = clock();
-    let network_id = 1.into();
-    let (sender, certificate_stream) = mpsc::channel(100);
-
-    let certificate = Certificate::new_for_test(network_id, Height::ZERO);
-    let certificate2 = Certificate::new_for_test(network_id, Height::new(1));
-    let certificate_id = certificate.hash();
-    let certificate_id2 = certificate2.hash();
-
-    pending
-        .expect_get_certificate()
-        .once()
-        .with(eq(network_id), eq(Height::ZERO))
-        .returning(|network_id, height| Ok(Some(Certificate::new_for_test(network_id, height))));
-
-    pending
-        .expect_get_certificate()
-        .once()
-        .with(eq(network_id), eq(Height::new(1)))
-        .returning(|network_id, height| Ok(Some(Certificate::new_for_test(network_id, height))));
-
-    state
-        .expect_read_local_network_state()
-        .returning(|_| Ok(Default::default()));
-
-    state
-        .expect_write_local_network_state()
-        .returning(|_, _, _| Ok(()));
-
-    state
-        .expect_get_latest_settled_certificate_per_network()
-        .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(None));
-
-    state
-        .expect_get_certificate_header()
-        .once()
-        .with(eq(certificate_id))
-        .returning(|certificate_id| {
-            Ok(Some(agglayer_types::CertificateHeader {
-                network_id: 1.into(),
-                height: Height::ZERO,
-                epoch_number: None,
-                certificate_index: None,
-                certificate_id: *certificate_id,
-                new_local_exit_root: [0; 32].into(),
-                prev_local_exit_root: [1; 32].into(),
-                metadata: Metadata::ZERO,
-                status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
-            }))
-        });
-
-    state
-        .expect_get_certificate_header()
-        .once()
-        .with(eq(certificate_id2))
-        .returning(|certificate_id| {
-            Ok(Some(agglayer_types::CertificateHeader {
-                network_id: 1.into(),
-                height: Height::new(1),
-                epoch_number: None,
-                certificate_index: None,
-                certificate_id: *certificate_id,
-                prev_local_exit_root: [1; 32].into(),
-                new_local_exit_root: [0; 32].into(),
-                metadata: Metadata::ZERO,
-                status: CertificateStatus::Pending,
-                settlement_tx_hash: None,
-            }))
-        });
-
-    certifier
-        .expect_certify()
-        .once()
-        .with(always(), eq(network_id), eq(Height::ZERO))
-        .return_once(move |new_state, network_id, _height| {
-            let result = crate::CertifierOutput {
-                certificate,
-                height: Height::ZERO,
-                new_state,
-                network: network_id,
-                new_pp_root: Digest::ZERO,
-            };
-
-            Ok(result)
-        });
-
-    certifier
-        .expect_certify()
-        .once()
-        .with(always(), eq(network_id), eq(Height::new(1)))
-        .return_once(move |new_state, network_id, _height| {
-            let result = crate::CertifierOutput {
-                certificate: certificate2,
-                height: Height::new(1),
-                new_state,
-                network: network_id,
-                new_pp_root: Digest::ZERO,
-            };
-
-            Ok(result)
-        });
-
-    pending
-        .expect_set_latest_proven_certificate_per_network()
-        .once()
-        .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
-        .returning(|_, _, _| Ok(()));
-
-    pending
-        .expect_set_latest_proven_certificate_per_network()
-        .once()
-        .with(eq(network_id), eq(Height::new(1)), eq(certificate_id2))
-        .returning(|_, _, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Proven))
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id2), eq(CertificateStatus::Proven))
-        .returning(|_, _| Ok(()));
-
-    // Both certificates transition through Candidate before settlement.
-    state
-        .expect_update_certificate_header_status()
-        .times(2)
-        .withf(|_, status| matches!(status, CertificateStatus::Candidate))
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_insert_certificate_settlement_job_id()
-        .returning(|_, _| Ok(()));
-    state
-        .expect_get_certificate_settlement_job_id()
-        .returning(|_| Ok(Some(job_id(1))));
-
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id && *t == SETTLEMENT_TX_HASH_1)
-        .returning(|_, _, _, _| Ok(()));
-
-    state
-        .expect_update_settlement_tx_hash()
-        .once()
-        .withf(move |i, t, _f, _| *i == certificate_id2 && *t == SETTLEMENT_TX_HASH_2)
-        .returning(|_, _, _, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Settled))
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_set_latest_settled_certificate_for_network()
-        .once()
-        .with(
-            eq(network_id),
-            eq(Height::ZERO),
-            eq(certificate_id),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
-        )
-        .returning(|_, _, _, _, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id2), eq(CertificateStatus::Settled))
-        .returning(|_, _| Ok(()));
-
-    state
-        .expect_set_latest_settled_certificate_for_network()
-        .once()
-        .with(
-            eq(network_id),
-            eq(Height::new(1)),
-            eq(certificate_id2),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
-        )
-        .returning(|_, _, _, _, _| Ok(()));
-
-    let mut settlement_service = MockSettlementServiceTrait::new();
-    settlement_service
-        .expect_submit_settlement_job()
-        .times(2)
-        .returning(|_, _| Ok(job_id(1)));
-    settlement_service
-        .expect_wait_for_settlement()
-        .times(1)
-        .return_once(move |_| {
-            Ok(settlement_result(
-                SETTLEMENT_TX_HASH_1,
-                ContractCallOutcome::Success,
-            ))
-        });
-    settlement_service
-        .expect_wait_for_settlement()
-        .times(1)
-        .return_once(move |_| {
-            Ok(settlement_result(
-                SETTLEMENT_TX_HASH_2,
-                ContractCallOutcome::Success,
-            ))
-        });
-
-    let mut task = NetworkTask::new(
-        Arc::new(pending),
-        Arc::new(state),
-        Arc::new(certifier),
-        clock_ref.clone(),
-        network_id,
-        certificate_stream,
-        Arc::new(settlement_service),
-        mock_current_epoch(),
-    )
-    .expect("Failed to create a new network task");
-
-    let mut epochs = task.clock_ref.subscribe().unwrap();
-    let mut next_expected_height = Height::ZERO;
-
-    sender
-        .send(NewCertificate {
-            certificate_id,
-            height: Height::ZERO,
-        })
-        .await
-        .expect("Failed to send the certificate");
-
-    sender
-        .send(NewCertificate {
-            certificate_id: certificate_id2,
-            height: Height::new(1),
-        })
-        .await
-        .expect("Failed to send the certificate");
-    let mut first_run = true;
-    task.make_progress(
-        &mut epochs,
-        &mut next_expected_height,
-        &mut first_run,
-        &CancellationToken::new(),
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(next_expected_height, Height::new(1));
-
-    tokio::time::timeout(
-        Duration::from_millis(100),
-        task.make_progress(
-            &mut epochs,
-            &mut next_expected_height,
-            &mut first_run,
-            &CancellationToken::new(),
-        ),
-    )
-    .await
-    .expect_err("Should have timed out");
-
-    assert_eq!(next_expected_height, Height::new(1));
-
-    clock_ref.update_block_height(2);
-
-    clock_ref
-        .get_sender()
-        .send(agglayer_clock::Event::EpochEnded(EpochNumber::ZERO))
-        .expect("Failed to send");
-    let mut first_run = true;
-    task.make_progress(
-        &mut epochs,
-        &mut next_expected_height,
-        &mut first_run,
-        &CancellationToken::new(),
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(next_expected_height, Height::new(2));
 }
 
 #[rstest]
@@ -1358,7 +822,6 @@ async fn timeout_certifier() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
 
     sender
@@ -1370,7 +833,6 @@ async fn timeout_certifier() {
         .expect("Failed to send the certificate");
     let mut first_run = true;
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -1486,7 +948,6 @@ async fn process_next_certificate() {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
     let mut first_run = false; // Set to false since we're testing certificate processing, not initialization
 
@@ -1507,9 +968,8 @@ async fn process_next_certificate() {
         .await
         .expect("Failed to send second certificate");
 
-    // Process first certificate
+    // The first wake drains both queued certificates back-to-back.
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -1517,19 +977,10 @@ async fn process_next_certificate() {
     .await
     .unwrap();
 
-    assert_eq!(next_expected_height, Height::new(1));
+    assert_eq!(next_expected_height, Height::new(2));
 
-    // Advance the epoch and signal it so the per-epoch settlement backpressure
-    // releases before the second certificate.
-    clock_ref.update_block_height(2);
-    clock_ref
-        .get_sender()
-        .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)))
-        .unwrap();
-
-    // Process second certificate
+    // The queued event for the already-settled second certificate is a no-op.
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
@@ -1542,32 +993,98 @@ async fn process_next_certificate() {
 
 #[rstest]
 #[test_log::test(tokio::test)]
-#[timeout(Duration::from_secs(1))]
-async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
-    let mut pending = MockPendingStore::new();
-    let mut state = MockStateStore::new();
-    let certifier = MockCertifier::new();
-    let settlement_service = MockSettlementServiceTrait::new();
+#[timeout(Duration::from_secs(30))]
+async fn settles_pending_backlog_on_startup() {
+    let tmp = TempDBDir::new();
+    let storage = new_storage(&tmp.path);
+    let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
     let clock_ref = clock();
-    let epoch_sender = clock_ref.get_sender();
     let network_id = 1.into();
-    let (_sender, certificate_stream) = mpsc::channel(1);
+    // No certificate events are ever sent: the pending store alone must be
+    // enough to catch up, as when recovering a backlog after a restart.
+    let (_sender, certificate_stream) = mpsc::channel(100);
 
-    state
-        .expect_read_local_network_state()
-        .returning(|_| Ok(Default::default()));
+    let mut forest = Forest::default();
 
-    state
-        .expect_get_latest_settled_certificate_per_network()
-        .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(None));
+    let certificate = forest.apply_events(
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
+    );
+    storage
+        .pending
+        .insert_pending_certificate(network_id, Height::ZERO, &certificate)
+        .expect("unable to insert certificate in pending");
+    storage
+        .state
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .expect("Failed to insert certificate header");
 
-    pending.expect_get_certificate().returning(|_, _| Ok(None));
+    let certificate2 = {
+        let mut c = forest.apply_events(&[], &[(USDC, 1.try_into().unwrap())]);
+        c.height = Height::new(1);
+        c
+    };
+    storage
+        .pending
+        .insert_pending_certificate(network_id, Height::new(1), &certificate2)
+        .expect("unable to insert certificate in pending");
+    storage
+        .state
+        .insert_certificate_header(&certificate2, CertificateStatus::Pending)
+        .expect("Failed to insert certificate header");
 
+    certifier
+        .expect_certify()
+        .times(2)
+        .with(always(), eq(network_id), always())
+        .returning({
+            let pending_store = Arc::clone(&storage.pending);
+            move |mut new_state, network, height| {
+                let certificate = pending_store
+                    .get_certificate(network, height)
+                    .expect("Failed to get certificate")
+                    .expect("Certificate not found");
+                pending_store
+                    .insert_generated_proof(&certificate.hash(), &settlement_proof())
+                    .ok();
+
+                let signer = agglayer_types::Address::new([0; 20]);
+                let ctx_from_l1 = L1WitnessCtx {
+                    l1_info_root: certificate
+                        .l1_info_root()
+                        .expect("Failed to get L1 info root")
+                        .unwrap_or_default(),
+                    prev_pessimistic_root: PessimisticRootInput::Computed(
+                        PessimisticRootCommitmentVersion::V2,
+                    ),
+                    aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                };
+
+                let _ = new_state
+                    .apply_certificate(&certificate, ctx_from_l1)
+                    .expect("Failed to apply certificate");
+
+                Ok(CertifierOutput {
+                    certificate,
+                    height,
+                    new_state,
+                    network,
+                    new_pp_root: Digest::ZERO,
+                })
+            }
+        });
+
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    mock_settlement_persisting(
+        &mut settlement_service,
+        Arc::clone(&storage.state),
+        SETTLEMENT_TX_HASH_1,
+        ContractCallOutcome::Success,
+    );
     let mut task = NetworkTask::new(
-        Arc::new(pending),
-        Arc::new(state),
+        Arc::clone(&storage.pending),
+        Arc::clone(&storage.state),
         Arc::new(certifier),
         clock_ref.clone(),
         network_id,
@@ -1577,39 +1094,129 @@ async fn epoch_jammed(#[values(false, true)] at_capacity: bool) {
     )
     .expect("Failed to create a new network task");
 
-    let mut epochs = task.clock_ref.subscribe().unwrap();
     let mut next_expected_height = Height::ZERO;
+    let mut first_run = true;
 
-    // Jam the epoch channel with a bunch of epoch events.
-    for epoch_no in 1..=105 {
-        epoch_sender
-            .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(
-                epoch_no,
-            )))
-            .unwrap();
-    }
+    // A single first-run pass settles the whole backlog.
+    task.make_progress(
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
 
-    // Just make sure it does not panic or time out when epoch events are skipped.
+    assert_eq!(next_expected_height, Height::new(2));
+}
+
+#[rstest]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(30))]
+async fn wrong_height_event_still_drains_pending() {
+    let tmp = TempDBDir::new();
+    let storage = new_storage(&tmp.path);
+    let mut certifier = MockCertifier::new();
+    expect_settlement_l1_context(&mut certifier);
+    let clock_ref = clock();
+    let network_id = 1.into();
+    let (sender, certificate_stream) = mpsc::channel(100);
+
+    let mut forest = Forest::default();
+
+    let certificate = forest.apply_events(
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
+    );
+    let certificate_id = certificate.hash();
+    storage
+        .pending
+        .insert_pending_certificate(network_id, Height::ZERO, &certificate)
+        .expect("unable to insert certificate in pending");
+    storage
+        .state
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .expect("Failed to insert certificate header");
+
+    certifier
+        .expect_certify()
+        .once()
+        .with(always(), eq(network_id), eq(Height::ZERO))
+        .returning({
+            let pending_store = Arc::clone(&storage.pending);
+            move |mut new_state, network, height| {
+                let certificate = pending_store
+                    .get_certificate(network, height)
+                    .expect("Failed to get certificate")
+                    .expect("Certificate not found");
+                pending_store
+                    .insert_generated_proof(&certificate.hash(), &settlement_proof())
+                    .ok();
+
+                let signer = agglayer_types::Address::new([0; 20]);
+                let ctx_from_l1 = L1WitnessCtx {
+                    l1_info_root: certificate
+                        .l1_info_root()
+                        .expect("Failed to get L1 info root")
+                        .unwrap_or_default(),
+                    prev_pessimistic_root: PessimisticRootInput::Computed(
+                        PessimisticRootCommitmentVersion::V2,
+                    ),
+                    aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                };
+
+                let _ = new_state
+                    .apply_certificate(&certificate, ctx_from_l1)
+                    .expect("Failed to apply certificate");
+
+                Ok(CertifierOutput {
+                    certificate,
+                    height,
+                    new_state,
+                    network,
+                    new_pp_root: Digest::ZERO,
+                })
+            }
+        });
+
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    mock_settlement_persisting(
+        &mut settlement_service,
+        Arc::clone(&storage.state),
+        SETTLEMENT_TX_HASH_1,
+        ContractCallOutcome::Success,
+    );
+    let mut task = NetworkTask::new(
+        Arc::clone(&storage.pending),
+        Arc::clone(&storage.state),
+        Arc::new(certifier),
+        clock_ref.clone(),
+        network_id,
+        certificate_stream,
+        Arc::new(settlement_service),
+        mock_current_epoch(),
+    )
+    .expect("Failed to create a new network task");
+
+    let mut next_expected_height = Height::ZERO;
     let mut first_run = false;
-    task.at_capacity_for_epoch = at_capacity;
-    task.make_progress(
-        &mut epochs,
-        &mut next_expected_height,
-        &mut first_run,
-        &CancellationToken::new(),
-    )
-    .await
-    .unwrap();
-    assert_eq!(task.at_capacity_for_epoch, at_capacity);
 
-    // Taking the next item from the channel should advance the epoch.
+    // An event for a later height still wakes the task, which then finds and
+    // settles the certificate pending at the expected height.
+    sender
+        .send(NewCertificate {
+            certificate_id,
+            height: Height::new(5),
+        })
+        .await
+        .expect("Failed to send the certificate");
+
     task.make_progress(
-        &mut epochs,
         &mut next_expected_height,
         &mut first_run,
         &CancellationToken::new(),
     )
     .await
     .unwrap();
-    assert!(!task.at_capacity_for_epoch);
+
+    assert_eq!(next_expected_height, Height::new(1));
 }
