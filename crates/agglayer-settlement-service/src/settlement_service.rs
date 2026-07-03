@@ -48,6 +48,20 @@ impl SettlementJobWatcher {
     pub fn job_id(&self) -> SettlementJobId {
         self.job_id
     }
+
+    /// Wait until the job produces a result, then return it.
+    ///
+    /// Uses `wait_for(Option::is_some)` rather than `changed()` so a result
+    /// that landed before this call is not missed.
+    pub async fn wait_for_result(&mut self) -> eyre::Result<SettlementJobResult> {
+        let result = self
+            .watcher
+            .wait_for(|value| value.is_some())
+            .await
+            .map_err(|_| eyre::eyre!("settlement job watcher closed before producing a result"))?
+            .clone();
+        result.ok_or_else(|| eyre::eyre!("settlement job completed with no result"))
+    }
 }
 
 pub enum RetrievedSettlementResult {
@@ -421,7 +435,10 @@ mod tests {
         SettlementTxHash, B256, U256,
     };
     use alloy::{
-        network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner,
+        network::EthereumWallet,
+        primitives::U64,
+        providers::{mock::Asserter, ProviderBuilder},
+        signers::local::PrivateKeySigner,
     };
 
     use super::*;
@@ -439,6 +456,18 @@ mod tests {
                     .parse()
                     .expect("test provider URL should parse"),
             )
+    }
+
+    fn mk_provider_with_gas_estimate(
+        gas_estimate: u64,
+    ) -> impl Provider + WalletProvider + 'static {
+        let asserter = Asserter::new();
+        asserter.push_success(&U64::from(gas_estimate));
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(
+                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+            ))
+            .connect_mocked_client(asserter)
     }
 
     fn expect_empty_startup_recovery(store: &mut MockStateStore) {
@@ -718,7 +747,9 @@ mod tests {
         expect_empty_startup_recovery(&mut store);
         let certificate_id = CertificateId::new(Digest::from([7; 32]));
         let job = mk_job(7);
-        let expected_job = job.clone();
+        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+        let mut expected_job = job.clone();
+        expected_job.gas_limit = 200_000;
         let recorded_job_id = Arc::new(Mutex::new(None));
         let ordering = Arc::new(Mutex::new(Vec::new()));
 
@@ -750,14 +781,25 @@ mod tests {
                 }
             });
 
+        // `create` runs `estimateGas` before persisting; answer it above the
+        // ceiling so the stored limit is unchanged. Live token for estimation,
+        // then cancel to stop the spawned task.
         let cancellation_token = CancellationToken::new();
-        cancellation_token.cancel();
-        let service = mk_service_with_token(Arc::new(store), cancellation_token).await;
+        let service = SettlementService::start(
+            SettlementServiceConfig::default(),
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider_with_gas_estimate(200_000)),
+            Arc::new(store),
+            cancellation_token.clone(),
+        )
+        .await
+        .expect("settlement service should start");
 
         let watcher = service
             .request_new_settlement(Some(certificate_id), job)
             .await
             .expect("settlement request should be accepted");
+        cancellation_token.cancel();
 
         assert_eq!(*recorded_job_id.lock().unwrap(), Some(watcher.job_id()));
         assert_eq!(

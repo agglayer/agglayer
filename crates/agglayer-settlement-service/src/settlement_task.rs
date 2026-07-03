@@ -340,6 +340,51 @@ pub struct SettlementTask<L1Provider, SettlementStore> {
 
 static ID_GENERATOR: OnceLock<std::sync::Mutex<ulid::Generator>> = OnceLock::new();
 
+/// The settlement call without nonce, gas, or fees — shared by gas estimation
+/// and the final attempt build.
+fn settlement_call_request(job: &SettlementJob, wallet: Address) -> TransactionRequest {
+    TransactionRequest::default()
+        .from(wallet)
+        .to(job.contract_address.into_alloy())
+        .value(job.eth_value)
+        .input(job.calldata.clone().into())
+}
+
+/// Resolve the gas limit (`min(multiplier × estimateGas, ceiling)`) before the
+/// job and cert->job-id link are persisted, so a deterministic `estimateGas`
+/// failure fails here rather than on every restart of a persisted job.
+/// Transient RPC failures retry; deterministic ones propagate.
+async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
+    provider: &P,
+    tx_config: &SettlementTransactionConfig,
+    mut job: SettlementJob,
+    cancellation_token: &CancellationToken,
+) -> eyre::Result<SettlementJob> {
+    let wallet = provider.default_signer_address();
+    let request = settlement_call_request(&job, wallet);
+
+    let gas_estimate = crate::utils::retry_alloy_callback_until_success(
+        &tx_config.retry_on_transient_failure,
+        cancellation_token,
+        || provider.estimate_gas(request.clone()).into_future(),
+    )
+    .await
+    .map_err(|error| match error {
+        RetryCallbackError::Cancelled => {
+            eyre::eyre!("settlement gas estimation cancelled before completion")
+        }
+        RetryCallbackError::Error(error) => {
+            eyre::eyre!("failed to estimate settlement gas limit: {error}")
+        }
+    })?;
+
+    job.gas_limit = tx_config
+        .gas_limit_multiplier_factor
+        .saturating_mul_u128(gas_estimate as u128)
+        .min(tx_config.gas_limit_ceiling.saturating_to::<u128>());
+    Ok(job)
+}
+
 impl<
         L1Provider: Provider + WalletProvider + 'static,
         SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter,
@@ -353,6 +398,13 @@ impl<
         store: Arc<SettlementStore>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
+        let job = resolve_settlement_gas_limit(
+            provider.as_ref(),
+            tx_config.as_ref(),
+            job,
+            &control.cancellation_token,
+        )
+        .await?;
         let id = Self::reserve_settlement_job_id(store.as_ref(), certificate_id).await?;
         let this = Self {
             id,
@@ -876,6 +928,12 @@ impl<
         wallet: Address,
         nonce: Nonce,
     ) -> Result<Option<SettlementTxHash>, RetryCallbackError<TransportError>> {
+        // Test-only failpoint: pretend the nonce is not yet included on L1 so the
+        // run loop keeps waiting and resubmits. Compiled out of production builds.
+        #[cfg(feature = "testutils")]
+        if fail::eval("settlement::tx_not_included", |_| true).unwrap_or(false) {
+            return Ok(None);
+        }
         crate::utils::retry_alloy_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
@@ -975,11 +1033,19 @@ impl<
         nonce: Nonce,
         tx_hash: SettlementTxHash,
     ) -> Result<Option<ContractCallResult>, WaitForSettlementError> {
-        if let Some(receipt) = self
+        let receipt = self
             .provider
             .get_transaction_receipt(tx_hash.into())
-            .await?
-        {
+            .await?;
+
+        // Test-only failpoint: hide an otherwise-available receipt so the run loop
+        // treats it as indexing lag and keeps polling. Compiled out of production.
+        #[cfg(feature = "testutils")]
+        let receipt = receipt.filter(|_| {
+            !fail::eval("settlement::receipt_transiently_unavailable", |_| true).unwrap_or(false)
+        });
+
+        if let Some(receipt) = receipt {
             return match crate::utils::contract_call_result_from_receipt(&receipt) {
                 Some(result) => Ok(Some(result)),
                 None => Err(WaitForSettlementError::NotSettledYet),
@@ -1153,12 +1219,8 @@ impl<
         )
         .min(max_fee_per_gas);
 
-        let gas_limit_ceiling = u128::try_from(config.gas_limit_ceiling).unwrap_or(u128::MAX);
-        let gas_limit_u128 = config
-            .gas_limit_multiplier_factor
-            .saturating_mul_u128(self.job.gas_limit)
-            .min(gas_limit_ceiling);
-        let gas_limit = u64::try_from(gas_limit_u128).unwrap_or(u64::MAX);
+        // The job's gas limit is already resolved (at job creation).
+        let gas_limit = u64::try_from(self.job.gas_limit).unwrap_or(u64::MAX);
 
         GasParams {
             gas_limit,
@@ -1238,11 +1300,10 @@ impl<
         })
     }
 
-    /// Builds and signs an EIP-1559 settlement transaction for [`Self::job`]
-    /// with the given wallet, nonce, chain id, and resolved gas parameters.
+    /// Builds and signs an EIP-1559 settlement transaction for [`Self::job`].
     ///
-    /// `wallet` sets the `from` field and must have a registered signer in the
-    /// provider's wallet; otherwise signing fails with a signer-missing error.
+    /// The gas limit is `gas.gas_limit`, resolved at job creation, so this path
+    /// makes no `eth_estimateGas` call. `wallet` needs a registered signer.
     async fn build_attempt(
         &self,
         wallet: Address,
@@ -1250,11 +1311,7 @@ impl<
         chain_id: u64,
         gas: GasParams,
     ) -> Result<TxEnvelope, TransactionBuilderError<Ethereum>> {
-        let request = TransactionRequest::default()
-            .from(wallet)
-            .to(self.job.contract_address.into_alloy())
-            .value(self.job.eth_value)
-            .input(self.job.calldata.clone().into())
+        let request = settlement_call_request(&self.job, wallet)
             .nonce(nonce.0)
             .gas_limit(gas.gas_limit)
             .max_fee_per_gas(gas.max_fee_per_gas)
@@ -1349,8 +1406,8 @@ impl<
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || async {
-                // These three L1 reads are independent, so fetch them
-                // concurrently to keep each (retried) build to one round-trip.
+                // These fetches are independent, so run them concurrently to
+                // keep each (retried) build to one round-trip.
                 let (nonce, chain_id, estimate) = tokio::try_join!(
                     self.assign_next_nonce_for_wallet(wallet),
                     async {
@@ -1895,6 +1952,16 @@ mod tests {
             .connect_mocked_client(asserter)
     }
 
+    // `create` now resolves the gas limit via `eth_estimateGas`; this answers that
+    // one call so the durable-write path under test runs.
+    fn mk_mock_provider_with_gas_estimate(gas: u64) -> impl Provider + WalletProvider + 'static {
+        let asserter = Asserter::new();
+        asserter.push_success(&U64::from(gas));
+        ProviderBuilder::new()
+            .wallet(EthereumWallet::from(test_signer()))
+            .connect_mocked_client(asserter)
+    }
+
     async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
         _provider: L1Provider,
         store: &MockStateStore,
@@ -1930,7 +1997,9 @@ mod tests {
     async fn create_generates_settlement_job_id() {
         let mut store = MockStateStore::new();
         let job = mk_job();
-        let expected_job = job.clone();
+        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+        let mut expected_job = job.clone();
+        expected_job.gas_limit = 200_000;
         let recorded_job_id = Arc::new(Mutex::new(None));
         let recorded_job_id_for_store = recorded_job_id.clone();
 
@@ -1947,7 +2016,7 @@ mod tests {
             None,
             job,
             Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider()),
+            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
             mk_control(),
         )
@@ -1963,7 +2032,9 @@ mod tests {
         let mut store = MockStateStore::new();
         let certificate_id = CertificateId::new(Digest::from([7; 32]));
         let job = mk_job();
-        let expected_job = job.clone();
+        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+        let mut expected_job = job.clone();
+        expected_job.gas_limit = 200_000;
         let recorded_job_id = Arc::new(Mutex::new(None));
         let ordering = Arc::new(Mutex::new(Vec::new()));
 
@@ -1999,7 +2070,7 @@ mod tests {
             Some(certificate_id),
             job,
             Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider()),
+            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
             mk_control(),
         )
@@ -2036,7 +2107,7 @@ mod tests {
             Some(certificate_id),
             job,
             Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider()),
+            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
             mk_control(),
         )
@@ -2929,8 +3000,6 @@ mod tests {
     #[test]
     fn resolve_base_gas_params_applies_multiplier_floor_and_ceiling() {
         let config = SettlementTransactionConfig {
-            gas_limit_multiplier_factor: Multiplier::from_u64_per_1000(2000), // 2.0x
-            gas_limit_ceiling: U256::from(150_000u64),
             max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1000),
             max_fee_per_gas_floor: 1_000_000_000,    // 1 gwei
             max_fee_per_gas_ceiling: 50_000_000_000, // 50 gwei
@@ -2955,8 +3024,8 @@ mod tests {
 
         let gas = task.resolve_base_gas_params(&estimate);
 
-        // 100_000 * 2.0 = 200_000, capped to ceiling 150_000.
-        assert_eq!(gas.gas_limit, 150_000);
+        // gas_limit passes through the job's gas_limit unchanged.
+        assert_eq!(gas.gas_limit, 100_000);
         assert_eq!(gas.max_fee_per_gas, 50_000_000_000);
         assert_eq!(gas.max_priority_fee_per_gas, 2_000_000_000);
     }

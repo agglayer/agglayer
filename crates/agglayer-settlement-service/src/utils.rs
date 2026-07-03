@@ -150,8 +150,15 @@ pub(crate) fn contract_call_result_from_receipt(
 ) -> Option<ContractCallResult> {
     let block_hash = receipt.block_hash()?;
     let block_number = receipt.block_number()?;
+
+    let succeeded = receipt.status();
+    // Test-only failpoint: force the settlement tx to look reverted so the run
+    // loop finalizes the job as a revert. Compiled out of production builds.
+    #[cfg(feature = "testutils")]
+    let succeeded = succeeded && !fail::eval("settlement::force_revert", |_| true).unwrap_or(false);
+
     Some(ContractCallResult {
-        outcome: if receipt.status() {
+        outcome: if succeeded {
             ContractCallOutcome::Success
         } else {
             ContractCallOutcome::Revert
