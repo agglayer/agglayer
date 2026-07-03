@@ -38,6 +38,9 @@ async fn healthcheck_method_can_be_called() {
         .await
         .unwrap();
     let out = String::from_utf8(bytes.to_bytes().to_vec()).unwrap();
-    assert_eq!(out.as_str(), "{\"health\":true,\"version\":\"test-version\"}");
+    assert_eq!(
+        out.as_str(),
+        "{\"health\":true,\"version\":\"test-version\"}"
+    );
     token.cancel();
 }
