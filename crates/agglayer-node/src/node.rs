@@ -196,6 +196,7 @@ impl Node {
             let signers = ConfiguredSigners::new(&config).await?;
             let provider_cert = fn_build_provider(signers.pp_settlement);
 
+            let tx_settlement_configured = signers.tx_settlement.is_some();
             let provider_tx = if let Some(tx_settlement) = signers.tx_settlement {
                 fn_build_provider(tx_settlement)
             } else {
@@ -203,16 +204,17 @@ impl Node {
                 provider_cert.clone()
             };
 
-            tracing::info!(
-                "Cert signer address: {:?}",
-                // Note that because the signer always has at least one address,
-                // this iterator will always have at least one element.
-                provider_cert.signer_addresses().next().unwrap()
-            );
-            tracing::info!(
-                "Tx signer address: {:?}",
-                provider_tx.signer_addresses().next().unwrap()
-            );
+            // The signer always has at least one address, so `next()` is always `Some`.
+            let cert_signer = provider_cert.signer_addresses().next().unwrap();
+            let tx_signer = provider_tx.signer_addresses().next().unwrap();
+            tracing::info!("Cert signer address: {cert_signer:?}");
+            tracing::info!("Tx signer address: {tx_signer:?}");
+            if tx_settlement_configured && cert_signer == tx_signer {
+                warn!(
+                    "Configured pp- and tx-settlement signers share address {cert_signer:?}; \
+                     settlement service and kernel will use one wallet with two nonce allocators"
+                );
+            }
 
             (provider_cert, provider_tx)
         };
@@ -265,7 +267,7 @@ impl Node {
             agglayer_settlement_service::SettlementService::start(
                 config.settlement.settlement_service_config.clone(),
                 settlement_config.clone(),
-                rpc_tx_settlement.clone(),
+                rpc_pp_settlement.clone(),
                 state_store.clone(),
                 cancellation_token.clone(),
             )
