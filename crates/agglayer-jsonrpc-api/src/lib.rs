@@ -8,7 +8,7 @@ use std::{
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
-    PendingCertificateWriter, StateReader, StateWriter,
+    PendingCertificateWriter, SettlementReader, StateReader, StateWriter,
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, NetworkInfo,
@@ -122,7 +122,7 @@ where
     V0Rpc: Provider + Clone + 'static,
     Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + SettlementReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
@@ -198,7 +198,7 @@ where
     V0Rpc: Provider + Clone + 'static,
     Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + SettlementReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
