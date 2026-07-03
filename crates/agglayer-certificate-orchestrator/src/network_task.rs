@@ -11,11 +11,11 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
-    CertificateId, CertificateStatus, CertificateStatusError, EpochNumber, ExecutionMode, Height,
+    CertificateId, CertificateStatus, CertificateStatusError, ExecutionMode, Height,
     LocalNetworkStateData, NetworkId,
 };
 use arc_swap::ArcSwap;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -92,14 +92,11 @@ pub(crate) struct NetworkTask<
     certifier_client: Arc<CertifierClient>,
     /// The local network state of the network task.
     local_state: Box<LocalNetworkStateData>,
-
     /// The clock reference to subscribe to the epoch events and check for
     /// current epoch.
     clock_ref: ClockRef,
     /// The stream of new certificates to certify.
     certificate_stream: mpsc::Receiver<NewCertificate>,
-    /// Flag to indicate if the network is at capacity for the current epoch.
-    at_capacity_for_epoch: bool,
     /// latest certificate settled
     latest_settled: Option<SettledCertificate>,
     /// The settlement service for submitting settlement jobs
@@ -154,7 +151,6 @@ where
             local_state,
             clock_ref,
             certificate_stream,
-            at_capacity_for_epoch: false,
             latest_settled,
             settlement_service,
             current_epoch,
@@ -174,8 +170,6 @@ where
     ) -> Result<NetworkId, Error> {
         info!("Starting the network task for network {}", self.network_id);
 
-        let mut stream_epoch = self.clock_ref.subscribe()?;
-
         let current_epoch = self.clock_ref.current_epoch();
 
         // Start from the latest settled certificate to define the next expected height
@@ -189,7 +183,6 @@ where
                 debug!("Current network height is {}", current_height);
                 if epoch == current_epoch {
                     debug!("Already settled for the epoch {current_epoch}");
-                    self.at_capacity_for_epoch = true;
                 }
 
                 current_height.next()
@@ -208,7 +201,7 @@ where
                     return Ok(self.network_id);
                 }
 
-                result = self.make_progress(&mut stream_epoch, &mut next_expected_height, &mut first_run, &cancellation_token) => {
+                result = self.make_progress(&mut next_expected_height, &mut first_run, &cancellation_token) => {
                     if let Err(error)= result {
                         error!("Error during the certification process: {}", error);
 
@@ -222,10 +215,9 @@ where
         }
     }
 
-    #[instrument(skip(self, stream_epoch, cancellation_token), fields(certificate_id))]
+    #[instrument(skip(self, cancellation_token), fields(certificate_id))]
     async fn make_progress(
         &mut self,
-        stream_epoch: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
         next_expected_height: &mut Height,
         first_run: &mut bool,
         cancellation_token: &CancellationToken,
@@ -234,39 +226,7 @@ where
             *first_run = false;
         } else {
             tokio::select! {
-                event = stream_epoch.recv() => {
-                    let network_id = self.network_id;
-                    match event {
-                        Ok(agglayer_clock::Event::EpochEnded(epoch)) => {
-                            info!("Received an epoch event: {}", epoch);
-
-                            let current_epoch = self.clock_ref.current_epoch();
-                            if epoch != EpochNumber::ZERO && epoch.next() < current_epoch {
-                                warn!("Received an epoch event for epoch {epoch} which is outdated, current epoch is {current_epoch}");
-
-                                return Ok(());
-                            }
-                            match self.latest_settled {
-                                Some(SettledCertificate(_, _, epoch, _)) if epoch == current_epoch => {
-                                    warn!("Network {network_id} is at capacity for the epoch {current_epoch}");
-                                    return Ok(());
-                                },
-                                _ => {
-                                    self.at_capacity_for_epoch = false;
-                                }
-                            }
-                        }
-                        Err(broadcast::error::RecvError::Lagged(num_skipped)) => {
-                            warn!("Network {network_id} skipped {num_skipped} epoch ticks");
-                            return Ok(());
-                        }
-                        Err(broadcast::error::RecvError::Closed) => {
-                            error!("Epoch channel closed for network {network_id}");
-                            return Err(Error::InternalError("epoch channel closed".into()));
-                        }
-                    }
-                }
-                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv(), if !self.at_capacity_for_epoch => {
+                Some(NewCertificate { certificate_id, height, .. }) = self.certificate_stream.recv() => {
                     info!(
                         hash = certificate_id.to_string(),
                         "Received a certificate event for {certificate_id} at height {height}"
@@ -367,9 +327,6 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateSettled { height, certificate_id }) => {
-                        // One certificate settles per network per epoch: stop
-                        // accepting new certificates until the next epoch event.
-                        self.at_capacity_for_epoch = true;
                         next_expected_height.increment();
                         debug!("Certification process completed");
 
@@ -459,7 +416,6 @@ where
                     }
                     Some(NetworkTaskMessage::CertificateErrored { .. }) => {
                         // The certificate task already logged everything that should be logged.
-                        self.at_capacity_for_epoch = false;
                         break;
                     }
                 }
