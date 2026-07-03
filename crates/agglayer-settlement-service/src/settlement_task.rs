@@ -1704,9 +1704,22 @@ impl<
             }
 
             if !current_result.can_be_replaced_by(&result) {
+                // A "settled elsewhere" note can reach an attempt that already has a real
+                // result. Keep the real result. Panicking here would repeat on every restart
+                // and wedge the job forever.
+                if result.is_resolved_elsewhere() {
+                    warn!(
+                        "Settlement task {} kept result {current_result:?} for attempt \
+                         {attempt_number}, dropped conflicting write {result:?}",
+                        self.id
+                    );
+                    return;
+                }
+
                 panic!(
-                    "Settlement task {} tried to replace conflicting result for attempt {}",
-                    self.id, attempt_number
+                    "Settlement task {} tried to replace conflicting result for attempt \
+                     {attempt_number}: {current_result:?} -> {result:?}",
+                    self.id
                 );
             }
         }
@@ -2433,6 +2446,42 @@ mod tests {
             existing_hash
         );
         assert!(!task.attempts.contains_key(&(new_wallet, new_nonce)));
+    }
+
+    #[tokio::test]
+    async fn record_attempt_result_keeps_revert_over_conflicting_write() {
+        // Regression (#1607): a stored revert must survive a later "settled elsewhere"
+        // write instead of panicking (which used to repeat on every restart).
+        let wallet = Address::from([2; 20]);
+        let nonce = Nonce(7);
+        let attempt_number = SettlementAttemptNumber(3);
+        let revert = SettlementAttemptResult::ContractCall(mk_contract_call_result(
+            1,
+            ContractCallOutcome::Revert,
+        ));
+
+        let attempts = BTreeMap::from([(
+            (wallet, nonce),
+            BTreeMap::from([(
+                attempt_number,
+                mk_active_attempt(wallet, nonce, mk_tx_hash(1), Some(revert.clone())),
+            )]),
+        )]);
+
+        // The conflicting write is dropped, so the store is never called.
+        let mut task = mk_task(Arc::new(MockStateStore::new()), attempts);
+
+        task.record_attempt_result_to_db(
+            attempt_number,
+            SettlementAttemptResult::ClientError(ClientError::settlement_succeeded_elsewhere(
+                mk_tx_hash(9),
+            )),
+        );
+
+        assert_eq!(
+            task.attempts[&(wallet, nonce)][&attempt_number].result,
+            Some(revert)
+        );
     }
 
     #[tokio::test]
