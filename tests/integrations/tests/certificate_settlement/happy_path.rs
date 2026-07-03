@@ -60,6 +60,8 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
     let (_agglayer_shutdowned, l1, client) =
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
+    let mut certificate_ids = Vec::with_capacity(5);
+
     for i in 0..5 {
         let withdrawals = vec![];
 
@@ -79,9 +81,13 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
             .await
             .unwrap();
 
-        let result = wait_for_settlement_or_error!(client, certificate_id).await;
+        certificate_ids.push(certificate_id);
+    }
 
-        assert!(matches!(result.status, CertificateStatus::Settled));
+    for certificate_id in &certificate_ids {
+        let header = wait_for_settlement_or_error!(client, *certificate_id).await;
+
+        assert!(matches!(header.status, CertificateStatus::Settled));
     }
 
     let provider = RootProvider::<Ethereum>::new_http(reqwest::Url::parse(&l1.rpc).unwrap());

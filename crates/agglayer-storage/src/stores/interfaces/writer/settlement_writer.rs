@@ -1,14 +1,14 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobResult,
+    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
 };
-use ulid::Ulid;
 
 use crate::error::Error;
 
 /// Write access to settlement-related records stored in RocksDB.
 ///
-/// All write operations in this trait are insert-only: implementations must
-/// reject attempts to overwrite an existing key.
+/// Settlement job and attempt writes are insert-only. Settlement attempt
+/// results may be upgraded by `record_settlement_attempt_result` when stronger
+/// final evidence supersedes a previous client-side error.
 pub trait SettlementWriter: Send + Sync {
     /// Inserts a settlement job under `settlement_job_id`.
     ///
@@ -16,7 +16,7 @@ pub trait SettlementWriter: Send + Sync {
     /// `settlement_job_id` already exists.
     fn insert_settlement_job(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         settlement_job: &SettlementJob,
     ) -> Result<(), Error>;
 
@@ -27,7 +27,7 @@ pub trait SettlementWriter: Send + Sync {
     /// job must already exist.
     fn insert_settlement_job_result(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         tx_result: &SettlementJobResult,
     ) -> Result<(), Error>;
 
@@ -38,19 +38,20 @@ pub trait SettlementWriter: Send + Sync {
     /// already exists. The parent settlement job must already exist.
     fn insert_settlement_attempt(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         attempt_sequence_number: u64,
         settlement_attempt: &SettlementAttempt,
     ) -> Result<(), Error>;
 
-    /// Inserts a settlement attempt result under
-    /// `(settlement_job_id, attempt_sequence_number)`.
+    /// Records a settlement attempt result under `(settlement_job_id,
+    /// attempt_sequence_number)`.
     ///
-    /// This is an insert-only operation and must fail if that composite key
-    /// already exists. The corresponding settlement attempt must already exist.
-    fn insert_settlement_attempt_result(
+    /// This inserts missing results, accepts idempotent re-recording, and
+    /// allows a previous client error to be replaced by stronger final
+    /// nonce/on-chain evidence. Other conflicting updates must fail.
+    fn record_settlement_attempt_result(
         &self,
-        settlement_job_id: &Ulid,
+        settlement_job_id: &SettlementJobId,
         attempt_sequence_number: u64,
         tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error>;

@@ -1,6 +1,7 @@
 use super::generated::agglayer::storage::v0::{
-    settlement_attempt_result, BlockHash, BlockNumber, ContractCallMetadata, ContractCallOutcome,
-    ContractCallResult, SettlementAttemptResult, SettlementJobResult, TxHash,
+    settlement_attempt_result, Address, AttemptSequenceNumber, BlockHash, BlockNumber,
+    ContractCallMetadata, ContractCallOutcome, ContractCallResult, Nonce, SettlementAttemptResult,
+    SettlementJobResult, TxHash,
 };
 
 fn contract_call_success_for_test(seed: u8) -> ContractCallResult {
@@ -34,6 +35,15 @@ impl SettlementAttemptResult {
 impl SettlementJobResult {
     pub fn contract_call_success_for_test(seed: u8) -> Self {
         Self {
+            wallet: Some(Address {
+                address: vec![seed.wrapping_add(3); 20].into(),
+            }),
+            nonce: Some(Nonce {
+                nonce: seed as u64 + 200,
+            }),
+            attempt_number: Some(AttemptSequenceNumber {
+                number: seed as u64 + 300,
+            }),
             contract_call_result: Some(contract_call_success_for_test(seed)),
         }
     }

@@ -121,14 +121,19 @@ impl<const TREE_DEPTH: usize> LocalExitTreeData<TREE_DEPTH> {
 
 #[cfg(test)]
 mod tests {
-    use rand::{random, rng, Rng};
+    use agglayer_primitives::Digest;
+    use rand::{rng, Rng};
 
     use crate::local_exit_tree::{data::LocalExitTreeData, LocalExitTree, LocalExitTreeError};
 
     const TREE_DEPTH: usize = 32;
 
+    fn random_digest() -> Digest {
+        Digest::from(rng().random::<[u8; 32]>())
+    }
+
     fn compare_let_data_let_frontier(num_leaves: usize) {
-        let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
+        let leaves = (0..num_leaves).map(|_| random_digest()).collect::<Vec<_>>();
         let local_exit_tree_frontier: LocalExitTree<TREE_DEPTH> =
             LocalExitTree::from_leaves(leaves.iter().cloned()).unwrap();
         let local_exit_tree_data: LocalExitTreeData<TREE_DEPTH> =
@@ -153,7 +158,7 @@ mod tests {
     #[test]
     fn test_data_vs_frontier_add_leaf() -> Result<(), LocalExitTreeError> {
         let num_leaves = rng().random_range(1usize..100.min(1 << TREE_DEPTH));
-        let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
+        let leaves = (0..num_leaves).map(|_| random_digest()).collect::<Vec<_>>();
         let mut local_exit_tree_data: LocalExitTreeData<TREE_DEPTH> =
             LocalExitTreeData::from_leaves(leaves.into_iter())?;
         let mut local_exit_tree_frontier: LocalExitTree<TREE_DEPTH> =
@@ -162,7 +167,7 @@ mod tests {
             local_exit_tree_data.get_root(),
             local_exit_tree_frontier.get_root()
         );
-        let leaf = random();
+        let leaf = random_digest();
         local_exit_tree_data.add_leaf(leaf)?;
         local_exit_tree_frontier.add_leaf(leaf)?;
         assert_eq!(
@@ -175,7 +180,7 @@ mod tests {
     #[test]
     fn test_merkle_proofs() {
         let num_leaves = rng().random_range(1..=100.min(1 << TREE_DEPTH));
-        let leaves = (0..num_leaves).map(|_| random()).collect::<Vec<_>>();
+        let leaves = (0..num_leaves).map(|_| random_digest()).collect::<Vec<_>>();
         let leaf_index = rng().random_range(0..num_leaves);
         let leaf = leaves[leaf_index];
         let local_exit_tree_data: LocalExitTreeData<TREE_DEPTH> =

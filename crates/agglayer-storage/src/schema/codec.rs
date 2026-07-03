@@ -27,6 +27,9 @@ pub enum CodecError {
     #[error(r#"Invalid enum variant {0}"#)]
     InvalidEnumVariant(String),
 
+    #[error(r#"Conversion error: {0}"#)]
+    Conversion(String),
+
     #[error(r#"Unable to write encoded bytes: {0}"#)]
     UnableToWriteEncodedBytes(#[from] std::io::Error),
 }
@@ -46,6 +49,18 @@ pub trait Codec: Sized {
     fn encode_into<W: io::Write>(&self, writer: W) -> Result<(), CodecError>;
 
     fn decode(buf: &[u8]) -> Result<Self, CodecError>;
+}
+
+impl<const N: usize> Codec for [u8; N] {
+    fn encode_into<W: io::Write>(&self, mut writer: W) -> Result<(), CodecError> {
+        writer.write_all(self)?;
+
+        Ok(())
+    }
+
+    fn decode(buf: &[u8]) -> Result<Self, CodecError> {
+        crate::schema::fixed_bytes::<N>(buf, "fixed byte array")
+    }
 }
 
 macro_rules! impl_codec_using_bincode_for {

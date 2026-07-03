@@ -8,7 +8,7 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest,
+    Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, Digest, Height,
     SettlementTxHash,
 };
 use tokio::sync::{mpsc, oneshot};
@@ -369,9 +369,15 @@ where
     }
 
     async fn process_from_pending(&mut self) -> Result<(), CertificateStatusError> {
+        self.certify_pending().await?;
+
+        self.process_from_proven().await
+    }
+
+    async fn certify_pending(&mut self) -> Result<(), CertificateStatusError> {
         if self.header.status != CertificateStatus::Pending {
             return Err(CertificateStatusError::InternalError(format!(
-                "CertificateTask::process_from_pending called with cert status {}",
+                "CertificateTask::certify_pending called with cert status {}",
                 self.header.status,
             )));
         }
@@ -413,7 +419,7 @@ where
         })
         .await?;
 
-        self.process_from_proven().await
+        Ok(())
     }
 
     async fn process_from_proven(&mut self) -> Result<(), CertificateStatusError> {
@@ -444,22 +450,34 @@ where
             "Submitting certificate for settlement, previous nonce is {:?}",
             self.nonce_info
         );
-        let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
-        self.send_to_network_task(NetworkTaskMessage::CertificateReadyForSettlement {
-            height,
-            certificate_id,
-            nonce_info: self.nonce_info.clone(),
-            previous_tx_hashes: self.previous_tx_hashes.clone(),
-            new_pp_root: self
-                .new_pp_root
-                .ok_or(CertificateStatusError::InternalError(
-                    "CertificateTask::process_from_proven called without a pp_root".into(),
-                ))?,
-            settlement_submitted_notifier,
-        })
-        .await?;
+        let mut settlement_submission = self
+            .submit_certificate_for_settlement(height, certificate_id)
+            .await?;
 
-        let (settlement_tx_hash, nonce_info) = settlement_submitted.await.map_err(recv_err)??;
+        if let Err(Error::Storage(agglayer_storage::error::Error::UnreadableProof { id, source })) =
+            &settlement_submission
+        {
+            if *id == certificate_id {
+                warn!(
+                    ?source,
+                    %certificate_id,
+                    "Unreadable generated proof, moving certificate back to Pending and reproving"
+                );
+                self.state_store.update_certificate_header_status(
+                    &certificate_id,
+                    &CertificateStatus::Pending,
+                )?;
+                self.header.status = CertificateStatus::Pending;
+                self.pending_store.remove_generated_proof(&certificate_id)?;
+                self.certify_pending().await?;
+                settlement_submission = self
+                    .submit_certificate_for_settlement(height, certificate_id)
+                    .await?;
+            }
+        }
+
+        let (settlement_tx_hash, nonce_info) =
+            settlement_submission.map_err(CertificateStatusError::from)?;
 
         if self.previous_tx_hashes.insert(settlement_tx_hash) {
             debug!(
@@ -502,6 +520,29 @@ where
         );
 
         self.process_from_candidate().await
+    }
+
+    async fn submit_certificate_for_settlement(
+        &self,
+        height: Height,
+        certificate_id: agglayer_types::CertificateId,
+    ) -> Result<Result<(SettlementTxHash, Option<NonceInfo>), Error>, CertificateStatusError> {
+        let (settlement_submitted_notifier, settlement_submitted) = oneshot::channel();
+        self.send_to_network_task(NetworkTaskMessage::CertificateReadyForSettlement {
+            height,
+            certificate_id,
+            nonce_info: self.nonce_info.clone(),
+            previous_tx_hashes: self.previous_tx_hashes.clone(),
+            new_pp_root: self
+                .new_pp_root
+                .ok_or(CertificateStatusError::InternalError(
+                    "CertificateTask::process_from_proven called without a pp_root".into(),
+                ))?,
+            settlement_submitted_notifier,
+        })
+        .await?;
+
+        settlement_submitted.await.map_err(recv_err)
     }
 
     async fn process_from_candidate(&mut self) -> Result<(), CertificateStatusError> {

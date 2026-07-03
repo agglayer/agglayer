@@ -5,7 +5,9 @@ use std::{
     sync::Arc,
 };
 
+use agglayer_errors::ResultExt as _;
 use agglayer_types::EpochNumber;
+use eyre::eyre;
 use rocksdb::backup::{
     BackupEngine as RocksBackupEngine, BackupEngineInfo as RocksBackupEngineInfo,
     BackupEngineOptions, RestoreOptions,
@@ -13,13 +15,37 @@ use rocksdb::backup::{
 use serde::Serialize;
 use tokio::sync;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::storage::DB;
 
-mod error;
+#[cfg(test)]
+mod test_hooks {
+    use std::{sync::Mutex, thread, time::Duration};
 
-pub use error::BackupError;
+    static BACKUP_STARTED: Mutex<Option<std::sync::mpsc::Sender<String>>> = Mutex::new(None);
+
+    pub(super) fn observe_backup_started(sender: std::sync::mpsc::Sender<String>) {
+        *BACKUP_STARTED.lock().expect("backup hook lock poisoned") = Some(sender);
+    }
+
+    pub(super) fn backup_started() {
+        let Some(sender) = BACKUP_STARTED
+            .lock()
+            .expect("backup hook lock poisoned")
+            .take()
+        else {
+            return;
+        };
+
+        let thread_name = thread::current().name().unwrap_or("unnamed").to_string();
+        sender
+            .send(thread_name)
+            .expect("backup hook receiver should be alive");
+
+        thread::sleep(Duration::from_millis(200));
+    }
+}
 
 /// Request to create a new backup.
 pub struct BackupRequest {
@@ -65,11 +91,11 @@ impl BackupClient {
     /// Send a backup request.
     ///
     /// This function will send the request to the backup engine.
-    pub fn backup(&self, request: BackupRequest) -> Result<(), BackupError> {
+    pub fn backup(&self, request: BackupRequest) -> eyre::Result<()> {
         if let Some(sender) = &self.sender {
             sender
                 .try_send(request)
-                .map_err(|_| BackupError::UnableToSendBackupRequest)?;
+                .map_err(|_| eyre!("Unable to send backup request"))?;
         }
 
         Ok(())
@@ -101,7 +127,7 @@ impl BackupEngine {
         state_max_backup_number: usize,
         pending_max_backup_number: usize,
         cancellation_token: CancellationToken,
-    ) -> Result<(Self, BackupClient), BackupError> {
+    ) -> eyre::Result<(Self, BackupClient)> {
         let env = rocksdb::Env::new()?;
         let config: BackupEngineConfig = path.into();
         let pending_opts = rocksdb::backup::BackupEngineOptions::new(&config.pending_backup_path)?;
@@ -132,7 +158,10 @@ impl BackupEngine {
 
     /// Create a new backup for the state, pending and epochs databases.
     /// This function will also purge old backups as configured.
-    pub fn create_new_backup(&mut self, request: &BackupRequest) -> Result<(), BackupError> {
+    pub fn create_new_backup(&mut self, request: &BackupRequest) -> eyre::Result<()> {
+        #[cfg(test)]
+        test_hooks::backup_started();
+
         info!("Creating new backup");
 
         if let Some((db, epoch_number)) = request.epoch_db.as_ref() {
@@ -142,44 +171,33 @@ impl BackupEngine {
                     .join(format!("{epoch_number}")),
             )?;
 
-            match RocksBackupEngine::open(&epochs_opts, &self.env) {
-                Err(error) => {
-                    error!("Failed to open backup engine for epoch db: {:?}", error);
-                }
-                Ok(mut engine) => {
-                    if let Err(error) = engine.create_new_backup_flush(db.raw_rocksdb(), true) {
-                        error!("Failed to create backup for epoch db: {:?}", error);
-                    }
-                }
+            if let Ok(mut engine) = RocksBackupEngine::open(&epochs_opts, &self.env)
+                .log_err("Failed to open backup engine for epoch db")
+            {
+                let _ = engine
+                    .create_new_backup_flush(db.raw_rocksdb(), true)
+                    .log_err("Failed to create backup for epoch db");
             }
         } else {
-            if let Err(error) = self
+            let _ = self
                 .state_engine
                 .create_new_backup_flush(self.state_db.raw_rocksdb(), true)
-            {
-                error!("Failed to create backup for state db: {:?}", error);
-            }
+                .log_err("Failed to create backup for state db");
 
-            if let Err(error) = self
+            let _ = self
                 .state_engine
                 .purge_old_backups(self.state_max_backup_number)
-            {
-                error!("Failed to purge old backup for state db: {:?}", error);
-            }
+                .log_err("Failed to purge old backup for state db");
 
-            if let Err(error) = self
+            let _ = self
                 .pending_engine
                 .create_new_backup_flush(self.pending_db.raw_rocksdb(), true)
-            {
-                error!("Failed to create backup for pending db: {:?}", error);
-            }
+                .log_err("Failed to create backup for pending db");
 
-            if let Err(error) = self
+            let _ = self
                 .pending_engine
                 .purge_old_backups(self.pending_max_backup_number)
-            {
-                error!("Failed to purge old backup for pending db: {:?}", error);
-            }
+                .log_err("Failed to purge old backup for pending db");
         }
 
         info!("Backup successfully created");
@@ -188,7 +206,7 @@ impl BackupEngine {
     }
 
     /// Run the backup engine, listen for new backup requests.
-    pub async fn run(mut self) -> Result<(), BackupError> {
+    pub async fn run(mut self) -> eyre::Result<()> {
         loop {
             tokio::select! {
                 _ = self.cancellation_token.cancelled() => {
@@ -196,7 +214,16 @@ impl BackupEngine {
                     break;
                 }
                 Some(request) = self.backup_request.recv() =>{
-                    self.create_new_backup(&request)?;
+                    let (backup_engine, result) = tokio::task::spawn_blocking(move || {
+                        let mut backup_engine = self;
+                        let result = backup_engine.create_new_backup(&request);
+
+                        (backup_engine, result)
+                    })
+                    .await?;
+
+                    self = backup_engine;
+                    result?;
                 }
             }
         }
@@ -205,7 +232,7 @@ impl BackupEngine {
     }
 
     /// Restore the state database from the latest backup.
-    pub fn restore(path: &Path, db_path: &Path) -> Result<(), BackupError> {
+    pub fn restore(path: &Path, db_path: &Path) -> eyre::Result<()> {
         let env = rocksdb::Env::new()?;
         let opts = rocksdb::backup::BackupEngineOptions::new(path)?;
 
@@ -217,7 +244,7 @@ impl BackupEngine {
     }
 
     /// Restore the state database from the defined backup version.
-    pub fn restore_at(path: &Path, db_path: &Path, version: u32) -> Result<(), BackupError> {
+    pub fn restore_at(path: &Path, db_path: &Path, version: u32) -> eyre::Result<()> {
         let env = rocksdb::Env::new()?;
         let opts = rocksdb::backup::BackupEngineOptions::new(path)?;
 
@@ -228,7 +255,7 @@ impl BackupEngine {
         Ok(engine.restore_from_backup(db_path, db_path, &RestoreOptions::default(), version)?)
     }
 
-    pub fn list_backups(path: &Path) -> Result<BackupReport, BackupError> {
+    pub fn list_backups(path: &Path) -> eyre::Result<BackupReport> {
         let env = rocksdb::Env::new()?;
 
         let config: BackupEngineConfig = path.into();
@@ -265,11 +292,11 @@ impl BackupEngine {
 
         let epochs = epochs
             .into_iter()
-            .map(|(epoch_number, path)| {
+            .map(|(epoch_number, path)| -> eyre::Result<_> {
                 let opts = BackupEngineOptions::new(path)?;
                 let engine = RocksBackupEngine::open(&opts, &env)?;
 
-                Ok::<_, BackupError>((
+                Ok((
                     epoch_number,
                     engine
                         .get_backup_info()
@@ -278,7 +305,7 @@ impl BackupEngine {
                         .collect::<Vec<_>>(),
                 ))
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<eyre::Result<Vec<_>>>()?;
 
         Ok(BackupReport::new(state, pending, epochs))
     }
@@ -356,5 +383,66 @@ impl BackupReport {
 
     pub fn get_epoch(&self, epoch: u64) -> Option<&Vec<BackupEngineInfo>> {
         self.epochs.get(&epoch)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    };
+
+    use tokio_util::sync::CancellationToken;
+
+    use super::*;
+    use crate::{
+        stores::{pending::PendingStore, state::StateStore},
+        tests::TempDBDir,
+    };
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn backup_creation_does_not_block_the_async_runtime_worker() {
+        let tmp = TempDBDir::new();
+        let state_db = Arc::new(
+            StateStore::init_db(&tmp.path.join("state")).expect("state db should initialize"),
+        );
+        let pending_db = Arc::new(
+            PendingStore::init_db(&tmp.path.join("pending")).expect("pending db should initialize"),
+        );
+        let cancellation_token = CancellationToken::new();
+        let (backup_engine, backup_client) = BackupEngine::new(
+            &tmp.path.join("backup"),
+            state_db,
+            pending_db,
+            10,
+            10,
+            cancellation_token.clone(),
+        )
+        .expect("backup engine should initialize");
+
+        let (started_sender, started_receiver) = std::sync::mpsc::channel();
+        test_hooks::observe_backup_started(started_sender);
+
+        let backup_handle = tokio::spawn(backup_engine.run());
+        let started_at = Instant::now();
+        backup_client
+            .backup(BackupRequest { epoch_db: None })
+            .expect("backup request should be queued");
+
+        let _backup_thread = tokio::task::spawn_blocking(move || {
+            started_receiver.recv_timeout(Duration::from_secs(1))
+        })
+        .await
+        .expect("backup started receiver task should complete")
+        .expect("backup should start");
+
+        assert!(
+            started_at.elapsed() < Duration::from_millis(100),
+            "backup creation ran on the async runtime worker and delayed unrelated async tasks"
+        );
+
+        cancellation_token.cancel();
+        backup_handle.abort();
     }
 }

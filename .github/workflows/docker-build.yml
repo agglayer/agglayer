@@ -37,6 +37,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Full history + tags so `git describe --tags` resolves a real
+          # version for the build-args below (default checkout is shallow).
+          fetch-depth: 0
+
+      - name: Compute build version
+        id: version
+        run: |
+          echo "describe=$(git describe --tags --always --dirty)" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -69,11 +79,16 @@ jobs:
           # platforms: linux/amd64,linux/arm64
           push: ${{ inputs.push }}
           file: ${{ inputs.file }}
+          build-args: |
+            AGGLAYER_BUILD_DESCRIBE=${{ steps.version.outputs.describe }}
+            AGGLAYER_BUILD_TIMESTAMP=${{ steps.version.outputs.timestamp }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: ${{ inputs.push == true && 'type=image' || format('type=docker,dest={0}/{1}.tar', inputs.local-artifact-dir, inputs.local-artifact-name) }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Keep merge queue/local artifact builds cache-read-only; cache export is
+          # expensive and blocks the E2E required check.
+          cache-to: ${{ inputs.push == true && 'type=gha,mode=max' || '' }}
 
       - name: Upload artifact
         if: inputs.push == false

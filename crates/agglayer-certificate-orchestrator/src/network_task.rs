@@ -68,7 +68,7 @@ pub enum NetworkTaskMessage {
         previous_tx_hashes: HashSet<SettlementTxHash>,
         new_pp_root: Digest,
         settlement_submitted_notifier:
-            oneshot::Sender<Result<(SettlementTxHash, Option<NonceInfo>), CertificateStatusError>>,
+            oneshot::Sender<Result<(SettlementTxHash, Option<NonceInfo>), Error>>,
     },
 
     /// Notify the network task that a certificate is waiting for settlement to
@@ -436,7 +436,7 @@ where
                         }
 
                         settlement_submitted_notifier
-                            .send(result.map_err(Into::into))
+                            .send(result)
                             .map_err(|_| Error::InternalError("Certificate notification channel closed".into()))?;
 
                         #[cfg(feature = "testutils")]

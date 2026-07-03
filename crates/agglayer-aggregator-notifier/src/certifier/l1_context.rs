@@ -1,3 +1,5 @@
+use std::panic::AssertUnwindSafe;
+
 use agglayer_certificate_orchestrator::CertificationError;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
 use agglayer_types::{
@@ -10,7 +12,6 @@ use agglayer_types::{
 };
 use eyre::Context as _;
 use prover_executor::sp1_fast;
-use sp1_sdk::HashableKey;
 use tracing::debug;
 
 use crate::CertifierClient;
@@ -117,11 +118,13 @@ where
             .await
             .map_err(|source| CertificationError::UnableToFindAggchainVkey { source })?;
 
-        let vkey = aggchain_proof_payload.aggchain_vkey_from_proof();
-
-        let vkey_hash_bytes = sp1_fast(|| vkey.vk.hash_bytes())
-            .context("Failed to hash SP1 vkey")
-            .map_err(CertificationError::Other)?;
+        let (vkey_hash_bytes, vkey_hash_u32) = sp1_fast(AssertUnwindSafe(|| {
+            aggchain_proof_payload.aggchain_vkey_hashes()
+        }))
+        .context("Failed to hash SP1 vkey")
+        .map_err(CertificationError::Other)?
+        .context("Failed to hash SP1 vkey")
+        .map_err(CertificationError::Other)?;
 
         let vkey_digest = Digest::from(vkey_hash_bytes);
 
@@ -133,10 +136,6 @@ where
                 actual: proof_vk_hash.to_bytes().to_string(),
             });
         }
-
-        let vkey_hash_u32 = sp1_fast(|| vkey.vk.hash_u32())
-            .context("Failed to hash SP1 vkey")
-            .map_err(CertificationError::Other)?;
 
         Ok(AggchainProofCtx {
             aggchain_vkey: vkey_hash_u32,

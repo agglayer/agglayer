@@ -1,7 +1,7 @@
 use agglayer_types::NetworkId;
 use rocksdb::DB as RocksDB;
 
-use super::sample::*;
+use super::{lock_sample_migration_tests, sample::*};
 use crate::{
     schema::{ColumnDescriptor, ColumnSchema},
     storage::migration::{migration_cf::MigrationRecordColumn, Builder, DBOpenError},
@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[test_log::test]
-fn default_cf_not_empty() -> Result<(), eyre::Error> {
+fn default_cf_not_empty() -> eyre::Result<()> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
@@ -37,7 +37,8 @@ fn default_cf_not_empty() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn migration_record_gap() -> Result<(), eyre::Error> {
+fn migration_record_gap() -> eyre::Result<()> {
+    let _guard = lock_sample_migration_tests();
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
@@ -71,7 +72,37 @@ fn migration_record_gap() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn unexpected_schema() -> Result<(), eyre::Error> {
+fn noop_ensure_cfs_does_not_create_migration_gap() -> eyre::Result<()> {
+    let _guard = lock_sample_migration_tests();
+    let temp_dir = TempDBDir::new();
+    let db_path = &temp_dir.path;
+
+    // Phase 1: Create a database whose declared baseline schema is already V1.
+    {
+        Builder::open_sample_v1(db_path)?.finalize(CFS_V1)?;
+    }
+
+    // Phase 2: Reopen, declare a no-op ensure step, then run a later migration.
+    {
+        Builder::open_sample_v1(db_path)?
+            .ensure_cfs(CFS_V1)?
+            .sample_migrate_v1_v2()?
+            .finalize(CFS_V2)?;
+    }
+
+    // Phase 3: Reopen again with the same declared steps.
+    {
+        Builder::open_sample_v1(db_path)?
+            .ensure_cfs(CFS_V1)?
+            .sample_migrate_v1_v2()?
+            .finalize(CFS_V2)?;
+    }
+
+    Ok(())
+}
+
+#[test_log::test]
+fn unexpected_schema() -> eyre::Result<()> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
@@ -98,7 +129,7 @@ fn unexpected_schema() -> Result<(), eyre::Error> {
 }
 
 #[test_log::test]
-fn write_to_readonly_cf_during_migration() -> Result<(), eyre::Error> {
+fn write_to_readonly_cf_during_migration() -> eyre::Result<()> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
