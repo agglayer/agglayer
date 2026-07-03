@@ -140,6 +140,8 @@ impl ClientError {
 }
 
 impl SettlementAttemptResult {
+    /// May `replacement` overwrite `self`? Only a stronger result replaces a
+    /// weaker one.
     pub fn can_be_replaced_by(&self, replacement: &Self) -> bool {
         match (self, replacement) {
             (Self::ClientError(_), Self::ContractCall(_)) => true,
@@ -153,6 +155,20 @@ impl SettlementAttemptResult {
             }
             _ => false,
         }
+    }
+
+    /// True for "nonce used elsewhere" / "settled elsewhere" results: notes
+    /// that another tx handled the attempt. They never overwrite a real
+    /// result.
+    pub fn is_resolved_elsewhere(&self) -> bool {
+        matches!(
+            self,
+            Self::ClientError(ClientError {
+                kind: ClientErrorType::NonceAlreadyUsed
+                    | ClientErrorType::SettlementSucceededElsewhere,
+                ..
+            })
+        )
     }
 }
 
@@ -183,4 +199,23 @@ pub struct SettlementAttempt {
     /// `max_priority_fee_per_gas` (wei) of the signed attempt; the baseline a
     /// retry bumps from.
     pub max_priority_fee_per_gas: u128,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn client_error(kind: ClientErrorType) -> SettlementAttemptResult {
+        SettlementAttemptResult::ClientError(ClientError {
+            kind,
+            message: String::new(),
+        })
+    }
+
+    #[test]
+    fn is_resolved_elsewhere_matches_used_and_settled_kinds() {
+        assert!(client_error(ClientErrorType::NonceAlreadyUsed).is_resolved_elsewhere());
+        assert!(client_error(ClientErrorType::SettlementSucceededElsewhere).is_resolved_elsewhere());
+        assert!(!client_error(ClientErrorType::Unknown).is_resolved_elsewhere());
+    }
 }
