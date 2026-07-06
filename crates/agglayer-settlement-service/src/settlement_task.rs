@@ -1489,7 +1489,8 @@ impl<
     > {
         let wallet = self.provider.default_signer_address();
         let attempt_number = self.next_attempt_number();
-        let nonce = self.reserve_nonce_for_build(wallet).await?;
+        let nonce_value = self.reserve_nonce_for_build(wallet).await?;
+        let nonce = Nonce(nonce_value);
         let mut retry_policy = BuildRetryPolicy::new();
 
         match crate::utils::retry_callback_until_success(
@@ -1510,7 +1511,7 @@ impl<
         {
             Ok(result) => Ok(result),
             Err(error) => {
-                self.nonce_allocator.release(wallet, nonce).await;
+                self.nonce_allocator.release(wallet, nonce_value).await;
                 Err(error)
             }
         }
@@ -1968,18 +1969,23 @@ mod tests {
     #[tokio::test]
     async fn create_stores_shared_nonce_allocator() {
         let mut store = MockStateStore::new();
+        let job = mk_job();
+        let mut expected_job = job.clone();
+        expected_job.gas_limit = 200_000;
         store
             .expect_insert_settlement_job()
             .once()
+            .withf(move |_, recorded_job| recorded_job == &expected_job)
             .return_once(|_, _| Ok(()));
 
         let allocator = mk_nonce_allocator();
         let allocator_for_assert = allocator.clone();
 
         let (_job_id, task) = SettlementTask::create(
-            mk_job(),
+            None,
+            job,
             Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider()),
+            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
             allocator,
             mk_control(),
@@ -2196,6 +2202,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            mk_nonce_allocator(),
             mk_control(),
         )
         .await
@@ -2250,6 +2257,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            mk_nonce_allocator(),
             mk_control(),
         )
         .await
@@ -2287,6 +2295,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            mk_nonce_allocator(),
             mk_control(),
         )
         .await;
@@ -3560,6 +3569,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts,
         };
@@ -3623,6 +3633,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts,
         };
@@ -3682,6 +3693,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts,
         };
@@ -3764,6 +3776,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            nonce_allocator: mk_nonce_allocator(),
             control: mk_control(),
             attempts,
         };

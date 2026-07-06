@@ -814,6 +814,8 @@ mod tests {
             ordering.lock().unwrap().as_slice(),
             ["write_link", "write_job"]
         );
+    }
+
     mod nonce_allocator_integration {
         use std::{
             sync::{Arc, Mutex},
@@ -847,6 +849,10 @@ mod tests {
             captured_nonces: Arc<Mutex<Vec<u64>>>,
         ) -> MockStateStore {
             let mut store = MockStateStore::new();
+            store
+                .expect_list_settlement_job_ids()
+                .once()
+                .return_once(|| Ok(Vec::new()));
             store
                 .expect_insert_settlement_job()
                 .times(job_count)
@@ -906,13 +912,13 @@ mod tests {
             let (watcher_a, watcher_b) = tokio::join!(
                 async {
                     service_a
-                        .request_new_settlement(mk_settlement_job())
+                        .request_new_settlement(None, mk_settlement_job())
                         .await
                         .expect("job a")
                 },
                 async {
                     service_b
-                        .request_new_settlement(mk_settlement_job())
+                        .request_new_settlement(None, mk_settlement_job())
                         .await
                         .expect("job b")
                 },
@@ -953,7 +959,7 @@ mod tests {
             let service = Arc::new(mk_anvil_service(provider, store).await);
 
             let watcher_a = service
-                .request_new_settlement(mk_settlement_job())
+                .request_new_settlement(None, mk_settlement_job())
                 .await
                 .expect("job a");
             wait_for_recorded_nonces(&captured_nonces, 1).await;
@@ -963,7 +969,7 @@ mod tests {
                 .expect("abort job a");
 
             let watcher_b = service
-                .request_new_settlement(mk_settlement_job())
+                .request_new_settlement(None, mk_settlement_job())
                 .await
                 .expect("job b");
             wait_for_recorded_nonces(&captured_nonces, 2).await;
@@ -981,7 +987,12 @@ mod tests {
         async fn external_nonce_use_advances_allocator() {
             let anvil = Anvil::new().spawn();
             let provider = Arc::new(build_provider(&anvil));
-            let store = Arc::new(MockStateStore::new());
+            let mut store = MockStateStore::new();
+            store
+                .expect_list_settlement_job_ids()
+                .once()
+                .return_once(|| Ok(Vec::new()));
+            let store = Arc::new(store);
             let service = mk_anvil_service(provider.clone(), store).await;
             let wallet = provider.default_signer_address();
 
