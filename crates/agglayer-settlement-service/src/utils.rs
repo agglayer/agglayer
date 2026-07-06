@@ -128,11 +128,23 @@ pub(crate) async fn tx_hash_on_l1_for_nonce(
     wallet: Address,
     nonce: Nonce,
 ) -> TransportResult<Option<SettlementTxHash>> {
-    let result = provider
+    let tx = match provider
         .get_transaction_by_sender_nonce(wallet, nonce.0)
-        .await?;
-    let Some(tx) = result else {
-        return Ok(None);
+        .await
+    {
+        Ok(Some(tx)) => tx,
+        Ok(None) => return Ok(None),
+        // Tenderly Gateway (the L1 RPC of current deployments) answers
+        // `-32001 "not found"` instead of the `null` other nodes return when
+        // no transaction matches the sender and nonce. Only this exact
+        // dialect maps to `None`; any other error response keeps failing
+        // loudly rather than being silently read as "not included yet".
+        Err(TransportError::ErrorResp(error))
+            if error.code == -32001 && error.message == "not found" =>
+        {
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
     };
     Ok(tx
         .block_number()
@@ -734,6 +746,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tx_hash_on_l1_for_nonce_maps_tenderly_not_found_to_none() {
+        // Tenderly Gateway answers `-32001 "not found"` instead of the `null`
+        // other nodes return when no transaction matches the sender and nonce.
+        let asserter = alloy::providers::mock::Asserter::new();
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter.clone());
+        asserter.push_failure(alloy::rpc::json_rpc::ErrorPayload {
+            code: -32001,
+            message: Cow::Borrowed("not found"),
+            data: None,
+        });
+
+        let result = tx_hash_on_l1_for_nonce(&provider, Address::ZERO, Nonce(0))
+            .await
+            .unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn tx_hash_on_l1_for_nonce_propagates_other_error_responses() {
+        let asserter = alloy::providers::mock::Asserter::new();
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter.clone());
+        asserter.push_failure(alloy::rpc::json_rpc::ErrorPayload {
+            code: -32001,
+            message: Cow::Borrowed("header not found"),
+            data: None,
+        });
+
+        let error = tx_hash_on_l1_for_nonce(&provider, Address::ZERO, Nonce(0))
+            .await
+            .unwrap_err();
+        assert!(matches!(&error, RpcError::ErrorResp(error) if error.code == -32001));
+    }
+
+    #[tokio::test]
     async fn contract_call_result_from_receipt_maps_revert() {
         let anvil = Anvil::new().spawn();
         let provider = build_provider(&anvil);
@@ -807,6 +853,26 @@ mod tests {
             Some(expected_hash),
             "Unexpected tx hash when querying by wallet + nonce through {}",
             L1_RPC_ENV,
+        );
+
+        println!("Querying an absent (wallet, nonce) pair via wallet + nonce RPC");
+
+        // A nonce far beyond anything the sampled wallet has used, so no
+        // transaction can match. Providers signal absence either with `null`
+        // or with an error dialect like Tenderly's `-32001 "not found"`; both
+        // must map to `None`.
+        let absent_nonce = Nonce(nonce.saturating_add(1_000_000));
+        let result = match tx_hash_on_l1_for_nonce(&provider, sender, absent_nonce).await {
+            Ok(result) => result,
+            Err(error) => panic!(
+                "{L1_RPC_ENV} rejected eth_getTransactionBySenderAndNonce for absent nonce \
+                 {absent_nonce}: {error:?}"
+            ),
+        };
+        assert_eq!(
+            result, None,
+            "Expected no tx hash for absent nonce {} through {}",
+            absent_nonce, L1_RPC_ENV,
         );
 
         println!("External L1 RPC sender+nonce lookup validated");
