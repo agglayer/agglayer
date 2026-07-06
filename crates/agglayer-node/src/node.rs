@@ -58,6 +58,7 @@ impl Node {
     ///    Node::builder()
     ///      .config(config)
     ///      .cancellation_token(CancellationToken::new())
+    ///      .version(env!("CARGO_PKG_VERSION").to_string())
     ///      .start()
     ///      .await?;
     ///
@@ -76,6 +77,7 @@ impl Node {
     pub(crate) async fn start(
         config: Arc<Config>,
         cancellation_token: CancellationToken,
+        version: String,
     ) -> eyre::Result<Self> {
         if config.mock_verifier {
             warn!(
@@ -330,7 +332,7 @@ impl Node {
                 .build()
                 .inspect_err(|err| error!(?err, "Failed to build public gRPC router"))?;
 
-        let health_router = api::rest::health_router();
+        let health_router = api::rest::health_router(version);
 
         let readrpc_router = axum::Router::new()
             .merge(health_router)
