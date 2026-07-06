@@ -199,6 +199,18 @@ impl WaitForSettlementError {
             Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
         }
     }
+
+    /// Whether the retry loop should log this transient error at warning
+    /// level. The "not yet" variants are the expected steady state while
+    /// polling for inclusion or settlement of a submitted transaction, so they
+    /// are only worth debug logs; transport errors are anomalies worth
+    /// surfacing.
+    fn needs_warning_log(&self) -> bool {
+        match self {
+            Self::NotSettledYet | Self::NotIncludedYet => false,
+            Self::Transport(_) => true,
+        }
+    }
 }
 
 impl From<TransportError> for WaitForSettlementError {
@@ -919,6 +931,7 @@ impl<
                 Err(WaitForSettlementError::NotIncludedYet)
             },
             WaitForSettlementError::is_transient,
+            WaitForSettlementError::needs_warning_log,
         )
         .await;
     }
@@ -992,6 +1005,7 @@ impl<
             &self.control.cancellation_token,
             check,
             WaitForSettlementError::is_transient,
+            WaitForSettlementError::needs_warning_log,
         )
         .await
         .map_err(|error| match error {
@@ -1383,6 +1397,7 @@ impl<
                 Ok(Some((attempt_number, tx)))
             },
             |error| retry_policy.should_retry(error),
+            |_| true,
         )
         .await
     }
@@ -1428,6 +1443,7 @@ impl<
                 Ok((wallet, nonce, attempt_number, tx))
             },
             |error| retry_policy.should_retry(error),
+            |_| true,
         )
         .await
     }
@@ -3326,6 +3342,16 @@ mod tests {
         assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
         // Fees are within the configured bounds (defaults: floor 0, ceiling 100 gwei).
         assert!(envelope.max_fee_per_gas() <= 100_000_000_000);
+    }
+
+    #[test]
+    fn polling_signals_skip_the_retry_warning_log() {
+        assert!(!WaitForSettlementError::NotIncludedYet.needs_warning_log());
+        assert!(!WaitForSettlementError::NotSettledYet.needs_warning_log());
+        assert!(
+            WaitForSettlementError::Transport(TransportErrorKind::custom_str("connection reset"))
+                .needs_warning_log()
+        );
     }
 
     #[test]
