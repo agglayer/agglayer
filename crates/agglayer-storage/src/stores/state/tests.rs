@@ -91,12 +91,16 @@ fn init_db_adds_settlement_job_id_per_certificate_id_cf_to_v1_schema() {
 
     let tmp = TempDBDir::new();
     {
-        let previous_schema = DB::builder(tmp.path.as_path(), cf_definitions::STATE_DB_V0)
-            .expect("V0 schema initialization should succeed")
-            .ensure_cfs(cf_definitions::STATE_DB_V1_ADDED_CFS)
-            .expect("V1 schema migration should succeed")
-            .finalize(cf_definitions::STATE_DB)
-            .expect("V1 schema finalization should succeed");
+        let previous_schema = DB::builder(
+            tmp.path.as_path(),
+            cf_definitions::STATE_DB_V0,
+            cf_definitions::STATE_DB,
+        )
+        .expect("V0 schema initialization should succeed")
+        .ensure_cfs(cf_definitions::STATE_DB_V1_ADDED_CFS)
+        .expect("V1 schema migration should succeed")
+        .finalize(cf_definitions::STATE_DB)
+        .expect("V1 schema finalization should succeed");
         drop(previous_schema);
     }
 

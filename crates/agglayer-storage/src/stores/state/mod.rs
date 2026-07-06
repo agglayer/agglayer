@@ -64,7 +64,7 @@ impl StateStore {
         // path. Each `ensure_cfs` call is a recorded migration step, so new
         // catch-up CFs must be added in a new step instead of changing an
         // already-recorded target list.
-        DB::builder(path, cf_definitions::STATE_DB_V0)?
+        DB::builder(path, cf_definitions::STATE_DB_V0, cf_definitions::STATE_DB)?
             .ensure_cfs(cf_definitions::STATE_DB_V1_ADDED_CFS)?
             .ensure_cfs(cf_definitions::STATE_DB_V2_ADDED_CFS)?
             .finalize(cf_definitions::STATE_DB)
