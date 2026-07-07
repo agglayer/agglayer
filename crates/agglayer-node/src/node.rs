@@ -121,6 +121,8 @@ impl Node {
 
         info!("Storage initialized.");
 
+        crate::metrics::register_network_state_metrics(pending_store.clone(), state_store.clone());
+
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
             Epoch::BlockClock(cfg) => {

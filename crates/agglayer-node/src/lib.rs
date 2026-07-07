@@ -9,6 +9,7 @@ mod logging;
 
 mod epoch_synchronizer;
 mod l1_tracing;
+mod metrics;
 mod node;
 mod url_redact;
 
