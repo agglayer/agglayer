@@ -33,16 +33,12 @@ pub struct PendingStore {
 
 impl PendingStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::builder(
-            path,
-            cf_definitions::PENDING_DB_V0,
-            cf_definitions::PENDING_DB,
-        )?
-        .add_cfs(
-            &[ColumnDescriptor::new::<PendingQueueProtoColumn>()],
-            backfill_pending_certificates_proto_from_legacy_bincode,
-        )?
-        .finalize(cf_definitions::PENDING_DB)
+        DB::builder(path, cf_definitions::PENDING_DB_V0)?
+            .add_cfs(
+                &[ColumnDescriptor::new::<PendingQueueProtoColumn>()],
+                backfill_pending_certificates_proto_from_legacy_bincode,
+            )?
+            .finalize(cf_definitions::PENDING_DB)
     }
 
     pub fn new(db: Arc<DB>) -> Self {

@@ -42,21 +42,13 @@ pub struct DB {
 impl DB {
     /// Open a new RocksDB instance at the given path with initial column
     /// families and a possibility to migrate the database.
-    ///
-    /// `known_cfs` catalogs every column family this binary declares across
-    /// all schema versions; existing column families are opened with the
-    /// declared options found there (or RocksDB defaults when absent).
-    pub fn builder(
-        path: &Path,
-        cfs_v0: &[ColumnDescriptor],
-        known_cfs: &[ColumnDescriptor],
-    ) -> Result<Builder, DBOpenError> {
-        Builder::open(path, cfs_v0, known_cfs)
+    pub fn builder(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Builder, DBOpenError> {
+        Builder::open(path, cfs_v0)
     }
 
     /// Open a new RocksDB instance at the given path with some column families.
     pub fn open_cf(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
-        Builder::open(path, cfs, cfs)?.finalize(cfs)
+        Builder::open(path, cfs)?.finalize(cfs)
     }
 
     /// Open a RocksDB instance in read-only mode at the given path with some

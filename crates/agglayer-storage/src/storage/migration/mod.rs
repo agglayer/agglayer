@@ -45,18 +45,12 @@ impl Builder {
     /// initial schema (v0). It automatically sets up migration tracking and
     /// validates the database schema.
     ///
-    /// `known_cfs` catalogs every column family this binary declares across
-    /// all schema versions. Column family options only apply when passed at
-    /// open time, so an existing database is opened with the declared options
-    /// looked up there (RocksDB defaults for on-disk column families it does
-    /// not list).
-    pub fn open(
-        path: &Path,
-        cfs_v0: &[ColumnDescriptor],
-        known_cfs: &[ColumnDescriptor],
-    ) -> Result<Self, DBOpenError> {
+    /// The handle opened here only serves the migration steps; existing
+    /// column families are opened with default options. [`Self::finalize`]
+    /// reopens the database with the declared column options before handing
+    /// it out.
+    pub fn open(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
         debug!("Preparing database for initialization and migration");
-        debug!(?known_cfs, "Column families known to this binary");
         let desc_v0: Vec<_> = cfs_v0.iter().map(DB::descriptor).collect();
         let cfs_v0: BTreeSet<_> = desc_v0.iter().map(|d| d.name()).collect();
 
@@ -84,12 +78,12 @@ impl Builder {
             Self::open_rocksdb_fresh(path, cfs)?
         } else if cfs_db.contains(MigrationRecordColumn::COLUMN_FAMILY_NAME) {
             // Move on to migration as usual.
-            Self::open_rocksdb_existing(path, &cfs_db, known_cfs)?
+            Self::open_rocksdb_existing(path, &cfs_db)?
         } else if cfs_db.iter().eq(cfs_v0.iter()) {
             // Initialize migration record.
             let mut cfs = cfs_db;
             cfs.insert(MigrationRecordColumn::COLUMN_FAMILY_NAME.into());
-            Self::open_rocksdb_existing(path, &cfs, known_cfs)?
+            Self::open_rocksdb_existing(path, &cfs)?
         } else {
             // Unexpected schema.
             return Err(DBOpenError::UnexpectedSchema);
@@ -142,28 +136,14 @@ impl Builder {
         })
     }
 
-    fn open_rocksdb_existing(
-        path: &Path,
-        cfs: &BTreeSet<impl AsRef<str>>,
-        known_cfs: &[ColumnDescriptor],
-    ) -> Result<DB, DBError> {
+    fn open_rocksdb_existing(path: &Path, cfs: &BTreeSet<impl AsRef<str>>) -> Result<DB, DBError> {
         debug!("Opening existing database");
 
         let mut options = rocksdb::Options::default();
         options.create_missing_column_families(true);
 
-        let known_cfs: Vec<ColumnDescriptor> = known_cfs
-            .iter()
-            .cloned()
-            .chain([ColumnDescriptor::new::<MigrationRecordColumn>()])
-            .collect();
-        let descriptors: Vec<_> = cfs
-            .iter()
-            .map(|name| DB::descriptor_for_existing(name.as_ref(), &known_cfs))
-            .collect();
-
         Ok(DB {
-            rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, descriptors)?,
+            rocksdb: rocksdb::DB::open_cf(&options, path, cfs.iter().map(AsRef::as_ref))?,
             default_write_options: Some(Self::writeopts()),
         })
     }
@@ -267,8 +247,14 @@ impl Builder {
     /// Completes the migration process and returns the database.
     ///
     /// This method validates that all declared migration steps have been
-    /// executed and returns the fully migrated database ready for use.
-    pub fn finalize(self, _expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
+    /// executed, then unconditionally closes the migration-time handle and
+    /// reopens the database with the column options declared in
+    /// `expected_schema` (RocksDB defaults for on-disk column families it
+    /// does not list). Column family options — prefix extractors,
+    /// compression — only take effect when passed at open time, and the
+    /// migration-time handle opens existing column families by name without
+    /// them.
+    pub fn finalize(self, expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
         if self.step < self.start_step {
             return Err(DBOpenError::FewerStepsDeclared {
                 declared: self.step,
@@ -276,7 +262,33 @@ impl Builder {
             });
         }
 
-        Ok(self.db)
+        let path = self.db.rocksdb.path().to_path_buf();
+        // Close the migration-time handle so the reopen below can take the
+        // RocksDB lock.
+        drop(self.db);
+
+        debug!("Reopening database with declared column options");
+        let known_cfs: Vec<ColumnDescriptor> = expected_schema
+            .iter()
+            .cloned()
+            .chain([ColumnDescriptor::new::<MigrationRecordColumn>()])
+            .collect();
+        let descriptors: Vec<_> = rocksdb::DB::list_cf(&rocksdb::Options::default(), &path)
+            .map_err(DBError::from)?
+            .into_iter()
+            .filter(|name| name != rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
+            .map(|name| DB::descriptor_for_existing(&name, &known_cfs))
+            .collect();
+
+        Ok(DB {
+            rocksdb: rocksdb::DB::open_cf_descriptors(
+                &rocksdb::Options::default(),
+                &path,
+                descriptors,
+            )
+            .map_err(DBError::from)?,
+            default_write_options: Some(Self::writeopts()),
+        })
     }
 
     fn perform_step(
