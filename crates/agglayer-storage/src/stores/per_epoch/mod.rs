@@ -53,12 +53,16 @@ pub struct PerEpochStore<PendingStore, StateStore> {
 
 impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     pub fn init_db(path: &std::path::Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::builder(path, cf_definitions::EPOCHS_DB_V0)?
-            .add_cfs(
-                &[ColumnDescriptor::new::<CertificatePerIndexProtoColumn>()],
-                backfill_epoch_certificates_proto_from_legacy_bincode,
-            )?
-            .finalize(cf_definitions::EPOCHS_DB)
+        DB::builder(
+            path,
+            cf_definitions::EPOCHS_DB_V0,
+            cf_definitions::EPOCHS_DB,
+        )?
+        .add_cfs(
+            &[ColumnDescriptor::new::<CertificatePerIndexProtoColumn>()],
+            backfill_epoch_certificates_proto_from_legacy_bincode,
+        )?
+        .finalize(cf_definitions::EPOCHS_DB)
     }
 
     pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {

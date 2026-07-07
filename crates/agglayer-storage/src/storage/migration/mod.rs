@@ -44,8 +44,19 @@ impl Builder {
     /// This method initializes or opens an existing database with the provided
     /// initial schema (v0). It automatically sets up migration tracking and
     /// validates the database schema.
-    pub fn open(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
+    ///
+    /// `known_cfs` catalogs every column family this binary declares across
+    /// all schema versions. Column family options only apply when passed at
+    /// open time, so an existing database is opened with the declared options
+    /// looked up there (RocksDB defaults for on-disk column families it does
+    /// not list).
+    pub fn open(
+        path: &Path,
+        cfs_v0: &[ColumnDescriptor],
+        known_cfs: &[ColumnDescriptor],
+    ) -> Result<Self, DBOpenError> {
         debug!("Preparing database for initialization and migration");
+        debug!(?known_cfs, "Column families known to this binary");
         let desc_v0: Vec<_> = cfs_v0.iter().map(DB::descriptor).collect();
         let cfs_v0: BTreeSet<_> = desc_v0.iter().map(|d| d.name()).collect();
 
@@ -73,12 +84,12 @@ impl Builder {
             Self::open_rocksdb_fresh(path, cfs)?
         } else if cfs_db.contains(MigrationRecordColumn::COLUMN_FAMILY_NAME) {
             // Move on to migration as usual.
-            Self::open_rocksdb_existing(path, &cfs_db)?
+            Self::open_rocksdb_existing(path, &cfs_db, known_cfs)?
         } else if cfs_db.iter().eq(cfs_v0.iter()) {
             // Initialize migration record.
             let mut cfs = cfs_db;
             cfs.insert(MigrationRecordColumn::COLUMN_FAMILY_NAME.into());
-            Self::open_rocksdb_existing(path, &cfs)?
+            Self::open_rocksdb_existing(path, &cfs, known_cfs)?
         } else {
             // Unexpected schema.
             return Err(DBOpenError::UnexpectedSchema);
@@ -131,14 +142,28 @@ impl Builder {
         })
     }
 
-    fn open_rocksdb_existing(path: &Path, cfs: &BTreeSet<impl AsRef<str>>) -> Result<DB, DBError> {
+    fn open_rocksdb_existing(
+        path: &Path,
+        cfs: &BTreeSet<impl AsRef<str>>,
+        known_cfs: &[ColumnDescriptor],
+    ) -> Result<DB, DBError> {
         debug!("Opening existing database");
 
         let mut options = rocksdb::Options::default();
         options.create_missing_column_families(true);
 
+        let known_cfs: Vec<ColumnDescriptor> = known_cfs
+            .iter()
+            .cloned()
+            .chain([ColumnDescriptor::new::<MigrationRecordColumn>()])
+            .collect();
+        let descriptors: Vec<_> = cfs
+            .iter()
+            .map(|name| DB::descriptor_for_existing(name.as_ref(), &known_cfs))
+            .collect();
+
         Ok(DB {
-            rocksdb: rocksdb::DB::open_cf(&options, path, cfs.iter().map(AsRef::as_ref))?,
+            rocksdb: rocksdb::DB::open_cf_descriptors(&options, path, descriptors)?,
             default_write_options: Some(Self::writeopts()),
         })
     }
@@ -164,7 +189,7 @@ impl Builder {
                     db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
                 }
 
-                debug!("Creating column family {cf:?}");
+                debug!(options = ?descriptor.options(), "Creating column family {cf:?}");
                 db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
             }
 
@@ -210,7 +235,10 @@ impl Builder {
                 let cf = descriptor.name();
 
                 let opts = DB::options(descriptor.options());
-                debug!("Creating missing column family {cf:?}");
+                debug!(
+                    options = ?descriptor.options(),
+                    "Creating missing column family {cf:?}"
+                );
                 db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
             }
 

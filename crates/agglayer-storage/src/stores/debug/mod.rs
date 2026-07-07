@@ -28,7 +28,7 @@ pub struct EnabledDebugStore {
 
 impl DebugStore {
     pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
-        DB::builder(path, cf_definitions::DEBUG_DB_V0)?
+        DB::builder(path, cf_definitions::DEBUG_DB_V0, cf_definitions::DEBUG_DB)?
             .add_cfs(
                 &[ColumnDescriptor::new::<DebugCertificatesProtoColumn>()],
                 backfill_debug_certificates_proto_from_legacy_bincode,
