@@ -56,6 +56,9 @@ pub async fn start_l1() -> L1Docker {
     l1_setup::L1Docker::new(name).await
 }
 
+/// Like [`start_agglayer`], but also returns the effective [`Config`] (with
+/// the randomized ports, e.g. `telemetry.addr`) so tests can reach the
+/// node's auxiliary endpoints.
 pub async fn start_agglayer_with_config(
     config_path: &Path,
     l1: &L1Docker,
@@ -191,12 +194,14 @@ pub async fn setup_network(
     config: Option<Config>,
     token: Option<CancellationToken>,
 ) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
-    let l1 = start_l1().await;
-    let (receiver, client, _token) = start_agglayer(tmp_dir, &l1, config, token).await;
+    let (receiver, l1, client, _config) = setup_network_with_config(tmp_dir, config, token).await;
 
     (receiver, l1, client)
 }
 
+/// Like [`setup_network`], but also returns the effective [`Config`] (with
+/// the randomized ports, e.g. `telemetry.addr`) so tests can reach the
+/// node's auxiliary endpoints.
 pub async fn setup_network_with_config(
     tmp_dir: &Path,
     config: Option<Config>,

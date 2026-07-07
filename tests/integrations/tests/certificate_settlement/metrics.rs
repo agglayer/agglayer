@@ -11,13 +11,19 @@ use rstest::rstest;
 const METRICS_POLL_TIMEOUT: Duration = Duration::from_secs(30);
 const METRICS_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
-/// Scrape the metrics page and extract the value of `metric` for
-/// `network_id`, if the series is currently exported.
-async fn sample_value(metrics_url: &str, metric: &str, network_id: u32) -> Option<u64> {
-    let body = reqwest::get(metrics_url).await.ok()?.text().await.ok()?;
+/// Scrape the metrics page, returning the raw prometheus text body if the
+/// endpoint responded.
+async fn fetch_metrics(metrics_url: &str) -> Option<String> {
+    reqwest::get(metrics_url).await.ok()?.text().await.ok()
+}
+
+/// Extract the value of `metric` for `network_id` from a scraped metrics
+/// body, if the series is exported in that snapshot.
+fn sample_value(body: &str, metric: &str, network_id: u32) -> Option<u64> {
+    let prefix = format!("{metric}{{");
     let label = format!("network_id=\"{network_id}\"");
     body.lines()
-        .find(|line| line.starts_with(&format!("{metric}{{")) && line.contains(&label))
+        .find(|line| line.starts_with(&prefix) && line.contains(&label))
         .and_then(|line| line.rsplit(' ').next()?.parse().ok())
 }
 
@@ -46,38 +52,56 @@ async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
     assert_eq!(result.status, CertificateStatus::Settled);
 
     // The latest-settled pointer is written shortly after the header flips
-    // to Settled; poll until the gauge appears.
+    // to Settled; poll until the gauge appears, then evaluate every gauge
+    // from that scrape so all values come from one consistent snapshot.
     let start = tokio::time::Instant::now();
-    let settled_height = loop {
-        if let Some(value) =
-            sample_value(&metrics_url, "agglayer_network_settled_height", network_id).await
-        {
-            break value;
-        }
+    let body = loop {
+        let last_observation = match fetch_metrics(&metrics_url).await {
+            Some(body) => {
+                if sample_value(&body, "agglayer_network_settled_height", network_id).is_some() {
+                    break body;
+                }
+
+                format!(
+                    "settled height series for network {network_id} absent from metrics body ({} \
+                     bytes)",
+                    body.len()
+                )
+            }
+            None => "failed to fetch the metrics page".to_string(),
+        };
+
         assert!(
             start.elapsed() < METRICS_POLL_TIMEOUT,
-            "settled height metric did not appear within {METRICS_POLL_TIMEOUT:?}"
+            "settled height metric did not appear within {METRICS_POLL_TIMEOUT:?}. Last \
+             observation: {last_observation}"
         );
         tokio::time::sleep(METRICS_POLL_INTERVAL).await;
     };
-    assert_eq!(settled_height, 0);
 
     assert_eq!(
-        sample_value(&metrics_url, "agglayer_network_pending_height", network_id).await,
+        sample_value(&body, "agglayer_network_settled_height", network_id),
         Some(0),
+        "metrics body:\n{body}"
     );
     assert_eq!(
-        sample_value(&metrics_url, "agglayer_network_proven_height", network_id).await,
+        sample_value(&body, "agglayer_network_pending_height", network_id),
         Some(0),
+        "metrics body:\n{body}"
+    );
+    assert_eq!(
+        sample_value(&body, "agglayer_network_proven_height", network_id),
+        Some(0),
+        "metrics body:\n{body}"
     );
     assert_eq!(
         sample_value(
-            &metrics_url,
+            &body,
             "agglayer_network_latest_certificate_in_error",
             network_id
-        )
-        .await,
+        ),
         Some(0),
+        "metrics body:\n{body}"
     );
 
     scenario.teardown();
