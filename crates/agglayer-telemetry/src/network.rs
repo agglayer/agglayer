@@ -41,6 +41,17 @@ pub struct NetworkErrorSample {
     pub in_error: bool,
 }
 
+/// The set of closures feeding the per-network gauges.
+///
+/// Named fields prevent accidentally transposing the three height samplers,
+/// which share a type and often report equal values in steady state.
+pub struct NetworkStateSamplers {
+    pub pending: Box<dyn Fn() -> Vec<NetworkHeightSample> + Send + Sync>,
+    pub proven: Box<dyn Fn() -> Vec<NetworkHeightSample> + Send + Sync>,
+    pub settled: Box<dyn Fn() -> Vec<NetworkHeightSample> + Send + Sync>,
+    pub in_error: Box<dyn Fn() -> Vec<NetworkErrorSample> + Send + Sync>,
+}
+
 /// Register the four per-network observable gauges.
 ///
 /// Each closure is invoked on every `/metrics` scrape and must return one
@@ -48,17 +59,32 @@ pub struct NetworkErrorSample {
 /// omitted: a height of zero is a valid height (the first certificate of a
 /// network) and must never be used as a placeholder.
 ///
+/// # Runtime contract
+///
+/// The closures run synchronously inside the `/metrics` HTTP handler on
+/// every scrape: they must not panic (a panic would break the metrics
+/// endpoint on every scrape) and should be cheap and non-blocking.
+///
+/// On a data-source read error, closures should log upstream and return an
+/// empty [`Vec`]. An empty result removes the series for that scrape, which
+/// interacts with `absent()`-style alerting.
+///
 /// # Ordering
 ///
 /// Call this only after the global meter provider has been installed (see
 /// [`crate::ServerBuilder`]). Instruments created earlier silently bind to
 /// the no-op meter and never export anything.
-pub fn register_network_state_metrics(
-    pending: impl Fn() -> Vec<NetworkHeightSample> + Send + Sync + 'static,
-    proven: impl Fn() -> Vec<NetworkHeightSample> + Send + Sync + 'static,
-    settled: impl Fn() -> Vec<NetworkHeightSample> + Send + Sync + 'static,
-    in_error: impl Fn() -> Vec<NetworkErrorSample> + Send + Sync + 'static,
-) {
+///
+/// Call this function at most once per meter provider: repeated
+/// registration accumulates duplicate instruments and callbacks.
+pub fn register_network_state_metrics(samplers: NetworkStateSamplers) {
+    let NetworkStateSamplers {
+        pending,
+        proven,
+        settled,
+        in_error,
+    } = samplers;
+
     register_height_gauge(
         NETWORK_PENDING_HEIGHT,
         "Height of the latest pending certificate per network",
@@ -99,7 +125,7 @@ pub fn register_network_state_metrics(
 fn register_height_gauge(
     name: &'static str,
     description: &'static str,
-    samples: impl Fn() -> Vec<NetworkHeightSample> + Send + Sync + 'static,
+    samples: Box<dyn Fn() -> Vec<NetworkHeightSample> + Send + Sync>,
 ) {
     let _ = global::meter(AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME)
         .u64_observable_gauge(name)
@@ -153,6 +179,10 @@ mod tests {
             .build()
             .unwrap();
         let provider = SdkMeterProvider::builder().with_reader(exporter).build();
+        // This test deliberately owns the process-global meter provider:
+        // nextest runs one process per test, so nothing else can race it.
+        // Future exporter-based tests in this crate must keep that isolation
+        // in mind (each test must install its own provider and registry).
         global::set_meter_provider(provider);
 
         let pending = Arc::new(Mutex::new(vec![
@@ -184,24 +214,24 @@ mod tests {
             },
         ]));
 
-        register_network_state_metrics(
-            {
+        register_network_state_metrics(NetworkStateSamplers {
+            pending: Box::new({
                 let pending = pending.clone();
                 move || pending.lock().unwrap().clone()
-            },
-            {
+            }),
+            proven: Box::new({
                 let proven = proven.clone();
                 move || proven.lock().unwrap().clone()
-            },
-            {
+            }),
+            settled: Box::new({
                 let settled = settled.clone();
                 move || settled.lock().unwrap().clone()
-            },
-            {
+            }),
+            in_error: Box::new({
                 let in_error = in_error.clone();
                 move || in_error.lock().unwrap().clone()
-            },
-        );
+            }),
+        });
 
         let metrics = gather(&registry);
 
