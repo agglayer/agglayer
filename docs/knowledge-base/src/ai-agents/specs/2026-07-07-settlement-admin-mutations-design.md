@@ -77,9 +77,9 @@ thin adapters over `SettlementService::admin_*` methods.
 
 | Method | Semantics |
 |---|---|
-| `admin_insertSettlementAttempt(job_id, attempt)` | Append one new attempt to a pending job; returns the assigned attempt number. Never overwrites. |
-| `admin_markSettlementAttemptDefinitelyFailed(job_id, attempt_number, reason)` | Overwrite the attempt's result with an operator assertion that it will never land. |
-| `admin_removeSettlementAttemptResult(job_id, attempt_number)` | Delete the attempt's result; the task re-derives it from L1. |
+| `admin_insertSettlementAttempt(job_id, attempt, force?)` | Append one new attempt to the job; returns the assigned attempt number. Never overwrites. |
+| `admin_markSettlementAttemptDefinitelyFailed(job_id, attempt_number, reason, force?)` | Overwrite the attempt's result with an operator assertion that it will never land. |
+| `admin_removeSettlementAttemptResult(job_id, attempt_number, force?)` | Delete the attempt's result; the task re-derives it from L1. |
 | `admin_forceRemoveSettlementJobResult(job_id)` | Delete the job's terminal result and immediately re-drive the job. |
 | `admin_abortSettlementTask(job_id)` | Stop the in-memory task (runtime-only; not a terminal state). |
 | `admin_reloadSettlementTask(job_id)` | Make the live task drop its memory and reload from storage. |
@@ -91,6 +91,9 @@ The three attempt mutations respond with
 `{ attemptNumber, liveTask: "notified" | "absent" | "notify-failed" }`;
 `liveTask` reports whether the running task was told to reload
 (see the mutation model below).
+Their optional trailing `force` parameter takes the literal string
+`"force=true"` or `"force=false"` (the `admin_forceEditCertificate` style;
+omitted means false) and gates edits on completed jobs (see D6).
 
 ## Design decisions and rationale
 
@@ -164,7 +167,9 @@ it deletes the `SettlementJobResult` row, drops the in-memory watcher that
 still broadcasts the removed result, and spawns a fresh task that re-drives
 the job from stored state.
 Attempts and their results are untouched;
-remove attempt results first if they must be re-derived too.
+correct them **first**, with the attempt mutations' `force` parameter,
+while the terminal result still blocks the job from being re-driven
+(see D6).
 
 Guards, in order:
 
@@ -205,10 +210,20 @@ For a pending job, anything but `notified` is an anomaly worth
 investigating — after node integration (PR 1393),
 every pending job normally has a live task.
 
-Every attempt mutation refuses a job that already has a terminal result:
+Every attempt mutation refuses a job that already has a terminal result,
+unless its `force` parameter is `"force=true"`:
 a completed job is never re-driven,
-so editing its attempts could only create inconsistencies
-(`admin_forceRemoveSettlementJobResult` is the explicit way back).
+so editing its attempts could normally only create inconsistencies.
+The forced variant exists to prepare
+`admin_forceRemoveSettlementJobResult`:
+attempt-result corrections must land while the job still has its terminal
+result, because removing the result immediately respawns the task,
+which could re-derive and re-record the job result from the uncorrected
+attempts before the operator gets a chance to adjust them.
+On a completed job there is no live task,
+so a forced edit reporting `liveTask: "absent"` is the expected state;
+the correction is observed by the task that
+`admin_forceRemoveSettlementJobResult` spawns.
 
 **Accepted race**: between an admin write and the task observing its reload,
 the task can act on pre-edit memory.
@@ -286,9 +301,10 @@ Reviewed and chosen deliberately when the surface shrank to mutations-only:
   the reloaded task re-drives on a fresh nonce/wallet.
 - **Wrong assertion**: `admin_removeSettlementAttemptResult(job_id, n)`;
   the task re-derives the attempt's outcome from L1.
-- **Wrongly recorded terminal result**: optionally clear the misleading
-  attempt results, then `admin_forceRemoveSettlementJobResult(job_id)`;
-  a fresh task re-drives the job immediately.
+- **Wrongly recorded terminal result**: first correct the misleading
+  attempt results with `"force=true"` (mark abandoned, remove, or insert),
+  then `admin_forceRemoveSettlementJobResult(job_id)`;
+  a fresh task re-drives the job immediately from the corrected attempts.
 - **Recovery when `liveTask != "notified"`**:
   `admin_reloadSettlementTask(job_id)`, or `admin_abortSettlementTask` and
   let the next restart respawn from storage.
