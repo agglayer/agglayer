@@ -99,6 +99,13 @@ fn collect_settled_heights(store: &StateStore) -> Vec<NetworkHeightSample> {
 /// A network is flagged in-error when its latest pending certificate header
 /// has the `InError` status — the same definition `get_network_info` uses
 /// for `NetworkStatus::Error`.
+///
+/// Unlike `get_network_info` (where `Disabled` takes precedence over
+/// `Error`), this metric reports storage truth and does not consult the
+/// disabled-networks list: a disabled network with an in-error pending
+/// certificate still exports `in_error=1`, and the height gauges keep
+/// exporting for disabled networks. Alert authors must account for
+/// disabled networks separately.
 fn collect_error_flags(
     pending_store: &PendingStore,
     state_store: &StateStore,
@@ -124,6 +131,7 @@ fn collect_error_flags(
                 }),
                 Ok(None) => {
                     warn!(
+                        %network_id,
                         %certificate_id,
                         "Latest pending certificate has no header, skipping error metric"
                     );
@@ -132,6 +140,7 @@ fn collect_error_flags(
                 Err(error) => {
                     warn!(
                         ?error,
+                        %network_id,
                         %certificate_id,
                         "Failed to read certificate header for error metric"
                     );
