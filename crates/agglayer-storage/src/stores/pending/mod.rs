@@ -184,6 +184,17 @@ impl PendingCertificateReader for PendingStore {
             .map(|v| v.map(|PendingCertificate(id, height)| (id, height)))?)
     }
 
+    fn get_current_pending_heights(&self) -> Result<Vec<(NetworkId, PendingCertificate)>, Error> {
+        Ok(self
+            .db
+            .iter_with_direction::<LatestPendingCertificatePerNetworkColumn>(
+                ReadOptions::default(),
+                Direction::Forward,
+            )?
+            .filter_map(|entry| entry.ok())
+            .collect())
+    }
+
     fn get_certificate(
         &self,
         network_id: NetworkId,

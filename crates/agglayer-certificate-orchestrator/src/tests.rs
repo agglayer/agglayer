@@ -427,6 +427,18 @@ impl PendingCertificateReader for DummyPendingStore {
         todo!()
     }
 
+    fn get_current_pending_heights(
+        &self,
+    ) -> Result<
+        Vec<(
+            NetworkId,
+            agglayer_storage::columns::latest_pending_certificate_per_network::PendingCertificate,
+        )>,
+        agglayer_storage::error::Error,
+    > {
+        todo!()
+    }
+
     fn get_current_proven_height(
         &self,
     ) -> Result<Vec<ProvenCertificate>, agglayer_storage::error::Error> {

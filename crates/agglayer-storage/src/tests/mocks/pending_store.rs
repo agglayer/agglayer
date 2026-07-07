@@ -2,7 +2,10 @@ use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
 use mockall::mock;
 
 use crate::{
-    columns::latest_proven_certificate_per_network::ProvenCertificate,
+    columns::{
+        latest_pending_certificate_per_network::PendingCertificate,
+        latest_proven_certificate_per_network::ProvenCertificate,
+    },
     error::Error,
     stores::{PendingCertificateReader, PendingCertificateWriter},
 };
@@ -24,6 +27,10 @@ mock! {
             &self,
             network_id: &NetworkId,
         ) -> Result<Option<(CertificateId, Height)>, Error>;
+
+        fn get_current_pending_heights(
+            &self,
+        ) -> Result<Vec<(NetworkId, PendingCertificate)>, Error>;
 
         fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error>;
 
