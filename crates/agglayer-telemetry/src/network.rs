@@ -52,6 +52,13 @@ pub struct NetworkStateSamplers {
     pub in_error: Box<dyn Fn() -> Vec<NetworkErrorSample> + Send + Sync>,
 }
 
+impl std::fmt::Debug for NetworkStateSamplers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NetworkStateSamplers")
+            .finish_non_exhaustive()
+    }
+}
+
 /// Register the four per-network observable gauges.
 ///
 /// Each closure is invoked on every `/metrics` scrape and must return one
