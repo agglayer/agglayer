@@ -181,6 +181,15 @@ impl<
                     }
                     SettlementTaskRunResult::ReloadAndRestart => {
                         info!(?job_id, "Reloading and restarting settlement task");
+                        // Install replacement admin controls before storage I/O so
+                        // operator abort/reload commands are not dropped while the
+                        // previous task control receiver is no longer polled.
+                        let (task_control_handle, task_control) =
+                            TaskControlHandle::new(&cancellation_token);
+                        task_controls
+                            .lock()
+                            .await
+                            .insert(job_id, task_control_handle);
                         match SettlementTask::recover_from_storage(
                             job_id,
                             tx_config.clone(),
@@ -190,12 +199,6 @@ impl<
                         .await
                         {
                             Ok(RecoveredSettlementJob::Pending(pending)) => {
-                                let (task_control_handle, task_control) =
-                                    TaskControlHandle::new(&cancellation_token);
-                                task_controls
-                                    .lock()
-                                    .await
-                                    .insert(job_id, task_control_handle);
                                 task = pending.into_task(task_control);
                             }
                             Ok(RecoveredSettlementJob::Completed(_, result)) => {
