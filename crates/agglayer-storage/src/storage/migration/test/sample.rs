@@ -106,11 +106,11 @@ pub const CFS_V2: &[ColumnDescriptor] = &[
 impl Builder {
     pub fn open_sample(path: &Path) -> Result<Self, DBOpenError> {
         let cfs = [ColumnDescriptor::new::<NetworkInfoV0Column>()];
-        Self::open(path, &cfs, &cfs)
+        Self::open(path, &cfs)
     }
 
     pub fn open_sample_v1(path: &Path) -> Result<Self, DBOpenError> {
-        Self::open(path, CFS_V1, CFS_V1)
+        Self::open(path, CFS_V1)
     }
 
     pub fn sample_migrate_v0_v1(self) -> Result<Self, DBOpenError> {
