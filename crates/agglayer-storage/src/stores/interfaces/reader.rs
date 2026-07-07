@@ -45,6 +45,8 @@ pub trait PendingCertificateReader: Send + Sync {
     ) -> Result<Option<(CertificateId, Height)>, Error>;
 
     /// Scan the latest pending certificate pointer of every network.
+    ///
+    /// Entries that fail to decode are skipped.
     fn get_current_pending_heights(&self) -> Result<Vec<(NetworkId, PendingCertificate)>, Error>;
 
     fn get_certificate(

@@ -229,4 +229,27 @@ fn get_current_pending_heights_returns_all_networks() {
         heights[&network_15],
         PendingCertificate(certificate_15.hash(), Height::new(3))
     );
+
+    // Inserting a newer pending certificate for the same network overwrites
+    // the latest pointer instead of adding a new entry.
+    let certificate_1_next = Certificate::new_for_test(network_1, Height::new(1));
+    store
+        .insert_pending_certificate(network_1, Height::new(1), &certificate_1_next)
+        .unwrap();
+
+    let heights: BTreeMap<_, _> = store
+        .get_current_pending_heights()
+        .unwrap()
+        .into_iter()
+        .collect();
+
+    assert_eq!(heights.len(), 2);
+    assert_eq!(
+        heights[&network_1],
+        PendingCertificate(certificate_1_next.hash(), Height::new(1))
+    );
+    assert_eq!(
+        heights[&network_15],
+        PendingCertificate(certificate_15.hash(), Height::new(3))
+    );
 }

@@ -13,6 +13,7 @@ use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
     backup::BackupClient,
     columns::{
+        latest_pending_certificate_per_network::PendingCertificate,
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
@@ -429,13 +430,7 @@ impl PendingCertificateReader for DummyPendingStore {
 
     fn get_current_pending_heights(
         &self,
-    ) -> Result<
-        Vec<(
-            NetworkId,
-            agglayer_storage::columns::latest_pending_certificate_per_network::PendingCertificate,
-        )>,
-        agglayer_storage::error::Error,
-    > {
+    ) -> Result<Vec<(NetworkId, PendingCertificate)>, agglayer_storage::error::Error> {
         todo!()
     }
 
