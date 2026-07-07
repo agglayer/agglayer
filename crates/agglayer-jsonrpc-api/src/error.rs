@@ -33,6 +33,9 @@ pub mod code {
 
     /// Resource not found.
     pub const RESOURCE_NOT_FOUND: i32 = -10008;
+
+    /// Method permanently disabled.
+    pub const METHOD_DISABLED: i32 = -10009;
 }
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
@@ -145,6 +148,9 @@ pub enum Error {
     #[error("Resource not found: {0}")]
     ResourceNotFound(String),
 
+    #[error("The {method} method is disabled")]
+    MethodDisabled { method: &'static str },
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -167,6 +173,7 @@ impl Error {
             Self::Status(_) => code::STATUS_ERROR,
             Self::SendCertificate { .. } => code::SEND_CERTIFICATE,
             Self::RateLimited { .. } => code::RATE_LIMITED,
+            Self::MethodDisabled { .. } => code::METHOD_DISABLED,
         }
     }
 }
