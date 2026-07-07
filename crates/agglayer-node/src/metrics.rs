@@ -29,10 +29,12 @@ use tracing::warn;
 ///
 /// The closures deliberately hold [`Weak`](std::sync::Weak) store references
 /// and upgrade them on every scrape: the global meter provider outlives
-/// in-process node shutdowns, so a registration must never extend the store
-/// lifetime past the owning node instance (a retained RocksDB handle would
-/// keep the storage path locked, e.g. during backup restores). Once the
-/// stores drop, the series simply disappear.
+/// in-process node shutdowns, so a registration must not keep the stores
+/// alive past the owning node instance (a retained RocksDB handle would
+/// keep the storage path locked, e.g. during backup restores). The weak
+/// references extend the store lifetime by at most one in-flight collect
+/// (an `upgrade()` pins a store only for the duration of a single sampling
+/// pass); once the stores drop, the series simply disappear.
 pub(crate) fn register_network_state_metrics(
     pending_store: &Arc<PendingStore>,
     state_store: &Arc<StateStore>,
@@ -320,10 +322,17 @@ mod tests {
         );
     }
 
+    fn gather(registry: &prometheus::Registry) -> String {
+        use prometheus::Encoder as _;
+
+        let encoder = prometheus::TextEncoder::new();
+        let mut out = Vec::new();
+        encoder.encode(&registry.gather(), &mut out).unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
     #[test]
     fn registration_does_not_extend_store_lifetime() {
-        use std::sync::Arc;
-
         // A real meter provider must be installed, otherwise the no-op meter
         // discards the callbacks and this test cannot observe retention.
         let registry = prometheus::Registry::new();
@@ -334,6 +343,8 @@ mod tests {
         let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
             .with_reader(exporter)
             .build();
+        // This test deliberately owns the process-global meter provider:
+        // nextest runs one process per test, so nothing else can race it.
         opentelemetry::global::set_meter_provider(provider);
 
         let pending_tmp = TempDBDir::new();
@@ -344,6 +355,23 @@ mod tests {
 
         register_network_state_metrics(&pending_store, &state_store);
 
+        // Positive control: the registration must land on the provider this
+        // test installed, otherwise the retention check below is vacuous
+        // (e.g. a dependency drift splitting the `opentelemetry` globals).
+        let network_id = NetworkId::new(2);
+        let certificate = Certificate::new_for_test(network_id, Height::ZERO);
+        pending_store
+            .insert_pending_certificate(network_id, Height::ZERO, &certificate)
+            .unwrap();
+        let metrics = gather(&registry);
+        assert!(
+            metrics.lines().any(|line| {
+                line.starts_with("agglayer_network_pending_height{")
+                    && line.contains("network_id=\"2\"")
+            }),
+            "expected a pending height sample for network 2, got:\n{metrics}"
+        );
+
         drop(pending_store);
         drop(state_store);
 
@@ -351,5 +379,15 @@ mod tests {
         // keep the RocksDB instances alive (RocksDB holds a lock per path).
         PendingStore::new_with_path(&pending_tmp.path).unwrap();
         StateStore::new_with_path(&state_tmp.path, BackupClient::noop()).unwrap();
+
+        // With the original stores gone the weak upgrades fail and every
+        // per-network series disappears from the scrape.
+        let metrics = gather(&registry);
+        assert!(
+            metrics
+                .lines()
+                .all(|line| !line.starts_with("agglayer_network_")),
+            "expected no per-network sample lines, got:\n{metrics}"
+        );
     }
 }
