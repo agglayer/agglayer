@@ -1,11 +1,12 @@
 //! Per-network certificate state metrics.
 //!
-//! These gauges expose, for every network known to the node, the height of
-//! the latest pending / proven / settled certificate plus a flag reporting
-//! whether the latest known certificate is in error. They are *observable*
-//! gauges: the closures given to [`register_network_state_metrics`] run on
-//! every scrape of the `/metrics` endpoint, so exported values always
-//! reflect the current storage content, including right after a restart.
+//! These gauges expose, for every network with a recorded certificate
+//! pointer, the height of the latest pending / proven / settled certificate
+//! plus a flag reporting whether the latest known certificate is in error. They
+//! are *observable* gauges: the closures given to
+//! [`register_network_state_metrics`] run on every scrape of the `/metrics`
+//! endpoint, so exported values always reflect the current storage content,
+//! including right after a restart.
 
 use opentelemetry::{global, KeyValue};
 
