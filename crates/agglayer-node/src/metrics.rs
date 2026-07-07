@@ -26,19 +26,44 @@ use tracing::warn;
 ///
 /// Must run after the metrics server has installed the global meter provider
 /// (the node does this before `Node::start` runs).
+///
+/// The closures deliberately hold [`Weak`](std::sync::Weak) store references
+/// and upgrade them on every scrape: the global meter provider outlives
+/// in-process node shutdowns, so a registration must never extend the store
+/// lifetime past the owning node instance (a retained RocksDB handle would
+/// keep the storage path locked, e.g. during backup restores). Once the
+/// stores drop, the series simply disappear.
 pub(crate) fn register_network_state_metrics(
-    pending_store: Arc<PendingStore>,
-    state_store: Arc<StateStore>,
+    pending_store: &Arc<PendingStore>,
+    state_store: &Arc<StateStore>,
 ) {
-    let pending = pending_store.clone();
-    let proven = pending_store.clone();
-    let settled = state_store.clone();
+    let pending = Arc::downgrade(pending_store);
+    let proven = Arc::downgrade(pending_store);
+    let settled = Arc::downgrade(state_store);
+    let in_error_pending = Arc::downgrade(pending_store);
+    let in_error_state = Arc::downgrade(state_store);
 
     agglayer_telemetry::network::register_network_state_metrics(NetworkStateSamplers {
-        pending: Box::new(move || collect_pending_heights(&pending)),
-        proven: Box::new(move || collect_proven_heights(&proven)),
-        settled: Box::new(move || collect_settled_heights(&settled)),
-        in_error: Box::new(move || collect_error_flags(&pending_store, &state_store)),
+        pending: Box::new(move || match pending.upgrade() {
+            Some(store) => collect_pending_heights(&store),
+            None => Vec::new(),
+        }),
+        proven: Box::new(move || match proven.upgrade() {
+            Some(store) => collect_proven_heights(&store),
+            None => Vec::new(),
+        }),
+        settled: Box::new(move || match settled.upgrade() {
+            Some(store) => collect_settled_heights(&store),
+            None => Vec::new(),
+        }),
+        in_error: Box::new(
+            move || match (in_error_pending.upgrade(), in_error_state.upgrade()) {
+                (Some(pending_store), Some(state_store)) => {
+                    collect_error_flags(&pending_store, &state_store)
+                }
+                _ => Vec::new(),
+            },
+        ),
     });
 }
 
@@ -293,5 +318,38 @@ mod tests {
                 },
             ],
         );
+    }
+
+    #[test]
+    fn registration_does_not_extend_store_lifetime() {
+        use std::sync::Arc;
+
+        // A real meter provider must be installed, otherwise the no-op meter
+        // discards the callbacks and this test cannot observe retention.
+        let registry = prometheus::Registry::new();
+        let exporter = opentelemetry_prometheus::exporter()
+            .with_registry(registry.clone())
+            .build()
+            .unwrap();
+        let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+            .with_reader(exporter)
+            .build();
+        opentelemetry::global::set_meter_provider(provider);
+
+        let pending_tmp = TempDBDir::new();
+        let state_tmp = TempDBDir::new();
+        let pending_store = Arc::new(PendingStore::new_with_path(&pending_tmp.path).unwrap());
+        let state_store =
+            Arc::new(StateStore::new_with_path(&state_tmp.path, BackupClient::noop()).unwrap());
+
+        register_network_state_metrics(&pending_store, &state_store);
+
+        drop(pending_store);
+        drop(state_store);
+
+        // Reopening the same paths only succeeds if the registration did not
+        // keep the RocksDB instances alive (RocksDB holds a lock per path).
+        PendingStore::new_with_path(&pending_tmp.path).unwrap();
+        StateStore::new_with_path(&state_tmp.path, BackupClient::noop()).unwrap();
     }
 }
