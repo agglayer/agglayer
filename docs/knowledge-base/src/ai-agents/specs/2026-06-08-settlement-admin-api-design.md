@@ -8,6 +8,19 @@
 | **Target** | The new `agglayer-settlement-service` crate |
 | **Decision owners** | @Ekleog-Polygon (settlement design intent), @Freyskeyd (assignee) |
 
+> **Scope note (2026-07-07).**
+> This design has been split in two.
+> The mutation surface — registering and correcting attempts and job results,
+> plus the JSON-RPC exposure of the abort/reload task controls — is
+> implemented and recorded in
+> [Settlement admin mutations](2026-07-07-settlement-admin-mutations-design.md),
+> together with its deliberate deviations from the sketches below.
+> This document keeps the parts that are not implemented yet:
+> pause/resume with full quiesce and drain reporting,
+> the observability read surface, and the durable admin audit log.
+> Background snapshots and code references predate the mutation
+> implementation and may be stale where they overlap it.
+
 ## Summary
 
 This document designs a production-grade admin and observability API
@@ -28,6 +41,9 @@ The API delivers three capability groups:
 - **Mutation** — add/edit settlement attempts and mark an attempt
   "definitely failed" so the job re-drives on a fresh nonce
   (the wallet-rotation and degraded-RPC fallbacks from the ticket).
+  Split out and implemented — see the
+  [mutations document](2026-07-07-settlement-admin-mutations-design.md);
+  of this group, only audit-log coverage remains in scope here.
 
 The anchor scenario is an **emergency pause during an L1 incident**:
 a full quiesce in which tasks stop both submitting transactions
@@ -35,8 +51,9 @@ and writing on-chain-derived conclusions until an operator resumes.
 
 ## Goals
 
-- Make the three ticket capabilities (pause, add/edit attempts,
-  mark-definitely-failed/retry-with-new-nonce) safe to operate in production.
+- Make the remaining ticket capability, pause, safe to operate in production
+  (add/edit attempts and mark-definitely-failed/retry-with-new-nonce
+  are implemented; see the mutations document).
 - Provide the minimum observability required to use those capabilities
   without flying blind (there is no "list jobs" or status view today).
 - Preserve the infallible-`SettlementJob` invariant.
@@ -46,6 +63,11 @@ and writing on-chain-derived conclusions until an operator resumes.
 
 ## Non-goals
 
+- The attempt/job mutation surface and the task abort/reload controls:
+  implemented, and covered by the
+  [mutations document](2026-07-07-settlement-admin-mutations-design.md).
+  This document only adds on top of it (audit rows for its operations,
+  and pause as the clean fix for its accepted insert race).
 - A job-level terminal-failure state.
   This contradicts the infallible-job invariant
   and is deferred to an explicit maintainer decision (see Open Questions).
@@ -69,6 +91,12 @@ and writing on-chain-derived conclusions until an operator resumes.
 | D6 | Double-settle posture | Operator assertion + contract backstop; mandatory reason; mark-fail and re-drive are separate steps |
 | D7 | Trust + audit | Network-boundary trust + durable, reusable audit log; tower `Layer` for tracing/metrics |
 | D8 | Transport | Public reads on ReadRPC; mutations + audit read on the private Admin RPC; internal surface is the tower `AdminCommand` service |
+
+D5 and D6 are implemented as part of the mutation split.
+The implementation keeps their substance but not every sketched detail
+(per-operation preconditions instead of literal `from=`/`to=` snapshots,
+append-only insert instead of upsert, no audit rows yet);
+the deviations are recorded in the mutations document (D1, D3, D6, D8).
 
 ## Background: the new settlement service
 
@@ -134,7 +162,7 @@ flowchart TB
     R1["settlement_listJobs / getJob / getPauseStatus"]
   end
   subgraph Admin["Private Admin RPC (admin_rpc_addr)"]
-    A1["settlement_pause / resume / addAttempt / editAttempt / markAttemptDefinitelyFailed / ..."]
+    A1["settlement_pause / resume / pauseWallet / resumeWallet"]
     A2["settlement_listAuditLog"]
   end
   R1 -->|read view| SVC
@@ -186,7 +214,18 @@ This extends the existing `AdminCommand` enum and its `tower::Service` impl
 (`settlement_service.rs:260`),
 widening its response from `()` to a typed `AdminResponse`.
 
+The implemented mutation surface deliberately skips this indirection —
+its JSON-RPC adapters call inherent `admin_*` service methods directly
+(mutations document, D8).
+The tower choke point returns with the audit-log work,
+and the mutation commands would join it then.
+
 ### Mutation model (D5)
+
+*Implemented with the mutation surface (mutations document, D6),
+with per-operation preconditions instead of the literal `from=`/`to=`
+check of step 2;
+the audit append of step 3 arrives with the audit-log work below.*
 
 All mutations are **declarative over stored state**, never in-memory patches:
 
@@ -203,40 +242,18 @@ All mutations are **declarative over stored state**, never in-memory patches:
 Storage remains the single source of truth;
 the live task only ever *reads* storage (start/reload),
 so there is no live/stored divergence and no bespoke in-memory edit logic.
-The reload path (#1230) is therefore the **linchpin dependency**
-for all mutations and for resume.
+The reload path (#1230) was therefore the **linchpin dependency**
+for all mutations and for resume;
+it has since landed, and the implemented mutations rely on it.
 
 ## Data model and storage
 
-### The one required `agglayer-types` change: attempt-level "definitely failed"
+### Attempt-level "definitely failed" (implemented)
 
-"Mark a settlement attempt as definitely failed"
-maps onto the existing attempt-result type.
-A human asserting that a `(wallet, nonce)` will never land
-is a terminal client-side outcome,
-so we add **one variant** to `ClientErrorType`:
-`AbandonedByAdmin`.
-
-`admin_override_attempt_result` force-writes
-`SettlementAttemptResult::ClientError { kind: AbandonedByAdmin, message: <reason> }`,
-bypassing `can_be_replaced_by` (`settlement.rs:137`).
-
-Re-drive is **emergent**, not a separate command.
-Once that attempt is resolved (non-pending),
-the run loop has no pending attempt to bump,
-cannot bump the dead nonce
-(`is_wallet_privkey_known` is false after rotation,
-`settlement_task.rs:536`, `:297-305`),
-and falls through to `build_next_attempt_with_new_nonce`
-(`settlement_task.rs:398`) on the new wallet.
-So "retry with new nonce" = mark-failed + resume.
-The job never fails — it is freed to settle elsewhere.
-This is the ticket's fallback for "we cannot wait-for-finalization
-for lack of RPC": the human substitutes the conclusion
-the automated path cannot reach.
-
-Naming note: the variant and the API name must convey
-"this *attempt* is abandoned," never "the job failed."
+The one `agglayer-types` change this design needed —
+the `ClientErrorType::AbandonedByAdmin` attempt-result override,
+with its emergent re-drive on a fresh nonce/wallet —
+is implemented; see the mutations document (D3, D7).
 
 ### Persisted pause state (D4)
 
@@ -292,10 +309,10 @@ pub trait SettlementObservabilityReader {
 }
 
 // Behind `settlement-admin`; NOT in the stores prelude; ADMIN surface only.
+// (The attempt/result bypass writers sketched here originally are
+// implemented on `SettlementWriter` instead — mutations document, D8.)
 #[cfg(feature = "settlement-admin")]
 pub trait SettlementAdminWriter {
-    fn admin_upsert_attempt(&self, …) -> Result<…>;             // bypass insert-only (add/edit attempt)
-    fn admin_override_attempt_result(&self, …) -> Result<…>;    // bypass can_be_replaced_by (mark definitely-failed)
     fn admin_set_pause(&self, scope, on, record) -> Result<…>;  // settlement_pause_cf
 }
 
@@ -311,6 +328,12 @@ only, so it cannot even name the bypass methods —
 a compile-time guarantee that the invariant-bypassing path
 is unreachable from normal code.
 `SettlementService`'s admin path gains the `…Admin…` bounds.
+The implemented mutation surface chose otherwise:
+its bypass writers live on `SettlementWriter` with an `admin_` prefix and a
+documented never-call-from-the-task contract, without a feature gate
+(mutations document, D8).
+Whether the remaining admin writer (pause) and the audit reader keep the
+feature-gated shape sketched here is revisited at implementation time (OQ3).
 
 The `settlement-admin` Cargo feature is primarily for **API-surface hygiene**:
 a crate depending on `agglayer-storage` without the feature
@@ -348,12 +371,14 @@ merges into the single generated
 Shared scalars (`Address`, `Nonce`, `TxHash`, `Uint128`, …)
 live in `ethereum_types.proto`.
 
-This adds **two new files plus one one-line enum edit**:
+This adds **two new files**
+(the enum edit sketched earlier — `CLIENT_ERROR_TYPE_ABANDONED_BY_ADMIN` —
+already landed with the mutation implementation):
 
 ```
 proto/agglayer/storage/v0/
   ethereum_types.proto        (existing — shared scalars)
-  settlement.proto            (existing — EDIT: add one enum variant)
+  settlement.proto            (existing — ABANDONED_BY_ADMIN variant already added)
   admin_audit.proto           (NEW — neutral envelope)
   settlement_admin.proto      (NEW — settlement payload + pause record)
 ```
@@ -367,8 +392,6 @@ proto/agglayer/storage/v0/
 - `settlement_admin.proto`
   (`message SettlementAdminPayload`, `message SettlementPauseRecord`)
   imports `settlement.proto` to reuse `SettlementAttempt`/`SettlementAttemptResult`.
-- The one edit to an existing proto adds the variant to `settlement.proto:63`:
-  `CLIENT_ERROR_TYPE_ABANDONED_BY_ADMIN = 3;`.
 
 Protos are always generated;
 the `settlement-admin` feature gates only the Rust trait/impl
@@ -491,7 +514,11 @@ so this design defines the gate and defers failover to #1318.
 
 Namespace `settlement`.
 Reads are dedicated tower request types (`SettlementObservabilityReader`);
-control and mutation extend the `AdminCommand` enum (`SettlementAdminWriter`).
+control extends the `AdminCommand` enum (`SettlementAdminWriter`).
+The implemented mutations joined the `admin` namespace instead
+(mutations document, D8);
+settle on one namespace story for the remaining methods at implementation
+time.
 
 ### Group A — Observability (public ReadRPC; no audit row)
 
@@ -509,16 +536,23 @@ control and mutation extend the `AdminCommand` enum (`SettlementAdminWriter`).
 | `settlement_resume` | `ResumeGlobal{…}` | `()` | reload + re-evaluate on wake |
 | `settlement_pauseWallet` | `PauseWallet{wallet,…}` | `()` | submission gate |
 | `settlement_resumeWallet` | `ResumeWallet{wallet,…}` | `()` | |
-| `settlement_abortTask` | `AbortTask{job_id,…}` (exists `:105`) | `()` | runtime stop only, **not** terminal |
-| `settlement_reloadTask` | `ReloadAndRestartTask{job_id,…}` (exists `:111`; reload #1230) | `()` | manual escape hatch |
 
-### Group C — Mutation (private Admin RPC; declarative; audit row; per-job lock; auto-reload)
+`abortTask` and `reloadTask` are already exposed as
+`admin_abortSettlementTask` / `admin_reloadSettlementTask`
+(mutations document); the only work left for them here is audit coverage.
 
-| Method | → `AdminCommand` | Params | Errors |
-|---|---|---|---|
-| `settlement_addAttempt` | `AddAttempt{…}` | `job_id, attempt{sender_wallet,nonce,hash,submission_time}, reason, actor`; precondition `from=absent` | InvalidArgument(dup), internal |
-| `settlement_editAttempt` | `EditAttempt{…}` | `job_id, attempt_seq, from:AttemptSnapshot, to:AttemptSnapshot, reason, actor` | ResourceNotFound, InvalidArgument(from-mismatch) |
-| `settlement_markAttemptDefinitelyFailed` | `MarkAttemptDefinitelyFailed{…}` | `job_id, attempt_seq, from_result:Option<…>, reason (**mandatory**), actor` → writes `ClientError{AbandonedByAdmin}` | ResourceNotFound, InvalidArgument |
+### Group C — Mutation (implemented; see the mutations document)
+
+The mutation surface is implemented and recorded in the
+[mutations document](2026-07-07-settlement-admin-mutations-design.md):
+append-only insert, mark-attempt-definitely-failed,
+remove-attempt-result, and force-remove-job-result,
+in the `admin` namespace.
+What remains in scope here is audit coverage:
+when the audit log lands, these operations gain audit rows and the
+mandatory `reason` + `actor` metadata of cross-cutting rule 1
+(mark-definitely-failed already carries a mandatory `reason`,
+persisted only in the attempt result's message until then).
 
 ### Group D — Audit read (private Admin RPC; `AdminAuditReader`)
 
@@ -536,9 +570,8 @@ pub enum AdminCommand {
     PauseGlobal { reason: String, actor: String }, ResumeGlobal { … },
     PauseWallet { wallet: Address, … },           ResumeWallet { … },
     AbortTask { job_id: SettlementJobId, … },      ReloadAndRestartTask { … },
-    AddAttempt { job_id, attempt, … },
-    EditAttempt { job_id, attempt_seq, from, to, … },
-    MarkAttemptDefinitelyFailed { job_id, attempt_seq, from_result, reason, actor },
+    // … plus the implemented mutation operations (mutations document),
+    // folded in when the audit choke point lands.
 }
 pub enum AdminResponse { Ack, PauseStatus(DrainSnapshot) }   // widened from today's ()
 ```
@@ -564,6 +597,13 @@ pub enum AdminResponse { Ack, PauseStatus(DrainSnapshot) }   // widened from tod
    the `SettlementJob` row persists and can be re-spawned.
    There is no admin path to a terminal job failure in v1.
 
+Rules 2 and 3 describe the draft's snapshot-precondition shape;
+the implemented mutations keep their substance (precondition-checked,
+atomic under the per-job lock, state untouched on mismatch) with
+per-operation preconditions instead of literal `from=`/`to=` snapshots
+(mutations document, D1, D6).
+The audit work should follow the implemented shape.
+
 ## Safety invariants (implementation contract)
 
 1. **Infallible-job preserved.**
@@ -580,6 +620,9 @@ pub enum AdminResponse { Ack, PauseStatus(DrainSnapshot) }   // widened from tod
 6. **Intake never rejected** (recorded + parked while paused).
 7. **Capability containment.**
    Bypass writers are unreachable from the settlement task (compile-time).
+   (The implemented mutation surface relaxed this to a documented
+   convention — mutations document, D8; whether the remaining surface
+   restores the compile-time shape is part of OQ3.)
 8. **Auditability.**
    Every state-changing admin action leaves a durable, time-ordered record
    with `actor` + `reason`.
@@ -622,12 +665,13 @@ These double as acceptance scenarios.
 | **0 Foundations** | CFs + types/proto, traits (`ObservabilityReader` always-on; `AdminWriter`/`AdminAuditReader` feature-gated) + `MockStateStore`, audit envelope + tower `Layer`, derived status + list/scan readers | — | No (storage/types; mock-testable) |
 | **1 Observability API** | `listJobs`/`getJob`/`getPauseStatus` on ReadRPC; `listAuditLog` on Admin RPC | node integration (construct + `Arc`-share `SettlementService`; mount namespaces) | No |
 | **2 Pause/resume** | `PauseState` watch + two gates + per-task `TaskRuntimeState` + `getPauseStatus` + pause/resume(+wallet) + restart-loads-pause | Phase 0; the task loop (exists) | No for global; per-wallet failover needs #1318 |
-| **3 Mutations** | `addAttempt`/`editAttempt`/`markAttemptDefinitelyFailed` + admin writers + auto-reload | **reload path #1230** | `markFailed` records now; its re-drive lands with #1318/#1321 |
+| **3 Mutations** | Implemented — see the mutations document; only audit coverage remains | reload path #1230 (landed) | No |
 | **4 (conditional)** | `editJobPayload` | maintainer fork (A) | — |
 
-`abortTask`/`reloadTask` already exist (`settlement_service.rs:105`/`:111`);
-they only need audit + JSON-RPC exposure (fold into Phase 1/2).
-The critical path is **node integration → #1230 reload**.
+`abortTask`/`reloadTask` are exposed on JSON-RPC by the mutation
+implementation; they only need audit (fold into Phase 1/2).
+The old critical path — node integration (#1393) and the #1230 reload —
+has since landed.
 Pause and observability — the anchor value —
 are reachable without the deep execution stubs.
 
@@ -684,6 +728,9 @@ keeping the envelope decoupled from each domain's proto.
 
 Included for API-surface hygiene, with the additive-features caveat documented.
 Reviewers may veto in favour of the trait boundary alone.
+The implemented mutation surface shipped without the feature and without a
+separate trait (mutations document, D8);
+the question stays open for the pause writer and the audit reader.
 
 ### OQ4 — Per-wallet pause: failover vs park
 
@@ -704,7 +751,10 @@ Invariant 9 and the entire double-settle posture (D6)
 depend on the L1 settlement contract being replay-safe
 (a duplicate settlement reverts or no-ops).
 This must be confirmed with the settlement-contract owners
-before relying on `markAttemptDefinitelyFailed` in production.
+before relying on `markAttemptDefinitelyFailed` in production —
+all the more pressing now that the operation is implemented
+(as `admin_markSettlementAttemptDefinitelyFailed`, alongside
+`admin_forceRemoveSettlementJobResult`, which leans on the same backstop).
 
 ## Appendix: key code references
 
