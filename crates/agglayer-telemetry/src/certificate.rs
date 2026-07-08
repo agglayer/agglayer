@@ -6,7 +6,7 @@ use std::time::Instant;
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*, KeyValue};
 
-const AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME: &str = "agglayer_node_certificate";
+const AGGLAYER_OTEL_SCOPE_NAME: &str = "agglayer";
 
 /// Histogram buckets in seconds, from the sub-second submission stage to
 /// multi-minute settlement.
@@ -22,20 +22,16 @@ pub mod stage {
 }
 
 lazy_static! {
-    static ref CERTIFICATE_DURATION: Histogram<f64> =
-        global::meter(AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME)
-            .f64_histogram("agglayer_certificate_duration_seconds")
-            .with_description(
-                "End-to-end certificate bridging time, Pending to Settled, in seconds"
-            )
-            .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
-            .build();
-    static ref CERTIFICATE_STAGE_DURATION: Histogram<f64> =
-        global::meter(AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME)
-            .f64_histogram("agglayer_certificate_stage_duration_seconds")
-            .with_description("Time spent in each certificate lifecycle stage, in seconds")
-            .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
-            .build();
+    static ref CERTIFICATE_DURATION: Histogram<f64> = global::meter(AGGLAYER_OTEL_SCOPE_NAME)
+        .f64_histogram("agglayer_certificate_duration_seconds")
+        .with_description("End-to-end certificate bridging time, Pending to Settled, in seconds")
+        .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
+        .build();
+    static ref CERTIFICATE_STAGE_DURATION: Histogram<f64> = global::meter(AGGLAYER_OTEL_SCOPE_NAME)
+        .f64_histogram("agglayer_certificate_stage_duration_seconds")
+        .with_description("Time spent in each certificate lifecycle stage, in seconds")
+        .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
+        .build();
 }
 
 fn labels(network_id: u32, extra: &[KeyValue]) -> Vec<KeyValue> {
