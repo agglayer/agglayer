@@ -1,0 +1,9 @@
+# Top-level sections that only configured the removed `interop_sendTx` flow.
+# They are rejected since their removal (issue #1632).
+[full-node-rpcs]
+
+[l2]
+rpc-timeout = "45s"
+
+[rate-limiting]
+send-tx = "unlimited"

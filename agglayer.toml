@@ -1,10 +1,5 @@
 prover-entrypoint = "http://127.0.0.1:8080"
 
-[full-node-rpcs]
-
-[l2]
-rpc-timeout = "45s"
-
 [proof-signers]
 
 [log]
@@ -16,11 +11,6 @@ format = "pretty"
 port = 9090
 host = "0.0.0.0"
 request-timeout = "3m"
-
-[rate-limiting]
-send-tx = "unlimited"
-
-[rate-limiting.network]
 
 [l1]
 chain-id = 1337

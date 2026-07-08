@@ -28,15 +28,6 @@ pub struct KMS {
     config: GcpKmsConfig,
 }
 
-#[derive(Debug)]
-pub struct KmsSigners {
-    // The signer for PP settlement.
-    pub pp_settlement: KmsSigner,
-    // The signer for transaction settlement, if not defined is expected
-    // that `pp_settlement` signer will be used.
-    pub tx_settlement: Option<KmsSigner>,
-}
-
 impl KMS {
     /// Creates a new KMS instance.
     pub fn new(chain_id: u64, config: GcpKmsConfig) -> Self {
@@ -66,22 +57,16 @@ impl KMS {
     /// This function will return an error if it fails to retrieve the required
     /// environment variables or if there is an issue creating the GCP KMS
     /// signer.
-    pub async fn gcp_kms_signers(&self) -> eyre::Result<KmsSigners> {
+    pub async fn gcp_kms_signer(&self) -> eyre::Result<KmsSigner> {
         let params = KMSParameters::try_from(&self.config)?;
         debug!("Using GCP KMS with parameters: {:?}", params);
 
-        // create KeySpecifier for both signers
         let keyring =
             GcpKeyRingRef::new(&params.project_id, &params.location, &params.keyring_name);
         let pp_settlement_specifier = KeySpecifier::new(
-            keyring.clone(),
+            keyring,
             &params.key_name_pp_settlement,
             params.key_version_pp_settlement,
-        );
-        let tx_settlement_specifier = KeySpecifier::new(
-            keyring,
-            &params.key_name_tx_settlement,
-            params.key_version_tx_settlement,
         );
 
         // Create the GoogleApi client matching the type expected by GcpSigner
@@ -92,26 +77,10 @@ impl KMS {
 
         // Use GcpSigner::new with the proper client type
         let pp_settlement_gcp_signer =
-            GcpSigner::new(client.clone(), pp_settlement_specifier, Some(self.chain_id))
+            GcpSigner::new(client, pp_settlement_specifier, Some(self.chain_id))
                 .await
                 .wrap_err("Unable to create PP settlement GcpSigner")?;
 
-        let is_the_same_key = params.key_name_pp_settlement == params.key_name_tx_settlement
-            && params.key_version_pp_settlement == params.key_version_tx_settlement;
-
-        let tx_settlement_gcp_signer = if is_the_same_key {
-            None
-        } else {
-            Some(
-                GcpSigner::new(client, tx_settlement_specifier, Some(self.chain_id))
-                    .await
-                    .wrap_err("Unable to create tx settlement GcpSigner")?,
-            )
-        };
-
-        Ok(KmsSigners {
-            pp_settlement: KmsSigner::new(pp_settlement_gcp_signer),
-            tx_settlement: tx_settlement_gcp_signer.map(KmsSigner::new),
-        })
+        Ok(KmsSigner::new(pp_settlement_gcp_signer))
     }
 }

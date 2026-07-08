@@ -35,7 +35,6 @@ including README references to crate/domain ownership.
 |---|---|
 | `agglayer-jsonrpc-api` | JSON-RPC API surface and handlers |
 | `agglayer-rpc` | Internal RPC service implementation |
-| `agglayer-rate-limiting` | Shared rate-limiting middleware |
 | `agglayer-grpc-api` | gRPC API traits and service definitions |
 | `agglayer-grpc-server` | gRPC server implementation |
 | `agglayer-grpc-client` | gRPC client implementation |

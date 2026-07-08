@@ -4,11 +4,6 @@ expression: config
 ---
 prover-buffer-size = 100
 
-[full-node-rpcs]
-
-[l2]
-rpc-timeout = "45s"
-
 [proof-signers]
 
 [log]
@@ -23,11 +18,6 @@ admin-port = 9091
 host = "0.0.0.0"
 max-request-body-size = 104857600
 request-timeout = "3m"
-
-[rate-limiting]
-send-tx = "unlimited"
-
-[rate-limiting.network]
 
 [l1]
 chain-id = 1337
