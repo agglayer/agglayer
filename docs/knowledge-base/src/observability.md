@@ -11,14 +11,14 @@ This page documents Agglayer's certificate metrics: the bridging-time histograms
 ## Certificate bridging-time metrics
 
 All metrics use the OpenTelemetry meter scope `agglayer` and are labeled by
-`environment` and `network_id` (two also carry a `stage` label).
+`network_id` (two also carry a `stage` label).
 
 | Metric | Type | Labels | Meaning |
 | --- | --- | --- | --- |
-| `agglayer_certificate_duration_seconds` | histogram | `environment`, `network_id` | Total end-to-end bridging time of a certificate (`Pending` → `Settled`). |
-| `agglayer_certificate_stage_duration_seconds` | histogram | `environment`, `network_id`, `stage` | Time spent in each lifecycle stage. |
-| `agglayer_certificate_settled_height` | gauge | `environment`, `network_id` | Height of the latest settled certificate for a network. |
-| `agglayer_certificate_errors_total` | counter | `environment`, `network_id`, `stage` | Certificates that moved to `InError`, by the stage they errored from. |
+| `agglayer_certificate_duration_seconds` | histogram | `network_id` | Total end-to-end bridging time of a certificate (`Pending` → `Settled`). |
+| `agglayer_certificate_stage_duration_seconds` | histogram | `network_id`, `stage` | Time spent in each lifecycle stage. |
+| `agglayer_certificate_settled_height` | gauge | `network_id` | Height of the latest settled certificate for a network. |
+| `agglayer_certificate_errors_total` | counter | `network_id`, `stage` | Certificates that moved to `InError`, by the stage they errored from. |
 
 ### Stages
 
@@ -71,12 +71,12 @@ through multi-minute settlement waits:
 
 ## Example PromQL
 
-End-to-end p95 bridging time, per network and environment:
+End-to-end p95 bridging time, per network:
 
 ```promql
 histogram_quantile(
   0.95,
-  sum by (le, environment, network_id) (
+  sum by (le, network_id) (
     rate(agglayer_certificate_duration_seconds_bucket[$__rate_interval])
   )
 )
@@ -107,10 +107,10 @@ sum by (stage) (rate(agglayer_certificate_errors_total[$__rate_interval]))
 
 ## Configuration
 
-The `environment` label is taken from `[telemetry].environment` in the node
-configuration (default `"unknown"`); deployments set it to the target network
-(e.g. `bali`, `cardona`, `mainnet`). Alternatively, an environment/cluster label
-can be injected at scrape time via Prometheus `external_labels`.
+The metrics endpoint address is configured under `[telemetry]`
+(`prometheus-addr`, default `0.0.0.0:3000`). Deployment-level labels such as
+`environment` or `cluster` are expected to be added at scrape time via Prometheus
+`external_labels` rather than emitted by the node.
 
 ## Extending
 
