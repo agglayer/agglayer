@@ -46,6 +46,9 @@ private-keys = []
 
 [telemetry]
 prometheus-addr = "0.0.0.0:3000"
+# Deployment environment label applied to certificate metrics (e.g. bali,
+# cardona, mainnet). Defaults to "unknown" when unset.
+environment = "cardona"
 
 [epoch.block-clock]
 epoch-duration = 6

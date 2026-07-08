@@ -88,6 +88,10 @@ pub fn main(
         .enable_all()
         .build()?;
 
+    // Set the environment label applied to certificate metrics before any
+    // metric is recorded.
+    agglayer_telemetry::set_environment(config.telemetry.environment.clone());
+
     // Create the metrics server.
     let metric_server = metrics_runtime.block_on(
         MetricsBuilder::builder()

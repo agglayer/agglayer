@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::OnceLock};
 
 use axum::{
     extract::State,
@@ -19,9 +19,28 @@ use crate::constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_N
 
 mod constant;
 
+pub mod certificate;
 pub mod clock;
 
 pub use opentelemetry::KeyValue;
+
+/// Deployment environment label (e.g. "cardona", "mainnet") applied to
+/// certificate metrics. Set once at startup from configuration.
+static ENVIRONMENT: OnceLock<String> = OnceLock::new();
+
+/// Sets the deployment environment label applied to certificate metrics.
+///
+/// Call once during node startup, before any metric is recorded. Subsequent
+/// calls are ignored.
+pub fn set_environment(environment: impl Into<String>) {
+    let _ = ENVIRONMENT.set(environment.into());
+}
+
+/// Returns the configured deployment environment label, or `"unknown"` if it
+/// was never set.
+pub(crate) fn environment() -> &'static str {
+    ENVIRONMENT.get().map(String::as_str).unwrap_or("unknown")
+}
 
 lazy_static! {
     // Backward compatibility with the old metrics from agglayer go implementation

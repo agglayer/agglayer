@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use agglayer_contracts::{
     rollup::VerifierType, settler::verify_pessimistic_trusted_aggregator_calldata,
@@ -38,6 +38,15 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient, Settlement
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
     settlement_service: Arc<SettlementService>,
+
+    /// When the task began processing a fresh `Pending` certificate; `None` for
+    /// resumed certificates. Gates the duration metrics so they measure a full
+    /// `Pending` -> `Settled` lifecycle within a single process, and holds the
+    /// start of the end-to-end bridging clock.
+    overall_start: Option<Instant>,
+    /// Start of the current lifecycle stage; reset after each stage is
+    /// recorded.
+    stage_start: Option<Instant>,
 }
 
 impl<StateStore, PendingStore, CertifierClient, SettlementService>
@@ -78,6 +87,8 @@ where
             certifier_client,
             cancellation_token,
             settlement_service,
+            overall_start: None,
+            stage_start: None,
         })
     }
 
@@ -139,6 +150,16 @@ where
         // with storing the certificate if needed.
 
         debug!(initial_status = ?self.header.status, "Processing certificate");
+
+        // Start the bridging-time clock for fresh certificates only, so the
+        // duration metrics measure a full Pending -> Settled lifecycle within a
+        // single process. Resumed certificates (entry Proven/Candidate) leave
+        // both clocks `None` and contribute no durations.
+        if self.header.status == CertificateStatus::Pending {
+            let now = Instant::now();
+            self.overall_start = Some(now);
+            self.stage_start = Some(now);
+        }
 
         // TODO: Hack to deal with Proven certificates in case the PP changed.
         // See https://github.com/agglayer/agglayer/pull/819#discussion_r2152193517 for the details
@@ -278,6 +299,7 @@ where
 
         // Record the certification success
         self.set_status(CertificateStatus::Proven)?;
+        self.record_stage(agglayer_telemetry::certificate::stage::PENDING);
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -324,6 +346,7 @@ where
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
 
         self.set_status(CertificateStatus::Candidate)?;
+        self.record_stage(agglayer_telemetry::certificate::stage::PROVEN);
 
         #[cfg(feature = "testutils")]
         testutils::inject_fail_points_after_proving(
@@ -477,12 +500,42 @@ where
         Ok(())
     }
 
+    /// Records the elapsed duration of the current lifecycle stage (fresh
+    /// certificates only) and resets the stage clock for the next stage.
+    fn record_stage(&mut self, stage: &'static str) {
+        if let Some(started) = self.stage_start {
+            agglayer_telemetry::certificate::record_certificate_stage_completed(
+                self.header.network_id.to_u32(),
+                stage,
+                started.elapsed().as_secs_f64(),
+            );
+            self.stage_start = Some(Instant::now());
+        }
+    }
+
     /// Common finalization logic for all settlement completion paths.
     async fn finalize_settlement(&mut self) -> Result<(), CertificateStatusError> {
         // The network task persists `Settled` once the epoch is assigned, so a
         // failed assignment leaves the certificate `Candidate` (recoverable) rather
         // than durably `Settled` with no epoch. Reflect the status in memory only.
         self.header.status = CertificateStatus::Settled;
+
+        // Certificate metrics: always advance the settled-height gauge; for fresh
+        // certificates also record the final `candidate` stage (time awaiting L1
+        // settlement) and the end-to-end bridging duration.
+        let network_id = self.header.network_id.to_u32();
+        agglayer_telemetry::certificate::record_certificate_settled_height(
+            network_id,
+            self.header.height.as_u64(),
+        );
+        self.record_stage(agglayer_telemetry::certificate::stage::CANDIDATE);
+        if let Some(started) = self.overall_start {
+            agglayer_telemetry::certificate::record_certificate_total_duration(
+                network_id,
+                started.elapsed().as_secs_f64(),
+            );
+        }
+
         self.send_to_network_task(NetworkTaskMessage::CertificateSettled {
             height: self.header.height,
             certificate_id: self.header.certificate_id,
