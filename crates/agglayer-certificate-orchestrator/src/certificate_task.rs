@@ -8,6 +8,7 @@ use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
     UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
+use agglayer_telemetry::certificate;
 #[cfg(feature = "testutils")]
 use agglayer_types::SettlementTxHash;
 use agglayer_types::{
@@ -127,6 +128,9 @@ where
             ) {
                 error!(?error, "Failed to update certificate status in database");
             };
+
+            // Record the error, labeled by the stage the certificate errored from.
+            self.record_error();
 
             self.send_to_network_task(NetworkTaskMessage::CertificateErrored {
                 height: self.header.height,
@@ -297,9 +301,10 @@ where
             .await?;
         debug!("Proof certification completed");
 
-        // Record the certification success
+        // Certification succeeded: close out the `pending` (proving) stage, then
+        // record the new status.
+        self.record_stage();
         self.set_status(CertificateStatus::Proven)?;
-        self.record_stage(agglayer_telemetry::certificate::stage::PENDING);
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -345,8 +350,9 @@ where
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
 
+        // Close out the `proven` (submission) stage, then record the new status.
+        self.record_stage();
         self.set_status(CertificateStatus::Candidate)?;
-        self.record_stage(agglayer_telemetry::certificate::stage::PROVEN);
 
         #[cfg(feature = "testutils")]
         testutils::inject_fail_points_after_proving(
@@ -500,11 +506,15 @@ where
         Ok(())
     }
 
-    /// Records the elapsed duration of the current lifecycle stage (fresh
-    /// certificates only) and resets the stage clock for the next stage.
-    fn record_stage(&mut self, stage: &'static str) {
-        if let Some(started) = self.stage_start {
-            agglayer_telemetry::certificate::record_certificate_stage_completed(
+    /// Records how long the certificate has spent in its current status (fresh
+    /// certificates only) and resets the stage clock. Call immediately before
+    /// transitioning to the next status; the stage label is the status being
+    /// left.
+    fn record_stage(&mut self) {
+        if let (Some(started), Some(stage)) =
+            (self.stage_start, Self::stage_label(&self.header.status))
+        {
+            certificate::record_certificate_stage_completed(
                 self.header.network_id.to_u32(),
                 stage,
                 started.elapsed().as_secs_f64(),
@@ -513,24 +523,42 @@ where
         }
     }
 
+    /// Records a certificate moving to `InError`, labeled by the stage it
+    /// errored from (its status when processing failed). Counts every error,
+    /// including on resumed certificates.
+    fn record_error(&self) {
+        if let Some(stage) = Self::stage_label(&self.header.status) {
+            certificate::record_certificate_error(self.header.network_id.to_u32(), stage);
+        }
+    }
+
+    /// Maps a non-terminal certificate status to its `stage` metric label, or
+    /// `None` for terminal statuses (which have no stage to record).
+    fn stage_label(status: &CertificateStatus) -> Option<&'static str> {
+        match status {
+            CertificateStatus::Pending => Some(certificate::stage::PENDING),
+            CertificateStatus::Proven => Some(certificate::stage::PROVEN),
+            CertificateStatus::Candidate => Some(certificate::stage::CANDIDATE),
+            CertificateStatus::Settled | CertificateStatus::InError { .. } => None,
+        }
+    }
+
     /// Common finalization logic for all settlement completion paths.
     async fn finalize_settlement(&mut self) -> Result<(), CertificateStatusError> {
+        // Close out the `candidate` stage while the status still reflects it.
+        self.record_stage();
+
         // The network task persists `Settled` once the epoch is assigned, so a
         // failed assignment leaves the certificate `Candidate` (recoverable) rather
         // than durably `Settled` with no epoch. Reflect the status in memory only.
         self.header.status = CertificateStatus::Settled;
 
         // Certificate metrics: always advance the settled-height gauge; for fresh
-        // certificates also record the final `candidate` stage (time awaiting L1
-        // settlement) and the end-to-end bridging duration.
+        // certificates also record the end-to-end bridging duration.
         let network_id = self.header.network_id.to_u32();
-        agglayer_telemetry::certificate::record_certificate_settled_height(
-            network_id,
-            self.header.height.as_u64(),
-        );
-        self.record_stage(agglayer_telemetry::certificate::stage::CANDIDATE);
+        certificate::record_certificate_settled_height(network_id, self.header.height.as_u64());
         if let Some(started) = self.overall_start {
-            agglayer_telemetry::certificate::record_certificate_total_duration(
+            certificate::record_certificate_total_duration(
                 network_id,
                 started.elapsed().as_secs_f64(),
             );

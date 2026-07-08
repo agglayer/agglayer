@@ -5,19 +5,20 @@ the `agglayer-telemetry` crate (OpenTelemetry → `opentelemetry-prometheus`). T
 listen address is configured under `[telemetry]` (`prometheus-addr`, default
 `0.0.0.0:3000`).
 
-This page documents the certificate **bridging-time** metrics — the first
-histogram-based metrics in the project.
+This page documents Agglayer's certificate metrics: the bridging-time histograms
+(the project's first), a settled-height gauge, and an errors counter.
 
 ## Certificate bridging-time metrics
 
-All three metrics use the OpenTelemetry meter scope `agglayer` and are labeled by
-`environment` and `network_id`.
+All metrics use the OpenTelemetry meter scope `agglayer` and are labeled by
+`environment` and `network_id` (two also carry a `stage` label).
 
 | Metric | Type | Labels | Meaning |
 | --- | --- | --- | --- |
 | `agglayer_certificate_duration_seconds` | histogram | `environment`, `network_id` | Total end-to-end bridging time of a certificate (`Pending` → `Settled`). |
 | `agglayer_certificate_stage_duration_seconds` | histogram | `environment`, `network_id`, `stage` | Time spent in each lifecycle stage. |
 | `agglayer_certificate_settled_height` | gauge | `environment`, `network_id` | Height of the latest settled certificate for a network. |
+| `agglayer_certificate_errors_total` | counter | `environment`, `network_id`, `stage` | Certificates that moved to `InError`, by the stage they errored from. |
 
 ### Stages
 
@@ -36,8 +37,8 @@ The three stages are contiguous, so their durations sum to
 
 ### Histogram buckets
 
-Both histograms share one bucket set (seconds), covering the fast `submission`
-stage through multi-minute settlement:
+Both histograms share one bucket set (seconds), covering sub-second stages
+through multi-minute settlement waits:
 
 ```text
 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600, 900, 1800
@@ -63,6 +64,10 @@ stage through multi-minute settlement:
 - **`agglayer_certificate_settled_height`** is recorded unconditionally at
   settlement (including for resumed certificates). It is monotonic per network, so
   its rate approximates throughput and a flat line indicates a stall.
+- **`agglayer_certificate_errors_total`** counts every certificate that moves to
+  `InError` — fresh or resumed, so unlike the duration metrics it is not gated —
+  with the `stage` label set to the status the certificate held when it failed
+  (`pending`, `proven`, or `candidate`).
 
 ## Example PromQL
 
@@ -94,6 +99,12 @@ Settlement throughput (certificates settled per second) per network:
 rate(agglayer_certificate_settled_height[$__rate_interval])
 ```
 
+Error rate by the stage certificates fail in:
+
+```promql
+sum by (stage) (rate(agglayer_certificate_errors_total[$__rate_interval]))
+```
+
 ## Configuration
 
 The `environment` label is taken from `[telemetry].environment` in the node
@@ -105,8 +116,8 @@ can be injected at scrape time via Prometheus `external_labels`.
 
 Certificate metrics are defined in `crates/agglayer-telemetry/src/certificate.rs`
 and emitted only through its `record_*` helpers, which build the shared label set.
-Adding a metric (for example a settled/error counter) is one instrument plus one
-helper there and its call site in `agglayer-certificate-orchestrator`; adding or
-splitting a stage is a new `stage` constant plus a record call at the transition.
+Adding a metric (for example an RPC-path latency histogram) is one instrument plus
+one helper there and its call site in `agglayer-certificate-orchestrator`; adding
+or splitting a stage is a new `stage` constant plus a record call at the transition.
 Bucket boundaries and stage names are constants at the top of that module and can
 be tuned once real distributions are observed.
