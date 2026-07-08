@@ -31,7 +31,6 @@ agglayer-grpc-server = { path = "crates/agglayer-grpc-server" }
 agglayer-grpc-types = { path = "crates/agglayer-grpc-types" }
 agglayer-jsonrpc-api = { path = "crates/agglayer-jsonrpc-api" }
 agglayer-node = { path = "crates/agglayer-node" }
-agglayer-rate-limiting = { path = "crates/agglayer-rate-limiting" }
 agglayer-rpc = { path = "crates/agglayer-rpc" }
 agglayer-settlement-service = { path = "crates/agglayer-settlement-service" }
 agglayer-signer = { path = "crates/agglayer-signer" }

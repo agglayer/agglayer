@@ -1,3 +1,4 @@
-[rpc.settle]
-
-[rpc.settle-cert]
+# `settle-tx` is accepted but ignored since the removal of `interop_sendTx`;
+# on its own it no longer provides the required settlement configuration.
+[rpc.settle-tx]
+max-retries = 5

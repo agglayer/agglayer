@@ -21,7 +21,6 @@ pub struct OutboundConfig {
 #[serde(rename = "rpc", rename_all = "kebab-case")]
 pub struct OutboundRpcConfig {
     /// Outbound configuration of the RPC settle function call.
-    pub settle_tx: OutboundRpcSettleConfig,
     pub settle_cert: OutboundRpcSettleConfig,
 }
 
@@ -33,34 +32,31 @@ impl<'de> Deserialize<'de> for OutboundRpcConfig {
         #[derive(Deserialize)]
         #[serde(rename = "rpc", rename_all = "kebab-case")]
         pub struct Intermediate {
-            pub settle_tx: Option<OutboundRpcSettleConfig>,
+            /// The `settle-tx` section configured the removed `interop_sendTx`
+            /// settlement flow. It is accepted and ignored so that existing
+            /// configuration files keep parsing.
+            #[serde(rename = "settle-tx", default)]
+            pub _settle_tx: Option<serde::de::IgnoredAny>,
             pub settle_cert: Option<OutboundRpcSettleConfig>,
             pub settle: Option<OutboundRpcSettleConfig>,
         }
 
         let deserialized = Intermediate::deserialize(deserializer)?;
 
-        let (settle_tx, settle_cert) = match (
-            deserialized.settle_tx,
-            deserialized.settle_cert,
-            deserialized.settle,
-        ) {
-            (Some(tx), Some(cert), _) => (tx, cert),
-            (None, None, Some(settle)) => {
-                warn!("'settle' is deprecated. Please use 'settle-tx' and 'settle-cert' instead.");
-                (settle.clone(), settle)
+        let settle_cert = match (deserialized.settle_cert, deserialized.settle) {
+            (Some(cert), _) => cert,
+            (None, Some(settle)) => {
+                warn!("'settle' is deprecated. Please use 'settle-cert' instead.");
+                settle
             }
-            _ => {
+            (None, None) => {
                 return Err(serde::de::Error::custom(
-                    "Either both ['settle-tx','settle-cert'] or 'settle' must be specified",
+                    "Either 'settle-cert' or 'settle' must be specified",
                 ));
             }
         };
 
-        Ok(OutboundRpcConfig {
-            settle_tx,
-            settle_cert,
-        })
+        Ok(OutboundRpcConfig { settle_cert })
     }
 }
 
@@ -201,7 +197,7 @@ mod tests {
 
             let config = toml::from_str::<DummyContainer>(toml).unwrap();
 
-            assert_eq!(config.outbound.rpc.settle_tx.max_retries, 10);
+            // The legacy `settle-tx` section is accepted but ignored.
             assert_eq!(config.outbound.rpc.settle_cert.max_retries, 11);
         }
 

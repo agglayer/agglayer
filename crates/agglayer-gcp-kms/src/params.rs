@@ -15,8 +15,6 @@ const GOOGLE_KEY_NAME_LEGACY: &str = "GOOGLE_KEY_NAME";
 const GOOGLE_KEY_VERSION_LEGACY: &str = "GOOGLE_KEY_VERSION";
 const GOOGLE_KEY_NAME_PP_SETTLEMENT: &str = "GOOGLE_KEY_NAME_PP_SETTLEMENT";
 const GOOGLE_KEY_VERSION_PP_SETTLEMENT: &str = "GOOGLE_KEY_VERSION_PP_SETTLEMENT";
-const GOOGLE_KEY_NAME_TX_SETTLEMENT: &str = "GOOGLE_KEY_NAME_TX_SETTLEMENT";
-const GOOGLE_KEY_VERSION_TX_SETTLEMENT: &str = "GOOGLE_KEY_VERSION_TX_SETTLEMENT";
 
 #[derive(Debug)]
 pub struct KMSParameters {
@@ -25,8 +23,6 @@ pub struct KMSParameters {
     pub(crate) keyring_name: String,
     pub(crate) key_name_pp_settlement: String,
     pub(crate) key_version_pp_settlement: u64,
-    pub(crate) key_name_tx_settlement: String,
-    pub(crate) key_version_tx_settlement: u64,
 }
 
 // Helper function to get a value from environment variables or configuration
@@ -84,16 +80,6 @@ impl TryFrom<&GcpKmsConfig> for KMSParameters {
             Some(GOOGLE_KEY_VERSION_LEGACY),
             &config.pp_settlement_key_version,
         )?;
-        let key_name_tx_settlement = from_env_or_conf(
-            GOOGLE_KEY_NAME_TX_SETTLEMENT,
-            Some(GOOGLE_KEY_NAME_LEGACY),
-            &config.tx_settlement_key_name,
-        )?;
-        let key_version_tx_settlement = from_env_or_conf(
-            GOOGLE_KEY_VERSION_TX_SETTLEMENT,
-            Some(GOOGLE_KEY_VERSION_LEGACY),
-            &config.tx_settlement_key_version,
-        )?;
 
         Ok(Self {
             project_id,
@@ -101,8 +87,6 @@ impl TryFrom<&GcpKmsConfig> for KMSParameters {
             keyring_name,
             key_name_pp_settlement,
             key_version_pp_settlement,
-            key_name_tx_settlement,
-            key_version_tx_settlement,
         })
     }
 }
@@ -159,11 +143,6 @@ mod test {
                 distinct.then_some("env_key_name_pp"),
             ),
             SetEnvGuard::new("GOOGLE_KEY_VERSION_PP_SETTLEMENT", distinct.then_some("1")),
-            SetEnvGuard::new(
-                "GOOGLE_KEY_NAME_TX_SETTLEMENT",
-                distinct.then_some("env_key_name_tx"),
-            ),
-            SetEnvGuard::new("GOOGLE_KEY_VERSION_TX_SETTLEMENT", distinct.then_some("2")),
             SetEnvGuard::new("GOOGLE_KEY_NAME", unique.then_some("env_key_name")),
             SetEnvGuard::new("GOOGLE_KEY_VERSION", unique.then_some("3")),
         ]
@@ -175,8 +154,6 @@ mod test {
             keyring: Some("conf_keyring".to_string()),
             pp_settlement_key_name: Some("conf_key_name_pp".to_string()),
             pp_settlement_key_version: Some(1),
-            tx_settlement_key_name: Some("conf_key_name_tx".to_string()),
-            tx_settlement_key_version: Some(2),
         }
     }
 
@@ -191,8 +168,6 @@ mod test {
         assert_eq!(params.keyring_name, "env_keyring");
         assert_eq!(params.key_name_pp_settlement, "env_key_name_pp");
         assert_eq!(params.key_version_pp_settlement, 1);
-        assert_eq!(params.key_name_tx_settlement, "env_key_name_tx");
-        assert_eq!(params.key_version_tx_settlement, 2);
     }
 
     #[test]
@@ -206,8 +181,6 @@ mod test {
         assert_eq!(params.keyring_name, "env_keyring");
         assert_eq!(params.key_name_pp_settlement, "env_key_name");
         assert_eq!(params.key_version_pp_settlement, 3);
-        assert_eq!(params.key_name_tx_settlement, "env_key_name");
-        assert_eq!(params.key_version_tx_settlement, 3);
     }
 
     #[test]
@@ -221,8 +194,6 @@ mod test {
         assert_eq!(params.keyring_name, "conf_keyring");
         assert_eq!(params.key_name_pp_settlement, "conf_key_name_pp");
         assert_eq!(params.key_version_pp_settlement, 1);
-        assert_eq!(params.key_name_tx_settlement, "conf_key_name_tx");
-        assert_eq!(params.key_version_tx_settlement, 2);
     }
 
     #[test]
@@ -235,8 +206,6 @@ mod test {
             keyring: None,
             pp_settlement_key_name: None,
             pp_settlement_key_version: None,
-            tx_settlement_key_name: None,
-            tx_settlement_key_version: None,
         };
 
         let error = crate::KMSParameters::try_from(&config).unwrap_err();

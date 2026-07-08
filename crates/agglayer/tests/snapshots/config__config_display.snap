@@ -4,11 +4,6 @@ expression: sanitize_config_folder_path(result)
 ---
 prover-buffer-size = 100
 
-[full-node-rpcs]
-
-[l2]
-rpc-timeout = "45s"
-
 [proof-signers]
 
 [log]
@@ -22,19 +17,6 @@ readrpc-port = 9090
 admin-port = 9091
 host = "0.0.0.0"
 request-timeout = "3m"
-
-[rate-limiting]
-send-tx = "unlimited"
-
-[rate-limiting.network]
-
-[outbound.rpc.settle-tx]
-max-retries = 30
-retry-interval = "10s"
-confirmations = 12
-
-[outbound.rpc.settle-tx.gas-price]
-ceiling = "100gwei"
 
 [outbound.rpc.settle-cert]
 max-retries = 30

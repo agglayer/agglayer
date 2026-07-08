@@ -18,8 +18,6 @@ fn auth_legacy() {
     assert_eq!(gkms.keyring, Some("keyring-test".into()));
     assert_eq!(gkms.pp_settlement_key_name, Some("key-name-test".into()));
     assert_eq!(gkms.pp_settlement_key_version, Some(2));
-    assert_eq!(gkms.tx_settlement_key_name, Some("key-name-test".into()));
-    assert_eq!(gkms.tx_settlement_key_version, Some(2));
 
     assert_toml_snapshot!(config, {
         ".storage.*" => agglayer_config::redact_storage_path(),
@@ -44,11 +42,6 @@ fn auth_transition() {
         Some("pp-settlement-key-name-test".into())
     );
     assert_eq!(gkms.pp_settlement_key_version, Some(3));
-    assert_eq!(
-        gkms.tx_settlement_key_name,
-        Some("tx-settlement-key-name-test".into())
-    );
-    assert_eq!(gkms.tx_settlement_key_version, Some(4));
 
     assert_toml_snapshot!(config, {
         ".storage.*" => agglayer_config::redact_storage_path(),
@@ -73,11 +66,6 @@ fn auth_update() {
         Some("pp-settlement-key-name-test".into())
     );
     assert_eq!(gkms.pp_settlement_key_version, Some(3));
-    assert_eq!(
-        gkms.tx_settlement_key_name,
-        Some("tx-settlement-key-name-test".into())
-    );
-    assert_eq!(gkms.tx_settlement_key_version, Some(4));
 
     assert_toml_snapshot!(config, {
         ".storage.*" => agglayer_config::redact_storage_path(),
@@ -85,7 +73,10 @@ fn auth_update() {
 }
 
 #[test]
-fn auth_distinct_pp_and_tx_settlement_keys_are_preserved() {
+fn auth_tx_settlement_keys_are_ignored() {
+    // The dedicated tx-settlement signer was removed together with the
+    // `interop_sendTx` flow; configs still carrying the keys must keep
+    // parsing, with the tx keys silently ignored.
     let input = "./tests/fixtures/auth/distinct_settlement_keys.toml";
 
     let config = Config::try_load(Path::new(input)).unwrap();
@@ -99,12 +90,6 @@ fn auth_distinct_pp_and_tx_settlement_keys_are_preserved() {
         Some("pp-distinct-key-name".into())
     );
     assert_eq!(gkms.pp_settlement_key_version, Some(11));
-
-    assert_eq!(
-        gkms.tx_settlement_key_name,
-        Some("tx-distinct-key-name".into())
-    );
-    assert_eq!(gkms.tx_settlement_key_version, Some(22));
 
     assert_toml_snapshot!(config, {
         ".storage.*" => agglayer_config::redact_storage_path(),
