@@ -366,7 +366,7 @@ mod tests {
         let metrics = gather(&registry);
         assert!(
             metrics.lines().any(|line| {
-                line.starts_with("agglayer_network_pending_height{")
+                line.starts_with("agglayer_node_network_pending_height{")
                     && line.contains("network_id=\"2\"")
             }),
             "expected a pending height sample for network 2, got:\n{metrics}"
@@ -386,7 +386,7 @@ mod tests {
         assert!(
             metrics
                 .lines()
-                .all(|line| !line.starts_with("agglayer_network_")),
+                .all(|line| !line.starts_with("agglayer_node_network_")),
             "expected no per-network sample lines, got:\n{metrics}"
         );
     }

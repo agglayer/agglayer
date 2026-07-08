@@ -58,7 +58,8 @@ async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
     let body = loop {
         let last_observation = match fetch_metrics(&metrics_url).await {
             Some(body) => {
-                if sample_value(&body, "agglayer_network_settled_height", network_id).is_some() {
+                if sample_value(&body, "agglayer_node_network_settled_height", network_id).is_some()
+                {
                     break body;
                 }
 
@@ -80,24 +81,24 @@ async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
     };
 
     assert_eq!(
-        sample_value(&body, "agglayer_network_settled_height", network_id),
+        sample_value(&body, "agglayer_node_network_settled_height", network_id),
         Some(0),
         "metrics body:\n{body}"
     );
     assert_eq!(
-        sample_value(&body, "agglayer_network_pending_height", network_id),
+        sample_value(&body, "agglayer_node_network_pending_height", network_id),
         Some(0),
         "metrics body:\n{body}"
     );
     assert_eq!(
-        sample_value(&body, "agglayer_network_proven_height", network_id),
+        sample_value(&body, "agglayer_node_network_proven_height", network_id),
         Some(0),
         "metrics body:\n{body}"
     );
     assert_eq!(
         sample_value(
             &body,
-            "agglayer_network_latest_certificate_in_error",
+            "agglayer_node_network_latest_certificate_in_error",
             network_id
         ),
         Some(0),

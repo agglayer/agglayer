@@ -16,17 +16,17 @@ const AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME: &str = "agglayer_node_network";
 const NETWORK_ID_LABEL: &str = "network_id";
 
 /// Gauge name: height of the latest pending certificate per network.
-pub const NETWORK_PENDING_HEIGHT: &str = "agglayer_network_pending_height";
+pub const NETWORK_PENDING_HEIGHT: &str = "agglayer_node_network_pending_height";
 
 /// Gauge name: height of the latest proven certificate per network.
-pub const NETWORK_PROVEN_HEIGHT: &str = "agglayer_network_proven_height";
+pub const NETWORK_PROVEN_HEIGHT: &str = "agglayer_node_network_proven_height";
 
 /// Gauge name: height of the latest settled certificate per network.
-pub const NETWORK_SETTLED_HEIGHT: &str = "agglayer_network_settled_height";
+pub const NETWORK_SETTLED_HEIGHT: &str = "agglayer_node_network_settled_height";
 
 /// Gauge name: whether the latest known certificate is in error (0/1).
 pub const NETWORK_LATEST_CERTIFICATE_IN_ERROR: &str =
-    "agglayer_network_latest_certificate_in_error";
+    "agglayer_node_network_latest_certificate_in_error";
 
 /// One per-network height observation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -267,7 +267,7 @@ mod tests {
         assert!(
             metrics
                 .lines()
-                .all(|line| !line.starts_with("agglayer_network_")),
+                .all(|line| !line.starts_with("agglayer_node_network_")),
             "expected no per-network sample lines, got:\n{metrics}"
         );
     }
