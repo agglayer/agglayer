@@ -34,7 +34,6 @@ pub type MockProvider = FillProvider<
 >;
 
 pub type RawRpcClient = crate::AgglayerImpl<
-    MockProvider,
     L1RpcClient<MockProvider>,
     PendingStore,
     StateStore,
@@ -118,11 +117,6 @@ impl TestContext {
         // Create certificate sender channel
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-        // Create AgglayerService (V0Rpc service) with the provider
-        let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(real_provider.clone(), config.clone()).unwrap(),
-        ));
-
         // Create a real epoch store for testing
         let epochs_store = Arc::new(
             EpochsStore::new(
@@ -146,7 +140,7 @@ impl TestContext {
         ));
 
         // Create AgglayerImpl
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
+        let agglayer_impl = crate::AgglayerImpl::new(rpc_service);
 
         // Create the routers
         let router = agglayer_impl.start().await.unwrap();
@@ -261,11 +255,6 @@ impl TestContext {
         // Create certificate sender channel
         let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-        // Create AgglayerService (V0Rpc service)
-        let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()).unwrap(),
-        ));
-
         // Create a real epoch store for testing
         let epochs_store = Arc::new(
             EpochsStore::new(
@@ -289,7 +278,7 @@ impl TestContext {
         ));
 
         // Create AgglayerImpl
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
+        let agglayer_impl = crate::AgglayerImpl::new(rpc_service);
 
         RawRpcContext {
             rpc: agglayer_impl,
