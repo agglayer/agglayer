@@ -1,0 +1,13 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "MethodDisabled { method: \"interop_sendTx\" }"
+---
+{
+  "code": -10009,
+  "data": {
+    "method-disabled": {
+      "method": "interop_sendTx"
+    }
+  },
+  "message": "The interop_sendTx method is disabled"
+}
