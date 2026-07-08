@@ -12,8 +12,8 @@ counters are tracked separately (issues #1352 and #1655).
 
 ## Certificate bridging-time metrics
 
-Both metrics use the OpenTelemetry meter scope `agglayer` and are labeled by
-`network_id`; the per-stage histogram also carries a `stage` label.
+Both metrics use the OpenTelemetry meter scope `agglayer_node_certificate` and are
+labeled by `network_id`; the per-stage histogram also carries a `stage` label.
 
 | Metric | Type | Labels | Meaning |
 | --- | --- | --- | --- |
