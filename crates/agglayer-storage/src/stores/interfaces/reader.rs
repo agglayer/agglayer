@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId, Proof,
+    LocalNetworkStateData, NetworkId, Proof, SettlementJobId,
 };
 
 use crate::{
@@ -88,6 +88,11 @@ pub trait StateReader: Send + Sync {
         &self,
         certificate_id: &CertificateId,
     ) -> Result<Option<CertificateHeader>, Error>;
+
+    fn get_certificate_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<SettlementJobId>, Error>;
 
     fn get_certificate_header_by_cursor(
         &self,

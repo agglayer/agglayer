@@ -4,7 +4,7 @@ use std::{
 };
 
 use agglayer_types::{
-    Address, ClientError, ClientErrorType, Digest, Nonce, SettlementAttempt,
+    Address, CertificateId, ClientError, ClientErrorType, Digest, Nonce, SettlementAttempt,
     SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementTxHash, U256,
 };
 
@@ -14,10 +14,15 @@ use crate::{
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
+        settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
+        SETTLEMENT_ATTEMPTS_CF,
     },
     error::Error,
-    stores::{state::StateStore, SettlementReader as _, SettlementWriter as _},
+    stores::{
+        state::StateStore, SettlementReader as _, SettlementWriter as _, StateReader as _,
+        StateWriter as _,
+    },
     tests::TempDBDir,
     types::{
         generated::agglayer::storage::v0,
@@ -32,6 +37,10 @@ use crate::{
 
 fn mk_job_id(seed: u128) -> SettlementJobId {
     SettlementJobId::from(seed)
+}
+
+fn mk_certificate_id(seed: u8) -> CertificateId {
+    CertificateId::new(Digest::from([seed; 32]))
 }
 
 fn mk_settlement_job(seed: u8) -> SettlementJob {
@@ -49,6 +58,8 @@ fn mk_settlement_attempt(seed: u64) -> SettlementAttempt {
         nonce: Nonce(seed),
         hash: SettlementTxHash::new(Digest::from([(seed as u8).wrapping_add(4); 32])),
         submission_time: SystemTime::UNIX_EPOCH + Duration::from_secs(seed),
+        max_fee_per_gas: 30_000_000_000 + seed as u128,
+        max_priority_fee_per_gas: 1_000_000_000 + seed as u128,
     }
 }
 
@@ -82,6 +93,114 @@ fn insert_settlement_job_duplicate_fails() {
         db.get::<SettlementJobsColumn>(&job_id)
             .expect("Unable to read stored value"),
         Some((&first).into())
+    );
+}
+
+#[test]
+fn list_settlement_job_ids_returns_all_jobs_in_key_order() {
+    let (_tmp, _db, store) = setup_store();
+    let first_job_id = mk_job_id(1);
+    let second_job_id = mk_job_id(2);
+    let third_job_id = mk_job_id(3);
+
+    store
+        .insert_settlement_job(&third_job_id, &mk_settlement_job(3))
+        .expect("third job insert must succeed");
+    store
+        .insert_settlement_job(&first_job_id, &mk_settlement_job(1))
+        .expect("first job insert must succeed");
+    store
+        .insert_settlement_job(&second_job_id, &mk_settlement_job(2))
+        .expect("second job insert must succeed");
+
+    assert_eq!(
+        store
+            .list_settlement_job_ids()
+            .expect("job id scan must succeed"),
+        vec![first_job_id, second_job_id, third_job_id]
+    );
+}
+
+#[test]
+fn get_certificate_settlement_job_id_returns_none_when_missing() {
+    let (_tmp, _db, store) = setup_store();
+
+    assert_eq!(
+        store
+            .get_certificate_settlement_job_id(&mk_certificate_id(1))
+            .expect("read must succeed"),
+        None
+    );
+}
+
+#[test]
+fn insert_certificate_settlement_job_id_allows_missing_job() {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(2);
+    let job_id = mk_job_id(200);
+
+    store
+        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
+        .expect("mapping insert must not require an existing job");
+
+    assert_eq!(
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(job_id)
+    );
+
+    assert_eq!(
+        db.get::<SettlementJobsColumn>(&job_id)
+            .expect("Unable to read stored value"),
+        None
+    );
+}
+
+#[test]
+fn insert_certificate_settlement_job_id_returns_value_after_insert() {
+    let (_tmp, _db, store) = setup_store();
+    let certificate_id = mk_certificate_id(3);
+    let job_id = mk_job_id(300);
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(3))
+        .expect("job insert must succeed");
+    store
+        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
+        .expect("mapping insert must succeed");
+
+    assert_eq!(
+        store
+            .get_certificate_settlement_job_id(&certificate_id)
+            .expect("read must succeed"),
+        Some(job_id)
+    );
+}
+
+#[test]
+fn insert_certificate_settlement_job_id_duplicate_fails() {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(4);
+    let first_job_id = mk_job_id(400);
+    let second_job_id = mk_job_id(401);
+
+    store
+        .insert_settlement_job(&first_job_id, &mk_settlement_job(4))
+        .expect("first job insert must succeed");
+    store
+        .insert_settlement_job(&second_job_id, &mk_settlement_job(5))
+        .expect("second job insert must succeed");
+    store
+        .insert_certificate_settlement_job_id(&certificate_id, &first_job_id)
+        .expect("first mapping insert must succeed");
+
+    let res = store.insert_certificate_settlement_job_id(&certificate_id, &second_job_id);
+
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+    assert_eq!(
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(first_job_id)
     );
 }
 
@@ -295,6 +414,73 @@ fn insert_settlement_attempt_indexes_by_wallet_and_nonce() {
             .expect("index read must succeed"),
         Some(SettlementAttemptPerWalletValue)
     ));
+}
+
+#[test]
+fn max_settlement_nonce_for_wallet_returns_highest_indexed_nonce() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_job_id(407);
+    let other_job_id = mk_job_id(408);
+    let wallet = Address::from([10; 20]);
+    let max_wallet = Address::from([0xff; 20]);
+    let other_wallet = Address::from([11; 20]);
+    let mut lower_nonce_attempt = mk_settlement_attempt(1);
+    let mut higher_nonce_attempt = mk_settlement_attempt(2);
+    let mut other_wallet_attempt = mk_settlement_attempt(3);
+    let mut max_wallet_lower_nonce_attempt = mk_settlement_attempt(4);
+    let mut max_wallet_higher_nonce_attempt = mk_settlement_attempt(5);
+
+    lower_nonce_attempt.sender_wallet = wallet;
+    lower_nonce_attempt.nonce = Nonce(12);
+    higher_nonce_attempt.sender_wallet = wallet;
+    higher_nonce_attempt.nonce = Nonce(14);
+    other_wallet_attempt.sender_wallet = other_wallet;
+    other_wallet_attempt.nonce = Nonce(99);
+    max_wallet_lower_nonce_attempt.sender_wallet = max_wallet;
+    max_wallet_lower_nonce_attempt.nonce = Nonce(7);
+    max_wallet_higher_nonce_attempt.sender_wallet = max_wallet;
+    max_wallet_higher_nonce_attempt.nonce = Nonce(8);
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(42))
+        .expect("first job insert must succeed");
+    store
+        .insert_settlement_job(&other_job_id, &mk_settlement_job(43))
+        .expect("second job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &lower_nonce_attempt)
+        .expect("lower nonce attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 2, &higher_nonce_attempt)
+        .expect("higher nonce attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&other_job_id, 1, &other_wallet_attempt)
+        .expect("other-wallet attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 3, &max_wallet_lower_nonce_attempt)
+        .expect("max-wallet lower nonce attempt insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 4, &max_wallet_higher_nonce_attempt)
+        .expect("max-wallet higher nonce attempt insert must succeed");
+
+    assert_eq!(
+        store
+            .max_settlement_nonce_for_wallet(wallet)
+            .expect("max nonce lookup must succeed"),
+        Some(Nonce(14))
+    );
+    assert_eq!(
+        store
+            .max_settlement_nonce_for_wallet(max_wallet)
+            .expect("max wallet lookup must succeed"),
+        Some(Nonce(8))
+    );
+    assert_eq!(
+        store
+            .max_settlement_nonce_for_wallet(Address::from([12; 20]))
+            .expect("missing wallet lookup must succeed"),
+        None
+    );
 }
 
 #[test]
@@ -536,6 +722,117 @@ fn list_settlement_attempt_results_does_not_return_results_from_other_jobs() {
             .list_settlement_attempt_results(&job_id)
             .expect("read must succeed"),
         vec![(1, first_result), (2, second_result)]
+    );
+}
+
+/// Reopening an existing database goes through a different code path than
+/// creating a fresh one (`open_rocksdb_existing` opens column families by
+/// name, without the column options carrying the prefix extractor), so
+/// listing must not rely on column-family options to stop at the job-id
+/// prefix boundary. Every job numbers its attempts from 0, so leaking the
+/// next job's entries surfaces as a duplicate attempt 0 during startup
+/// recovery.
+#[test]
+fn list_settlement_attempts_stays_within_job_after_reopen() {
+    let tmp = TempDBDir::new();
+    let job_id = mk_job_id(27);
+    let other_job_id = mk_job_id(28);
+    let attempt = mk_settlement_attempt(1);
+    let result: SettlementAttemptResult =
+        v0::SettlementAttemptResult::contract_call_success_for_test(5)
+            .try_into()
+            .expect("test tx result helper should be decodable");
+
+    {
+        let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
+        let store = StateStore::new(db, BackupClient::noop());
+        store
+            .insert_settlement_job(&job_id, &mk_settlement_job(27))
+            .expect("first job insert must succeed");
+        store
+            .insert_settlement_job(&other_job_id, &mk_settlement_job(28))
+            .expect("second job insert must succeed");
+        store
+            .insert_settlement_attempt(&job_id, 0, &attempt)
+            .expect("first job attempt insert must succeed");
+        store
+            .insert_settlement_attempt(&other_job_id, 0, &mk_settlement_attempt(10))
+            .expect("other job attempt insert must succeed");
+        store
+            .record_settlement_attempt_result(&job_id, 0, &result)
+            .expect("first job result insert must succeed");
+        store
+            .record_settlement_attempt_result(
+                &other_job_id,
+                0,
+                &v0::SettlementAttemptResult::contract_call_success_for_test(10)
+                    .try_into()
+                    .expect("test tx result helper should be decodable"),
+            )
+            .expect("other job result insert must succeed");
+    }
+
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to reopen db"));
+    let store = StateStore::new(db, BackupClient::noop());
+
+    assert_eq!(
+        store
+            .list_settlement_attempts(&job_id)
+            .expect("read must succeed"),
+        vec![(0, attempt)]
+    );
+    assert_eq!(
+        store
+            .list_settlement_attempt_results(&job_id)
+            .expect("read must succeed"),
+        vec![(0, result)]
+    );
+}
+
+/// The declared column options — in particular the fixed-prefix extractor —
+/// must be applied when reopening an existing database, not only when
+/// creating a fresh one. This probes RocksDB's own prefix iterator directly,
+/// bypassing the explicit bounds set by `DB::prefix_iterator`: without the
+/// extractor it silently degrades to an unbounded scan.
+#[test]
+fn reopened_database_applies_declared_prefix_extractor() {
+    let tmp = TempDBDir::new();
+    let job_id = mk_job_id(29);
+    let other_job_id = mk_job_id(30);
+
+    {
+        let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
+        let store = StateStore::new(db, BackupClient::noop());
+        store
+            .insert_settlement_job(&job_id, &mk_settlement_job(29))
+            .expect("first job insert must succeed");
+        store
+            .insert_settlement_job(&other_job_id, &mk_settlement_job(30))
+            .expect("second job insert must succeed");
+        store
+            .insert_settlement_attempt(&job_id, 0, &mk_settlement_attempt(1))
+            .expect("first job attempt insert must succeed");
+        store
+            .insert_settlement_attempt(&other_job_id, 0, &mk_settlement_attempt(10))
+            .expect("other job attempt insert must succeed");
+    }
+
+    let db = StateStore::init_db(tmp.path.as_path()).expect("Unable to reopen db");
+    let cf = db
+        .raw_rocksdb()
+        .cf_handle(SETTLEMENT_ATTEMPTS_CF)
+        .expect("settlement attempts column family must exist");
+    let prefix = job_id.to_be_bytes();
+    let keys_outside_prefix: Vec<_> = db
+        .raw_rocksdb()
+        .prefix_iterator_cf(cf, prefix)
+        .map(|entry| entry.expect("iteration must succeed").0)
+        .filter(|key| !key.starts_with(&prefix))
+        .collect();
+
+    assert!(
+        keys_outside_prefix.is_empty(),
+        "prefix extractor was not applied on reopen; leaked keys: {keys_outside_prefix:?}",
     );
 }
 

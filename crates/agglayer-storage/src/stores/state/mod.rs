@@ -32,6 +32,7 @@ use crate::{
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
+        settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
     },
     error::Error,
     schema::ColumnSchema,
@@ -60,12 +61,12 @@ impl StateStore {
         // and the settlement family. Legacy production snapshots still
         // have only those CFs; running the current binary against them
         // would fail the migration framework's schema gate without this
-        // path. `ensure_cfs` is idempotent: passing the full `STATE_DB`
-        // list creates whatever is missing on disk and is a no-op when
-        // every CF is already present, so legacy V0 DBs converge to the
-        // current schema and existing post-V0 DBs are unaffected.
+        // path. Each `ensure_cfs` call is a recorded migration step, so new
+        // catch-up CFs must be added in a new step instead of changing an
+        // already-recorded target list.
         DB::builder(path, cf_definitions::STATE_DB_V0)?
-            .ensure_cfs(cf_definitions::STATE_DB)?
+            .ensure_cfs(cf_definitions::STATE_DB_V1_ADDED_CFS)?
+            .ensure_cfs(cf_definitions::STATE_DB_V2_ADDED_CFS)?
             .finalize(cf_definitions::STATE_DB)
     }
 
@@ -206,6 +207,26 @@ impl StateWriter for StateStore {
         }
 
         Ok(())
+    }
+
+    fn insert_certificate_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<(), Error> {
+        if self
+            .db
+            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
+            .is_some()
+        {
+            return Err(Error::UnprocessedAction(format!(
+                "Certificate {certificate_id} already has a settlement job id"
+            )));
+        }
+
+        Ok(self
+            .db
+            .put::<SettlementJobIdPerCertificateIdColumn>(certificate_id, settlement_job_id)?)
     }
 
     fn assign_certificate_to_epoch(
@@ -592,6 +613,15 @@ impl StateReader for StateStore {
         certificate_id: &CertificateId,
     ) -> Result<Option<CertificateHeader>, Error> {
         Ok(self.db.get::<CertificateHeaderColumn>(certificate_id)?)
+    }
+
+    fn get_certificate_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<SettlementJobId>, Error> {
+        Ok(self
+            .db
+            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?)
     }
 
     fn get_certificate_header_by_cursor(

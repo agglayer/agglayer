@@ -196,19 +196,8 @@ cargo run --package pessimistic-proof-test-suite --bin ppgen
 
 ### Prerequisites
 
-To run the integration tests, you'll need to build the contracts image first, and then run the tests with the integration profile:
-
-1. Clone the contracts repository:
-   ```bash
-   git clone https://github.com/agglayer/agglayer-contracts
-   ```
-
-2. Build the contracts Docker image:
-   ```bash
-   cd agglayer-contracts
-   npm install
-   npm run dockerv2:contracts:all
-   ```
+The integration tests now use a checked-in Anvil fixture by default.
+You only need Foundry's `anvil` binary installed locally.
 
 ### Running the tests
 
@@ -217,11 +206,23 @@ Once the prerequisites are ready, you can now return to the main agglayer direct
 cargo nextest run --workspace -P integrations --no-fail-fast --retries 2
 ```
 
+If you need to regenerate the fixture after the contracts image changes, run:
+
+```bash
+tests/integrations/scripts/generate_anvil_l1_fixture.sh
+```
+
+This rebuilds `tests/integrations/fixtures/anvil-l1/state.json`
+from `hermeznetwork/geth-zkevm-contracts`.
+
+If you need to compare behavior against the legacy backend,
+set `AGGLAYER_INTEGRATION_L1_BACKEND=docker` before running the tests.
+
 ### Potential issues
 
-Note that, due to the use of docker, sometimes there are leftover containers that cause issues with the integration tests.
-In this case, just delete any container you might have, and rerun the integration tests.
-You may also need to rebuild the contracts Docker image, if there have been updates there.
+If the fixture needs to be refreshed,
+re-run `tests/integrations/scripts/generate_anvil_l1_fixture.sh`
+and commit both the updated `state.json` and `metadata.json` files.
 
 Also, there are quite a few intermittent failures in the tests, that can be helped thanks to the suggested `--retries 2`.
 
