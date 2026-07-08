@@ -2,10 +2,17 @@ name: Cycle tracker
 
 on:
   workflow_dispatch:
-  merge_group:
   pull_request:
     branches:
       - main
+    paths:
+      - "crates/agglayer-elf-build/**"
+      - "crates/agglayer-sp1/**"
+      - "crates/pessimistic-proof/**"
+      - "crates/pessimistic-proof-core/**"
+      - "crates/pessimistic-proof-program/**"
+      - "crates/pessimistic-proof-test-suite/**"
+      - "scripts/make/Makefile.pp.toml"
   schedule:
     - cron: "0 13 * * 3"
 
