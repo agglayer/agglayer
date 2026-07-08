@@ -307,6 +307,7 @@ fn hydrate_settlement_attempts(
     let mut results_by_attempt_number = BTreeMap::new();
     for (attempt_number, result) in results {
         let attempt_number = attempt_number.into();
+        debug!(%job_id, %attempt_number, ?result, "Loaded settlement attempt result from storage");
         if results_by_attempt_number
             .insert(attempt_number, result)
             .is_some()
@@ -319,6 +320,7 @@ fn hydrate_settlement_attempts(
     let mut loaded_attempts = ActiveSettlementAttempts::new();
     for (attempt_number, attempt) in attempts {
         let attempt_number = attempt_number.into();
+        debug!(%job_id, %attempt_number, ?attempt, "Loaded settlement attempt from storage");
         if !loaded_attempt_numbers.insert(attempt_number) {
             eyre::bail!("Duplicate settlement attempt {attempt_number} for job {job_id}",);
         }

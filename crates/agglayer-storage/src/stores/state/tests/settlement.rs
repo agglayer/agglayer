@@ -16,6 +16,7 @@ use crate::{
         settlement_attempts::SettlementAttemptsColumn,
         settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
+        SETTLEMENT_ATTEMPTS_CF,
     },
     error::Error,
     stores::{
@@ -721,6 +722,117 @@ fn list_settlement_attempt_results_does_not_return_results_from_other_jobs() {
             .list_settlement_attempt_results(&job_id)
             .expect("read must succeed"),
         vec![(1, first_result), (2, second_result)]
+    );
+}
+
+/// Reopening an existing database goes through a different code path than
+/// creating a fresh one (`open_rocksdb_existing` opens column families by
+/// name, without the column options carrying the prefix extractor), so
+/// listing must not rely on column-family options to stop at the job-id
+/// prefix boundary. Every job numbers its attempts from 0, so leaking the
+/// next job's entries surfaces as a duplicate attempt 0 during startup
+/// recovery.
+#[test]
+fn list_settlement_attempts_stays_within_job_after_reopen() {
+    let tmp = TempDBDir::new();
+    let job_id = mk_job_id(27);
+    let other_job_id = mk_job_id(28);
+    let attempt = mk_settlement_attempt(1);
+    let result: SettlementAttemptResult =
+        v0::SettlementAttemptResult::contract_call_success_for_test(5)
+            .try_into()
+            .expect("test tx result helper should be decodable");
+
+    {
+        let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
+        let store = StateStore::new(db, BackupClient::noop());
+        store
+            .insert_settlement_job(&job_id, &mk_settlement_job(27))
+            .expect("first job insert must succeed");
+        store
+            .insert_settlement_job(&other_job_id, &mk_settlement_job(28))
+            .expect("second job insert must succeed");
+        store
+            .insert_settlement_attempt(&job_id, 0, &attempt)
+            .expect("first job attempt insert must succeed");
+        store
+            .insert_settlement_attempt(&other_job_id, 0, &mk_settlement_attempt(10))
+            .expect("other job attempt insert must succeed");
+        store
+            .record_settlement_attempt_result(&job_id, 0, &result)
+            .expect("first job result insert must succeed");
+        store
+            .record_settlement_attempt_result(
+                &other_job_id,
+                0,
+                &v0::SettlementAttemptResult::contract_call_success_for_test(10)
+                    .try_into()
+                    .expect("test tx result helper should be decodable"),
+            )
+            .expect("other job result insert must succeed");
+    }
+
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to reopen db"));
+    let store = StateStore::new(db, BackupClient::noop());
+
+    assert_eq!(
+        store
+            .list_settlement_attempts(&job_id)
+            .expect("read must succeed"),
+        vec![(0, attempt)]
+    );
+    assert_eq!(
+        store
+            .list_settlement_attempt_results(&job_id)
+            .expect("read must succeed"),
+        vec![(0, result)]
+    );
+}
+
+/// The declared column options — in particular the fixed-prefix extractor —
+/// must be applied when reopening an existing database, not only when
+/// creating a fresh one. This probes RocksDB's own prefix iterator directly,
+/// bypassing the explicit bounds set by `DB::prefix_iterator`: without the
+/// extractor it silently degrades to an unbounded scan.
+#[test]
+fn reopened_database_applies_declared_prefix_extractor() {
+    let tmp = TempDBDir::new();
+    let job_id = mk_job_id(29);
+    let other_job_id = mk_job_id(30);
+
+    {
+        let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
+        let store = StateStore::new(db, BackupClient::noop());
+        store
+            .insert_settlement_job(&job_id, &mk_settlement_job(29))
+            .expect("first job insert must succeed");
+        store
+            .insert_settlement_job(&other_job_id, &mk_settlement_job(30))
+            .expect("second job insert must succeed");
+        store
+            .insert_settlement_attempt(&job_id, 0, &mk_settlement_attempt(1))
+            .expect("first job attempt insert must succeed");
+        store
+            .insert_settlement_attempt(&other_job_id, 0, &mk_settlement_attempt(10))
+            .expect("other job attempt insert must succeed");
+    }
+
+    let db = StateStore::init_db(tmp.path.as_path()).expect("Unable to reopen db");
+    let cf = db
+        .raw_rocksdb()
+        .cf_handle(SETTLEMENT_ATTEMPTS_CF)
+        .expect("settlement attempts column family must exist");
+    let prefix = job_id.to_be_bytes();
+    let keys_outside_prefix: Vec<_> = db
+        .raw_rocksdb()
+        .prefix_iterator_cf(cf, prefix)
+        .map(|entry| entry.expect("iteration must succeed").0)
+        .filter(|key| !key.starts_with(&prefix))
+        .collect();
+
+    assert!(
+        keys_outside_prefix.is_empty(),
+        "prefix extractor was not applied on reopen; leaked keys: {keys_outside_prefix:?}",
     );
 }
 
