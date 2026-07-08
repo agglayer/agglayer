@@ -3,10 +3,10 @@ resource-limited = { max-threads = 4 }
 integration-failpoint = { max-threads = 1 }
 
 [profile.default]
-default-filter = "not package(integrations)"
+default-filter = "not package(integrations) and not binary(cycle-tracker)"
 
 [profile.integrations]
-default-filter = "package(integrations)"
+default-filter = "package(integrations) or binary(cycle-tracker)"
 
 # The L1 settlement failure tests (failure.rs `transaction_with*receipt*`) are
 # heavy (up to ~45s each, dominated by Anvil + node setup) and run serially so
