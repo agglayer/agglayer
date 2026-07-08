@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use agglayer_contracts::{
     rollup::VerifierType, settler::verify_pessimistic_trusted_aggregator_calldata,
@@ -40,14 +40,9 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient, Settlement
     cancellation_token: CancellationToken,
     settlement_service: Arc<SettlementService>,
 
-    /// When the task began processing a fresh `Pending` certificate; `None` for
-    /// resumed certificates. Gates the duration metrics so they measure a full
-    /// `Pending` -> `Settled` lifecycle within a single process, and holds the
-    /// start of the end-to-end bridging clock.
-    overall_start: Option<Instant>,
-    /// Start of the current lifecycle stage; reset after each stage is
-    /// recorded.
-    stage_start: Option<Instant>,
+    /// Bridging-time timer; `None` for resumed certificates (only fresh
+    /// `Pending` -> `Settled` lifecycles are timed).
+    bridging_timer: Option<certificate::CertificateTimer>,
 }
 
 impl<StateStore, PendingStore, CertifierClient, SettlementService>
@@ -88,8 +83,7 @@ where
             certifier_client,
             cancellation_token,
             settlement_service,
-            overall_start: None,
-            stage_start: None,
+            bridging_timer: None,
         })
     }
 
@@ -129,9 +123,6 @@ where
                 error!(?error, "Failed to update certificate status in database");
             };
 
-            // Record the error, labeled by the stage the certificate errored from.
-            self.record_error();
-
             self.send_to_network_task(NetworkTaskMessage::CertificateErrored {
                 height: self.header.height,
                 certificate_id: self.header.certificate_id,
@@ -155,14 +146,12 @@ where
 
         debug!(initial_status = ?self.header.status, "Processing certificate");
 
-        // Start the bridging-time clock for fresh certificates only, so the
-        // duration metrics measure a full Pending -> Settled lifecycle within a
-        // single process. Resumed certificates (entry Proven/Candidate) leave
-        // both clocks `None` and contribute no durations.
+        // Only time fresh certificates: a full Pending -> Settled lifecycle in
+        // one process. Resumed certificates leave the timer `None`.
         if self.header.status == CertificateStatus::Pending {
-            let now = Instant::now();
-            self.overall_start = Some(now);
-            self.stage_start = Some(now);
+            self.bridging_timer = Some(certificate::CertificateTimer::start(
+                self.header.network_id.to_u32(),
+            ));
         }
 
         // TODO: Hack to deal with Proven certificates in case the PP changed.
@@ -506,34 +495,19 @@ where
         Ok(())
     }
 
-    /// Records how long the certificate has spent in its current status (fresh
-    /// certificates only) and resets the stage clock. Call immediately before
-    /// transitioning to the next status; the stage label is the status being
-    /// left.
+    /// Records the current stage's duration. Call just before the status
+    /// changes.
     fn record_stage(&mut self) {
-        if let (Some(started), Some(stage)) =
-            (self.stage_start, Self::stage_label(&self.header.status))
-        {
-            certificate::record_certificate_stage_completed(
-                self.header.network_id.to_u32(),
-                stage,
-                started.elapsed().as_secs_f64(),
-            );
-            self.stage_start = Some(Instant::now());
+        if let (Some(timer), Some(stage)) = (
+            self.bridging_timer.as_mut(),
+            Self::stage_label(&self.header.status),
+        ) {
+            timer.complete_stage(stage);
         }
     }
 
-    /// Records a certificate moving to `InError`, labeled by the stage it
-    /// errored from (its status when processing failed). Counts every error,
-    /// including on resumed certificates.
-    fn record_error(&self) {
-        if let Some(stage) = Self::stage_label(&self.header.status) {
-            certificate::record_certificate_error(self.header.network_id.to_u32(), stage);
-        }
-    }
-
-    /// Maps a non-terminal certificate status to its `stage` metric label, or
-    /// `None` for terminal statuses (which have no stage to record).
+    /// Metric `stage` label for a non-terminal status; `None` for terminal
+    /// ones.
     fn stage_label(status: &CertificateStatus) -> Option<&'static str> {
         match status {
             CertificateStatus::Pending => Some(certificate::stage::PENDING),
@@ -553,15 +527,9 @@ where
         // than durably `Settled` with no epoch. Reflect the status in memory only.
         self.header.status = CertificateStatus::Settled;
 
-        // Certificate metrics: always advance the settled-height gauge; for fresh
-        // certificates also record the end-to-end bridging duration.
-        let network_id = self.header.network_id.to_u32();
-        certificate::record_certificate_settled_height(network_id, self.header.height.as_u64());
-        if let Some(started) = self.overall_start {
-            certificate::record_certificate_total_duration(
-                network_id,
-                started.elapsed().as_secs_f64(),
-            );
+        // For fresh certificates, record the end-to-end bridging duration.
+        if let Some(timer) = &self.bridging_timer {
+            timer.complete();
         }
 
         self.send_to_network_task(NetworkTaskMessage::CertificateSettled {

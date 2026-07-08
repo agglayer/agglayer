@@ -5,20 +5,20 @@ the `agglayer-telemetry` crate (OpenTelemetry → `opentelemetry-prometheus`). T
 listen address is configured under `[telemetry]` (`prometheus-addr`, default
 `0.0.0.0:3000`).
 
-This page documents Agglayer's certificate metrics: the bridging-time histograms
-(the project's first), a settled-height gauge, and an errors counter.
+This page documents Agglayer's certificate bridging-time metrics: the end-to-end
+duration histogram and a per-stage breakdown (the project's first histograms).
+Per-rollup pending/proven/settled height gauges and certificate status/error
+counters are tracked separately (issues #1352 and #1655).
 
 ## Certificate bridging-time metrics
 
-All metrics use the OpenTelemetry meter scope `agglayer` and are labeled by
-`network_id` (two also carry a `stage` label).
+Both metrics use the OpenTelemetry meter scope `agglayer_node_certificate` and are
+labeled by `network_id`; the per-stage histogram also carries a `stage` label.
 
 | Metric | Type | Labels | Meaning |
 | --- | --- | --- | --- |
 | `agglayer_certificate_duration_seconds` | histogram | `network_id` | Total end-to-end bridging time of a certificate (`Pending` → `Settled`). |
 | `agglayer_certificate_stage_duration_seconds` | histogram | `network_id`, `stage` | Time spent in each lifecycle stage. |
-| `agglayer_certificate_settled_height` | gauge | `network_id` | Height of the latest settled certificate for a network. |
-| `agglayer_certificate_errors_total` | counter | `network_id`, `stage` | Certificates that moved to `InError`, by the stage they errored from. |
 
 ### Stages
 
@@ -61,13 +61,6 @@ through multi-minute settlement waits:
   processing, not at RPC receipt. Time spent waiting in the pending queue before
   pickup (usually small) is not included. A true wall-clock receipt→settled metric
   that survives restarts is a possible follow-up.
-- **`agglayer_certificate_settled_height`** is recorded unconditionally at
-  settlement (including for resumed certificates). It is monotonic per network, so
-  its rate approximates throughput and a flat line indicates a stall.
-- **`agglayer_certificate_errors_total`** counts every certificate that moves to
-  `InError` — fresh or resumed, so unlike the duration metrics it is not gated —
-  with the `stage` label set to the status the certificate held when it failed
-  (`pending`, `proven`, or `candidate`).
 
 ## Example PromQL
 
@@ -91,18 +84,6 @@ histogram_quantile(
     rate(agglayer_certificate_stage_duration_seconds_bucket[$__rate_interval])
   )
 )
-```
-
-Settlement throughput (certificates settled per second) per network:
-
-```promql
-rate(agglayer_certificate_settled_height[$__rate_interval])
-```
-
-Error rate by the stage certificates fail in:
-
-```promql
-sum by (stage) (rate(agglayer_certificate_errors_total[$__rate_interval]))
 ```
 
 ## Configuration

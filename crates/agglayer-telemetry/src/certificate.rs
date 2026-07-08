@@ -1,72 +1,43 @@
-//! Certificate bridging-time metrics.
-//!
-//! Kicks off certificate observability with the end-to-end bridging time, a
-//! per-stage breakdown of where that time is spent, and the latest settled
-//! height -- all labeled by `network_id`.
-//!
-//! All metrics are recorded through the `record_*` helpers below, which are the
-//! single extension point: adding a new certificate metric is one instrument
-//! plus one helper here, with no changes to the emitters. See the Observability
-//! page in `docs/knowledge-base` for the exposed names and semantics.
+//! Certificate bridging-time metrics: end-to-end duration and a per-stage
+//! breakdown, labeled by `network_id`.
+
+use std::time::Instant;
 
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*, KeyValue};
 
-use crate::constant::AGGLAYER_OTEL_SCOPE_NAME;
+const AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME: &str = "agglayer_node_certificate";
 
-/// Histogram bucket boundaries in seconds, shared by the total and per-stage
-/// duration histograms. Covers the sub-second `submission` stage through
-/// multi-minute settlement; tune once real distributions are observed.
+/// Histogram buckets in seconds, from the sub-second submission stage to
+/// multi-minute settlement.
 const DURATION_BUCKETS_SECONDS: &[f64] = &[
     0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 900.0, 1800.0,
 ];
 
-/// `stage` label values for [`record_certificate_stage_completed`], one per
-/// non-terminal certificate status (`Pending`, `Proven`, `Candidate`). Each
-/// measures the time a certificate spends in that state before its next
-/// transition. Adding or splitting a stage later is a new constant here plus a
-/// record call at the transition -- no new metric required.
+/// `stage` label values: the non-terminal status a certificate is timed in.
 pub mod stage {
-    /// Time in the `Pending` state (awaiting its proof), ending at `Proven`.
     pub const PENDING: &str = "pending";
-    /// Time in the `Proven` state (settlement-job submission), ending at
-    /// `Candidate`.
     pub const PROVEN: &str = "proven";
-    /// Time in the `Candidate` state (L1 inclusion and confirmation), ending at
-    /// `Settled`.
     pub const CANDIDATE: &str = "candidate";
 }
 
 lazy_static! {
-    /// Total end-to-end certificate bridging time (`Pending` -> `Settled`).
-    static ref CERTIFICATE_DURATION: Histogram<f64> = global::meter(AGGLAYER_OTEL_SCOPE_NAME)
-        .f64_histogram("agglayer_certificate_duration_seconds")
-        .with_description("End-to-end certificate bridging time from Pending to Settled, in seconds")
-        .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
-        .build();
-
-    /// Time spent in each certificate lifecycle stage (see [`stage`]).
-    static ref CERTIFICATE_STAGE_DURATION: Histogram<f64> = global::meter(AGGLAYER_OTEL_SCOPE_NAME)
-        .f64_histogram("agglayer_certificate_stage_duration_seconds")
-        .with_description("Time spent in each certificate lifecycle stage, in seconds")
-        .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
-        .build();
-
-    /// Height of the latest settled certificate for a network.
-    static ref CERTIFICATE_SETTLED_HEIGHT: Gauge<u64> = global::meter(AGGLAYER_OTEL_SCOPE_NAME)
-        .u64_gauge("agglayer_certificate_settled_height")
-        .with_description("Height of the latest settled certificate for a network")
-        .build();
-
-    /// Certificates that moved to `InError`, by the stage they errored from.
-    static ref CERTIFICATE_ERRORS: Counter<u64> = global::meter(AGGLAYER_OTEL_SCOPE_NAME)
-        .u64_counter("agglayer_certificate_errors")
-        .with_description("Certificates that moved to InError, by the stage they errored from")
-        .build();
+    static ref CERTIFICATE_DURATION: Histogram<f64> =
+        global::meter(AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME)
+            .f64_histogram("agglayer_certificate_duration_seconds")
+            .with_description(
+                "End-to-end certificate bridging time, Pending to Settled, in seconds"
+            )
+            .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
+            .build();
+    static ref CERTIFICATE_STAGE_DURATION: Histogram<f64> =
+        global::meter(AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME)
+            .f64_histogram("agglayer_certificate_stage_duration_seconds")
+            .with_description("Time spent in each certificate lifecycle stage, in seconds")
+            .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
+            .build();
 }
 
-/// Builds the common `[network_id, ..extra]` label set shared by every
-/// certificate metric.
 fn labels(network_id: u32, extra: &[KeyValue]) -> Vec<KeyValue> {
     let mut labels = Vec::with_capacity(1 + extra.len());
     labels.push(KeyValue::new("network_id", network_id.to_string()));
@@ -74,8 +45,7 @@ fn labels(network_id: u32, extra: &[KeyValue]) -> Vec<KeyValue> {
     labels
 }
 
-/// Records how long a certificate spent in a single lifecycle `stage` (one of
-/// the [`stage`] constants).
+/// Records the duration of one lifecycle `stage`.
 #[inline]
 pub fn record_certificate_stage_completed(network_id: u32, stage: &'static str, seconds: f64) {
     CERTIFICATE_STAGE_DURATION.record(
@@ -84,23 +54,46 @@ pub fn record_certificate_stage_completed(network_id: u32, stage: &'static str, 
     );
 }
 
-/// Records the total end-to-end bridging time of a certificate.
+/// Records the total end-to-end bridging time.
 #[inline]
 pub fn record_certificate_total_duration(network_id: u32, seconds: f64) {
     CERTIFICATE_DURATION.record(seconds, &labels(network_id, &[]));
 }
 
-/// Records the height of the latest settled certificate for a network.
-#[inline]
-pub fn record_certificate_settled_height(network_id: u32, height: u64) {
-    CERTIFICATE_SETTLED_HEIGHT.record(height, &labels(network_id, &[]));
+/// Times a certificate's bridging: `start` on pickup, `complete_stage` at each
+/// transition, `complete` once settled.
+pub struct CertificateTimer {
+    network_id: u32,
+    overall_start: Instant,
+    stage_start: Instant,
 }
 
-/// Records a certificate moving to `InError`, labeled by the `stage` (the
-/// status it held) it errored from.
-#[inline]
-pub fn record_certificate_error(network_id: u32, stage: &'static str) {
-    CERTIFICATE_ERRORS.add(1, &labels(network_id, &[KeyValue::new("stage", stage)]));
+impl CertificateTimer {
+    pub fn start(network_id: u32) -> Self {
+        let now = Instant::now();
+        Self {
+            network_id,
+            overall_start: now,
+            stage_start: now,
+        }
+    }
+
+    /// Records the finished `stage` and resets the stage clock.
+    pub fn complete_stage(&mut self, stage: &'static str) {
+        record_certificate_stage_completed(
+            self.network_id,
+            stage,
+            self.stage_start.elapsed().as_secs_f64(),
+        );
+        self.stage_start = Instant::now();
+    }
+
+    pub fn complete(&self) {
+        record_certificate_total_duration(
+            self.network_id,
+            self.overall_start.elapsed().as_secs_f64(),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -108,12 +101,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_helper_functions() {
+    fn helpers_do_not_panic() {
         record_certificate_stage_completed(1, stage::PENDING, 1.5);
-        record_certificate_stage_completed(1, stage::PROVEN, 0.2);
-        record_certificate_stage_completed(1, stage::CANDIDATE, 42.0);
         record_certificate_total_duration(1, 43.7);
-        record_certificate_settled_height(1, 100);
-        record_certificate_error(1, stage::PROVEN);
+
+        let mut timer = CertificateTimer::start(1);
+        timer.complete_stage(stage::PROVEN);
+        timer.complete();
     }
 }
