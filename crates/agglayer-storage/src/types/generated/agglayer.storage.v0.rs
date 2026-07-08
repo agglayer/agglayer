@@ -939,6 +939,8 @@ pub enum ClientErrorType {
     NonceAlreadyUsed = 1,
     /// Settlement succeeded in another tx.
     SettlementSucceededElsewhere = 2,
+    /// An administrator asserted that this attempt will never land on L1.
+    AbandonedByAdmin = 3,
 }
 impl ClientErrorType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -950,6 +952,7 @@ impl ClientErrorType {
             Self::Unspecified => "CLIENT_ERROR_TYPE_UNSPECIFIED",
             Self::NonceAlreadyUsed => "CLIENT_ERROR_TYPE_NONCE_ALREADY_USED",
             Self::SettlementSucceededElsewhere => "CLIENT_ERROR_TYPE_SETTLEMENT_SUCCEEDED_ELSEWHERE",
+            Self::AbandonedByAdmin => "CLIENT_ERROR_TYPE_ABANDONED_BY_ADMIN",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -958,6 +961,7 @@ impl ClientErrorType {
             "CLIENT_ERROR_TYPE_UNSPECIFIED" => Some(Self::Unspecified),
             "CLIENT_ERROR_TYPE_NONCE_ALREADY_USED" => Some(Self::NonceAlreadyUsed),
             "CLIENT_ERROR_TYPE_SETTLEMENT_SUCCEEDED_ELSEWHERE" => Some(Self::SettlementSucceededElsewhere),
+            "CLIENT_ERROR_TYPE_ABANDONED_BY_ADMIN" => Some(Self::AbandonedByAdmin),
             _ => None,
         }
     }

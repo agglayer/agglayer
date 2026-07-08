@@ -112,6 +112,12 @@ pub enum ClientErrorType {
     Unknown,
     NonceAlreadyUsed,
     SettlementSucceededElsewhere,
+    /// An administrator asserted that this attempt will never land on L1.
+    ///
+    /// Terminal for the attempt, never for the job: the run loop is freed to
+    /// drive the settlement elsewhere. Only written through the admin
+    /// override path; real on-chain evidence may still supersede it.
+    AbandonedByAdmin,
 }
 
 impl ClientError {
@@ -135,6 +141,13 @@ impl ClientError {
         Self {
             kind: ClientErrorType::SettlementSucceededElsewhere,
             message: format!("Settlement succeeded in transaction {tx_hash}"),
+        }
+    }
+
+    pub fn abandoned_by_admin(reason: &str) -> Self {
+        Self {
+            kind: ClientErrorType::AbandonedByAdmin,
+            message: format!("Attempt abandoned by administrator: {reason}"),
         }
     }
 }
@@ -202,20 +215,4 @@ pub struct SettlementAttempt {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn client_error(kind: ClientErrorType) -> SettlementAttemptResult {
-        SettlementAttemptResult::ClientError(ClientError {
-            kind,
-            message: String::new(),
-        })
-    }
-
-    #[test]
-    fn is_resolved_elsewhere_matches_used_and_settled_kinds() {
-        assert!(client_error(ClientErrorType::NonceAlreadyUsed).is_resolved_elsewhere());
-        assert!(client_error(ClientErrorType::SettlementSucceededElsewhere).is_resolved_elsewhere());
-        assert!(!client_error(ClientErrorType::Unknown).is_resolved_elsewhere());
-    }
-}
+mod tests;

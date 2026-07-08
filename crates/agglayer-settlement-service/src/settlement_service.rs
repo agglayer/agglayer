@@ -1,14 +1,23 @@
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc, time::SystemTime};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
-use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
-use agglayer_types::{CertificateId, SettlementJob, SettlementJobId, SettlementJobResult};
-use alloy::providers::{Provider, WalletProvider};
+use agglayer_storage::stores::{
+    EditEvenIfCompleted, SettlementReader, SettlementWriter, StateReader, StateWriter,
+};
+use agglayer_types::{
+    Address, CertificateId, ClientError, Nonce, SettlementAttempt, SettlementAttemptResult,
+    SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
+};
+use alloy::{
+    consensus::Transaction as _,
+    network::TransactionResponse as _,
+    providers::{Provider, WalletProvider},
+};
 use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{watch, Mutex};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::settlement_task::{
     SettlementTask, SettlementTaskRunResult, StoredSettlementJob, TaskAdminCommand,
@@ -335,6 +344,270 @@ impl<
     }
 }
 
+/// How the live task for a job (if any) was told about an admin mutation.
+///
+/// Admin mutations are declarative edits of stored state; a running task only
+/// picks them up by reloading from storage. Anything but [`Notified`] means
+/// the operator should check the job before relying on the edit being live.
+///
+/// Serializes as `notified` / `absent` / `notify-failed` in admin RPC
+/// responses.
+///
+/// [`Notified`]: LiveTaskNotification::Notified
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LiveTaskNotification {
+    /// The running task was told to reload from storage and restart.
+    Notified,
+    /// No live task exists for this job. The edit persists and is picked up
+    /// whenever a task is started for the job (e.g. on startup recovery).
+    Absent,
+    /// A live task exists but could not be notified; it keeps acting on its
+    /// stale in-memory view until it reloads. Retry with an explicit task
+    /// reload, or abort the task.
+    NotifyFailed,
+}
+
+/// A settlement attempt to register through the admin surface.
+///
+/// Only the transaction hash is mandatory. A missing sender or nonce is
+/// resolved by fetching the transaction from L1 by hash; missing fees fall
+/// back to the fetched transaction's fees, or 0 when the transaction was not
+/// fetched. A missing submission time defaults to now.
+#[derive(Clone, Debug)]
+pub struct NewSettlementAttempt {
+    pub tx_hash: SettlementTxHash,
+    pub sender_wallet: Option<Address>,
+    pub nonce: Option<Nonce>,
+    pub submission_time: Option<SystemTime>,
+    pub max_fee_per_gas: Option<u128>,
+    pub max_priority_fee_per_gas: Option<u128>,
+}
+
+/// Admin surface: mutations of stored settlement state.
+impl<
+        L1Provider: Provider + WalletProvider + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+    > SettlementService<L1Provider, SettlementStore>
+{
+    /// Tells the live task for `job_id`, if any, to drop its in-memory state
+    /// and reload from storage, so it observes an admin edit.
+    ///
+    /// Best-effort: the edit is already persisted when this runs, and a task
+    /// that cannot be notified will still observe it on its next reload.
+    async fn notify_live_task_of_admin_edit(
+        &self,
+        job_id: SettlementJobId,
+    ) -> LiveTaskNotification {
+        let task_controls = self.task_controls.lock().await;
+        let Some(task_control) = task_controls.get(&job_id) else {
+            return LiveTaskNotification::Absent;
+        };
+
+        match task_control.try_send(TaskAdminCommand::ReloadAndRestart) {
+            Ok(()) => LiveTaskNotification::Notified,
+            Err(error) => {
+                warn!(
+                    ?job_id,
+                    ?error,
+                    "Failed to notify live settlement task of an admin edit; the task acts on \
+                     stale in-memory state until it reloads"
+                );
+                LiveTaskNotification::NotifyFailed
+            }
+        }
+    }
+
+    /// Resolves an admin-provided attempt into a full [`SettlementAttempt`],
+    /// fetching the transaction from L1 when the sender or nonce is missing.
+    async fn resolve_new_settlement_attempt(
+        &self,
+        attempt: NewSettlementAttempt,
+    ) -> eyre::Result<SettlementAttempt> {
+        let tx_hash = attempt.tx_hash;
+        let fetched_tx = match (&attempt.sender_wallet, &attempt.nonce) {
+            (Some(_), Some(_)) => None,
+            _ => Some(
+                self.provider
+                    .get_transaction_by_hash(tx_hash.into())
+                    .await
+                    .wrap_err_with(|| {
+                        format!("Failed to fetch settlement transaction {tx_hash} from L1")
+                    })?
+                    .ok_or_else(|| {
+                        eyre::eyre!(
+                            "Settlement transaction {tx_hash} is not known to the L1 RPC; provide \
+                             sender_wallet and nonce explicitly"
+                        )
+                    })?,
+            ),
+        };
+
+        Ok(SettlementAttempt {
+            sender_wallet: attempt
+                .sender_wallet
+                .or_else(|| fetched_tx.as_ref().map(|tx| tx.from().into()))
+                .expect("transaction is fetched when the sender is missing"),
+            nonce: attempt
+                .nonce
+                .or_else(|| fetched_tx.as_ref().map(|tx| Nonce(tx.nonce())))
+                .expect("transaction is fetched when the nonce is missing"),
+            hash: tx_hash,
+            submission_time: attempt.submission_time.unwrap_or_else(SystemTime::now),
+            max_fee_per_gas: attempt
+                .max_fee_per_gas
+                // Fully qualified: the rpc transaction type also offers
+                // `TransactionResponse::max_fee_per_gas`.
+                .or_else(|| {
+                    fetched_tx
+                        .as_ref()
+                        .map(alloy::consensus::Transaction::max_fee_per_gas)
+                })
+                .unwrap_or(0),
+            max_priority_fee_per_gas: attempt
+                .max_priority_fee_per_gas
+                .or_else(|| {
+                    fetched_tx
+                        .as_ref()
+                        .and_then(|tx| tx.max_priority_fee_per_gas())
+                })
+                .unwrap_or(0),
+        })
+    }
+
+    /// Appends a new settlement attempt to `job_id` and returns its assigned
+    /// attempt number.
+    ///
+    /// This always adds one new attempt (it never overwrites an existing
+    /// one), so it is safe for porting an externally-submitted settlement
+    /// transaction into the job.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_insert_settlement_attempt(
+        &self,
+        job_id: SettlementJobId,
+        attempt: NewSettlementAttempt,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> eyre::Result<(u64, LiveTaskNotification)> {
+        let attempt = self.resolve_new_settlement_attempt(attempt).await?;
+        let attempt_number = self
+            .store
+            .admin_insert_settlement_attempt(&job_id, &attempt, edit_even_if_completed)
+            .wrap_err_with(|| format!("Failed to insert settlement attempt for job {job_id}"))?;
+        let live_task = self.notify_live_task_of_admin_edit(job_id).await;
+        Ok((attempt_number, live_task))
+    }
+
+    /// Records that an administrator asserts the attempt will never land on
+    /// L1, overwriting any previously recorded result for it.
+    ///
+    /// Terminal for the attempt, never for the job: the reloaded task no
+    /// longer waits on this attempt and drives the settlement elsewhere.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_mark_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: &str,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> eyre::Result<LiveTaskNotification> {
+        let result = SettlementAttemptResult::ClientError(ClientError::abandoned_by_admin(reason));
+        self.store
+            .admin_override_settlement_attempt_result(
+                &job_id,
+                attempt_number,
+                &result,
+                edit_even_if_completed,
+            )
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to mark settlement attempt {attempt_number} of job {job_id} as \
+                     definitely failed"
+                )
+            })?;
+        Ok(self.notify_live_task_of_admin_edit(job_id).await)
+    }
+
+    /// Removes the recorded result of an attempt, handing the attempt back to
+    /// the settlement task as pending.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_remove_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> eyre::Result<LiveTaskNotification> {
+        self.store
+            .admin_remove_settlement_attempt_result(&job_id, attempt_number, edit_even_if_completed)
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to remove result of settlement attempt {attempt_number} of job \
+                     {job_id}"
+                )
+            })?;
+        Ok(self.notify_live_task_of_admin_edit(job_id).await)
+    }
+
+    /// Removes the terminal result of a completed job and spawns a fresh task
+    /// for it, so the job is re-driven from its stored state.
+    ///
+    /// Force operation: if the removed result was real, only the settlement
+    /// contract's replay protection stands between the re-driven job and a
+    /// double settlement.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_force_remove_settlement_job_result(
+        &self,
+        job_id: SettlementJobId,
+    ) -> eyre::Result<()> {
+        // A completed job has no live task. Refusing while one is still
+        // registered (e.g. mid-completion, or the job is simply not done)
+        // keeps the old task and the fresh one below from racing.
+        if self.task_controls.lock().await.contains_key(&job_id) {
+            eyre::bail!(
+                "A settlement task is still live for job {job_id}; its terminal result can only \
+                 be removed once it has completed"
+            );
+        }
+
+        self.store
+            .admin_force_remove_settlement_job_result(&job_id)
+            .wrap_err_with(|| {
+                format!("Failed to remove terminal result of settlement job {job_id}")
+            })?;
+
+        // Drop the in-memory watcher that still broadcasts the removed
+        // result, then bring the job back to life.
+        self.result_watchers.lock().await.remove(&job_id);
+
+        let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
+        match SettlementTask::load(
+            job_id,
+            self.tx_config.clone(),
+            self.provider.clone(),
+            self.store.clone(),
+            task_control,
+        )
+        .await
+        .wrap_err_with(|| {
+            format!(
+                "Removed the terminal result of settlement job {job_id} but failed to reload the \
+                 job; it will be re-driven after the next node restart"
+            )
+        })? {
+            StoredSettlementJob::Pending(task) => {
+                self.spawn_settlement_task(job_id, task, task_control_handle)
+                    .await;
+                Ok(())
+            }
+            StoredSettlementJob::Completed(_, _) => {
+                eyre::bail!(
+                    "Settlement job {job_id} still has a terminal result right after its removal; \
+                     was one re-recorded concurrently?"
+                )
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RequestNewSettlement {
     pub certificate_id: Option<CertificateId>,
@@ -425,386 +698,4 @@ impl<
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::{Arc, Mutex};
-
-    use agglayer_storage::tests::mocks::MockStateStore;
-    use agglayer_types::{
-        CertificateId, ContractCallOutcome, ContractCallResult, Digest, Nonce,
-        SettlementAttemptNumber, SettlementJob, SettlementJobId, SettlementJobResult,
-        SettlementTxHash, B256, U256,
-    };
-    use alloy::{
-        network::EthereumWallet,
-        primitives::U64,
-        providers::{mock::Asserter, ProviderBuilder},
-        signers::local::PrivateKeySigner,
-    };
-
-    use super::*;
-    use crate::settlement_task::{
-        SettlementTask, StoredSettlementJob, TaskAdminCommand, TaskControlHandle,
-    };
-
-    fn mk_provider() -> impl Provider + WalletProvider + 'static {
-        ProviderBuilder::new()
-            .wallet(EthereumWallet::from(
-                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
-            ))
-            .connect_http(
-                "http://127.0.0.1:0"
-                    .parse()
-                    .expect("test provider URL should parse"),
-            )
-    }
-
-    fn mk_provider_with_gas_estimate(
-        gas_estimate: u64,
-    ) -> impl Provider + WalletProvider + 'static {
-        let asserter = Asserter::new();
-        asserter.push_success(&U64::from(gas_estimate));
-        ProviderBuilder::new()
-            .wallet(EthereumWallet::from(
-                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
-            ))
-            .connect_mocked_client(asserter)
-    }
-
-    fn expect_empty_startup_recovery(store: &mut MockStateStore) {
-        store
-            .expect_list_settlement_job_ids()
-            .once()
-            .return_once(|| Ok(Vec::new()));
-    }
-
-    async fn mk_service(
-        store: Arc<MockStateStore>,
-    ) -> SettlementService<impl Provider + WalletProvider + 'static, MockStateStore> {
-        mk_service_with_token(store, CancellationToken::new()).await
-    }
-
-    async fn mk_service_with_token(
-        store: Arc<MockStateStore>,
-        cancellation_token: CancellationToken,
-    ) -> SettlementService<impl Provider + WalletProvider + 'static, MockStateStore> {
-        SettlementService::start(
-            SettlementServiceConfig::default(),
-            Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider()),
-            store,
-            cancellation_token,
-        )
-        .await
-        .expect("settlement service should start")
-    }
-
-    fn mk_job_id(seed: u128) -> SettlementJobId {
-        SettlementJobId::from(ulid::Ulid::from(seed))
-    }
-
-    fn mk_job(seed: u8) -> SettlementJob {
-        SettlementJob {
-            contract_address: agglayer_types::Address::from([seed; 20]),
-            calldata: vec![seed, seed.wrapping_add(1)].into(),
-            eth_value: U256::from(seed),
-            gas_limit: seed as u128 + 100_000,
-        }
-    }
-
-    fn mk_result(seed: u8, outcome: ContractCallOutcome) -> SettlementJobResult {
-        SettlementJobResult {
-            wallet: agglayer_types::Address::from([seed.wrapping_add(3); 20]),
-            nonce: Nonce(seed as u64 + 200),
-            attempt_number: SettlementAttemptNumber(seed as u64 + 300),
-            contract_call_result: ContractCallResult {
-                outcome,
-                metadata: vec![seed, seed.wrapping_add(1)].into(),
-                block_hash: B256::from([seed; 32]),
-                block_number: seed as u64,
-                tx_hash: SettlementTxHash::new(Digest::from([seed.wrapping_add(2); 32])),
-            },
-        }
-    }
-
-    #[tokio::test]
-    async fn start_scans_jobs_and_skips_completed_ones() {
-        let mut store = MockStateStore::new();
-        let job_id = mk_job_id(9);
-        let job = mk_job(9);
-        let result = mk_result(9, ContractCallOutcome::Success);
-
-        store
-            .expect_list_settlement_job_ids()
-            .once()
-            .return_once(move || Ok(vec![job_id]));
-        store
-            .expect_get_settlement_job()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(move |_| Ok(Some(job)));
-        store
-            .expect_get_settlement_job_result()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(move |_| Ok(Some(result)));
-        store.expect_list_settlement_attempts().never();
-        store.expect_list_settlement_attempt_results().never();
-
-        let service = mk_service(Arc::new(store)).await;
-
-        assert!(service.task_controls.lock().await.is_empty());
-        assert!(service.result_watchers.lock().await.is_empty());
-    }
-
-    #[tokio::test]
-    async fn retrieve_uses_in_memory_watcher_before_storage() {
-        let mut store = MockStateStore::new();
-        expect_empty_startup_recovery(&mut store);
-        let service = mk_service(Arc::new(store)).await;
-        let job_id = mk_job_id(1);
-        let in_memory_result = mk_result(2, ContractCallOutcome::Revert);
-
-        let (_sender, watcher) = watch::channel(Some(in_memory_result.clone()));
-        service.result_watchers.lock().await.insert(job_id, watcher);
-
-        let retrieved = service
-            .retrieve_settlement_result(job_id)
-            .await
-            .expect("retrieval should succeed");
-
-        match retrieved {
-            RetrievedSettlementResult::Completed(result) => assert_eq!(result, in_memory_result),
-            RetrievedSettlementResult::Pending(_) => panic!("expected completed result"),
-        }
-    }
-
-    #[tokio::test]
-    async fn retrieve_uses_stored_terminal_result_without_watcher() {
-        let mut store = MockStateStore::new();
-        expect_empty_startup_recovery(&mut store);
-        let job_id = mk_job_id(2);
-        let stored_result = mk_result(3, ContractCallOutcome::Success);
-        let stored_result_for_store = stored_result.clone();
-
-        store
-            .expect_get_settlement_job_result()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(move |_| Ok(Some(stored_result_for_store)));
-
-        let service = mk_service(Arc::new(store)).await;
-
-        let retrieved = service
-            .retrieve_settlement_result(job_id)
-            .await
-            .expect("retrieval should succeed");
-
-        match retrieved {
-            RetrievedSettlementResult::Completed(result) => assert_eq!(result, stored_result),
-            RetrievedSettlementResult::Pending(_) => panic!("expected completed result"),
-        }
-    }
-
-    #[tokio::test]
-    async fn retrieve_fails_for_unknown_job_id() {
-        let mut store = MockStateStore::new();
-        expect_empty_startup_recovery(&mut store);
-        let job_id = mk_job_id(4);
-
-        store
-            .expect_get_settlement_job_result()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(|_| Ok(None));
-        store
-            .expect_get_settlement_job()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(|_| Ok(None));
-
-        let service = mk_service(Arc::new(store)).await;
-
-        let result = service.retrieve_settlement_result(job_id).await;
-        assert!(result.is_err(), "unknown job should fail");
-        let error = result.err().expect("result should be an error");
-
-        assert!(error.to_string().contains("No settlement job found for id"));
-    }
-
-    #[tokio::test]
-    async fn retrieve_fails_when_pending_job_has_no_running_task() {
-        let mut store = MockStateStore::new();
-        expect_empty_startup_recovery(&mut store);
-        let job_id = mk_job_id(5);
-        let job = mk_job(5);
-
-        store
-            .expect_get_settlement_job_result()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(|_| Ok(None));
-        store
-            .expect_get_settlement_job()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(move |_| Ok(Some(job)));
-
-        let service = mk_service(Arc::new(store)).await;
-
-        let result = service.retrieve_settlement_result(job_id).await;
-        assert!(
-            result.is_err(),
-            "pending job without a watcher should fail as an invariant break"
-        );
-        let error = result.err().expect("result should be an error");
-
-        assert!(error.to_string().contains("exists without a running task"));
-    }
-
-    #[tokio::test]
-    async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() {
-        let mut store = MockStateStore::new();
-        let job_id = mk_job_id(6);
-        let job = mk_job(6);
-        let completed_result = mk_result(6, ContractCallOutcome::Success);
-        let completed_result_for_store = completed_result.clone();
-        let result_reads = Arc::new(Mutex::new(0usize));
-
-        store
-            .expect_list_settlement_job_ids()
-            .once()
-            .return_once(|| Ok(Vec::new()));
-        store
-            .expect_get_settlement_job()
-            .times(2)
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .returning({
-                let job = job.clone();
-                move |_| Ok(Some(job.clone()))
-            });
-        store
-            .expect_get_settlement_job_result()
-            .times(2)
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .returning(move |_| {
-                let mut result_reads = result_reads.lock().unwrap();
-                *result_reads += 1;
-                if *result_reads == 1 {
-                    Ok(None)
-                } else {
-                    Ok(Some(completed_result_for_store.clone()))
-                }
-            });
-        store
-            .expect_list_settlement_attempt_results()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(|_| Ok(Vec::new()));
-        store
-            .expect_list_settlement_attempts()
-            .once()
-            .withf(move |requested_job_id| requested_job_id == &job_id)
-            .return_once(|_| Ok(Vec::new()));
-
-        let store = Arc::new(store);
-        let service = mk_service(store).await;
-        let (task_control_handle, task_control) =
-            TaskControlHandle::new(&service.cancellation_token);
-        task_control_handle
-            .try_send(TaskAdminCommand::ReloadAndRestart)
-            .expect("reload command should fit in admin channel");
-        let task = match SettlementTask::load(
-            job_id,
-            service.tx_config.clone(),
-            service.provider.clone(),
-            service.store.clone(),
-            task_control,
-        )
-        .await
-        .expect("settlement task should load")
-        {
-            StoredSettlementJob::Pending(task) => task,
-            StoredSettlementJob::Completed(_, _) => panic!("initial load should be pending"),
-        };
-
-        let mut result_receiver = service
-            .spawn_settlement_task(job_id, task, task_control_handle)
-            .await;
-
-        result_receiver
-            .changed()
-            .await
-            .expect("reload should publish the stored terminal result");
-
-        assert_eq!(result_receiver.borrow().as_ref(), Some(&completed_result));
-        assert!(service.task_controls.lock().await.is_empty());
-        assert!(service.result_watchers.lock().await.contains_key(&job_id));
-    }
-
-    #[tokio::test]
-    async fn request_new_settlement_records_certificate_link_before_job() {
-        let mut store = MockStateStore::new();
-        expect_empty_startup_recovery(&mut store);
-        let certificate_id = CertificateId::new(Digest::from([7; 32]));
-        let job = mk_job(7);
-        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
-        let mut expected_job = job.clone();
-        expected_job.gas_limit = 200_000;
-        let recorded_job_id = Arc::new(Mutex::new(None));
-        let ordering = Arc::new(Mutex::new(Vec::new()));
-
-        store
-            .expect_insert_certificate_settlement_job_id()
-            .once()
-            .withf(move |recorded_certificate_id, _| recorded_certificate_id == &certificate_id)
-            .return_once({
-                let ordering = ordering.clone();
-                let recorded_job_id = recorded_job_id.clone();
-                move |_, settlement_job_id| {
-                    ordering.lock().unwrap().push("write_link");
-                    *recorded_job_id.lock().unwrap() = Some(*settlement_job_id);
-                    Ok(())
-                }
-            });
-
-        store
-            .expect_insert_settlement_job()
-            .once()
-            .withf(move |_, recorded_job| recorded_job == &expected_job)
-            .return_once({
-                let ordering = ordering.clone();
-                let recorded_job_id = recorded_job_id.clone();
-                move |settlement_job_id, _| {
-                    ordering.lock().unwrap().push("write_job");
-                    assert_eq!(*recorded_job_id.lock().unwrap(), Some(*settlement_job_id));
-                    Ok(())
-                }
-            });
-
-        // `create` runs `estimateGas` before persisting; answer it above the
-        // ceiling so the stored limit is unchanged. Live token for estimation,
-        // then cancel to stop the spawned task.
-        let cancellation_token = CancellationToken::new();
-        let service = SettlementService::start(
-            SettlementServiceConfig::default(),
-            Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_provider_with_gas_estimate(200_000)),
-            Arc::new(store),
-            cancellation_token.clone(),
-        )
-        .await
-        .expect("settlement service should start");
-
-        let watcher = service
-            .request_new_settlement(Some(certificate_id), job)
-            .await
-            .expect("settlement request should be accepted");
-        cancellation_token.cancel();
-
-        assert_eq!(*recorded_job_id.lock().unwrap(), Some(watcher.job_id()));
-        assert_eq!(
-            ordering.lock().unwrap().as_slice(),
-            ["write_link", "write_job"]
-        );
-    }
-}
+mod tests;

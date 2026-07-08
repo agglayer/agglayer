@@ -1,15 +1,22 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use agglayer_config::Config;
+use agglayer_settlement_service::{LiveTaskNotification, NewSettlementAttempt, SettlementService};
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    DebugReader, DebugWriter, EditEvenIfCompleted, PendingCertificateReader,
+    PendingCertificateWriter, SettlementReader, SettlementWriter, StateReader, StateWriter,
+    UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    CertificateStatusError, Digest, Height, NetworkId, SettlementTxHash, U256,
+    CertificateStatusError, Digest, Height, NetworkId, Nonce, SettlementJobId, SettlementTxHash,
+    U256,
 };
+use alloy::providers::{Provider, WalletProvider};
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pessimistic_proof::local_balance_tree::BalanceTree;
 use serde::{Deserialize, Serialize};
@@ -38,6 +45,106 @@ pub enum ProcessNow {
     /// Apply edits without triggering reprocessing.
     #[serde(rename = "process-now=false")]
     False,
+}
+
+/// A settlement attempt as accepted by `admin_insertSettlementAttempt`.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsertAttemptParams {
+    /// Hash of the settlement transaction. The only mandatory field: the
+    /// others are resolved from the transaction when omitted.
+    pub tx_hash: SettlementTxHash,
+
+    /// Wallet the settlement transaction was sent from. Resolved by fetching
+    /// the transaction from L1 when omitted.
+    #[serde(default)]
+    pub sender_wallet: Option<Address>,
+
+    /// L1 nonce of the settlement transaction. Resolved by fetching the
+    /// transaction from L1 when omitted.
+    #[serde(default)]
+    pub nonce: Option<u64>,
+
+    /// Unix timestamp (in seconds) at which the transaction was submitted to
+    /// L1. Defaults to now. The settlement task uses it as the base of its
+    /// retry backoff for this attempt.
+    #[serde(default)]
+    pub submission_time_unix_secs: Option<u64>,
+
+    /// `max_fee_per_gas` (wei) of the transaction. A fee-bumping retry
+    /// outbids this baseline. When omitted, taken from the L1 transaction if
+    /// it was fetched, else 0 (which makes a retry start over from freshly
+    /// estimated fees).
+    #[serde(default)]
+    pub max_fee_per_gas: Option<u128>,
+
+    /// `max_priority_fee_per_gas` (wei) of the transaction. Defaulted like
+    /// `maxFeePerGas`.
+    #[serde(default)]
+    pub max_priority_fee_per_gas: Option<u128>,
+}
+
+impl From<InsertAttemptParams> for NewSettlementAttempt {
+    fn from(params: InsertAttemptParams) -> Self {
+        Self {
+            tx_hash: params.tx_hash,
+            sender_wallet: params.sender_wallet,
+            nonce: params.nonce.map(Nonce),
+            submission_time: params
+                .submission_time_unix_secs
+                .map(|seconds| SystemTime::UNIX_EPOCH + Duration::from_secs(seconds)),
+            max_fee_per_gas: params.max_fee_per_gas,
+            max_priority_fee_per_gas: params.max_priority_fee_per_gas,
+        }
+    }
+}
+
+/// Controls whether a settlement attempt mutation may touch a job that
+/// already has a terminal result.
+///
+/// Passed as the optional trailing `force` parameter of the attempt
+/// mutations; omitting it is equivalent to `"force=false"`.
+///
+/// Editing a completed job's attempts is refused by default. Forcing exists
+/// to prepare `admin_forceRemoveSettlementJobResult`: attempt-result
+/// corrections must land while the job still has its terminal result,
+/// because removing the result immediately respawns the task, which could
+/// re-derive and re-record the job result from the uncorrected attempts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
+pub enum Force {
+    /// Apply the mutation even if the job already has a terminal result.
+    #[serde(rename = "force=true")]
+    True,
+
+    /// Refuse the mutation on a job that already has a terminal result.
+    #[serde(rename = "force=false")]
+    False,
+}
+
+fn edit_even_if_completed(force: Option<Force>) -> EditEvenIfCompleted {
+    match force {
+        Some(Force::True) => EditEvenIfCompleted::Yes,
+        Some(Force::False) | None => EditEvenIfCompleted::No,
+    }
+}
+
+/// Outcome of a settlement admin mutation.
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MutationResponse {
+    /// The attempt number the mutation landed on. For
+    /// `admin_insertSettlementAttempt` this is the newly assigned number.
+    pub attempt_number: u64,
+
+    /// Whether the live task observed the edit. Anything but `notified`
+    /// means the task acts on stale state until it reloads
+    /// (`admin_reloadSettlementTask` is the manual escape hatch).
+    pub live_task: LiveTaskNotification,
+}
+
+fn settlement_internal_error(error: eyre::Report) -> Error {
+    error!(?error, "Settlement admin command failed");
+    Error::internal(format!("{error:#}"))
 }
 
 use serde_with::{serde_as, DisplayFromStr};
@@ -198,18 +305,133 @@ pub(crate) trait AdminAgglayer {
     async fn disable_network(&self, network_id: NetworkId) -> RpcResult<()>;
     #[method(name = "enableNetwork")]
     async fn enable_network(&self, network_id: NetworkId) -> RpcResult<()>;
+
+    // ----- Settlement admin mutations -----
+    //
+    // Thin adapters over the settlement service's `admin_*` methods: no
+    // handler touches settlement storage directly, so the service stays the
+    // single choke point for settlement admin mutations.
+
+    /// Append one new settlement attempt to a settlement job.
+    ///
+    /// **JSON-RPC method:** `admin_insertSettlementAttempt`
+    ///
+    /// Registers a settlement transaction the service does not know about
+    /// (e.g. one submitted out-of-band, or ported from the legacy settlement
+    /// path) so the settlement task tracks it like its own attempts. Only the
+    /// transaction hash is mandatory: a missing sender or nonce is resolved
+    /// by fetching the transaction from the L1 RPC (an unknown transaction is
+    /// then rejected).
+    ///
+    /// This always adds one new attempt under the next unused attempt number
+    /// — it never overwrites an existing attempt — and returns the assigned
+    /// number. It fails if the job does not exist, or if it already has a
+    /// terminal result and `force` is not `"force=true"` (see [`Force`]).
+    #[method(name = "insertSettlementAttempt")]
+    async fn insert_settlement_attempt(
+        &self,
+        job_id: SettlementJobId,
+        attempt: InsertAttemptParams,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
+
+    /// Record that this attempt will never land on L1.
+    ///
+    /// **JSON-RPC method:** `admin_markSettlementAttemptDefinitelyFailed`
+    ///
+    /// Overwrites the attempt's result with a client error carrying the
+    /// mandatory `reason`, bypassing the usual upgrade-only rule for attempt
+    /// results. Terminal for the attempt, never for the job: the reloaded
+    /// task stops waiting on the attempt and drives the settlement elsewhere
+    /// (a wallet still under the service's control re-drives the same nonce;
+    /// a rotated-away wallet falls through to a fresh nonce).
+    ///
+    /// This is a trusted operator assertion: if the transaction can still
+    /// land, double settlement is only prevented by the settlement contract
+    /// itself. Real on-chain evidence observed later supersedes the
+    /// assertion. It fails if the attempt does not exist, or if the job
+    /// already has a terminal result and `force` is not `"force=true"`
+    /// (see [`Force`]).
+    #[method(name = "markSettlementAttemptDefinitelyFailed")]
+    async fn mark_settlement_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: String,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
+
+    /// Remove the recorded result of a settlement attempt.
+    ///
+    /// **JSON-RPC method:** `admin_removeSettlementAttemptResult`
+    ///
+    /// Hands the attempt back to the settlement task as pending, so the task
+    /// re-derives its outcome from L1. This is the undo of
+    /// `admin_markSettlementAttemptDefinitelyFailed` (and of any wrongly
+    /// recorded client error). It fails if the attempt does not exist, no
+    /// result is recorded, or if the job already has a terminal result and
+    /// `force` is not `"force=true"` (see [`Force`]).
+    #[method(name = "removeSettlementAttemptResult")]
+    async fn remove_settlement_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
+
+    /// Remove the terminal result of a settlement job, turning it back into
+    /// a pending job that is immediately re-driven.
+    ///
+    /// **JSON-RPC method:** `admin_forceRemoveSettlementJobResult`
+    ///
+    /// The job's stale completed-result watcher is dropped and a fresh
+    /// settlement task is spawned from the stored job state. Attempts and
+    /// their results are untouched: correct them **first**, with the attempt
+    /// mutations' `"force=true"` parameter, while the terminal result still
+    /// blocks the job from being re-driven — the fresh task spawned here
+    /// could otherwise re-derive and re-record the removed result from the
+    /// uncorrected attempts.
+    ///
+    /// **Force operation**: it un-completes a job. If the removed result was
+    /// real, only the settlement contract's replay protection stands between
+    /// the re-driven job and a double settlement. It fails if the job does
+    /// not exist, has no terminal result, or still has a live task.
+    #[method(name = "forceRemoveSettlementJobResult")]
+    async fn force_remove_settlement_job_result(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Stop the in-memory settlement task of a job.
+    ///
+    /// **JSON-RPC method:** `admin_abortSettlementTask`
+    ///
+    /// Runtime-only: the stored job is untouched and gets a fresh task on the
+    /// next startup recovery. This is not a terminal job state.
+    #[method(name = "abortSettlementTask")]
+    async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Make the live settlement task of a job drop its in-memory state and
+    /// reload from storage.
+    ///
+    /// **JSON-RPC method:** `admin_reloadSettlementTask`
+    ///
+    /// Escape hatch when a mutation reported a `live_task` status other than
+    /// `notified`.
+    #[method(name = "reloadSettlementTask")]
+    async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 }
 
 /// The Admin RPC agglayer service implementation.
-pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
+    settlement_service: SettlementService<L1Provider, StateStore>,
 }
 
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+impl<PendingStore, StateStore, DebugStore, L1Provider>
+    AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
+{
     /// Create an instance of the admin RPC agglayer service.
     pub fn new(
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
@@ -217,6 +439,7 @@ impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, State
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
+        settlement_service: SettlementService<L1Provider, StateStore>,
     ) -> Self {
         Self {
             certificate_sender,
@@ -224,16 +447,20 @@ impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, State
             state,
             debug_store,
             config,
+            settlement_service,
         }
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider>
+    AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Provider: Provider + WalletProvider + 'static,
 {
+    /// Starts the admin JSON-RPC router.
     pub async fn start(self) -> eyre::Result<axum::Router> {
         // Create the RPC service
         let config = self.config.clone();
@@ -295,8 +522,8 @@ where
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> Drop
-    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider> Drop
+    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer service");
@@ -304,12 +531,13 @@ impl<PendingStore, StateStore, DebugStore> Drop
 }
 
 #[async_trait]
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerServer
-    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider> AdminAgglayerServer
+    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Provider: Provider + WalletProvider + 'static,
 {
     #[instrument(skip(self))]
     async fn get_token_balance(
@@ -798,5 +1026,98 @@ where
             error!(?error, "Failed to enable network {network_id}");
             Error::internal(format!("Unable to enable network {network_id}"))
         })
+    }
+
+    #[instrument(skip(self))]
+    async fn insert_settlement_attempt(
+        &self,
+        job_id: SettlementJobId,
+        attempt: InsertAttemptParams,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!("(ADMIN) Inserting settlement attempt for job {job_id}");
+        let (attempt_number, live_task) = self
+            .settlement_service
+            .admin_insert_settlement_attempt(job_id, attempt.into(), edit_even_if_completed(force))
+            .await
+            .map_err(settlement_internal_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn mark_settlement_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: String,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!(
+            "(ADMIN) Marking settlement attempt {attempt_number} of job {job_id} as definitely \
+             failed"
+        );
+        let live_task = self
+            .settlement_service
+            .admin_mark_attempt_definitely_failed(
+                job_id,
+                attempt_number,
+                &reason,
+                edit_even_if_completed(force),
+            )
+            .await
+            .map_err(settlement_internal_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn remove_settlement_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!("(ADMIN) Removing result of settlement attempt {attempt_number} of job {job_id}");
+        let live_task = self
+            .settlement_service
+            .admin_remove_attempt_result(job_id, attempt_number, edit_even_if_completed(force))
+            .await
+            .map_err(settlement_internal_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn force_remove_settlement_job_result(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!("(ADMIN) Force-removing terminal result of settlement job {job_id}");
+        self.settlement_service
+            .admin_force_remove_settlement_job_result(job_id)
+            .await
+            .map_err(settlement_internal_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!("(ADMIN) Aborting settlement task for job {job_id}");
+        self.settlement_service
+            .admin_abort_task(job_id)
+            .await
+            .map_err(settlement_internal_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!("(ADMIN) Reloading settlement task for job {job_id}");
+        self.settlement_service
+            .admin_reload_and_restart_task(job_id)
+            .await
+            .map_err(settlement_internal_error)
     }
 }

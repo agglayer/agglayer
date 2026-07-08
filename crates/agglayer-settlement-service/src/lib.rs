@@ -16,7 +16,7 @@ pub mod settlement_service_trait;
 mod settlement_task;
 mod utils;
 
-pub use settlement_service::SettlementService;
+pub use settlement_service::{LiveTaskNotification, NewSettlementAttempt, SettlementService};
 #[cfg(feature = "testutils")]
 pub use settlement_service_trait::MockSettlementServiceTrait;
 pub use settlement_service_trait::SettlementServiceTrait;

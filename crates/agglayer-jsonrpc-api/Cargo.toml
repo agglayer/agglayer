@@ -9,6 +9,7 @@ agglayer-config.workspace = true
 agglayer-contracts.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-rpc.workspace = true
+agglayer-settlement-service.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
 agglayer-tries.workspace = true
