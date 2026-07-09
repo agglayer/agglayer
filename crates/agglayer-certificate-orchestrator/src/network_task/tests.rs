@@ -232,12 +232,6 @@ async fn start_from_zero() {
         .returning(|_, _, _, _| Ok(()));
 
     state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id), eq(CertificateStatus::Settled))
-        .returning(|_, _| Ok(()));
-
-    state
         .expect_set_latest_settled_certificate_for_network()
         .once()
         .with(
@@ -623,12 +617,6 @@ async fn retries() {
     state
         .expect_update_settlement_tx_hash()
         .returning(|_, _, _, _| Ok(()));
-
-    state
-        .expect_update_certificate_header_status()
-        .once()
-        .with(eq(certificate_id2), eq(CertificateStatus::Settled))
-        .returning(|_, _| Ok(()));
 
     // Both certificates transition through Candidate before settlement.
     state
