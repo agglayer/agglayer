@@ -190,7 +190,7 @@ mod tests {
                     && line.contains(&network_label)
                     && stage_label
                         .as_ref()
-                        .map_or(true, |label| line.contains(label))
+                        .is_none_or(|label| line.contains(label))
             })
             .and_then(|line| line.rsplit(' ').next())
             .map(|value| value.parse().unwrap())
