@@ -17,13 +17,21 @@ async fn fetch_metrics(metrics_url: &str) -> Option<String> {
     reqwest::get(metrics_url).await.ok()?.text().await.ok()
 }
 
-/// Extract the value of `metric` for `network_id` from a scraped metrics
-/// body, if the series is exported in that snapshot.
-fn sample_value(body: &str, metric: &str, network_id: u32) -> Option<u64> {
+/// Extract the value of `metric` for `network_id` (and the `stage` label,
+/// when given) from a scraped metrics body, if the series is exported in
+/// that snapshot.
+fn sample_value(body: &str, metric: &str, network_id: u32, stage: Option<&str>) -> Option<u64> {
     let prefix = format!("{metric}{{");
-    let label = format!("network_id=\"{network_id}\"");
+    let network_label = format!("network_id=\"{network_id}\"");
+    let stage_label = stage.map(|stage| format!("stage=\"{stage}\""));
     body.lines()
-        .find(|line| line.starts_with(&prefix) && line.contains(&label))
+        .find(|line| {
+            line.starts_with(&prefix)
+                && line.contains(&network_label)
+                && stage_label
+                    .as_ref()
+                    .map_or(true, |label| line.contains(label))
+        })
         .and_then(|line| line.rsplit(' ').next()?.parse().ok())
 }
 
@@ -58,7 +66,13 @@ async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
     let body = loop {
         let last_observation = match fetch_metrics(&metrics_url).await {
             Some(body) => {
-                if sample_value(&body, "agglayer_node_network_settled_height", network_id).is_some()
+                if sample_value(
+                    &body,
+                    "agglayer_node_network_height",
+                    network_id,
+                    Some("settled"),
+                )
+                .is_some()
                 {
                     break body;
                 }
@@ -80,26 +94,24 @@ async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
         tokio::time::sleep(METRICS_POLL_INTERVAL).await;
     };
 
-    assert_eq!(
-        sample_value(&body, "agglayer_node_network_settled_height", network_id),
-        Some(0),
-        "metrics body:\n{body}"
-    );
-    assert_eq!(
-        sample_value(&body, "agglayer_node_network_pending_height", network_id),
-        Some(0),
-        "metrics body:\n{body}"
-    );
-    assert_eq!(
-        sample_value(&body, "agglayer_node_network_proven_height", network_id),
-        Some(0),
-        "metrics body:\n{body}"
-    );
+    for stage in ["settled", "pending", "proven"] {
+        assert_eq!(
+            sample_value(
+                &body,
+                "agglayer_node_network_height",
+                network_id,
+                Some(stage)
+            ),
+            Some(0),
+            "stage {stage}, metrics body:\n{body}"
+        );
+    }
     assert_eq!(
         sample_value(
             &body,
             "agglayer_node_network_latest_certificate_in_error",
-            network_id
+            network_id,
+            None
         ),
         Some(0),
         "metrics body:\n{body}"

@@ -1,28 +1,35 @@
 //! Per-network certificate state metrics.
 //!
 //! These gauges expose, for every network with a recorded certificate
-//! pointer, the height of the latest pending / proven / settled certificate
-//! plus a flag reporting whether the latest known certificate is in error. They
-//! are *observable* gauges: the closures given to
-//! [`register_network_state_metrics`] run on every scrape of the `/metrics`
-//! endpoint, so exported values always reflect the current storage content,
-//! including right after a restart.
+//! pointer, the height of the latest certificate at each lifecycle stage
+//! (`stage="pending" | "proven" | "settled"` label) plus a flag reporting
+//! whether the latest known certificate is in error. They are *observable*
+//! gauges: the closures given to [`register_network_state_metrics`] run on
+//! every scrape of the `/metrics` endpoint, so exported values always
+//! reflect the current storage content, including right after a restart.
 
-use opentelemetry::{global, KeyValue};
+use opentelemetry::{global, metrics::AsyncInstrument, KeyValue};
 
 const AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME: &str = "agglayer_node_network";
 
 /// Label carrying the network (rollup) id on every per-network series.
 const NETWORK_ID_LABEL: &str = "network_id";
 
-/// Gauge name: height of the latest pending certificate per network.
-pub const NETWORK_PENDING_HEIGHT: &str = "agglayer_node_network_pending_height";
+/// Label carrying the certificate lifecycle stage on the height gauge.
+const STAGE_LABEL: &str = "stage";
 
-/// Gauge name: height of the latest proven certificate per network.
-pub const NETWORK_PROVEN_HEIGHT: &str = "agglayer_node_network_proven_height";
+/// Stage label value for the latest pending certificate height.
+const STAGE_PENDING: &str = "pending";
 
-/// Gauge name: height of the latest settled certificate per network.
-pub const NETWORK_SETTLED_HEIGHT: &str = "agglayer_node_network_settled_height";
+/// Stage label value for the latest proven certificate height.
+const STAGE_PROVEN: &str = "proven";
+
+/// Stage label value for the latest settled certificate height.
+const STAGE_SETTLED: &str = "settled";
+
+/// Gauge name: height of the latest certificate per network and lifecycle
+/// stage (`stage` label).
+pub const NETWORK_HEIGHT: &str = "agglayer_node_network_height";
 
 /// Gauge name: whether the latest known certificate is in error (0/1).
 pub const NETWORK_LATEST_CERTIFICATE_IN_ERROR: &str =
@@ -60,7 +67,12 @@ impl std::fmt::Debug for NetworkStateSamplers {
     }
 }
 
-/// Register the four per-network observable gauges.
+/// Register the per-network observable gauges: one height gauge carrying a
+/// `stage` label (`pending` / `proven` / `settled`), plus the error flag.
+///
+/// The stage is a label rather than part of the metric name so dashboards
+/// can aggregate `by (stage)` and future lifecycle stages extend the label
+/// set without introducing new metric names.
 ///
 /// Each closure is invoked on every `/metrics` scrape and must return one
 /// sample per network that has a value. Networks without a value must be
@@ -93,24 +105,19 @@ pub fn register_network_state_metrics(samplers: NetworkStateSamplers) {
         in_error,
     } = samplers;
 
-    register_height_gauge(
-        NETWORK_PENDING_HEIGHT,
-        "Height of the latest pending certificate per network",
-        pending,
-    );
-    register_height_gauge(
-        NETWORK_PROVEN_HEIGHT,
-        "Height of the latest proven certificate per network",
-        proven,
-    );
-    register_height_gauge(
-        NETWORK_SETTLED_HEIGHT,
-        "Height of the latest settled certificate per network",
-        settled,
-    );
+    // The returned instrument handles are intentionally dropped: the callback
+    // registrations live in the meter provider, not in the handles.
+    //
+    // The sampler-to-stage mapping happens here and only here, so the named
+    // struct fields keep protecting against transposition.
+    let _ = global::meter(AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME)
+        .u64_observable_gauge(NETWORK_HEIGHT)
+        .with_description("Height of the latest certificate per network and lifecycle stage")
+        .with_callback(observe_heights(STAGE_PENDING, pending))
+        .with_callback(observe_heights(STAGE_PROVEN, proven))
+        .with_callback(observe_heights(STAGE_SETTLED, settled))
+        .build();
 
-    // The returned instrument handle is intentionally dropped: the callback
-    // registration lives in the meter provider, not in the handle.
     let _ = global::meter(AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME)
         .u64_observable_gauge(NETWORK_LATEST_CERTIFICATE_IN_ERROR)
         .with_description(
@@ -130,26 +137,23 @@ pub fn register_network_state_metrics(samplers: NetworkStateSamplers) {
         .build();
 }
 
-fn register_height_gauge(
-    name: &'static str,
-    description: &'static str,
+/// Builds the observation callback for one lifecycle stage of the height
+/// gauge.
+fn observe_heights(
+    stage: &'static str,
     samples: Box<dyn Fn() -> Vec<NetworkHeightSample> + Send + Sync>,
-) {
-    let _ = global::meter(AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME)
-        .u64_observable_gauge(name)
-        .with_description(description)
-        .with_callback(move |observer| {
-            for sample in samples() {
-                observer.observe(
-                    sample.height,
-                    &[KeyValue::new(
-                        NETWORK_ID_LABEL,
-                        sample.network_id.to_string(),
-                    )],
-                );
-            }
-        })
-        .build();
+) -> impl Fn(&dyn AsyncInstrument<u64>) + Send + Sync + 'static {
+    move |observer| {
+        for sample in samples() {
+            observer.observe(
+                sample.height,
+                &[
+                    KeyValue::new(NETWORK_ID_LABEL, sample.network_id.to_string()),
+                    KeyValue::new(STAGE_LABEL, stage),
+                ],
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -169,12 +173,25 @@ mod tests {
         String::from_utf8(out).unwrap()
     }
 
-    /// Extract the value of the sample line for `name` and `network_id`.
-    fn sample_value(metrics: &str, name: &str, network_id: u32) -> Option<u64> {
-        let label = format!("network_id=\"{network_id}\"");
+    /// Extract the value of the sample line for `name`, `network_id` and,
+    /// when given, the `stage` label.
+    fn sample_value(
+        metrics: &str,
+        name: &str,
+        network_id: u32,
+        stage: Option<&str>,
+    ) -> Option<u64> {
+        let network_label = format!("network_id=\"{network_id}\"");
+        let stage_label = stage.map(|stage| format!("stage=\"{stage}\""));
         metrics
             .lines()
-            .find(|line| line.starts_with(&format!("{name}{{")) && line.contains(&label))
+            .find(|line| {
+                line.starts_with(&format!("{name}{{"))
+                    && line.contains(&network_label)
+                    && stage_label
+                        .as_ref()
+                        .map_or(true, |label| line.contains(label))
+            })
             .and_then(|line| line.rsplit(' ').next())
             .map(|value| value.parse().unwrap())
     }
@@ -243,16 +260,38 @@ mod tests {
 
         let metrics = gather(&registry);
 
-        assert_eq!(sample_value(&metrics, NETWORK_PENDING_HEIGHT, 1), Some(0));
-        assert_eq!(sample_value(&metrics, NETWORK_PENDING_HEIGHT, 14), Some(35));
-        assert_eq!(sample_value(&metrics, NETWORK_PROVEN_HEIGHT, 14), Some(35));
-        assert_eq!(sample_value(&metrics, NETWORK_SETTLED_HEIGHT, 14), Some(34));
         assert_eq!(
-            sample_value(&metrics, NETWORK_LATEST_CERTIFICATE_IN_ERROR, 1),
+            sample_value(&metrics, NETWORK_HEIGHT, 1, Some(STAGE_PENDING)),
+            Some(0)
+        );
+        assert_eq!(
+            sample_value(&metrics, NETWORK_HEIGHT, 14, Some(STAGE_PENDING)),
+            Some(35)
+        );
+        assert_eq!(
+            sample_value(&metrics, NETWORK_HEIGHT, 14, Some(STAGE_PROVEN)),
+            Some(35)
+        );
+        assert_eq!(
+            sample_value(&metrics, NETWORK_HEIGHT, 14, Some(STAGE_SETTLED)),
+            Some(34)
+        );
+        // Stages are independent series: network 1 has no proven or settled
+        // pointer, so those stage series must be absent, not zero.
+        assert_eq!(
+            sample_value(&metrics, NETWORK_HEIGHT, 1, Some(STAGE_PROVEN)),
+            None
+        );
+        assert_eq!(
+            sample_value(&metrics, NETWORK_HEIGHT, 1, Some(STAGE_SETTLED)),
+            None
+        );
+        assert_eq!(
+            sample_value(&metrics, NETWORK_LATEST_CERTIFICATE_IN_ERROR, 1, None),
             Some(1)
         );
         assert_eq!(
-            sample_value(&metrics, NETWORK_LATEST_CERTIFICATE_IN_ERROR, 14),
+            sample_value(&metrics, NETWORK_LATEST_CERTIFICATE_IN_ERROR, 14, None),
             Some(0)
         );
 
