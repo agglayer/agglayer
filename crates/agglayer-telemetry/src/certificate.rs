@@ -6,6 +6,8 @@ use std::time::Instant;
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*, KeyValue};
 
+use crate::{stage::STAGE_LABEL, CertificateStage};
+
 const AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME: &str = "agglayer_node_certificate";
 
 /// Histogram buckets in seconds, from the sub-second submission stage to
@@ -13,13 +15,6 @@ const AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME: &str = "agglayer_node_certifica
 const DURATION_BUCKETS_SECONDS: &[f64] = &[
     0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 900.0, 1800.0,
 ];
-
-/// `stage` label values: the non-terminal status a certificate is timed in.
-pub mod stage {
-    pub const PENDING: &str = "pending";
-    pub const PROVEN: &str = "proven";
-    pub const CANDIDATE: &str = "candidate";
-}
 
 lazy_static! {
     static ref CERTIFICATE_DURATION: Histogram<f64> =
@@ -47,10 +42,10 @@ fn labels(network_id: u32, extra: &[KeyValue]) -> Vec<KeyValue> {
 
 /// Records the duration of one lifecycle `stage`.
 #[inline]
-pub fn record_certificate_stage_completed(network_id: u32, stage: &'static str, seconds: f64) {
+pub fn record_certificate_stage_completed(network_id: u32, stage: CertificateStage, seconds: f64) {
     CERTIFICATE_STAGE_DURATION.record(
         seconds,
-        &labels(network_id, &[KeyValue::new("stage", stage)]),
+        &labels(network_id, &[KeyValue::new(STAGE_LABEL, stage.as_str())]),
     );
 }
 
@@ -79,7 +74,7 @@ impl CertificateTimer {
     }
 
     /// Records the finished `stage` and resets the stage clock.
-    pub fn complete_stage(&mut self, stage: &'static str) {
+    pub fn complete_stage(&mut self, stage: CertificateStage) {
         record_certificate_stage_completed(
             self.network_id,
             stage,
@@ -102,11 +97,11 @@ mod tests {
 
     #[test]
     fn helpers_do_not_panic() {
-        record_certificate_stage_completed(1, stage::PENDING, 1.5);
+        record_certificate_stage_completed(1, CertificateStage::Pending, 1.5);
         record_certificate_total_duration(1, 43.7);
 
         let mut timer = CertificateTimer::start(1);
-        timer.complete_stage(stage::PROVEN);
+        timer.complete_stage(CertificateStage::Proven);
         timer.complete();
     }
 }

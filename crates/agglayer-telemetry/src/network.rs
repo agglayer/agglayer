@@ -10,22 +10,12 @@
 
 use opentelemetry::{global, metrics::AsyncInstrument, KeyValue};
 
+use crate::{stage::STAGE_LABEL, CertificateStage};
+
 const AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME: &str = "agglayer_node_network";
 
 /// Label carrying the network (rollup) id on every per-network series.
 const NETWORK_ID_LABEL: &str = "network_id";
-
-/// Label carrying the certificate lifecycle stage on the height gauge.
-const STAGE_LABEL: &str = "stage";
-
-/// Stage label value for the latest pending certificate height.
-const STAGE_PENDING: &str = "pending";
-
-/// Stage label value for the latest proven certificate height.
-const STAGE_PROVEN: &str = "proven";
-
-/// Stage label value for the latest settled certificate height.
-const STAGE_SETTLED: &str = "settled";
 
 /// Gauge name: height of the latest certificate per network and lifecycle
 /// stage (`stage` label).
@@ -113,9 +103,9 @@ pub fn register_network_state_metrics(samplers: NetworkStateSamplers) {
     let _ = global::meter(AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME)
         .u64_observable_gauge(NETWORK_HEIGHT)
         .with_description("Height of the latest certificate per network and lifecycle stage")
-        .with_callback(observe_heights(STAGE_PENDING, pending))
-        .with_callback(observe_heights(STAGE_PROVEN, proven))
-        .with_callback(observe_heights(STAGE_SETTLED, settled))
+        .with_callback(observe_heights(CertificateStage::Pending, pending))
+        .with_callback(observe_heights(CertificateStage::Proven, proven))
+        .with_callback(observe_heights(CertificateStage::Settled, settled))
         .build();
 
     let _ = global::meter(AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME)
@@ -140,7 +130,7 @@ pub fn register_network_state_metrics(samplers: NetworkStateSamplers) {
 /// Builds the observation callback for one lifecycle stage of the height
 /// gauge.
 fn observe_heights(
-    stage: &'static str,
+    stage: CertificateStage,
     samples: Box<dyn Fn() -> Vec<NetworkHeightSample> + Send + Sync>,
 ) -> impl Fn(&dyn AsyncInstrument<u64>) + Send + Sync + 'static {
     move |observer| {
@@ -149,7 +139,7 @@ fn observe_heights(
                 sample.height,
                 &[
                     KeyValue::new(NETWORK_ID_LABEL, sample.network_id.to_string()),
-                    KeyValue::new(STAGE_LABEL, stage),
+                    KeyValue::new(STAGE_LABEL, stage.as_str()),
                 ],
             );
         }
@@ -261,29 +251,29 @@ mod tests {
         let metrics = gather(&registry);
 
         assert_eq!(
-            sample_value(&metrics, NETWORK_HEIGHT, 1, Some(STAGE_PENDING)),
+            sample_value(&metrics, NETWORK_HEIGHT, 1, Some("pending")),
             Some(0)
         );
         assert_eq!(
-            sample_value(&metrics, NETWORK_HEIGHT, 14, Some(STAGE_PENDING)),
+            sample_value(&metrics, NETWORK_HEIGHT, 14, Some("pending")),
             Some(35)
         );
         assert_eq!(
-            sample_value(&metrics, NETWORK_HEIGHT, 14, Some(STAGE_PROVEN)),
+            sample_value(&metrics, NETWORK_HEIGHT, 14, Some("proven")),
             Some(35)
         );
         assert_eq!(
-            sample_value(&metrics, NETWORK_HEIGHT, 14, Some(STAGE_SETTLED)),
+            sample_value(&metrics, NETWORK_HEIGHT, 14, Some("settled")),
             Some(34)
         );
         // Stages are independent series: network 1 has no proven or settled
         // pointer, so those stage series must be absent, not zero.
         assert_eq!(
-            sample_value(&metrics, NETWORK_HEIGHT, 1, Some(STAGE_PROVEN)),
+            sample_value(&metrics, NETWORK_HEIGHT, 1, Some("proven")),
             None
         );
         assert_eq!(
-            sample_value(&metrics, NETWORK_HEIGHT, 1, Some(STAGE_SETTLED)),
+            sample_value(&metrics, NETWORK_HEIGHT, 1, Some("settled")),
             None
         );
         assert_eq!(
