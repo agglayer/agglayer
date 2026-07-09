@@ -8,7 +8,7 @@ use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
     UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
-use agglayer_telemetry::{certificate, CertificateStage};
+use agglayer_telemetry::certificate::{self, CertificateStage};
 #[cfg(feature = "testutils")]
 use agglayer_types::SettlementTxHash;
 use agglayer_types::{

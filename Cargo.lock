@@ -703,6 +703,7 @@ dependencies = [
  "opentelemetry-prometheus 0.31.0",
  "opentelemetry_sdk 0.31.0",
  "prometheus",
+ "strum_macros 0.28.0",
  "tokio",
  "tokio-util",
  "tracing",

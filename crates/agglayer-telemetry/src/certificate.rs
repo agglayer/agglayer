@@ -6,9 +6,26 @@ use std::time::Instant;
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*, KeyValue};
 
-use crate::{stage::STAGE_LABEL, CertificateStage};
-
 const AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME: &str = "agglayer_node_certificate";
+
+/// Name of the label carrying the certificate lifecycle stage.
+pub(crate) const STAGE_LABEL_NAME: &str = "stage";
+
+/// A certificate lifecycle stage, rendered as the `stage` label value.
+///
+/// The metric families each use a subset: the duration histograms time the
+/// non-terminal stages (`Pending`, `Proven`, `Candidate`), while the
+/// per-network height gauge reports pointer positions (`Pending`, `Proven`,
+/// `Settled`). Sharing one enum keeps the label values consistent across
+/// families.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum_macros::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum CertificateStage {
+    Pending,
+    Proven,
+    Candidate,
+    Settled,
+}
 
 /// Histogram buckets in seconds, from the sub-second submission stage to
 /// multi-minute settlement.
@@ -45,7 +62,10 @@ fn labels(network_id: u32, extra: &[KeyValue]) -> Vec<KeyValue> {
 pub fn record_certificate_stage_completed(network_id: u32, stage: CertificateStage, seconds: f64) {
     CERTIFICATE_STAGE_DURATION.record(
         seconds,
-        &labels(network_id, &[KeyValue::new(STAGE_LABEL, stage.as_str())]),
+        &labels(
+            network_id,
+            &[KeyValue::new(STAGE_LABEL_NAME, stage.to_string())],
+        ),
     );
 }
 

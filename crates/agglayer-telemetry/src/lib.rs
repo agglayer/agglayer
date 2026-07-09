@@ -18,14 +18,12 @@ use tracing::{debug, info};
 use crate::constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME};
 
 mod constant;
-mod stage;
 
 pub mod certificate;
 pub mod clock;
 pub mod network;
 
 pub use opentelemetry::KeyValue;
-pub use stage::CertificateStage;
 
 lazy_static! {
     // Backward compatibility with the old metrics from agglayer go implementation

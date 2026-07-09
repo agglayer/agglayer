@@ -10,7 +10,7 @@
 
 use opentelemetry::{global, metrics::AsyncInstrument, KeyValue};
 
-use crate::{stage::STAGE_LABEL, CertificateStage};
+use crate::certificate::{CertificateStage, STAGE_LABEL_NAME};
 
 const AGGLAYER_NODE_NETWORK_OTEL_SCOPE_NAME: &str = "agglayer_node_network";
 
@@ -139,7 +139,7 @@ fn observe_heights(
                 sample.height,
                 &[
                     KeyValue::new(NETWORK_ID_LABEL, sample.network_id.to_string()),
-                    KeyValue::new(STAGE_LABEL, stage.as_str()),
+                    KeyValue::new(STAGE_LABEL_NAME, stage.to_string()),
                 ],
             );
         }
