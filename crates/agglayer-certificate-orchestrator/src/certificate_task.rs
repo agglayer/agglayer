@@ -8,6 +8,7 @@ use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
     UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
+use agglayer_telemetry::certificate;
 #[cfg(feature = "testutils")]
 use agglayer_types::SettlementTxHash;
 use agglayer_types::{
@@ -38,6 +39,10 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient, Settlement
     certifier_client: Arc<CertifierClient>,
     cancellation_token: CancellationToken,
     settlement_service: Arc<SettlementService>,
+
+    /// Bridging-time timer; `None` for resumed certificates (only fresh
+    /// `Pending` -> `Settled` lifecycles are timed).
+    bridging_timer: Option<certificate::CertificateTimer>,
 }
 
 impl<StateStore, PendingStore, CertifierClient, SettlementService>
@@ -78,6 +83,7 @@ where
             certifier_client,
             cancellation_token,
             settlement_service,
+            bridging_timer: None,
         })
     }
 
@@ -139,6 +145,14 @@ where
         // with storing the certificate if needed.
 
         debug!(initial_status = ?self.header.status, "Processing certificate");
+
+        // Only time fresh certificates: a full Pending -> Settled lifecycle in
+        // one process. Resumed certificates leave the timer `None`.
+        if self.header.status == CertificateStatus::Pending {
+            self.bridging_timer = Some(certificate::CertificateTimer::start(
+                self.header.network_id.to_u32(),
+            ));
+        }
 
         // TODO: Hack to deal with Proven certificates in case the PP changed.
         // See https://github.com/agglayer/agglayer/pull/819#discussion_r2152193517 for the details
@@ -276,7 +290,9 @@ where
             .await?;
         debug!("Proof certification completed");
 
-        // Record the certification success
+        // Certification succeeded: close out the `pending` (proving) stage, then
+        // record the new status.
+        self.record_stage();
         self.set_status(CertificateStatus::Proven)?;
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
@@ -323,6 +339,8 @@ where
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
 
+        // Close out the `proven` (submission) stage, then record the new status.
+        self.record_stage();
         self.set_status(CertificateStatus::Candidate)?;
 
         #[cfg(feature = "testutils")]
@@ -477,12 +495,43 @@ where
         Ok(())
     }
 
+    /// Records the current stage's duration. Call just before the status
+    /// changes.
+    fn record_stage(&mut self) {
+        if let (Some(timer), Some(stage)) = (
+            self.bridging_timer.as_mut(),
+            Self::stage_label(&self.header.status),
+        ) {
+            timer.complete_stage(stage);
+        }
+    }
+
+    /// Metric `stage` label for a non-terminal status; `None` for terminal
+    /// ones.
+    fn stage_label(status: &CertificateStatus) -> Option<&'static str> {
+        match status {
+            CertificateStatus::Pending => Some(certificate::stage::PENDING),
+            CertificateStatus::Proven => Some(certificate::stage::PROVEN),
+            CertificateStatus::Candidate => Some(certificate::stage::CANDIDATE),
+            CertificateStatus::Settled | CertificateStatus::InError { .. } => None,
+        }
+    }
+
     /// Common finalization logic for all settlement completion paths.
     async fn finalize_settlement(&mut self) -> Result<(), CertificateStatusError> {
+        // Close out the `candidate` stage while the status still reflects it.
+        self.record_stage();
+
         // The network task persists `Settled` once the epoch is assigned, so a
         // failed assignment leaves the certificate `Candidate` (recoverable) rather
         // than durably `Settled` with no epoch. Reflect the status in memory only.
         self.header.status = CertificateStatus::Settled;
+
+        // For fresh certificates, record the end-to-end bridging duration.
+        if let Some(timer) = &self.bridging_timer {
+            timer.complete();
+        }
+
         self.send_to_network_task(NetworkTaskMessage::CertificateSettled {
             height: self.header.height,
             certificate_id: self.header.certificate_id,

@@ -39,6 +39,7 @@ agglayer-clock.workspace = true
 agglayer-config.workspace = true
 agglayer-contracts.workspace = true
 agglayer-storage.workspace = true
+agglayer-telemetry.workspace = true
 agglayer-test-suite = { workspace = true, optional = true }
 agglayer-types.workspace = true
 agglayer-settlement-service.workspace = true

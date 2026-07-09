@@ -19,6 +19,7 @@ use crate::constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_N
 
 mod constant;
 
+pub mod certificate;
 pub mod clock;
 pub mod network;
 
