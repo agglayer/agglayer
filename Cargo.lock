@@ -137,6 +137,7 @@ dependencies = [
  "agglayer-contracts",
  "agglayer-settlement-service",
  "agglayer-storage",
+ "agglayer-telemetry 0.1.0",
  "agglayer-test-suite",
  "agglayer-types",
  "alloy",
