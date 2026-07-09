@@ -21,6 +21,7 @@ mod constant;
 
 pub mod certificate;
 pub mod clock;
+pub mod network;
 
 pub use opentelemetry::KeyValue;
 

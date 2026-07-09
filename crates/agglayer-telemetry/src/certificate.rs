@@ -8,18 +8,30 @@ use opentelemetry::{global, metrics::*, KeyValue};
 
 const AGGLAYER_NODE_CERTIFICATE_OTEL_SCOPE_NAME: &str = "agglayer_node_certificate";
 
+/// Name of the label carrying the certificate lifecycle stage.
+pub(crate) const STAGE_LABEL_NAME: &str = "stage";
+
+/// A certificate lifecycle stage, rendered as the `stage` label value.
+///
+/// The metric families each use a subset: the duration histograms time the
+/// non-terminal stages (`Pending`, `Proven`, `Candidate`), while the
+/// per-network height gauge reports pointer positions (`Pending`, `Proven`,
+/// `Settled`). Sharing one enum keeps the label values consistent across
+/// families.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum_macros::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum CertificateStage {
+    Pending,
+    Proven,
+    Candidate,
+    Settled,
+}
+
 /// Histogram buckets in seconds, from the sub-second submission stage to
 /// multi-minute settlement.
 const DURATION_BUCKETS_SECONDS: &[f64] = &[
     0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 900.0, 1800.0,
 ];
-
-/// `stage` label values: the non-terminal status a certificate is timed in.
-pub mod stage {
-    pub const PENDING: &str = "pending";
-    pub const PROVEN: &str = "proven";
-    pub const CANDIDATE: &str = "candidate";
-}
 
 lazy_static! {
     static ref CERTIFICATE_DURATION: Histogram<f64> =
@@ -47,10 +59,13 @@ fn labels(network_id: u32, extra: &[KeyValue]) -> Vec<KeyValue> {
 
 /// Records the duration of one lifecycle `stage`.
 #[inline]
-pub fn record_certificate_stage_completed(network_id: u32, stage: &'static str, seconds: f64) {
+pub fn record_certificate_stage_completed(network_id: u32, stage: CertificateStage, seconds: f64) {
     CERTIFICATE_STAGE_DURATION.record(
         seconds,
-        &labels(network_id, &[KeyValue::new("stage", stage)]),
+        &labels(
+            network_id,
+            &[KeyValue::new(STAGE_LABEL_NAME, stage.to_string())],
+        ),
     );
 }
 
@@ -79,7 +94,7 @@ impl CertificateTimer {
     }
 
     /// Records the finished `stage` and resets the stage clock.
-    pub fn complete_stage(&mut self, stage: &'static str) {
+    pub fn complete_stage(&mut self, stage: CertificateStage) {
         record_certificate_stage_completed(
             self.network_id,
             stage,
@@ -102,11 +117,11 @@ mod tests {
 
     #[test]
     fn helpers_do_not_panic() {
-        record_certificate_stage_completed(1, stage::PENDING, 1.5);
+        record_certificate_stage_completed(1, CertificateStage::Pending, 1.5);
         record_certificate_total_duration(1, 43.7);
 
         let mut timer = CertificateTimer::start(1);
-        timer.complete_stage(stage::PROVEN);
+        timer.complete_stage(CertificateStage::Proven);
         timer.complete();
     }
 }

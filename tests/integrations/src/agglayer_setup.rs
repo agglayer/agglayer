@@ -56,12 +56,15 @@ pub async fn start_l1() -> L1Docker {
     l1_setup::L1Docker::new(name).await
 }
 
-pub async fn start_agglayer(
+/// Like [`start_agglayer`], but also returns the effective [`Config`] (with
+/// the randomized ports, e.g. `telemetry.addr`) so tests can reach the
+/// node's auxiliary endpoints.
+pub async fn start_agglayer_with_config(
     config_path: &Path,
     l1: &L1Docker,
     config: Option<agglayer_config::Config>,
     token: Option<CancellationToken>,
-) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
+) -> (oneshot::Receiver<()>, WsClient, CancellationToken, Config) {
     let (shutdown, receiver) = oneshot::channel();
 
     // Make the mock prover pass
@@ -172,6 +175,17 @@ pub async fn start_agglayer(
 
     assert!(!handle.is_finished());
 
+    (receiver, client, cancellation, config)
+}
+
+pub async fn start_agglayer(
+    config_path: &Path,
+    l1: &L1Docker,
+    config: Option<agglayer_config::Config>,
+    token: Option<CancellationToken>,
+) -> (oneshot::Receiver<()>, WsClient, CancellationToken) {
+    let (receiver, client, cancellation, _config) =
+        start_agglayer_with_config(config_path, l1, config, token).await;
     (receiver, client, cancellation)
 }
 
@@ -180,10 +194,24 @@ pub async fn setup_network(
     config: Option<Config>,
     token: Option<CancellationToken>,
 ) -> (oneshot::Receiver<()>, L1Docker, WsClient) {
-    let l1 = start_l1().await;
-    let (receiver, client, _token) = start_agglayer(tmp_dir, &l1, config, token).await;
+    let (receiver, l1, client, _config) = setup_network_with_config(tmp_dir, config, token).await;
 
     (receiver, l1, client)
+}
+
+/// Like [`setup_network`], but also returns the effective [`Config`] (with
+/// the randomized ports, e.g. `telemetry.addr`) so tests can reach the
+/// node's auxiliary endpoints.
+pub async fn setup_network_with_config(
+    tmp_dir: &Path,
+    config: Option<Config>,
+    token: Option<CancellationToken>,
+) -> (oneshot::Receiver<()>, L1Docker, WsClient, Config) {
+    let l1 = start_l1().await;
+    let (receiver, client, _token, config) =
+        start_agglayer_with_config(tmp_dir, &l1, config, token).await;
+
+    (receiver, l1, client, config)
 }
 
 pub fn get_signer(index: u32) -> PrivateKeySigner {

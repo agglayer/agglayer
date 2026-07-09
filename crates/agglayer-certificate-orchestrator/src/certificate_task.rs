@@ -8,7 +8,7 @@ use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
     UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
-use agglayer_telemetry::certificate;
+use agglayer_telemetry::certificate::{self, CertificateStage};
 #[cfg(feature = "testutils")]
 use agglayer_types::SettlementTxHash;
 use agglayer_types::{
@@ -508,11 +508,11 @@ where
 
     /// Metric `stage` label for a non-terminal status; `None` for terminal
     /// ones.
-    fn stage_label(status: &CertificateStatus) -> Option<&'static str> {
+    fn stage_label(status: &CertificateStatus) -> Option<CertificateStage> {
         match status {
-            CertificateStatus::Pending => Some(certificate::stage::PENDING),
-            CertificateStatus::Proven => Some(certificate::stage::PROVEN),
-            CertificateStatus::Candidate => Some(certificate::stage::CANDIDATE),
+            CertificateStatus::Pending => Some(CertificateStage::Pending),
+            CertificateStatus::Proven => Some(CertificateStage::Proven),
+            CertificateStatus::Candidate => Some(CertificateStage::Candidate),
             CertificateStatus::Settled | CertificateStatus::InError { .. } => None,
         }
     }
