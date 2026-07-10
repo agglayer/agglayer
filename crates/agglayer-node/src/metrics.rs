@@ -185,6 +185,7 @@ mod tests {
         stores::{PendingCertificateWriter as _, StateWriter as _},
         tests::TempDBDir,
     };
+    use agglayer_telemetry::testutils::MetricsHarness;
     use agglayer_types::{
         Certificate, CertificateIndex, CertificateStatus, CertificateStatusError, EpochNumber,
         Height, NetworkId,
@@ -322,30 +323,13 @@ mod tests {
         );
     }
 
-    fn gather(registry: &prometheus::Registry) -> String {
-        use prometheus::Encoder as _;
-
-        let encoder = prometheus::TextEncoder::new();
-        let mut out = Vec::new();
-        encoder.encode(&registry.gather(), &mut out).unwrap();
-        String::from_utf8(out).unwrap()
-    }
-
     #[test]
     fn registration_does_not_extend_store_lifetime() {
         // A real meter provider must be installed, otherwise the no-op meter
-        // discards the callbacks and this test cannot observe retention.
-        let registry = prometheus::Registry::new();
-        let exporter = opentelemetry_prometheus::exporter()
-            .with_registry(registry.clone())
-            .build()
-            .unwrap();
-        let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
-            .with_reader(exporter)
-            .build();
-        // This test deliberately owns the process-global meter provider:
-        // nextest runs one process per test, so nothing else can race it.
-        opentelemetry::global::set_meter_provider(provider);
+        // discards the callbacks and this test cannot observe retention. The
+        // harness owns the process-global meter provider and relies on
+        // nextest's process-per-test isolation.
+        let harness = MetricsHarness::install();
 
         let pending_tmp = TempDBDir::new();
         let state_tmp = TempDBDir::new();
@@ -356,14 +340,13 @@ mod tests {
         register_network_state_metrics(&pending_store, &state_store);
 
         // Positive control: the registration must land on the provider this
-        // test installed, otherwise the retention check below is vacuous
-        // (e.g. a dependency drift splitting the `opentelemetry` globals).
+        // test installed, otherwise the retention check below is vacuous.
         let network_id = NetworkId::new(2);
         let certificate = Certificate::new_for_test(network_id, Height::ZERO);
         pending_store
             .insert_pending_certificate(network_id, Height::ZERO, &certificate)
             .unwrap();
-        let metrics = gather(&registry);
+        let metrics = harness.gather();
         assert!(
             metrics.lines().any(|line| {
                 line.starts_with("agglayer_node_network_height{")
@@ -383,7 +366,7 @@ mod tests {
 
         // With the original stores gone the weak upgrades fail and every
         // per-network series disappears from the scrape.
-        let metrics = gather(&registry);
+        let metrics = harness.gather();
         assert!(
             metrics
                 .lines()
