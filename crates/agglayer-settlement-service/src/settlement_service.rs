@@ -256,9 +256,16 @@ impl<
         }
     }
 
-    /// Stop the in-memory task of `job_id`. Runtime-only: the job stays
-    /// pending in storage and no terminal result is recorded; restart it
-    /// with [`Self::admin_reload_and_restart_task`].
+    /// Request cancellation of the in-memory task of `job_id`; the job stays
+    /// pending in storage and no terminal result is recorded.
+    ///
+    /// Returns before the task observes the cancellation; watch the actual
+    /// teardown through [`Self::has_live_task`]. `Ok(())` can race with task
+    /// completion, where the cancel is a no-op on a lingering handle. An
+    /// abort chained with a reload-and-restart can drop the queued reload if
+    /// the task exits on the cancellation first; retry once
+    /// [`Self::has_live_task`] is `false`. The storage classification behind
+    /// the returned errors is a best-effort snapshot.
     #[tracing::instrument(skip(self))]
     pub async fn admin_abort_task(
         &self,
@@ -853,8 +860,14 @@ mod tests {
         let job_id = mk_job_id(20);
         store
             .expect_get_settlement_job_result()
-            .returning(|_| Ok(None));
-        store.expect_get_settlement_job().returning(|_| Ok(None));
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
 
         let service = mk_service(Arc::new(store)).await;
 
@@ -876,7 +889,9 @@ mod tests {
         let result = mk_result(21, ContractCallOutcome::Success);
         store
             .expect_get_settlement_job_result()
-            .returning(move |_| Ok(Some(result.clone())));
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(result)));
 
         let service = mk_service(Arc::new(store)).await;
 
@@ -898,10 +913,14 @@ mod tests {
         let job = mk_job(22);
         store
             .expect_get_settlement_job_result()
-            .returning(|_| Ok(None));
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
         store
             .expect_get_settlement_job()
-            .returning(move |_| Ok(Some(job.clone())));
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
 
         let service = mk_service(Arc::new(store)).await;
 
@@ -912,6 +931,87 @@ mod tests {
         assert!(matches!(
             error,
             crate::SettlementAdminError::NoLiveTask(id) if id == job_id
+        ));
+    }
+
+    #[tokio::test]
+    async fn admin_abort_task_storage_error_on_result_read_returns_storage_error() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(24);
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| {
+                Err(agglayer_storage::error::Error::Unexpected(
+                    "boom".to_string(),
+                ))
+            });
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let error = service
+            .admin_abort_task(job_id)
+            .await
+            .expect_err("abort must surface the storage error");
+        assert!(matches!(error, crate::SettlementAdminError::Storage { .. }));
+    }
+
+    #[tokio::test]
+    async fn admin_abort_task_storage_error_on_job_read_returns_storage_error() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(25);
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| {
+                Err(agglayer_storage::error::Error::Unexpected(
+                    "boom".to_string(),
+                ))
+            });
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let error = service
+            .admin_abort_task(job_id)
+            .await
+            .expect_err("abort must surface the storage error");
+        assert!(matches!(error, crate::SettlementAdminError::Storage { .. }));
+    }
+
+    #[tokio::test]
+    async fn admin_reload_and_restart_task_unknown_job_returns_job_not_found() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(26);
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let error = service
+            .admin_reload_and_restart_task(job_id)
+            .await
+            .expect_err("reload of an unknown job must fail");
+        assert!(matches!(
+            error,
+            crate::SettlementAdminError::JobNotFound(id) if id == job_id
         ));
     }
 
@@ -974,6 +1074,10 @@ mod tests {
         expect_pending_job_reads(&mut store, 23);
 
         let service = mk_service(Arc::new(store)).await;
+        // Determinism assumption: on the current_thread test runtime the
+        // spawned task is first polled after `cancel()` below, so it exits at
+        // the loop-top control check without touching the dead provider
+        // endpoint.
         load_and_spawn_pending_task(&service, job_id).await;
         assert!(service.has_live_task(job_id).await);
 

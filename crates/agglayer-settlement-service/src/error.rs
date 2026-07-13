@@ -1,3 +1,8 @@
+//! Typed errors for the settlement service admin surface.
+//!
+//! [`SettlementAdminError`] classifies a failed admin command by the job
+//! state found in storage, so operators know which recovery step applies.
+
 use agglayer_types::SettlementJobId;
 
 /// Errors returned by the admin surface of the settlement service.
