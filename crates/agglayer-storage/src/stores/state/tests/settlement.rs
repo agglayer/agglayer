@@ -202,6 +202,18 @@ fn insert_certificate_settlement_job_id_duplicate_fails() {
             .expect("Unable to read stored value"),
         Some(first_job_id)
     );
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&second_job_id)
+            .expect("reverse read must succeed"),
+        None,
+    );
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&first_job_id)
+            .expect("reverse read must succeed"),
+        Some(certificate_id),
+    );
 }
 
 #[test]

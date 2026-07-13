@@ -215,6 +215,10 @@ impl StateWriter for StateStore {
         certificate_id: &CertificateId,
         settlement_job_id: &SettlementJobId,
     ) -> Result<(), Error> {
+        // This check-then-write is not locked: concurrent inserts for the
+        // same certificate can leave a dangling reverse row for the losing
+        // job (pre-existing race, see the certificate_id lockguard TODO in
+        // `assign_certificate_to_epoch`).
         if self
             .db
             .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
