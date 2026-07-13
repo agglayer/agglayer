@@ -854,6 +854,8 @@ mod tests {
         /// because mockall serializes concurrent calls to the same mocked
         /// method. The store is stateful: saving an attempt raises the
         /// value later reads observe, exactly like the real store.
+        // Multi-threaded runtime required: the mock store's condvar gate
+        // blocks worker threads, and would deadlock a current-thread runtime.
         #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
         async fn concurrent_jobs_on_same_wallet_get_distinct_nonces() {
             // `--no-mining` keeps submitted transactions pending so the run

@@ -719,14 +719,15 @@ impl<
                 // until the attempt is saved, so no other same-wallet task
                 // can pick the same nonce in that window; XREF:
                 // https://github.com/agglayer/agglayer/issues/1597.
-                let nonce_guard = self
-                    .wallet_nonce_locks
-                    .lock(self.provider.default_signer_address())
-                    .await;
+                let locked_wallet = self.provider.default_signer_address();
+                let nonce_guard = self.wallet_nonce_locks.lock(locked_wallet).await;
                 let (wallet, nonce, attempt_number, tx) = retry!(
                     self.build_next_attempt_with_new_nonce().await,
                     "building next settlement attempt with a new nonce",
                 );
+                // The build derives its wallet the same way; if wallet
+                // selection ever becomes dynamic, the lock key must follow.
+                debug_assert_eq!(wallet, locked_wallet);
                 not_included_on_l1.insert((wallet, nonce));
                 if let Some(run_result) = self
                     .save_attempt_to_db_and_submit_to_l1(

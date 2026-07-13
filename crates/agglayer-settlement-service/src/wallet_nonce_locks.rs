@@ -32,6 +32,8 @@ impl WalletNonceLocks {
     /// boundaries and drop it at the exact release point.
     /// Dropping the returned future before acquisition leaves the lock
     /// untouched (`lock_owned` is cancel-safe).
+    /// The underlying tokio mutex is FIFO-fair, so waiters on a busy wallet
+    /// cannot starve.
     pub(crate) async fn lock(&self, wallet: Address) -> OwnedMutexGuard<()> {
         let lock = {
             let mut locks = self.locks.lock().expect("wallet nonce locks poisoned");
