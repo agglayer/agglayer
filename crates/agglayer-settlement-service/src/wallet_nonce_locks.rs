@@ -30,6 +30,8 @@ impl WalletNonceLocks {
     ///
     /// The returned guard is owned so callers can move it across function
     /// boundaries and drop it at the exact release point.
+    /// Dropping the returned future before acquisition leaves the lock
+    /// untouched (`lock_owned` is cancel-safe).
     pub(crate) async fn lock(&self, wallet: Address) -> OwnedMutexGuard<()> {
         let lock = {
             let mut locks = self.locks.lock().expect("wallet nonce locks poisoned");
@@ -53,7 +55,7 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn same_wallet_lock_blocks_until_guard_drops() {
         let locks = Arc::new(WalletNonceLocks::default());
         let wallet = Address::from([0xAB; 20]);
