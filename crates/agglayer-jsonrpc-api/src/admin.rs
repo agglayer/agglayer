@@ -223,7 +223,18 @@ pub(crate) trait AdminAgglayer {
     /// A pending job without a live task (after an admin abort or a
     /// failed in-task reload) gets a fresh task spawned from storage:
     /// this is the recovery step after `admin_abortSettlementTask`.
-    /// Fails if the job is unknown or already completed.
+    ///
+    /// A reload issued while an abort is still taking effect may be
+    /// accepted but dropped: the task can exit on the cancellation
+    /// without draining its command queue. When chaining after an
+    /// abort, allow the abort to take effect and issue the reload
+    /// again; once the aborted task is gone, the reload respawns the
+    /// job from storage, and repeating it is harmless (idempotent
+    /// recovery).
+    ///
+    /// Fails if the job is unknown or already completed, or with a
+    /// task-not-responding error when the live task's command queue is
+    /// unavailable.
     #[method(name = "reloadAndRestartSettlementTask")]
     async fn reload_and_restart_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 }

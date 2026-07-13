@@ -1,7 +1,10 @@
 //! Tests for the settlement task admin RPC methods.
 
 use agglayer_storage::stores::SettlementWriter;
-use agglayer_types::{SettlementJob, SettlementJobId, U256};
+use agglayer_types::{
+    ContractCallOutcome, ContractCallResult, Digest, Nonce, SettlementAttemptNumber, SettlementJob,
+    SettlementJobId, SettlementJobResult, SettlementTxHash, B256, U256,
+};
 use jsonrpsee::{core::client::ClientT, rpc_params};
 
 use crate::testutils::TestContext;
@@ -31,6 +34,29 @@ fn seed_pending_job(context: &TestContext, seed: u8) -> SettlementJobId {
     job_id
 }
 
+/// Seed a settlement job with a stored terminal result: a completed job
+/// with no live task, as after a settled transaction and a node restart.
+fn seed_completed_job(context: &TestContext, seed: u8) -> SettlementJobId {
+    let job_id = seed_pending_job(context, seed);
+    let result = SettlementJobResult {
+        wallet: agglayer_types::Address::from([seed; 20]),
+        nonce: Nonce(seed as u64),
+        attempt_number: SettlementAttemptNumber(seed as u64),
+        contract_call_result: ContractCallResult {
+            outcome: ContractCallOutcome::Success,
+            metadata: vec![].into(),
+            block_hash: B256::from([seed; 32]),
+            block_number: seed as u64,
+            tx_hash: SettlementTxHash::new(Digest::from([seed; 32])),
+        },
+    };
+    context
+        .state_store
+        .insert_settlement_job_result(&job_id, &result)
+        .expect("job result insert must succeed");
+    job_id
+}
+
 async fn wait_until_task_gone(context: &TestContext, job_id: SettlementJobId) {
     tokio::time::timeout(std::time::Duration::from_secs(10), async {
         while context.settlement_service.has_live_task(job_id).await {
@@ -52,6 +78,11 @@ fn assert_error_code(error: jsonrpsee::core::client::Error, code: i32) {
 
 #[test_log::test(tokio::test)]
 async fn abort_and_reload_settlement_task_round_trip() {
+    // Determinism assumption: on the current_thread test runtime the
+    // abort's control-map read and cancel() have no await point between
+    // them, so the run-loop's reload-arm handle swap cannot interleave
+    // and the abort always lands on the task's current control handle.
+    // Mirrors the determinism comments in the settlement-service tests.
     let context = TestContext::new_with_config(TestContext::get_default_config()).await;
     let job_id = seed_pending_job(&context, 1);
 
@@ -93,6 +124,24 @@ async fn abort_and_reload_settlement_task_round_trip() {
         .await
         .expect("reload after abort must respawn the task");
     assert!(context.settlement_service.has_live_task(job_id).await);
+}
+
+#[test_log::test(tokio::test)]
+async fn settlement_task_controls_report_completed_job() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let job_id = seed_completed_job(&context, 42);
+
+    for method in [
+        "admin_abortSettlementTask",
+        "admin_reloadAndRestartSettlementTask",
+    ] {
+        let error = context
+            .admin_client
+            .request::<(), _>(method, rpc_params![job_id])
+            .await
+            .expect_err("completed job must fail");
+        assert_error_code(error, crate::error::code::SETTLEMENT_ADMIN);
+    }
 }
 
 #[test_log::test(tokio::test)]
