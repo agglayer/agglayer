@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::settlement_task::{
-    SettlementTask, SettlementTaskRunResult, StoredSettlementJob, TaskAdminCommand,
+    RecoveredSettlementJob, SettlementTask, SettlementTaskRunResult, TaskAdminCommand,
     TaskControlHandle,
 };
 
@@ -107,23 +107,23 @@ impl<
         let mut completed_jobs = 0usize;
         let mut resumed_jobs = 0usize;
         for job_id in job_ids {
-            let (task_control_handle, task_control) =
-                TaskControlHandle::new(&self.cancellation_token);
-            match SettlementTask::load(
+            match SettlementTask::recover_from_storage(
                 job_id,
                 self.tx_config.clone(),
                 self.provider.clone(),
                 self.store.clone(),
-                task_control,
             )
             .await
             .wrap_err_with(|| {
                 format!("Failed to load settlement job {job_id} during startup recovery")
             })? {
-                StoredSettlementJob::Completed(_, _) => {
+                RecoveredSettlementJob::Completed(_, _) => {
                     completed_jobs += 1;
                 }
-                StoredSettlementJob::Pending(task) => {
+                RecoveredSettlementJob::Pending(pending) => {
+                    let (task_control_handle, task_control) =
+                        TaskControlHandle::new(&self.cancellation_token);
+                    let task = pending.into_task(task_control);
                     self.spawn_settlement_task(job_id, task, task_control_handle)
                         .await;
                     resumed_jobs += 1;
@@ -181,25 +181,27 @@ impl<
                     }
                     SettlementTaskRunResult::ReloadAndRestart => {
                         info!(?job_id, "Reloading and restarting settlement task");
+                        // Install replacement admin controls before storage I/O so
+                        // operator abort/reload commands are not dropped while the
+                        // previous task control receiver is no longer polled.
                         let (task_control_handle, task_control) =
                             TaskControlHandle::new(&cancellation_token);
                         task_controls
                             .lock()
                             .await
                             .insert(job_id, task_control_handle);
-                        match SettlementTask::load(
+                        match SettlementTask::recover_from_storage(
                             job_id,
                             tx_config.clone(),
                             provider.clone(),
                             store.clone(),
-                            task_control,
                         )
                         .await
                         {
-                            Ok(StoredSettlementJob::Pending(reloaded_task)) => {
-                                task = reloaded_task;
+                            Ok(RecoveredSettlementJob::Pending(pending)) => {
+                                task = pending.into_task(task_control);
                             }
-                            Ok(StoredSettlementJob::Completed(_, result)) => {
+                            Ok(RecoveredSettlementJob::Completed(_, result)) => {
                                 if let Err(error) = result_sender.send(Some(result)) {
                                     error!(
                                         ?error,
@@ -426,7 +428,10 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     use agglayer_storage::tests::mocks::MockStateStore;
     use agglayer_types::{
@@ -554,6 +559,114 @@ mod tests {
 
         assert!(service.task_controls.lock().await.is_empty());
         assert!(service.result_watchers.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn start_resumes_pending_job_with_task_controls() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(10);
+        let job = mk_job(10);
+
+        store
+            .expect_list_settlement_job_ids()
+            .once()
+            .return_once(move || Ok(vec![job_id]));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_list_settlement_attempt_results()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+        store
+            .expect_list_settlement_attempts()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+
+        let cancellation_token = CancellationToken::new();
+        let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+        assert!(service.task_controls.lock().await.contains_key(&job_id));
+        assert!(service.result_watchers.lock().await.contains_key(&job_id));
+
+        cancellation_token.cancel();
+
+        let cleanup = async {
+            loop {
+                if !service.task_controls.lock().await.contains_key(&job_id) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(1), cleanup)
+            .await
+            .expect("recovered pending task should stop after cancellation");
+    }
+
+    #[tokio::test]
+    async fn recovered_pending_task_honors_service_cancellation() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(11);
+        let job = mk_job(11);
+
+        store
+            .expect_list_settlement_job_ids()
+            .once()
+            .return_once(move || Ok(vec![job_id]));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_list_settlement_attempt_results()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+        store
+            .expect_list_settlement_attempts()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+
+        let cancellation_token = CancellationToken::new();
+        let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+        assert!(service.task_controls.lock().await.contains_key(&job_id));
+
+        cancellation_token.cancel();
+
+        let wait_for_shutdown = async {
+            loop {
+                if service.task_controls.lock().await.is_empty() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        };
+
+        tokio::time::timeout(Duration::from_secs(1), wait_for_shutdown)
+            .await
+            .expect("recovered pending task should stop within timeout");
+
+        assert!(
+            service.task_controls.lock().await.is_empty(),
+            "recovered task should stop and clear control on service cancellation"
+        );
     }
 
     #[tokio::test]

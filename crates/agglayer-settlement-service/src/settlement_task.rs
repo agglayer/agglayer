@@ -235,6 +235,41 @@ pub enum StoredSettlementJob<L1Provider, SettlementStore> {
     Completed(SettlementJob, SettlementJobResult),
 }
 
+pub(crate) struct PendingSettlementJob<L1Provider, SettlementStore> {
+    id: SettlementJobId,
+    job: SettlementJob,
+    tx_config: Arc<SettlementTransactionConfig>,
+    provider: Arc<L1Provider>,
+    store: Arc<SettlementStore>,
+    attempts: ActiveSettlementAttempts,
+}
+
+impl<
+        L1Provider: Provider + WalletProvider + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter,
+    > PendingSettlementJob<L1Provider, SettlementStore>
+{
+    pub(crate) fn into_task(
+        self,
+        control: TaskControl,
+    ) -> SettlementTask<L1Provider, SettlementStore> {
+        SettlementTask {
+            id: self.id,
+            job: self.job,
+            tx_config: self.tx_config,
+            provider: self.provider,
+            store: self.store,
+            control,
+            attempts: self.attempts,
+        }
+    }
+}
+
+pub(crate) enum RecoveredSettlementJob<L1Provider, SettlementStore> {
+    Pending(PendingSettlementJob<L1Provider, SettlementStore>),
+    Completed(SettlementJob, SettlementJobResult),
+}
+
 pub enum TaskAdminCommand {
     ReloadAndRestart,
 }
@@ -475,21 +510,35 @@ impl<
         store: Arc<SettlementStore>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
+        match Self::recover_from_storage(id, tx_config, provider, store).await? {
+            RecoveredSettlementJob::Pending(pending) => {
+                Ok(StoredSettlementJob::Pending(pending.into_task(control)))
+            }
+            RecoveredSettlementJob::Completed(job, result) => {
+                Ok(StoredSettlementJob::Completed(job, result))
+            }
+        }
+    }
+
+    pub(crate) async fn recover_from_storage(
+        id: SettlementJobId,
+        tx_config: Arc<SettlementTransactionConfig>,
+        provider: Arc<L1Provider>,
+        store: Arc<SettlementStore>,
+    ) -> eyre::Result<RecoveredSettlementJob<L1Provider, SettlementStore>> {
         let (job, result) = Self::load_settlement_job_from_db(store.as_ref(), id).await?;
         if let Some(result) = result {
-            Ok(StoredSettlementJob::Completed(job, result))
+            Ok(RecoveredSettlementJob::Completed(job, result))
         } else {
-            let mut this = SettlementTask {
+            let attempts = Self::load_settlement_attempts_from_store(store.as_ref(), id)?;
+            Ok(RecoveredSettlementJob::Pending(PendingSettlementJob {
                 id,
                 job,
                 tx_config,
                 provider,
                 store,
-                control,
-                attempts: BTreeMap::new(),
-            };
-            this.load_settlement_attempts_from_db()?;
-            Ok(StoredSettlementJob::Pending(this))
+                attempts,
+            }))
         }
     }
 
@@ -1501,11 +1550,18 @@ impl<
     }
 
     fn load_settlement_attempts_from_db(&mut self) -> eyre::Result<()> {
-        let results = self.store.list_settlement_attempt_results(&self.id)?;
-        let attempts = self.store.list_settlement_attempts(&self.id)?;
-
-        self.attempts = hydrate_settlement_attempts(attempts, results, self.id)?;
+        self.attempts = Self::load_settlement_attempts_from_store(self.store.as_ref(), self.id)?;
         Ok(())
+    }
+
+    fn load_settlement_attempts_from_store(
+        store: &SettlementStore,
+        id: SettlementJobId,
+    ) -> eyre::Result<ActiveSettlementAttempts> {
+        let results = store.list_settlement_attempt_results(&id)?;
+        let attempts = store.list_settlement_attempts(&id)?;
+
+        hydrate_settlement_attempts(attempts, results, id)
     }
 
     fn save_attempt_to_db(
@@ -2246,11 +2302,102 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_returns_completed_settlement_job() {
+    async fn recover_from_storage_returns_completed_without_loading_attempts() {
         let mut store = MockStateStore::new();
         let job_id = mk_job_id(5);
         let job = mk_job();
         let job_result = mk_job_result(6, ContractCallOutcome::Success);
+        let expected_job = job.clone();
+        let expected_job_result = job_result.clone();
+
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job_result)));
+        store.expect_list_settlement_attempts().never();
+        store.expect_list_settlement_attempt_results().never();
+
+        let loaded = SettlementTask::recover_from_storage(
+            job_id,
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            Arc::new(store),
+        )
+        .await
+        .expect("completed settlement job should recover");
+
+        match loaded {
+            RecoveredSettlementJob::Completed(loaded_job, loaded_result) => {
+                assert_eq!(loaded_job, expected_job);
+                assert_eq!(loaded_result, expected_job_result);
+            }
+            RecoveredSettlementJob::Pending(_) => {
+                panic!("completed settlement job should not recover as pending")
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn recover_from_storage_returns_pending_with_hydrated_attempts() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(6);
+        let job = mk_job();
+        let expected_job = job.clone();
+
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(move |_| Ok(Some(job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(|_| Ok(None));
+        store
+            .expect_list_settlement_attempt_results()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+        store
+            .expect_list_settlement_attempts()
+            .once()
+            .withf(move |recorded_job_id| recorded_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+
+        let loaded = SettlementTask::recover_from_storage(
+            job_id,
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider()),
+            Arc::new(store),
+        )
+        .await
+        .expect("pending settlement job should recover");
+
+        match loaded {
+            RecoveredSettlementJob::Pending(pending) => {
+                assert_eq!(pending.id, job_id);
+                assert_eq!(pending.job, expected_job);
+                assert!(pending.attempts.is_empty());
+            }
+            RecoveredSettlementJob::Completed(_, _) => {
+                panic!("pending settlement job should not recover as completed")
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn load_returns_completed_settlement_job() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(7);
+        let job = mk_job();
+        let job_result = mk_job_result(8, ContractCallOutcome::Success);
         let expected_job = job.clone();
         let expected_job_result = job_result.clone();
 
