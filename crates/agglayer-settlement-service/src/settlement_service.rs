@@ -296,9 +296,9 @@ impl<
 
     /// Make the task of `job_id` drop its in-memory state and reload
     /// from storage. A live task gets the reload command; a pending job
-    /// without a live task (aborted or crashed) gets a fresh task
-    /// spawned from storage: this is the recovery step after
-    /// [`Self::admin_abort_task`].
+    /// without a live task (after an admin abort or a failed in-task
+    /// reload) gets a fresh task spawned from storage: this is the
+    /// recovery step after [`Self::admin_abort_task`].
     ///
     /// The reload command is queued, not immediate: a task that is
     /// concurrently cancelled can exit without draining it. Retry once
@@ -337,7 +337,10 @@ impl<
             Ok(StoredSettlementJob::Pending(task)) => {
                 self.spawn_settlement_task(job_id, task, task_control_handle)
                     .await;
-                info!(%job_id, "Respawned settlement task via admin reload-and-restart");
+                info!(
+                    ?job_id,
+                    "Respawned settlement task via admin reload-and-restart"
+                );
                 Ok(())
             }
             Ok(StoredSettlementJob::Completed(_, _)) => {
@@ -1153,6 +1156,10 @@ mod tests {
         let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
         assert!(!service.has_live_task(job_id).await);
 
+        // Determinism assumption: on the current_thread test runtime the
+        // spawned task is first polled after `cancel()` below, so it exits at
+        // the loop-top control check without touching the dead provider
+        // endpoint.
         service
             .admin_reload_and_restart_task(job_id)
             .await
@@ -1179,9 +1186,11 @@ mod tests {
         let result = mk_result(25, ContractCallOutcome::Success);
         store
             .expect_get_settlement_job()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
             .returning(move |_| Ok(Some(job.clone())));
         store
             .expect_get_settlement_job_result()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
             .returning(move |_| Ok(Some(result.clone())));
 
         let service = mk_service(Arc::new(store)).await;
@@ -1201,21 +1210,93 @@ mod tests {
         let mut store = MockStateStore::new();
         expect_empty_startup_recovery(&mut store);
         let job_id = mk_job_id(27);
-        expect_pending_job_reads(&mut store, 27);
+        // Strict counts: the initial explicit load is the only permitted
+        // read, so a regression that respawned instead of sending the
+        // command would trip these expectations with a second load.
+        let job = mk_job(27);
+        store
+            .expect_get_settlement_job()
+            .times(1)
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(move |_| Ok(Some(job.clone())));
+        store
+            .expect_get_settlement_job_result()
+            .times(1)
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(|_| Ok(None));
+        store
+            .expect_list_settlement_attempts()
+            .times(1)
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(|_| Ok(Vec::new()));
+        store
+            .expect_list_settlement_attempt_results()
+            .times(1)
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(|_| Ok(Vec::new()));
+        store
+            .expect_max_settlement_nonce_for_wallet()
+            .returning(|_| Ok(None));
 
         let cancellation_token = CancellationToken::new();
         let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+        // Determinism assumption: on the current_thread test runtime the
+        // spawned task is first polled after `cancel()` below, so it exits at
+        // the loop-top control check without touching the dead provider
+        // endpoint.
         load_and_spawn_pending_task(&service, job_id).await;
 
         service
             .admin_reload_and_restart_task(job_id)
             .await
             .expect("reload of a live task must be accepted");
-        // The task stays registered: the reload command re-enters the
-        // run loop rather than tearing the task down.
+        // No second load occurred: the command was queued to the live
+        // task, not respawned. The task stays registered.
         assert!(service.has_live_task(job_id).await);
 
         cancellation_token.cancel();
+    }
+
+    #[tokio::test]
+    async fn admin_reload_and_restart_load_failure_returns_reload_failed() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(28);
+        let job = mk_job(28);
+        // The job row exists (both for the load and for the failure
+        // classification re-read), but hydrating the attempts fails, so
+        // the load fails on a job that is still present.
+        store
+            .expect_get_settlement_job()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(move |_| Ok(Some(job.clone())));
+        store
+            .expect_get_settlement_job_result()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(|_| Ok(None));
+        store
+            .expect_list_settlement_attempt_results()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(|_| Ok(Vec::new()));
+        store
+            .expect_list_settlement_attempts()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(|_| {
+                Err(agglayer_storage::error::Error::Unexpected(
+                    "boom".to_string(),
+                ))
+            });
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let error = service
+            .admin_reload_and_restart_task(job_id)
+            .await
+            .expect_err("reload must surface the load failure");
+        assert!(matches!(
+            error,
+            crate::SettlementAdminError::ReloadFailed { .. }
+        ));
     }
 
     mod same_wallet_nonce_race;
