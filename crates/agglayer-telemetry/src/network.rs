@@ -150,18 +150,8 @@ fn observe_heights(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use opentelemetry::global;
-    use opentelemetry_sdk::metrics::SdkMeterProvider;
-    use prometheus::{Encoder as _, Registry, TextEncoder};
-
     use super::*;
-
-    fn gather(registry: &Registry) -> String {
-        let encoder = TextEncoder::new();
-        let mut out = Vec::new();
-        encoder.encode(&registry.gather(), &mut out).unwrap();
-        String::from_utf8(out).unwrap()
-    }
+    use crate::testutils::MetricsHarness;
 
     /// Extract the value of the sample line for `name`, `network_id` and,
     /// when given, the `stage` label.
@@ -188,17 +178,11 @@ mod tests {
 
     #[test]
     fn network_state_gauges_export_per_network_series() {
-        let registry = Registry::new();
-        let exporter = opentelemetry_prometheus::exporter()
-            .with_registry(registry.clone())
-            .build()
-            .unwrap();
-        let provider = SdkMeterProvider::builder().with_reader(exporter).build();
         // This test deliberately owns the process-global meter provider:
         // nextest runs one process per test, so nothing else can race it.
         // Future exporter-based tests in this crate must keep that isolation
-        // in mind (each test must install its own provider and registry).
-        global::set_meter_provider(provider);
+        // in mind (each test must install its own harness).
+        let harness = MetricsHarness::install();
 
         let pending = Arc::new(Mutex::new(vec![
             NetworkHeightSample {
@@ -248,7 +232,7 @@ mod tests {
             }),
         });
 
-        let metrics = gather(&registry);
+        let metrics = harness.gather();
 
         assert_eq!(
             sample_value(&metrics, NETWORK_HEIGHT, 1, Some("pending")),
@@ -292,7 +276,7 @@ mod tests {
         settled.lock().unwrap().clear();
         in_error.lock().unwrap().clear();
 
-        let metrics = gather(&registry);
+        let metrics = harness.gather();
         assert!(
             metrics
                 .lines()

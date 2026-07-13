@@ -61,10 +61,6 @@ hyper-util = { version = "0.1.20", features = ["client"] }
 fail = { workspace = true, features = ["failpoints"] }
 lazy_static.workspace = true
 mockall.workspace = true
-opentelemetry = { version = "0.31.0", features = ["metrics"] }
-opentelemetry-prometheus = "0.31.0"
-opentelemetry_sdk = { version = "0.31.0", features = ["metrics"] }
-prometheus = "0.14.0"
 rand.workspace = true
 rstest.workspace = true
 serde_json.workspace = true
@@ -74,6 +70,7 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 agglayer-jsonrpc-api = { workspace = true, features = ["testutils"] }
 agglayer-config = { workspace = true, features = ["testutils"] }
 agglayer-storage = { workspace = true, features = ["testutils"] }
+agglayer-telemetry = { workspace = true, features = ["testutils"] }
 agglayer-types = { workspace = true, features = ["testutils"] }
 
 [features]

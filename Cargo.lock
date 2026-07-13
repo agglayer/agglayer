@@ -495,12 +495,8 @@ dependencies = [
  "jsonrpsee",
  "lazy_static",
  "mockall",
- "opentelemetry 0.31.0",
- "opentelemetry-prometheus 0.31.0",
- "opentelemetry_sdk 0.31.0",
  "pessimistic-proof",
  "pin-project",
- "prometheus",
  "prover-executor",
  "rand 0.9.3",
  "reqwest 0.12.28",
@@ -694,6 +690,7 @@ dependencies = [
 name = "agglayer-telemetry"
 version = "0.1.0"
 dependencies = [
+ "agglayer-telemetry 0.1.0",
  "axum 0.8.8",
  "buildstructor 0.6.0",
  "eyre",
