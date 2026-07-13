@@ -42,9 +42,10 @@ pub type MockProvider = FillProvider<
     alloy::network::Ethereum,
 >;
 
-/// Provider used by the test settlement service: wallet-carrying, with
-/// a dead HTTP endpoint. Startup recovery does no L1 calls, spawned
-/// tasks block retrying against L1 until cancelled.
+/// Provider used by the test settlement service: wallet-carrying, pointed
+/// at a never-accepting local listener. Startup recovery does no L1 calls
+/// on the empty store; a task that does reach L1 hangs in its retry loop
+/// and exits on cancellation.
 pub type SettlementTestProvider = FillProvider<
     JoinFill<
         JoinFill<
@@ -87,6 +88,9 @@ pub struct TestContext {
     pub state_store: Arc<StateStore>,
     pub pending_store: Arc<PendingStore>,
     pub settlement_service: SettlementService<SettlementTestProvider, StateStore>,
+    /// Keeps the never-accepting settlement L1 sink bound for the whole
+    /// test so in-flight settlement task requests hang instead of erroring.
+    pub _settlement_l1_sink: std::net::TcpListener,
     pub api_client: HttpClient,
     pub admin_client: HttpClient,
     pub config: Arc<Config>,
@@ -173,16 +177,30 @@ impl TestContext {
         // Create AgglayerImpl
         let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
 
+        // L1 sink for the settlement service: a bound listener that never
+        // accepts. Connections complete (kernel backlog) but requests get
+        // no response, so a settlement task that reaches L1 blocks inside
+        // its retry loop until cancellation instead of panicking on a
+        // non-retryable connect error.
+        let settlement_l1_sink =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("bind settlement L1 sink");
+        let settlement_l1_url = format!(
+            "http://{}/",
+            settlement_l1_sink
+                .local_addr()
+                .expect("settlement L1 sink address")
+        );
+
         // A settlement service over the (empty) state store, with its own
-        // wallet-carrying provider pointed at a dead endpoint: startup
-        // recovery finds no jobs, and spawned tasks retry against L1
-        // until cancelled instead of completing.
+        // wallet-carrying provider pointed at the never-accepting sink:
+        // startup recovery finds no jobs, and a spawned task that reaches
+        // L1 hangs in its retry loop until cancelled instead of completing.
         let settlement_provider = ProviderBuilder::new()
             .wallet(EthereumWallet::from(
                 PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
             ))
             .connect_http(
-                "http://127.0.0.1:0"
+                settlement_l1_url
                     .parse()
                     .expect("test provider URL should parse"),
             );
@@ -237,6 +255,7 @@ impl TestContext {
             state_store,
             pending_store,
             settlement_service,
+            _settlement_l1_sink: settlement_l1_sink,
             api_client,
             admin_client,
             config,
