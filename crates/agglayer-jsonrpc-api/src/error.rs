@@ -36,6 +36,9 @@ pub mod code {
 
     /// Method permanently disabled.
     pub const METHOD_DISABLED: i32 = -10009;
+
+    /// Settlement admin operation failure.
+    pub const SETTLEMENT_ADMIN: i32 = -10010;
 }
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
@@ -151,6 +154,9 @@ pub enum Error {
     #[error("The {method} method is disabled")]
     MethodDisabled { method: &'static str },
 
+    #[error("Settlement admin error: {0}")]
+    SettlementAdmin(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -174,6 +180,7 @@ impl Error {
             Self::SendCertificate { .. } => code::SEND_CERTIFICATE,
             Self::RateLimited { .. } => code::RATE_LIMITED,
             Self::MethodDisabled { .. } => code::METHOD_DISABLED,
+            Self::SettlementAdmin(_) => code::SETTLEMENT_ADMIN,
         }
     }
 }
@@ -263,6 +270,16 @@ impl From<agglayer_rpc::GetNetworkInfoError> for Error {
         // Since NetworkStateRetrievalError is currently empty, convert to internal
         // error
         Self::internal(format!("Network state retrieval error: {err}"))
+    }
+}
+
+impl From<agglayer_settlement_service::SettlementAdminError> for Error {
+    fn from(error: agglayer_settlement_service::SettlementAdminError) -> Self {
+        use agglayer_settlement_service::SettlementAdminError as E;
+        match error {
+            E::JobNotFound(job_id) => Self::ResourceNotFound(format!("SettlementJob({job_id})")),
+            error => Self::SettlementAdmin(error.to_string()),
+        }
     }
 }
 

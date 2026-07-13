@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use agglayer_rate_limiting::{self, component, Component};
 use agglayer_rpc::error::SignatureVerificationError;
-use agglayer_types::{Address, CertificateId, Digest};
+use agglayer_settlement_service::SettlementAdminError;
+use agglayer_types::{Address, CertificateId, Digest, SettlementJobId};
 use alloy::{
     contract::Error as ContractError,
     primitives::{SignatureError as AlloySignatureError, B256},
@@ -150,6 +151,14 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 #[case(
     "method_disabled",
     Error::MethodDisabled { method: "interop_sendTx" }
+)]
+#[case(
+    "settlement_admin_job_not_found",
+    SettlementAdminError::JobNotFound(SettlementJobId::from(7u128))
+)]
+#[case(
+    "settlement_admin_no_live_task",
+    SettlementAdminError::NoLiveTask(SettlementJobId::from(8u128))
 )]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: impl Into<Error>) {
     let err: Error = err.into();
