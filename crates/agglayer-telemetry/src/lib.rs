@@ -22,6 +22,7 @@ mod constant;
 pub mod certificate;
 pub mod clock;
 pub mod network;
+pub mod settlement;
 
 // Testing.
 #[cfg(feature = "testutils")]
