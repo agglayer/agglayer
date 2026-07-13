@@ -25,9 +25,22 @@
   "templating": {
     "list": [
       {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
         "allValue": ".*",
         "current": { "selected": true, "text": "All", "value": "$__all" },
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "definition": "label_values(agglayer_certificate_stage_duration_seconds_count, network_id)",
         "hide": 0,
         "includeAll": true,
@@ -63,7 +76,7 @@
       "panels": []
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "description": "Total number of certificates that have completed the full lifecycle (Pending -> Settled).",
       "fieldConfig": {
         "defaults": {
@@ -86,7 +99,7 @@
       "pluginVersion": "11.1.4",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(agglayer_certificate_duration_seconds_count{job=\"agglayer\", network_id=~\"$network_id\"})",
           "legendFormat": "settled",
@@ -98,7 +111,7 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "description": "Current epoch tracked by the agglayer block clock.",
       "fieldConfig": {
         "defaults": {
@@ -121,7 +134,7 @@
       "pluginVersion": "11.1.4",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "max(current_epoch{job=\"agglayer\"})",
           "legendFormat": "epoch",
@@ -133,7 +146,7 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "description": "Latest L1 block height processed by the agglayer block clock.",
       "fieldConfig": {
         "defaults": {
@@ -156,7 +169,7 @@
       "pluginVersion": "11.1.4",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "max(current_block_height{job=\"agglayer\"})",
           "legendFormat": "L1 block",
@@ -176,7 +189,7 @@
       "panels": []
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "description": "Cumulative count of settled certificates per network (climbs by 1 each time a certificate settles).",
       "fieldConfig": {
         "defaults": {
@@ -202,7 +215,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "agglayer_certificate_duration_seconds_count{job=\"agglayer\", network_id=~\"$network_id\"}",
           "legendFormat": "net {{network_id}}",
@@ -214,7 +227,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "description": "Average time a certificate takes end to end, Pending -> Settled (mean over certificates settled in each window). Y axis = seconds, X axis = time. Legend shows the mean and latest value.",
       "fieldConfig": {
         "defaults": {
@@ -242,7 +255,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(agglayer_certificate_duration_seconds_sum{job=\"agglayer\", network_id=~\"$network_id\"}[$__rate_interval])) / sum(rate(agglayer_certificate_duration_seconds_count{job=\"agglayer\", network_id=~\"$network_id\"}[$__rate_interval]))",
           "legendFormat": "avg bridging time",
@@ -254,7 +267,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "description": "Average seconds a certificate spends in each stage (all-time mean), per network. Shown as a table so every value is exact and readable regardless of magnitude: pending (awaiting proof) and proven (settlement-job submission) are typically sub-second; candidate (L1 inclusion + confirmation) is tens of seconds.",
       "fieldConfig": {
         "defaults": {
@@ -281,7 +294,7 @@
       "pluginVersion": "11.1.4",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "refId": "pending",
           "editorMode": "code",
           "format": "table",
@@ -290,7 +303,7 @@
           "expr": "sum by (network_id) (agglayer_certificate_stage_duration_seconds_sum{job=\"agglayer\", network_id=~\"$network_id\", stage=\"pending\"}) / clamp_min(sum by (network_id) (agglayer_certificate_stage_duration_seconds_count{job=\"agglayer\", network_id=~\"$network_id\", stage=\"pending\"}), 1)"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "refId": "proven",
           "editorMode": "code",
           "format": "table",
@@ -299,7 +312,7 @@
           "expr": "sum by (network_id) (agglayer_certificate_stage_duration_seconds_sum{job=\"agglayer\", network_id=~\"$network_id\", stage=\"proven\"}) / clamp_min(sum by (network_id) (agglayer_certificate_stage_duration_seconds_count{job=\"agglayer\", network_id=~\"$network_id\", stage=\"proven\"}), 1)"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "refId": "candidate",
           "editorMode": "code",
           "format": "table",
@@ -328,7 +341,7 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "description": "Rate of certificates reaching Settled, per network. Continuous line: windows with no settlement are interpolated (dots mark actual settlement events) rather than dropping to zero.",
       "fieldConfig": {
         "defaults": {
@@ -355,7 +368,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum by (network_id) (rate(agglayer_certificate_stage_duration_seconds_count{job=\"agglayer\", network_id=~\"$network_id\", stage=\"candidate\"}[$__rate_interval])) > 0",
           "legendFormat": "net {{network_id}} settled/s",
@@ -367,7 +380,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "description": "Certificate stage completions over time (per network / stage). Continuous line connecting completion events; dots mark actual completions, gaps with no activity are interpolated rather than dropping to zero.",
       "fieldConfig": {
         "defaults": {
@@ -394,7 +407,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum by (network_id, stage) (increase(agglayer_certificate_stage_duration_seconds_count{job=\"agglayer\", network_id=~\"$network_id\"}[$__rate_interval])) > 0",
           "legendFormat": "net {{network_id}} · {{stage}}",
@@ -414,7 +427,7 @@
       "panels": []
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
@@ -439,7 +452,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum by (rollup_id) (rate(send_tx_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "rollup {{rollup_id}}",
@@ -451,7 +464,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
@@ -476,7 +489,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(check_tx_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "check_tx",
@@ -484,7 +497,7 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(execute_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "execute",
@@ -492,7 +505,7 @@
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(verify_signature_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "verify_signature",
@@ -500,7 +513,7 @@
           "refId": "C"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(verify_zkp_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "verify_zkp",
@@ -508,7 +521,7 @@
           "refId": "D"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(settle_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "settle",
@@ -528,7 +541,7 @@
       "panels": []
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
@@ -558,7 +571,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(proving_request_recv_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "received",
@@ -566,7 +579,7 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(proving_request_succeeded_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "succeeded",
@@ -574,7 +587,7 @@
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(proving_request_failed_total{job=\"agglayer\"}[$__rate_interval]))",
           "legendFormat": "failed",
@@ -586,7 +599,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
@@ -612,7 +625,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(proving_fallback_triggered_total{job=\"agglayer\"}[$__rate_interval])) > 0",
           "legendFormat": "fallback triggered/s",
@@ -632,7 +645,7 @@
       "panels": []
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -659,7 +672,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "connection_status{job=\"agglayer\"}",
           "legendFormat": "connection_status",
@@ -667,7 +680,7 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "health_status{job=\"agglayer\"}",
           "legendFormat": "health_status",
@@ -679,7 +692,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
@@ -705,7 +718,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(reconnection_attempts_total{job=\"agglayer\"}[$__rate_interval])) > 0",
           "legendFormat": "reconnection_attempts",
@@ -713,7 +726,7 @@
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(connection_errors_total{job=\"agglayer\"}[$__rate_interval])) > 0",
           "legendFormat": "connection_errors",
@@ -721,7 +734,7 @@
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
           "expr": "sum(rate(blocks_subscription_lag_total{job=\"agglayer\"}[$__rate_interval])) > 0",
           "legendFormat": "subscription_lag",
