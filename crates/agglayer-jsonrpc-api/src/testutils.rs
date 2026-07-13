@@ -1,7 +1,11 @@
 use std::{future::IntoFuture as _, net::SocketAddr, sync::Arc};
 
-use agglayer_config::Config;
+use agglayer_config::{
+    settlement_service::{SettlementServiceConfig, SettlementTransactionConfig},
+    Config,
+};
 use agglayer_contracts::L1RpcClient;
+use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     backup::BackupClient,
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
@@ -9,11 +13,16 @@ use agglayer_storage::{
 };
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
 use alloy::{
+    network::EthereumWallet,
     providers::{
-        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
+        fillers::{
+            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+            WalletFiller,
+        },
         mock::Asserter,
         Identity, ProviderBuilder, RootProvider,
     },
+    signers::local::PrivateKeySigner,
     transports::mock::MockTransport,
 };
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -28,6 +37,21 @@ pub type MockProvider = FillProvider<
     JoinFill<
         Identity,
         JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+    >,
+    RootProvider,
+    alloy::network::Ethereum,
+>;
+
+/// Provider used by the test settlement service: wallet-carrying, with
+/// a dead HTTP endpoint. Startup recovery does no L1 calls, spawned
+/// tasks block retrying against L1 until cancelled.
+pub type SettlementTestProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
     >,
     RootProvider,
     alloy::network::Ethereum,
@@ -62,6 +86,7 @@ pub struct TestContext {
     pub cancellation_token: CancellationToken,
     pub state_store: Arc<StateStore>,
     pub pending_store: Arc<PendingStore>,
+    pub settlement_service: SettlementService<SettlementTestProvider, StateStore>,
     pub api_client: HttpClient,
     pub admin_client: HttpClient,
     pub config: Arc<Config>,
@@ -148,6 +173,29 @@ impl TestContext {
         // Create AgglayerImpl
         let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
 
+        // A settlement service over the (empty) state store, with its own
+        // wallet-carrying provider pointed at a dead endpoint: startup
+        // recovery finds no jobs, and spawned tasks retry against L1
+        // until cancelled instead of completing.
+        let settlement_provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(
+                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+            ))
+            .connect_http(
+                "http://127.0.0.1:0"
+                    .parse()
+                    .expect("test provider URL should parse"),
+            );
+        let settlement_service = SettlementService::start(
+            SettlementServiceConfig::default(),
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(settlement_provider),
+            state_store.clone(),
+            cancellation_token.clone(),
+        )
+        .await
+        .expect("settlement service should start");
+
         // Create the routers
         let router = agglayer_impl.start().await.unwrap();
         let admin_router = AdminAgglayerImpl::new(
@@ -156,6 +204,7 @@ impl TestContext {
             state_store.clone(),
             debug_store.clone(),
             config.clone(),
+            settlement_service.clone(),
         )
         .start()
         .await
@@ -187,6 +236,7 @@ impl TestContext {
             cancellation_token,
             state_store,
             pending_store,
+            settlement_service,
             api_client,
             admin_client,
             config,

@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_settlement_service::SettlementService;
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
+    SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+    UpdateStatusToCandidate,
 };
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
     CertificateStatusError, Digest, Height, NetworkId, SettlementTxHash, U256,
 };
+use alloy::providers::{Provider, WalletProvider};
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pessimistic_proof::local_balance_tree::BalanceTree;
 use serde::{Deserialize, Serialize};
@@ -201,15 +204,19 @@ pub(crate) trait AdminAgglayer {
 }
 
 /// The Admin RPC agglayer service implementation.
-pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
+    #[allow(dead_code)] // used by the settlement admin methods in the next commit
+    settlement_service: SettlementService<L1Provider, StateStore>,
 }
 
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+impl<PendingStore, StateStore, DebugStore, L1Provider>
+    AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
+{
     /// Create an instance of the admin RPC agglayer service.
     pub fn new(
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
@@ -217,6 +224,7 @@ impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, State
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
+        settlement_service: SettlementService<L1Provider, StateStore>,
     ) -> Self {
         Self {
             certificate_sender,
@@ -224,15 +232,18 @@ impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, State
             state,
             debug_store,
             config,
+            settlement_service,
         }
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider>
+    AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Provider: Provider + WalletProvider + 'static,
 {
     pub async fn start(self) -> eyre::Result<axum::Router> {
         // Create the RPC service
@@ -295,8 +306,8 @@ where
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> Drop
-    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider> Drop
+    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer service");
@@ -304,12 +315,13 @@ impl<PendingStore, StateStore, DebugStore> Drop
 }
 
 #[async_trait]
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerServer
-    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider> AdminAgglayerServer
+    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Provider: Provider + WalletProvider + 'static,
 {
     #[instrument(skip(self))]
     async fn get_token_balance(
