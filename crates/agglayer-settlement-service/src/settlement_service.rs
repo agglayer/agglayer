@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::{
+    error::SettlementAdminError,
     settlement_task::{
         SettlementTask, SettlementTaskRunResult, StoredSettlementJob, TaskAdminCommand,
         TaskControlHandle,
@@ -240,43 +241,63 @@ impl<
         result_receiver
     }
 
-    #[tracing::instrument(skip_all)]
-    async fn task_control(&self, job_id: SettlementJobId) -> eyre::Result<TaskControlHandle> {
-        let task_controls = self.task_controls.lock().await;
-        let Some(task_control) = task_controls.get(&job_id) else {
-            eyre::bail!("No task control found for settlement task {job_id}");
-        };
-        Ok(task_control.clone())
+    /// Classify why no live task exists for `job_id` by consulting
+    /// storage: completed job, pending job with a dead task, or no such
+    /// job at all.
+    async fn no_live_task_error(&self, job_id: SettlementJobId) -> SettlementAdminError {
+        match self.store.get_settlement_job_result(&job_id) {
+            Err(source) => SettlementAdminError::Storage { job_id, source },
+            Ok(Some(_)) => SettlementAdminError::JobCompleted(job_id),
+            Ok(None) => match self.store.get_settlement_job(&job_id) {
+                Err(source) => SettlementAdminError::Storage { job_id, source },
+                Ok(Some(_)) => SettlementAdminError::NoLiveTask(job_id),
+                Ok(None) => SettlementAdminError::JobNotFound(job_id),
+            },
+        }
     }
 
-    #[tracing::instrument(skip_all)]
-    async fn admin_task(
+    /// Stop the in-memory task of `job_id`. Runtime-only: the job stays
+    /// pending in storage and no terminal result is recorded; restart it
+    /// with [`Self::admin_reload_and_restart_task`].
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_abort_task(
         &self,
         job_id: SettlementJobId,
-        command: TaskAdminCommand,
-    ) -> eyre::Result<()> {
-        self.task_control(job_id)
-            .await?
-            .try_send(command)
-            .wrap_err_with(|| {
-                format!(
-                    "Failed to forward admin command to settlement task {job_id}, did it already \
-                     complete?"
-                )
-            })?;
-        Ok(())
+    ) -> Result<(), SettlementAdminError> {
+        let control = self.task_controls.lock().await.get(&job_id).cloned();
+        match control {
+            Some(control) => {
+                control.cancel();
+                Ok(())
+            }
+            None => Err(self.no_live_task_error(job_id).await),
+        }
     }
 
-    #[tracing::instrument(skip_all)]
-    pub async fn admin_abort_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
-        self.task_control(job_id).await?.cancel();
-        Ok(())
+    /// Whether an in-memory task is currently registered for `job_id`.
+    ///
+    /// Advisory: the answer can race with task completion. A `pending`
+    /// job without a live task is wedged and needs
+    /// [`Self::admin_reload_and_restart_task`].
+    pub async fn has_live_task(&self, job_id: SettlementJobId) -> bool {
+        self.task_controls.lock().await.contains_key(&job_id)
     }
 
-    #[tracing::instrument(skip_all)]
-    pub async fn admin_reload_and_restart_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
-        self.admin_task(job_id, TaskAdminCommand::ReloadAndRestart)
-            .await
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_reload_and_restart_task(
+        &self,
+        job_id: SettlementJobId,
+    ) -> Result<(), SettlementAdminError> {
+        let control = self.task_controls.lock().await.get(&job_id).cloned();
+        match control {
+            Some(control) => control
+                .try_send(TaskAdminCommand::ReloadAndRestart)
+                .map_err(|error| SettlementAdminError::TaskNotResponding {
+                    job_id,
+                    reason: error.to_string(),
+                }),
+            None => Err(self.no_live_task_error(job_id).await),
+        }
     }
 
     #[tracing::instrument(skip(self))]
@@ -427,10 +448,14 @@ impl<
         let this = self.clone();
         Box::pin(async move {
             match req {
-                AdminCommand::AbortTask(job_id) => this.admin_abort_task(job_id).await,
-                AdminCommand::ReloadAndRestartTask(job_id) => {
-                    this.admin_reload_and_restart_task(job_id).await
-                }
+                AdminCommand::AbortTask(job_id) => this
+                    .admin_abort_task(job_id)
+                    .await
+                    .map_err(eyre::Report::new),
+                AdminCommand::ReloadAndRestartTask(job_id) => this
+                    .admin_reload_and_restart_task(job_id)
+                    .await
+                    .map_err(eyre::Report::new),
             }
         })
     }
@@ -819,6 +844,152 @@ mod tests {
             ordering.lock().unwrap().as_slice(),
             ["write_link", "write_job"]
         );
+    }
+
+    #[tokio::test]
+    async fn admin_abort_task_unknown_job_returns_job_not_found() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(20);
+        store
+            .expect_get_settlement_job_result()
+            .returning(|_| Ok(None));
+        store.expect_get_settlement_job().returning(|_| Ok(None));
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let error = service
+            .admin_abort_task(job_id)
+            .await
+            .expect_err("abort of an unknown job must fail");
+        assert!(matches!(
+            error,
+            crate::SettlementAdminError::JobNotFound(id) if id == job_id
+        ));
+    }
+
+    #[tokio::test]
+    async fn admin_abort_task_completed_job_returns_job_completed() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(21);
+        let result = mk_result(21, ContractCallOutcome::Success);
+        store
+            .expect_get_settlement_job_result()
+            .returning(move |_| Ok(Some(result.clone())));
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let error = service
+            .admin_abort_task(job_id)
+            .await
+            .expect_err("abort of a completed job must fail");
+        assert!(matches!(
+            error,
+            crate::SettlementAdminError::JobCompleted(id) if id == job_id
+        ));
+    }
+
+    #[tokio::test]
+    async fn admin_abort_task_pending_job_without_task_returns_no_live_task() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(22);
+        let job = mk_job(22);
+        store
+            .expect_get_settlement_job_result()
+            .returning(|_| Ok(None));
+        store
+            .expect_get_settlement_job()
+            .returning(move |_| Ok(Some(job.clone())));
+
+        let service = mk_service(Arc::new(store)).await;
+
+        let error = service
+            .admin_abort_task(job_id)
+            .await
+            .expect_err("abort without a live task must fail");
+        assert!(matches!(
+            error,
+            crate::SettlementAdminError::NoLiveTask(id) if id == job_id
+        ));
+    }
+
+    /// Loads a pending job through `SettlementTask::load` and spawns its
+    /// task, mirroring the reload test above. The caller provides the
+    /// storage expectations for the load (job, no result, no attempts).
+    async fn load_and_spawn_pending_task(
+        service: &SettlementService<impl Provider + WalletProvider + 'static, MockStateStore>,
+        job_id: SettlementJobId,
+    ) {
+        let (task_control_handle, task_control) =
+            TaskControlHandle::new(&service.cancellation_token);
+        let task = match SettlementTask::load(
+            job_id,
+            service.tx_config.clone(),
+            service.provider.clone(),
+            service.store.clone(),
+            service.wallet_nonce_locks.clone(),
+            task_control,
+        )
+        .await
+        .expect("settlement task should load")
+        {
+            StoredSettlementJob::Pending(task) => task,
+            StoredSettlementJob::Completed(_, _) => {
+                panic!("load should find a pending job")
+            }
+        };
+        service
+            .spawn_settlement_task(job_id, task, task_control_handle)
+            .await;
+    }
+
+    /// Storage expectations for loading one pending job, tolerant of the
+    /// extra reads the spawned task performs before it gets cancelled.
+    fn expect_pending_job_reads(store: &mut MockStateStore, seed: u8) {
+        let job = mk_job(seed);
+        store
+            .expect_get_settlement_job()
+            .returning(move |_| Ok(Some(job.clone())));
+        store
+            .expect_get_settlement_job_result()
+            .returning(|_| Ok(None));
+        store
+            .expect_list_settlement_attempts()
+            .returning(|_| Ok(Vec::new()));
+        store
+            .expect_list_settlement_attempt_results()
+            .returning(|_| Ok(Vec::new()));
+        store
+            .expect_max_settlement_nonce_for_wallet()
+            .returning(|_| Ok(None));
+    }
+
+    #[tokio::test]
+    async fn admin_abort_task_cancels_live_task() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(23);
+        expect_pending_job_reads(&mut store, 23);
+
+        let service = mk_service(Arc::new(store)).await;
+        load_and_spawn_pending_task(&service, job_id).await;
+        assert!(service.has_live_task(job_id).await);
+
+        service
+            .admin_abort_task(job_id)
+            .await
+            .expect("abort of a live task must succeed");
+
+        // The task observes the cancellation asynchronously.
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while service.has_live_task(job_id).await {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("aborted task should deregister its control handle");
     }
 
     mod same_wallet_nonce_race;
