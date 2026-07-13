@@ -11,12 +11,14 @@
 
 #![allow(dead_code)] // TODO remove after settlement service is integrated in the rest of the app
 
+pub mod error;
 pub mod settlement_service;
 pub mod settlement_service_trait;
 mod settlement_task;
 mod utils;
 mod wallet_nonce_locks;
 
+pub use error::SettlementAdminError;
 pub use settlement_service::SettlementService;
 #[cfg(feature = "testutils")]
 pub use settlement_service_trait::MockSettlementServiceTrait;
