@@ -1,6 +1,6 @@
 use agglayer_types::{
-    Address, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
-    SettlementJobResult,
+    Address, CertificateId, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob,
+    SettlementJobId, SettlementJobResult,
 };
 
 use crate::error::Error;
@@ -39,4 +39,13 @@ pub trait SettlementReader: Send + Sync {
 
     /// Returns the highest settlement attempt nonce recorded for `wallet`.
     fn max_settlement_nonce_for_wallet(&self, wallet: Address) -> Result<Option<Nonce>, Error>;
+
+    /// Returns the certificate linked to `settlement_job_id`, if any.
+    ///
+    /// Jobs created without a certificate, and jobs linked before the
+    /// reverse column was populated, return `None`.
+    fn get_settlement_job_certificate_id(
+        &self,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<Option<CertificateId>, Error>;
 }

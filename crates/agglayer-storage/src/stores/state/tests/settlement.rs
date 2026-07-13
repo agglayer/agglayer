@@ -914,6 +914,41 @@ fn job_attempt_result_can_be_read_back_together() {
 }
 
 #[test]
+fn certificate_settlement_job_link_is_readable_in_both_directions() {
+    let (_tmp, _db, store) = setup_store();
+    let certificate_id = mk_certificate_id(40);
+    let job_id = mk_job_id(40);
+
+    store
+        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
+        .expect("link insert must succeed");
+
+    assert_eq!(
+        store
+            .get_certificate_settlement_job_id(&certificate_id)
+            .expect("forward read must succeed"),
+        Some(job_id),
+    );
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&job_id)
+            .expect("reverse read must succeed"),
+        Some(certificate_id),
+    );
+}
+
+#[test]
+fn get_settlement_job_certificate_id_returns_none_for_unlinked_job() {
+    let (_tmp, _db, store) = setup_store();
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&mk_job_id(41))
+            .expect("reverse read must succeed"),
+        None,
+    );
+}
+
+#[test]
 fn result_absent_does_not_imply_attempt_absent() {
     let (_tmp, db, store) = setup_store();
     let job_id = mk_job_id(22);

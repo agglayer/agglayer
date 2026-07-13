@@ -157,6 +157,11 @@ mock! {
             &self,
             wallet: Address,
         ) -> Result<Option<Nonce>, Error>;
+
+        fn get_settlement_job_certificate_id(
+            &self,
+            settlement_job_id: &SettlementJobId,
+        ) -> Result<Option<CertificateId>, Error>;
     }
 
     impl SettlementWriter for StateStore {

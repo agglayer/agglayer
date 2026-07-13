@@ -1,12 +1,13 @@
 use agglayer_types::{
-    Address, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
-    SettlementJobResult,
+    Address, CertificateId, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob,
+    SettlementJobId, SettlementJobResult,
 };
 use rocksdb::{Direction, WriteBatch};
 
 use super::StateStore;
 use crate::{
     columns::{
+        certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn,
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
@@ -122,6 +123,15 @@ impl SettlementReader for StateStore {
             .next()
             .transpose()?
             .map(|(key, _)| Nonce(key.nonce)))
+    }
+
+    fn get_settlement_job_certificate_id(
+        &self,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<Option<CertificateId>, Error> {
+        Ok(self
+            .db
+            .get::<CertificateIdPerSettlementJobIdColumn>(settlement_job_id)?)
     }
 }
 
