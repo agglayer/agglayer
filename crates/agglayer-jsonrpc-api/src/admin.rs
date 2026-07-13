@@ -10,7 +10,7 @@ use agglayer_storage::stores::{
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    CertificateStatusError, Digest, Height, NetworkId, SettlementTxHash, U256,
+    CertificateStatusError, Digest, Height, NetworkId, SettlementJobId, SettlementTxHash, U256,
 };
 use alloy::providers::{Provider, WalletProvider};
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
@@ -201,6 +201,31 @@ pub(crate) trait AdminAgglayer {
     async fn disable_network(&self, network_id: NetworkId) -> RpcResult<()>;
     #[method(name = "enableNetwork")]
     async fn enable_network(&self, network_id: NetworkId) -> RpcResult<()>;
+
+    /// Stop the in-memory settlement task of a job.
+    ///
+    /// **JSON-RPC method:** `admin_abortSettlementTask`
+    ///
+    /// Requests cancellation of the task driving `job_id` and returns
+    /// before the task observes it. Runtime-only: the job stays pending
+    /// in storage and no terminal result is recorded, so the certificate
+    /// waiting on it stays blocked until the task is restarted with
+    /// `admin_reloadAndRestartSettlementTask`. Fails when no task is
+    /// running (job unknown, completed, or already aborted).
+    #[method(name = "abortSettlementTask")]
+    async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Reload a settlement job from storage and (re)start its task.
+    ///
+    /// **JSON-RPC method:** `admin_reloadAndRestartSettlementTask`
+    ///
+    /// A live task drops its in-memory state and reloads from storage.
+    /// A pending job without a live task (after an admin abort or a
+    /// failed in-task reload) gets a fresh task spawned from storage:
+    /// this is the recovery step after `admin_abortSettlementTask`.
+    /// Fails if the job is unknown or already completed.
+    #[method(name = "reloadAndRestartSettlementTask")]
+    async fn reload_and_restart_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 }
 
 /// The Admin RPC agglayer service implementation.
@@ -210,7 +235,6 @@ pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider> {
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
-    #[allow(dead_code)] // used by the settlement admin methods in the next commit
     settlement_service: SettlementService<L1Provider, StateStore>,
 }
 
@@ -810,5 +834,23 @@ where
             error!(?error, "Failed to enable network {network_id}");
             Error::internal(format!("Unable to enable network {network_id}"))
         })
+    }
+
+    #[instrument(skip(self))]
+    async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!(?job_id, "Aborting settlement task via admin RPC");
+        Ok(self.settlement_service.admin_abort_task(job_id).await?)
+    }
+
+    #[instrument(skip(self))]
+    async fn reload_and_restart_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!(
+            ?job_id,
+            "Reloading and restarting settlement task via admin RPC"
+        );
+        Ok(self
+            .settlement_service
+            .admin_reload_and_restart_task(job_id)
+            .await?)
     }
 }
