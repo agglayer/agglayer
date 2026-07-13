@@ -26,3 +26,8 @@ agglayer-telemetry = { workspace = true, features = ["testutils"] }
 
 [features]
 testutils = []
+
+# The self dev-dependency only activates `testutils` for this crate's own
+# unit tests; cargo-udeps cannot see that usage (same as agglayer-clock).
+[package.metadata.cargo-udeps.ignore]
+development = ["agglayer-telemetry"]
