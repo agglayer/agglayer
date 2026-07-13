@@ -32,7 +32,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
-use crate::utils::RetryCallbackError;
+use crate::{utils::RetryCallbackError, wallet_nonce_locks::WalletNonceLocks};
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
@@ -348,6 +348,10 @@ pub struct SettlementTask<L1Provider, SettlementStore> {
     tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
+    /// Shared per-wallet locks from
+    /// [`SettlementService`](crate::SettlementService); held across the
+    /// nonce read-to-save window in [`Self::run`].
+    wallet_nonce_locks: Arc<WalletNonceLocks>,
     control: TaskControl,
     attempts: ActiveSettlementAttempts,
 }
@@ -410,6 +414,7 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
+        wallet_nonce_locks: Arc<WalletNonceLocks>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
         let job = resolve_settlement_gas_limit(
@@ -426,6 +431,7 @@ impl<
             tx_config,
             provider,
             store,
+            wallet_nonce_locks,
             control,
             attempts: BTreeMap::new(),
         };
@@ -473,6 +479,7 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
+        wallet_nonce_locks: Arc<WalletNonceLocks>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
         let (job, result) = Self::load_settlement_job_from_db(store.as_ref(), id).await?;
@@ -485,6 +492,7 @@ impl<
                 tx_config,
                 provider,
                 store,
+                wallet_nonce_locks,
                 control,
                 attempts: BTreeMap::new(),
             };
@@ -1929,6 +1937,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store,
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         }
@@ -1944,6 +1953,7 @@ mod tests {
             tx_config: Arc::new(tx_config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts: BTreeMap::new(),
         }
@@ -2049,6 +2059,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            Arc::new(WalletNonceLocks::default()),
             mk_control(),
         )
         .await
@@ -2103,6 +2114,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            Arc::new(WalletNonceLocks::default()),
             mk_control(),
         )
         .await
@@ -2140,6 +2152,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            Arc::new(WalletNonceLocks::default()),
             mk_control(),
         )
         .await;
@@ -2272,6 +2285,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_provider()),
             Arc::new(store),
+            Arc::new(WalletNonceLocks::default()),
             mk_control(),
         )
         .await
@@ -2936,6 +2950,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -2982,6 +2997,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -3327,6 +3343,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(store),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -3426,6 +3443,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         };
@@ -3489,6 +3507,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         };
@@ -3548,6 +3567,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         };
@@ -3630,6 +3650,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         };
