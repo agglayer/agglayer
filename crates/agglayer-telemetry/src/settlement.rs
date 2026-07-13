@@ -21,19 +21,26 @@ const WALLET_LABEL_NAME: &str = "wallet";
 /// Name of the label carrying the job outcome.
 const OUTCOME_LABEL_NAME: &str = "outcome";
 
-/// Exported counter name: settlement transaction attempts by `kind`.
-pub const SETTLEMENT_ATTEMPTS_TOTAL: &str = "agglayer_node_settlement_attempts_total";
+/// Counter instrument name: settlement transaction attempts by `kind`.
+///
+/// Instrument names carry no `_total` suffix; the prometheus exporter adds
+/// it when rendering counters, so this one exports as
+/// `agglayer_node_settlement_attempts_total`, the name issue #1676 uses.
+pub const SETTLEMENT_ATTEMPTS: &str = "agglayer_node_settlement_attempts";
 
-/// Exported counter name: failed settlement transaction attempts by `kind`
-/// and `wallet`.
-pub const SETTLEMENT_ATTEMPT_ERRORS_TOTAL: &str = "agglayer_node_settlement_attempt_errors_total";
+/// Counter instrument name: failed settlement transaction attempts by
+/// `kind` and `wallet`.
+///
+/// Exported as `agglayer_node_settlement_attempt_errors_total`; see
+/// [`SETTLEMENT_ATTEMPTS`] for the suffix convention.
+pub const SETTLEMENT_ATTEMPT_ERRORS: &str = "agglayer_node_settlement_attempt_errors";
 
 /// Histogram name: settlement job duration in seconds, from job creation to
 /// terminal state, by `outcome` and `wallet`.
 pub const SETTLEMENT_JOB_DURATION_SECONDS: &str = "agglayer_node_settlement_job_duration_seconds";
 
 /// A kind of settlement transaction attempt, rendered as the `kind` label
-/// value on [`SETTLEMENT_ATTEMPTS_TOTAL`].
+/// value on [`SETTLEMENT_ATTEMPTS`].
 ///
 /// The variants follow the transaction churn taxonomy of issue #1676:
 /// initial submissions, gas bumps, and replacements. Which service code
@@ -47,7 +54,7 @@ pub enum SettlementAttemptKind {
 }
 
 /// A kind of settlement attempt failure, rendered as the `kind` label value
-/// on [`SETTLEMENT_ATTEMPT_ERRORS_TOTAL`].
+/// on [`SETTLEMENT_ATTEMPT_ERRORS`].
 ///
 /// The variants follow the error taxonomy of issue #1676, with nonce and
 /// gas-price errors kept separate from generic RPC failures so nonce
@@ -74,28 +81,15 @@ pub enum SettlementJobOutcome {
     Revert,
 }
 
-/// Returns the OTel instrument name for an exported counter name.
-///
-/// The prometheus exporter appends `_total` to every counter it renders,
-/// so a counter declared under its full exported name would come out as
-/// `..._total_total`. Declaring the suffix-less name keeps the exported
-/// series exactly on the names mandated by issue #1676; the exporter test
-/// below pins that.
-fn counter_instrument_name(exported_name: &'static str) -> &'static str {
-    exported_name
-        .strip_suffix("_total")
-        .unwrap_or(exported_name)
-}
-
 lazy_static! {
-    static ref SETTLEMENT_ATTEMPTS: Counter<u64> =
+    static ref SETTLEMENT_ATTEMPTS_COUNTER: Counter<u64> =
         global::meter(AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME)
-            .u64_counter(counter_instrument_name(SETTLEMENT_ATTEMPTS_TOTAL))
+            .u64_counter(SETTLEMENT_ATTEMPTS)
             .with_description("Number of settlement transaction attempts, by kind")
             .build();
-    static ref SETTLEMENT_ATTEMPT_ERRORS: Counter<u64> =
+    static ref SETTLEMENT_ATTEMPT_ERRORS_COUNTER: Counter<u64> =
         global::meter(AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME)
-            .u64_counter(counter_instrument_name(SETTLEMENT_ATTEMPT_ERRORS_TOTAL))
+            .u64_counter(SETTLEMENT_ATTEMPT_ERRORS)
             .with_description(
                 "Number of failed settlement transaction attempts, by kind and wallet"
             )
@@ -111,13 +105,13 @@ lazy_static! {
 /// Records one settlement transaction attempt.
 #[inline]
 pub fn record_settlement_attempt(kind: SettlementAttemptKind) {
-    SETTLEMENT_ATTEMPTS.add(1, &[KeyValue::new(KIND_LABEL_NAME, kind.to_string())]);
+    SETTLEMENT_ATTEMPTS_COUNTER.add(1, &[KeyValue::new(KIND_LABEL_NAME, kind.to_string())]);
 }
 
 /// Records one failed settlement transaction attempt on `wallet`.
 #[inline]
 pub fn record_settlement_attempt_error(kind: SettlementAttemptErrorKind, wallet: &str) {
-    SETTLEMENT_ATTEMPT_ERRORS.add(
+    SETTLEMENT_ATTEMPT_ERRORS_COUNTER.add(
         1,
         &[
             KeyValue::new(KIND_LABEL_NAME, kind.to_string()),
@@ -182,34 +176,30 @@ mod tests {
 
         let metrics = harness.gather();
 
-        // The `sample_value` lookup matches `name{` exactly, so these also
-        // fail if the exporter renders a doubled `_total_total` suffix.
+        // The prometheus exporter appends `_total` when rendering counters,
+        // so the exported series carry a suffix the instrument names do
+        // not. `sample_value` matches `name{` exactly: a doubled or missing
+        // suffix fails these lookups.
+        let attempts_series = format!("{SETTLEMENT_ATTEMPTS}_total");
+        let attempt_errors_series = format!("{SETTLEMENT_ATTEMPT_ERRORS}_total");
         assert_eq!(
-            sample_value(
-                &metrics,
-                SETTLEMENT_ATTEMPTS_TOTAL,
-                &[("kind", "submission")],
-            ),
+            sample_value(&metrics, &attempts_series, &[("kind", "submission")]),
             Some(2.0),
             "attempts counter, got:\n{metrics}"
         );
         assert_eq!(
-            sample_value(&metrics, SETTLEMENT_ATTEMPTS_TOTAL, &[("kind", "gas_bump")]),
+            sample_value(&metrics, &attempts_series, &[("kind", "gas_bump")]),
             Some(1.0),
         );
         assert_eq!(
-            sample_value(
-                &metrics,
-                SETTLEMENT_ATTEMPTS_TOTAL,
-                &[("kind", "replacement")],
-            ),
+            sample_value(&metrics, &attempts_series, &[("kind", "replacement")]),
             Some(1.0),
         );
 
         assert_eq!(
             sample_value(
                 &metrics,
-                SETTLEMENT_ATTEMPT_ERRORS_TOTAL,
+                &attempt_errors_series,
                 &[("kind", "nonce_too_low"), ("wallet", "wallet-0")],
             ),
             Some(1.0),
@@ -218,7 +208,7 @@ mod tests {
         assert_eq!(
             sample_value(
                 &metrics,
-                SETTLEMENT_ATTEMPT_ERRORS_TOTAL,
+                &attempt_errors_series,
                 &[("kind", "underpriced"), ("wallet", "wallet-0")],
             ),
             Some(1.0),
@@ -226,7 +216,7 @@ mod tests {
         assert_eq!(
             sample_value(
                 &metrics,
-                SETTLEMENT_ATTEMPT_ERRORS_TOTAL,
+                &attempt_errors_series,
                 &[("kind", "rpc"), ("wallet", "wallet-1")],
             ),
             Some(1.0),
@@ -234,7 +224,7 @@ mod tests {
         assert_eq!(
             sample_value(
                 &metrics,
-                SETTLEMENT_ATTEMPT_ERRORS_TOTAL,
+                &attempt_errors_series,
                 &[("kind", "other"), ("wallet", "wallet-1")],
             ),
             Some(1.0),
