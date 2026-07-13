@@ -1,0 +1,17 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "SettlementAdmin(TaskNotResponding { job_id: \"0000000000000000000000000A\", detail: \"channel closed\" })"
+snapshot_kind: text
+---
+{
+  "code": -10010,
+  "data": {
+    "settlement-admin": {
+      "task-not-responding": {
+        "detail": "channel closed",
+        "job-id": "0000000000000000000000000A"
+      }
+    }
+  },
+  "message": "Settlement admin error: Settlement task for job 0000000000000000000000000A did not accept the admin command: channel closed"
+}

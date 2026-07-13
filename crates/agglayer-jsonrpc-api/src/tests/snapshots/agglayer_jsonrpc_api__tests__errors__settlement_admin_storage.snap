@@ -1,0 +1,17 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "SettlementAdmin(Storage { job_id: \"0000000000000000000000000C\", detail: \"An unexpected error occurred: boom\\n        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`\" })"
+snapshot_kind: text
+---
+{
+  "code": -10010,
+  "data": {
+    "settlement-admin": {
+      "storage": {
+        "detail": "An unexpected error occurred: boom\n        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`",
+        "job-id": "0000000000000000000000000C"
+      }
+    }
+  },
+  "message": "Settlement admin error: Storage error while handling settlement admin command for job 0000000000000000000000000C: An unexpected error occurred: boom\n        This is a critical bug that needs to be reported on `https://github.com/agglayer/agglayer/issues`"
+}

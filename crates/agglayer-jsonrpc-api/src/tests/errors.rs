@@ -160,6 +160,31 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
     "settlement_admin_no_live_task",
     SettlementAdminError::NoLiveTask(SettlementJobId::from(8u128))
 )]
+#[case(
+    "settlement_admin_job_completed",
+    SettlementAdminError::JobCompleted(SettlementJobId::from(9u128))
+)]
+#[case(
+    "settlement_admin_task_not_responding",
+    SettlementAdminError::TaskNotResponding {
+        job_id: SettlementJobId::from(10u128),
+        reason: "channel closed".to_string(),
+    }
+)]
+#[case(
+    "settlement_admin_reload_failed",
+    SettlementAdminError::ReloadFailed {
+        job_id: SettlementJobId::from(11u128),
+        reason: "boom".to_string(),
+    }
+)]
+#[case(
+    "settlement_admin_storage",
+    SettlementAdminError::Storage {
+        job_id: SettlementJobId::from(12u128),
+        source: agglayer_storage::error::Error::Unexpected("boom".to_string()),
+    }
+)]
 fn rpc_error_rendering(#[case] name: &str, #[case] err: impl Into<Error>) {
     let err: Error = err.into();
     let debug_str = format!("{err:?}");

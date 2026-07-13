@@ -1,0 +1,16 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "SettlementAdmin(JobCompleted { job_id: \"00000000000000000000000009\" })"
+snapshot_kind: text
+---
+{
+  "code": -10010,
+  "data": {
+    "settlement-admin": {
+      "job-completed": {
+        "job-id": "00000000000000000000000009"
+      }
+    }
+  },
+  "message": "Settlement admin error: Settlement job 00000000000000000000000009 is already completed"
+}

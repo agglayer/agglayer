@@ -107,6 +107,30 @@ impl From<TxStatusError> for StatusError {
     }
 }
 
+#[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
+#[serde(rename_all = "kebab-case")]
+pub enum SettlementAdminError {
+    #[error("Settlement job {job_id} is already completed")]
+    #[serde(rename_all = "kebab-case")]
+    JobCompleted { job_id: String },
+
+    #[error("No live settlement task for job {job_id}")]
+    #[serde(rename_all = "kebab-case")]
+    NoLiveTask { job_id: String },
+
+    #[error("Settlement task for job {job_id} did not accept the admin command: {detail}")]
+    #[serde(rename_all = "kebab-case")]
+    TaskNotResponding { job_id: String, detail: String },
+
+    #[error("Failed to reload settlement task for job {job_id}: {detail}")]
+    #[serde(rename_all = "kebab-case")]
+    ReloadFailed { job_id: String, detail: String },
+
+    #[error("Storage error while handling settlement admin command for job {job_id}: {detail}")]
+    #[serde(rename_all = "kebab-case")]
+    Storage { job_id: String, detail: String },
+}
+
 /// Application-level RPC errors returned by AggLayer.
 ///
 /// Implementation note:
@@ -155,7 +179,7 @@ pub enum Error {
     MethodDisabled { method: &'static str },
 
     #[error("Settlement admin error: {0}")]
-    SettlementAdmin(String),
+    SettlementAdmin(#[from] SettlementAdminError),
 
     #[error("Internal error: {0}")]
     Internal(String),
@@ -278,7 +302,29 @@ impl From<agglayer_settlement_service::SettlementAdminError> for Error {
         use agglayer_settlement_service::SettlementAdminError as E;
         match error {
             E::JobNotFound(job_id) => Self::ResourceNotFound(format!("SettlementJob({job_id})")),
-            error => Self::SettlementAdmin(error.to_string()),
+            E::JobCompleted(job_id) => SettlementAdminError::JobCompleted {
+                job_id: job_id.to_string(),
+            }
+            .into(),
+            E::NoLiveTask(job_id) => SettlementAdminError::NoLiveTask {
+                job_id: job_id.to_string(),
+            }
+            .into(),
+            E::TaskNotResponding { job_id, reason } => SettlementAdminError::TaskNotResponding {
+                job_id: job_id.to_string(),
+                detail: reason,
+            }
+            .into(),
+            E::ReloadFailed { job_id, reason } => SettlementAdminError::ReloadFailed {
+                job_id: job_id.to_string(),
+                detail: reason,
+            }
+            .into(),
+            E::Storage { job_id, source } => SettlementAdminError::Storage {
+                job_id: job_id.to_string(),
+                detail: source.to_string(),
+            }
+            .into(),
         }
     }
 }

@@ -1,0 +1,17 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "SettlementAdmin(ReloadFailed { job_id: \"0000000000000000000000000B\", detail: \"boom\" })"
+snapshot_kind: text
+---
+{
+  "code": -10010,
+  "data": {
+    "settlement-admin": {
+      "reload-failed": {
+        "detail": "boom",
+        "job-id": "0000000000000000000000000B"
+      }
+    }
+  },
+  "message": "Settlement admin error: Failed to reload settlement task for job 0000000000000000000000000B: boom"
+}

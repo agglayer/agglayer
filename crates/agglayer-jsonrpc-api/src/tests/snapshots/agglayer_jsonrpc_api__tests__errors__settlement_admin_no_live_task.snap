@@ -1,12 +1,16 @@
 ---
 source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
-expression: "SettlementAdmin(\"No live settlement task for job 00000000000000000000000008\")"
+expression: "SettlementAdmin(NoLiveTask { job_id: \"00000000000000000000000008\" })"
 snapshot_kind: text
 ---
 {
   "code": -10010,
   "data": {
-    "settlement-admin": "No live settlement task for job 00000000000000000000000008"
+    "settlement-admin": {
+      "no-live-task": {
+        "job-id": "00000000000000000000000008"
+      }
+    }
   },
   "message": "Settlement admin error: No live settlement task for job 00000000000000000000000008"
 }
