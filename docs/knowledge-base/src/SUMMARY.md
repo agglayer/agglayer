@@ -8,4 +8,5 @@
 - [Storage](storage.md)
 - [Observability](observability.md)
 - [AI Agent Configuration](ai-agents.md)
+  - [Settlement Admin Floor Design](ai-agents/specs/2026-07-13-settlement-admin-floor-design.md)
 - [Documentation Publishing](docs-publishing.md)
