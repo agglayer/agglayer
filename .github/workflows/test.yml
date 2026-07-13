@@ -101,7 +101,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@8763263b4c6bf61fd83d205a6fc0080c6e82b1e4 # 2026-03-20
+    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@4c5112c68c1f31b7ebe6ddb8e599476f72fbbcc1 # 2026-03-20
     secrets: inherit
     with:
       docker-image-override: agglayer_image
