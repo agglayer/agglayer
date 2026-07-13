@@ -1,0 +1,290 @@
+//! Settlement transaction metrics: attempt counts, attempt errors, and job
+//! durations, labeled by wallet where the wallet dimension matters.
+//!
+//! This module only declares the instruments and their record helpers. The
+//! settlement service is responsible for calling them; that wiring, and the
+//! jobs-by-state gauge it requires, land in follow-ups to issue #1676.
+
+use lazy_static::lazy_static;
+use opentelemetry::{global, metrics::*, KeyValue};
+
+use crate::certificate::DURATION_BUCKETS_SECONDS;
+
+const AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME: &str = "agglayer_node_settlement";
+
+/// Name of the label carrying an attempt or attempt-error kind.
+const KIND_LABEL_NAME: &str = "kind";
+
+/// Name of the label carrying the settlement wallet.
+const WALLET_LABEL_NAME: &str = "wallet";
+
+/// Name of the label carrying the job outcome.
+const OUTCOME_LABEL_NAME: &str = "outcome";
+
+/// Exported counter name: settlement transaction attempts by `kind`.
+pub const SETTLEMENT_ATTEMPTS_TOTAL: &str = "agglayer_node_settlement_attempts_total";
+
+/// Exported counter name: failed settlement transaction attempts by `kind`
+/// and `wallet`.
+pub const SETTLEMENT_ATTEMPT_ERRORS_TOTAL: &str = "agglayer_node_settlement_attempt_errors_total";
+
+/// Histogram name: settlement job duration in seconds, from job creation to
+/// terminal state, by `outcome` and `wallet`.
+pub const SETTLEMENT_JOB_DURATION_SECONDS: &str = "agglayer_node_settlement_job_duration_seconds";
+
+/// A kind of settlement transaction attempt, rendered as the `kind` label
+/// value on [`SETTLEMENT_ATTEMPTS_TOTAL`].
+///
+/// The variants follow the transaction churn taxonomy of issue #1676:
+/// initial submissions, gas bumps, and replacements. Which service code
+/// paths map onto which variant is decided where emission is wired in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum_macros::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum SettlementAttemptKind {
+    Submission,
+    GasBump,
+    Replacement,
+}
+
+/// A kind of settlement attempt failure, rendered as the `kind` label value
+/// on [`SETTLEMENT_ATTEMPT_ERRORS_TOTAL`].
+///
+/// The variants follow the error taxonomy of issue #1676, with nonce and
+/// gas-price errors kept separate from generic RPC failures so nonce
+/// contention is visible on its own. The mapping from concrete errors to
+/// variants is decided where emission is wired in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum_macros::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum SettlementAttemptErrorKind {
+    NonceTooLow,
+    Underpriced,
+    Rpc,
+    Other,
+}
+
+/// A terminal settlement job outcome, rendered as the `outcome` label value
+/// on [`SETTLEMENT_JOB_DURATION_SECONDS`].
+///
+/// The variants follow the outcome taxonomy of issue #1676. Which terminal
+/// job states map onto which variant is decided where emission is wired in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum_macros::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum SettlementJobOutcome {
+    Success,
+    Revert,
+}
+
+/// Returns the OTel instrument name for an exported counter name.
+///
+/// The prometheus exporter appends `_total` to every counter it renders,
+/// so a counter declared under its full exported name would come out as
+/// `..._total_total`. Declaring the suffix-less name keeps the exported
+/// series exactly on the names mandated by issue #1676; the exporter test
+/// below pins that.
+fn counter_instrument_name(exported_name: &'static str) -> &'static str {
+    exported_name
+        .strip_suffix("_total")
+        .unwrap_or(exported_name)
+}
+
+lazy_static! {
+    static ref SETTLEMENT_ATTEMPTS: Counter<u64> =
+        global::meter(AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME)
+            .u64_counter(counter_instrument_name(SETTLEMENT_ATTEMPTS_TOTAL))
+            .with_description("Number of settlement transaction attempts, by kind")
+            .build();
+    static ref SETTLEMENT_ATTEMPT_ERRORS: Counter<u64> =
+        global::meter(AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME)
+            .u64_counter(counter_instrument_name(SETTLEMENT_ATTEMPT_ERRORS_TOTAL))
+            .with_description(
+                "Number of failed settlement transaction attempts, by kind and wallet"
+            )
+            .build();
+    static ref SETTLEMENT_JOB_DURATION: Histogram<f64> =
+        global::meter(AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME)
+            .f64_histogram(SETTLEMENT_JOB_DURATION_SECONDS)
+            .with_description("Settlement job time from creation to terminal state, in seconds")
+            .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
+            .build();
+}
+
+/// Records one settlement transaction attempt.
+#[inline]
+pub fn record_settlement_attempt(kind: SettlementAttemptKind) {
+    SETTLEMENT_ATTEMPTS.add(1, &[KeyValue::new(KIND_LABEL_NAME, kind.to_string())]);
+}
+
+/// Records one failed settlement transaction attempt on `wallet`.
+#[inline]
+pub fn record_settlement_attempt_error(kind: SettlementAttemptErrorKind, wallet: &str) {
+    SETTLEMENT_ATTEMPT_ERRORS.add(
+        1,
+        &[
+            KeyValue::new(KIND_LABEL_NAME, kind.to_string()),
+            KeyValue::new(WALLET_LABEL_NAME, wallet.to_string()),
+        ],
+    );
+}
+
+/// Records the duration of one settlement job that reached a terminal
+/// state on `wallet`.
+#[inline]
+pub fn record_settlement_job_duration(outcome: SettlementJobOutcome, wallet: &str, seconds: f64) {
+    SETTLEMENT_JOB_DURATION.record(
+        seconds,
+        &[
+            KeyValue::new(OUTCOME_LABEL_NAME, outcome.to_string()),
+            KeyValue::new(WALLET_LABEL_NAME, wallet.to_string()),
+        ],
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutils::MetricsHarness;
+
+    /// Extracts the value of the sample line for `name` carrying every
+    /// label pair in `labels`.
+    fn sample_value(metrics: &str, name: &str, labels: &[(&str, &str)]) -> Option<f64> {
+        let labels: Vec<String> = labels
+            .iter()
+            .map(|(key, value)| format!("{key}=\"{value}\""))
+            .collect();
+        metrics
+            .lines()
+            .find(|line| {
+                line.starts_with(&format!("{name}{{"))
+                    && labels.iter().all(|label| line.contains(label))
+            })
+            .and_then(|line| line.rsplit(' ').next())
+            .map(|value| value.parse().unwrap())
+    }
+
+    #[test]
+    fn settlement_metrics_export_the_issue_1676_series() {
+        // This test deliberately owns the process-global meter provider:
+        // nextest runs one process per test, so nothing else can race it.
+        let harness = MetricsHarness::install();
+
+        record_settlement_attempt(SettlementAttemptKind::Submission);
+        record_settlement_attempt(SettlementAttemptKind::Submission);
+        record_settlement_attempt(SettlementAttemptKind::GasBump);
+        record_settlement_attempt(SettlementAttemptKind::Replacement);
+
+        record_settlement_attempt_error(SettlementAttemptErrorKind::NonceTooLow, "wallet-0");
+        record_settlement_attempt_error(SettlementAttemptErrorKind::Underpriced, "wallet-0");
+        record_settlement_attempt_error(SettlementAttemptErrorKind::Rpc, "wallet-1");
+        record_settlement_attempt_error(SettlementAttemptErrorKind::Other, "wallet-1");
+
+        record_settlement_job_duration(SettlementJobOutcome::Success, "wallet-0", 42.0);
+        record_settlement_job_duration(SettlementJobOutcome::Revert, "wallet-1", 3.0);
+
+        let metrics = harness.gather();
+
+        // The `sample_value` lookup matches `name{` exactly, so these also
+        // fail if the exporter renders a doubled `_total_total` suffix.
+        assert_eq!(
+            sample_value(
+                &metrics,
+                SETTLEMENT_ATTEMPTS_TOTAL,
+                &[("kind", "submission")],
+            ),
+            Some(2.0),
+            "attempts counter, got:\n{metrics}"
+        );
+        assert_eq!(
+            sample_value(&metrics, SETTLEMENT_ATTEMPTS_TOTAL, &[("kind", "gas_bump")]),
+            Some(1.0),
+        );
+        assert_eq!(
+            sample_value(
+                &metrics,
+                SETTLEMENT_ATTEMPTS_TOTAL,
+                &[("kind", "replacement")],
+            ),
+            Some(1.0),
+        );
+
+        assert_eq!(
+            sample_value(
+                &metrics,
+                SETTLEMENT_ATTEMPT_ERRORS_TOTAL,
+                &[("kind", "nonce_too_low"), ("wallet", "wallet-0")],
+            ),
+            Some(1.0),
+            "attempt errors counter, got:\n{metrics}"
+        );
+        assert_eq!(
+            sample_value(
+                &metrics,
+                SETTLEMENT_ATTEMPT_ERRORS_TOTAL,
+                &[("kind", "underpriced"), ("wallet", "wallet-0")],
+            ),
+            Some(1.0),
+        );
+        assert_eq!(
+            sample_value(
+                &metrics,
+                SETTLEMENT_ATTEMPT_ERRORS_TOTAL,
+                &[("kind", "rpc"), ("wallet", "wallet-1")],
+            ),
+            Some(1.0),
+        );
+        assert_eq!(
+            sample_value(
+                &metrics,
+                SETTLEMENT_ATTEMPT_ERRORS_TOTAL,
+                &[("kind", "other"), ("wallet", "wallet-1")],
+            ),
+            Some(1.0),
+        );
+
+        let count_series = format!("{SETTLEMENT_JOB_DURATION_SECONDS}_count");
+        let sum_series = format!("{SETTLEMENT_JOB_DURATION_SECONDS}_sum");
+        let bucket_series = format!("{SETTLEMENT_JOB_DURATION_SECONDS}_bucket");
+        assert_eq!(
+            sample_value(
+                &metrics,
+                &count_series,
+                &[("outcome", "success"), ("wallet", "wallet-0")],
+            ),
+            Some(1.0),
+            "job duration histogram, got:\n{metrics}"
+        );
+        assert_eq!(
+            sample_value(
+                &metrics,
+                &sum_series,
+                &[("outcome", "success"), ("wallet", "wallet-0")],
+            ),
+            Some(42.0),
+        );
+        assert_eq!(
+            sample_value(
+                &metrics,
+                &count_series,
+                &[("outcome", "revert"), ("wallet", "wallet-1")],
+            ),
+            Some(1.0),
+        );
+        assert_eq!(
+            sample_value(
+                &metrics,
+                &sum_series,
+                &[("outcome", "revert"), ("wallet", "wallet-1")],
+            ),
+            Some(3.0),
+        );
+        // The 60s boundary is not one of the OTel defaults, so this bucket
+        // only exists when the shared duration buckets were applied.
+        assert_eq!(
+            sample_value(
+                &metrics,
+                &bucket_series,
+                &[("outcome", "success"), ("wallet", "wallet-0"), ("le", "60"),],
+            ),
+            Some(1.0),
+        );
+    }
+}
