@@ -25,7 +25,6 @@ pub mod settler;
 
 pub use aggchain::AggchainContract;
 pub use rollup::RollupContract;
-pub use settler::Settler;
 
 /// Gas price parameters for L1 transactions.
 #[derive(Debug, Clone)]
@@ -93,10 +92,6 @@ pub struct L1RpcClient<RpcProvider> {
     global_exit_root_manager_contract: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
-    /// Gas multiplier factor for transactions.
-    gas_multiplier_factor: u32,
-    /// Gas price parameters for transactions.
-    gas_price_params: GasPriceParams,
     /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
     /// Map<leaf_count, l1_info_root>
     l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
@@ -145,13 +140,6 @@ pub enum L1RpcError {
     #[error("Failed to retrieve rollup data")]
     RollupDataRetrievalFailed,
 
-    #[error("Unable to get transaction {tx_hash}")]
-    UnableToGetTransaction {
-        tx_hash: SettlementTxHash,
-        #[source]
-        source: eyre::Error,
-    },
-
     #[error("Unable to parse aggchain vkey")]
     UnableToParseAggchainVkey,
 
@@ -176,9 +164,6 @@ pub enum L1RpcError {
     #[error("Transaction receipt for tx {0} failed on L1")]
     TransactionReceiptFailedOnL1(TxHash),
 
-    #[error("Failed to get the events")]
-    FailedToQueryEvents(#[source] eyre::Error),
-
     #[error("L1 info roots cache lock poisoned")]
     CacheLockPoisoned,
 }
@@ -187,14 +172,11 @@ impl<RpcProvider> L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         global_exit_root_manager_contract: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
-        gas_multiplier_factor: u32,
-        gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
     ) -> Self {
         Self {
@@ -202,8 +184,6 @@ where
             inner,
             global_exit_root_manager_contract,
             default_l1_info_tree_entry,
-            gas_multiplier_factor,
-            gas_price_params,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
             event_filter_block_range,
         }
@@ -213,8 +193,6 @@ where
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         global_exit_root_manager_contract: Address,
-        gas_multiplier_factor: u32,
-        gas_price_params: GasPriceParams,
         event_filter_block_range: u64,
     ) -> eyre::Result<Self>
     where
@@ -289,8 +267,6 @@ where
             inner,
             global_exit_root_manager_contract,
             default_l1_info_tree_entry,
-            gas_multiplier_factor,
-            gas_price_params,
             event_filter_block_range,
         ))
     }
@@ -422,8 +398,6 @@ mod tests {
             Arc::new(rpc.clone()),
             contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
             contracts.ger_contract,
-            100, // default gas_multiplier_factor
-            GasPriceParams::default(),
             10000, // default event_filter_block_range
         )
         .await
@@ -490,8 +464,6 @@ mod tests {
                 Arc::new(rpc.clone()),
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
-                100,
-                GasPriceParams::default(),
                 10000,
             )
             .await
@@ -545,8 +517,6 @@ mod tests {
             Arc::new(rpc.clone()),
             contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
             contracts.ger_contract,
-            100, // default gas_multiplier_factor
-            GasPriceParams::default(),
             10000, // default event_filter_block_range
         )
         .await

@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 
 #[rstest]
 #[case::cert_task_type_0_ecdsa(
-    &["certificate_task::process_impl::about_to_record_candidate", "network_task::make_progress::settlement_submitted"],
+    &["certificate_task::process_impl::about_to_record_candidate"],
     crate::common::type_0_ecdsa_forest()
 )]
 #[tokio::test]
@@ -186,16 +186,9 @@ async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
     )
     .expect("Failed to configure candidate_recorded failpoint");
 
-    let mut config = agglayer_config::Config::new(&tmp_dir.path);
-    config.outbound.rpc.settle_cert.confirmations = 10;
-
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) = setup_network(
-        &tmp_dir.path,
-        Some(config),
-        Some(cancellation_token.clone()),
-    )
-    .await;
+    let (agglayer_shutdowned, l1, client) =
+        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
     let imported_bridge_events = vec![];

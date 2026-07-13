@@ -9,10 +9,7 @@ use std::{
 use agglayer_clock::{ClockRef, Event};
 use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::{
-    columns::{
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
+    columns::latest_proven_certificate_per_network::ProvenCertificate,
     stores::{
         EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
         PerEpochReader, PerEpochWriter, StateReader, StateWriter,
@@ -33,37 +30,16 @@ mod certificate_task;
 mod certifier;
 mod error;
 mod network_task;
-mod settlement_client;
 #[cfg(test)]
 mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
 pub use error::{CertificationError, Error, PreCertificationError};
-pub use settlement_client::{NonceInfo, SettlementClient, TxReceiptStatus};
 
 const MAX_POLL_READS: usize = 1_000;
 
-pub type EpochPackingTasks =
-    FuturesUnordered<Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'static>>>;
-
 pub type NetworkTasks = FuturesUnordered<
     Pin<Box<dyn Future<Output = Result<NetworkId, (NetworkId, Error)>> + Send + 'static>>,
->;
-
-pub type SettlementContext = (NetworkId, CertificateId);
-
-pub type SettlementTasks = FuturesUnordered<
-    Pin<
-        Box<
-            dyn Future<
-                    Output = (
-                        SettlementContext,
-                        Result<(NetworkId, SettledCertificate), Error>,
-                    ),
-                > + Send
-                + 'static,
-        >,
-    >,
 >;
 
 /// The Certificate orchestrator receives the certificates from CDKs.
@@ -79,8 +55,6 @@ pub struct CertificateOrchestrator<
     StateStore,
     SettlementService,
 > {
-    /// Epoch packing task resolver.
-    epoch_packing_tasks: EpochPackingTasks,
     /// Certifier task builder.
     certifier_task_builder: Arc<CertifierClient>,
     /// Clock stream to receive EpochEnded events.
@@ -143,7 +117,6 @@ where
         settlement_service: Arc<SettlementService>,
     ) -> Result<Self, Error> {
         Ok(Self {
-            epoch_packing_tasks: FuturesUnordered::new(),
             clock: Box::pin(tokio_stream::StreamExt::filter_map(
                 tokio_stream::wrappers::BroadcastStream::new(clock.subscribe()?),
                 |v| v.ok(),
@@ -191,7 +164,6 @@ where
     /// - `data_receiver`: Sets the receiver for certificates coming from CDKs.
     /// - `cancellation_token`: Sets the cancellation token for graceful
     ///   shutdown.
-    /// - `epoch_packing_builder`: Sets the task builder for epoch packing.
     /// - `start`: Starts the CertificateOrchestrator.
     ///
     /// # Errors
@@ -369,8 +341,6 @@ where
 
         Ok(())
     }
-
-    fn handle_epoch_packing_result(&mut self) {}
 }
 
 impl<A, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementService> Future
@@ -413,19 +383,6 @@ where
             }
             Poll::Ready(None) => {}
             Poll::Pending => {}
-        }
-
-        // Poll the notification tasks to check if any have errored.
-        match self.epoch_packing_tasks.poll_next_unpin(cx) {
-            Poll::Ready(Some(Err(error))) => {
-                error!("Error during epoch packing: {:?}", error)
-            }
-            Poll::Ready(Some(Ok(()))) => {
-                debug!("Successfully settled the epoch");
-
-                self.handle_epoch_packing_result();
-            }
-            _ => {}
         }
 
         let mut received = vec![];

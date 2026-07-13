@@ -79,16 +79,13 @@ dependencies = [
  "agglayer-types",
  "alloy",
  "anyhow",
- "arc-swap",
  "async-trait",
  "eyre",
  "fail",
  "futures",
- "hex",
  "mockall",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
- "prover-alloy",
  "prover-config",
  "prover-executor",
  "reqwest 0.12.28",
@@ -104,7 +101,6 @@ dependencies = [
  "tokio-util",
  "tower 0.4.13",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -140,7 +136,6 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-test-suite",
  "agglayer-types",
- "alloy",
  "arc-swap",
  "async-trait",
  "buildstructor 0.6.0",

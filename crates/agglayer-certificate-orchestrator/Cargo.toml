@@ -19,7 +19,6 @@ testutils = [
 ]
 
 [dependencies]
-alloy.workspace = true
 arc-swap.workspace = true
 async-trait.workspace = true
 buildstructor.workspace = true
@@ -55,7 +54,6 @@ agglayer-certificate-orchestrator = { workspace = true, features = [
 agglayer-settlement-service = { workspace = true, features = ["testutils"] }
 
 async-trait.workspace = true
-alloy.workspace = true
 lazy_static.workspace = true
 mockall.workspace = true
 rstest.workspace = true

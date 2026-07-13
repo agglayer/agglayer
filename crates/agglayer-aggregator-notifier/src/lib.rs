@@ -2,7 +2,5 @@
 const ELF: &[u8] = pessimistic_proof::ELF;
 
 mod certifier;
-mod settlement_client;
 
 pub use certifier::CertifierClient;
-pub use settlement_client::RpcSettlementClient;

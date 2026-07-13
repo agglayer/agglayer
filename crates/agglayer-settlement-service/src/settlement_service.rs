@@ -120,7 +120,7 @@ impl<
             .wrap_err_with(|| {
                 format!("Failed to load settlement job {job_id} during startup recovery")
             })? {
-                StoredSettlementJob::Completed(_, _) => {
+                StoredSettlementJob::Completed(_) => {
                     completed_jobs += 1;
                 }
                 StoredSettlementJob::Pending(task) => {
@@ -199,7 +199,7 @@ impl<
                             Ok(StoredSettlementJob::Pending(reloaded_task)) => {
                                 task = reloaded_task;
                             }
-                            Ok(StoredSettlementJob::Completed(_, result)) => {
+                            Ok(StoredSettlementJob::Completed(result)) => {
                                 if let Err(error) = result_sender.send(Some(result)) {
                                     error!(
                                         ?error,
@@ -724,7 +724,7 @@ mod tests {
         .expect("settlement task should load")
         {
             StoredSettlementJob::Pending(task) => task,
-            StoredSettlementJob::Completed(_, _) => panic!("initial load should be pending"),
+            StoredSettlementJob::Completed(_) => panic!("initial load should be pending"),
         };
 
         let mut result_receiver = service

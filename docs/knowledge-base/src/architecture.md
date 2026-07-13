@@ -23,7 +23,7 @@ including README references to crate/domain ownership.
 | Crate | Primary responsibility |
 |---|---|
 | `agglayer-certificate-orchestrator` | Certificate lifecycle orchestration and task scheduling |
-| `agglayer-aggregator-notifier` | Certifier client and epoch packing pipeline |
+| `agglayer-aggregator-notifier` | Certifier client driving pessimistic-proof generation |
 | `agglayer-settlement-service` | Settlement request handling and L1 transaction workflow |
 | `agglayer-signer` | Signing abstraction used for settlement/proof flows |
 | `agglayer-gcp-kms` | GCP KMS-backed key management |

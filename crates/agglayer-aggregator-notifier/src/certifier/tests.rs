@@ -2,12 +2,11 @@ use std::{sync::Arc, time::Duration};
 
 use agglayer_certificate_orchestrator::Certifier;
 use agglayer_config::Config;
-use agglayer_contracts::{L1RpcError, Settler};
+use agglayer_contracts::L1RpcError;
 use agglayer_primitives::vkey_hash::VKeyHash;
 use agglayer_storage::tests::{mocks::MockPendingStore, TempDBDir};
 use agglayer_types::{Address, Height, LocalNetworkStateData, NetworkId, SettlementTxHash};
 use alloy::{
-    contract::Error as ContractError,
     network::Ethereum,
     primitives::{Bytes, TxHash},
     rpc::types::TransactionReceipt,
@@ -304,21 +303,5 @@ mockall::mock! {
         async fn fetch_transaction_receipt(&self, tx_hash: SettlementTxHash) -> Result<Option<TransactionReceipt>, L1RpcError>;
 
         fn get_provider(&self) -> &<Self as agglayer_contracts::L1TransactionFetcher>::Provider;
-    }
-
-    #[async_trait::async_trait]
-    impl Settler for L1Rpc {
-        fn decode_contract_revert(error: &ContractError) -> Option<String>;
-
-        async fn verify_pessimistic_trusted_aggregator(
-            &self,
-            rollup_id: u32,
-            l_1_info_tree_leaf_count: u32,
-            new_local_exit_root: [u8; 32],
-            new_pessimistic_root: [u8; 32],
-            proof: Bytes,
-            custom_chain_data: Bytes,
-            nonce: Option<(u64, u128, Option<u128>)>
-        ) -> Result<alloy::providers::PendingTransactionBuilder<Ethereum>, ContractError>;
     }
 }
