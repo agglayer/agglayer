@@ -22,16 +22,6 @@ send-tx = "unlimited"
 
 [rate-limiting.network]
 
-[outbound.rpc.settle-tx]
-max-retries = 3
-retry-interval = "7s"
-confirmations = 12
-
-[outbound.rpc.settle-cert]
-max-retries = 3
-retry-interval = "7s"
-confirmations = 12
-
 [l1]
 chain-id = 1337
 node-url = "http://zkevm-mock-l1-network:8545/"

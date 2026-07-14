@@ -78,7 +78,7 @@ pub struct Config {
     pub rate_limiting: RateLimitingConfig,
 
     /// The configuration for every outbound network component.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub outbound: OutboundConfig,
 
     /// The L1 configuration.
