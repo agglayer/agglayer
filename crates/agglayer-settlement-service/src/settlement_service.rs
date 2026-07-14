@@ -106,6 +106,7 @@ impl<
 
         let mut completed_jobs = 0usize;
         let mut resumed_jobs = 0usize;
+        let mut skipped_jobs = 0usize;
         for job_id in job_ids {
             let (task_control_handle, task_control) =
                 TaskControlHandle::new(&self.cancellation_token);
@@ -117,23 +118,32 @@ impl<
                 task_control,
             )
             .await
-            .wrap_err_with(|| {
-                format!("Failed to load settlement job {job_id} during startup recovery")
-            })? {
-                StoredSettlementJob::Completed(_, _) => {
+            {
+                Ok(StoredSettlementJob::Completed(_, _)) => {
                     completed_jobs += 1;
                 }
-                StoredSettlementJob::Pending(task) => {
+                Ok(StoredSettlementJob::Pending(task)) => {
                     self.spawn_settlement_task(job_id, task, task_control_handle)
                         .await;
                     resumed_jobs += 1;
+                }
+                // An unloadable job must not prevent node boot: skip it and
+                // report loudly so it can be inspected and repaired.
+                Err(error) => {
+                    error!(
+                        ?error,
+                        %job_id,
+                        "Failed to load settlement job during startup recovery; skipping"
+                    );
+                    agglayer_telemetry::settlement::record_settlement_recovery_skipped_job();
+                    skipped_jobs += 1;
                 }
             }
         }
 
         info!(
             completed_jobs,
-            resumed_jobs, "Settlement service startup recovery scan completed"
+            resumed_jobs, skipped_jobs, "Settlement service startup recovery scan completed"
         );
         Ok(())
     }
@@ -549,6 +559,46 @@ mod tests {
             .return_once(move |_| Ok(Some(result)));
         store.expect_list_settlement_attempts().never();
         store.expect_list_settlement_attempt_results().never();
+
+        let service = mk_service(Arc::new(store)).await;
+
+        assert!(service.task_controls.lock().await.is_empty());
+        assert!(service.result_watchers.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn start_skips_unloadable_jobs_and_keeps_scanning() {
+        let mut store = MockStateStore::new();
+        let unloadable_job_id = mk_job_id(8);
+        let completed_job_id = mk_job_id(9);
+        let completed_job = mk_job(9);
+        let completed_result = mk_result(9, ContractCallOutcome::Success);
+
+        // The unloadable job comes first: startup must skip it and still
+        // process the following one.
+        store
+            .expect_list_settlement_job_ids()
+            .once()
+            .return_once(move || Ok(vec![unloadable_job_id, completed_job_id]));
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &unloadable_job_id)
+            .return_once(|_| {
+                Err(agglayer_storage::error::Error::UnprocessedAction(
+                    "corrupt settlement job row".into(),
+                ))
+            });
+        store
+            .expect_get_settlement_job()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &completed_job_id)
+            .return_once(move |_| Ok(Some(completed_job)));
+        store
+            .expect_get_settlement_job_result()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &completed_job_id)
+            .return_once(move |_| Ok(Some(completed_result)));
 
         let service = mk_service(Arc::new(store)).await;
 
