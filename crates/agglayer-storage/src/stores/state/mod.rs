@@ -25,6 +25,7 @@ use crate::{
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
+        certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
@@ -214,6 +215,8 @@ impl StateWriter for StateStore {
         certificate_id: &CertificateId,
         settlement_job_id: &SettlementJobId,
     ) -> Result<(), Error> {
+        // The check-then-write is lock-free: job ids are fresh ULIDs, so the
+        // duplicate checks only guard against caller bugs, not races.
         if self
             .db
             .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
@@ -224,9 +227,28 @@ impl StateWriter for StateStore {
             )));
         }
 
-        Ok(self
+        if self
             .db
-            .put::<SettlementJobIdPerCertificateIdColumn>(certificate_id, settlement_job_id)?)
+            .get::<CertificateIdPerSettlementJobIdColumn>(settlement_job_id)?
+            .is_some()
+        {
+            return Err(Error::UnprocessedAction(format!(
+                "Settlement job {settlement_job_id} is already linked to a certificate"
+            )));
+        }
+
+        let mut batch = WriteBatch::default();
+        self.db
+            .multi_insert_batch::<SettlementJobIdPerCertificateIdColumn>(
+                [(certificate_id, settlement_job_id)],
+                &mut batch,
+            )?;
+        self.db
+            .multi_insert_batch::<CertificateIdPerSettlementJobIdColumn>(
+                [(settlement_job_id, certificate_id)],
+                &mut batch,
+            )?;
+        Ok(self.db.write_batch(batch)?)
     }
 
     fn assign_certificate_to_epoch(
