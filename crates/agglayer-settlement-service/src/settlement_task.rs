@@ -523,6 +523,14 @@ impl<
                 return run_result;
             }
 
+            // A recorded successful attempt result means a previous run
+            // already confirmed settlement per the configured policy but
+            // stopped before finishing the completion writes; finish them
+            // before any submission logic can run.
+            if let Some(job_result) = self.try_complete_interrupted_success().await {
+                return SettlementTaskRunResult::Completed(job_result);
+            }
+
             // Process in a big loop. We'll come back here whenever a reorg is detected, and
             // after waiting when we're done with one cycle.
 
@@ -1641,6 +1649,37 @@ impl<
         recorded_attempt_count
     }
 
+    /// Finishes the completion writes of a job whose previous run recorded a
+    /// successful, policy-confirmed attempt result but stopped before writing
+    /// the terminal job result.
+    ///
+    /// Reuses the stored result verbatim, so already-performed completion
+    /// writes are idempotent no-ops. Interrupted revert completions have no
+    /// such shortcut: they are re-derived from L1 by the run loop, which is
+    /// equally idempotent.
+    async fn try_complete_interrupted_success(&mut self) -> Option<SettlementJobResult> {
+        let (wallet, nonce, attempt_number, tx_result) =
+            self.attempts
+                .iter()
+                .find_map(|(&(wallet, nonce), attempts_for_nonce)| {
+                    attempts_for_nonce
+                        .iter()
+                        .find_map(|(&attempt_number, attempt)| match attempt.result.as_ref() {
+                            Some(SettlementAttemptResult::ContractCall(result))
+                                if result.outcome == ContractCallOutcome::Success =>
+                            {
+                                Some((wallet, nonce, attempt_number, result.clone()))
+                            }
+                            _ => None,
+                        })
+                })?;
+
+        Some(
+            self.write_job_result_to_db(wallet, nonce, attempt_number, tx_result)
+                .await,
+        )
+    }
+
     async fn write_job_result_to_db(
         &mut self,
         wallet: Address,
@@ -1648,10 +1687,6 @@ impl<
         attempt_number: SettlementAttemptNumber,
         tx_result: ContractCallResult,
     ) -> SettlementJobResult {
-        // TODO: Handle interrupted completion writes in the resumption path.
-        // Attempt results are persisted before the terminal job result below; if
-        // the process stops in between, loading the pending job must resume these
-        // writes before considering any new settlement submission.
         self.record_attempt_result_to_db(
             attempt_number,
             SettlementAttemptResult::ContractCall(tx_result.clone()),
@@ -2654,6 +2689,138 @@ mod tests {
                 ..
             }))
         ));
+    }
+
+    #[tokio::test]
+    async fn try_complete_interrupted_success_finishes_completion_writes() {
+        let wallet = Address::from([4; 20]);
+        let other_wallet = Address::from([5; 20]);
+        let nonce = Nonce(11);
+        let other_nonce = Nonce(12);
+        let attempt_number = SettlementAttemptNumber(1);
+        let sibling_attempt_number = SettlementAttemptNumber(2);
+        let other_attempt_number = SettlementAttemptNumber(3);
+        let tx_result = mk_contract_call_result(60, ContractCallOutcome::Success);
+        let expected_wallet: agglayer_types::Address = wallet.into();
+        let expected_tx_result = tx_result.clone();
+
+        // The winning attempt already carries its stored result (the crash
+        // happened after recording it); the sibling and other-wallet attempts
+        // still miss their completion markers.
+        let mut attempts = BTreeMap::new();
+        attempts.insert(
+            (wallet, nonce),
+            BTreeMap::from([
+                (
+                    attempt_number,
+                    mk_active_attempt(
+                        wallet,
+                        nonce,
+                        tx_result.tx_hash,
+                        Some(SettlementAttemptResult::ContractCall(tx_result.clone())),
+                    ),
+                ),
+                (
+                    sibling_attempt_number,
+                    mk_active_attempt(wallet, nonce, mk_tx_hash(70), None),
+                ),
+            ]),
+        );
+        attempts.insert(
+            (other_wallet, other_nonce),
+            BTreeMap::from([(
+                other_attempt_number,
+                mk_active_attempt(other_wallet, other_nonce, mk_tx_hash(80), None),
+            )]),
+        );
+
+        let mut store = MockStateStore::new();
+        // Only the two unresolved attempts get a store write; the winner's
+        // identical re-record no-ops in memory.
+        store
+            .expect_record_settlement_attempt_result()
+            .times(2)
+            .returning(|_, _, _| Ok(()));
+        store
+            .expect_insert_settlement_job_result()
+            .once()
+            .withf(move |_, result| {
+                result.wallet == expected_wallet
+                    && result.nonce == nonce
+                    && result.attempt_number == attempt_number
+                    && result.contract_call_result == expected_tx_result
+            })
+            .returning(|_, _| Ok(()));
+
+        let mut task = mk_task(Arc::new(store), attempts);
+
+        let job_result = task
+            .try_complete_interrupted_success()
+            .await
+            .expect("recorded successful attempt must complete the job");
+
+        assert_eq!(job_result.contract_call_result, tx_result);
+        assert!(matches!(
+            task.attempts[&(wallet, nonce)][&sibling_attempt_number]
+                .result
+                .as_ref(),
+            Some(SettlementAttemptResult::ClientError(ClientError {
+                kind: ClientErrorType::NonceAlreadyUsed,
+                ..
+            }))
+        ));
+        assert!(matches!(
+            task.attempts[&(other_wallet, other_nonce)][&other_attempt_number]
+                .result
+                .as_ref(),
+            Some(SettlementAttemptResult::ClientError(ClientError {
+                kind: ClientErrorType::SettlementSucceededElsewhere,
+                ..
+            }))
+        ));
+    }
+
+    #[tokio::test]
+    async fn try_complete_interrupted_success_ignores_jobs_without_recorded_success() {
+        let wallet = Address::from([6; 20]);
+        let nonce = Nonce(13);
+        let revert = mk_contract_call_result(90, ContractCallOutcome::Revert);
+
+        let attempts = BTreeMap::from([(
+            (wallet, nonce),
+            BTreeMap::from([
+                (
+                    SettlementAttemptNumber(1),
+                    mk_active_attempt(
+                        wallet,
+                        nonce,
+                        revert.tx_hash,
+                        Some(SettlementAttemptResult::ContractCall(revert)),
+                    ),
+                ),
+                (
+                    SettlementAttemptNumber(2),
+                    mk_active_attempt(
+                        wallet,
+                        nonce,
+                        mk_tx_hash(91),
+                        Some(SettlementAttemptResult::ClientError(ClientError {
+                            kind: ClientErrorType::Unknown,
+                            message: "submission failed".to_string(),
+                        })),
+                    ),
+                ),
+                (
+                    SettlementAttemptNumber(3),
+                    mk_active_attempt(wallet, nonce, mk_tx_hash(92), None),
+                ),
+            ]),
+        )]);
+
+        // No expectations: any store write would panic the mock.
+        let mut task = mk_task(Arc::new(MockStateStore::new()), attempts);
+
+        assert!(task.try_complete_interrupted_success().await.is_none());
     }
 
     #[test]
