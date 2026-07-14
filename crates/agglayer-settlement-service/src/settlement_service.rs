@@ -33,6 +33,7 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
     result_watchers:
         Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
+    recovery_skipped_jobs: u64,
 }
 
 pub struct SettlementJobWatcher {
@@ -81,20 +82,29 @@ impl<
         store: Arc<SettlementStore>,
         cancellation_token: CancellationToken,
     ) -> eyre::Result<Self> {
-        let this = Self {
+        let mut this = Self {
             tx_config,
             provider,
             store,
             cancellation_token,
             task_controls: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
+            recovery_skipped_jobs: 0,
         };
-        this.resume_pending_settlement_jobs().await?;
+        this.recovery_skipped_jobs = this.resume_pending_settlement_jobs().await?;
         Ok(this)
     }
 
+    /// Number of settlement jobs the startup recovery scan skipped because
+    /// they could not be loaded. The node records this as a metric; the
+    /// service crate stays free of the telemetry dependency.
+    pub fn recovery_skipped_jobs(&self) -> u64 {
+        self.recovery_skipped_jobs
+    }
+
+    /// Returns the number of jobs skipped because they could not be loaded.
     #[tracing::instrument(skip_all)]
-    async fn resume_pending_settlement_jobs(&self) -> eyre::Result<()> {
+    async fn resume_pending_settlement_jobs(&self) -> eyre::Result<u64> {
         // TODO: Avoid scanning the whole settlement jobs CF on every startup.
         // Record the latest ULID before which all settlement job ids are known
         // to be fully complete in the metadata CF, then start future scans from
@@ -106,7 +116,7 @@ impl<
 
         let mut completed_jobs = 0usize;
         let mut resumed_jobs = 0usize;
-        let mut skipped_jobs = 0usize;
+        let mut skipped_jobs = 0u64;
         for job_id in job_ids {
             let (task_control_handle, task_control) =
                 TaskControlHandle::new(&self.cancellation_token);
@@ -135,7 +145,6 @@ impl<
                         %job_id,
                         "Failed to load settlement job during startup recovery; skipping"
                     );
-                    agglayer_telemetry::settlement::record_settlement_recovery_skipped_job();
                     skipped_jobs += 1;
                 }
             }
@@ -145,7 +154,7 @@ impl<
             completed_jobs,
             resumed_jobs, skipped_jobs, "Settlement service startup recovery scan completed"
         );
-        Ok(())
+        Ok(skipped_jobs)
     }
 
     async fn spawn_settlement_task(
@@ -602,6 +611,7 @@ mod tests {
 
         let service = mk_service(Arc::new(store)).await;
 
+        assert_eq!(service.recovery_skipped_jobs(), 1);
         assert!(service.task_controls.lock().await.is_empty());
         assert!(service.result_watchers.lock().await.is_empty());
     }

@@ -148,11 +148,12 @@ pub fn record_settlement_job_duration(outcome: SettlementJobOutcome, wallet: &st
     );
 }
 
-/// Records one settlement job skipped during startup recovery because it
-/// could not be loaded.
+/// Records how many settlement jobs the startup recovery scan skipped
+/// because they could not be loaded. Called once at node startup; a zero
+/// count still exports the series.
 #[inline]
-pub fn record_settlement_recovery_skipped_job() {
-    SETTLEMENT_RECOVERY_SKIPPED_JOBS_COUNTER.add(1, &[]);
+pub fn record_settlement_recovery_skipped_jobs(count: u64) {
+    SETTLEMENT_RECOVERY_SKIPPED_JOBS_COUNTER.add(count, &[]);
 }
 
 #[cfg(test)]

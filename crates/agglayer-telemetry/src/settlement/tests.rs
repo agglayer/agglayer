@@ -145,8 +145,8 @@ fn settlement_metrics_export_the_issue_1676_series() {
 fn recovery_skipped_jobs_counter_exports() {
     let harness = MetricsHarness::install();
 
-    record_settlement_recovery_skipped_job();
-    record_settlement_recovery_skipped_job();
+    record_settlement_recovery_skipped_jobs(0);
+    record_settlement_recovery_skipped_jobs(2);
 
     let metrics = harness.gather();
 
