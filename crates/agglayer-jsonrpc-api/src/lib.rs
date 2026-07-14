@@ -11,7 +11,8 @@ use agglayer_storage::stores::{
     PendingCertificateWriter, SettlementReader, StateReader, StateWriter,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, NetworkInfo,
+    Certificate, CertificateHeader, CertificateId, CertificateInfo, EpochConfiguration, Height,
+    NetworkId, NetworkInfo,
 };
 use alloy::{primitives::B256, providers::Provider};
 use error::{Error, RpcResult};
@@ -82,6 +83,14 @@ trait Agglayer {
 
     #[method(name = "getNetworkInfo")]
     async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<NetworkInfo>;
+
+    #[method(name = "getCertificateInfo")]
+    async fn get_certificate_info(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        include_claims: Option<bool>,
+    ) -> RpcResult<CertificateInfo>;
 }
 
 /// The RPC agglayer service implementation.
@@ -282,6 +291,19 @@ where
         let state = self.rpc_service.get_network_info(network_id)?;
 
         Ok(state)
+    }
+
+    async fn get_certificate_info(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        include_claims: Option<bool>,
+    ) -> RpcResult<CertificateInfo> {
+        Ok(self.rpc_service.get_certificate_info(
+            network_id,
+            height,
+            include_claims.unwrap_or(false),
+        )?)
     }
 }
 

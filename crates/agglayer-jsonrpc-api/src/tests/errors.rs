@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use agglayer_rate_limiting::{self, component, Component};
 use agglayer_rpc::error::SignatureVerificationError;
-use agglayer_types::{Address, CertificateId, Digest};
+use agglayer_types::{Address, CertificateId, Digest, EpochNumber, Height, NetworkId};
 use alloy::{
     contract::Error as ContractError,
     primitives::{SignatureError as AlloySignatureError, B256},
@@ -146,6 +146,22 @@ type WallClockLimitedInfo = <component::SendTx as Component>::LimitedInfo;
 #[case(
     "cert_notfound",
     agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id: CertificateId::new(Digest([0x51; 32])) }
+)]
+#[case(
+    "cert_notfound_at_height",
+    agglayer_rpc::CertificateRetrievalError::NotFoundAtHeight {
+        network_id: NetworkId::new(2),
+        height: Height::new(3),
+    }
+)]
+#[case(
+    "cert_too_old",
+    agglayer_rpc::CertificateRetrievalError::TooOld {
+        network_id: NetworkId::new(2),
+        height: Height::new(3),
+        certificate_epoch: EpochNumber::new(7),
+        latest_settled_epoch: EpochNumber::new(42),
+    }
 )]
 #[case(
     "method_disabled",

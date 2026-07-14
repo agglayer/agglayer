@@ -1,0 +1,23 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/get_certificate_info.rs
+expression: "{\n  \"id\": 0,\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"interop_getCertificateInfo\",\n  \"params\": [\n    1,\n    0,\n    true\n  ]\n}"
+snapshot_kind: text
+---
+{
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": {
+    "certificate_id": "[certificate_id]",
+    "claims": [
+      "0x10000000000000000"
+    ],
+    "exit_count": 2,
+    "height": 0,
+    "leaf_range": {
+      "end": 2,
+      "start": 0
+    },
+    "network_id": 1,
+    "status": "Settled"
+  }
+}

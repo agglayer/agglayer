@@ -2,7 +2,7 @@
 use agglayer_contracts::L1RpcError;
 pub use agglayer_storage::error::Error as StorageError;
 pub use agglayer_types::primitives::Digest;
-use agglayer_types::{Address, CertificateId, Height, NetworkId, SignerError};
+use agglayer_types::{Address, CertificateId, EpochNumber, Height, NetworkId, SignerError};
 use alloy::contract::Error as ContractError;
 
 pub use crate::rate_limiting::RateLimited as RateLimitedError;
@@ -14,6 +14,23 @@ pub enum CertificateRetrievalError {
 
     #[error("Data for certificate {certificate_id} not found")]
     NotFound { certificate_id: CertificateId },
+
+    #[error("No certificate found for network {network_id} at height {height}")]
+    NotFoundAtHeight {
+        network_id: NetworkId,
+        height: Height,
+    },
+
+    #[error(
+        "Certificate at height {height} for network {network_id} was settled in a past epoch \
+         ({certificate_epoch}), latest epoch with a settlement is {latest_settled_epoch}"
+    )]
+    TooOld {
+        network_id: NetworkId,
+        height: Height,
+        certificate_epoch: EpochNumber,
+        latest_settled_epoch: EpochNumber,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]

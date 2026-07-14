@@ -72,17 +72,21 @@ where
                 error!(?error, "returning internal storage error to RPC");
                 Err(tonic::Status::internal("Internal storage error"))
             }
-            Err(agglayer_rpc::CertificateRetrievalError::NotFound { .. }) => {
-                Err(tonic::Status::with_error_details(
-                    tonic::Code::NotFound,
-                    "Certificate not found",
-                    ErrorDetails::with_error_info(
-                        GetCertificateHeaderErrorKind::NotFound.as_str_name(),
-                        GET_CERTIFICATE_HEADER_METHOD_PATH,
-                        [],
-                    ),
-                ))
+            Err(error @ agglayer_rpc::CertificateRetrievalError::TooOld { .. }) => {
+                Err(tonic::Status::invalid_argument(error.to_string()))
             }
+            Err(
+                agglayer_rpc::CertificateRetrievalError::NotFound { .. }
+                | agglayer_rpc::CertificateRetrievalError::NotFoundAtHeight { .. },
+            ) => Err(tonic::Status::with_error_details(
+                tonic::Code::NotFound,
+                "Certificate not found",
+                ErrorDetails::with_error_info(
+                    GetCertificateHeaderErrorKind::NotFound.as_str_name(),
+                    GET_CERTIFICATE_HEADER_METHOD_PATH,
+                    [],
+                ),
+            )),
             Ok(header) => Ok(tonic::Response::new(GetCertificateHeaderResponse {
                 certificate_header: Some(header.into()),
             })),
@@ -131,7 +135,11 @@ where
                 error!(?error, "returning internal storage error to RPC");
                 tonic::Status::internal("Internal storage error")
             }
-            agglayer_rpc::CertificateRetrievalError::NotFound { .. } => {
+            error @ agglayer_rpc::CertificateRetrievalError::TooOld { .. } => {
+                tonic::Status::invalid_argument(error.to_string())
+            }
+            agglayer_rpc::CertificateRetrievalError::NotFound { .. }
+            | agglayer_rpc::CertificateRetrievalError::NotFoundAtHeight { .. } => {
                 tonic::Status::with_error_details(
                     tonic::Code::NotFound,
                     "Certificate not found",

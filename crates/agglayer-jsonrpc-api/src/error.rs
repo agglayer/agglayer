@@ -254,6 +254,12 @@ impl From<agglayer_rpc::CertificateRetrievalError> for Error {
             agglayer_rpc::CertificateRetrievalError::NotFound { certificate_id } => {
                 Self::ResourceNotFound(format!("Certificate({certificate_id})"))
             }
+            agglayer_rpc::CertificateRetrievalError::NotFoundAtHeight { network_id, height } => {
+                Self::ResourceNotFound(format!("Certificate({network_id}, height {height})"))
+            }
+            error @ agglayer_rpc::CertificateRetrievalError::TooOld { .. } => {
+                Self::InvalidArgument(error.to_string())
+            }
         }
     }
 }

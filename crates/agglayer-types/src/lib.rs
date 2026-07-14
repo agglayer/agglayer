@@ -20,8 +20,8 @@ pub mod testutils {
     pub use crate::certificate::{compute_signature_info, dummy_sp1_stark_proof_with_version};
 }
 pub use certificate::{
-    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Height,
-    Metadata, SettlementTxHash,
+    Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateInfo,
+    CertificateStatus, Height, Metadata, SettlementTxHash,
 };
 pub use epoch::{EpochConfiguration, EpochNumber};
 pub use error::{CertificateStatusError, Error, SignerError};

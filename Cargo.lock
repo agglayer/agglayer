@@ -439,6 +439,7 @@ dependencies = [
  "lazy_static",
  "mockall",
  "pessimistic-proof",
+ "pessimistic-proof-test-suite",
  "pin-project",
  "rand 0.9.3",
  "reqwest 0.12.28",

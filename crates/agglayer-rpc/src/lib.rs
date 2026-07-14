@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
@@ -13,8 +13,8 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
-    CertificateId, CertificateStatus, ContractCallOutcome, EpochConfiguration, Height, NetworkId,
-    NetworkInfo, NetworkStatus, NetworkType, SettledClaim, U256,
+    CertificateId, CertificateInfo, CertificateStatus, ContractCallOutcome, EpochConfiguration,
+    EpochNumber, Height, NetworkId, NetworkInfo, NetworkStatus, NetworkType, SettledClaim, U256,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
@@ -111,6 +111,17 @@ where
             .get_latest_settled_certificate_per_network(network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
             .map(|(_, SettledCertificate(id, height, _, _))| (id, height)))
+    }
+
+    fn latest_settled_height_and_epoch(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(Height, EpochNumber)>, agglayer_storage::error::Error> {
+        Ok(self
+            .state
+            .get_latest_settled_certificate_per_network(network_id)
+            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
+            .map(|(_, SettledCertificate(_, height, epoch, _))| (height, epoch)))
     }
 
     fn latest_proven_id_and_height(
@@ -430,6 +441,231 @@ where
         // No imported bridge exits found in any certificate from `settled_height` down
         // to 0
         Ok(None)
+    }
+
+    /// Get the projection binding the certificate at the given height to its
+    /// bridge exits (local exit tree leaf range) and, optionally, to its
+    /// claims (imported bridge exits' global indexes).
+    ///
+    /// Certificates not yet part of an epoch resolve from the pending store.
+    /// Settled ones are only served from the latest epoch with a settlement
+    /// for the network: anything older is rejected before touching the
+    /// per-epoch storage, since serving it would open an archived database
+    /// on demand.
+    #[instrument(skip(self))]
+    pub fn get_certificate_info(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        include_claims: bool,
+    ) -> Result<CertificateInfo, CertificateRetrievalError> {
+        let (certificate, status) = match self
+            .pending_store
+            .get_certificate(network_id, height)
+            .inspect_err(|e| error!("Failed to get pending certificate: {e}"))?
+        {
+            Some(certificate) => {
+                let status = self
+                    .state
+                    .get_certificate_header(&certificate.hash())
+                    .inspect_err(|e| error!("Failed to get certificate header: {e}"))?
+                    .map_or(CertificateStatus::Pending, |header| header.status);
+                (certificate, status)
+            }
+            None => {
+                let header = self
+                    .state
+                    .get_certificate_header_by_cursor(network_id, height)
+                    .inspect_err(|e| error!("Failed to get certificate header by cursor: {e}"))?
+                    .ok_or(CertificateRetrievalError::NotFoundAtHeight { network_id, height })?;
+
+                let certificate = match (header.epoch_number, header.certificate_index) {
+                    (Some(certificate_epoch), Some(certificate_index)) => {
+                        if let Some((_, latest_settled_epoch)) =
+                            self.latest_settled_height_and_epoch(&network_id)?
+                        {
+                            if certificate_epoch != latest_settled_epoch {
+                                return Err(CertificateRetrievalError::TooOld {
+                                    network_id,
+                                    height,
+                                    certificate_epoch,
+                                    latest_settled_epoch,
+                                });
+                            }
+                        }
+                        self.epochs_store
+                            .get_certificate(certificate_epoch, certificate_index)
+                            .inspect_err(|e| {
+                                error!("Failed to get certificate from epoch store: {e}")
+                            })?
+                    }
+                    _ => None,
+                }
+                .ok_or(CertificateRetrievalError::NotFound {
+                    certificate_id: header.certificate_id,
+                })?;
+
+                (certificate, header.status)
+            }
+        };
+
+        let exit_count = certificate.bridge_exits.len() as u32;
+        let leaf_range = self.compute_leaf_range(network_id, height, exit_count)?;
+        let claims = include_claims.then(|| {
+            certificate
+                .imported_bridge_exits
+                .iter()
+                .map(|imported_exit| imported_exit.global_index.into())
+                .collect()
+        });
+
+        Ok(CertificateInfo {
+            certificate_id: certificate.hash(),
+            network_id,
+            height,
+            status,
+            exit_count,
+            leaf_range,
+            claims,
+        })
+    }
+
+    /// Compute the absolute local exit tree leaf range covered by the
+    /// certificate at the given height, anchored on the current leaf count.
+    ///
+    /// The reads span the state, pending, and per-epoch databases without a
+    /// common snapshot, so a settlement landing mid-computation invalidates
+    /// the attempt: it is detected through the settled anchor and retried.
+    /// A failure with a stable anchor means the stores are inconsistent
+    /// (e.g. a gap left in the pending queue) and is reported as an error.
+    fn compute_leaf_range(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        exit_count: u32,
+    ) -> Result<Range<u32>, CertificateRetrievalError> {
+        const MAX_ATTEMPTS: usize = 3;
+
+        let mut settled = self.latest_settled_height_and_epoch(&network_id)?;
+        for _ in 0..MAX_ATTEMPTS {
+            let leaf_count = self
+                .state
+                .read_local_network_state(network_id)
+                .inspect_err(|e| error!("Failed to read local network state: {e}"))?
+                .map_or(0, |state| state.exit_tree.leaf_count);
+
+            let range = match settled {
+                Some((settled_height, settled_epoch)) if height <= settled_height => self
+                    .settled_leaf_range(
+                        network_id,
+                        height,
+                        settled_height,
+                        settled_epoch,
+                        leaf_count,
+                        exit_count,
+                    )?,
+                _ => {
+                    let next_height =
+                        settled.map_or(Height::ZERO, |(settled_height, _)| settled_height.next());
+                    self.pending_leaf_range(
+                        network_id,
+                        next_height,
+                        height,
+                        leaf_count,
+                        exit_count,
+                    )?
+                }
+            };
+
+            let settled_after = self.latest_settled_height_and_epoch(&network_id)?;
+            if settled_after == settled {
+                return range.ok_or_else(|| {
+                    agglayer_storage::error::Error::Unexpected(format!(
+                        "Inconsistent stores while computing the leaf range of the certificate at \
+                         height {height} for network {network_id}"
+                    ))
+                    .into()
+                });
+            }
+            settled = settled_after;
+        }
+
+        Err(agglayer_storage::error::Error::Unexpected(format!(
+            "Settlements kept landing while computing the leaf range of the certificate at height \
+             {height} for network {network_id}"
+        ))
+        .into())
+    }
+
+    /// Provisional range of a certificate not settled yet: the current leaf
+    /// count plus the exits of the certificates queued before it.
+    fn pending_leaf_range(
+        &self,
+        network_id: NetworkId,
+        next_height: Height,
+        height: Height,
+        leaf_count: u32,
+        exit_count: u32,
+    ) -> Result<Option<Range<u32>>, CertificateRetrievalError> {
+        let mut from_leaf_index = leaf_count;
+        for queued in next_height.as_u64()..height.as_u64() {
+            let certificate = match self
+                .pending_store
+                .get_certificate(network_id, Height::new(queued))?
+            {
+                Some(certificate) => certificate,
+                None => return Ok(None),
+            };
+            from_leaf_index += certificate.bridge_exits.len() as u32;
+        }
+
+        Ok(Some(from_leaf_index..from_leaf_index + exit_count))
+    }
+
+    /// Walk the settled certificates from `settled` down to `height`
+    /// (exclusive), subtracting their exit counts from the current leaf count
+    /// to locate the range covered at `height`. The walk never leaves the
+    /// latest epoch with a settlement: crossing into an older one would open
+    /// an archived per-epoch database.
+    fn settled_leaf_range(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        settled: Height,
+        latest_settled_epoch: EpochNumber,
+        leaf_count: u32,
+        exit_count: u32,
+    ) -> Result<Option<Range<u32>>, CertificateRetrievalError> {
+        let mut to_leaf_index = leaf_count;
+        for walked in (height.as_u64() + 1)..=settled.as_u64() {
+            let header = match self
+                .state
+                .get_certificate_header_by_cursor(network_id, Height::new(walked))?
+            {
+                Some(header) => header,
+                None => return Ok(None),
+            };
+            if header.epoch_number != Some(latest_settled_epoch) {
+                return Ok(None);
+            }
+            let certificate = match header.certificate_index {
+                Some(certificate_index) => self
+                    .epochs_store
+                    .get_certificate(latest_settled_epoch, certificate_index)?,
+                None => None,
+            };
+            let Some(certificate) = certificate else {
+                return Ok(None);
+            };
+            to_leaf_index = match to_leaf_index.checked_sub(certificate.bridge_exits.len() as u32) {
+                Some(value) => value,
+                None => return Ok(None),
+            };
+        }
+
+        Ok(to_leaf_index
+            .checked_sub(exit_count)
+            .map(|from_leaf_index| from_leaf_index..to_leaf_index))
     }
 
     /// Assemble the current information of the specified network from

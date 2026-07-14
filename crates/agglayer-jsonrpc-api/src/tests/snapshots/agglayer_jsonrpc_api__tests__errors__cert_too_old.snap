@@ -1,0 +1,12 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/errors.rs
+expression: "InvalidArgument(\"Certificate at height 3 for network 2 was settled in a past epoch (7), latest epoch with a settlement is 42\")"
+snapshot_kind: text
+---
+{
+  "code": -32602,
+  "data": {
+    "invalid-argument": "Certificate at height 3 for network 2 was settled in a past epoch (7), latest epoch with a settlement is 42"
+  },
+  "message": "Invalid argument: Certificate at height 3 for network 2 was settled in a past epoch (7), latest epoch with a settlement is 42"
+}

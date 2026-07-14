@@ -17,6 +17,7 @@ mod header;
 mod height;
 mod id;
 mod index;
+mod info;
 mod metadata;
 #[cfg(feature = "testutils")]
 mod testutils;
@@ -27,6 +28,7 @@ pub use header::{CertificateHeader, CertificateStatus, SettlementTxHash};
 pub use height::Height;
 pub use id::CertificateId;
 pub use index::CertificateIndex;
+pub use info::CertificateInfo;
 pub use metadata::Metadata;
 #[cfg(feature = "testutils")]
 pub use testutils::compute_signature_info;

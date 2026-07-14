@@ -60,6 +60,7 @@ tracing-capture = "0.1.0"
 agglayer-config = { workspace = true, features = ["testutils"] }
 agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-types = { workspace = true, features = ["testutils"] }
+pessimistic-proof-test-suite.workspace = true
 
 [lints]
 workspace = true
