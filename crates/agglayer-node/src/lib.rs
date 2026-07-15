@@ -4,7 +4,7 @@ use agglayer_config::Config;
 use eyre::bail;
 use node::Node;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 mod logging;
 
 mod epoch_synchronizer;
@@ -70,6 +70,10 @@ pub fn main(
             eprintln!("Failed to initialize logger: {e:?}");
             return Err(e);
         }
+    }
+
+    if let Some(outbound) = &config.outbound {
+        warn!("{}", outbound.ignored_config_warning());
     }
 
     info!("Starting agglayer node version info: {}", version);
