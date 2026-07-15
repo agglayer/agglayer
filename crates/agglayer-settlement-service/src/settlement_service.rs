@@ -190,17 +190,15 @@ impl<
                 match task.run().await {
                     SettlementTaskRunResult::Completed(result) => {
                         // Publish the result, then drop the registered sender.
-                        // Waiters using `wait_for(Option::is_some)` observe the
-                        // value set here before the channel closes; a late
-                        // subscriber finds no sender and falls through to the
-                        // completed result in storage.
-                        if let Err(error) = result_sender.send(Some(result)) {
-                            error!(
-                                ?error,
-                                ?job_id,
-                                "Failed to send settlement job result to watchers"
-                            );
-                        }
+                        // `send_replace` sets the value unconditionally (even
+                        // with zero receivers, as for a job resumed at startup
+                        // whose spawn receiver was discarded), unlike `send`
+                        // which errors and leaves the value `None`. A current
+                        // or late-but-pre-removal subscriber observes the value
+                        // set here; a subscriber after removal finds no sender
+                        // and falls through to the completed result in storage.
+                        // XREF: bot r3589964568 on PR #1681.
+                        let _ = result_sender.send_replace(Some(result));
                         result_senders.lock().await.remove(&job_id);
                         task_controls.lock().await.remove(&job_id);
                         break;
@@ -267,13 +265,15 @@ impl<
                                 task = reloaded_task;
                             }
                             Ok(StoredSettlementJob::Completed(_, result)) => {
-                                if let Err(error) = result_sender.send(Some(result)) {
-                                    error!(
-                                        ?error,
-                                        ?job_id,
-                                        "Failed to send settlement job result to watchers"
-                                    );
-                                }
+                                // `send_replace` sets the value unconditionally
+                                // (even with zero receivers), unlike `send`
+                                // which errors and leaves the value `None`. A
+                                // current or late-but-pre-removal subscriber
+                                // observes the value; a subscriber after removal
+                                // falls through to the completed result in
+                                // storage.
+                                // XREF: bot r3589964568 on PR #1681.
+                                let _ = result_sender.send_replace(Some(result));
                                 result_senders.lock().await.remove(&job_id);
                                 task_controls.lock().await.remove(&job_id);
                                 break;
@@ -929,6 +929,128 @@ mod tests {
         // dropped. A later `retrieve_settlement_result` falls through to the
         // completed result in storage rather than a lingering in-memory entry.
         assert!(!service.result_senders.lock().await.contains_key(&job_id));
+    }
+
+    /// Regression for bot r3589964568 (PR #1681): the run loop must publish
+    /// the terminal result even when the job has zero live receivers, as
+    /// happens for a job resumed at startup whose `spawn_settlement_task`
+    /// receiver was discarded by `resume_pending_settlement_jobs`.
+    ///
+    /// The run loop publishes with `send_replace`, which sets the value
+    /// unconditionally, rather than `send`, which errors and leaves the value
+    /// `None` when there are no receivers. Here the only handle kept alive is a
+    /// `Sender` clone (which is NOT a receiver, so it does not mask the bug):
+    /// with the buggy `send` the published value would stay `None`, and a
+    /// retrieve subscribing in the window before the sender is removed would
+    /// observe a pending watcher that then closes with no value even though
+    /// storage holds the result. `send_replace` makes the value observable via
+    /// the retained sender before removal.
+    #[tokio::test]
+    async fn completion_publish_sets_value_with_zero_receivers() {
+        let mut store = MockStateStore::new();
+        let job_id = mk_job_id(37);
+        let job = mk_job(37);
+        let completed_result = mk_result(37, ContractCallOutcome::Success);
+        let completed_result_for_store = completed_result.clone();
+        let result_reads = Arc::new(Mutex::new(0usize));
+
+        store
+            .expect_list_settlement_job_ids()
+            .once()
+            .return_once(|| Ok(Vec::new()));
+        store
+            .expect_get_settlement_job()
+            .times(2)
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning({
+                let job = job.clone();
+                move |_| Ok(Some(job.clone()))
+            });
+        store
+            .expect_get_settlement_job_result()
+            .times(2)
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .returning(move |_| {
+                let mut result_reads = result_reads.lock().unwrap();
+                *result_reads += 1;
+                if *result_reads == 1 {
+                    Ok(None)
+                } else {
+                    Ok(Some(completed_result_for_store.clone()))
+                }
+            });
+        store
+            .expect_list_settlement_attempt_results()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+        store
+            .expect_list_settlement_attempts()
+            .once()
+            .withf(move |requested_job_id| requested_job_id == &job_id)
+            .return_once(|_| Ok(Vec::new()));
+
+        let store = Arc::new(store);
+        let service = mk_service(store).await;
+
+        // Retain a `Sender` clone so we can observe the published value while
+        // keeping zero live receivers: this models a startup-resumed job whose
+        // spawn receiver was discarded. Register it before spawn so the run
+        // loop reuses it and publishes into it on completion.
+        let retained_sender = watch::channel(None).0;
+        service
+            .result_senders
+            .lock()
+            .await
+            .insert(job_id, retained_sender.clone());
+
+        let (task_control_handle, task_control) =
+            TaskControlHandle::new(&service.cancellation_token);
+        task_control_handle
+            .try_send(TaskAdminCommand::ReloadAndRestart)
+            .expect("reload command should fit in admin channel");
+        let task = match SettlementTask::load(
+            job_id,
+            service.tx_config.clone(),
+            service.provider.clone(),
+            service.store.clone(),
+            service.wallet_nonce_locks.clone(),
+            task_control,
+        )
+        .await
+        .expect("settlement task should load")
+        {
+            StoredSettlementJob::Pending(task) => task,
+            StoredSettlementJob::Completed(_, _) => panic!("initial load should be pending"),
+        };
+
+        // Drop the receiver `spawn_settlement_task` hands back, leaving the
+        // retained `Sender` clone as the only live handle (zero receivers).
+        let spawn_receiver = service
+            .spawn_settlement_task(job_id, task, task_control_handle)
+            .await;
+        drop(spawn_receiver);
+
+        // Wait for the run loop to publish and deregister the sender. Once the
+        // sender is removed from the map, publishing has happened.
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while service.result_senders.lock().await.contains_key(&job_id) {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("run loop should publish and deregister the sender");
+
+        // The retained sender observed the value despite having zero receivers
+        // at publish time. With the buggy `send` this would still be `None`.
+        assert_eq!(retained_sender.borrow().as_ref(), Some(&completed_result));
+        // A fresh subscriber (as `retrieve_settlement_result` would create)
+        // sees the value too, so it reports `Completed` instead of a pending
+        // watcher that closes empty.
+        assert_eq!(
+            retained_sender.subscribe().borrow().as_ref(),
+            Some(&completed_result)
+        );
     }
 
     #[tokio::test]
