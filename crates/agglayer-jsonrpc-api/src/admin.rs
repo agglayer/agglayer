@@ -256,6 +256,11 @@ pub(crate) trait AdminAgglayer {
     /// wedged and needs `admin_reloadAndRestartSettlementTask`.
     /// Performs a full scan with per-job lookups; intended for operator
     /// use on the admin listener, not for polling at high frequency.
+    ///
+    /// Fields are read point-in-time, not transactionally; a job
+    /// completing concurrently can briefly appear pending without a
+    /// live task. The mutation methods re-classify authoritatively, so
+    /// acting on a stale row is safe.
     #[method(name = "listSettlementJobs")]
     async fn list_settlement_jobs(&self) -> RpcResult<Vec<SettlementJobSummary>>;
 

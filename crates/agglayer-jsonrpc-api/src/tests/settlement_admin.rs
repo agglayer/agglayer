@@ -290,6 +290,30 @@ async fn get_settlement_job_returns_detail_with_attempts() {
 }
 
 #[test_log::test(tokio::test)]
+async fn get_settlement_job_returns_completed_detail() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let job_id = seed_completed_job(&context, 6);
+
+    let detail: SettlementJobDetail = context
+        .admin_client
+        .request("admin_getSettlementJob", rpc_params![job_id])
+        .await
+        .expect("get must succeed");
+    assert_eq!(detail.status, SettlementJobStatus::Completed);
+    let job_result = detail.job_result.expect("job result must be set");
+    assert_eq!(job_result.outcome, "success");
+    assert_eq!(job_result.nonce, 6);
+    assert_eq!(job_result.attempt_number, 6);
+    assert_eq!(job_result.block_number, 6);
+
+    // Pin the wire casing of the terminal result.
+    let json = serde_json::to_value(&job_result).expect("job result must serialize");
+    assert!(json.get("attemptNumber").is_some());
+    assert!(json.get("txHash").is_some());
+    assert!(json.get("blockNumber").is_some());
+}
+
+#[test_log::test(tokio::test)]
 async fn get_settlement_job_unknown_id_is_resource_not_found() {
     let context = TestContext::new_with_config(TestContext::get_default_config()).await;
     let error = context
