@@ -579,6 +579,78 @@ async fn admin_reload_over_panicked_completed_job_clears_stale_pending_watcher()
     cancellation_token.cancel();
 }
 
+/// Regression for bot r3589964560 (PR #1681): a certificate already waiting on
+/// the stale sender of a job that panicked after persisting its result must
+/// receive that terminal result when an admin reload finds the job completed,
+/// not a closed channel.
+///
+/// The reload's completed arm publishes the loaded result to the stale sender
+/// with `send_replace` (which sets the value even with zero receivers) before
+/// dropping it, so the waiter resolves. Without the fix the arm removed the
+/// sender without publishing: the waiter's channel closed and `wait_for_result`
+/// errored, wrongly turning a persisted success into a settlement error.
+#[tokio::test]
+async fn admin_reload_over_panicked_completed_job_delivers_result_to_waiter() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(38);
+    let stored_result = mk_result(38, ContractCallOutcome::Success);
+    {
+        let job = mk_job(38);
+        store
+            .expect_get_settlement_job()
+            .withf(move |id| id == &job_id)
+            .returning(move |_| Ok(Some(job.clone())));
+        let result = stored_result.clone();
+        store
+            .expect_get_settlement_job_result()
+            .withf(move |id| id == &job_id)
+            .returning(move |_| Ok(Some(result.clone())));
+    }
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+    // Panic-mid-completion state: closed control handle + a registered sender
+    // still holding `None`, both registered.
+    let (handle, control) = TaskControlHandle::new(&service.cancellation_token);
+    drop(control);
+    service.task_controls.lock().await.insert(job_id, handle);
+    let (stale_sender, stale_receiver) = watch::channel(None);
+    service
+        .result_senders
+        .lock()
+        .await
+        .insert(job_id, stale_sender);
+
+    // A certificate was awaiting the job through a subscribed receiver from
+    // before the owning task panicked.
+    let mut pre_reload_waiter = SettlementJobWatcher {
+        watcher: stale_receiver,
+        job_id,
+    };
+
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("completed job must report JobCompleted");
+    assert!(matches!(error, crate::SettlementAdminError::JobCompleted(id) if id == job_id));
+
+    // The waiter resolves with the terminal result rather than seeing the
+    // channel close. Without the fix the sender was dropped without a publish
+    // and this would error.
+    let received = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        pre_reload_waiter.wait_for_result(),
+    )
+    .await
+    .expect("waiter must resolve, not hang")
+    .expect("reload-completed must deliver the terminal result to the waiter");
+    assert_eq!(received, stored_result);
+
+    cancellation_token.cancel();
+}
+
 /// A failed in-task reload must never leave a closed control handle
 /// registered: closed-while-registered is reserved for panicked tasks,
 /// and a concurrent admin reload observing it mid-teardown would spawn

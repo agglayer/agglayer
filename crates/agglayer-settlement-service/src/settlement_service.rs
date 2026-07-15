@@ -415,15 +415,28 @@ impl<
                 );
                 Ok(())
             }
-            Ok(StoredSettlementJob::Completed(_, _)) => {
+            Ok(StoredSettlementJob::Completed(_, result)) => {
                 // A stale control/sender can survive here only when the
                 // owning task panicked after persisting the terminal
-                // result but before publishing it to the watcher. Drop
-                // both so `retrieve_settlement_result` falls through to
-                // the completed result in storage instead of serving the
-                // stale pending watcher.
+                // result but before publishing it to the watcher. That
+                // stale sender can still have a waiter (a certificate in
+                // `wait_for_settlement`). Publish the loaded terminal
+                // result to that waiter with `send_replace` (which sets
+                // the value even with zero receivers) before dropping the
+                // sender, so the waiter resolves instead of erroring; a
+                // later retrieve finds no sender and reads the completed
+                // result from storage. `send_replace` is sync, so a single
+                // lock scope covering send_replace + remove is fine and
+                // avoids a re-lock.
+                // XREF: bot r3589964560 on PR #1681.
                 self.task_controls.lock().await.remove(&job_id);
-                self.result_senders.lock().await.remove(&job_id);
+                {
+                    let mut result_senders = self.result_senders.lock().await;
+                    if let Some(sender) = result_senders.get(&job_id) {
+                        sender.send_replace(Some(result));
+                    }
+                    result_senders.remove(&job_id);
+                }
                 Err(SettlementAdminError::JobCompleted(job_id))
             }
             Err(error) => match self.store.get_settlement_job(&job_id) {
