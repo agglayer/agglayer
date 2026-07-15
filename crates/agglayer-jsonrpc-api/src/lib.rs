@@ -41,6 +41,7 @@ pub mod tests;
 pub mod testutils;
 
 pub mod admin;
+pub mod settlement_admin;
 
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
