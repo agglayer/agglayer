@@ -3,12 +3,17 @@
 //! The settlement domain types in `agglayer-types` carry no serde; the
 //! JSON representation is owned here, at the RPC boundary (same pattern
 //! as `TokenBalanceEntry` for `admin_getTokenBalance`).
+//!
+//! Data-carrying enums here are deliberately internally tagged
+//! (`#[serde(tag = "type")]`), unlike the error family in
+//! [`crate::error`], which keeps serde's default externally-tagged
+//! payloads.
 
 use std::time::SystemTime;
 
 use agglayer_types::{
-    Address, CertificateId, ContractCallOutcome, SettlementAttempt, SettlementAttemptResult,
-    SettlementJobId, SettlementJobResult, SettlementTxHash, B256,
+    Address, CertificateId, ClientErrorType, ContractCallOutcome, SettlementAttempt,
+    SettlementAttemptResult, SettlementJobId, SettlementJobResult, SettlementTxHash, B256,
 };
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +72,9 @@ impl From<(u64, &SettlementAttempt)> for SettlementAttemptSummary {
 }
 
 /// Full job detail returned by `admin_getSettlementJob`.
+///
+/// `gas_limit` is rendered as a JSON number; realistic values stay far
+/// below 2^53, so this is safe for standard JSON tooling.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettlementJobDetail {
@@ -87,6 +95,10 @@ pub struct SettlementJobDetail {
 }
 
 /// One attempt with its recorded result, as returned in the job detail.
+///
+/// `max_fee_per_gas` and `max_priority_fee_per_gas` are rendered as
+/// JSON numbers; realistic values stay far below 2^53, so this is safe
+/// for standard JSON tooling.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettlementAttemptDetail {
@@ -138,11 +150,21 @@ pub enum SettlementAttemptResultDto {
     },
 }
 
+/// Stable wire tag for a client error kind. Exhaustive on purpose: a new
+/// `ClientErrorType` variant must pick its wire tag here.
+fn client_error_kind_tag(kind: ClientErrorType) -> &'static str {
+    match kind {
+        ClientErrorType::Unknown => "unknown",
+        ClientErrorType::NonceAlreadyUsed => "nonceAlreadyUsed",
+        ClientErrorType::SettlementSucceededElsewhere => "settlementSucceededElsewhere",
+    }
+}
+
 impl From<&SettlementAttemptResult> for SettlementAttemptResultDto {
     fn from(result: &SettlementAttemptResult) -> Self {
         match result {
             SettlementAttemptResult::ClientError(client_error) => Self::ClientError {
-                kind: format!("{:?}", client_error.kind),
+                kind: client_error_kind_tag(client_error.kind).to_string(),
                 message: client_error.message.clone(),
             },
             SettlementAttemptResult::ContractCall(call) => Self::ContractCall {
@@ -194,9 +216,11 @@ impl From<&SettlementJobResult> for SettlementJobResultDto {
 pub(crate) fn render_last_error(results: &[(u64, SettlementAttemptResult)]) -> Option<String> {
     let (_, latest) = results.iter().max_by_key(|(number, _)| *number)?;
     match latest {
-        SettlementAttemptResult::ClientError(client_error) => {
-            Some(format!("{:?}: {}", client_error.kind, client_error.message))
-        }
+        SettlementAttemptResult::ClientError(client_error) => Some(format!(
+            "{}: {}",
+            client_error_kind_tag(client_error.kind),
+            client_error.message
+        )),
         SettlementAttemptResult::ContractCall(call) => match call.outcome {
             ContractCallOutcome::Revert => Some(format!(
                 "Reverted on L1 in tx {} (block {})",
