@@ -49,8 +49,6 @@ fn deserialize_custom_outbound_config() {
     assert_eq!(config.rpc.settle_cert.gas_price.floor, 11_000_000_000);
     assert_eq!(config.rpc.settle_cert.gas_price.ceiling, 1_123_000_000_000);
 
-    assert!(config.ignored_config_warning().is_some());
-
     assert_toml_snapshot!(config);
 }
 
@@ -64,8 +62,6 @@ fn deserialize_legacy_outbound_config() {
     assert_eq!(settle.max_retries, 5);
     assert_eq!(settle.retry_interval, Duration::from_secs(10));
     assert_eq!(settle.confirmations, 3);
-
-    assert!(config.ignored_config_warning().is_some());
 
     assert_toml_snapshot!(config);
 }

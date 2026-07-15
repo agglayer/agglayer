@@ -26,8 +26,8 @@ fn main() -> eyre::Result<()> {
         cli::Commands::ValidateConfig { path } => {
             match agglayer_config::Config::try_load(path.as_path()) {
                 Ok(config) => {
-                    if let Some(warning) = config.outbound.ignored_config_warning() {
-                        eprintln!("warning: {warning}");
+                    if let Some(outbound) = &config.outbound {
+                        eprintln!("warning: {}", outbound.ignored_config_warning());
                     }
                     println!(
                         "{}",

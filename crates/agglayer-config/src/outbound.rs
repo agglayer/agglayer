@@ -16,16 +16,14 @@ pub struct OutboundConfig {
 }
 
 impl OutboundConfig {
-    /// Nothing reads `[outbound.rpc]` anymore: certificate settlement is
+    /// Nothing reads `[outbound]` anymore: certificate settlement is
     /// configured by `[settlement.pessimistic-proof-tx-config]` and
-    /// `interop_sendTx` is disabled. It is still parsed so stale operator
-    /// config can be detected, but only after tracing is initialized, hence
-    /// reporting is left to the caller.
-    pub fn ignored_config_warning(&self) -> Option<&'static str> {
-        (*self != Self::default()).then_some(
-            "'[outbound.rpc]' is deprecated and ignored: certificate settlement is configured by \
-             '[settlement.pessimistic-proof-tx-config]' and 'interop_sendTx' is disabled",
-        )
+    /// `interop_sendTx` is disabled. The section is still parsed so stale
+    /// operator config can be detected, but only after tracing is
+    /// initialized, hence reporting is left to the caller.
+    pub fn ignored_config_warning(&self) -> &'static str {
+        "'[outbound]' is deprecated and ignored: certificate settlement is configured by \
+         '[settlement.pessimistic-proof-tx-config]' and 'interop_sendTx' is disabled"
     }
 }
 
@@ -168,7 +166,7 @@ mod tests {
 
         #[derive(Debug, Deserialize)]
         struct DummyContainer {
-            outbound: OutboundConfig,
+            outbound: Option<OutboundConfig>,
         }
 
         #[test]
@@ -182,11 +180,14 @@ mod tests {
                 max-retries = 12
                 "#;
 
-            let config = toml::from_str::<DummyContainer>(toml).unwrap();
+            let outbound = toml::from_str::<DummyContainer>(toml)
+                .unwrap()
+                .outbound
+                .unwrap();
 
-            assert_eq!(config.outbound.rpc.settle_tx.max_retries, 10);
-            assert_eq!(config.outbound.rpc.settle_cert.max_retries, 11);
-            assert!(config.outbound.ignored_config_warning().is_some());
+            assert_eq!(outbound.rpc.settle_tx.max_retries, 10);
+            assert_eq!(outbound.rpc.settle_cert.max_retries, 11);
+            assert_eq!(outbound.rpc.settle.unwrap().max_retries, 12);
         }
 
         #[test]
@@ -196,35 +197,41 @@ mod tests {
                 max-retries = 11
                 "#;
 
-            let config = toml::from_str::<DummyContainer>(toml).unwrap();
+            let outbound = toml::from_str::<DummyContainer>(toml)
+                .unwrap()
+                .outbound
+                .unwrap();
 
-            assert_eq!(config.outbound.rpc.settle_tx, Default::default());
-            assert_eq!(config.outbound.rpc.settle_cert.max_retries, 11);
-            assert!(config.outbound.ignored_config_warning().is_some());
+            assert_eq!(outbound.rpc.settle_tx, Default::default());
+            assert_eq!(outbound.rpc.settle_cert.max_retries, 11);
         }
 
         #[test]
-        fn empty_rpc_section() {
+        fn default_valued_section_is_detected() {
             let toml = r#"
-                [outbound.rpc]
+                [outbound.rpc.settle-tx]
+                max-retries = 30
                 "#;
 
             let config = toml::from_str::<DummyContainer>(toml).unwrap();
 
-            assert_eq!(config.outbound, Default::default());
-            assert!(config.outbound.ignored_config_warning().is_none());
+            assert_eq!(config.outbound, Some(OutboundConfig::default()));
         }
 
         #[test]
-        fn missing_rpc_section() {
-            let toml = r#"
-                [outbound]
-                "#;
+        fn empty_sections_are_detected() {
+            for toml in ["[outbound]", "[outbound.rpc]"] {
+                let config = toml::from_str::<DummyContainer>(toml).unwrap();
 
-            let config = toml::from_str::<DummyContainer>(toml).unwrap();
+                assert_eq!(config.outbound, Some(OutboundConfig::default()));
+            }
+        }
 
-            assert_eq!(config.outbound, Default::default());
-            assert!(config.outbound.ignored_config_warning().is_none());
+        #[test]
+        fn absent_section() {
+            let config = toml::from_str::<DummyContainer>("").unwrap();
+
+            assert_eq!(config.outbound, None);
         }
 
         mod rpc {
