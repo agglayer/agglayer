@@ -217,6 +217,34 @@ fn insert_certificate_settlement_job_id_duplicate_fails() {
 }
 
 #[test]
+fn insert_certificate_settlement_job_id_rejects_relinking_a_job() {
+    let (_tmp, _db, store) = setup_store();
+    let first_certificate = mk_certificate_id(42);
+    let second_certificate = mk_certificate_id(43);
+    let job_id = mk_job_id(42);
+
+    store
+        .insert_certificate_settlement_job_id(&first_certificate, &job_id)
+        .expect("first link must succeed");
+    let res = store.insert_certificate_settlement_job_id(&second_certificate, &job_id);
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+
+    // Both directions still describe the first link.
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&job_id)
+            .expect("reverse read must succeed"),
+        Some(first_certificate),
+    );
+    assert_eq!(
+        store
+            .get_certificate_settlement_job_id(&second_certificate)
+            .expect("forward read must succeed"),
+        None,
+    );
+}
+
+#[test]
 fn insert_settlement_attempt_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_job_id(3);

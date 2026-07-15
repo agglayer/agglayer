@@ -229,6 +229,16 @@ impl StateWriter for StateStore {
             )));
         }
 
+        if self
+            .db
+            .get::<CertificateIdPerSettlementJobIdColumn>(settlement_job_id)?
+            .is_some()
+        {
+            return Err(Error::UnprocessedAction(format!(
+                "Settlement job {settlement_job_id} already has a certificate"
+            )));
+        }
+
         let mut batch = WriteBatch::default();
         self.db
             .multi_insert_batch::<SettlementJobIdPerCertificateIdColumn>(

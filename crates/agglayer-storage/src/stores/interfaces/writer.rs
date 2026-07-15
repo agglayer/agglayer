@@ -73,7 +73,8 @@ pub trait StateWriter: Send + Sync {
     /// Inserts the settlement job id associated with `certificate_id`.
     ///
     /// This is an insert-only operation and must fail if `certificate_id`
-    /// already has a stored settlement job id. The settlement job may be
+    /// already has a stored settlement job id or if `settlement_job_id`
+    /// already has a stored certificate id. The settlement job may be
     /// created after this link, so startup recovery can recreate a missing job
     /// from the certificate-side id. Also records the reverse job ->
     /// certificate link in the same atomic write.
