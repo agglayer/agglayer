@@ -251,6 +251,66 @@ fn insert_certificate_settlement_job_id_rejects_relinking_a_job() {
 }
 
 #[test]
+fn concurrent_link_reservations_for_one_certificate_keep_directions_consistent() {
+    // Invariant pin for the serialized check-then-write: exactly one of
+    // two racing reservations wins, and both directions describe the
+    // winner. Without the store-level link lock this failed
+    // probabilistically (dangling reverse row for the loser).
+    for round in 0..50u8 {
+        let (_tmp, _db, store) = setup_store();
+        let certificate_id = mk_certificate_id(round);
+        let first_job = mk_job_id(u128::from(round) * 2 + 1);
+        let second_job = mk_job_id(u128::from(round) * 2 + 2);
+
+        let (first_result, second_result) = std::thread::scope(|scope| {
+            let first = scope
+                .spawn(|| store.insert_certificate_settlement_job_id(&certificate_id, &first_job));
+            let second = scope
+                .spawn(|| store.insert_certificate_settlement_job_id(&certificate_id, &second_job));
+            (
+                first.join().expect("thread"),
+                second.join().expect("thread"),
+            )
+        });
+
+        assert!(
+            first_result.is_ok() ^ second_result.is_ok(),
+            "exactly one reservation must win (round {round}): {first_result:?} / \
+             {second_result:?}",
+        );
+        let winner = if first_result.is_ok() {
+            first_job
+        } else {
+            second_job
+        };
+        let loser = if first_result.is_ok() {
+            second_job
+        } else {
+            first_job
+        };
+
+        assert_eq!(
+            store
+                .get_certificate_settlement_job_id(&certificate_id)
+                .expect("forward read must succeed"),
+            Some(winner),
+        );
+        assert_eq!(
+            store
+                .get_settlement_job_certificate_id(&winner)
+                .expect("reverse read must succeed"),
+            Some(certificate_id),
+        );
+        assert_eq!(
+            store
+                .get_settlement_job_certificate_id(&loser)
+                .expect("reverse read must succeed"),
+            None,
+        );
+    }
+}
+
+#[test]
 fn insert_settlement_attempt_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_job_id(3);

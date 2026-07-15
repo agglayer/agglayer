@@ -54,6 +54,10 @@ pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
     settlement_write_locks: Mutex<HashMap<SettlementJobId, Arc<Mutex<()>>>>,
+    /// Serializes `insert_certificate_settlement_job_id`'s
+    /// check-then-write so concurrent link reservations cannot each pass
+    /// the existence checks and then both commit.
+    certificate_settlement_link_lock: Mutex<()>,
 }
 
 impl StateStore {
@@ -76,6 +80,7 @@ impl StateStore {
             db,
             backup_client,
             settlement_write_locks: Mutex::new(HashMap::new()),
+            certificate_settlement_link_lock: Mutex::new(()),
         }
     }
 
@@ -88,6 +93,7 @@ impl StateStore {
             db,
             backup_client,
             settlement_write_locks: Mutex::new(HashMap::new()),
+            certificate_settlement_link_lock: Mutex::new(()),
         })
     }
 }
@@ -215,10 +221,14 @@ impl StateWriter for StateStore {
         certificate_id: &CertificateId,
         settlement_job_id: &SettlementJobId,
     ) -> Result<(), Error> {
-        // This check-then-write is not locked: concurrent inserts for the
-        // same certificate can leave a dangling reverse row for the losing
-        // job (pre-existing race, see the certificate_id lockguard TODO in
-        // `assign_certificate_to_epoch`).
+        // The existence checks and the batch write are serialized by the
+        // store-level link lock: without it, two racing reservations can
+        // both pass the checks and both commit, leaving a dangling
+        // reverse row for the losing job.
+        let _link_lock = self.certificate_settlement_link_lock.lock().map_err(|_| {
+            Error::Unexpected("Certificate settlement link lock is poisoned".to_string())
+        })?;
+
         if self
             .db
             .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
