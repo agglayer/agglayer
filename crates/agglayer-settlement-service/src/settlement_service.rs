@@ -198,10 +198,14 @@ impl<
                         info!(?job_id, "Reloading and restarting settlement task");
                         let (task_control_handle, task_control) =
                             TaskControlHandle::new(&cancellation_token);
-                        task_controls
-                            .lock()
-                            .await
-                            .insert(job_id, task_control_handle);
+                        // The old handle stays in the map until the reloaded
+                        // task is ready: its receiver lives in the current
+                        // `task` binding, so it reads as open and a concurrent
+                        // admin reload queues a command instead of mistaking
+                        // this task for a panicked one and spawning a
+                        // duplicate. On a failed load the old handle is
+                        // removed below, never leaving a closed handle
+                        // registered by a live loop.
                         match SettlementTask::load(
                             job_id,
                             tx_config.clone(),
@@ -213,6 +217,10 @@ impl<
                         .await
                         {
                             Ok(StoredSettlementJob::Pending(reloaded_task)) => {
+                                task_controls
+                                    .lock()
+                                    .await
+                                    .insert(job_id, task_control_handle);
                                 task = reloaded_task;
                             }
                             Ok(StoredSettlementJob::Completed(_, result)) => {
@@ -268,8 +276,10 @@ impl<
     /// completion, where the cancel is a no-op on a lingering handle. An
     /// abort chained with a reload-and-restart can drop the queued reload if
     /// the task exits on the cancellation first; retry once
-    /// [`Self::has_live_task`] is `false`. The storage classification behind
-    /// the returned errors is a best-effort snapshot.
+    /// [`Self::has_live_task`] is `false`. Aborting the stale registration of
+    /// a panicked task is an accepted no-op; the next
+    /// [`Self::admin_reload_and_restart_task`] clears it. The storage
+    /// classification behind the returned errors is a best-effort snapshot.
     #[tracing::instrument(skip(self))]
     pub async fn admin_abort_task(
         &self,
@@ -305,11 +315,13 @@ impl<
     /// and respawns over the stale entry.
     ///
     /// The reload command is queued, not immediate: a task that is
-    /// concurrently cancelled can exit without draining it, and its
-    /// channel can close between the liveness check and the send,
-    /// failing the reload with `TaskNotResponding`. Retry once
-    /// [`Self::has_live_task`] reports `false`; the respawn path then
-    /// picks the job up from storage.
+    /// concurrently cancelled can exit without draining it, a reload
+    /// already in flight drops commands queued to the pre-reload
+    /// handle when it completes, and the channel can close between
+    /// the liveness check and the send, failing with
+    /// `TaskNotResponding`. Retrying is safe: a retry reaches the
+    /// live task, respawns over a dead or panicked one, or reports
+    /// the job's storage state.
     #[tracing::instrument(skip(self))]
     pub async fn admin_reload_and_restart_task(
         &self,

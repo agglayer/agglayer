@@ -238,6 +238,12 @@ fn insert_certificate_settlement_job_id_rejects_relinking_a_job() {
     );
     assert_eq!(
         store
+            .get_certificate_settlement_job_id(&first_certificate)
+            .expect("forward read must succeed"),
+        Some(job_id),
+    );
+    assert_eq!(
+        store
             .get_certificate_settlement_job_id(&second_certificate)
             .expect("forward read must succeed"),
         None,

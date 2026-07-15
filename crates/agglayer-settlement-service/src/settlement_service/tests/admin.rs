@@ -407,7 +407,8 @@ async fn admin_reload_and_restart_respawns_after_task_panic() {
     let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
 
     // Simulate a panicked task: its control handle stays registered
-    // while the receiver side is gone.
+    // while the receiver side is gone, along with a watcher whose
+    // sender died with the task.
     let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
     drop(task_control);
     service
@@ -415,6 +416,11 @@ async fn admin_reload_and_restart_respawns_after_task_panic() {
         .lock()
         .await
         .insert(job_id, task_control_handle);
+    service
+        .result_watchers
+        .lock()
+        .await
+        .insert(job_id, watch::channel(None).1);
     assert!(service.has_live_task(job_id).await);
 
     service
@@ -432,6 +438,96 @@ async fn admin_reload_and_restart_respawns_after_task_panic() {
         .cloned()
         .expect("control handle must be registered");
     assert!(!control.is_closed());
+
+    // The stale watcher was replaced by one backed by the respawned
+    // task's live sender: retrieval reports the job as pending instead
+    // of failing on a dead channel.
+    let retrieved = service
+        .retrieve_settlement_result(job_id)
+        .await
+        .expect("retrieval after respawn should succeed");
+    match retrieved {
+        RetrievedSettlementResult::Pending(mut watcher) => assert!(
+            watcher.watcher().has_changed().is_ok(),
+            "respawn must replace the stale watcher with a functioning one"
+        ),
+        RetrievedSettlementResult::Completed(_) => panic!("job must still be pending"),
+    }
+
+    cancellation_token.cancel();
+}
+
+/// A failed in-task reload must never leave a closed control handle
+/// registered: closed-while-registered is reserved for panicked tasks,
+/// and a concurrent admin reload observing it mid-teardown would spawn
+/// a duplicate task that the dying run loop then strips from the maps.
+#[tokio::test]
+async fn failed_in_task_reload_never_leaves_a_closed_handle_registered() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(30);
+    let job = mk_job(30);
+    store
+        .expect_get_settlement_job()
+        .returning(move |_| Ok(Some(job.clone())));
+    store
+        .expect_get_settlement_job_result()
+        .returning(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .returning(|_| Ok(Vec::new()));
+    // The initial explicit load succeeds; the reload-triggered load
+    // fails, tearing the task down through the run loop's error arm.
+    let attempts_reads = Arc::new(Mutex::new(0usize));
+    store.expect_list_settlement_attempts().returning(move |_| {
+        let mut attempts_reads = attempts_reads.lock().unwrap();
+        *attempts_reads += 1;
+        if *attempts_reads == 1 {
+            Ok(Vec::new())
+        } else {
+            Err(agglayer_storage::error::Error::Unexpected(
+                "boom".to_string(),
+            ))
+        }
+    });
+    store
+        .expect_max_settlement_nonce_for_wallet()
+        .returning(|_| Ok(None));
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+    load_and_spawn_pending_task(&service, job_id).await;
+
+    let control = service
+        .task_controls
+        .lock()
+        .await
+        .get(&job_id)
+        .cloned()
+        .expect("control handle must be registered");
+    control
+        .try_send(TaskAdminCommand::ReloadAndRestart)
+        .expect("reload command should fit in admin channel");
+
+    // The failed reload deregisters the task; sample every handle
+    // observed on the way down. The sampling is best-effort: on the
+    // current_thread runtime the teardown window has no forced yield,
+    // so the decisive assertion is the end state (entry absent).
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let control = service.task_controls.lock().await.get(&job_id).cloned();
+            match control {
+                Some(control) => assert!(
+                    !control.is_closed(),
+                    "mid-reload task must not be registered as closed"
+                ),
+                None => break,
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("failed reload should deregister the control handle");
 
     cancellation_token.cancel();
 }
