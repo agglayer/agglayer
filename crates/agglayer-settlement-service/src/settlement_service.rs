@@ -398,6 +398,18 @@ impl<
         certificate_id: Option<CertificateId>,
         job: SettlementJob,
     ) -> eyre::Result<SettlementJobWatcher> {
+        // Serialize creation against admin respawn. `create` makes the job
+        // visible in storage as pending before `spawn_settlement_task`
+        // registers the task; without this lock a concurrent
+        // `admin_reload_and_restart_task` (which takes the same lock) could
+        // observe the pending job with no live task in that window and spawn
+        // a second task from storage, racing two tasks over one job.
+        // XREF: bot r3589631500 on PR #1681.
+        //
+        // No deadlock: `request_new_settlement` calls no admin method that
+        // re-takes this lock, and `spawn_settlement_task` never takes it.
+        let _admin_op = self.admin_operation_lock.lock().await;
+
         let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
         let (job_id, task) = SettlementTask::create(
             certificate_id,

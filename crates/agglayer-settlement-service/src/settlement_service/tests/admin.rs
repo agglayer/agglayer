@@ -274,6 +274,75 @@ async fn admin_reload_and_restart_respawns_dead_task() {
     cancellation_token.cancel();
 }
 
+/// Regression for bot r3589631500 (PR #1681, line 366): a new-settlement
+/// request must not interleave its create+spawn with an admin respawn.
+///
+/// `request_new_settlement` holds `admin_operation_lock` across create and
+/// spawn, the same lock `admin_reload_and_restart_task` takes. This test
+/// holds that lock externally and asserts `request_new_settlement` cannot
+/// make progress (it blocks before `SettlementTask::create` touches storage),
+/// proving the two are mutually exclusive. Without the fix the request runs
+/// to completion while the lock is held.
+#[tokio::test]
+async fn request_new_settlement_serializes_against_admin_lock() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    // `create` writes the job row once, but only after the request acquires
+    // the admin lock. An observable counter lets the test assert the write
+    // has NOT happened while the lock is held.
+    let job_writes = Arc::new(Mutex::new(0usize));
+    let job_writes_for_store = job_writes.clone();
+    store.expect_insert_settlement_job().returning(move |_, _| {
+        *job_writes_for_store.lock().unwrap() += 1;
+        Ok(())
+    });
+
+    let cancellation_token = CancellationToken::new();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider_with_gas_estimate(200_000)),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start");
+
+    // Simulate an in-flight admin respawn by holding the admin operation
+    // lock, then fire a new-settlement request.
+    let admin_guard = service.admin_operation_lock.clone().lock_owned().await;
+
+    let request_service = service.clone();
+    let request = tokio::spawn(async move {
+        request_service
+            .request_new_settlement(None, mk_job(40))
+            .await
+    });
+
+    // Give the spawned request ample time to run if it ignored the lock.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(
+        !request.is_finished(),
+        "request_new_settlement must block on the admin operation lock"
+    );
+    assert_eq!(
+        *job_writes.lock().unwrap(),
+        0,
+        "request_new_settlement must not persist the job while the admin lock is held"
+    );
+
+    // Releasing the lock lets the request proceed.
+    drop(admin_guard);
+    let watcher = tokio::time::timeout(std::time::Duration::from_secs(10), request)
+        .await
+        .expect("request should finish once the admin lock is free")
+        .expect("request task should not panic")
+        .expect("settlement request should be accepted");
+    let _ = watcher;
+
+    cancellation_token.cancel();
+}
+
 #[tokio::test]
 async fn admin_reload_and_restart_completed_job_returns_job_completed() {
     let mut store = MockStateStore::new();
