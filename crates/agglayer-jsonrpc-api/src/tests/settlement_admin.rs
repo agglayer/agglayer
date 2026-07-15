@@ -1,13 +1,19 @@
 //! Tests for the settlement task admin RPC methods.
 
-use agglayer_storage::stores::SettlementWriter;
+use std::time::{Duration, SystemTime};
+
+use agglayer_storage::stores::{SettlementWriter, StateWriter};
 use agglayer_types::{
-    ContractCallOutcome, ContractCallResult, Digest, Nonce, SettlementAttemptNumber, SettlementJob,
+    CertificateId, ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest,
+    Nonce, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
     SettlementJobId, SettlementJobResult, SettlementTxHash, B256, U256,
 };
 use jsonrpsee::{core::client::ClientT, rpc_params};
 
-use crate::testutils::TestContext;
+use crate::{
+    settlement_admin::{SettlementJobDetail, SettlementJobStatus, SettlementJobSummary},
+    testutils::TestContext,
+};
 
 fn mk_job_id(seed: u128) -> SettlementJobId {
     SettlementJobId::from(seed)
@@ -160,4 +166,136 @@ async fn settlement_task_controls_report_unknown_job() {
             .expect_err("unknown job must fail");
         assert_error_code(error, crate::error::code::RESOURCE_NOT_FOUND);
     }
+}
+
+fn mk_attempt(seed: u64) -> SettlementAttempt {
+    SettlementAttempt {
+        sender_wallet: agglayer_types::Address::from([seed as u8; 20]),
+        nonce: Nonce(seed),
+        hash: SettlementTxHash::new(Digest::from([seed as u8; 32])),
+        submission_time: SystemTime::UNIX_EPOCH + Duration::from_secs(seed),
+        max_fee_per_gas: 30_000_000_000,
+        max_priority_fee_per_gas: 1_000_000_000,
+    }
+}
+
+#[test_log::test(tokio::test)]
+async fn list_settlement_jobs_returns_seeded_jobs() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+
+    let empty: Vec<SettlementJobSummary> = context
+        .admin_client
+        .request("admin_listSettlementJobs", rpc_params![])
+        .await
+        .expect("empty list must succeed");
+    assert!(empty.is_empty());
+
+    // A pending job with one errored attempt, linked to a certificate.
+    let pending_id = seed_pending_job(&context, 2);
+    let certificate_id = CertificateId::new(Digest::from([2u8; 32]));
+    context
+        .state_store
+        .insert_certificate_settlement_job_id(&certificate_id, &pending_id)
+        .expect("link insert must succeed");
+    context
+        .state_store
+        .insert_settlement_attempt(&pending_id, 0, &mk_attempt(2))
+        .expect("attempt insert must succeed");
+    context
+        .state_store
+        .record_settlement_attempt_result(
+            &pending_id,
+            0,
+            &SettlementAttemptResult::ClientError(ClientError {
+                kind: ClientErrorType::Unknown,
+                message: "rpc flake".to_string(),
+            }),
+        )
+        .expect("attempt result insert must succeed");
+
+    // A completed job without attempts.
+    let completed_id = seed_completed_job(&context, 3);
+
+    let jobs: Vec<SettlementJobSummary> = context
+        .admin_client
+        .request("admin_listSettlementJobs", rpc_params![])
+        .await
+        .expect("list must succeed");
+    assert_eq!(jobs.len(), 2);
+
+    let pending = jobs
+        .iter()
+        .find(|job| job.job_id == pending_id)
+        .expect("pending job must be listed");
+    assert_eq!(pending.status, SettlementJobStatus::Pending);
+    assert_eq!(pending.certificate_id, Some(certificate_id));
+    assert!(!pending.has_live_task);
+    assert_eq!(pending.attempt_count, 1);
+    assert_eq!(
+        pending
+            .latest_attempt
+            .as_ref()
+            .expect("latest attempt must be set")
+            .attempt_number,
+        0
+    );
+    assert!(pending
+        .last_error
+        .as_ref()
+        .expect("last error must be set")
+        .contains("rpc flake"));
+
+    let completed = jobs
+        .iter()
+        .find(|job| job.job_id == completed_id)
+        .expect("completed job must be listed");
+    assert_eq!(completed.status, SettlementJobStatus::Completed);
+    assert_eq!(completed.certificate_id, None);
+    assert_eq!(completed.last_error, None);
+}
+
+#[test_log::test(tokio::test)]
+async fn get_settlement_job_returns_detail_with_attempts() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let job_id = seed_pending_job(&context, 4);
+    context
+        .state_store
+        .insert_settlement_attempt(&job_id, 0, &mk_attempt(4))
+        .expect("attempt insert must succeed");
+
+    let detail: SettlementJobDetail = context
+        .admin_client
+        .request("admin_getSettlementJob", rpc_params![job_id])
+        .await
+        .expect("get must succeed");
+    assert_eq!(detail.job_id, job_id);
+    assert_eq!(detail.status, SettlementJobStatus::Pending);
+    assert_eq!(detail.attempts.len(), 1);
+    assert_eq!(detail.attempts[0].nonce, 4);
+    assert!(detail.attempts[0].result.is_none());
+    assert!(detail.job_result.is_none());
+
+    // Live-task flag through the respawn path.
+    let () = context
+        .admin_client
+        .request("admin_reloadAndRestartSettlementTask", rpc_params![job_id])
+        .await
+        .expect("reload must respawn");
+    let detail: SettlementJobDetail = context
+        .admin_client
+        .request("admin_getSettlementJob", rpc_params![job_id])
+        .await
+        .expect("get must succeed");
+    assert!(detail.has_live_task);
+}
+
+#[test_log::test(tokio::test)]
+async fn get_settlement_job_unknown_id_is_resource_not_found() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let error = context
+        .admin_client
+        .request::<SettlementJobDetail, _>("admin_getSettlementJob", rpc_params![mk_job_id(98)])
+        .await
+        .expect_err("unknown job must fail");
+    assert_error_code(error, crate::error::code::RESOURCE_NOT_FOUND);
 }

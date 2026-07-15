@@ -22,7 +22,15 @@ use tracing::{error, info, instrument, warn};
 use unified_bridge::TokenInfo;
 
 use super::error::RpcResult;
-use crate::{error::Error, rpc_middleware, JsonRpcService};
+use crate::{
+    error::Error,
+    rpc_middleware,
+    settlement_admin::{
+        build_job_summary, render_last_error, SettlementAttemptDetail, SettlementJobDetail,
+        SettlementJobResultDto, SettlementJobStatus, SettlementJobSummary,
+    },
+    JsonRpcService,
+};
 
 /// Controls whether the certificate is immediately submitted for reprocessing
 /// after edits are applied.
@@ -237,6 +245,27 @@ pub(crate) trait AdminAgglayer {
     /// unavailable.
     #[method(name = "reloadAndRestartSettlementTask")]
     async fn reload_and_restart_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// List every settlement job known to storage.
+    ///
+    /// **JSON-RPC method:** `admin_listSettlementJobs`
+    ///
+    /// One summary per job: certificate link, storage-derived status,
+    /// live-task flag, attempt count, latest attempt, and the latest
+    /// error if any. A `pending` job with `hasLiveTask: false` is
+    /// wedged and needs `admin_reloadAndRestartSettlementTask`.
+    /// Performs a full scan with per-job lookups; intended for operator
+    /// use on the admin listener, not for polling at high frequency.
+    #[method(name = "listSettlementJobs")]
+    async fn list_settlement_jobs(&self) -> RpcResult<Vec<SettlementJobSummary>>;
+
+    /// Get one settlement job with its full attempt history.
+    ///
+    /// **JSON-RPC method:** `admin_getSettlementJob`
+    ///
+    /// Fails with resource-not-found when the job does not exist.
+    #[method(name = "getSettlementJob")]
+    async fn get_settlement_job(&self, job_id: SettlementJobId) -> RpcResult<SettlementJobDetail>;
 }
 
 /// The Admin RPC agglayer service implementation.
@@ -338,6 +367,38 @@ where
             .route("/", axum::routing::get_service(service.clone()))
             .route("/", axum::routing::post_service(service.clone()))
             .layer(middleware))
+    }
+
+    /// Read everything one list row needs from storage and the service.
+    async fn read_job_summary(
+        &self,
+        job_id: SettlementJobId,
+    ) -> Result<SettlementJobSummary, Error> {
+        let job_result = self
+            .state
+            .get_settlement_job_result(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let attempts = self
+            .state
+            .list_settlement_attempts(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let attempt_results = self
+            .state
+            .list_settlement_attempt_results(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let certificate_id = self
+            .state
+            .get_settlement_job_certificate_id(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let has_live_task = self.settlement_service.has_live_task(job_id).await;
+        Ok(build_job_summary(
+            job_id,
+            certificate_id,
+            has_live_task,
+            job_result.as_ref(),
+            &attempts,
+            &attempt_results,
+        ))
     }
 }
 
@@ -863,5 +924,73 @@ where
             .settlement_service
             .admin_reload_and_restart_task(job_id)
             .await?)
+    }
+
+    #[instrument(skip(self))]
+    async fn list_settlement_jobs(&self) -> RpcResult<Vec<SettlementJobSummary>> {
+        let job_ids = self
+            .state
+            .list_settlement_job_ids()
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let mut jobs = Vec::with_capacity(job_ids.len());
+        for job_id in job_ids {
+            jobs.push(self.read_job_summary(job_id).await?);
+        }
+        Ok(jobs)
+    }
+
+    #[instrument(skip(self))]
+    async fn get_settlement_job(&self, job_id: SettlementJobId) -> RpcResult<SettlementJobDetail> {
+        let job = self
+            .state
+            .get_settlement_job(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?
+            .ok_or_else(|| Error::ResourceNotFound(format!("SettlementJob({job_id})")))?;
+        let job_result = self
+            .state
+            .get_settlement_job_result(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let attempts = self
+            .state
+            .list_settlement_attempts(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let attempt_results = self
+            .state
+            .list_settlement_attempt_results(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let certificate_id = self
+            .state
+            .get_settlement_job_certificate_id(&job_id)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        let has_live_task = self.settlement_service.has_live_task(job_id).await;
+
+        let attempts = attempts
+            .iter()
+            .map(|(number, attempt)| {
+                let result = attempt_results
+                    .iter()
+                    .find(|(result_number, _)| result_number == number)
+                    .map(|(_, result)| result);
+                SettlementAttemptDetail::new(*number, attempt, result)
+            })
+            .collect();
+
+        Ok(SettlementJobDetail {
+            job_id,
+            certificate_id,
+            status: if job_result.is_some() {
+                SettlementJobStatus::Completed
+            } else {
+                SettlementJobStatus::Pending
+            },
+            has_live_task,
+            contract_address: job.contract_address,
+            eth_value: job.eth_value,
+            gas_limit: job.gas_limit,
+            calldata: job.calldata,
+            attempts,
+            job_result: job_result.as_ref().map(SettlementJobResultDto::from),
+            last_error: render_last_error(&attempt_results),
+        })
     }
 }

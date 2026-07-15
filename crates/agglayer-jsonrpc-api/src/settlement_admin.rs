@@ -210,9 +210,6 @@ impl From<&SettlementJobResult> for SettlementJobResultDto {
 
 /// Render the most recent attempt result as an operator-facing error
 /// string, or `None` when the latest recorded state is not a failure.
-// Only unit tests call this until the settlement admin read methods land
-// in the next commit.
-#[allow(dead_code)]
 pub(crate) fn render_last_error(results: &[(u64, SettlementAttemptResult)]) -> Option<String> {
     let (_, latest) = results.iter().max_by_key(|(number, _)| *number)?;
     match latest {
@@ -232,8 +229,6 @@ pub(crate) fn render_last_error(results: &[(u64, SettlementAttemptResult)]) -> O
 }
 
 /// Build one list row from its storage and service inputs.
-// Used by the settlement admin read methods in the next commit.
-#[allow(dead_code)]
 pub(crate) fn build_job_summary(
     job_id: SettlementJobId,
     certificate_id: Option<CertificateId>,
