@@ -67,6 +67,11 @@ A pending job without a live task, for example after an admin abort
 or a failed in-task reload, gets a fresh task spawned from storage.
 Repeating the call is harmless: reload-and-restart is idempotent recovery.
 
+A panicked task stays registered, so `hasLiveTask` keeps reporting true
+while the job makes no progress.
+Reload directly in that case:
+the call detects the dead registration and respawns over it.
+
 ### A job must stop now
 
 Call `admin_abortSettlementTask` to stop the in-memory task.
@@ -80,6 +85,9 @@ because the task can exit on the cancellation
 without draining its command queue.
 Verify with `admin_getSettlementJob` that `hasLiveTask` is false
 before reloading.
+If `hasLiveTask` never turns false and the job shows no progress,
+the task has likely panicked; reload directly, the call respawns over
+a dead registration.
 
 ### External transaction or wrong recorded result
 
