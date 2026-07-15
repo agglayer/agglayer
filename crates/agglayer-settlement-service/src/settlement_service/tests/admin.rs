@@ -476,8 +476,9 @@ async fn admin_reload_and_restart_respawns_after_task_panic() {
     let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
 
     // Simulate a panicked task: its control handle stays registered
-    // while the receiver side is gone, along with a watcher whose
-    // sender died with the task.
+    // while the receiver side is gone, along with the registered
+    // result sender it left behind (the task's own sender clone died
+    // with it, but the map still holds one).
     let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
     drop(task_control);
     service
@@ -486,10 +487,10 @@ async fn admin_reload_and_restart_respawns_after_task_panic() {
         .await
         .insert(job_id, task_control_handle);
     service
-        .result_watchers
+        .result_senders
         .lock()
         .await
-        .insert(job_id, watch::channel(None).1);
+        .insert(job_id, watch::channel(None).0);
     assert!(service.has_live_task(job_id).await);
 
     service
@@ -508,9 +509,9 @@ async fn admin_reload_and_restart_respawns_after_task_panic() {
         .expect("control handle must be registered");
     assert!(!control.is_closed());
 
-    // The stale watcher was replaced by one backed by the respawned
-    // task's live sender: retrieval reports the job as pending instead
-    // of failing on a dead channel.
+    // The respawn reused the registered sender, so the channel stays
+    // alive and backed by the respawned task: retrieval reports the job
+    // as pending with a functioning receiver instead of a dead channel.
     let retrieved = service
         .retrieve_settlement_result(job_id)
         .await
@@ -518,7 +519,7 @@ async fn admin_reload_and_restart_respawns_after_task_panic() {
     match retrieved {
         RetrievedSettlementResult::Pending(mut watcher) => assert!(
             watcher.watcher().has_changed().is_ok(),
-            "respawn must replace the stale watcher with a functioning one"
+            "respawn must keep the result channel alive and functioning"
         ),
         RetrievedSettlementResult::Completed(_) => panic!("job must still be pending"),
     }
@@ -548,17 +549,17 @@ async fn admin_reload_over_panicked_completed_job_clears_stale_pending_watcher()
     let cancellation_token = CancellationToken::new();
     let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
 
-    // Panic-mid-completion state: closed control handle + a watcher
-    // still holding `None`, both registered.
+    // Panic-mid-completion state: closed control handle + a registered
+    // sender still holding `None`, both registered.
     let (handle, control) = TaskControlHandle::new(&service.cancellation_token);
     drop(control);
     service.task_controls.lock().await.insert(job_id, handle);
-    let (_dead_sender, dead_receiver) = watch::channel(None);
+    let (stale_sender, _stale_receiver) = watch::channel(None);
     service
-        .result_watchers
+        .result_senders
         .lock()
         .await
-        .insert(job_id, dead_receiver);
+        .insert(job_id, stale_sender);
 
     let error = service
         .admin_reload_and_restart_task(job_id)
@@ -746,4 +747,134 @@ async fn abort_during_in_task_reload_exits_the_reloaded_task() {
     .expect("abort during reload must make the reloaded task exit");
 
     cancellation_token.cancel();
+}
+
+/// Regression for bot r3589571032 (PR #1681, line 367): a certificate already
+/// waiting on a job's result must keep receiving when an admin respawn
+/// replaces the task.
+///
+/// The waiter holds a receiver obtained through `subscribe()` on the
+/// registered sender. A respawn reuses that same sender (rather than creating
+/// a fresh channel), so a result published afterwards still reaches the
+/// pre-respawn waiter. Under the old receiver-per-spawn model the respawn
+/// dropped the original sender and the waiter would see the channel close
+/// (`RecvError`) instead of the result.
+#[tokio::test]
+async fn waiter_before_respawn_still_receives_result() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(33);
+    // The respawn loads a pending job from storage; tolerate the reads.
+    expect_pending_job_reads(&mut store, 33);
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+    // A certificate is already awaiting the job through a subscribed receiver,
+    // exactly as `request_new_settlement`/`retrieve_settlement_result` hand
+    // out. Register the sender first, then subscribe before the respawn.
+    // Drop every other reference to the channel we own here, so the ONLY
+    // sender left is the one in the map: if the respawn discards it (the old
+    // receiver-per-spawn model) the waiter's channel closes and the wait
+    // fails; if the respawn reuses it, the waiter still receives.
+    let (sender, initial_receiver) = watch::channel(None);
+    service.result_senders.lock().await.insert(job_id, sender);
+    let mut pre_respawn_waiter = SettlementJobWatcher {
+        watcher: initial_receiver,
+        job_id,
+    };
+
+    // Respawn a task for the same job. It must reuse the registered sender.
+    load_and_spawn_pending_task(&service, job_id).await;
+
+    // Publish a result through the map's current sender (the one the respawn
+    // installed/reused) before yielding to the spawned task, so the assertion
+    // is deterministic on current_thread.
+    let result = mk_result(33, ContractCallOutcome::Success);
+    {
+        let senders = service.result_senders.lock().await;
+        let sender = senders
+            .get(&job_id)
+            .expect("a sender must be registered after respawn");
+        sender
+            .send(Some(result.clone()))
+            .expect("registered sender must still have the pre-respawn receiver");
+    }
+
+    let received = pre_respawn_waiter
+        .wait_for_result()
+        .await
+        .expect("pre-respawn waiter must still resolve through the reused sender");
+    assert_eq!(received, result);
+
+    cancellation_token.cancel();
+}
+
+/// `retrieve_settlement_result` reads through the registered sender:
+/// `Some` current value reports `Completed`, `None` reports `Pending` with a
+/// functioning subscribed receiver, and an absent sender falls through to the
+/// completed result in storage.
+#[tokio::test]
+async fn retrieve_reads_completed_pending_and_storage_fallback() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let completed_job = mk_job_id(34);
+    let pending_job = mk_job_id(35);
+    let storage_job = mk_job_id(36);
+    let completed_result = mk_result(34, ContractCallOutcome::Success);
+    let storage_result = mk_result(36, ContractCallOutcome::Revert);
+
+    // Storage fallback: no sender registered, storage has a terminal result.
+    let storage_result_for_store = storage_result.clone();
+    store
+        .expect_get_settlement_job_result()
+        .withf(move |id| id == &storage_job)
+        .return_once(move |_| Ok(Some(storage_result_for_store)));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    // Completed: sender holds a `Some` value.
+    let (completed_sender, _rx) = watch::channel(Some(completed_result.clone()));
+    service
+        .result_senders
+        .lock()
+        .await
+        .insert(completed_job, completed_sender);
+    // Pending: sender holds `None`.
+    let (pending_sender, _rx) = watch::channel(None);
+    service
+        .result_senders
+        .lock()
+        .await
+        .insert(pending_job, pending_sender);
+
+    match service
+        .retrieve_settlement_result(completed_job)
+        .await
+        .expect("completed retrieval should succeed")
+    {
+        RetrievedSettlementResult::Completed(result) => assert_eq!(result, completed_result),
+        RetrievedSettlementResult::Pending(_) => panic!("expected completed"),
+    }
+
+    match service
+        .retrieve_settlement_result(pending_job)
+        .await
+        .expect("pending retrieval should succeed")
+    {
+        RetrievedSettlementResult::Pending(mut watcher) => assert!(
+            watcher.watcher().has_changed().is_ok(),
+            "pending retrieval must hand out a functioning receiver"
+        ),
+        RetrievedSettlementResult::Completed(_) => panic!("expected pending"),
+    }
+
+    match service
+        .retrieve_settlement_result(storage_job)
+        .await
+        .expect("storage-fallback retrieval should succeed")
+    {
+        RetrievedSettlementResult::Completed(result) => assert_eq!(result, storage_result),
+        RetrievedSettlementResult::Pending(_) => panic!("expected completed from storage"),
+    }
 }

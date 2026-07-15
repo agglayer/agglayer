@@ -35,8 +35,14 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
     task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
-    result_watchers:
-        Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
+    /// Per-job result channel senders. Holding the sender (rather than a
+    /// receiver) keeps the channel alive across a task respawn: an admin
+    /// reload replaces the task but reuses the registered sender, so
+    /// certificates already awaiting through a `subscribe()`d receiver keep
+    /// receiving instead of seeing the channel close.
+    /// XREF: bot r3589571032 on PR #1681.
+    result_senders:
+        Arc<Mutex<HashMap<SettlementJobId, watch::Sender<Option<SettlementJobResult>>>>>,
     /// Per-wallet locks serializing the nonce read-to-save window across
     /// concurrent settlement tasks.
     /// XREF: https://github.com/agglayer/agglayer/issues/1597
@@ -98,7 +104,7 @@ impl<
             store,
             cancellation_token,
             task_controls: Arc::new(Mutex::new(HashMap::new())),
-            result_watchers: Arc::new(Mutex::new(HashMap::new())),
+            result_senders: Arc::new(Mutex::new(HashMap::new())),
             wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             admin_operation_lock: Arc::new(Mutex::new(())),
         };
@@ -158,17 +164,23 @@ impl<
         mut task: SettlementTask<L1Provider, SettlementStore>,
         task_control_handle: TaskControlHandle,
     ) -> watch::Receiver<Option<SettlementJobResult>> {
-        let (result_sender, result_receiver) = watch::channel(None);
         self.task_controls
             .lock()
             .await
             .insert(job_id, task_control_handle);
-        self.result_watchers
-            .lock()
-            .await
-            .insert(job_id, result_receiver.clone());
+        // Reuse the registered sender on respawn so waiters that subscribed
+        // before the respawn keep receiving; only create a fresh channel for
+        // a job with no sender yet.
+        let result_sender = {
+            let mut result_senders = self.result_senders.lock().await;
+            result_senders
+                .entry(job_id)
+                .or_insert_with(|| watch::channel(None).0)
+                .clone()
+        };
+        let result_receiver = result_sender.subscribe();
         let task_controls = self.task_controls.clone();
-        let result_watchers = self.result_watchers.clone();
+        let result_senders = self.result_senders.clone();
         let tx_config = self.tx_config.clone();
         let provider = self.provider.clone();
         let store = self.store.clone();
@@ -177,6 +189,11 @@ impl<
             loop {
                 match task.run().await {
                     SettlementTaskRunResult::Completed(result) => {
+                        // Publish the result, then drop the registered sender.
+                        // Waiters using `wait_for(Option::is_some)` observe the
+                        // value set here before the channel closes; a late
+                        // subscriber finds no sender and falls through to the
+                        // completed result in storage.
                         if let Err(error) = result_sender.send(Some(result)) {
                             error!(
                                 ?error,
@@ -184,12 +201,13 @@ impl<
                                 "Failed to send settlement job result to watchers"
                             );
                         }
+                        result_senders.lock().await.remove(&job_id);
                         task_controls.lock().await.remove(&job_id);
                         break;
                     }
                     SettlementTaskRunResult::Cancelled => {
                         info!(?job_id, "Settlement task cancelled");
-                        result_watchers.lock().await.remove(&job_id);
+                        result_senders.lock().await.remove(&job_id);
                         task_controls.lock().await.remove(&job_id);
                         break;
                     }
@@ -238,7 +256,7 @@ impl<
                                         "Abort observed during in-task reload; exiting instead of \
                                          installing the reloaded task"
                                     );
-                                    result_watchers.lock().await.remove(&job_id);
+                                    result_senders.lock().await.remove(&job_id);
                                     task_controls.lock().await.remove(&job_id);
                                     break;
                                 }
@@ -256,6 +274,7 @@ impl<
                                         "Failed to send settlement job result to watchers"
                                     );
                                 }
+                                result_senders.lock().await.remove(&job_id);
                                 task_controls.lock().await.remove(&job_id);
                                 break;
                             }
@@ -266,7 +285,7 @@ impl<
                                     "Failed to reload settlement task; dropping in-memory task \
                                      state"
                                 );
-                                result_watchers.lock().await.remove(&job_id);
+                                result_senders.lock().await.remove(&job_id);
                                 task_controls.lock().await.remove(&job_id);
                                 break;
                             }
@@ -397,14 +416,14 @@ impl<
                 Ok(())
             }
             Ok(StoredSettlementJob::Completed(_, _)) => {
-                // A stale control/watcher can survive here only when the
+                // A stale control/sender can survive here only when the
                 // owning task panicked after persisting the terminal
                 // result but before publishing it to the watcher. Drop
                 // both so `retrieve_settlement_result` falls through to
                 // the completed result in storage instead of serving the
                 // stale pending watcher.
                 self.task_controls.lock().await.remove(&job_id);
-                self.result_watchers.lock().await.remove(&job_id);
+                self.result_senders.lock().await.remove(&job_id);
                 Err(SettlementAdminError::JobCompleted(job_id))
             }
             Err(error) => match self.store.get_settlement_job(&job_id) {
@@ -460,11 +479,11 @@ impl<
         &self,
         job_id: SettlementJobId,
     ) -> eyre::Result<RetrievedSettlementResult> {
-        if let Some(watcher) = self.result_watchers.lock().await.get(&job_id) {
-            return match watcher.borrow().as_ref() {
+        if let Some(sender) = self.result_senders.lock().await.get(&job_id) {
+            return match sender.borrow().as_ref() {
                 None => Ok(RetrievedSettlementResult::Pending(SettlementJobWatcher {
                     job_id,
-                    watcher: watcher.clone(),
+                    watcher: sender.subscribe(),
                 })),
                 Some(result) => Ok(RetrievedSettlementResult::Completed(result.clone())),
             };
@@ -719,7 +738,7 @@ mod tests {
         let service = mk_service(Arc::new(store)).await;
 
         assert!(service.task_controls.lock().await.is_empty());
-        assert!(service.result_watchers.lock().await.is_empty());
+        assert!(service.result_senders.lock().await.is_empty());
     }
 
     #[tokio::test]
@@ -730,8 +749,8 @@ mod tests {
         let job_id = mk_job_id(1);
         let in_memory_result = mk_result(2, ContractCallOutcome::Revert);
 
-        let (_sender, watcher) = watch::channel(Some(in_memory_result.clone()));
-        service.result_watchers.lock().await.insert(job_id, watcher);
+        let (sender, _watcher) = watch::channel(Some(in_memory_result.clone()));
+        service.result_senders.lock().await.insert(job_id, sender);
 
         let retrieved = service
             .retrieve_settlement_result(job_id)
@@ -905,7 +924,11 @@ mod tests {
 
         assert_eq!(result_receiver.borrow().as_ref(), Some(&completed_result));
         assert!(service.task_controls.lock().await.is_empty());
-        assert!(service.result_watchers.lock().await.contains_key(&job_id));
+        // In the sender model the completed result is delivered to the
+        // already-subscribed receiver above, then the registered sender is
+        // dropped. A later `retrieve_settlement_result` falls through to the
+        // completed result in storage rather than a lingering in-memory entry.
+        assert!(!service.result_senders.lock().await.contains_key(&job_id));
     }
 
     #[tokio::test]
