@@ -514,6 +514,15 @@ impl<
         }
     }
 
+    /// The cancellation token this task observes.
+    ///
+    /// During an in-task reload the run loop parents the replacement task's
+    /// token on this one so an abort that lands while the task is reloading
+    /// from storage propagates into the reloaded task.
+    pub fn cancellation_token(&self) -> &CancellationToken {
+        &self.control.cancellation_token
+    }
+
     pub async fn run(&mut self) -> SettlementTaskRunResult {
         let settlement_task_id = self.id;
 

@@ -652,3 +652,98 @@ async fn failed_in_task_reload_never_leaves_a_closed_handle_registered() {
 
     cancellation_token.cancel();
 }
+
+/// Regression for bot r3589631493 (PR #1681, line 223): an abort that lands
+/// while a task is reloading from storage must carry into the reloaded task.
+///
+/// During an in-task reload the OLD handle stays registered on purpose, so an
+/// `admin_abort_task` in the load window cancels the OLD token. The reload arm
+/// then parents the replacement token on that OLD token and, right after
+/// building the reloaded task, fast-checks the OLD token: a cancel observed in
+/// the window skips the swap, runs the cancelled cleanup, and exits. Without
+/// the fix the replacement token was a child of the service token, so the
+/// abort was lost and the reloaded task kept running (stayed registered).
+///
+/// The cancellation is injected synchronously from inside the reload-triggered
+/// `get_settlement_job` read, modelling an abort arriving mid-hydration, which
+/// keeps the test deterministic on the current_thread runtime.
+#[tokio::test]
+async fn abort_during_in_task_reload_exits_the_reloaded_task() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(32);
+    let job = mk_job(32);
+
+    // The OLD handle, shared into the store so the reload-triggered read can
+    // cancel it, modelling an admin abort landing during hydration.
+    let old_handle_slot: Arc<Mutex<Option<TaskControlHandle>>> = Arc::new(Mutex::new(None));
+
+    let job_reads = Arc::new(Mutex::new(0usize));
+    let old_handle_for_store = old_handle_slot.clone();
+    store.expect_get_settlement_job().returning(move |_| {
+        let mut job_reads = job_reads.lock().unwrap();
+        *job_reads += 1;
+        // Read 1 is the initial explicit load; read 2 is the reload. Cancel
+        // the OLD token during the reload's hydration.
+        if *job_reads == 2 {
+            if let Some(handle) = old_handle_for_store.lock().unwrap().as_ref() {
+                handle.cancel();
+            }
+        }
+        Ok(Some(job.clone()))
+    });
+    store
+        .expect_get_settlement_job_result()
+        .returning(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .returning(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .returning(|_| Ok(Vec::new()));
+    store
+        .expect_max_settlement_nonce_for_wallet()
+        .returning(|_| Ok(None));
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+    // Load the initial task and queue a reload so its first poll enters the
+    // reload arm (the loop-top check passes because the OLD token is not yet
+    // cancelled), then drains the command and reloads from storage.
+    let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
+    *old_handle_slot.lock().unwrap() = Some(task_control_handle.clone());
+    task_control_handle
+        .try_send(TaskAdminCommand::ReloadAndRestart)
+        .expect("reload command should fit in admin channel");
+    let task = match SettlementTask::load(
+        job_id,
+        service.tx_config.clone(),
+        service.provider.clone(),
+        service.store.clone(),
+        service.wallet_nonce_locks.clone(),
+        task_control,
+    )
+    .await
+    .expect("settlement task should load")
+    {
+        StoredSettlementJob::Pending(task) => task,
+        StoredSettlementJob::Completed(_, _) => panic!("initial load should be pending"),
+    };
+
+    service
+        .spawn_settlement_task(job_id, task, task_control_handle)
+        .await;
+
+    // The abort injected during the reload must make the reloaded task exit
+    // rather than keep running: the control handle deregisters.
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while service.has_live_task(job_id).await {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("abort during reload must make the reloaded task exit");
+
+    cancellation_token.cancel();
+}

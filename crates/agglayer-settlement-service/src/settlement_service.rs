@@ -173,7 +173,6 @@ impl<
         let provider = self.provider.clone();
         let store = self.store.clone();
         let wallet_nonce_locks = self.wallet_nonce_locks.clone();
-        let cancellation_token = self.cancellation_token.clone();
         tokio::task::spawn(async move {
             loop {
                 match task.run().await {
@@ -196,8 +195,17 @@ impl<
                     }
                     SettlementTaskRunResult::ReloadAndRestart => {
                         info!(?job_id, "Reloading and restarting settlement task");
+                        // Parent the replacement token on the OLD task's token
+                        // rather than the service token. During the load the
+                        // OLD handle stays registered on purpose, so an
+                        // `admin_abort_task` in that window cancels the OLD
+                        // token; a child of it is then immediately cancelled,
+                        // making the reloaded task observe cancellation at its
+                        // first control check and exit cleanly. Parenting on
+                        // the service token would lose that abort.
+                        // XREF: bot r3589631493 on PR #1681.
                         let (task_control_handle, task_control) =
-                            TaskControlHandle::new(&cancellation_token);
+                            TaskControlHandle::new(task.cancellation_token());
                         // The old handle stays in the map until the reloaded
                         // task is ready: its receiver lives in the current
                         // `task` binding, so it reads as open and a concurrent
@@ -217,6 +225,23 @@ impl<
                         .await
                         {
                             Ok(StoredSettlementJob::Pending(reloaded_task)) => {
+                                // If an abort landed on the OLD token while the
+                                // task was hydrating, prefer exiting over
+                                // installing the reloaded task. The child-token
+                                // parenting above already guarantees the
+                                // reloaded task would exit at its first control
+                                // check, but skipping the swap tears the task
+                                // down here without another loop iteration.
+                                if task.cancellation_token().is_cancelled() {
+                                    info!(
+                                        ?job_id,
+                                        "Abort observed during in-task reload; exiting instead of \
+                                         installing the reloaded task"
+                                    );
+                                    result_watchers.lock().await.remove(&job_id);
+                                    task_controls.lock().await.remove(&job_id);
+                                    break;
+                                }
                                 task_controls
                                     .lock()
                                     .await
