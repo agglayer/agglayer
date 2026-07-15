@@ -278,6 +278,18 @@ impl TaskControlHandle {
     ) -> Result<(), mpsc::error::TrySendError<TaskAdminCommand>> {
         self.admin_commands.try_send(command)
     }
+
+    /// Whether the admin command channel of this handle is closed.
+    ///
+    /// A live task owns the receiver of the handle currently registered
+    /// in the service's task-control map, so a closed map-handle means
+    /// the owning task is gone without having deregistered (it
+    /// panicked). Handles cloned out of the map earlier can report
+    /// closed while the task lives on under a swapped-in handle; only
+    /// the map's current handle supports this conclusion.
+    pub fn is_closed(&self) -> bool {
+        self.admin_commands.is_closed()
+    }
 }
 
 pub enum SettlementTaskRunResult {

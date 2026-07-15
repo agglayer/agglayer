@@ -8,7 +8,7 @@ use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{watch, Mutex};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     error::SettlementAdminError,
@@ -296,12 +296,18 @@ impl<
 
     /// Make the task of `job_id` drop its in-memory state and reload
     /// from storage. A live task gets the reload command; a pending job
-    /// without a live task (after an admin abort or a failed in-task
-    /// reload) gets a fresh task spawned from storage: this is the
-    /// recovery step after [`Self::admin_abort_task`].
+    /// without a live task (after an admin abort, a failed in-task
+    /// reload, or a task panic) gets a fresh task spawned from storage:
+    /// this is the recovery step after [`Self::admin_abort_task`].
+    ///
+    /// A panicked task exits without deregistering, leaving a closed
+    /// control handle in the map; the reload detects the closed handle
+    /// and respawns over the stale entry.
     ///
     /// The reload command is queued, not immediate: a task that is
-    /// concurrently cancelled can exit without draining it. Retry once
+    /// concurrently cancelled can exit without draining it, and its
+    /// channel can close between the liveness check and the send,
+    /// failing the reload with `TaskNotResponding`. Retry once
     /// [`Self::has_live_task`] reports `false`; the respawn path then
     /// picks the job up from storage.
     #[tracing::instrument(skip(self))]
@@ -311,15 +317,25 @@ impl<
     ) -> Result<(), SettlementAdminError> {
         let _admin_op = self.admin_operation_lock.lock().await;
 
-        // Fast path: a live task processes the reload itself.
+        // Fast path: a live task processes the reload itself. A closed
+        // handle still registered in the map means the owning task
+        // panicked without deregistering: fall through and respawn over
+        // the stale entries.
         let control = self.task_controls.lock().await.get(&job_id).cloned();
         if let Some(control) = control {
-            return control
-                .try_send(TaskAdminCommand::ReloadAndRestart)
-                .map_err(|error| SettlementAdminError::TaskNotResponding {
-                    job_id,
-                    reason: error.to_string(),
-                });
+            if !control.is_closed() {
+                return control
+                    .try_send(TaskAdminCommand::ReloadAndRestart)
+                    .map_err(|error| SettlementAdminError::TaskNotResponding {
+                        job_id,
+                        reason: error.to_string(),
+                    });
+            }
+            warn!(
+                ?job_id,
+                "Settlement task control channel is closed but still registered; respawning over \
+                 the stale entry"
+            );
         }
 
         // No live task: respawn from storage if the job is still pending.
@@ -1297,6 +1313,47 @@ mod tests {
             error,
             crate::SettlementAdminError::ReloadFailed { .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn admin_reload_and_restart_respawns_after_task_panic() {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        let job_id = mk_job_id(29);
+        expect_pending_job_reads(&mut store, 29);
+
+        let cancellation_token = CancellationToken::new();
+        let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+        // Simulate a panicked task: its control handle stays registered
+        // while the receiver side is gone.
+        let (task_control_handle, task_control) =
+            TaskControlHandle::new(&service.cancellation_token);
+        drop(task_control);
+        service
+            .task_controls
+            .lock()
+            .await
+            .insert(job_id, task_control_handle);
+        assert!(service.has_live_task(job_id).await);
+
+        service
+            .admin_reload_and_restart_task(job_id)
+            .await
+            .expect("reload must respawn over the stale entry of a panicked task");
+
+        // The respawned task registered a fresh, working handle.
+        assert!(service.has_live_task(job_id).await);
+        let control = service
+            .task_controls
+            .lock()
+            .await
+            .get(&job_id)
+            .cloned()
+            .expect("control handle must be registered");
+        assert!(!control.is_closed());
+
+        cancellation_token.cancel();
     }
 
     mod same_wallet_nonce_race;
