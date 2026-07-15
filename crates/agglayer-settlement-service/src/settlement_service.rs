@@ -372,6 +372,14 @@ impl<
                 Ok(())
             }
             Ok(StoredSettlementJob::Completed(_, _)) => {
+                // A stale control/watcher can survive here only when the
+                // owning task panicked after persisting the terminal
+                // result but before publishing it to the watcher. Drop
+                // both so `retrieve_settlement_result` falls through to
+                // the completed result in storage instead of serving the
+                // stale pending watcher.
+                self.task_controls.lock().await.remove(&job_id);
+                self.result_watchers.lock().await.remove(&job_id);
                 Err(SettlementAdminError::JobCompleted(job_id))
             }
             Err(error) => match self.store.get_settlement_job(&job_id) {

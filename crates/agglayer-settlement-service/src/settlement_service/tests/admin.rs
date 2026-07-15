@@ -457,6 +457,58 @@ async fn admin_reload_and_restart_respawns_after_task_panic() {
     cancellation_token.cancel();
 }
 
+#[tokio::test]
+async fn admin_reload_over_panicked_completed_job_clears_stale_pending_watcher() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(31);
+    let stored_result = mk_result(31, ContractCallOutcome::Success);
+    {
+        let job = mk_job(31);
+        store
+            .expect_get_settlement_job()
+            .withf(move |id| id == &job_id)
+            .returning(move |_| Ok(Some(job.clone())));
+        let result = stored_result.clone();
+        store
+            .expect_get_settlement_job_result()
+            .withf(move |id| id == &job_id)
+            .returning(move |_| Ok(Some(result.clone())));
+    }
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+    // Panic-mid-completion state: closed control handle + a watcher
+    // still holding `None`, both registered.
+    let (handle, control) = TaskControlHandle::new(&service.cancellation_token);
+    drop(control);
+    service.task_controls.lock().await.insert(job_id, handle);
+    let (_dead_sender, dead_receiver) = watch::channel(None);
+    service
+        .result_watchers
+        .lock()
+        .await
+        .insert(job_id, dead_receiver);
+
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("completed job must report JobCompleted");
+    assert!(matches!(error, crate::SettlementAdminError::JobCompleted(id) if id == job_id));
+
+    let retrieved = service
+        .retrieve_settlement_result(job_id)
+        .await
+        .expect("retrieve must succeed");
+    assert!(
+        matches!(retrieved, RetrievedSettlementResult::Completed(result) if result == stored_result),
+        "retrieve must read the completed result from storage, not the stale pending watcher",
+    );
+
+    cancellation_token.cancel();
+}
+
 /// A failed in-task reload must never leave a closed control handle
 /// registered: closed-while-registered is reserved for panicked tasks,
 /// and a concurrent admin reload observing it mid-teardown would spawn
