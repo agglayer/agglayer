@@ -95,7 +95,7 @@ Both need the mutation methods from the separate work stream
 2. Abort the task with `admin_abortSettlementTask`.
 3. Re-inspect until `hasLiveTask` is false.
 4. Restart with `admin_reloadAndRestartSettlementTask`.
-5. Re-inspect and confirm `hasLiveTask` is true.
+5. Re-inspect and confirm `hasLiveTask` is true (or `status` already `completed`).
 
 ## Worked examples
 
@@ -116,7 +116,7 @@ Get one job with its attempt history:
 ```bash
 curl -s -X POST http://127.0.0.1:9091/ \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"admin_getSettlementJob","params":["01K1ZDGVR1V0Q2EXAMPLEULID0"]}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"admin_getSettlementJob","params":["01K1ZDGVR1V0Q2EXA4P3E00000"]}'
 ```
 
 Abort the task of a job:
@@ -124,7 +124,7 @@ Abort the task of a job:
 ```bash
 curl -s -X POST http://127.0.0.1:9091/ \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"admin_abortSettlementTask","params":["01K1ZDGVR1V0Q2EXAMPLEULID0"]}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"admin_abortSettlementTask","params":["01K1ZDGVR1V0Q2EXA4P3E00000"]}'
 ```
 
 Reload a job from storage and restart its task:
@@ -132,16 +132,17 @@ Reload a job from storage and restart its task:
 ```bash
 curl -s -X POST http://127.0.0.1:9091/ \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"admin_reloadAndRestartSettlementTask","params":["01K1ZDGVR1V0Q2EXAMPLEULID0"]}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"admin_reloadAndRestartSettlementTask","params":["01K1ZDGVR1V0Q2EXA4P3E00000"]}'
 ```
 
 ## Error responses
 
 An unknown job id returns code `-10008` (resource not found).
-Every other settlement admin failure returns code `-10010`
+Every other failure of the two task-control methods returns code `-10010`
 with a machine-readable variant tag nested under `data.settlement-admin`:
 `job-completed`, `no-live-task`, `task-not-responding`,
 `reload-failed`, or `storage`.
+The read methods report storage failures as plain internal errors (`-32603`).
 Scripts should branch on the tag, not on the message,
 which is free text and can change.
 `crates/agglayer-jsonrpc-api/src/error.rs` defines the codes.
@@ -154,7 +155,7 @@ An abort without a live task, for example, fails with:
   "data": {
     "settlement-admin": {
       "no-live-task": {
-        "job-id": "01K1ZDGVR1V0Q2EXAMPLEULID0"
+        "job-id": "01K1ZDGVR1V0Q2EXA4P3E00000"
       }
     }
   },
