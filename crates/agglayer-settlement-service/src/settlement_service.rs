@@ -10,9 +10,12 @@ use tokio::sync::{watch, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::settlement_task::{
-    SettlementTask, SettlementTaskRunResult, StoredSettlementJob, TaskAdminCommand,
-    TaskControlHandle,
+use crate::{
+    settlement_task::{
+        SettlementTask, SettlementTaskRunResult, StoredSettlementJob, TaskAdminCommand,
+        TaskControlHandle,
+    },
+    wallet_nonce_locks::WalletNonceLocks,
 };
 
 /// The Settlement Service is responsible for managing settlement jobs and
@@ -33,6 +36,10 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
     result_watchers:
         Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
+    /// Per-wallet locks serializing the nonce read-to-save window across
+    /// concurrent settlement tasks.
+    /// XREF: https://github.com/agglayer/agglayer/issues/1597
+    wallet_nonce_locks: Arc<WalletNonceLocks>,
 }
 
 pub struct SettlementJobWatcher {
@@ -88,6 +95,7 @@ impl<
             cancellation_token,
             task_controls: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
         };
         this.resume_pending_settlement_jobs().await?;
         Ok(this)
@@ -114,6 +122,7 @@ impl<
                 self.tx_config.clone(),
                 self.provider.clone(),
                 self.store.clone(),
+                self.wallet_nonce_locks.clone(),
                 task_control,
             )
             .await
@@ -158,6 +167,7 @@ impl<
         let tx_config = self.tx_config.clone();
         let provider = self.provider.clone();
         let store = self.store.clone();
+        let wallet_nonce_locks = self.wallet_nonce_locks.clone();
         let cancellation_token = self.cancellation_token.clone();
         tokio::task::spawn(async move {
             loop {
@@ -192,6 +202,7 @@ impl<
                             tx_config.clone(),
                             provider.clone(),
                             store.clone(),
+                            wallet_nonce_locks.clone(),
                             task_control,
                         )
                         .await
@@ -281,6 +292,7 @@ impl<
             self.tx_config.clone(),
             self.provider.clone(),
             self.store.clone(),
+            self.wallet_nonce_locks.clone(),
             task_control,
         )
         .await?;
@@ -718,6 +730,7 @@ mod tests {
             service.tx_config.clone(),
             service.provider.clone(),
             service.store.clone(),
+            service.wallet_nonce_locks.clone(),
             task_control,
         )
         .await
@@ -807,4 +820,6 @@ mod tests {
             ["write_link", "write_job"]
         );
     }
+
+    mod same_wallet_nonce_race;
 }

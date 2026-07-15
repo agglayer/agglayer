@@ -28,8 +28,9 @@ pub enum CertificateStage {
 }
 
 /// Histogram buckets in seconds, from the sub-second submission stage to
-/// multi-minute settlement.
-const DURATION_BUCKETS_SECONDS: &[f64] = &[
+/// multi-minute settlement. Settlement job durations live on the same
+/// L1-inclusion timescale, so [`crate::settlement`] shares these buckets.
+pub(crate) const DURATION_BUCKETS_SECONDS: &[f64] = &[
     0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 900.0, 1800.0,
 ];
 
