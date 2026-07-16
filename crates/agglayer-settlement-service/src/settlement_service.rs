@@ -146,8 +146,11 @@ impl<
                         .await;
                     resumed_jobs += 1;
                 }
-                // An unloadable job must not prevent node boot: skip it and
-                // report loudly so it can be inspected and repaired.
+                // Load fails only when this job's stored rows cannot be read
+                // back (corrupt or undecodable data); never expected in
+                // normal operation. Such a job must not prevent node boot:
+                // skip it and report loudly so it can be inspected and
+                // repaired.
                 Err(error) => {
                     error!(
                         ?error,
