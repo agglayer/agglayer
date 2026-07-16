@@ -215,8 +215,6 @@ impl StateWriter for StateStore {
         certificate_id: &CertificateId,
         settlement_job_id: &SettlementJobId,
     ) -> Result<(), Error> {
-        // The check-then-write is lock-free: job ids are fresh ULIDs, so the
-        // duplicate checks only guard against caller bugs, not races.
         if self
             .db
             .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
@@ -224,16 +222,6 @@ impl StateWriter for StateStore {
         {
             return Err(Error::UnprocessedAction(format!(
                 "Certificate {certificate_id} already has a settlement job id"
-            )));
-        }
-
-        if self
-            .db
-            .get::<CertificateIdPerSettlementJobIdColumn>(settlement_job_id)?
-            .is_some()
-        {
-            return Err(Error::UnprocessedAction(format!(
-                "Settlement job {settlement_job_id} is already linked to a certificate"
             )));
         }
 

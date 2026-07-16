@@ -228,32 +228,6 @@ fn insert_certificate_settlement_job_id_duplicate_fails() {
 }
 
 #[test]
-fn insert_certificate_settlement_job_id_job_already_linked_fails() {
-    let (_tmp, db, store) = setup_store();
-    let first_certificate_id = mk_certificate_id(5);
-    let second_certificate_id = mk_certificate_id(6);
-    let job_id = mk_job_id(500);
-
-    store
-        .insert_certificate_settlement_job_id(&first_certificate_id, &job_id)
-        .expect("first mapping insert must succeed");
-
-    let res = store.insert_certificate_settlement_job_id(&second_certificate_id, &job_id);
-
-    assert!(matches!(res, Err(Error::UnprocessedAction(_))));
-    assert_eq!(
-        db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
-            .expect("Unable to read stored value"),
-        Some(first_certificate_id)
-    );
-    assert_eq!(
-        db.get::<SettlementJobIdPerCertificateIdColumn>(&second_certificate_id)
-            .expect("Unable to read stored value"),
-        None
-    );
-}
-
-#[test]
 fn insert_settlement_attempt_succeeds_once() {
     let (_tmp, _db, store) = setup_store();
     let job_id = mk_job_id(3);

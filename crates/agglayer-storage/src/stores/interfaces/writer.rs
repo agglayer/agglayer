@@ -74,10 +74,9 @@ pub trait StateWriter: Send + Sync {
     /// writing the certificate→job and job→certificate mappings atomically.
     ///
     /// This is an insert-only operation and must fail if `certificate_id`
-    /// already has a stored settlement job id or `settlement_job_id` is
-    /// already linked to a certificate. The settlement job may be created
-    /// after this link, so startup recovery can recreate a missing job from
-    /// the certificate-side id.
+    /// already has a stored settlement job id. The settlement job may be
+    /// created after this link, so startup recovery can recreate a missing job
+    /// from the certificate-side id.
     fn insert_certificate_settlement_job_id(
         &self,
         certificate_id: &CertificateId,
