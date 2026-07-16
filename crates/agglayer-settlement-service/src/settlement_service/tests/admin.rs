@@ -1056,3 +1056,147 @@ async fn retrieve_reads_completed_pending_and_storage_fallback() {
         RetrievedSettlementResult::Pending(_) => panic!("expected completed from storage"),
     }
 }
+
+/// Regression for Codex bot r3594135624 (PR #1681): an admin abort must
+/// serialize against reload/respawn via `admin_operation_lock`.
+///
+/// `admin_reload_and_restart_task`'s respawn-from-storage branch holds
+/// `admin_operation_lock` across `SettlementTask::load` +
+/// `spawn_settlement_task`, during which the map still holds the STALE CLOSED
+/// handle of the panicked task. Before this fix `admin_abort_task` took no
+/// lock, so an abort in that window cancelled the dead token (a no-op) and
+/// returned `Ok(())`, then the respawn installed a fresh service-token handle
+/// UNCANCELLED — the abort was silently lost. Making abort take the same lock
+/// closes the window: an abort runs fully before the respawn starts or fully
+/// after it completes.
+///
+/// This pins the SERIALIZATION deterministically, mirroring
+/// `request_new_settlement_serializes_against_admin_lock`: hold
+/// `admin_operation_lock` externally (modelling an in-flight respawn), fire
+/// `admin_abort_task`, and assert it does NOT complete while the lock is held,
+/// then completes once released. A true "abort during respawn" interleaving is
+/// not deterministically reproducible on the current_thread runtime (the
+/// respawn's awaited load has no forced yield point where an external abort can
+/// be injected between the stale-handle read and the fresh-handle install), so
+/// the lock-serialization guard is the primary regression pin; the behavioral
+/// outcome is covered by
+/// `admin_abort_after_respawn_cancels_the_respawned_task` below.
+#[tokio::test]
+async fn admin_abort_task_serializes_against_admin_lock() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(42);
+    expect_pending_job_reads(&mut store, 42);
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+    // Register a live task so the abort would reach the cancel path (rather
+    // than the no-live-task classification) once it acquires the lock.
+    // Determinism assumption: on the current_thread test runtime the spawned
+    // task is first polled after `cancel()` below, so it exits at the loop-top
+    // control check without touching the dead provider endpoint.
+    load_and_spawn_pending_task(&service, job_id).await;
+    assert!(service.has_live_task(job_id).await);
+
+    // Simulate an in-flight admin respawn by holding the admin operation lock,
+    // then fire an abort.
+    let admin_guard = service.admin_operation_lock.clone().lock_owned().await;
+
+    let abort_service = service.clone();
+    let abort = tokio::spawn(async move { abort_service.admin_abort_task(job_id).await });
+
+    // Give the spawned abort ample time to run if it ignored the lock.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(
+        !abort.is_finished(),
+        "admin_abort_task must block on the admin operation lock"
+    );
+
+    // Releasing the lock lets the abort proceed and cancel the live task.
+    drop(admin_guard);
+    tokio::time::timeout(std::time::Duration::from_secs(10), abort)
+        .await
+        .expect("abort should finish once the admin lock is free")
+        .expect("abort task should not panic")
+        .expect("abort of a live task must succeed");
+
+    cancellation_token.cancel();
+}
+
+/// Behavioral counterpart to `admin_abort_task_serializes_against_admin_lock`:
+/// with abort serialized behind `admin_operation_lock`, an abort that runs
+/// AFTER a respawn finds the freshly spawned live handle and cancels the real
+/// token, rather than the stale dead one.
+///
+/// Stages a panicked task (closed control handle + registered sender, as
+/// `admin_reload_and_restart_respawns_after_task_panic` does), drives a reload
+/// that respawns over the stale entry, then aborts. The abort — serialized
+/// after the completed respawn — cancels the respawned task's real token, and
+/// the task deregisters (`has_live_task` -> `false`). Before the fix, an abort
+/// racing the respawn could cancel the stale dead token and be lost; here the
+/// lock guarantees ordering so the outcome is deterministic on current_thread.
+#[tokio::test]
+async fn admin_abort_after_respawn_cancels_the_respawned_task() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(43);
+    expect_pending_job_reads(&mut store, 43);
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+    // Simulate a panicked task: closed control handle still registered plus
+    // the registered result sender it left behind.
+    let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
+    drop(task_control);
+    service
+        .task_controls
+        .lock()
+        .await
+        .insert(job_id, task_control_handle);
+    service
+        .result_senders
+        .lock()
+        .await
+        .insert(job_id, watch::channel(None).0);
+    assert!(service.has_live_task(job_id).await);
+
+    // Reload respawns over the stale closed handle with a fresh, live one.
+    // Determinism assumption: on the current_thread test runtime the respawned
+    // task is first polled after the abort's `cancel()` below, so it exits at
+    // the loop-top control check without touching the dead provider endpoint.
+    service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect("reload must respawn over the stale entry of a panicked task");
+    assert!(service.has_live_task(job_id).await);
+    let respawned = service
+        .task_controls
+        .lock()
+        .await
+        .get(&job_id)
+        .cloned()
+        .expect("control handle must be registered after respawn");
+    assert!(
+        !respawned.is_closed(),
+        "respawn must install a fresh, live handle"
+    );
+
+    // The abort, serialized after the completed respawn, cancels the REAL
+    // token of the respawned task, which then tears down and deregisters.
+    service
+        .admin_abort_task(job_id)
+        .await
+        .expect("abort of the respawned live task must succeed");
+
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while service.has_live_task(job_id).await {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("abort after respawn must cancel the respawned task, not be lost");
+
+    cancellation_token.cancel();
+}

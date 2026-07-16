@@ -315,6 +315,20 @@ impl<
     /// Request cancellation of the in-memory task of `job_id`; the job stays
     /// pending in storage and no terminal result is recorded.
     ///
+    /// Serializes against reload/respawn via `admin_operation_lock`: an abort
+    /// either runs fully before an [`Self::admin_reload_and_restart_task`]
+    /// starts or fully after it completes. This closes the respawn's
+    /// load+spawn window, where the map briefly holds the stale closed handle
+    /// of a panicked task: without the lock an abort in that window would
+    /// cancel the dead token (a no-op) and then the respawn would install a
+    /// fresh, uncancelled handle, silently losing the abort. Under the lock a
+    /// post-respawn abort instead finds the freshly spawned live handle and
+    /// cancels the real token. Taking the lock cannot expose abort to an
+    /// unbounded block because gas estimation — the only previously-unbounded
+    /// await — now runs outside the lock (XREF: Codex bot r3590141585 on PR
+    /// #1681); what remains under the lock is bounded storage reads, map
+    /// inserts, and a non-awaiting spawn.
+    ///
     /// Returns before the task observes the cancellation; watch the actual
     /// teardown through [`Self::has_live_task`]. `Ok(())` can race with task
     /// completion, where the cancel is a no-op on a lingering handle. An
@@ -329,6 +343,13 @@ impl<
         &self,
         job_id: SettlementJobId,
     ) -> Result<(), SettlementAdminError> {
+        // Serialize against reload/respawn so an abort cannot interleave with
+        // a respawn's load+spawn window and get lost on the stale closed
+        // handle. Same lock-ordering as `admin_reload_and_restart_task`
+        // (admin_operation_lock, then task_controls), so no new cycle.
+        // XREF: Codex bot r3594135624 on PR #1681.
+        let _admin_op = self.admin_operation_lock.lock().await;
+
         let control = self.task_controls.lock().await.get(&job_id).cloned();
         match control {
             Some(control) => {
