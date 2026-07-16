@@ -277,12 +277,16 @@ async fn admin_reload_and_restart_respawns_dead_task() {
 /// Regression for bot r3589631500 (PR #1681, line 366): a new-settlement
 /// request must not interleave its create+spawn with an admin respawn.
 ///
-/// `request_new_settlement` holds `admin_operation_lock` across create and
-/// spawn, the same lock `admin_reload_and_restart_task` takes. This test
-/// holds that lock externally and asserts `request_new_settlement` cannot
-/// make progress (it blocks before `SettlementTask::create` touches storage),
-/// proving the two are mutually exclusive. Without the fix the request runs
-/// to completion while the lock is held.
+/// The reserve/save + spawn window of `request_new_settlement` is serialized
+/// against admin respawn: it takes `admin_operation_lock`, the same lock
+/// `admin_reload_and_restart_task` takes. This test holds that lock externally
+/// and asserts the storage write (reserve/save) cannot happen while the lock
+/// is held, proving the two are mutually exclusive. Without commit 25f3e854's
+/// lock the request would persist the job while the lock is held.
+///
+/// Gas estimation runs BEFORE the lock (Codex bot r3590141585): the estimateGas
+/// mock response is consumed even while the lock is held, so this test also
+/// asserts estimation completed before the request parked on the lock.
 #[tokio::test]
 async fn request_new_settlement_serializes_against_admin_lock() {
     let mut store = MockStateStore::new();
@@ -297,11 +301,12 @@ async fn request_new_settlement_serializes_against_admin_lock() {
         Ok(())
     });
 
+    let (provider, asserter) = mk_provider_and_asserter_with_gas_estimate(200_000);
     let cancellation_token = CancellationToken::new();
     let service = SettlementService::start(
         SettlementServiceConfig::default(),
         Arc::new(SettlementTransactionConfig::default()),
-        Arc::new(mk_provider_with_gas_estimate(200_000)),
+        Arc::new(provider),
         Arc::new(store),
         cancellation_token.clone(),
     )
@@ -330,6 +335,13 @@ async fn request_new_settlement_serializes_against_admin_lock() {
         0,
         "request_new_settlement must not persist the job while the admin lock is held"
     );
+    // Gas estimation runs outside the lock, so its mock response is already
+    // consumed even though the request is parked on the lock.
+    assert_eq!(
+        asserter.read_q().len(),
+        0,
+        "gas estimation must complete before the request blocks on the admin lock"
+    );
 
     // Releasing the lock lets the request proceed.
     drop(admin_guard);
@@ -339,6 +351,100 @@ async fn request_new_settlement_serializes_against_admin_lock() {
         .expect("request task should not panic")
         .expect("settlement request should be accepted");
     let _ = watcher;
+
+    cancellation_token.cancel();
+}
+
+/// Regression for Codex bot r3590141585 (PR #1681): gas estimation must run
+/// OUTSIDE `admin_operation_lock`. Commit 25f3e854 held the lock across the
+/// whole of `create`, whose first step is `resolve_settlement_gas_limit` — an
+/// L1 `eth_estimateGas` with retry-on-transient-failure. Holding the lock
+/// across that step lets a new submission stuck in gas-estimation retries
+/// (e.g. during an L1 outage) block an operator from respawning an unrelated
+/// wedged job via `admin_reload_and_restart_task`, which takes the same lock.
+///
+/// This test holds the admin lock, fires `request_new_settlement`, and asserts
+/// that while the lock is held the request STILL runs gas estimation (the mock
+/// `estimateGas` response is consumed) yet does NOT persist the job (the
+/// reserve/save step stays serialized behind the lock). Before the fix the
+/// estimateGas response is never consumed because estimation waits on the lock.
+#[tokio::test]
+async fn request_new_settlement_estimates_gas_outside_admin_lock() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    // The reserve/save step must remain serialized behind the admin lock, so a
+    // counter proves the storage write has NOT happened while the lock is held.
+    let job_writes = Arc::new(Mutex::new(0usize));
+    let job_writes_for_store = job_writes.clone();
+    store.expect_insert_settlement_job().returning(move |_, _| {
+        *job_writes_for_store.lock().unwrap() += 1;
+        Ok(())
+    });
+
+    let (provider, asserter) = mk_provider_and_asserter_with_gas_estimate(200_000);
+    assert_eq!(
+        asserter.read_q().len(),
+        1,
+        "the estimateGas response should be queued before the request runs"
+    );
+
+    let cancellation_token = CancellationToken::new();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start");
+
+    // Simulate an in-flight admin respawn by holding the admin operation lock.
+    let admin_guard = service.admin_operation_lock.clone().lock_owned().await;
+
+    let request_service = service.clone();
+    let request = tokio::spawn(async move {
+        request_service
+            .request_new_settlement(None, mk_job(41))
+            .await
+    });
+
+    // Give the request ample time to run gas estimation and then park on the
+    // admin lock at the storage-write step.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    // Gas estimation ran outside the lock: the mock response was consumed.
+    assert_eq!(
+        asserter.read_q().len(),
+        0,
+        "gas estimation must run outside the admin lock (estimateGas response should be consumed \
+         even while the lock is held)"
+    );
+    // The storage write is still serialized behind the lock.
+    assert_eq!(
+        *job_writes.lock().unwrap(),
+        0,
+        "the reserve/save step must not run while the admin lock is held"
+    );
+    // The request is parked at the lock, not finished.
+    assert!(
+        !request.is_finished(),
+        "request_new_settlement must block on the admin lock before persisting"
+    );
+
+    // Releasing the lock lets the request finish the reserve/save + spawn.
+    drop(admin_guard);
+    let watcher = tokio::time::timeout(std::time::Duration::from_secs(10), request)
+        .await
+        .expect("request should finish once the admin lock is free")
+        .expect("request task should not panic")
+        .expect("settlement request should be accepted");
+    let _ = watcher;
+    assert_eq!(
+        *job_writes.lock().unwrap(),
+        1,
+        "the job should be persisted once the lock is released"
+    );
 
     cancellation_token.cancel();
 }

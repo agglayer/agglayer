@@ -246,6 +246,18 @@ pub struct TaskControl {
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
 }
 
+impl TaskControl {
+    /// The task's cancellation token.
+    ///
+    /// Exposed so the service can resolve the settlement gas limit with the
+    /// task's token (preserving cancellation) BEFORE acquiring
+    /// `admin_operation_lock`.
+    /// XREF: Codex bot r3590141585 on PR #1681.
+    pub(crate) fn cancellation_token(&self) -> &CancellationToken {
+        &self.cancellation_token
+    }
+}
+
 #[derive(Clone)]
 pub struct TaskControlHandle {
     cancellation_token: CancellationToken,
@@ -385,7 +397,14 @@ fn settlement_call_request(job: &SettlementJob, wallet: Address) -> TransactionR
 /// job and cert->job-id link are persisted, so a deterministic `estimateGas`
 /// failure fails here rather than on every restart of a persisted job.
 /// Transient RPC failures retry; deterministic ones propagate.
-async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
+///
+/// Callers resolve the gas limit BEFORE acquiring `admin_operation_lock` and
+/// pass the resolved job to [`SettlementTask::create`], so an L1 outage during
+/// gas estimation cannot block an admin respawn of an unrelated job that takes
+/// the same lock. The retry loop observes `cancellation_token` for prompt
+/// cancellation.
+/// XREF: Codex bot r3590141585 on PR #1681.
+pub(crate) async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
     provider: &P,
     tx_config: &SettlementTransactionConfig,
     mut job: SettlementJob,
@@ -421,6 +440,34 @@ impl<
         SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter,
     > SettlementTask<L1Provider, SettlementStore>
 {
+    /// Resolve the settlement gas limit for `job` before it is persisted.
+    ///
+    /// Thin wrapper over [`resolve_settlement_gas_limit`] exposed so the
+    /// service caller can resolve the gas limit OUTSIDE `admin_operation_lock`
+    /// and then pass the already-resolved job to [`Self::create`]. Keeping gas
+    /// estimation out of the lock means an L1 outage during a new submission
+    /// cannot block an admin respawn of an unrelated job. The retry loop
+    /// observes `cancellation_token` for prompt cancellation.
+    /// XREF: Codex bot r3590141585 on PR #1681.
+    pub(crate) async fn resolve_gas_limit(
+        provider: &L1Provider,
+        tx_config: &SettlementTransactionConfig,
+        job: SettlementJob,
+        cancellation_token: &CancellationToken,
+    ) -> eyre::Result<SettlementJob> {
+        resolve_settlement_gas_limit(provider, tx_config, job, cancellation_token).await
+    }
+
+    /// Persist a settlement job and build its task.
+    ///
+    /// The `job` MUST already have its gas limit resolved via
+    /// [`resolve_settlement_gas_limit`] (e.g. through
+    /// [`Self::resolve_gas_limit`]); this method performs only the
+    /// storage-visible steps (reserve the job id / cert->job-id link, then
+    /// save the job row). Gas estimation is deliberately excluded so the
+    /// caller can run it OUTSIDE `admin_operation_lock` and keep
+    /// only the reserve/save window serialized against admin respawn.
+    /// XREF: Codex bot r3590141585 on PR #1681.
     pub async fn create(
         certificate_id: Option<CertificateId>,
         job: SettlementJob,
@@ -430,13 +477,6 @@ impl<
         wallet_nonce_locks: Arc<WalletNonceLocks>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
-        let job = resolve_settlement_gas_limit(
-            provider.as_ref(),
-            tx_config.as_ref(),
-            job,
-            &control.cancellation_token,
-        )
-        .await?;
         let id = Self::reserve_settlement_job_id(store.as_ref(), certificate_id).await?;
         let this = Self {
             id,
@@ -2104,7 +2144,9 @@ mod tests {
     async fn create_generates_settlement_job_id() {
         let mut store = MockStateStore::new();
         let job = mk_job();
-        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+        // `create` now expects an already-gas-resolved job, so resolve the gas
+        // limit first (mock estimateGas returns 200_000) exactly as the service
+        // caller does before acquiring the admin lock.
         let mut expected_job = job.clone();
         expected_job.gas_limit = 200_000;
         let recorded_job_id = Arc::new(Mutex::new(None));
@@ -2119,14 +2161,26 @@ mod tests {
                 Ok(())
             });
 
+        let tx_config = Arc::new(SettlementTransactionConfig::default());
+        let provider = Arc::new(mk_mock_provider_with_gas_estimate(200_000));
+        let control = mk_control();
+        let job = resolve_settlement_gas_limit(
+            provider.as_ref(),
+            tx_config.as_ref(),
+            job,
+            control.cancellation_token(),
+        )
+        .await
+        .expect("gas limit should resolve");
+
         let (job_id, task) = SettlementTask::create(
             None,
             job,
-            Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
+            tx_config,
+            provider,
             Arc::new(store),
             Arc::new(WalletNonceLocks::default()),
-            mk_control(),
+            control,
         )
         .await
         .expect("settlement task should be created");
@@ -2140,7 +2194,8 @@ mod tests {
         let mut store = MockStateStore::new();
         let certificate_id = CertificateId::new(Digest::from([7; 32]));
         let job = mk_job();
-        // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+        // `create` now expects an already-gas-resolved job, so resolve the gas
+        // limit first (mock estimateGas returns 200_000).
         let mut expected_job = job.clone();
         expected_job.gas_limit = 200_000;
         let recorded_job_id = Arc::new(Mutex::new(None));
@@ -2174,14 +2229,26 @@ mod tests {
                 }
             });
 
+        let tx_config = Arc::new(SettlementTransactionConfig::default());
+        let provider = Arc::new(mk_mock_provider_with_gas_estimate(200_000));
+        let control = mk_control();
+        let job = resolve_settlement_gas_limit(
+            provider.as_ref(),
+            tx_config.as_ref(),
+            job,
+            control.cancellation_token(),
+        )
+        .await
+        .expect("gas limit should resolve");
+
         let (job_id, task) = SettlementTask::create(
             Some(certificate_id),
             job,
-            Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
+            tx_config,
+            provider,
             Arc::new(store),
             Arc::new(WalletNonceLocks::default()),
-            mk_control(),
+            control,
         )
         .await
         .expect("settlement task should be created");
@@ -2212,11 +2279,14 @@ mod tests {
 
         store.expect_insert_settlement_job().never();
 
+        // Gas resolution is not exercised here: `create` no longer estimates
+        // gas and this test fails earlier, at the cert->job-id reserve step. A
+        // plain provider (no queued estimateGas) keeps that intent clear.
         let result = SettlementTask::create(
             Some(certificate_id),
             job,
             Arc::new(SettlementTransactionConfig::default()),
-            Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
+            Arc::new(mk_provider()),
             Arc::new(store),
             Arc::new(WalletNonceLocks::default()),
             mk_control(),

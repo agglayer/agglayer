@@ -455,19 +455,39 @@ impl<
         certificate_id: Option<CertificateId>,
         job: SettlementJob,
     ) -> eyre::Result<SettlementJobWatcher> {
+        let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
+
+        // Resolve the gas limit BEFORE acquiring `admin_operation_lock`. Gas
+        // estimation is an L1 `eth_estimateGas` with retry-on-transient-failure
+        // that writes nothing and touches none of the shared maps; during an
+        // L1/RPC outage it can retry for a long time. Holding the admin lock
+        // across it would let a new submission stuck in estimation retries
+        // block an operator from respawning an unrelated wedged job via
+        // `admin_reload_and_restart_task` (which takes the same lock) — the
+        // worst time for it. Cancellation is preserved via the task's token.
+        // XREF: Codex bot r3590141585 on PR #1681.
+        let job = SettlementTask::<L1Provider, SettlementStore>::resolve_gas_limit(
+            self.provider.as_ref(),
+            self.tx_config.as_ref(),
+            job,
+            task_control.cancellation_token(),
+        )
+        .await?;
+
         // Serialize creation against admin respawn. `create` makes the job
-        // visible in storage as pending before `spawn_settlement_task`
-        // registers the task; without this lock a concurrent
-        // `admin_reload_and_restart_task` (which takes the same lock) could
-        // observe the pending job with no live task in that window and spawn
-        // a second task from storage, racing two tasks over one job.
+        // visible in storage as pending (reserve/save) before
+        // `spawn_settlement_task` registers the task; without this lock a
+        // concurrent `admin_reload_and_restart_task` (which takes the same
+        // lock) could observe the pending job with no live task in that window
+        // and spawn a second task from storage, racing two tasks over one job.
+        // Only the reserve/save/spawn window needs the lock — gas estimation
+        // above is intentionally outside it (see the comment above).
         // XREF: bot r3589631500 on PR #1681.
         //
         // No deadlock: `request_new_settlement` calls no admin method that
         // re-takes this lock, and `spawn_settlement_task` never takes it.
         let _admin_op = self.admin_operation_lock.lock().await;
 
-        let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
         let (job_id, task) = SettlementTask::create(
             certificate_id,
             job,
@@ -659,13 +679,24 @@ mod tests {
     fn mk_provider_with_gas_estimate(
         gas_estimate: u64,
     ) -> impl Provider + WalletProvider + 'static {
+        mk_provider_and_asserter_with_gas_estimate(gas_estimate).0
+    }
+
+    /// Like [`mk_provider_with_gas_estimate`] but also returns the backing
+    /// [`Asserter`]. The asserter's response queue is drained as the provider
+    /// answers RPC calls, so a test can observe whether `eth_estimateGas` has
+    /// run yet by inspecting `asserter.read_q().len()`.
+    fn mk_provider_and_asserter_with_gas_estimate(
+        gas_estimate: u64,
+    ) -> (impl Provider + WalletProvider + 'static, Asserter) {
         let asserter = Asserter::new();
         asserter.push_success(&U64::from(gas_estimate));
-        ProviderBuilder::new()
+        let provider = ProviderBuilder::new()
             .wallet(EthereumWallet::from(
                 PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
             ))
-            .connect_mocked_client(asserter)
+            .connect_mocked_client(asserter.clone());
+        (provider, asserter)
     }
 
     fn expect_empty_startup_recovery(store: &mut MockStateStore) {
