@@ -75,10 +75,22 @@ the call detects the dead registration and respawns over it.
 ### A job must stop now
 
 Call `admin_abortSettlementTask` to stop the in-memory task.
-The abort is runtime-only.
-The job stays pending in storage and nothing is recorded,
-so the certificate waiting on the job stays blocked
-until a later `admin_reloadAndRestartSettlementTask`.
+The abort is runtime-only: the job stays pending in storage and nothing
+is recorded, so the settlement can be re-driven later with
+`admin_reloadAndRestartSettlementTask`.
+
+Abort does not preserve an in-flight certificate.
+A certificate task already waiting on this job through `wait_for_settlement`
+sees its watcher close when the task stops, which the orchestrator records
+as a settlement error on the certificate, before any reload runs.
+Recovering the settlement job afterwards does not un-error that certificate;
+the certificate itself must then be recovered separately
+(for example with `admin_forceEditCertificate`).
+If the goal is only to bounce a wedged task without disturbing a waiting
+certificate, use `admin_reloadAndRestartSettlementTask` directly instead:
+a reload of a live task reloads it in place and keeps the waiter connected,
+so the certificate resolves once the reloaded task settles.
+Reach for abort when the task must stop regardless of the waiting certificate.
 
 A reload chained immediately after an abort can be accepted and then dropped,
 because the task can exit on the cancellation
