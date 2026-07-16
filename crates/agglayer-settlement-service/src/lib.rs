@@ -15,6 +15,7 @@ pub mod settlement_service;
 pub mod settlement_service_trait;
 mod settlement_task;
 mod utils;
+mod wallet_nonce_locks;
 
 pub use settlement_service::SettlementService;
 #[cfg(feature = "testutils")]

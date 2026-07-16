@@ -58,33 +58,10 @@ fn deserialize_legacy_outbound_config() {
     let content = std::fs::read_to_string(input).unwrap();
     let config: OutboundConfig = toml::from_str(&content).unwrap();
 
-    // Assert custom values
-    assert_eq!(config.rpc.settle_tx.max_retries, 5);
-    assert_eq!(config.rpc.settle_tx.retry_interval, Duration::from_secs(10));
-    assert_eq!(config.rpc.settle_tx.confirmations, 3);
-
-    assert_eq!(config.rpc.settle_tx.gas_multiplier_factor, 120);
-    assert_eq!(
-        config.rpc.settle_tx.gas_price.multiplier,
-        Multiplier::try_from(1.5).unwrap()
-    );
-    assert_eq!(config.rpc.settle_tx.gas_price.floor, 1_000_000_000);
-    assert_eq!(config.rpc.settle_tx.gas_price.ceiling, 123_000_000_000);
-
-    assert_eq!(config.rpc.settle_cert.max_retries, 5);
-    assert_eq!(
-        config.rpc.settle_cert.retry_interval,
-        Duration::from_secs(10)
-    );
-    assert_eq!(config.rpc.settle_cert.confirmations, 3);
-
-    assert_eq!(config.rpc.settle_cert.gas_multiplier_factor, 120);
-    assert_eq!(
-        config.rpc.settle_cert.gas_price.multiplier,
-        Multiplier::try_from(1.5).unwrap()
-    );
-    assert_eq!(config.rpc.settle_cert.gas_price.floor, 1_000_000_000);
-    assert_eq!(config.rpc.settle_cert.gas_price.ceiling, 123_000_000_000);
+    let settle = config.rpc.settle.as_ref().unwrap();
+    assert_eq!(settle.max_retries, 5);
+    assert_eq!(settle.retry_interval, Duration::from_secs(10));
+    assert_eq!(settle.confirmations, 3);
 
     assert_toml_snapshot!(config);
 }

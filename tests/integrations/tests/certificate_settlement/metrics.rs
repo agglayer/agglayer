@@ -39,7 +39,7 @@ fn sample_value(body: &str, metric: &str, network_id: u32, stage: Option<&str>) 
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
-async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
+async fn settlement_path_metrics_are_exposed(#[case] state: Forest) {
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
 
@@ -59,26 +59,36 @@ async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // The latest-settled pointer is written shortly after the header flips
-    // to Settled; poll until the gauge appears, then evaluate every gauge
-    // from that scrape so all values come from one consistent snapshot.
+    // The latest-settled pointer is written by the network task while the
+    // bridging histograms are recorded by the certificate task, so one
+    // series showing up does not mean the other has. Poll until both
+    // appear, then evaluate everything from that scrape so all values come
+    // from one consistent snapshot.
     let start = tokio::time::Instant::now();
     let body = loop {
         let last_observation = match fetch_metrics(&metrics_url).await {
             Some(body) => {
-                if sample_value(
+                let settled_height_present = sample_value(
                     &body,
                     "agglayer_node_network_height",
                     network_id,
                     Some("settled"),
                 )
-                .is_some()
-                {
+                .is_some();
+                let total_duration_present = sample_value(
+                    &body,
+                    "agglayer_certificate_duration_seconds_count",
+                    network_id,
+                    None,
+                )
+                .is_some();
+                if settled_height_present && total_duration_present {
                     break body;
                 }
 
                 format!(
-                    "settled height series for network {network_id} absent from metrics body ({} \
+                    "for network {network_id}: settled height present: {settled_height_present}, \
+                     total duration count present: {total_duration_present}, metrics body ({} \
                      bytes)",
                     body.len()
                 )
@@ -88,8 +98,8 @@ async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
 
         assert!(
             start.elapsed() < METRICS_POLL_TIMEOUT,
-            "settled height metric did not appear within {METRICS_POLL_TIMEOUT:?}. Last \
-             observation: {last_observation}"
+            "settlement metrics did not appear within {METRICS_POLL_TIMEOUT:?}. Last observation: \
+             {last_observation}"
         );
         tokio::time::sleep(METRICS_POLL_INTERVAL).await;
     };
@@ -115,6 +125,33 @@ async fn per_network_height_metrics_are_exposed(#[case] state: Forest) {
         ),
         Some(0),
         "metrics body:\n{body}"
+    );
+
+    // The bridging histograms only emit while a certificate moves through
+    // the settlement path. If a refactor orphans that instrumentation, the
+    // series disappear instead of reading zero, so assert each one exists
+    // and holds at least one observation.
+    for stage in ["pending", "proven", "candidate"] {
+        let count = sample_value(
+            &body,
+            "agglayer_certificate_stage_duration_seconds_count",
+            network_id,
+            Some(stage),
+        );
+        assert!(
+            count.is_some_and(|count| count >= 1),
+            "no duration recorded for stage {stage}, metrics body:\n{body}"
+        );
+    }
+    let total_count = sample_value(
+        &body,
+        "agglayer_certificate_duration_seconds_count",
+        network_id,
+        None,
+    );
+    assert!(
+        total_count.is_some_and(|count| count >= 1),
+        "no total bridging duration recorded, metrics body:\n{body}"
     );
 
     scenario.teardown();

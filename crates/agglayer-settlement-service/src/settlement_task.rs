@@ -28,11 +28,11 @@ use alloy::{
     transports::{TransportError, TransportErrorKind},
 };
 use eyre::Context as _;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, OwnedMutexGuard};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
-use crate::utils::RetryCallbackError;
+use crate::{utils::RetryCallbackError, wallet_nonce_locks::WalletNonceLocks};
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
@@ -348,6 +348,11 @@ pub struct SettlementTask<L1Provider, SettlementStore> {
     tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
+    /// Shared per-wallet locks from
+    /// [`SettlementService`](crate::SettlementService); held across the
+    /// nonce read-to-save window in [`Self::run`].
+    /// XREF: https://github.com/agglayer/agglayer/issues/1597
+    wallet_nonce_locks: Arc<WalletNonceLocks>,
     control: TaskControl,
     attempts: ActiveSettlementAttempts,
 }
@@ -410,6 +415,7 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
+        wallet_nonce_locks: Arc<WalletNonceLocks>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
         let job = resolve_settlement_gas_limit(
@@ -426,6 +432,7 @@ impl<
             tx_config,
             provider,
             store,
+            wallet_nonce_locks,
             control,
             attempts: BTreeMap::new(),
         };
@@ -473,6 +480,7 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
+        wallet_nonce_locks: Arc<WalletNonceLocks>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
         let (job, result) = Self::load_settlement_job_from_db(store.as_ref(), id).await?;
@@ -485,6 +493,7 @@ impl<
                 tx_config,
                 provider,
                 store,
+                wallet_nonce_locks,
                 control,
                 attempts: BTreeMap::new(),
             };
@@ -626,7 +635,13 @@ impl<
                                           // the existing attempt
                     };
                     if let Some(run_result) = self
-                        .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
+                        .save_attempt_to_db_and_submit_to_l1(
+                            None,
+                            wallet,
+                            nonce,
+                            attempt_number,
+                            tx,
+                        )
                         .await
                     {
                         return run_result;
@@ -707,13 +722,38 @@ impl<
                 // used externally, or that we no longer have the required wallets to bump
                 // pending nonces. So we need to submit a new attempt with a new
                 // nonce.
+                //
+                // Hold the wallet's nonce lock from before the nonce is read
+                // until the attempt is saved, so no other same-wallet task
+                // can pick the same nonce in that window; XREF:
+                // https://github.com/agglayer/agglayer/issues/1597.
+                let locked_wallet = self.provider.default_signer_address();
+                // Race the lock wait against cancellation: the holder may be
+                // stuck in transient L1 retries, and an aborted task must not
+                // stay parked in the lock queue until the holder releases.
+                let nonce_guard = tokio::select! {
+                    biased;
+                    _ = self.control.cancellation_token.cancelled() => {
+                        return SettlementTaskRunResult::Cancelled;
+                    }
+                    guard = self.wallet_nonce_locks.lock(locked_wallet) => guard,
+                };
                 let (wallet, nonce, attempt_number, tx) = retry!(
                     self.build_next_attempt_with_new_nonce().await,
                     "building next settlement attempt with a new nonce",
                 );
+                // The build derives its wallet the same way; if wallet
+                // selection ever becomes dynamic, the lock key must follow.
+                debug_assert_eq!(wallet, locked_wallet);
                 not_included_on_l1.insert((wallet, nonce));
                 if let Some(run_result) = self
-                    .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
+                    .save_attempt_to_db_and_submit_to_l1(
+                        Some(nonce_guard),
+                        wallet,
+                        nonce,
+                        attempt_number,
+                        tx,
+                    )
                     .await
                 {
                     return run_result;
@@ -764,6 +804,14 @@ impl<
 
     /// Saves the attempt, then submits it to L1.
     ///
+    /// `nonce_guard` is the per-wallet nonce lock held since before the
+    /// nonce was assigned; XREF:
+    /// https://github.com/agglayer/agglayer/issues/1597. It is dropped as
+    /// soon as the attempt is saved: from that point the nonce is visible to
+    /// other tasks through the store, and the L1 submission does not need to
+    /// block them. The retry path passes `None` because it reuses a nonce
+    /// this job already owns.
+    ///
     /// Returns `Some(SettlementTaskRunResult::Cancelled)` when submission was
     /// interrupted by a shutdown, so the runner stops promptly while leaving
     /// the already-saved attempt pending; returns `None` when the runner
@@ -771,12 +819,15 @@ impl<
     /// recorded client error).
     async fn save_attempt_to_db_and_submit_to_l1(
         &mut self,
+        nonce_guard: Option<OwnedMutexGuard<()>>,
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
         tx: TxEnvelope,
     ) -> Option<SettlementTaskRunResult> {
         self.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
+        // The nonce is recorded; other same-wallet tasks may now read it.
+        drop(nonce_guard);
         match self.submit_attempt_to_l1(tx).await {
             Ok(()) => None,
             Err(SubmitAttemptError::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
@@ -1964,6 +2015,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store,
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         }
@@ -1979,10 +2031,13 @@ mod tests {
             tx_config: Arc::new(tx_config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts: BTreeMap::new(),
         }
     }
+
+    mod nonce_lock;
 
     #[test]
     fn next_attempt_number_starts_at_zero_and_increments_past_max() {
@@ -2084,6 +2139,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            Arc::new(WalletNonceLocks::default()),
             mk_control(),
         )
         .await
@@ -2138,6 +2194,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            Arc::new(WalletNonceLocks::default()),
             mk_control(),
         )
         .await
@@ -2175,6 +2232,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
             Arc::new(store),
+            Arc::new(WalletNonceLocks::default()),
             mk_control(),
         )
         .await;
@@ -2307,6 +2365,7 @@ mod tests {
             Arc::new(SettlementTransactionConfig::default()),
             Arc::new(mk_provider()),
             Arc::new(store),
+            Arc::new(WalletNonceLocks::default()),
             mk_control(),
         )
         .await
@@ -3103,6 +3162,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -3149,6 +3209,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -3494,6 +3555,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(store),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts: BTreeMap::new(),
         };
@@ -3593,6 +3655,7 @@ mod tests {
             tx_config: Arc::new(SettlementTransactionConfig::default()),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         };
@@ -3656,6 +3719,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         };
@@ -3715,6 +3779,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         };
@@ -3797,6 +3862,7 @@ mod tests {
             tx_config: Arc::new(config),
             provider: Arc::new(provider),
             store: Arc::new(MockStateStore::new()),
+            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
             control: mk_control(),
             attempts,
         };
