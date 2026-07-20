@@ -274,16 +274,19 @@ pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 }
 
 #[cfg(feature = "testutils")]
-pub fn redact_storage_path() -> insta::internals::Redaction {
-    use insta::internals::Content;
-    insta::dynamic_redaction(|value, path| {
-        if path.to_string() != "storage.db-path" {
-            if let Content::String(path) = value {
-                let cur_dir = Path::new("./").canonicalize().unwrap();
-                return Content::String(path.replace(cur_dir.to_str().unwrap(), "/tmp/agglayer"));
-            }
-        }
+pub fn toml_snapshot_string<T: serde::Serialize>(value: &T) -> String {
+    let cur_dir = Path::new("./").canonicalize().unwrap();
+    toml::to_string_pretty(value)
+        .unwrap()
+        .replace(cur_dir.to_str().unwrap(), "/tmp/agglayer")
+}
 
-        value
-    })
+// insta >= 1.45 restyles TOML strings to literal quotes; serializing with the
+// plain toml crate keeps the stored snapshots byte-stable.
+#[cfg(feature = "testutils")]
+#[macro_export]
+macro_rules! assert_toml_snapshot {
+    ($value:expr $(,)?) => {
+        insta::assert_snapshot!($crate::toml_snapshot_string(&$value))
+    };
 }
