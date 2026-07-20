@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use agglayer_config::{outbound::OutboundConfig, Multiplier};
-use insta::assert_toml_snapshot;
+use agglayer_config::{assert_toml_snapshot, outbound::OutboundConfig, Multiplier};
 
 #[test]
 fn deserialize_default_outbound_config() {

@@ -1,11 +1,11 @@
 use std::time::Duration;
 
 use agglayer_config::{
+    assert_toml_snapshot,
     settlement_service::{SettlementConfig, SettlementPolicy, SettlementTransactionConfig},
     Multiplier,
 };
 use agglayer_primitives::U256;
-use insta::assert_toml_snapshot;
 
 #[test]
 fn deserialize_default_settlement_tx_config() {
