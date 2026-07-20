@@ -14,6 +14,7 @@ use num_traits::FromPrimitive;
 use tracing::{debug, error, trace};
 
 use crate::{
+    block_pinning::{block_before_tx, UnresolvedBlock},
     contracts::{PolygonRollupManager::RollupDataReturnV2, PolygonZkEvm},
     L1RpcClient, L1RpcError,
 };
@@ -250,27 +251,20 @@ where
     ) -> Result<[u8; 32], L1RpcError> {
         let at_block = if let Some(tx_hash) = before_tx_hash {
             let settlement_tx_hash = SettlementTxHash::from(tx_hash);
-            let receipt = self
-                .rpc
-                .get_transaction_receipt(tx_hash)
+            block_before_tx(&self.rpc, tx_hash)
                 .await
-                .map_err(|err| L1RpcError::UnableToFetchTransactionReceipt {
-                    tx_hash: settlement_tx_hash,
-                    source: err.into(),
+                .map_err(|unresolved| match unresolved {
+                    UnresolvedBlock::FetchFailed(source) => {
+                        L1RpcError::UnableToFetchTransactionReceipt {
+                            tx_hash: settlement_tx_hash,
+                            source,
+                        }
+                    }
+                    UnresolvedBlock::NotMined => {
+                        L1RpcError::TransactionNotYetMined(settlement_tx_hash)
+                    }
+                    UnresolvedBlock::Reverted => L1RpcError::TransactionReceiptFailedOnL1(tx_hash),
                 })?
-                .ok_or_else(|| L1RpcError::TransactionNotYetMined(settlement_tx_hash))?;
-
-            if receipt.status() {
-                receipt
-                    .block_number
-                    .map(|block| {
-                        let block = block.saturating_sub(1);
-                        BlockId::number(block)
-                    })
-                    .unwrap_or_else(BlockId::latest)
-            } else {
-                return Err(L1RpcError::TransactionReceiptFailedOnL1(tx_hash));
-            }
         } else {
             BlockId::latest()
         };

@@ -8,7 +8,7 @@ use agglayer_grpc_types::node::v1::{
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, EpochStoreReader, PendingCertificateReader, PendingCertificateWriter,
-    StateReader, StateWriter,
+    SettlementReader, StateReader, StateWriter,
 };
 use error::CertificateSubmissionErrorWrapper;
 use tonic_types::{ErrorDetails, StatusExt};
@@ -29,7 +29,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> CertificateSubmis
     for CertificateSubmissionServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: SettlementReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,

@@ -13,6 +13,7 @@ arc-swap.workspace = true
 buildstructor.workspace = true
 eyre.workspace = true
 fail = { workspace = true, features = ["failpoints"] }
+fs2 = "0.4.3"
 futures.workspace = true
 hex.workspace = true
 http-body-util = "0.1.3"
@@ -45,6 +46,7 @@ agglayer-clock.workspace = true
 agglayer-config.workspace = true
 agglayer-contracts = { workspace = true, features = ["testutils"] }
 agglayer-node.workspace = true
+agglayer-settlement-service = { workspace = true, features = ["testutils"] }
 agglayer-signer.workspace = true
 agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-telemetry.workspace = true

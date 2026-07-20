@@ -24,14 +24,14 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - uses: ./.github/actions/unit-test
 
   isolated-feature-checks:
     name: "Isolated feature checks"
     runs-on: ubuntu-latest-16-cores
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -66,9 +66,19 @@ jobs:
 
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # Pinned so CI's anvil can decode the committed state.json fixture.
+          # anvil_dumpState's format is foundry-version-coupled, so this must
+          # match the version the fixture was generated with (recorded as
+          # `foundry_version` in tests/integrations/fixtures/anvil-l1/metadata.json).
+          # To upgrade: bump here, regenerate the fixture with the same version via
+          # tests/integrations/scripts/generate_anvil_l1_fixture.sh, and commit both.
+          version: "1.7.1"
 
       - name: Test
-        run: cargo nextest run --workspace -P integrations
+        # --retries 2 absorbs transient startup-timeout flakes under parallel
+        # load (mirrors the documented local invocation in the README).
+        run: cargo nextest run --workspace -P integrations --retries 2
 
   docker-build-local:
     name: E2E Tests | Docker build
@@ -91,14 +101,14 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@a2a90439583b62a7dcabcda915c72193e57ec6e7 # 2026-03-20
+    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@8763263b4c6bf61fd83d205a6fc0080c6e82b1e4 # 2026-03-20
     secrets: inherit
     with:
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
       kurtosis-cdk-ref: 6f5c0f0cd2cce5cf11a025aade73b13664df8007 # 2026-03-18
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: a2a90439583b62a7dcabcda915c72193e57ec6e7 # 2026-03-20
+      agglayer-e2e-ref: 8763263b4c6bf61fd83d205a6fc0080c6e82b1e4 # 2026-04-27
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
@@ -133,7 +143,7 @@ jobs:
     name: ELF Checking
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Define source checksum
         run: |

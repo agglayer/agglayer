@@ -50,10 +50,11 @@ impl TryFrom<v0::SettlementAttemptResult> for SettlementAttemptResult {
 
 impl From<&SettlementJobResult> for v0::SettlementJobResult {
     fn from(value: &SettlementJobResult) -> Self {
-        match value {
-            SettlementJobResult::ContractCall(contract_call_result) => Self {
-                contract_call_result: Some(contract_call_result.into()),
-            },
+        Self {
+            wallet: Some(value.wallet.into()),
+            nonce: Some(value.nonce.into()),
+            attempt_number: Some(value.attempt_number.into()),
+            contract_call_result: Some((&value.contract_call_result).into()),
         }
     }
 }
@@ -62,19 +63,24 @@ impl TryFrom<v0::SettlementJobResult> for SettlementJobResult {
     type Error = Error;
 
     fn try_from(value: v0::SettlementJobResult) -> Result<Self, Self::Error> {
-        Ok(SettlementJobResult::ContractCall(
-            value
-                .contract_call_result
-                .ok_or_else(|| Error::missing_field("contract_call_result"))?
-                .try_into()?,
-        ))
+        Ok(SettlementJobResult {
+            wallet: required_field!(value, wallet => try_into::<agglayer_types::Address>),
+            nonce: required_field!(value, nonce => into::<agglayer_types::Nonce>),
+            attempt_number: required_field!(value, attempt_number =>
+                into::<agglayer_types::SettlementAttemptNumber>
+            ),
+            contract_call_result: required_field!(value, contract_call_result =>
+                try_into::<agglayer_types::ContractCallResult>
+            ),
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use agglayer_types::{
-        ClientError, ContractCallOutcome, ContractCallResult, Digest, Nonce, SettlementTxHash, B256,
+        ClientError, ContractCallOutcome, ContractCallResult, Digest, Nonce,
+        SettlementAttemptNumber, SettlementTxHash, B256,
     };
 
     use super::*;
@@ -133,6 +139,9 @@ mod tests {
     #[test]
     fn missing_contract_call_fails_for_job_result() {
         let proto = v0::SettlementJobResult {
+            wallet: Some(agglayer_types::Address::from([1_u8; 20]).into()),
+            nonce: Some(Nonce(7).into()),
+            attempt_number: Some(SettlementAttemptNumber(8).into()),
             contract_call_result: None,
         };
 
@@ -142,14 +151,16 @@ mod tests {
 
     #[test]
     fn job_result_round_trip_contract_call() {
-        let job_result = SettlementJobResult::ContractCall(sample_contract_call_result());
+        let job_result = SettlementJobResult {
+            wallet: agglayer_types::Address::from([9_u8; 20]),
+            nonce: Nonce(7),
+            attempt_number: SettlementAttemptNumber(8),
+            contract_call_result: sample_contract_call_result(),
+        };
         let proto: v0::SettlementJobResult = (&job_result).into();
 
         let decoded = SettlementJobResult::try_from(proto).unwrap();
 
-        assert_eq!(
-            decoded,
-            SettlementJobResult::ContractCall(sample_contract_call_result())
-        );
+        assert_eq!(decoded, job_result);
     }
 }

@@ -11,7 +11,7 @@ use crate::node::api;
 
 #[test_log::test(tokio::test)]
 async fn healthcheck_method_can_be_called() {
-    let router = api::rest::health_router();
+    let router = api::rest::health_router("test-version".to_string());
     let addr = TestContext::next_available_address();
     let listener = TcpListener::bind(addr).await.unwrap();
 
@@ -38,6 +38,9 @@ async fn healthcheck_method_can_be_called() {
         .await
         .unwrap();
     let out = String::from_utf8(bytes.to_bytes().to_vec()).unwrap();
-    assert_eq!(out.as_str(), "{\"health\":true}");
+    assert_eq!(
+        out.as_str(),
+        "{\"health\":true,\"version\":\"test-version\"}"
+    );
     token.cancel();
 }

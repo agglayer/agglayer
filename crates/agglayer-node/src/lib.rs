@@ -4,11 +4,12 @@ use agglayer_config::Config;
 use eyre::bail;
 use node::Node;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 mod logging;
 
 mod epoch_synchronizer;
 mod l1_tracing;
+mod metrics;
 mod node;
 mod url_redact;
 
@@ -71,6 +72,10 @@ pub fn main(
         }
     }
 
+    if let Some(outbound) = &config.outbound {
+        warn!("{}", outbound.ignored_config_warning());
+    }
+
     info!("Starting agglayer node version info: {}", version);
 
     let node_runtime = tokio::runtime::Builder::new_multi_thread()
@@ -112,6 +117,7 @@ pub fn main(
         Node::builder()
             .config(config.clone())
             .cancellation_token(global_cancellation_token.clone())
+            .version(version.to_string())
             .start(),
     )?;
     let terminate_signal = async {

@@ -37,8 +37,17 @@ message SettlementAttemptResult {
 
 // Terminal result of a settlement job.
 message SettlementJobResult {
+  // Sender wallet of the finalized settlement transaction.
+  Address wallet = 1;
+
+  // Nonce of the finalized settlement transaction.
+  Nonce nonce = 2;
+
+  // Sequence number of the finalized settlement attempt.
+  AttemptSequenceNumber attempt_number = 3;
+
   // Result of the final on-chain contract call for the job.
-  ContractCallResult contract_call_result = 1;
+  ContractCallResult contract_call_result = 4;
 }
 
 // Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
@@ -57,6 +66,9 @@ enum ClientErrorType {
 
   // Nonce already used and finalized in other tx.
   CLIENT_ERROR_TYPE_NONCE_ALREADY_USED = 1;
+
+  // Settlement succeeded in another tx.
+  CLIENT_ERROR_TYPE_SETTLEMENT_SUCCEEDED_ELSEWHERE = 2;
 }
 
 // Result for a successfully-executed contract call.
@@ -116,6 +128,12 @@ message SettlementAttempt {
 
   // Nonce reserved for the transaction.
   Nonce nonce = 2;
+
+  // Max fee per gas of the submitted transaction (EIP-1559).
+  Uint128 max_fee_per_gas = 3;
+
+  // Max priority fee per gas of the submitted transaction (EIP-1559).
+  Uint128 max_priority_fee_per_gas = 4;
 
   // Hash of the submitted transaction.
   TxHash tx_hash = 5;

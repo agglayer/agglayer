@@ -84,7 +84,7 @@ impl PendingStore {
 /// [`super::migration_helpers::copy_legacy_certificate_cf_into_proto`],
 /// which streams the legacy keyspace, skips and logs rows whose bytes cannot
 /// be decoded as a certificate, and copies the rest into the proto CF. The
-/// legacy CF stays in place for this PR; runtime reads and writes only use
+/// legacy CF stays in place for now; runtime reads and writes only use
 /// the proto CF after this backfill completes.
 fn backfill_pending_certificates_proto_from_legacy_bincode(
     db: &crate::storage::DbAccess,
@@ -182,6 +182,17 @@ impl PendingCertificateReader for PendingStore {
             .db
             .get::<LatestPendingCertificatePerNetworkColumn>(network_id)
             .map(|v| v.map(|PendingCertificate(id, height)| (id, height)))?)
+    }
+
+    fn get_current_pending_heights(&self) -> Result<Vec<(NetworkId, PendingCertificate)>, Error> {
+        Ok(self
+            .db
+            .iter_with_direction::<LatestPendingCertificatePerNetworkColumn>(
+                ReadOptions::default(),
+                Direction::Forward,
+            )?
+            .filter_map(|entry| entry.ok())
+            .collect())
     }
 
     fn get_certificate(

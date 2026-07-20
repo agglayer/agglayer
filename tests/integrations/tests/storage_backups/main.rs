@@ -1,12 +1,14 @@
 use std::time::Duration;
 
 use agglayer_config::storage::backup::BackupConfig;
-use agglayer_storage::{backup::BackupEngine, tests::TempDBDir};
+use agglayer_storage::{
+    backup::{BackupEngine, BackupEngineInfo},
+    tests::TempDBDir,
+};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
-use futures::FutureExt;
 use integrations::{
-    agglayer_setup::{setup_network, start_agglayer},
+    agglayer_setup::{setup_network, start_agglayer, wait_for_condition},
     wait_for_settlement_or_error,
 };
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
@@ -16,6 +18,47 @@ use tokio_util::sync::CancellationToken;
 
 #[path = "../common/mod.rs"]
 mod common;
+
+const RESOURCE_NOT_FOUND_ERROR: i32 = -10008;
+
+async fn wait_for_backup_counts(
+    backup_dir: &std::path::Path,
+    minimum_state_backups: usize,
+    minimum_pending_backups: usize,
+) {
+    wait_for_condition("backup creation", Duration::from_secs(30), || async {
+        let backup_report = BackupEngine::list_backups(backup_dir).unwrap();
+        backup_report.get_state().len() >= minimum_state_backups
+            && backup_report.get_pending().len() >= minimum_pending_backups
+    })
+    .await;
+}
+
+fn latest_backup_id(backups: &[BackupEngineInfo]) -> Option<u32> {
+    backups.iter().map(|backup| backup.backup_id).max()
+}
+
+/// Waits until the latest state and pending backup ids reach at least the given
+/// values.
+///
+/// Unlike [`wait_for_backup_counts`], this works under aggressive purging
+/// (where the retained backup count stays at 1) because RocksDB backup ids are
+/// monotonic. Each settled certificate produces two backups (one when the L1 tx
+/// hash is known, one when it is settled), so the Nth settled certificate's
+/// durable state has backup id `2 * N`.
+async fn wait_for_backup_ids(
+    backup_dir: &std::path::Path,
+    minimum_state_backup_id: u32,
+    minimum_pending_backup_id: u32,
+) {
+    wait_for_condition("backup id advance", Duration::from_secs(30), || async {
+        let backup_report = BackupEngine::list_backups(backup_dir).unwrap();
+        latest_backup_id(backup_report.get_state()).is_some_and(|id| id >= minimum_state_backup_id)
+            && latest_backup_id(backup_report.get_pending())
+                .is_some_and(|id| id >= minimum_pending_backup_id)
+    })
+    .await;
+}
 
 #[rstest]
 #[tokio::test]
@@ -50,8 +93,11 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // Awaiting for the backup to be created in the background
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Each settled certificate produces two backups (tx-hash known, then
+    // settled). Wait for both so the restore captures the settled state rather
+    // than the earlier tx-hash snapshot, which would leave the certificate
+    // non-Settled after restart.
+    wait_for_backup_counts(&backup_dir.path, 2, 2).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -124,6 +170,11 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
+    // Each settled certificate produces two backups (tx-hash known, then
+    // settled). Wait for certificate1 to be fully backed up (state/pending
+    // backup id >= 2) before sending certificate2.
+    wait_for_backup_ids(&backup_dir.path, 2, 2).await;
+
     let certificate_id2: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2])
         .await
@@ -133,8 +184,13 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // Awaiting for the backup to be created in the background
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // This configuration purges state and pending backups eagerly, so the
+    // retained backup count stays at 1 after both settlements. Backup ids are
+    // monotonic, so wait for certificate2's settled backup (id >= 4) to be
+    // durable before shutting the node down; otherwise the restore can capture
+    // certificate2's pre-settlement (tx-hash) snapshot and the post-restart
+    // status assertion flakes.
+    wait_for_backup_ids(&backup_dir.path, 4, 4).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -224,8 +280,7 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // Awaiting for the backup to be created in the background
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_for_backup_counts(&backup_dir.path, 4, 4).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -309,7 +364,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    wait_for_backup_counts(&backup_dir.path, 2, 2).await;
 
     let certificate_id2: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2])
@@ -320,8 +375,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // Awaiting for the backup to be created in the background
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    wait_for_backup_counts(&backup_dir.path, 4, 4).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -353,18 +407,21 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(certificate.status, CertificateStatus::Settled);
 
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    wait_for_condition(
+        "restored certificate pruning",
+        Duration::from_secs(15),
+        || async {
+            let error: Result<CertificateHeader, jsonrpsee::core::ClientError> = client
+                .request("interop_getCertificateHeader", rpc_params![certificate_id2])
+                .await;
 
-    let error: Result<CertificateHeader, jsonrpsee::core::ClientError> = client
-        .request("interop_getCertificateHeader", rpc_params![certificate_id2])
-        .inspect(|result| println!("final get certificate header: {result:?}"))
-        .await;
-
-    let expected_message = format!("Resource not found: Certificate({certificate_id2:#})");
-
-    assert!(
-        matches!(error.unwrap_err(), jsonrpsee::core::ClientError::Call(obj) if obj.message() == expected_message)
-    );
+            matches!(
+                error,
+                Err(jsonrpsee::core::ClientError::Call(obj)) if obj.code() == RESOURCE_NOT_FOUND_ERROR
+            )
+        },
+    )
+    .await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;

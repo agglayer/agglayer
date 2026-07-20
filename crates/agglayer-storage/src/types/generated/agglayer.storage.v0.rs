@@ -843,8 +843,17 @@ pub mod settlement_attempt_result {
 /// Terminal result of a settlement job.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SettlementJobResult {
-    /// Result of the final on-chain contract call for the job.
+    /// Sender wallet of the finalized settlement transaction.
     #[prost(message, optional, tag="1")]
+    pub wallet: ::core::option::Option<Address>,
+    /// Nonce of the finalized settlement transaction.
+    #[prost(message, optional, tag="2")]
+    pub nonce: ::core::option::Option<Nonce>,
+    /// Sequence number of the finalized settlement attempt.
+    #[prost(message, optional, tag="3")]
+    pub attempt_number: ::core::option::Option<AttemptSequenceNumber>,
+    /// Result of the final on-chain contract call for the job.
+    #[prost(message, optional, tag="4")]
     pub contract_call_result: ::core::option::Option<ContractCallResult>,
 }
 /// Error encountered while attempting to submit the transaction, that didn't lead to an on-chain result.
@@ -907,6 +916,12 @@ pub struct SettlementAttempt {
     /// Nonce reserved for the transaction.
     #[prost(message, optional, tag="2")]
     pub nonce: ::core::option::Option<Nonce>,
+    /// Max fee per gas of the submitted transaction (EIP-1559).
+    #[prost(message, optional, tag="3")]
+    pub max_fee_per_gas: ::core::option::Option<Uint128>,
+    /// Max priority fee per gas of the submitted transaction (EIP-1559).
+    #[prost(message, optional, tag="4")]
+    pub max_priority_fee_per_gas: ::core::option::Option<Uint128>,
     /// Hash of the submitted transaction.
     #[prost(message, optional, tag="5")]
     pub tx_hash: ::core::option::Option<TxHash>,
@@ -922,6 +937,8 @@ pub enum ClientErrorType {
     Unspecified = 0,
     /// Nonce already used and finalized in other tx.
     NonceAlreadyUsed = 1,
+    /// Settlement succeeded in another tx.
+    SettlementSucceededElsewhere = 2,
 }
 impl ClientErrorType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -932,6 +949,7 @@ impl ClientErrorType {
         match self {
             Self::Unspecified => "CLIENT_ERROR_TYPE_UNSPECIFIED",
             Self::NonceAlreadyUsed => "CLIENT_ERROR_TYPE_NONCE_ALREADY_USED",
+            Self::SettlementSucceededElsewhere => "CLIENT_ERROR_TYPE_SETTLEMENT_SUCCEEDED_ELSEWHERE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -939,6 +957,7 @@ impl ClientErrorType {
         match value {
             "CLIENT_ERROR_TYPE_UNSPECIFIED" => Some(Self::Unspecified),
             "CLIENT_ERROR_TYPE_NONCE_ALREADY_USED" => Some(Self::NonceAlreadyUsed),
+            "CLIENT_ERROR_TYPE_SETTLEMENT_SUCCEEDED_ELSEWHERE" => Some(Self::SettlementSucceededElsewhere),
             _ => None,
         }
     }

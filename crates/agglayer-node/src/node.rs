@@ -1,6 +1,6 @@
 use std::{num::NonZeroU64, sync::Arc};
 
-use agglayer_aggregator_notifier::{CertifierClient, RpcSettlementClient};
+use agglayer_aggregator_notifier::CertifierClient;
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
@@ -58,6 +58,7 @@ impl Node {
     ///    Node::builder()
     ///      .config(config)
     ///      .cancellation_token(CancellationToken::new())
+    ///      .version(env!("CARGO_PKG_VERSION").to_string())
     ///      .start()
     ///      .await?;
     ///
@@ -76,6 +77,7 @@ impl Node {
     pub(crate) async fn start(
         config: Arc<Config>,
         cancellation_token: CancellationToken,
+        version: String,
     ) -> eyre::Result<Self> {
         if config.mock_verifier {
             warn!(
@@ -118,6 +120,8 @@ impl Node {
         };
 
         info!("Storage initialized.");
+
+        crate::metrics::register_network_state_metrics(&pending_store, &state_store);
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
@@ -196,6 +200,7 @@ impl Node {
             let signers = ConfiguredSigners::new(&config).await?;
             let provider_cert = fn_build_provider(signers.pp_settlement);
 
+            let tx_settlement_configured = signers.tx_settlement.is_some();
             let provider_tx = if let Some(tx_settlement) = signers.tx_settlement {
                 fn_build_provider(tx_settlement)
             } else {
@@ -203,21 +208,27 @@ impl Node {
                 provider_cert.clone()
             };
 
-            tracing::info!(
-                "Cert signer address: {:?}",
-                // Note that because the signer always has at least one address,
-                // this iterator will always have at least one element.
-                provider_cert.signer_addresses().next().unwrap()
-            );
-            tracing::info!(
-                "Tx signer address: {:?}",
-                provider_tx.signer_addresses().next().unwrap()
-            );
+            // The signer always has at least one address, so `next()` is always `Some`.
+            let cert_signer = provider_cert.signer_addresses().next().unwrap();
+            let tx_signer = provider_tx.signer_addresses().next().unwrap();
+            tracing::info!("Cert signer address: {cert_signer:?}");
+            tracing::info!("Tx signer address: {tx_signer:?}");
+            if tx_settlement_configured && cert_signer == tx_signer {
+                warn!(
+                    "Configured pp- and tx-settlement signers share address {cert_signer:?}; \
+                     settlement service and kernel will use one wallet with two nonce allocators"
+                );
+            }
 
             (provider_cert, provider_tx)
         };
 
         tracing::debug!("RPC provider created");
+        let settle_cert_config = config
+            .outbound
+            .as_ref()
+            .map(|outbound| outbound.rpc.settle_cert.clone())
+            .unwrap_or_default();
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
                 rpc_pp_settlement.clone(),
@@ -226,9 +237,9 @@ impl Node {
                     (*rpc_pp_settlement).clone(),
                 ),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
-                config.outbound.rpc.settle_cert.gas_multiplier_factor,
+                settle_cert_config.gas_multiplier_factor,
                 {
-                    let gas_config = &config.outbound.rpc.settle_cert.gas_price;
+                    let gas_config = &settle_cert_config.gas_price;
                     agglayer_contracts::GasPriceParams::new(
                         gas_config.multiplier.as_u64_per_1000(),
                         gas_config.floor..=gas_config.ceiling,
@@ -259,15 +270,18 @@ impl Node {
         let core = Kernel::new(rpc_tx_settlement.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
-        let epoch_packing_aggregator_task = RpcSettlementClient::new(
-            Arc::new(config.outbound.rpc.settle_cert.clone()),
-            state_store.clone(),
-            pending_store.clone(),
-            Arc::clone(&rollup_manager),
-            current_epoch_store.clone(),
-        );
 
-        info!("Epoch packing aggregator task created.");
+        let settlement_config = Arc::new(config.settlement.pessimistic_proof_tx_config.clone());
+        let settlement_service = Arc::new(
+            agglayer_settlement_service::SettlementService::start(
+                config.settlement.settlement_service_config.clone(),
+                settlement_config.clone(),
+                rpc_pp_settlement.clone(),
+                state_store.clone(),
+                cancellation_token.clone(),
+            )
+            .await?,
+        );
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
@@ -279,12 +293,12 @@ impl Node {
             .clock(clock_ref)
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
-            .settlement_client(epoch_packing_aggregator_task)
             .pending_store(pending_store.clone())
             .epochs_store(epochs_store.clone())
             .current_epoch(current_epoch_store)
             .state_store(state_store.clone())
             .certifier_task_builder(certifier_client)
+            .settlement_service(settlement_service)
             .start()
             .await
             .context("Failed starting certificate orchestrator")?;
@@ -325,7 +339,7 @@ impl Node {
                 .build()
                 .inspect_err(|err| error!(?err, "Failed to build public gRPC router"))?;
 
-        let health_router = api::rest::health_router();
+        let health_router = api::rest::health_router(version);
 
         let readrpc_router = axum::Router::new()
             .merge(health_router)

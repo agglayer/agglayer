@@ -8,7 +8,6 @@ license.workspace = true
 default = []
 testutils = [
     "dep:arbitrary",
-    "dep:sp1-sdk-v5",
     "pessimistic-proof/testutils",
     "agglayer-interop-types/testutils",
     "agglayer-sp1/testutils",
@@ -32,10 +31,6 @@ derive_more.workspace = true
 hex.workspace = true
 serde.workspace = true
 serde_with.workspace = true
-sp1-sdk.workspace = true
-sp1-sdk-v5 = { workspace = true, optional = true }
-sp1-core-machine.workspace = true
-sp1-prover.workspace = true
 thiserror.workspace = true
 rand.workspace = true
 strum_macros.workspace = true

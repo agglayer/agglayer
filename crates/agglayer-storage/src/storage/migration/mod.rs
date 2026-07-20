@@ -44,6 +44,11 @@ impl Builder {
     /// This method initializes or opens an existing database with the provided
     /// initial schema (v0). It automatically sets up migration tracking and
     /// validates the database schema.
+    ///
+    /// The handle opened here only serves the migration steps; existing
+    /// column families are opened with default options. [`Self::finalize`]
+    /// reopens the database with the declared column options before handing
+    /// it out.
     pub fn open(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Self, DBOpenError> {
         debug!("Preparing database for initialization and migration");
         let desc_v0: Vec<_> = cfs_v0.iter().map(DB::descriptor).collect();
@@ -164,7 +169,7 @@ impl Builder {
                     db.db.rocksdb.drop_cf(cf).map_err(DBError::from)?;
                 }
 
-                debug!("Creating column family {cf:?}");
+                debug!(options = ?descriptor.options(), "Creating column family {cf:?}");
                 db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
             }
 
@@ -210,7 +215,10 @@ impl Builder {
                 let cf = descriptor.name();
 
                 let opts = DB::options(descriptor.options());
-                debug!("Creating missing column family {cf:?}");
+                debug!(
+                    options = ?descriptor.options(),
+                    "Creating missing column family {cf:?}"
+                );
                 db.db.rocksdb.create_cf(cf, &opts).map_err(DBError::from)?;
             }
 
@@ -239,8 +247,14 @@ impl Builder {
     /// Completes the migration process and returns the database.
     ///
     /// This method validates that all declared migration steps have been
-    /// executed and returns the fully migrated database ready for use.
-    pub fn finalize(self, _expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
+    /// executed, then unconditionally closes the migration-time handle and
+    /// reopens the database with the column options declared in
+    /// `expected_schema` (RocksDB defaults for on-disk column families it
+    /// does not list). Column family options — prefix extractors,
+    /// compression — only take effect when passed at open time, and the
+    /// migration-time handle opens existing column families by name without
+    /// them.
+    pub fn finalize(self, expected_schema: &[ColumnDescriptor]) -> Result<DB, DBOpenError> {
         if self.step < self.start_step {
             return Err(DBOpenError::FewerStepsDeclared {
                 declared: self.step,
@@ -248,7 +262,33 @@ impl Builder {
             });
         }
 
-        Ok(self.db)
+        let path = self.db.rocksdb.path().to_path_buf();
+        // Close the migration-time handle so the reopen below can take the
+        // RocksDB lock.
+        drop(self.db);
+
+        debug!("Reopening database with declared column options");
+        let known_cfs: Vec<ColumnDescriptor> = expected_schema
+            .iter()
+            .cloned()
+            .chain([ColumnDescriptor::new::<MigrationRecordColumn>()])
+            .collect();
+        let descriptors: Vec<_> = rocksdb::DB::list_cf(&rocksdb::Options::default(), &path)
+            .map_err(DBError::from)?
+            .into_iter()
+            .filter(|name| name != rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
+            .map(|name| DB::descriptor_for_existing(&name, &known_cfs))
+            .collect();
+
+        Ok(DB {
+            rocksdb: rocksdb::DB::open_cf_descriptors(
+                &rocksdb::Options::default(),
+                &path,
+                descriptors,
+            )
+            .map_err(DBError::from)?,
+            default_write_options: Some(Self::writeopts()),
+        })
     }
 
     fn perform_step(

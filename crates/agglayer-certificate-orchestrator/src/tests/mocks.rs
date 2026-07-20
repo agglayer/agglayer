@@ -22,5 +22,14 @@ mock! {
             state: &mut LocalNetworkStateData,
             certificate_tx_hash: Option<agglayer_types::Digest>,
         ) -> Result<(MultiBatchHeader, LocalNetworkState, pessimistic_proof::PessimisticProofOutput), CertificationError>;
+
+        fn rollup_manager_address(&self) -> agglayer_types::Address;
+
+        async fn verifier_type(
+            &self,
+            rollup_id: u32,
+        ) -> Result<agglayer_contracts::rollup::VerifierType, CertificationError>;
+
+        fn default_l1_info_tree_leaf_count(&self) -> u32;
     }
 }

@@ -2,11 +2,12 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, EpochNumber, Height,
-    LocalNetworkStateData, NetworkId, Proof,
+    LocalNetworkStateData, NetworkId, Proof, SettlementJobId,
 };
 
 use crate::{
     columns::{
+        latest_pending_certificate_per_network::PendingCertificate,
         latest_proven_certificate_per_network::ProvenCertificate,
         latest_settled_certificate_per_network::SettledCertificate,
     },
@@ -42,6 +43,11 @@ pub trait PendingCertificateReader: Send + Sync {
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<(CertificateId, Height)>, Error>;
+
+    /// Scan the latest pending certificate pointer of every network.
+    ///
+    /// Entries that fail to decode are skipped.
+    fn get_current_pending_heights(&self) -> Result<Vec<(NetworkId, PendingCertificate)>, Error>;
 
     fn get_certificate(
         &self,
@@ -88,6 +94,11 @@ pub trait StateReader: Send + Sync {
         &self,
         certificate_id: &CertificateId,
     ) -> Result<Option<CertificateHeader>, Error>;
+
+    fn get_certificate_settlement_job_id(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<Option<SettlementJobId>, Error>;
 
     fn get_certificate_header_by_cursor(
         &self,

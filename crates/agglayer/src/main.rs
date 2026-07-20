@@ -26,6 +26,9 @@ fn main() -> eyre::Result<()> {
         cli::Commands::ValidateConfig { path } => {
             match agglayer_config::Config::try_load(path.as_path()) {
                 Ok(config) => {
+                    if let Some(outbound) = &config.outbound {
+                        eprintln!("warning: {}", outbound.ignored_config_warning());
+                    }
                     println!(
                         "{}",
                         toml::to_string_pretty(&config)
@@ -98,11 +101,33 @@ fn install_default_crypto_provider() {
 }
 
 /// Common version information about the executed agglayer binary.
+///
+/// The git describe and commit timestamp are resolved at compile time. They
+/// default to the values derived from the local `.git` repository by `vergen`,
+/// but can be overridden via the `AGGLAYER_BUILD_DESCRIBE` and
+/// `AGGLAYER_BUILD_TIMESTAMP` environment variables. The override path exists
+/// for builds without a `.git` directory (e.g. the Docker image build), where
+/// `vergen` would otherwise emit a `VERGEN_IDEMPOTENT_OUTPUT` placeholder.
 pub fn version() -> String {
     let pkg_name = env!("CARGO_PKG_NAME");
-    let git_describe = env!("VERGEN_GIT_DESCRIBE");
-    let timestamp = env!("VERGEN_GIT_COMMIT_TIMESTAMP");
+    let git_describe = resolve_build_value(
+        option_env!("AGGLAYER_BUILD_DESCRIBE"),
+        env!("VERGEN_GIT_DESCRIBE"),
+    );
+    let timestamp = resolve_build_value(
+        option_env!("AGGLAYER_BUILD_TIMESTAMP"),
+        env!("VERGEN_GIT_COMMIT_TIMESTAMP"),
+    );
     format!("{pkg_name} ({git_describe}) [git commit timestamp: {timestamp}]")
+}
+
+/// Prefer an explicit build-time override, falling back to the git-derived
+/// value when the override is absent or empty.
+fn resolve_build_value<'a>(override_value: Option<&'a str>, fallback: &'a str) -> &'a str {
+    match override_value {
+        Some(value) if !value.is_empty() => value,
+        _ => fallback,
+    }
 }
 
 pub async fn compute_program_vkey(program: &'static [u8]) -> eyre::Result<String> {
@@ -119,5 +144,23 @@ mod tests {
         super::install_default_crypto_provider();
 
         assert!(rustls::crypto::CryptoProvider::get_default().is_some());
+    }
+
+    #[test]
+    fn build_value_prefers_override_when_present() {
+        assert_eq!(
+            super::resolve_build_value(Some("v1.2.3-7-gabc1234"), "fallback"),
+            "v1.2.3-7-gabc1234"
+        );
+    }
+
+    #[test]
+    fn build_value_falls_back_when_override_absent() {
+        assert_eq!(super::resolve_build_value(None, "fallback"), "fallback");
+    }
+
+    #[test]
+    fn build_value_falls_back_when_override_is_empty() {
+        assert_eq!(super::resolve_build_value(Some(""), "fallback"), "fallback");
     }
 }

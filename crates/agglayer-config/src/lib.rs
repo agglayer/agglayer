@@ -78,8 +78,9 @@ pub struct Config {
     pub rate_limiting: RateLimitingConfig,
 
     /// The configuration for every outbound network component.
-    #[serde(default)]
-    pub outbound: OutboundConfig,
+    /// No longer used, parsed only so stale config can be reported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outbound: Option<OutboundConfig>,
 
     /// The L1 configuration.
     #[serde(default)]
@@ -126,6 +127,10 @@ pub struct Config {
 
     #[serde(default)]
     pub grpc: grpc::GrpcConfig,
+
+    /// The settlement service configuration.
+    #[serde(default)]
+    pub settlement: settlement_service::SettlementConfig,
 }
 
 impl Config {
@@ -139,12 +144,8 @@ impl Config {
 
         let path = path
             .parent()
-            .ok_or_else(|| ConfigurationError::UnableToReadConfigFile {
-                path: path.to_path_buf(),
-                source: std::io::Error::other(
-                    "Unable to determine the parent folder of the configuration file",
-                ),
-            })?;
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
 
         let config_with_path = ConfigDeserializer { path };
 
@@ -181,6 +182,7 @@ impl Config {
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
+            settlement: Default::default(),
         }
     }
 
@@ -248,7 +250,7 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
                 .storage
                 .path_contextualized(&self.path.canonicalize().map_err(|error| {
                     serde::de::Error::custom(format!(
-                        "Unable to canonicalize the storage path: {error}"
+                        "Unable to canonicalize the configuration directory: {error}"
                     ))
                 })?);
 

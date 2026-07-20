@@ -174,6 +174,26 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     L1Rpc: RollupContract + AggchainContract + Send + Sync + 'static,
 {
+    fn rollup_manager_address(&self) -> agglayer_types::Address {
+        self.l1_rpc.get_rollup_manager_address()
+    }
+
+    async fn verifier_type(
+        &self,
+        rollup_id: u32,
+    ) -> Result<agglayer_contracts::rollup::VerifierType, CertificationError> {
+        self.l1_rpc
+            .get_verifier_type(rollup_id)
+            .await
+            .map_err(|error| {
+                CertificationError::InternalError(format!("Failed to get verifier type: {error}"))
+            })
+    }
+
+    fn default_l1_info_tree_leaf_count(&self) -> u32 {
+        self.l1_rpc.default_l1_info_tree_entry().0
+    }
+
     #[instrument(skip(self, state, height), fields(certificate_id, %network_id), level = "info")]
     async fn certify(
         &self,
@@ -415,7 +435,11 @@ where
 
             let l1_aggchain_hash = self
                 .l1_rpc
-                .get_aggchain_hash(rollup_address, certificate.custom_chain_data.clone().into())
+                .get_aggchain_hash(
+                    rollup_address,
+                    certificate.custom_chain_data.clone().into(),
+                    certificate_tx_hash.map(|digest| digest.0.into()),
+                )
                 .await
                 .map_err(CertificationError::UnableToFindAggchainHash)?
                 .into();

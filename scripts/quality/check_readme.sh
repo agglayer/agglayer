@@ -1,8 +1,5 @@
 #!/bin/bash
 
-
-README="cargo readme"
-
 version=$(cargo readme -V 2>&1)
 
 RES=$?

@@ -8,6 +8,7 @@ impl From<&ClientErrorType> for v0::ClientErrorType {
         match value {
             ClientErrorType::Unknown => Self::Unspecified,
             ClientErrorType::NonceAlreadyUsed => Self::NonceAlreadyUsed,
+            ClientErrorType::SettlementSucceededElsewhere => Self::SettlementSucceededElsewhere,
         }
     }
 }
@@ -17,6 +18,9 @@ impl From<v0::ClientErrorType> for ClientErrorType {
         match value {
             v0::ClientErrorType::Unspecified => ClientErrorType::Unknown,
             v0::ClientErrorType::NonceAlreadyUsed => ClientErrorType::NonceAlreadyUsed,
+            v0::ClientErrorType::SettlementSucceededElsewhere => {
+                ClientErrorType::SettlementSucceededElsewhere
+            }
         }
     }
 }

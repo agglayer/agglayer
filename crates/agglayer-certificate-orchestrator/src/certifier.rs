@@ -1,4 +1,5 @@
-use agglayer_types::{Certificate, Digest, Height, LocalNetworkStateData, NetworkId};
+use agglayer_contracts::rollup::VerifierType;
+use agglayer_types::{Address, Certificate, Digest, Height, LocalNetworkStateData, NetworkId};
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
 };
@@ -42,4 +43,14 @@ pub trait Certifier: Unpin + Send + Sync + 'static {
         state: &mut LocalNetworkStateData,
         certificate_tx_hash: Option<Digest>,
     ) -> Result<(MultiBatchHeader, LocalNetworkState, PessimisticProofOutput), CertificationError>;
+
+    /// The L1 rollup-manager address settlement transactions are sent to.
+    fn rollup_manager_address(&self) -> Address;
+
+    /// The on-chain verifier type for `rollup_id`, which selects the proof
+    /// encoding.
+    async fn verifier_type(&self, rollup_id: u32) -> Result<VerifierType, CertificationError>;
+
+    /// Default l1-info-tree leaf count, used when the certificate carries none.
+    fn default_l1_info_tree_leaf_count(&self) -> u32;
 }

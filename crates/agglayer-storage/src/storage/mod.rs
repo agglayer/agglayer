@@ -2,9 +2,11 @@ use std::path::Path;
 
 use iterators::{ColumnIterator, KeysIterator};
 use rocksdb::{
-    ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBPinnableSlice, Direction, Options,
-    ReadOptions, SliceTransform, WriteBatch, WriteOptions,
+    ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBPinnableSlice, Direction,
+    IterateBounds as _, IteratorMode, Options, PrefixRange, ReadOptions, SliceTransform,
+    WriteBatch, WriteOptions,
 };
+use tracing::debug;
 
 use crate::schema::{
     options::{ColumnCompressionType, ColumnOptions, PrefixExtractor},
@@ -40,8 +42,8 @@ pub struct DB {
 impl DB {
     /// Open a new RocksDB instance at the given path with initial column
     /// families and a possibility to migrate the database.
-    pub fn builder(path: &Path, cfs: &[ColumnDescriptor]) -> Result<Builder, DBOpenError> {
-        Builder::open(path, cfs)
+    pub fn builder(path: &Path, cfs_v0: &[ColumnDescriptor]) -> Result<Builder, DBOpenError> {
+        Builder::open(path, cfs_v0)
     }
 
     /// Open a new RocksDB instance at the given path with some column families.
@@ -61,7 +63,7 @@ impl DB {
             Ok(names) => names
                 .into_iter()
                 .filter(|name| name != rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
-                .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
+                .map(|name| Self::descriptor_for_existing(&name, cfs))
                 .collect(),
             Err(_) => cfs.iter().map(Self::descriptor).collect(),
         };
@@ -232,6 +234,48 @@ impl DB {
         Ok(ColumnIterator::new(iterator, direction))
     }
 
+    /// Iterates over the keys sharing `prefix`, relying on the column
+    /// family's prefix extractor to stop at the prefix boundary. The column
+    /// family MUST be opened with a prefix extractor covering exactly the
+    /// encoded `prefix`: without one, RocksDB silently ignores
+    /// `prefix_same_as_start` and the scan leaks past the prefix into
+    /// unrelated keys. Every open path applies the declared column options
+    /// (see [`Self::descriptor_for_existing`]), and
+    /// `reopened_database_applies_declared_prefix_extractor` guards this.
+    pub(crate) fn prefix_iterator<C: ColumnSchema, P: Codec>(
+        &self,
+        prefix: &P,
+    ) -> Result<ColumnIterator<'_, C>, DBError> {
+        let cf = self.cf::<C>()?;
+        let prefix = prefix.encode()?;
+        let iterator = self.rocksdb.prefix_iterator_cf(&cf, prefix).into();
+
+        Ok(ColumnIterator::new(iterator, Direction::Forward))
+    }
+
+    pub(crate) fn prefix_iterator_with_direction<C: ColumnSchema, P: Codec>(
+        &self,
+        prefix: &P,
+        direction: Direction,
+    ) -> Result<ColumnIterator<'_, C>, DBError> {
+        let cf = self.cf::<C>()?;
+        let prefix = prefix.encode()?;
+        let (_lower_bound, upper_bound) = PrefixRange(prefix.clone()).into_bounds();
+        let mode = match (direction, upper_bound.as_deref()) {
+            (Direction::Forward, _) => IteratorMode::From(&prefix, Direction::Forward),
+            (Direction::Reverse, Some(upper_bound)) => {
+                IteratorMode::From(upper_bound, Direction::Reverse)
+            }
+            (Direction::Reverse, None) => IteratorMode::End,
+        };
+
+        let mut read_options = ReadOptions::default();
+        read_options.set_iterate_range(PrefixRange(prefix.clone()));
+        let iterator = self.rocksdb.iterator_cf_opt(&cf, read_options, mode).into();
+
+        Ok(ColumnIterator::new(iterator, direction))
+    }
+
     pub(crate) fn delete<C: ColumnSchema>(&self, key: &C::Key) -> Result<(), DBError> {
         let cf = self.cf::<C>()?;
         let key = key.encode()?;
@@ -247,6 +291,33 @@ impl DB {
     // Convert a ColumnDescriptor to a RocksDB ColumnFamilyDescriptor.
     fn descriptor(descriptor: &ColumnDescriptor) -> ColumnFamilyDescriptor {
         ColumnFamilyDescriptor::new(descriptor.name(), Self::options(descriptor.options()))
+    }
+
+    /// Build the RocksDB descriptor for a column family found on disk: its
+    /// declared options when it is part of the known schema, RocksDB defaults
+    /// otherwise. Column family options only take effect when passed at open
+    /// time, so opening by name would silently drop declared options such as
+    /// the prefix extractor.
+    pub(crate) fn descriptor_for_existing(
+        name: &str,
+        known_cfs: &[ColumnDescriptor],
+    ) -> ColumnFamilyDescriptor {
+        match known_cfs.iter().find(|known| known.name() == name) {
+            Some(descriptor) => {
+                debug!(
+                    options = ?descriptor.options(),
+                    "Opening column family {name:?} with its declared options"
+                );
+                Self::descriptor(descriptor)
+            }
+            None => {
+                debug!(
+                    "Opening column family {name:?} with default options: not part of the known \
+                     schema"
+                );
+                ColumnFamilyDescriptor::new(name, Options::default())
+            }
+        }
     }
 
     // Convert ColumnOptions to RocksDB Options.

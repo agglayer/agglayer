@@ -25,9 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       checks: write
+      # Required for scheduled runs: rustsec/audit-check reports findings
+      # by opening an issue on schedule/workflow_dispatch events.
+      issues: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - uses: rustsec/audit-check@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

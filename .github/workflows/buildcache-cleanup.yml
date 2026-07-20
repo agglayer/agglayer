@@ -1,0 +1,24 @@
+name: Buildcache cleanup
+
+on:
+  schedule:
+    # The buildx cache export rewrites the buildcache tag on every main push,
+    # leaving untagged cache manifests behind in GHCR. GHCR has no built-in
+    # retention for untagged versions, so prune them weekly.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    name: Delete untagged buildcache versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: agglayer-buildcache
+          package-type: container
+          delete-only-untagged-versions: "true"
+          min-versions-to-keep: 5

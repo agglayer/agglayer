@@ -86,15 +86,6 @@ impl<'a, C: ColumnSchema> ColumnIterator<'a, C> {
         }
     }
 
-    /// Seeks to the first entry whose key is greater than or equal to `key`.
-    pub fn seek(&mut self, key: &C::Key) -> Result<(), DBError> {
-        let encoded = C::Key::encode(key)?;
-        self.iter.seek(&encoded);
-        self.status = IteratorStatus::Initialized;
-
-        Ok(())
-    }
-
     fn parse_key_value(&self) -> KeyValueResult<C::Key, C::Value> {
         let key = self.iter.key().map(C::Key::decode).transpose()?;
         let value = self.iter.value().map(C::Value::decode).transpose()?;

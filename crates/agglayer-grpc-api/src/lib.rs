@@ -9,7 +9,7 @@ use agglayer_grpc_server::node::v1::{
 };
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
-    PendingCertificateWriter, StateReader, StateWriter,
+    PendingCertificateWriter, SettlementReader, StateReader, StateWriter,
 };
 use certificate_submission_service::CertificateSubmissionServer;
 use configuration_service::ConfigurationServer;
@@ -100,7 +100,7 @@ impl Server {
     where
         L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
         PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
-        StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
+        StateStore: NetworkInfoReader + SettlementReader + StateReader + StateWriter + 'static,
         DebugStore: DebugReader + DebugWriter + 'static,
         EpochsStore: EpochStoreReader + 'static,
     {

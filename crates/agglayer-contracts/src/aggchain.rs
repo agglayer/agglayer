@@ -1,9 +1,12 @@
 pub use agglayer_primitives::vkey_hash::VKeyHash;
 use agglayer_primitives::{Address, U256};
-use alloy::primitives::Bytes;
+use alloy::{
+    eips::BlockId,
+    primitives::{Bytes, TxHash},
+};
 use tracing::error;
 
-use crate::{contracts::AggchainBase, L1RpcClient, L1RpcError};
+use crate::{block_pinning::block_before_tx, contracts::AggchainBase, L1RpcClient, L1RpcError};
 
 #[async_trait::async_trait]
 pub trait AggchainContract {
@@ -13,10 +16,22 @@ pub trait AggchainContract {
         aggchain_vkey_selector: u16,
     ) -> Result<VKeyHash, L1RpcError>;
 
+    /// Fetch the aggchain hash for `aggchain_data` from the rollup's aggchain
+    /// contract on L1.
+    ///
+    /// When `before_tx_hash` is `Some`, the call is pinned to the L1 block
+    /// immediately preceding that transaction's inclusion block. This is used
+    /// to reconcile an already-settled certificate: stateful aggchain
+    /// contracts (e.g. `AggchainFEP`) revert `getAggchainHash` once their
+    /// `nextBlockNumber` has advanced past the certificate's range, so the
+    /// hash must be queried at the pre-settlement state where it is still
+    /// served. When `None`, or when the transaction is not yet mined
+    /// successfully, the query targets `latest`.
     async fn get_aggchain_hash(
         &self,
         rollup_address: Address,
         aggchain_data: Bytes,
+        before_tx_hash: Option<TxHash>,
     ) -> Result<[u8; 32], L1RpcError>;
 
     async fn get_multisig_context(
@@ -55,14 +70,26 @@ where
         &self,
         rollup_address: Address,
         aggchain_data: Bytes,
+        before_tx_hash: Option<TxHash>,
     ) -> Result<[u8; 32], L1RpcError> {
+        let at_block = match before_tx_hash {
+            // A transaction that did not successfully advance the state we depend
+            // on (not mined, reverted, or whose receipt could not be fetched)
+            // leaves the current state as the one to query.
+            Some(tx_hash) => block_before_tx(&self.rpc, tx_hash)
+                .await
+                .unwrap_or_else(|_| BlockId::latest()),
+            None => BlockId::latest(),
+        };
+
         AggchainBase::new(rollup_address.into(), self.rpc.clone())
             .getAggchainHash(aggchain_data)
+            .block(at_block)
             .call()
             .await
             .map(Into::into)
             .map_err(|error| {
-                error!(?error, "Unable to fetch the aggchain hash");
+                error!(?error, ?at_block, "Unable to fetch the aggchain hash");
 
                 L1RpcError::AggchainHashFetchFailed
             })

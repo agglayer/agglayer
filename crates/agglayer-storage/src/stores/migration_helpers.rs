@@ -3,7 +3,7 @@
 //! The three certificate-bearing stores (pending, per-epoch, debug) all run
 //! the same shape of backfill at startup: iterate the legacy CF, decode
 //! each row through [`crate::types::LegacyCertificate`] (which accepts both
-//! historical bincode and post-#1519 proto), and write the resulting
+//! historical bincode and proto), and write the resulting
 //! [`agglayer_types::Certificate`] into the proto CF.
 //!
 //! This module provides one helper, [`copy_legacy_certificate_cf_into_proto`],

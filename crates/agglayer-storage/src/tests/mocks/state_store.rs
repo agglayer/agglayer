@@ -1,6 +1,6 @@
 use agglayer_types::{
-    primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementAttempt,
+    primitives::Digest, Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
+    EpochNumber, Height, LocalNetworkStateData, NetworkId, Nonce, SettlementAttempt,
     SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 use mockall::mock;
@@ -46,6 +46,12 @@ mock! {
         fn remove_settlement_tx_hash(
             &self,
             certificate_id: &CertificateId,
+        ) -> Result<(), Error>;
+
+        fn insert_certificate_settlement_job_id(
+            &self,
+            certificate_id: &CertificateId,
+            settlement_job_id: &SettlementJobId,
         ) -> Result<(), Error>;
 
         fn assign_certificate_to_epoch(
@@ -106,6 +112,11 @@ mock! {
             certificate_id: &CertificateId,
         ) -> Result<Option<CertificateHeader>, Error>;
 
+        fn get_certificate_settlement_job_id(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<Option<SettlementJobId>, Error>;
+
         fn get_certificate_header_by_cursor(
             &self,
             network_id: NetworkId,
@@ -120,6 +131,8 @@ mock! {
     }
 
     impl SettlementReader for StateStore {
+        fn list_settlement_job_ids(&self) -> Result<Vec<SettlementJobId>, Error>;
+
         fn get_settlement_job(
             &self,
             settlement_job_id: &SettlementJobId,
@@ -139,6 +152,11 @@ mock! {
             &self,
             settlement_job_id: &SettlementJobId,
         ) -> Result<Vec<(u64, SettlementAttemptResult)>, Error>;
+
+        fn max_settlement_nonce_for_wallet(
+            &self,
+            wallet: Address,
+        ) -> Result<Option<Nonce>, Error>;
     }
 
     impl SettlementWriter for StateStore {
@@ -161,7 +179,7 @@ mock! {
             settlement_attempt: &SettlementAttempt,
         ) -> Result<(), Error>;
 
-        fn insert_settlement_attempt_result(
+        fn record_settlement_attempt_result(
             &self,
             settlement_job_id: &SettlementJobId,
             attempt_sequence_number: u64,

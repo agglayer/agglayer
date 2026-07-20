@@ -1,7 +1,8 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
+    Address, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
+    SettlementJobResult,
 };
-use rocksdb::{Direction, ReadOptions, WriteBatch};
+use rocksdb::{Direction, WriteBatch};
 
 use super::StateStore;
 use crate::{
@@ -47,6 +48,13 @@ impl StateStore {
 }
 
 impl SettlementReader for StateStore {
+    fn list_settlement_job_ids(&self) -> Result<Vec<SettlementJobId>, Error> {
+        Ok(self
+            .db
+            .keys::<SettlementJobsColumn>()?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
     fn get_settlement_job(
         &self,
         settlement_job_id: &SettlementJobId,
@@ -73,28 +81,16 @@ impl SettlementReader for StateStore {
         &self,
         settlement_job_id: &SettlementJobId,
     ) -> Result<Vec<(u64, SettlementAttempt)>, Error> {
-        let mut iterator = self.db.iter_with_direction::<SettlementAttemptsColumn>(
-            ReadOptions::default(),
-            Direction::Forward,
-        )?;
-        iterator.seek(&SettlementAttemptKey {
-            settlement_job_id: *settlement_job_id,
-            attempt_sequence_number: 0,
-        })?;
-
-        iterator
-            .map(|entry| -> Result<Option<(u64, SettlementAttempt)>, Error> {
+        self.db
+            .prefix_iterator::<SettlementAttemptsColumn, _>(settlement_job_id)?
+            .map(|entry| -> Result<(u64, SettlementAttempt), Error> {
                 let (key, attempt) = entry?;
-                if key.settlement_job_id != *settlement_job_id {
-                    return Ok(None);
-                }
 
-                Ok(Some((
+                Ok((
                     key.attempt_sequence_number,
                     SettlementAttempt::try_from(attempt)?,
-                )))
+                ))
             })
-            .map_while(|entry| entry.transpose())
             .collect::<Result<Vec<_>, _>>()
     }
 
@@ -102,33 +98,30 @@ impl SettlementReader for StateStore {
         &self,
         settlement_job_id: &SettlementJobId,
     ) -> Result<Vec<(u64, SettlementAttemptResult)>, Error> {
-        let mut iterator = self
-            .db
-            .iter_with_direction::<SettlementAttemptResultsColumn>(
-                ReadOptions::default(),
-                Direction::Forward,
-            )?;
-        iterator.seek(&SettlementAttemptKey {
-            settlement_job_id: *settlement_job_id,
-            attempt_sequence_number: 0,
-        })?;
+        self.db
+            .prefix_iterator::<SettlementAttemptResultsColumn, _>(settlement_job_id)?
+            .map(|entry| -> Result<(u64, SettlementAttemptResult), Error> {
+                let (key, result) = entry?;
 
-        iterator
-            .map(
-                |entry| -> Result<Option<(u64, SettlementAttemptResult)>, Error> {
-                    let (key, result) = entry?;
-                    if key.settlement_job_id != *settlement_job_id {
-                        return Ok(None);
-                    }
-
-                    Ok(Some((
-                        key.attempt_sequence_number,
-                        SettlementAttemptResult::try_from(result)?,
-                    )))
-                },
-            )
-            .map_while(|entry| entry.transpose())
+                Ok((
+                    key.attempt_sequence_number,
+                    SettlementAttemptResult::try_from(result)?,
+                ))
+            })
             .collect::<Result<Vec<_>, _>>()
+    }
+
+    fn max_settlement_nonce_for_wallet(&self, wallet: Address) -> Result<Option<Nonce>, Error> {
+        let prefix = wallet.into_array();
+        Ok(self
+            .db
+            .prefix_iterator_with_direction::<SettlementAttemptPerWalletColumn, _>(
+                &prefix,
+                Direction::Reverse,
+            )?
+            .next()
+            .transpose()?
+            .map(|(key, _)| Nonce(key.nonce)))
     }
 }
 
@@ -253,30 +246,19 @@ impl SettlementWriter for StateStore {
         })
     }
 
-    fn insert_settlement_attempt_result(
+    fn record_settlement_attempt_result(
         &self,
         settlement_job_id: &SettlementJobId,
         attempt_sequence_number: u64,
         tx_result: &SettlementAttemptResult,
     ) -> Result<(), Error> {
-        let tx_result: v0::SettlementAttemptResult = tx_result.into();
+        let proto_tx_result: v0::SettlementAttemptResult = tx_result.into();
 
         self.with_settlement_write_lock(settlement_job_id, || {
             let key = SettlementAttemptKey {
                 settlement_job_id: *settlement_job_id,
                 attempt_sequence_number,
             };
-
-            if self
-                .db
-                .get::<SettlementAttemptResultsColumn>(&key)?
-                .is_some()
-            {
-                return Err(Error::UnprocessedAction(format!(
-                    "Settlement attempt result already exists for job {settlement_job_id} and \
-                     attempt sequence number {attempt_sequence_number}"
-                )));
-            }
 
             if self.db.get::<SettlementAttemptsColumn>(&key)?.is_none() {
                 return Err(Error::UnprocessedAction(format!(
@@ -285,9 +267,28 @@ impl SettlementWriter for StateStore {
                 )));
             }
 
+            if let Some(stored_result) = self
+                .db
+                .get::<SettlementAttemptResultsColumn>(&key)?
+                .map(SettlementAttemptResult::try_from)
+                .transpose()?
+            {
+                if stored_result == *tx_result {
+                    return Ok(());
+                }
+
+                if !stored_result.can_be_replaced_by(tx_result) {
+                    return Err(Error::UnprocessedAction(format!(
+                        "Cannot replace existing settlement attempt result {stored_result:?} with \
+                         new settlement attempt result {tx_result:?} for job {settlement_job_id} \
+                         and attempt sequence number {attempt_sequence_number}",
+                    )));
+                }
+            }
+
             Ok(self
                 .db
-                .put::<SettlementAttemptResultsColumn>(&key, &tx_result)?)
+                .put::<SettlementAttemptResultsColumn>(&key, &proto_tx_result)?)
         })
     }
 }

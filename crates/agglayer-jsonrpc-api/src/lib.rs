@@ -8,7 +8,7 @@ use std::{
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
-    PendingCertificateWriter, StateReader, StateWriter,
+    PendingCertificateWriter, SettlementReader, StateReader, StateWriter,
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, NetworkInfo,
@@ -23,7 +23,7 @@ use jsonrpsee::{
     server::{HttpBody, PingConfig, ServerBuilder},
 };
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{service::AgglayerService, signed_tx::SignedTx};
 
@@ -122,7 +122,7 @@ where
     V0Rpc: Provider + Clone + 'static,
     Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + SettlementReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
@@ -198,12 +198,30 @@ where
     V0Rpc: Provider + Clone + 'static,
     Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + SettlementReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
     async fn send_tx(&self, tx: SignedTx) -> RpcResult<B256> {
-        Ok(self.service.send_tx(tx).await?)
+        // The legacy `interop_sendTx` proof-settlement flow is disabled
+        // (https://github.com/agglayer/agglayer/issues/1632). The method stays
+        // registered so callers receive an explicit error instead of a generic
+        // "method not found".
+        let rollup_id = tx.tx.rollup_id;
+        agglayer_telemetry::SEND_TX.add(
+            1,
+            &[agglayer_telemetry::KeyValue::new(
+                "rollup_id",
+                rollup_id.to_string(),
+            )],
+        );
+        warn!(
+            rollup_id,
+            "Rejected interop_sendTx call: method is disabled"
+        );
+        Err(Error::MethodDisabled {
+            method: "interop_sendTx",
+        })
     }
 
     async fn get_tx_status(&self, hash: B256) -> RpcResult<TxStatus> {

@@ -19,7 +19,14 @@ use crate::constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_N
 
 mod constant;
 
+pub mod certificate;
 pub mod clock;
+pub mod network;
+pub mod settlement;
+
+// Testing.
+#[cfg(feature = "testutils")]
+pub mod testutils;
 
 pub use opentelemetry::KeyValue;
 
@@ -124,7 +131,7 @@ impl ServerBuilder {
     ///
     /// # Panics
     ///
-    /// Panics on failure of the gather_metrics internal methods (unlikely)
+    /// Panics on failure of the internal meter provider setup (unlikely)
     ///
     /// # Errors
     ///
@@ -143,13 +150,13 @@ impl ServerBuilder {
         >,
     > {
         let registry = registry.unwrap_or_default();
-        Self::init_meter_provider(&registry);
+        init_meter_provider(&registry);
 
         let app = Router::new()
             .route(
                 "/metrics",
                 get(|State(registry): State<prometheus::Registry>| async move {
-                    match Self::gather_metrics(&registry) {
+                    match encode_registry(&registry) {
                         Ok(metrics) => Response::new(metrics),
                         Err(error) => Response::builder()
                             .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -169,31 +176,33 @@ impl ServerBuilder {
         Ok(axum::serve(listener, app.into_make_service())
             .with_graceful_shutdown(shutdown_signal(cancellation_token)))
     }
+}
 
-    fn init_meter_provider(registry: &Registry) {
-        // configure OpenTelemetry to use the registry
-        let exporter = opentelemetry_prometheus::exporter()
-            .with_registry(registry.clone())
-            .build()
-            .unwrap();
+/// Installs a fresh [`SdkMeterProvider`] backed by `registry` as the
+/// process-global meter provider.
+fn init_meter_provider(registry: &Registry) {
+    // configure OpenTelemetry to use the registry
+    let exporter = opentelemetry_prometheus::exporter()
+        .with_registry(registry.clone())
+        .build()
+        .unwrap();
 
-        // set up a meter to create instruments
-        let provider = SdkMeterProvider::builder().with_reader(exporter).build();
+    // set up a meter to create instruments
+    let provider = SdkMeterProvider::builder().with_reader(exporter).build();
 
-        global::set_meter_provider(provider);
-    }
+    global::set_meter_provider(provider);
+}
 
-    fn gather_metrics(registry: &prometheus::Registry) -> eyre::Result<String> {
-        // Encode data as text or protobuf
-        let encoder = TextEncoder::new();
-        let metric_families = registry.gather();
-        let mut result = Vec::new();
-        encoder
-            .encode(&metric_families, &mut result)
-            .wrap_err("Error gathering metrics")?;
+/// Encodes the current content of `registry` as prometheus text.
+fn encode_registry(registry: &Registry) -> eyre::Result<String> {
+    let encoder = TextEncoder::new();
+    let metric_families = registry.gather();
+    let mut result = Vec::new();
+    encoder
+        .encode(&metric_families, &mut result)
+        .wrap_err("Error gathering metrics")?;
 
-        String::from_utf8(result).wrap_err("Error formatting metrics")
-    }
+    String::from_utf8(result).wrap_err("Error formatting metrics")
 }
 
 async fn shutdown_signal(cancellation: CancellationToken) {

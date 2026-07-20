@@ -40,7 +40,17 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          # Full history + tags so `git describe --tags` resolves a real
+          # version for the build-args below (default checkout is shallow).
+          fetch-depth: 0
+
+      - name: Compute build version
+        id: version
+        run: |
+          echo "describe=$(git describe --tags --always --dirty)" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
 
       - name: Docker meta
         id: meta
@@ -79,6 +89,9 @@ jobs:
           context: .
           push: false
           platforms: ${{ matrix.platform }}
+          build-args: |
+            AGGLAYER_BUILD_DESCRIBE=${{ steps.version.outputs.describe }}
+            AGGLAYER_BUILD_TIMESTAMP=${{ steps.version.outputs.timestamp }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

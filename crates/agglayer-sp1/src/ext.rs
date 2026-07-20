@@ -13,7 +13,7 @@ use crate::{
 ///
 /// The trait keeps the `sp1-sdk` dependency hidden from callers in
 /// `agglayer-types` and `agglayer-grpc-types`, which must not depend on
-/// `sp1-sdk` directly after #1508's storage decoupling work.
+/// `sp1-sdk` directly after the storage decoupling work.
 pub trait ProofExt {
     /// Borrow the inner SP1 stark context carried by this proof.
     fn sp1(&self) -> &SP1StarkWithContext;
