@@ -2,13 +2,15 @@ use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
-use agglayer_types::{CertificateId, SettlementJob, SettlementJobId, SettlementJobResult};
+use agglayer_types::{
+    CertificateId, RpcErrorCode, SettlementJob, SettlementJobId, SettlementJobResult,
+};
 use alloy::providers::{Provider, WalletProvider};
 use educe::Educe;
 use eyre::Context as _;
-use tokio::sync::{watch, Mutex};
+use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     settlement_task::{
@@ -240,13 +242,43 @@ impl<
         result_receiver
     }
 
+    /// Classifies why no in-memory task control exists for `job_id`, by
+    /// reading storage. Only called on error paths (no task control entry, or
+    /// a TOCTOU race against a just-finished task), so the extra storage
+    /// reads are irrelevant for cost.
+    async fn classify_missing_task(&self, job_id: SettlementJobId) -> eyre::Report {
+        let job = match self.store.get_settlement_job(&job_id) {
+            Ok(job) => job,
+            Err(error) => {
+                return eyre::Report::new(error).wrap_err(format!(
+                    "Failed to check settlement job existence for id {job_id}"
+                ));
+            }
+        };
+
+        if job.is_none() {
+            return eyre::eyre!("no settlement job found for id {job_id}")
+                .wrap_err(RpcErrorCode::NotFound);
+        }
+
+        match self.store.get_settlement_job_result(&job_id) {
+            Ok(Some(_)) => eyre::eyre!("settlement job {job_id} already completed")
+                .wrap_err(RpcErrorCode::AlreadyCompleted),
+            Ok(None) => eyre::eyre!("no live settlement task for pending job {job_id}")
+                .wrap_err(RpcErrorCode::NoLiveTask),
+            Err(error) => eyre::Report::new(error).wrap_err(format!(
+                "Failed to read settlement job terminal result for id {job_id}"
+            )),
+        }
+    }
+
     #[tracing::instrument(skip_all)]
     async fn task_control(&self, job_id: SettlementJobId) -> eyre::Result<TaskControlHandle> {
-        let task_controls = self.task_controls.lock().await;
-        let Some(task_control) = task_controls.get(&job_id) else {
-            eyre::bail!("No task control found for settlement task {job_id}");
-        };
-        Ok(task_control.clone())
+        let task_control = self.task_controls.lock().await.get(&job_id).cloned();
+        match task_control {
+            Some(task_control) => Ok(task_control),
+            None => Err(self.classify_missing_task(job_id).await),
+        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -255,16 +287,21 @@ impl<
         job_id: SettlementJobId,
         command: TaskAdminCommand,
     ) -> eyre::Result<()> {
-        self.task_control(job_id)
-            .await?
-            .try_send(command)
-            .wrap_err_with(|| {
-                format!(
-                    "Failed to forward admin command to settlement task {job_id}, did it already \
-                     complete?"
-                )
-            })?;
-        Ok(())
+        let task_control = self.task_control(job_id).await?;
+        match task_control.try_send(command) {
+            Ok(()) => Ok(()),
+            Err(error @ mpsc::error::TrySendError::Full(_)) => Err(eyre::Report::new(error)
+                .wrap_err(format!(
+                    "Failed to forward admin command to settlement task {job_id}: admin command \
+                     queue full"
+                ))
+                .wrap_err(RpcErrorCode::Unavailable)),
+            // The task completed or died between the `task_control` lookup above and this
+            // `try_send` call; classify the same way as a missing task control entry.
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                Err(self.classify_missing_task(job_id).await)
+            }
+        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -343,7 +380,10 @@ impl<
             ?job_id,
             "Settlement service invariant broken: pending job exists without running task"
         );
-        eyre::bail!("Pending settlement job {job_id} exists without a running task");
+        Err(
+            eyre::eyre!("Pending settlement job {job_id} exists without a running task")
+                .wrap_err(RpcErrorCode::NoLiveTask),
+        )
     }
 }
 
