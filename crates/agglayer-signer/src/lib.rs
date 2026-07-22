@@ -14,6 +14,7 @@ use alloy::{
 use alloy_primitives::{Address, ChainId, Signature, B256};
 use async_trait::async_trait;
 use eyre::{eyre, Context as _};
+use tracing::warn;
 
 /// A an alloy [`Signer`] that can house either a local keystore or a KMS
 /// signer.
@@ -33,25 +34,23 @@ impl ConfiguredSigner {
     pub(crate) fn local_wallet(
         chain_id: u64,
         local: &LocalConfig,
-    ) -> eyre::Result<(PrivateKeySigner, Option<PrivateKeySigner>)> {
-        let pk1 = local
+    ) -> eyre::Result<PrivateKeySigner> {
+        let pk = local
             .private_keys
             .first()
             .ok_or_else(|| eyre!("no private keys specified in the configuration"))?;
-        let signer1 = PrivateKeySigner::decrypt_keystore(&pk1.path, &pk1.password)
+        let signer = PrivateKeySigner::decrypt_keystore(&pk.path, &pk.password)
             .wrap_err("local signer error")?
             .with_chain_id(Some(chain_id));
 
-        let mut signer2 = None;
-        if let Some(pk2) = local.private_keys.get(1) {
-            signer2 = Some(
-                PrivateKeySigner::decrypt_keystore(&pk2.path, &pk2.password)
-                    .wrap_err("local signer error")?
-                    .with_chain_id(Some(chain_id)),
-            )
-        };
+        if local.private_keys.len() > 1 {
+            warn!(
+                "Multiple private keys configured; only the first one is used since the dedicated \
+                 tx-settlement signer was removed together with `interop_sendTx`"
+            );
+        }
 
-        Ok((signer1, signer2))
+        Ok(signer)
     }
 
     /// Create a new ConfiguredSigner from a local private key signer.
@@ -68,38 +67,19 @@ impl ConfiguredSigner {
     pub const fn from_kms(signer: KmsSigner) -> Self {
         Self::Kms(signer)
     }
-}
 
-/// Configured signers for different purposes.
-#[derive(Debug)]
-pub struct ConfiguredSigners {
-    /// The signer for PP settlement.
-    pub pp_settlement: ConfiguredSigner,
-    /// The signer for transaction settlement, if not defined is expected
-    /// that `pp_settlement` signer will be used.
-    pub tx_settlement: Option<ConfiguredSigner>,
-}
-
-impl ConfiguredSigners {
     /// Get either a local wallet or GCP KMS signer based on the configuration.
-    pub async fn new(config: &Config) -> eyre::Result<Self> {
+    ///
+    /// This is the settlement signer used for PP certificate settlement.
+    pub async fn from_config(config: &Config) -> eyre::Result<Self> {
         match &config.auth {
             AuthConfig::GcpKms(ref kms) => {
                 let kms = KMS::new(config.l1.chain_id, kms.clone());
-                let kms_signers = kms.gcp_kms_signers().await?;
-                Ok(Self {
-                    pp_settlement: ConfiguredSigner::Kms(kms_signers.pp_settlement),
-                    tx_settlement: kms_signers.tx_settlement.map(ConfiguredSigner::Kms),
-                })
+                Ok(ConfiguredSigner::Kms(kms.gcp_kms_signer().await?))
             }
-            AuthConfig::Local(ref local) => {
-                let (local_signer_cert, local_signer_tx) =
-                    ConfiguredSigner::local_wallet(config.l1.chain_id, local)?;
-                Ok(Self {
-                    pp_settlement: ConfiguredSigner::Local(local_signer_cert),
-                    tx_settlement: local_signer_tx.map(ConfiguredSigner::Local),
-                })
-            }
+            AuthConfig::Local(ref local) => Ok(ConfiguredSigner::Local(
+                ConfiguredSigner::local_wallet(config.l1.chain_id, local)?,
+            )),
         }
     }
 }

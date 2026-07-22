@@ -15,7 +15,7 @@ use prometheus::{Encoder as _, Registry, TextEncoder};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-use crate::constant::{AGGLAYER_KERNEL_OTEL_SCOPE_NAME, AGGLAYER_RPC_OTEL_SCOPE_NAME};
+use crate::constant::AGGLAYER_RPC_OTEL_SCOPE_NAME;
 
 mod constant;
 
@@ -33,34 +33,11 @@ pub use opentelemetry::KeyValue;
 lazy_static! {
     // Backward compatibility with the old metrics from agglayer go implementation
     // Those metrics are not linked to any registry
+    /// Number of calls to the disabled `interop_sendTx` method, kept to
+    /// observe residual callers.
     pub static ref SEND_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_RPC_OTEL_SCOPE_NAME)
         .u64_counter("send_tx")
         .with_description("Number of transactions received on the RPC")
-        .build();
-
-    pub static ref VERIFY_ZKP: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
-        .u64_counter("verify_zkp")
-        .with_description("Number of ZKP verifications")
-        .build();
-
-    pub static ref VERIFY_SIGNATURE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
-        .u64_counter("verify_signature")
-        .with_description("Number of signature verifications")
-        .build();
-
-    pub static ref CHECK_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
-        .u64_counter("check_tx")
-        .with_description("Number of transactions checked")
-        .build();
-
-    pub static ref EXECUTE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
-        .u64_counter("execute")
-        .with_description("Number of transactions executed")
-        .build();
-
-    pub static ref SETTLE: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_KERNEL_OTEL_SCOPE_NAME)
-        .u64_counter("settle")
-        .with_description("Number of transactions settled")
         .build();
 }
 

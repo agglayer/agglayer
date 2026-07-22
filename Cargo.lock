@@ -416,7 +416,6 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-rate-limiting",
  "agglayer-rpc",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
@@ -472,7 +471,6 @@ dependencies = [
  "agglayer-grpc-api",
  "agglayer-grpc-types",
  "agglayer-jsonrpc-api",
- "agglayer-rate-limiting",
  "agglayer-rpc",
  "agglayer-settlement-service",
  "agglayer-signer",
@@ -551,26 +549,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "agglayer-rate-limiting"
-version = "0.1.0"
-dependencies = [
- "agglayer-config",
- "agglayer-utils",
- "parking_lot",
- "serde",
- "serde_with",
- "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
 name = "agglayer-rpc"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-primitives 0.18.0",
- "agglayer-rate-limiting",
  "agglayer-storage",
  "agglayer-tries 0.18.0",
  "agglayer-types",

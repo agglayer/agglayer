@@ -89,13 +89,13 @@ fn constructor_methods_work() {
 }
 
 #[tokio::test]
-async fn configured_signers_reports_missing_private_key() {
+async fn configured_signer_reports_missing_private_key() {
     let mut config = Config::new(std::path::Path::new("/tmp/agglayer"));
     config.auth = AuthConfig::Local(LocalConfig {
         private_keys: Vec::new(),
     });
 
-    let error = ConfiguredSigners::new(&config).await.unwrap_err();
+    let error = ConfiguredSigner::from_config(&config).await.unwrap_err();
 
     assert_eq!(
         error.to_string(),

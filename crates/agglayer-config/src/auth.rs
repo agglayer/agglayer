@@ -77,26 +77,18 @@ pub struct GcpKmsConfig {
     #[serde(default)]
     pub keyring: Option<String>,
 
-    // Added to support distinct keys for cert and tx signing, falling back to
-    // the older single key if not specified
-    // ------------------------------------------------------------
     /// The key name for PP certificate settlement.
+    ///
+    /// Falls back to the deprecated `key-name` if not specified.
     #[serde_as(as = "NoneAsEmptyString")]
     #[serde(default)]
     pub pp_settlement_key_name: Option<String>,
 
     /// The key version for PP certificate settlement.
+    ///
+    /// Falls back to the deprecated `key-version` if not specified.
     #[serde(default)]
     pub pp_settlement_key_version: Option<u64>,
-
-    /// The key name for Tx certificate settlement.
-    #[serde_as(as = "NoneAsEmptyString")]
-    #[serde(default)]
-    pub tx_settlement_key_name: Option<String>,
-
-    /// The key version for Tx certificate settlement.
-    #[serde(default)]
-    pub tx_settlement_key_version: Option<u64>,
 }
 
 impl<'de> Deserialize<'de> for GcpKmsConfig {
@@ -126,11 +118,6 @@ impl<'de> Deserialize<'de> for GcpKmsConfig {
             pub pp_settlement_key_name: Option<String>,
             #[serde(default)]
             pub pp_settlement_key_version: Option<u64>,
-            #[serde_as(as = "NoneAsEmptyString")]
-            #[serde(default)]
-            pub tx_settlement_key_name: Option<String>,
-            #[serde(default)]
-            pub tx_settlement_key_version: Option<u64>,
             #[serde(alias = "KeyName")]
             #[serde_as(as = "NoneAsEmptyString")]
             #[serde(default)]
@@ -142,36 +129,24 @@ impl<'de> Deserialize<'de> for GcpKmsConfig {
 
         let d = Intermediate::deserialize(deserializer)?;
 
-        let (
-            pp_settlement_key_name,
-            pp_settlement_key_version,
-            tx_settlement_key_name,
-            tx_settlement_key_version,
-        ) = match (
+        let (pp_settlement_key_name, pp_settlement_key_version) = match (
             d.pp_settlement_key_name,
             d.pp_settlement_key_version,
-            d.tx_settlement_key_name,
-            d.tx_settlement_key_version,
             d.key_name,
             d.key_version,
         ) {
-            (Some(pp_k), Some(pp_v), Some(tx_k), Some(tx_v), _, _) => {
-                (Some(pp_k), Some(pp_v), Some(tx_k), Some(tx_v))
-            }
-            (None, None, None, None, Some(k), Some(v)) => {
+            (Some(pp_k), Some(pp_v), _, _) => (Some(pp_k), Some(pp_v)),
+            (None, None, Some(k), Some(v)) => {
                 warn!(
                     "'key-name' and 'key-version' are deprecated. Please use \
-                     'pp-settlement-key-name','pp-settlement-key-version', \
-                     'tx-settlement-key-name', and 'tx-settlement-key-version' instead."
+                     'pp-settlement-key-name' and 'pp-settlement-key-version' instead."
                 );
-                (Some(k.clone()), Some(v), Some(k), Some(v))
+                (Some(k), Some(v))
             }
             _ => {
                 return Err(serde::de::Error::custom(
-                    "Either both \
-                     ['pp-settlement-key-name','pp-settlement-key-version','\
-                     tx-settlement-key-name','tx-settlement-key-version'] or 'key-name' and \
-                     'key-version' must be specified",
+                    "Either both ['pp-settlement-key-name','pp-settlement-key-version'] or \
+                     'key-name' and 'key-version' must be specified",
                 ));
             }
         };
@@ -182,8 +157,6 @@ impl<'de> Deserialize<'de> for GcpKmsConfig {
             keyring: d.keyring,
             pp_settlement_key_name,
             pp_settlement_key_version,
-            tx_settlement_key_name,
-            tx_settlement_key_version,
         })
     }
 }

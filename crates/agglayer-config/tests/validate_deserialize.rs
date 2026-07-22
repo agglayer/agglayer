@@ -4,12 +4,18 @@ use agglayer_config::{assert_toml_snapshot, Config};
 use pretty_assertions::assert_eq;
 
 #[test]
-fn empty_rpcs() {
-    let input = "./tests/fixtures/valide_config/empty_rpcs.toml";
+fn removed_sendtx_options_are_rejected() {
+    // `full-node-rpcs`, `l2` and `rate-limiting` only configured the removed
+    // `interop_sendTx` flow. Their removal is a breaking change: configs
+    // still carrying them are rejected at load time.
+    let input = "./tests/fixtures/valide_config/removed_sendtx_options.toml";
 
-    let config = Config::try_load(Path::new(input)).unwrap();
+    let error = Config::try_load(Path::new(input)).unwrap_err();
 
-    assert_toml_snapshot!(config);
+    assert!(
+        error.to_string().contains("unknown field"),
+        "unexpected error: {error}"
+    );
 }
 
 #[test]
