@@ -10,7 +10,7 @@ use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::{
     settlement_task::{
