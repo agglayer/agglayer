@@ -453,7 +453,7 @@ where
             .settlement_service
             .wait_for_settlement(job_id)
             .await
-            .map_err(|error| CertificateStatusError::SettlementError(error.to_string()))?;
+            .map_err(|error| CertificateStatusError::SettlementError(format!("{error:?}")))?;
 
         // Success is the only happy path; revert (and any future outcome) is an
         // error, so we never accidentally settle on a non-success result.
