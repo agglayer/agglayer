@@ -2,8 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use agglayer_storage::tests::mocks::MockStateStore;
 use agglayer_types::{
-    CertificateId, ContractCallOutcome, ContractCallResult, Digest, Nonce, SettlementAttemptNumber,
-    SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash, B256, U256,
+    CertificateId, ContractCallOutcome, ContractCallResult, Digest, Nonce, RpcErrorCode,
+    SettlementAttemptNumber, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
+    B256, U256,
 };
 use alloy::{
     network::EthereumWallet,
@@ -227,7 +228,14 @@ async fn retrieve_fails_when_pending_job_has_no_running_task() {
     );
     let error = result.err().expect("result should be an error");
 
-    assert!(error.to_string().contains("exists without a running task"));
+    // The `RpcErrorCode` tag is the outermost context layer, so `Display`
+    // (`to_string()`) now renders just the tag; the original message is still
+    // in the chain, which the default `Debug` output includes.
+    assert!(format!("{error:?}").contains("exists without a running task"));
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::NoLiveTask)
+    );
 }
 
 #[tokio::test]
@@ -374,6 +382,251 @@ async fn request_new_settlement_records_certificate_link_before_job() {
     assert_eq!(
         ordering.lock().unwrap().as_slice(),
         ["write_link", "write_job"]
+    );
+}
+
+#[tokio::test]
+async fn admin_abort_unknown_job_is_tagged_not_found() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(20);
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    let error = service
+        .admin_abort_task(job_id)
+        .await
+        .expect_err("abort on unknown job should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::NotFound)
+    );
+}
+
+#[tokio::test]
+async fn admin_abort_completed_job_is_tagged_already_completed() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(21);
+    let job = mk_job(21);
+    let result = mk_result(21, ContractCallOutcome::Success);
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(result)));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    let error = service
+        .admin_abort_task(job_id)
+        .await
+        .expect_err("abort on completed job should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::AlreadyCompleted)
+    );
+}
+
+#[tokio::test]
+async fn admin_abort_pending_job_without_task_is_tagged_no_live_task() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(22);
+    let job = mk_job(22);
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    let error = service
+        .admin_abort_task(job_id)
+        .await
+        .expect_err("abort on pending job without a task should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::NoLiveTask)
+    );
+}
+
+#[tokio::test]
+async fn admin_reload_unknown_job_is_tagged_not_found() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(23);
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload on unknown job should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::NotFound)
+    );
+}
+
+#[tokio::test]
+async fn admin_reload_completed_job_is_tagged_already_completed() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(24);
+    let job = mk_job(24);
+    let result = mk_result(24, ContractCallOutcome::Success);
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(result)));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload on completed job should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::AlreadyCompleted)
+    );
+}
+
+#[tokio::test]
+async fn admin_reload_pending_job_without_task_is_tagged_no_live_task() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(25);
+    let job = mk_job(25);
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload on pending job without a task should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::NoLiveTask)
+    );
+}
+
+#[tokio::test]
+async fn admin_reload_with_full_admin_channel_is_tagged_unavailable() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(26);
+
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, _task_control) = TaskControlHandle::new(&service.cancellation_token);
+    while task_control_handle
+        .try_send(TaskAdminCommand::ReloadAndRestart)
+        .is_ok()
+    {}
+    service
+        .task_controls
+        .lock()
+        .await
+        .insert(job_id, task_control_handle);
+
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload with a full admin command channel should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::Unavailable)
+    );
+}
+
+#[tokio::test]
+async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(27);
+    let job = mk_job(27);
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
+    // Drop the receiver side so the admin channel is closed rather than full,
+    // simulating the task completing/dying between the lookup and the send.
+    drop(task_control);
+    service
+        .task_controls
+        .lock()
+        .await
+        .insert(job_id, task_control_handle);
+
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload with a closed admin command channel should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::NoLiveTask)
     );
 }
 
