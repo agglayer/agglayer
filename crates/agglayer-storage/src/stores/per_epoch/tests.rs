@@ -163,6 +163,38 @@ fn add_certificate_writes_proto_bytes_to_epoch_store(
 }
 
 #[rstest]
+fn add_certificate_writes_cursor_index(store: PerEpochStore<PendingStore, StateStore>) {
+    let network = NetworkId::new(1);
+    let height = Height::ZERO;
+    let certificate = Certificate::new_for_test(network, height);
+    let certificate_id = certificate.hash();
+    let pending_store = store.pending_store.clone();
+    let state_store = store.state_store.clone();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+    pending_store
+        .insert_pending_certificate(network, height, &certificate)
+        .unwrap();
+    pending_store
+        .insert_generated_proof(&certificate_id, &Proof::dummy())
+        .unwrap();
+
+    store
+        .add_certificate(certificate_id, agglayer_types::ExecutionMode::Default)
+        .unwrap();
+
+    let header = state_store
+        .get_certificate_header_by_cursor(network, height)
+        .expect("cursor lookup must succeed")
+        .expect("cursor index must be present after add_certificate");
+
+    assert_eq!(header.certificate_id, certificate_id);
+    assert_eq!(header.status, CertificateStatus::Settled);
+}
+
+#[rstest]
 fn get_certificate_at_index_does_not_read_legacy_v0_rows_after_open(
     store: PerEpochStore<PendingStore, StateStore>,
 ) {

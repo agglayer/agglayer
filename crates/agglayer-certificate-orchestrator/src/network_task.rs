@@ -11,8 +11,7 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
-    CertificateId, CertificateStatus, CertificateStatusError, ExecutionMode, Height,
-    LocalNetworkStateData, NetworkId,
+    CertificateId, CertificateStatusError, ExecutionMode, Height, LocalNetworkStateData, NetworkId,
 };
 use arc_swap::ArcSwap;
 use tokio::sync::{mpsc, oneshot};
@@ -404,19 +403,6 @@ where
                                 &self.network_id,
                                 &self.local_state,
                                 bridge_exit_hashes.as_slice(),
-                            )
-                            .map_err(|e| Error::PersistenceError {
-                                certificate_id,
-                                error: e.to_string(),
-                            })?;
-
-                        // Kept as the sole writer of `CertificatePerNetworkColumn`
-                        // (the RPC cursor index): `assign_certificate_to_epoch` set
-                        // the status but not that index.
-                        self.state_store
-                            .update_certificate_header_status(
-                                &certificate_id,
-                                &CertificateStatus::Settled,
                             )
                             .map_err(|e| Error::PersistenceError {
                                 certificate_id,

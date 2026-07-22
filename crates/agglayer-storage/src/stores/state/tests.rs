@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, primitives::Hashable as _, Certificate,
-    CertificateId, CertificateIndex, Digest, EpochNumber, Height, L1WitnessCtx,
+    CertificateId, CertificateIndex, CertificateStatus, Digest, EpochNumber, Height, L1WitnessCtx,
     LocalNetworkStateData, NetworkId, PessimisticRootInput,
 };
 use pessimistic_proof::{
@@ -165,6 +165,33 @@ fn can_retrieve_list_of_network() {
     )
     .expect("Unable to put certificate into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);
+}
+
+#[rstest]
+fn update_status_to_settled_does_not_write_cursor_index(store: StateStore) {
+    let network_id: NetworkId = 1.into();
+    let height = Height::ZERO;
+    let certificate = Certificate::new_for_test(network_id, height);
+    let certificate_id = certificate.hash();
+
+    store
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .unwrap();
+
+    store
+        .update_certificate_header_status(&certificate_id, &CertificateStatus::Settled)
+        .unwrap();
+
+    // After refactor: update_certificate_header_status is status-only.
+    // The cursor index must NOT be written by this function.
+    let result = store
+        .get_certificate_header_by_cursor(network_id, height)
+        .unwrap();
+
+    assert!(
+        result.is_none(),
+        "cursor index must not be written by update_certificate_header_status"
+    );
 }
 
 fn equal_state(lhs: &LocalNetworkStateData, rhs: &LocalNetworkStateData) -> bool {
