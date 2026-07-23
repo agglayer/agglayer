@@ -11,6 +11,7 @@ use agglayer_types::{
 use crate::{
     backup::BackupClient,
     columns::{
+        certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn,
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
@@ -150,6 +151,12 @@ fn insert_certificate_settlement_job_id_allows_missing_job() {
     );
 
     assert_eq!(
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
+            .expect("Unable to read stored value"),
+        Some(certificate_id)
+    );
+
+    assert_eq!(
         db.get::<SettlementJobsColumn>(&job_id)
             .expect("Unable to read stored value"),
         None
@@ -158,7 +165,7 @@ fn insert_certificate_settlement_job_id_allows_missing_job() {
 
 #[test]
 fn insert_certificate_settlement_job_id_returns_value_after_insert() {
-    let (_tmp, _db, store) = setup_store();
+    let (_tmp, db, store) = setup_store();
     let certificate_id = mk_certificate_id(3);
     let job_id = mk_job_id(300);
 
@@ -174,6 +181,12 @@ fn insert_certificate_settlement_job_id_returns_value_after_insert() {
             .get_certificate_settlement_job_id(&certificate_id)
             .expect("read must succeed"),
         Some(job_id)
+    );
+
+    assert_eq!(
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
+            .expect("Unable to read stored value"),
+        Some(certificate_id)
     );
 }
 
@@ -201,6 +214,16 @@ fn insert_certificate_settlement_job_id_duplicate_fails() {
         db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
             .expect("Unable to read stored value"),
         Some(first_job_id)
+    );
+    assert_eq!(
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&first_job_id)
+            .expect("Unable to read stored value"),
+        Some(certificate_id)
+    );
+    assert_eq!(
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&second_job_id)
+            .expect("Unable to read stored value"),
+        None
     );
 }
 

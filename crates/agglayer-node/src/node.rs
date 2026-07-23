@@ -282,6 +282,9 @@ impl Node {
             )
             .await?,
         );
+        agglayer_telemetry::settlement::record_settlement_recovery_skipped_jobs(
+            settlement_service.recovery_skipped_jobs(),
+        );
 
         let (data_sender, data_receiver) = mpsc::channel(
             config

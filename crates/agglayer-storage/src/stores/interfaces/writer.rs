@@ -70,7 +70,8 @@ pub trait StateWriter: Send + Sync {
 
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error>;
 
-    /// Inserts the settlement job id associated with `certificate_id`.
+    /// Inserts the settlement job id associated with `certificate_id`,
+    /// writing the certificate→job and job→certificate mappings atomically.
     ///
     /// This is an insert-only operation and must fail if `certificate_id`
     /// already has a stored settlement job id. The settlement job may be

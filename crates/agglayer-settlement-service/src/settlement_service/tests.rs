@@ -127,6 +127,47 @@ async fn start_scans_jobs_and_skips_completed_ones() {
 }
 
 #[tokio::test]
+async fn start_skips_unloadable_jobs_and_keeps_scanning() {
+    let mut store = MockStateStore::new();
+    let unloadable_job_id = mk_job_id(8);
+    let completed_job_id = mk_job_id(9);
+    let completed_job = mk_job(9);
+    let completed_result = mk_result(9, ContractCallOutcome::Success);
+
+    // The unloadable job comes first: startup must skip it and still
+    // process the following one.
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![unloadable_job_id, completed_job_id]));
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &unloadable_job_id)
+        .return_once(|_| {
+            Err(agglayer_storage::error::Error::UnprocessedAction(
+                "corrupt settlement job row".into(),
+            ))
+        });
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &completed_job_id)
+        .return_once(move |_| Ok(Some(completed_job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &completed_job_id)
+        .return_once(move |_| Ok(Some(completed_result)));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    assert_eq!(service.recovery_skipped_jobs(), 1);
+    assert!(service.task_controls.lock().await.is_empty());
+    assert!(service.result_watchers.lock().await.is_empty());
+}
+
+#[tokio::test]
 async fn retrieve_uses_in_memory_watcher_before_storage() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
