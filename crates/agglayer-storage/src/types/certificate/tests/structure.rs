@@ -45,7 +45,9 @@ fn structure_snapshot() {
     // * It is NOT OK to alter structs in any way, even just by adding a field at
     //   the end.
     match trace() {
-        Ok(registry) => insta::assert_json_snapshot!(&registry),
+        Ok(registry) => {
+            insta::assert_json_snapshot!(&registry);
+        }
         Err(err) => panic!("{err}: {}", err.explanation()),
     }
 }

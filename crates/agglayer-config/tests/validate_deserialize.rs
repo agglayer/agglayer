@@ -1,7 +1,6 @@
 use std::path::Path;
 
-use agglayer_config::Config;
-use insta::assert_toml_snapshot;
+use agglayer_config::{assert_toml_snapshot, Config};
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -10,9 +9,7 @@ fn empty_rpcs() {
 
     let config = Config::try_load(Path::new(input)).unwrap();
 
-    assert_toml_snapshot!(config, {
-        ".storage.*" => agglayer_config::redact_storage_path(),
-    });
+    assert_toml_snapshot!(config);
 }
 
 #[test]
@@ -21,9 +18,7 @@ fn max_rpc_request_size() {
 
     let config = Config::try_load(Path::new(input)).unwrap();
 
-    assert_toml_snapshot!(config, {
-        ".storage.*" => agglayer_config::redact_storage_path(),
-    });
+    assert_toml_snapshot!(config);
 
     assert_eq!(config.rpc.max_request_body_size, 100 * 1024 * 1024);
 }
@@ -34,9 +29,7 @@ fn grpc_max_decoding_message_size() {
 
     let config = Config::try_load(Path::new(input)).unwrap();
 
-    assert_toml_snapshot!(config, {
-        ".storage.*" => agglayer_config::redact_storage_path(),
-    });
+    assert_toml_snapshot!(config);
 
     assert_eq!(config.grpc.max_decoding_message_size, 100 * 1024 * 1024);
 }

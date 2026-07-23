@@ -44,7 +44,7 @@ pub fn main(
         bail!(
             "Provided configuration file path is not a file: {}",
             cfg.display()
-        )
+        );
     };
 
     let global_cancellation_token = cancellation_token.unwrap_or_default();
