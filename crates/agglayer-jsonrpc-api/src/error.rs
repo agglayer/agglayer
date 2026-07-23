@@ -2,41 +2,12 @@
 
 use agglayer_rate_limiting::RateLimited as RateLimitedError;
 use agglayer_rpc::CertificateSubmissionError;
+use agglayer_types::RpcErrorCode;
 use alloy::primitives::B256;
 use jsonrpsee::types::error::ErrorObjectOwned;
 use serde::Serialize;
 
 use crate::service::{self, SendTxError, TxStatusError};
-
-/// JsonRPC error codes.
-pub mod code {
-    /// Rollup is not registered.
-    pub const ROLLUP_NOT_REGISTERED: i32 = -10001;
-
-    /// Rollup signature verification failure.
-    pub const SIGNATURE_MISMATCH: i32 = -10002;
-
-    /// Proof or state validation failed.
-    pub const VALIDATION_FAILURE: i32 = -10003;
-
-    /// L1 settlement failure.
-    pub const SETTLEMENT_ERROR: i32 = -10004;
-
-    /// Transaction status retrieval error.
-    pub const STATUS_ERROR: i32 = -10005;
-
-    /// Error submitting a certificate.
-    pub const SEND_CERTIFICATE: i32 = -10006;
-
-    /// Transaction settlement has been rate limited.
-    pub const RATE_LIMITED: i32 = -10007;
-
-    /// Resource not found.
-    pub const RESOURCE_NOT_FOUND: i32 = -10008;
-
-    /// Method permanently disabled.
-    pub const METHOD_DISABLED: i32 = -10009;
-}
 
 #[derive(PartialEq, Eq, Serialize, Debug, Clone, thiserror::Error)]
 #[serde(rename_all = "kebab-case")]
@@ -165,15 +136,15 @@ impl Error {
         match self {
             Self::InvalidArgument(_) => jsonrpsee::types::error::INVALID_PARAMS_CODE,
             Self::Internal(_) => jsonrpsee::types::error::INTERNAL_ERROR_CODE,
-            Self::ResourceNotFound { .. } => code::RESOURCE_NOT_FOUND,
-            Self::RollupNotRegistered { .. } => code::ROLLUP_NOT_REGISTERED,
-            Self::SignatureMismatch { .. } => code::SIGNATURE_MISMATCH,
-            Self::Validation(_) => code::VALIDATION_FAILURE,
-            Self::Settlement(_) => code::SETTLEMENT_ERROR,
-            Self::Status(_) => code::STATUS_ERROR,
-            Self::SendCertificate { .. } => code::SEND_CERTIFICATE,
-            Self::RateLimited { .. } => code::RATE_LIMITED,
-            Self::MethodDisabled { .. } => code::METHOD_DISABLED,
+            Self::ResourceNotFound { .. } => RpcErrorCode::NotFound.code(),
+            Self::RollupNotRegistered { .. } => RpcErrorCode::RollupNotRegistered.code(),
+            Self::SignatureMismatch { .. } => RpcErrorCode::SignatureMismatch.code(),
+            Self::Validation(_) => RpcErrorCode::ValidationFailure.code(),
+            Self::Settlement(_) => RpcErrorCode::SettlementError.code(),
+            Self::Status(_) => RpcErrorCode::StatusError.code(),
+            Self::SendCertificate { .. } => RpcErrorCode::SendCertificate.code(),
+            Self::RateLimited { .. } => RpcErrorCode::RateLimited.code(),
+            Self::MethodDisabled { .. } => RpcErrorCode::MethodDisabled.code(),
         }
     }
 }
