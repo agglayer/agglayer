@@ -6,7 +6,8 @@
 /// reaction; do not add a variant without one. The `-10001..=-10009` range
 /// predates this rule: those variants mirror the historical public-API codes
 /// verbatim for wire compatibility.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, thiserror::Error)]
+#[serde(rename_all = "kebab-case")]
 #[repr(i32)]
 pub enum RpcErrorCode {
     /// Rollup is not registered.

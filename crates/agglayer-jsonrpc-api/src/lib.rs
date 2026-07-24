@@ -31,6 +31,7 @@ mod error;
 pub mod kernel;
 mod rpc_middleware;
 pub mod service;
+mod settlement_admin;
 mod signed_tx;
 mod zkevm_node_client;
 

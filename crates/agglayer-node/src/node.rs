@@ -283,6 +283,8 @@ impl Node {
             .await?,
         );
 
+        let settlement_service_for_admin = (*settlement_service).clone();
+
         let (data_sender, data_receiver) = mpsc::channel(
             config
                 .certificate_orchestrator
@@ -323,6 +325,7 @@ impl Node {
             state_store.clone(),
             debug_store.clone(),
             config.clone(),
+            settlement_service_for_admin,
         )
         .start()
         .await
