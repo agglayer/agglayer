@@ -1,0 +1,14 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/settlement_admin.rs
+expression: error
+---
+{
+  "code": -10010,
+  "data": {
+    "classified": {
+      "code": "already-completed",
+      "message": "already completed\n\nCaused by:\n    settlement job 00000000000000000000000003 already completed\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:265:28"
+    }
+  },
+  "message": "already completed\n\nCaused by:\n    settlement job 00000000000000000000000003 already completed\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:265:28"
+}

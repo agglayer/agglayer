@@ -1,0 +1,14 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/settlement_admin.rs
+expression: error
+---
+{
+  "code": -10008,
+  "data": {
+    "classified": {
+      "code": "not-found",
+      "message": "not found\n\nCaused by:\n    no settlement job found for id 00000000000000000000000001\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:260:20"
+    }
+  },
+  "message": "not found\n\nCaused by:\n    no settlement job found for id 00000000000000000000000001\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:260:20"
+}
