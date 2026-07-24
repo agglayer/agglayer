@@ -122,6 +122,10 @@ pub enum Error {
     #[error("The {method} method is disabled")]
     MethodDisabled { method: &'static str },
 
+    #[error("{message}")]
+    #[serde(rename_all = "kebab-case")]
+    Classified { code: RpcErrorCode, message: String },
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -145,6 +149,7 @@ impl Error {
             Self::SendCertificate { .. } => RpcErrorCode::SendCertificate.code(),
             Self::RateLimited { .. } => RpcErrorCode::RateLimited.code(),
             Self::MethodDisabled { .. } => RpcErrorCode::MethodDisabled.code(),
+            Self::Classified { code, .. } => code.code(),
         }
     }
 }

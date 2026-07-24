@@ -90,3 +90,30 @@ fn display_and_tag_are_pinned() {
         assert_eq!(code.code(), expected_code);
     }
 }
+
+#[test]
+fn serialization_matches_tag() {
+    let codes = [
+        RpcErrorCode::RollupNotRegistered,
+        RpcErrorCode::SignatureMismatch,
+        RpcErrorCode::ValidationFailure,
+        RpcErrorCode::SettlementError,
+        RpcErrorCode::StatusError,
+        RpcErrorCode::SendCertificate,
+        RpcErrorCode::RateLimited,
+        RpcErrorCode::NotFound,
+        RpcErrorCode::MethodDisabled,
+        RpcErrorCode::AlreadyCompleted,
+        RpcErrorCode::NotCompleted,
+        RpcErrorCode::NoLiveTask,
+        RpcErrorCode::TaskStillLive,
+        RpcErrorCode::Unavailable,
+    ];
+
+    for code in codes {
+        assert_eq!(
+            serde_json::to_value(code).unwrap(),
+            serde_json::json!(code.tag())
+        );
+    }
+}

@@ -1,0 +1,14 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/settlement_admin.rs
+expression: error
+---
+{
+  "code": -10012,
+  "data": {
+    "classified": {
+      "code": "no-live-task",
+      "message": "no live task\n\nCaused by:\n    no live settlement task for pending job 00000000000000000000000005\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:267:25"
+    }
+  },
+  "message": "no live task\n\nCaused by:\n    no live settlement task for pending job 00000000000000000000000005\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:267:25"
+}

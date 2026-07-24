@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_settlement_service::SettlementService;
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
+    SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+    UpdateStatusToCandidate,
 };
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    CertificateStatusError, Digest, Height, NetworkId, SettlementTxHash, U256,
+    CertificateStatusError, Digest, Height, NetworkId, SettlementJobId, SettlementTxHash, U256,
 };
+use alloy::providers::{Provider, WalletProvider};
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pessimistic_proof::local_balance_tree::BalanceTree;
 use serde::{Deserialize, Serialize};
@@ -19,7 +22,7 @@ use tracing::{error, info, instrument, warn};
 use unified_bridge::TokenInfo;
 
 use super::error::RpcResult;
-use crate::{error::Error, rpc_middleware, JsonRpcService};
+use crate::{error::Error, rpc_middleware, settlement_admin::map_admin_error, JsonRpcService};
 
 /// Controls whether the certificate is immediately submitted for reprocessing
 /// after edits are applied.
@@ -198,18 +201,58 @@ pub(crate) trait AdminAgglayer {
     async fn disable_network(&self, network_id: NetworkId) -> RpcResult<()>;
     #[method(name = "enableNetwork")]
     async fn enable_network(&self, network_id: NetworkId) -> RpcResult<()>;
+
+    /// Stop the in-memory settlement task for a job.
+    ///
+    /// **JSON-RPC method:** `admin_abortSettlementTask`
+    ///
+    /// This is runtime-only: the stored job remains pending and is untouched.
+    /// There is no respawn in this stack, so recovery is a node restart;
+    /// startup recovery respawns pending jobs. Aborting a job whose waiter is
+    /// live makes its certificate `InError` while the job can still settle
+    /// after restart. That certificate-status/storage divergence must be
+    /// reconciled manually by the operator.
+    ///
+    /// # Errors
+    ///
+    /// Unknown job IDs return `RpcErrorCode::NotFound`'s code; completed jobs
+    /// return `RpcErrorCode::AlreadyCompleted`'s code; pending jobs without a
+    /// task return `RpcErrorCode::NoLiveTask`'s code; and a full task command
+    /// queue returns `RpcErrorCode::Unavailable`'s code.
+    #[method(name = "abortSettlementTask")]
+    async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Make a live settlement task reload its state from storage.
+    ///
+    /// **JSON-RPC method:** `admin_reloadSettlementTask`
+    ///
+    /// The task drops its in-memory state and reloads from storage. It
+    /// requires a live task, and is the escape hatch when a later mutation
+    /// reports `liveTask` other than `notified`.
+    ///
+    /// # Errors
+    ///
+    /// Unknown job IDs return `RpcErrorCode::NotFound`'s code; completed jobs
+    /// return `RpcErrorCode::AlreadyCompleted`'s code; pending jobs without a
+    /// task return `RpcErrorCode::NoLiveTask`'s code; and a full task command
+    /// queue returns `RpcErrorCode::Unavailable`'s code.
+    #[method(name = "reloadSettlementTask")]
+    async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 }
 
 /// The Admin RPC agglayer service implementation.
-pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
+    settlement_service: SettlementService<L1Provider, StateStore>,
 }
 
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+impl<PendingStore, StateStore, DebugStore, L1Provider>
+    AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
+{
     /// Create an instance of the admin RPC agglayer service.
     pub fn new(
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
@@ -217,6 +260,7 @@ impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, State
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
+        settlement_service: SettlementService<L1Provider, StateStore>,
     ) -> Self {
         Self {
             certificate_sender,
@@ -224,15 +268,18 @@ impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, State
             state,
             debug_store,
             config,
+            settlement_service,
         }
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider>
+    AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Provider: Provider + WalletProvider + 'static,
 {
     pub async fn start(self) -> eyre::Result<axum::Router> {
         // Create the RPC service
@@ -295,8 +342,8 @@ where
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> Drop
-    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider> Drop
+    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer service");
@@ -304,12 +351,13 @@ impl<PendingStore, StateStore, DebugStore> Drop
 }
 
 #[async_trait]
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerServer
-    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider> AdminAgglayerServer
+    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Provider: Provider + WalletProvider + 'static,
 {
     #[instrument(skip(self))]
     async fn get_token_balance(
@@ -798,5 +846,23 @@ where
             error!(?error, "Failed to enable network {network_id}");
             Error::internal(format!("Unable to enable network {network_id}"))
         })
+    }
+
+    #[instrument(skip(self))]
+    async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!("(ADMIN) Aborting settlement task for job {job_id}");
+        self.settlement_service
+            .admin_abort_task(job_id)
+            .await
+            .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!("(ADMIN) Reloading settlement task for job {job_id}");
+        self.settlement_service
+            .admin_reload_and_restart_task(job_id)
+            .await
+            .map_err(map_admin_error)
     }
 }
