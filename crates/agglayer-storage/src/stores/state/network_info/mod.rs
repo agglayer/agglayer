@@ -12,8 +12,8 @@ use crate::{
     types::network_info::{
         self,
         v0::{
-            network_info_value, LatestPendingCertificateHeight, LatestPendingCertificateInfo,
-            SettledClaim, SettledLocalExitTreeLeafCount, SettledPessimisticProofRoot,
+            network_info_value, PendingCertificateInfo,
+            SettledClaim, LocalExitTreeLeafCount, PessimisticProofRoot,
         },
     },
 };
@@ -28,10 +28,10 @@ impl crate::stores::NetworkInfoReader for StateStore {
             .zip(keys)
             .try_for_each(|(maybe_value, network_info::Key { kind, .. })| {
                 match kind {
-                    network_info_value::ValueDiscriminants::SettledClaim => {
+                    network_info_value::ValueDiscriminants::LatestSettledClaim => {
                         state.settled_claim = expected_type_or_fail!(
                             maybe_value,
-                            network_info::v0::network_info_value::Value::SettledClaim(SettledClaim { global_index: Some(global_index), bridge_exit_hash: Some(bridge_exit_hash) }),
+                            network_info::v0::network_info_value::Value::LatestSettledClaim(SettledClaim { global_index: Some(global_index), bridge_exit_hash: Some(bridge_exit_hash) }),
                             agglayer_types::SettledClaim {
                                 global_index: try_digest!(&*global_index.value, "GlobalIndex")?,
                                 bridge_exit_hash: try_digest!(&*bridge_exit_hash.bridge_exit_hash, "BridgeExitHash")?,
@@ -40,10 +40,10 @@ impl crate::stores::NetworkInfoReader for StateStore {
                              another type"
                         )?;
                     }
-                    network_info_value::ValueDiscriminants::SettledCertificate => {
+                    network_info_value::ValueDiscriminants::LatestSettledCertificate => {
                         let maybe_settled_certificate = expected_type_or_fail!(
                             maybe_value,
-                            network_info::v0::network_info_value::Value::SettledCertificate(
+                            network_info::v0::network_info_value::Value::LatestSettledCertificate(
                                 settled_certificate
                             ),
                             settled_certificate,
@@ -51,8 +51,8 @@ impl crate::stores::NetworkInfoReader for StateStore {
                              type"
                         )?;
 
-                        if let Some(network_info::v0::SettledCertificate {
-                            certificate_id: Some(network_info::v0::SettledCertificateId { id }),
+                        if let Some(network_info::v0::SettledCertificateInfo {
+                            certificate_id: Some(network_info::v0::CertificateId { id }),
                             pp_root,
                             let_leaf_count,
                             ..
@@ -65,11 +65,11 @@ impl crate::stores::NetworkInfoReader for StateStore {
                                 state.settled_certificate_id = Some(certificate_id);
                                 state.settled_height = Some(header.height);
                                 state.settled_ler = Some(header.new_local_exit_root);
-                                if let Some(SettledLocalExitTreeLeafCount {
-                                    settled_let_leaf_count,
+                                if let Some(LocalExitTreeLeafCount {
+                                    let_leaf_count,
                                 }) = let_leaf_count
                                 {
-                                    state.settled_let_leaf_count = Some(settled_let_leaf_count);
+                                    state.settled_let_leaf_count = Some(let_leaf_count);
                                 } else {
                                     return Err(Error::Unexpected(
                                         "Settled certificate is missing the LET leaf count"
@@ -77,7 +77,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                                     ));
                                 }
 
-                                if let Some(SettledPessimisticProofRoot { root }) = pp_root {
+                                if let Some(PessimisticProofRoot { root }) = pp_root {
                                     state.settled_pp_root = Some(try_digest!(&*root, "PessimisticProofRoot")?);
                                 } else {
                                     return Err(Error::Unexpected(
@@ -115,8 +115,8 @@ impl crate::stores::NetworkInfoReader for StateStore {
                         state.latest_pending_height = expected_type_or_fail!(
                             maybe_value,
                             network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
-                                LatestPendingCertificateInfo{
-                                    height: Some(LatestPendingCertificateHeight { height }),
+                                PendingCertificateInfo{
+                                    height: Some(network_info::v0::Height { height }),
                                     ..
                                 },
                             ),
@@ -124,6 +124,10 @@ impl crate::stores::NetworkInfoReader for StateStore {
                             "Wrong value type decoded, was expecting LatestPendingCertificateInfo, decoded \
                              another type"
                         )?
+                    }
+
+                    network_info_value::ValueDiscriminants::LatestProvenCertificateInfo => {
+                        // TODO: Currently not used, will be used in future PRs.
                     }
                 }
 
@@ -144,8 +148,8 @@ impl crate::stores::NetworkInfoReader for StateStore {
                 expected_type_or_fail!(
                     value,
                     network_info::v0::network_info_value::Value::LatestPendingCertificateInfo(
-                        LatestPendingCertificateInfo {
-                            height: Some(LatestPendingCertificateHeight { height }),
+                        PendingCertificateInfo {
+                            height: Some(network_info::v0::Height { height }),
                             ..
                         }
                     ),
@@ -163,20 +167,20 @@ impl crate::stores::NetworkInfoReader for StateStore {
         self.db
             .get::<NetworkInfoColumn>(&network_info::Key {
                 network_id: network_id.to_u32(),
-                kind: network_info_value::ValueDiscriminants::SettledCertificate,
+                kind: network_info_value::ValueDiscriminants::LatestSettledCertificate,
             })
             .map_err(Into::into)
             .and_then(|value| {
                 expected_type_or_fail!(
                     value,
-                    network_info::v0::network_info_value::Value::SettledCertificate(
-                        network_info::v0::SettledCertificate {
-                            certificate_id: Some(network_info::v0::SettledCertificateId { id }),
+                    network_info::v0::network_info_value::Value::LatestSettledCertificate(
+                        network_info::v0::SettledCertificateInfo {
+                            certificate_id: Some(network_info::v0::CertificateId { id }),
                             ..
                         }
                     ),
-                    try_digest!(&*id, "SettledCertificateId")?.into(),
-                    "Wrong value type decoded, was expecting SettledCertificateId, decoded \
+                    try_digest!(&*id, "CertificateId")?.into(),
+                    "Wrong value type decoded, was expecting CertificateId, decoded \
                      another type"
                 )
             })

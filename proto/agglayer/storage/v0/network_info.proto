@@ -8,69 +8,86 @@ message NetworkInfoValue {
   oneof value {
     // The network type
     NetworkType network_type = 1;
+
     // Represents the current settled certificate for a given network.
-    SettledCertificate settled_certificate = 2;
+    SettledCertificateInfo latest_settled_certificate = 2;
+
     // Info about the latest settled claim in the network.
-    SettledClaim settled_claim = 3;
+    SettledClaim latest_settled_claim = 3;
+
     // The latest pending certificate.
-    LatestPendingCertificateInfo latest_pending_certificate_info = 4;
+    PendingCertificateInfo latest_pending_certificate_info = 4;
+
+    // The latest proven certificate.
+    ProvenCertificateInfo latest_proven_certificate_info = 5;
   }
 }
 
 // Represents the current settled certificate for a given network.
-message SettledCertificate {
+message SettledCertificateInfo {
   // The ID of the latest settled certificate.
-  SettledCertificateId certificate_id = 1;
+  CertificateId certificate_id = 1;
+
   // The pessimistic proof root of the latest settled certificate.
-  SettledPessimisticProofRoot pp_root = 2;
+  PessimisticProofRoot pp_root = 2;
+
   // The leaf count of the latest settled local exit tree.
-  SettledLocalExitTreeLeafCount let_leaf_count = 3;
+  LocalExitTreeLeafCount let_leaf_count = 3;
+
   // The local exit root of the latest settled certificate.
-  SettledLocalExitRoot ler = 4;
+  LocalExitRoot ler = 4;
+
+  // The height of the latest settled certificate.
+  Height height = 5;
+
+  // The epoch number in which the latest settled certificate was settled.
+  EpochNumber epoch = 6;
+
+  // The index of the certificate in the epoch.
+  CertificateIndexInEpoch index_in_epoch = 7;
 }
 
 // The network type
 enum NetworkType {
   // Unspecified network type.
   NETWORK_TYPE_UNSPECIFIED = 0;
+
   // ECDSA-based network type.
   NETWORK_TYPE_ECDSA = 1;
+
   // Generic network type.
   NETWORK_TYPE_GENERIC = 2;
+
   /// Multisig-only network type.
   NETWORK_TYPE_MULTISIG_ONLY = 3;
+
   /// Multisig and aggchain proof network type.
   NETWORK_TYPE_MULTISIG_AND_AGGCHAIN_PROOF = 4;
 }
 
-// SettledCertificateId represents the ID of the latest settled certificate.
-message SettledCertificateId {
-  // The certificate ID in bytes
-  bytes id = 1;
-}
-
 // The pessimistic proof root of the latest settled certificate.
-message SettledPessimisticProofRoot {
+message PessimisticProofRoot {
   // The root hash
   bytes root = 1;
 }
 
 // The local exit root of the latest settled certificate.
-message SettledLocalExitRoot {
+message LocalExitRoot {
   // The root hash
   bytes root = 1;
 }
 
 // The leaf count of the latest settled local exit tree.
-message SettledLocalExitTreeLeafCount {
+message LocalExitTreeLeafCount {
   // The leaf count
-  uint64 settled_let_leaf_count = 1;
+  uint64 let_leaf_count = 1;
 }
 
 // Info about the latest settled claim in the network.
 message SettledClaim {
   // Global index, indicating uniquely which tree leaf is claimed.
   GlobalIndex global_index = 1;
+
   // Hash of the claimed imported bridge exit.
   BridgeExitHash bridge_exit_hash = 2;
 }
@@ -88,21 +105,43 @@ message BridgeExitHash {
 }
 
 // The latest pending certificate.
-message LatestPendingCertificateInfo {
+message PendingCertificateInfo {
   // The actual certificate height that is in pending
-  LatestPendingCertificateHeight height = 1;
+  Height height = 1;
+
   // The ID of the latest pending certificate.
-  LatestPendingCertificateId id = 2;
+  CertificateId id = 2;
 }
 
-// The actual certificate height that is in pending
-message LatestPendingCertificateHeight {
+// The latest proven certificate.
+message ProvenCertificateInfo {
+  // The actual certificate height that is proven
+  Height height = 1;
+
+  // The ID of the latest proven certificate.
+  CertificateId id = 2;
+}
+
+// The actual certificate height
+message Height {
   // The height
   uint64 height = 1;
 }
 
-// The ID of the latest pending certificate.
-message LatestPendingCertificateId {
+// The epoch number
+message EpochNumber {
+  // The epoch number
+  uint64 epoch_number = 1;
+}
+
+// The index of the certificate in the epoch.
+message CertificateIndexInEpoch {
+  // The index in the epoch
+  uint64 index = 1;
+}
+
+// The ID of a certificate.
+message CertificateId {
   // The certificate ID in bytes
   bytes id = 1;
 }
