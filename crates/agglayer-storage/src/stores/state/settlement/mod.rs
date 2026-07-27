@@ -1,15 +1,17 @@
 use agglayer_types::{
-    Address, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
-    SettlementJobResult,
+    Address, CertificateId, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob,
+    SettlementJobId, SettlementJobResult,
 };
 use rocksdb::{Direction, WriteBatch};
 
 use super::StateStore;
 use crate::{
     columns::{
+        certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn,
         settlement_attempt_per_wallet::SettlementAttemptPerWalletColumn,
         settlement_attempt_results::SettlementAttemptResultsColumn,
         settlement_attempts::SettlementAttemptsColumn,
+        settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
     },
     error::Error,
@@ -147,6 +149,53 @@ impl SettlementWriter for StateStore {
             Ok(self
                 .db
                 .put::<SettlementJobsColumn>(settlement_job_id, &settlement_job)?)
+        })
+    }
+
+    fn insert_settlement_job_with_certificate(
+        &self,
+        settlement_job_id: &SettlementJobId,
+        settlement_job: &SettlementJob,
+        certificate_id: &CertificateId,
+    ) -> Result<(), Error> {
+        let settlement_job: v0::SettlementJob = settlement_job.into();
+
+        self.with_settlement_write_lock(settlement_job_id, || {
+            if self
+                .db
+                .get::<SettlementJobsColumn>(settlement_job_id)?
+                .is_some()
+            {
+                return Err(Error::UnprocessedAction(format!(
+                    "Settlement job already exists for id {settlement_job_id}"
+                )));
+            }
+            if self
+                .db
+                .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
+                .is_some()
+            {
+                return Err(Error::UnprocessedAction(format!(
+                    "Certificate {certificate_id} already has a settlement job id"
+                )));
+            }
+
+            let mut batch = WriteBatch::default();
+            self.db.multi_insert_batch::<SettlementJobsColumn>(
+                [(settlement_job_id, &settlement_job)],
+                &mut batch,
+            )?;
+            self.db
+                .multi_insert_batch::<SettlementJobIdPerCertificateIdColumn>(
+                    [(certificate_id, settlement_job_id)],
+                    &mut batch,
+                )?;
+            self.db
+                .multi_insert_batch::<CertificateIdPerSettlementJobIdColumn>(
+                    [(settlement_job_id, certificate_id)],
+                    &mut batch,
+                )?;
+            Ok(self.db.write_batch(batch)?)
         })
     }
 
