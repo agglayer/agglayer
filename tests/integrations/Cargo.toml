@@ -44,7 +44,7 @@ agglayer-aggregator-notifier = { workspace = true, features = ["testutils"] }
 agglayer-certificate-orchestrator = { workspace = true, features = ["testutils"] }
 agglayer-clock.workspace = true
 agglayer-config.workspace = true
-agglayer-contracts = { workspace = true, features = ["testutils"] }
+agglayer-contracts.workspace = true
 agglayer-node.workspace = true
 agglayer-settlement-service = { workspace = true, features = ["testutils"] }
 agglayer-signer.workspace = true

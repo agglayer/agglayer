@@ -498,7 +498,6 @@ async fn load_returns_completed_settlement_job() {
     let job_id = mk_job_id(5);
     let job = mk_job();
     let job_result = mk_job_result(6, ContractCallOutcome::Success);
-    let expected_job = job.clone();
     let expected_job_result = job_result.clone();
 
     store
@@ -526,8 +525,7 @@ async fn load_returns_completed_settlement_job() {
     .expect("completed settlement job should load");
 
     match loaded {
-        StoredSettlementJob::Completed(loaded_job, loaded_result) => {
-            assert_eq!(loaded_job, expected_job);
+        StoredSettlementJob::Completed(loaded_result) => {
             assert_eq!(loaded_result, expected_job_result);
         }
         StoredSettlementJob::Pending(_) => {
