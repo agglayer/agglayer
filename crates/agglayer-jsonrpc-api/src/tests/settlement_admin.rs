@@ -11,6 +11,40 @@ use jsonrpsee::{
 
 use crate::testutils::TestContext;
 
+fn normalize_report_locations(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(message) => {
+            const LOCATION_PREFIX: &str = "\n\nLocation:\n    ";
+
+            let Some((chain, location)) = message.rsplit_once(LOCATION_PREFIX) else {
+                return;
+            };
+            let Some((path_and_line, column)) = location.rsplit_once(':') else {
+                return;
+            };
+            let Some((path, line)) = path_and_line.rsplit_once(':') else {
+                return;
+            };
+            if line.parse::<u32>().is_err() || column.parse::<u32>().is_err() {
+                return;
+            }
+
+            *message = format!("{chain}{LOCATION_PREFIX}{path}:<line>:<column>");
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                normalize_report_locations(value);
+            }
+        }
+        serde_json::Value::Object(fields) => {
+            for value in fields.values_mut() {
+                normalize_report_locations(value);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn settlement_job() -> SettlementJob {
     SettlementJob {
         contract_address: Address::from([0x12; 20]),
@@ -45,11 +79,12 @@ fn call_error(result: Result<(), ClientError>, expected: RpcErrorCode) -> String
     let data: Option<serde_json::Value> = error
         .data()
         .map(|data| serde_json::from_str(data.get()).unwrap());
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "code": error.code(),
         "message": error.message(),
         "data": data,
     });
+    normalize_report_locations(&mut payload);
     serde_json::to_string_pretty(&payload).unwrap()
 }
 
