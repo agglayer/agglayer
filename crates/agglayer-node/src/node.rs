@@ -272,7 +272,7 @@ impl Node {
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
 
         let settlement_config = Arc::new(config.settlement.pessimistic_proof_tx_config.clone());
-        let settlement_service = Arc::new(
+        let (settlement_service, recovery_skipped_jobs) =
             agglayer_settlement_service::SettlementService::start(
                 config.settlement.settlement_service_config.clone(),
                 settlement_config.clone(),
@@ -280,10 +280,10 @@ impl Node {
                 state_store.clone(),
                 cancellation_token.clone(),
             )
-            .await?,
-        );
+            .await?;
+        let settlement_service = Arc::new(settlement_service);
         agglayer_telemetry::settlement::record_settlement_recovery_skipped_jobs(
-            settlement_service.recovery_skipped_jobs(),
+            recovery_skipped_jobs,
         );
 
         let (data_sender, data_receiver) = mpsc::channel(

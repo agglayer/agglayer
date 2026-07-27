@@ -66,6 +66,7 @@ async fn mk_service_with_token(
     )
     .await
     .expect("settlement service should start")
+    .0
 }
 
 fn mk_job_id(seed: u128) -> SettlementJobId {
@@ -160,9 +161,17 @@ async fn start_skips_unloadable_jobs_and_keeps_scanning() {
         .withf(move |requested_job_id| requested_job_id == &completed_job_id)
         .return_once(move |_| Ok(Some(completed_result)));
 
-    let service = mk_service(Arc::new(store)).await;
+    let (service, recovery_skipped_jobs) = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider()),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start");
 
-    assert_eq!(service.recovery_skipped_jobs(), 1);
+    assert_eq!(recovery_skipped_jobs, 1);
     assert!(service.task_controls.lock().await.is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
 }
@@ -411,7 +420,8 @@ async fn request_new_settlement_records_certificate_link_before_job() {
         cancellation_token.clone(),
     )
     .await
-    .expect("settlement service should start");
+    .expect("settlement service should start")
+    .0;
 
     let watcher = service
         .request_new_settlement(Some(certificate_id), job)

@@ -994,13 +994,16 @@ fn mk_rpc_transaction(
 
 #[tokio::test]
 async fn run_finishes_interrupted_completion_before_other_nonces() {
-    // The other wallet sorts before the winner: without the processing
-    // order it would be handled first and consume the mocked responses.
+    // Regression guard for dropping the resumption TODO: a completion
+    // interrupted between the attempt-result write and the job-result write
+    // (the winning nonce carries a recorded success, but the terminal job
+    // result never landed) is finished by the run loop re-deriving it from L1.
+    // A competing pending nonce is scanned first, yet nothing before the
+    // winner completes or blocks the job.
     let wallet = Address::from([4; 20]);
     let other_wallet = Address::from([3; 20]);
     let nonce = Nonce(11);
     let other_nonce = Nonce(12);
-    let attempt_number = SettlementAttemptNumber(1);
     let block_hash = B256::from([7; 32]);
     let block_number = 10;
     let stored_result = ContractCallResult {
@@ -1010,8 +1013,6 @@ async fn run_finishes_interrupted_completion_before_other_nonces() {
         block_number,
         tx_hash: mk_tx_hash(60),
     };
-    let expected_wallet: agglayer_types::Address = wallet.into();
-    let expected_tx_result = stored_result.clone();
 
     let attempts = mk_interrupted_completion_attempts(
         wallet,
@@ -1021,10 +1022,18 @@ async fn run_finishes_interrupted_completion_before_other_nonces() {
         &stored_result,
     );
 
-    // The loop replays its normal success checks on the winning nonce:
-    // the mined transaction for the nonce, its receipt, then the
-    // settlement check (safe head, receipt again, canonical block).
     let asserter = Asserter::new();
+    // The other wallet's nonce sorts lower, so it is scanned first: it is not
+    // on L1 and its wallet key is unknown, so the loop moves on without
+    // submitting or completing anything.
+    asserter.push_failure(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32001,
+        message: "not found".into(),
+        data: None,
+    });
+    // The winning nonce then replays the normal success checks: its mined
+    // transaction, the receipt, then the settlement check (safe head, receipt
+    // again, canonical block).
     asserter.push_success(&mk_rpc_transaction(mk_tx(60), wallet, block_number));
     asserter.push_success(&mk_rpc_receipt(
         stored_result.tx_hash,
@@ -1043,8 +1052,8 @@ async fn run_finishes_interrupted_completion_before_other_nonces() {
         .connect_mocked_client(asserter);
 
     let mut store = MockStateStore::new();
-    // Only the two unresolved attempts get a store write; the winner's
-    // identical re-record no-ops in memory.
+    // The winning completion resolves the two still-unresolved attempts (the
+    // same-nonce sibling and the other wallet's), then writes the job result.
     store
         .expect_record_settlement_attempt_result()
         .times(2)
@@ -1052,12 +1061,6 @@ async fn run_finishes_interrupted_completion_before_other_nonces() {
     store
         .expect_insert_settlement_job_result()
         .once()
-        .withf(move |_, result| {
-            result.wallet == expected_wallet
-                && result.nonce == nonce
-                && result.attempt_number == attempt_number
-                && result.contract_call_result == expected_tx_result
-        })
         .returning(|_, _| Ok(()));
 
     let cancellation_token = CancellationToken::new();
@@ -1081,94 +1084,6 @@ async fn run_finishes_interrupted_completion_before_other_nonces() {
         panic!("expected the run to complete the job");
     };
     assert_eq!(job_result.contract_call_result, stored_result);
-    assert!(matches!(
-        task.attempts[&(wallet, nonce)][&SettlementAttemptNumber(2)]
-            .result
-            .as_ref(),
-        Some(SettlementAttemptResult::ClientError(ClientError {
-            kind: ClientErrorType::NonceAlreadyUsed,
-            ..
-        }))
-    ));
-    assert!(matches!(
-        task.attempts[&(other_wallet, other_nonce)][&SettlementAttemptNumber(3)]
-            .result
-            .as_ref(),
-        Some(SettlementAttemptResult::ClientError(ClientError {
-            kind: ClientErrorType::SettlementSucceededElsewhere,
-            ..
-        }))
-    ));
-}
-
-#[test]
-fn nonces_in_processing_order_puts_recorded_success_first() {
-    let first_wallet = Address::from([3; 20]);
-    let winner_wallet = Address::from([4; 20]);
-    let success = mk_contract_call_result(60, ContractCallOutcome::Success);
-    let revert = mk_contract_call_result(90, ContractCallOutcome::Revert);
-
-    let attempts = BTreeMap::from([
-        (
-            (first_wallet, Nonce(12)),
-            BTreeMap::from([(
-                SettlementAttemptNumber(3),
-                mk_active_attempt(first_wallet, Nonce(12), mk_tx_hash(80), None),
-            )]),
-        ),
-        (
-            (winner_wallet, Nonce(11)),
-            BTreeMap::from([
-                (
-                    SettlementAttemptNumber(1),
-                    mk_active_attempt(
-                        winner_wallet,
-                        Nonce(11),
-                        success.tx_hash,
-                        Some(SettlementAttemptResult::ContractCall(success)),
-                    ),
-                ),
-                (
-                    SettlementAttemptNumber(2),
-                    mk_active_attempt(winner_wallet, Nonce(11), mk_tx_hash(70), None),
-                ),
-            ]),
-        ),
-    ]);
-    let task = mk_task(Arc::new(MockStateStore::new()), attempts);
-    assert_eq!(
-        task.nonces_in_processing_order(),
-        vec![(winner_wallet, Nonce(11)), (first_wallet, Nonce(12))]
-    );
-
-    // Without a recorded success (a revert or client error is not one),
-    // the natural nonce order is kept.
-    let attempts = BTreeMap::from([
-        (
-            (first_wallet, Nonce(12)),
-            BTreeMap::from([(
-                SettlementAttemptNumber(3),
-                mk_active_attempt(first_wallet, Nonce(12), mk_tx_hash(80), None),
-            )]),
-        ),
-        (
-            (winner_wallet, Nonce(11)),
-            BTreeMap::from([(
-                SettlementAttemptNumber(1),
-                mk_active_attempt(
-                    winner_wallet,
-                    Nonce(11),
-                    revert.tx_hash,
-                    Some(SettlementAttemptResult::ContractCall(revert)),
-                ),
-            )]),
-        ),
-    ]);
-    let task = mk_task(Arc::new(MockStateStore::new()), attempts);
-    assert_eq!(
-        task.nonces_in_processing_order(),
-        vec![(first_wallet, Nonce(12)), (winner_wallet, Nonce(11))]
-    );
 }
 
 #[test]

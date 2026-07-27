@@ -544,7 +544,7 @@ impl<
             let mut not_included_on_l1 = BTreeSet::new();
             let mut all_nonces_seen_on_l1 = true;
             let mut need_to_submit_attempt_with_new_nonce = true;
-            'nonces: for (wallet, nonce) in self.nonces_in_processing_order() {
+            'nonces: for (wallet, nonce) in self.all_used_nonces() {
                 if let Some(run_result) = self.try_handle_control_action() {
                     return run_result;
                 }
@@ -1692,33 +1692,6 @@ impl<
         recorded_attempt_count
     }
 
-    /// Nonces in run-loop processing order: nonces carrying a recorded
-    /// successful attempt result come first.
-    ///
-    /// Such a result is only written after settlement-policy confirmation,
-    /// so at most the terminal job-result write is missing (a crash between
-    /// the completion writes). Handling that nonce first lets the loop finish
-    /// the interrupted completion through its normal L1 checks before any
-    /// other nonce can submit a new transaction; re-recorded completion
-    /// writes are idempotent no-ops. Interrupted revert completions need no
-    /// ordering: they re-derive from L1 wherever the loop starts.
-    fn nonces_in_processing_order(&self) -> Vec<(Address, Nonce)> {
-        let has_recorded_success = |key: &(Address, Nonce)| {
-            self.attempts[key].values().any(|attempt| {
-                matches!(
-                    attempt.result.as_ref(),
-                    Some(SettlementAttemptResult::ContractCall(result))
-                        if result.outcome == ContractCallOutcome::Success
-                )
-            })
-        };
-        let (successes, others): (Vec<_>, Vec<_>) = self
-            .all_used_nonces()
-            .into_iter()
-            .partition(has_recorded_success);
-        [successes, others].concat()
-    }
-
     async fn write_job_result_to_db(
         &mut self,
         wallet: Address,
@@ -1726,6 +1699,9 @@ impl<
         attempt_number: SettlementAttemptNumber,
         tx_result: ContractCallResult,
     ) -> SettlementJobResult {
+        // Attempt results are persisted before this terminal job result; if the
+        // process stops in between, the next startup's run loop re-derives the
+        // completion from L1 and finishes it here — no special resumption needed.
         self.record_attempt_result_to_db(
             attempt_number,
             SettlementAttemptResult::ContractCall(tx_result.clone()),

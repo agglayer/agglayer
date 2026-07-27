@@ -42,7 +42,6 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     /// concurrent settlement tasks.
     /// XREF: https://github.com/agglayer/agglayer/issues/1597
     wallet_nonce_locks: Arc<WalletNonceLocks>,
-    recovery_skipped_jobs: u64,
 }
 
 pub struct SettlementJobWatcher {
@@ -90,8 +89,8 @@ impl<
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
         cancellation_token: CancellationToken,
-    ) -> eyre::Result<Self> {
-        let mut this = Self {
+    ) -> eyre::Result<(Self, u64)> {
+        let this = Self {
             tx_config,
             provider,
             store,
@@ -99,20 +98,11 @@ impl<
             task_controls: Arc::new(Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
             wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
-            recovery_skipped_jobs: 0,
         };
-        this.recovery_skipped_jobs = this.resume_pending_settlement_jobs().await?;
-        Ok(this)
+        let recovery_skipped_jobs = this.resume_pending_settlement_jobs().await?;
+        Ok((this, recovery_skipped_jobs))
     }
 
-    /// Number of settlement jobs the startup recovery scan skipped because
-    /// they could not be loaded. The node records this as a metric; the
-    /// service crate stays free of the telemetry dependency.
-    pub fn recovery_skipped_jobs(&self) -> u64 {
-        self.recovery_skipped_jobs
-    }
-
-    /// Returns the number of jobs skipped because they could not be loaded.
     #[tracing::instrument(skip_all)]
     async fn resume_pending_settlement_jobs(&self) -> eyre::Result<u64> {
         // TODO: Avoid scanning the whole settlement jobs CF on every startup.
