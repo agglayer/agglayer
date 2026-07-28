@@ -419,7 +419,6 @@ dependencies = [
  "axum 0.8.8",
  "buildstructor 0.6.0",
  "eyre",
- "fail",
  "futures",
  "hex",
  "http 1.4.0",
