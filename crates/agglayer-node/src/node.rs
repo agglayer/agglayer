@@ -198,11 +198,6 @@ impl Node {
         };
 
         tracing::debug!("RPC provider created");
-        let settle_cert_config = config
-            .outbound
-            .as_ref()
-            .map(|outbound| outbound.rpc.settle_cert.clone())
-            .unwrap_or_default();
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
                 rpc_pp_settlement.clone(),
@@ -211,14 +206,6 @@ impl Node {
                     (*rpc_pp_settlement).clone(),
                 ),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
-                settle_cert_config.gas_multiplier_factor,
-                {
-                    let gas_config = &settle_cert_config.gas_price;
-                    agglayer_contracts::GasPriceParams::new(
-                        gas_config.multiplier.as_u64_per_1000(),
-                        gas_config.floor..=gas_config.ceiling,
-                    )?
-                },
                 config.l1.event_filter_block_range.get(),
             )
             .await?,

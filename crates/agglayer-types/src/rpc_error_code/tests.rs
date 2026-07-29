@@ -4,46 +4,10 @@ use super::*;
 fn display_and_tag_are_pinned() {
     let cases = [
         (
-            RpcErrorCode::RollupNotRegistered,
-            "rollup not registered",
-            "rollup-not-registered",
-            -10001,
-        ),
-        (
-            RpcErrorCode::SignatureMismatch,
-            "signature mismatch",
-            "signature-mismatch",
-            -10002,
-        ),
-        (
-            RpcErrorCode::ValidationFailure,
-            "validation failure",
-            "validation-failure",
-            -10003,
-        ),
-        (
-            RpcErrorCode::SettlementError,
-            "settlement error",
-            "settlement-error",
-            -10004,
-        ),
-        (
-            RpcErrorCode::StatusError,
-            "status error",
-            "status-error",
-            -10005,
-        ),
-        (
             RpcErrorCode::SendCertificate,
             "certificate submission failed",
             "send-certificate",
             -10006,
-        ),
-        (
-            RpcErrorCode::RateLimited,
-            "rate limited",
-            "rate-limited",
-            -10007,
         ),
         (RpcErrorCode::NotFound, "not found", "not-found", -10008),
         (
@@ -94,13 +58,7 @@ fn display_and_tag_are_pinned() {
 #[test]
 fn serialization_matches_tag() {
     let codes = [
-        RpcErrorCode::RollupNotRegistered,
-        RpcErrorCode::SignatureMismatch,
-        RpcErrorCode::ValidationFailure,
-        RpcErrorCode::SettlementError,
-        RpcErrorCode::StatusError,
         RpcErrorCode::SendCertificate,
-        RpcErrorCode::RateLimited,
         RpcErrorCode::NotFound,
         RpcErrorCode::MethodDisabled,
         RpcErrorCode::AlreadyCompleted,

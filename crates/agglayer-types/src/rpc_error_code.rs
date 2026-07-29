@@ -3,40 +3,18 @@
 /// The `Display` strings are readable fragments — they render inside error
 /// chains ("failed to abort task: no live task: …"), so keep them lowercase
 /// prose, not mnemonics. Each variant corresponds to one distinct operator
-/// reaction; do not add a variant without one. The `-10001..=-10009` range
-/// predates this rule: those variants mirror the historical public-API codes
-/// verbatim for wire compatibility.
+/// reaction; do not add a variant without one. The remaining `-1000x` codes
+/// mirror the historical public-API codes verbatim for wire compatibility;
+/// `-10001` through `-10005` and `-10007` belonged to the removed
+/// `interop_sendTx`/`interop_getTxStatus` flows and are retired — they must
+/// not be reused.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, thiserror::Error)]
 #[serde(rename_all = "kebab-case")]
 #[repr(i32)]
 pub enum RpcErrorCode {
-    /// Rollup is not registered.
-    #[error("rollup not registered")]
-    RollupNotRegistered = -10001,
-
-    /// Rollup signature verification failed.
-    #[error("signature mismatch")]
-    SignatureMismatch = -10002,
-
-    /// Proof or state validation failed.
-    #[error("validation failure")]
-    ValidationFailure = -10003,
-
-    /// L1 settlement failed.
-    #[error("settlement error")]
-    SettlementError = -10004,
-
-    /// Transaction status retrieval failed.
-    #[error("status error")]
-    StatusError = -10005,
-
     /// Certificate submission failed.
     #[error("certificate submission failed")]
     SendCertificate = -10006,
-
-    /// Transaction settlement was rate limited.
-    #[error("rate limited")]
-    RateLimited = -10007,
 
     /// The referenced resource does not exist — check the id. Covers both
     /// the admin task-control API (job, attempt, attempt result, L1 tx) and
@@ -83,13 +61,7 @@ impl RpcErrorCode {
     /// Stable machine-readable tag for wire payloads.
     pub const fn tag(&self) -> &'static str {
         match self {
-            Self::RollupNotRegistered => "rollup-not-registered",
-            Self::SignatureMismatch => "signature-mismatch",
-            Self::ValidationFailure => "validation-failure",
-            Self::SettlementError => "settlement-error",
-            Self::StatusError => "status-error",
             Self::SendCertificate => "send-certificate",
-            Self::RateLimited => "rate-limited",
             Self::NotFound => "not-found",
             Self::MethodDisabled => "method-disabled",
             Self::AlreadyCompleted => "already-completed",
