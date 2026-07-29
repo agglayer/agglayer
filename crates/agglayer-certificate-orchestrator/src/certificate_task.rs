@@ -322,7 +322,13 @@ where
         // The settlement service records the certificate -> job-id link
         // atomically when creating the job and rejects duplicates, so the
         // orchestrator does not persist the link itself.
-        let job = self.build_settlement_job().await?;
+
+        // Infrastructure failures (L1 unreachable, missing proof) that stop a whole
+        // network from settling: `SettlementError` only reaches `debug!` in `process`.
+        let job = self
+            .build_settlement_job()
+            .await
+            .inspect_err(|error| error!(?error, "Failed to build the settlement job"))?;
         let job_id = self
             .settlement_service
             .submit_settlement_job(certificate_id, job)
