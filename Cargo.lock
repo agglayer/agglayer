@@ -218,7 +218,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "prover-alloy",
- "rstest",
  "test-log",
  "thiserror 2.0.18",
  "tokio",
@@ -427,7 +426,6 @@ dependencies = [
  "hyper-util",
  "insta",
  "jsonrpsee",
- "jsonrpsee-test-utils",
  "lazy_static",
  "mockall",
  "pessimistic-proof",
@@ -6015,24 +6013,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tower 0.4.13",
- "tracing",
-]
-
-[[package]]
-name = "jsonrpsee-test-utils"
-version = "0.24.9"
-source = "git+https://github.com/paritytech/jsonrpsee.git?tag=v0.24.9#274a8f025daadb6a6b592ade55ea990bda2f440b"
-dependencies = [
- "futures-channel",
- "futures-util",
- "http-body-util",
- "hyper 1.8.1",
- "hyper-util",
- "serde",
- "serde_json",
- "soketto",
- "tokio",
- "tokio-util",
  "tracing",
 ]
 
