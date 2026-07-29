@@ -30,6 +30,13 @@ pub enum EditEvenIfCompleted {
 /// by the store instead of the caller, and results may be overwritten or
 /// removed regardless of the upgrade-only rule. The settlement task itself
 /// must never call them.
+///
+/// Callers must orchestrate admin mutations as **abort → edit → reload**:
+/// stop the live settlement task before changing stored state, then reload it
+/// after all edits are complete. Conflict-avoidance behavior in the regular
+/// writers is a safety net for already in-flight writes, not a substitute for
+/// stopping the task. Any deviation requires an explicit, well-justified
+/// reason.
 pub trait SettlementWriter: Send + Sync {
     /// Inserts a settlement job under `settlement_job_id`.
     ///
