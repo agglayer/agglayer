@@ -112,6 +112,12 @@ pub enum ClientErrorType {
     Unknown,
     NonceAlreadyUsed,
     SettlementSucceededElsewhere,
+    /// An administrator asserted that this attempt will never land on L1.
+    ///
+    /// Terminal for the attempt, never for the job: the run loop is freed to
+    /// drive the settlement elsewhere. Only written through the admin
+    /// override path; real on-chain evidence may still supersede it.
+    AbandonedByAdmin,
 }
 
 impl ClientError {
@@ -135,6 +141,13 @@ impl ClientError {
         Self {
             kind: ClientErrorType::SettlementSucceededElsewhere,
             message: format!("Settlement succeeded in transaction {tx_hash}"),
+        }
+    }
+
+    pub fn abandoned_by_admin(reason: &str) -> Self {
+        Self {
+            kind: ClientErrorType::AbandonedByAdmin,
+            message: format!("Attempt abandoned by administrator: {reason}"),
         }
     }
 }
