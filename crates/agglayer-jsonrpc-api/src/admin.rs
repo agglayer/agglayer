@@ -151,9 +151,21 @@ pub(crate) trait AdminAgglayer {
     /// `null` to represent the absence of a hash.  Any other value must be a
     /// hex-encoded [`SettlementTxHash`] (a 32-byte keccak digest).
     ///
+    /// **Deprecated as a settlement-recovery tool.**  Settlement is resolved
+    /// through the certificate -> settlement-job link, not through this header
+    /// field, so editing the hash can neither restart nor redirect an in-flight
+    /// settlement; it is rejected for a certificate that has a settlement job
+    /// (see [Guards](#guards)).  Recovering a stuck settlement is a matter of
+    /// acting on the job, not on this field.  What the operation still does,
+    /// for a certificate with no job, is header bookkeeping plus pinning
+    /// the L1 block that witness generation replays against when a `Proven`
+    /// certificate is reprocessed.
+    ///
     /// # Guards
     ///
     /// - A [`CertificateStatus::Settled`] certificate cannot be edited.
+    /// - `set-settlement-tx-hash` is rejected when the certificate has a
+    ///   settlement job, whatever the job's state.
     /// - The `from=` value of every operation must exactly match the current
     ///   state of the certificate header (with the `InError` relaxation
     ///   described above).
@@ -162,7 +174,7 @@ pub(crate) trait AdminAgglayer {
     ///
     /// | Error | When |
     /// |---|---|
-    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate |
+    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate; `set-settlement-tx-hash` on a certificate that has a settlement job |
     /// | `ResourceNotFound` (`-10008`) | No certificate header found for `certificate_id` |
     /// | `INTERNAL_ERROR` | Storage read/write failure; orchestrator channel failure |
     #[method(name = "forceEditCertificate")]
@@ -609,6 +621,26 @@ where
                     }
                 }
                 Operation::SetSettlementTxHash { from, to: _ } => {
+                    // Settlement is resolved through the certificate -> job-id link, not
+                    // through this header field, so editing it cannot recover a
+                    // job-managed settlement.
+                    if self
+                        .state
+                        .get_certificate_settlement_job_id(&certificate_id)
+                        .map_err(|error| {
+                            error!(?error, "Failed to get certificate settlement job id");
+                            Error::internal("Unable to get certificate settlement job id")
+                        })?
+                        .is_some()
+                    {
+                        return Err(Error::InvalidArgument(
+                            "Settlement for this certificate is driven by a settlement job; \
+                             set-settlement-tx-hash cannot recover it. Act on the settlement job \
+                             instead."
+                                .to_string(),
+                        ));
+                    }
+
                     if &header.settlement_tx_hash != from {
                         return Err(Error::InvalidArgument(format!(
                             "Current settlement_tx_hash ({:?}) does not match expected 'from' \

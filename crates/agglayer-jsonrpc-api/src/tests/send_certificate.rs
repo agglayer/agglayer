@@ -8,9 +8,12 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, Digest, Height, Metadata,
-    NetworkId, SettlementTxHash,
+    NetworkId, SettlementJobId, SettlementTxHash,
 };
-use jsonrpsee::{core::client::ClientT, rpc_params};
+use jsonrpsee::{
+    core::{client::ClientT, ClientError},
+    rpc_params,
+};
 
 use crate::testutils::TestContext;
 
@@ -632,4 +635,126 @@ async fn pending_certificate_settled_force_set_status() {
 
     assert!(res.settlement_tx_hash.is_some());
     assert_eq!(res.status, CertificateStatus::Settled);
+}
+
+/// A job-managed settlement is resolved through the certificate -> job-id link,
+/// so `set-settlement-tx-hash` is rejected rather than silently applied. The
+/// rest of the endpoint stays usable on such a certificate.
+#[test_log::test(tokio::test)]
+async fn admin_fixup_tx_hash_rejected_when_settlement_is_job_managed() {
+    let path = TempDBDir::new();
+
+    let mut config = Config::new(&path.path);
+    config.debug_mode = true;
+
+    let mut context = TestContext::new_with_config(config).await;
+    let network_id = 1.into();
+
+    let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let certificate_id = pending_certificate.hash();
+
+    context
+        .state_store
+        .insert_certificate_header(&pending_certificate, CertificateStatus::Pending)
+        .expect("unable to insert pending certificate header");
+
+    let fake_settlement_tx_hash = SettlementTxHash::from(Digest::from([1; 32]));
+    let fake_settlement_tx_hash_2 = SettlementTxHash::from(Digest::from([2; 32]));
+
+    context
+        .state_store
+        .update_settlement_tx_hash(
+            &certificate_id,
+            fake_settlement_tx_hash,
+            UpdateEvenIfAlreadyPresent::No,
+            UpdateStatusToCandidate::Yes,
+        )
+        .expect("unable to update settlement tx hash");
+    context
+        .state_store
+        .insert_certificate_settlement_job_id(&certificate_id, &SettlementJobId::from(42u128))
+        .expect("unable to insert certificate settlement job id");
+
+    let res: Result<(), ClientError> = context
+        .admin_client
+        .request(
+            "admin_forceEditCertificate",
+            rpc_params![
+                certificate_id,
+                "process-now=false",
+                format!(
+                    "set-settlement-tx-hash,from={fake_settlement_tx_hash},\
+                     to={fake_settlement_tx_hash_2}"
+                )
+            ],
+        )
+        .await;
+
+    let error = res.unwrap_err();
+    let ClientError::Call(err) = error else {
+        panic!("expected a call error, got: {error}");
+    };
+    assert_eq!(err.code(), jsonrpsee::types::error::INVALID_PARAMS_CODE);
+    assert!(
+        err.message().contains("set-settlement-tx-hash"),
+        "unexpected rejection message: {}",
+        err.message()
+    );
+    assert!(context.certificate_receiver.try_recv().is_err());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash));
+    assert_eq!(res.status, CertificateStatus::Candidate);
+
+    // Clearing the hash is refused for the same reason.
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceEditCertificate",
+            rpc_params![
+                certificate_id,
+                "process-now=false",
+                format!("set-settlement-tx-hash,from={fake_settlement_tx_hash},to=null")
+            ],
+        )
+        .await;
+
+    assert!(res.is_err());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash));
+
+    // The guard is scoped to the tx-hash operation: set-status still applies.
+    let res: Result<(), _> = context
+        .admin_client
+        .request(
+            "admin_forceEditCertificate",
+            rpc_params![
+                certificate_id,
+                "process-now=false",
+                "set-status,from=Candidate,to=InError"
+            ],
+        )
+        .await;
+
+    assert!(res.is_ok());
+
+    let res: CertificateHeader = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    assert!(matches!(res.status, CertificateStatus::InError { .. }));
+    assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash));
 }
