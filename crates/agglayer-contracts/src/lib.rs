@@ -93,16 +93,6 @@ pub enum L1RpcError {
     #[error("Failed to retrieve rollup data")]
     RollupDataRetrievalFailed,
 
-    #[error("Unable to get transaction {tx_hash}")]
-    UnableToGetTransaction {
-        tx_hash: SettlementTxHash,
-        #[source]
-        source: eyre::Error,
-    },
-
-    #[error("Unable to parse aggchain vkey")]
-    UnableToParseAggchainVkey,
-
     #[error("Unable to retrieve verifier type")]
     VerifierTypeRetrievalFailed,
 
@@ -123,9 +113,6 @@ pub enum L1RpcError {
 
     #[error("Transaction receipt for tx {0} failed on L1")]
     TransactionReceiptFailedOnL1(TxHash),
-
-    #[error("Failed to get the events")]
-    FailedToQueryEvents(#[source] eyre::Error),
 
     #[error("L1 info roots cache lock poisoned")]
     CacheLockPoisoned,
