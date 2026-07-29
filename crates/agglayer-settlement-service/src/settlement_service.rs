@@ -1,16 +1,19 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
-use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
+use agglayer_storage::stores::{
+    EditEvenIfCompleted, SettlementReader, SettlementWriter, StateReader, StateWriter,
+};
 use agglayer_types::{
-    CertificateId, RpcErrorCode, SettlementJob, SettlementJobId, SettlementJobResult,
+    CertificateId, ClientError, RpcErrorCode, SettlementAttemptResult, SettlementJob,
+    SettlementJobId, SettlementJobResult,
 };
 use alloy::providers::{Provider, WalletProvider};
 use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     settlement_task::{
@@ -19,6 +22,49 @@ use crate::{
     },
     wallet_nonce_locks::WalletNonceLocks,
 };
+
+/// How the live task for a job (if any) was told about an admin mutation.
+///
+/// Admin mutations are declarative edits of stored state; a running task only
+/// picks them up by reloading from storage. Anything but [`Notified`] means
+/// the operator should check the job before relying on the edit being live.
+///
+/// Serializes as `notified` / `absent` / `notify-failed` in admin RPC
+/// responses. Keeping serialization on this service-level response is a
+/// deliberate pragmatic choice; it is not an `agglayer-types` domain type.
+///
+/// [`Notified`]: LiveTaskNotification::Notified
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LiveTaskNotification {
+    /// The running task was told to reload from storage and restart.
+    Notified,
+    /// No live task exists for this job. The edit persists and is picked up
+    /// whenever a task is started for the job (e.g. on startup recovery).
+    Absent,
+    /// A live task exists but could not be notified, so it keeps acting on
+    /// stale in-memory state until it reloads.
+    ///
+    /// This covers both a full command queue (the task is alive but
+    /// wedged/slow; commands drain only at control checks) and a closed
+    /// channel (the task just died or completed). The warning log records
+    /// which case occurred. Use `admin_reloadSettlementTask` as the escape
+    /// hatch, or abort the task and restart the node.
+    NotifyFailed,
+}
+
+fn tag_admin_storage_error(error: agglayer_storage::error::Error) -> eyre::Report {
+    use agglayer_storage::error::Error as E;
+
+    let code = match &error {
+        E::SettlementJobNotFound(_)
+        | E::SettlementAttemptNotFound { .. }
+        | E::SettlementAttemptResultNotRecorded { .. } => RpcErrorCode::NotFound,
+        E::SettlementJobAlreadyCompleted(_) => RpcErrorCode::AlreadyCompleted,
+        _ => return error.into(),
+    };
+    eyre::Report::new(error).wrap_err(code)
+}
 
 /// The Settlement Service is responsible for managing settlement jobs and
 /// answering settlement result requests.
@@ -314,6 +360,86 @@ impl<
     pub async fn admin_reload_and_restart_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
         self.admin_task(job_id, TaskAdminCommand::ReloadAndRestart)
             .await
+    }
+
+    /// Tells the live task for `job_id`, if any, to drop its in-memory state
+    /// and reload from storage, so it observes an admin edit.
+    ///
+    /// Best-effort: the edit is already persisted when this runs, and a task
+    /// that cannot be notified will still observe it on its next reload.
+    async fn notify_live_task_of_admin_edit(
+        &self,
+        job_id: SettlementJobId,
+    ) -> LiveTaskNotification {
+        let task_controls = self.task_controls.lock().await;
+        let Some(task_control) = task_controls.get(&job_id) else {
+            return LiveTaskNotification::Absent;
+        };
+
+        match task_control.try_send(TaskAdminCommand::ReloadAndRestart) {
+            Ok(()) => LiveTaskNotification::Notified,
+            Err(error) => {
+                warn!(
+                    ?job_id,
+                    ?error,
+                    "Failed to notify live settlement task of an admin edit; the task acts on \
+                     stale in-memory state until it reloads"
+                );
+                LiveTaskNotification::NotifyFailed
+            }
+        }
+    }
+
+    /// Records that an administrator asserts the attempt will never land on
+    /// L1, overwriting any previously recorded result for it.
+    ///
+    /// Terminal for the attempt, never for the job: the reloaded task no
+    /// longer waits on this attempt and drives the settlement elsewhere.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_mark_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: &str,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> eyre::Result<LiveTaskNotification> {
+        let result = SettlementAttemptResult::ClientError(ClientError::abandoned_by_admin(reason));
+        self.store
+            .admin_override_settlement_attempt_result(
+                &job_id,
+                attempt_number,
+                &result,
+                edit_even_if_completed,
+            )
+            .map_err(tag_admin_storage_error)
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to mark settlement attempt {attempt_number} of job {job_id} as \
+                     definitely failed"
+                )
+            })?;
+        Ok(self.notify_live_task_of_admin_edit(job_id).await)
+    }
+
+    /// Removes the recorded result of an attempt, handing the attempt back to
+    /// the settlement task as pending.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_remove_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> eyre::Result<LiveTaskNotification> {
+        self.store
+            .admin_remove_settlement_attempt_result(&job_id, attempt_number, edit_even_if_completed)
+            .map_err(tag_admin_storage_error)
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to remove result of settlement attempt {attempt_number} of job \
+                     {job_id}"
+                )
+            })?;
+        Ok(self.notify_live_task_of_admin_edit(job_id).await)
     }
 
     #[tracing::instrument(skip(self))]

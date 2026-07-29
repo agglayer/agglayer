@@ -25,6 +25,13 @@ use rstest::rstest;
 use super::*;
 use crate::utils::build_provider;
 
+impl TaskControl {
+    /// Test-only: pops the next queued admin command, if any.
+    pub(crate) fn try_recv_admin_command(&mut self) -> Option<TaskAdminCommand> {
+        self.admin_commands.try_recv().ok()
+    }
+}
+
 fn test_signer() -> PrivateKeySigner {
     PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key")
 }
