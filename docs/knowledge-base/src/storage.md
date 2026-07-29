@@ -85,6 +85,21 @@ Migration bookkeeping also uses a dedicated migration column family.
 - Backups are managed via storage backup configuration
   and CLI backup commands.
 
+Backups are requested by the write paths themselves,
+so a restored database stays usable without operator action.
+The state and pending DBs are backed up together when:
+
+- A certificate moves to `Candidate`,
+  which is the point from which its settlement job may already have reached L1.
+  This also captures its generated proof, which lives in the pending DB.
+- A settlement tx hash is recorded on or removed from a certificate header.
+- A local network state is written, which happens on settlement.
+
+An epoch DB is backed up separately when that epoch is edited.
+Every request is best-effort:
+it is dropped with a warning if the backup engine is busy,
+and it never blocks the write that triggered it.
+
 When changing storage schemas or keys:
 
 1. Define the migration path up front.

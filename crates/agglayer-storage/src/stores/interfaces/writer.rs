@@ -88,6 +88,11 @@ pub trait StateWriter: Send + Sync {
         status: CertificateStatus,
     ) -> Result<(), Error>;
 
+    /// Updates the stored status of `certificate_id`.
+    ///
+    /// Moving a certificate to [`CertificateStatus::Candidate`] also requests a
+    /// backup, as that is the point from which the certificate may have an
+    /// in-flight settlement on L1 that a restored database has to know about.
     fn update_certificate_header_status(
         &self,
         certificate_id: &CertificateId,

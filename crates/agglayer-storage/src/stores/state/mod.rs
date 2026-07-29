@@ -151,12 +151,7 @@ impl StateWriter for StateStore {
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
 
-            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-                warn!(
-                    hash = certificate_id.to_string(),
-                    "Unable to trigger backup for the state database: {}", error
-                );
-            }
+            self.request_backup(certificate_id);
         } else {
             info!(
                 "Certificate header not found for certificate_id: {}",
@@ -193,12 +188,7 @@ impl StateWriter for StateStore {
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
 
-            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-                warn!(
-                    hash = certificate_id.to_string(),
-                    "Unable to trigger backup for the state database: {}", error
-                );
-            }
+            self.request_backup(certificate_id);
         } else {
             info!(
                 "Certificate header not found for certificate_id: {}",
@@ -317,6 +307,14 @@ impl StateWriter for StateStore {
                     &certificate_header.certificate_id,
                 )?;
             }
+
+            // A `Candidate` certificate has a settlement job that may already have
+            // reached L1, so this is the last point at which a backup can still capture
+            // the certificate, its proof and its job before the settlement outcome is
+            // known.
+            if let CertificateStatus::Candidate = status {
+                self.request_backup(certificate_id);
+            }
         }
 
         Ok(())
@@ -431,6 +429,17 @@ impl StateWriter for StateStore {
 }
 
 impl StateStore {
+    /// Requests a best-effort backup of the state and pending databases after a
+    /// certificate-scoped write.
+    fn request_backup(&self, certificate_id: &CertificateId) {
+        if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+            warn!(
+                hash = certificate_id.to_string(),
+                "Unable to trigger backup for the state database: {}", error
+            );
+        }
+    }
+
     fn write_smt<C, const DEPTH: usize>(
         &self,
         network_id: u32,
