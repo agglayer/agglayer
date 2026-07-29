@@ -130,7 +130,7 @@ impl<
             )
             .await
             {
-                Ok(StoredSettlementJob::Completed(_, _)) => {
+                Ok(StoredSettlementJob::Completed(_)) => {
                     completed_jobs += 1;
                 }
                 Ok(StoredSettlementJob::Pending(task)) => {
@@ -224,7 +224,7 @@ impl<
                             Ok(StoredSettlementJob::Pending(reloaded_task)) => {
                                 task = reloaded_task;
                             }
-                            Ok(StoredSettlementJob::Completed(_, result)) => {
+                            Ok(StoredSettlementJob::Completed(result)) => {
                                 if let Err(error) = result_sender.send(Some(result)) {
                                     error!(
                                         ?error,
