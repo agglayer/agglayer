@@ -301,7 +301,7 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
     .expect("settlement task should load")
     {
         StoredSettlementJob::Pending(task) => task,
-        StoredSettlementJob::Completed(_, _) => panic!("initial load should be pending"),
+        StoredSettlementJob::Completed(_) => panic!("initial load should be pending"),
     };
 
     let mut result_receiver = service
