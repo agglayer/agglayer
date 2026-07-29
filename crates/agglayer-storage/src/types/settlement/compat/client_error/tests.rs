@@ -2,15 +2,21 @@ use super::*;
 
 #[test]
 fn client_error_round_trip() {
-    let error = ClientError {
-        kind: ClientErrorType::NonceAlreadyUsed,
-        message: "nonce already used".to_string(),
-    };
+    for kind in [
+        ClientErrorType::NonceAlreadyUsed,
+        ClientErrorType::SettlementSucceededElsewhere,
+        ClientErrorType::AbandonedByAdmin,
+    ] {
+        let error = ClientError {
+            kind,
+            message: "some client error".to_string(),
+        };
 
-    let proto: v0::ClientError = (&error).into();
-    let decoded = ClientError::try_from(proto).unwrap();
+        let proto: v0::ClientError = (&error).into();
+        let decoded = ClientError::try_from(proto).unwrap();
 
-    assert_eq!(decoded, error);
+        assert_eq!(decoded, error);
+    }
 }
 
 #[test]

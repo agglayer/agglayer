@@ -9,6 +9,7 @@ impl From<&ClientErrorType> for v0::ClientErrorType {
             ClientErrorType::Unknown => Self::Unspecified,
             ClientErrorType::NonceAlreadyUsed => Self::NonceAlreadyUsed,
             ClientErrorType::SettlementSucceededElsewhere => Self::SettlementSucceededElsewhere,
+            ClientErrorType::AbandonedByAdmin => Self::AbandonedByAdmin,
         }
     }
 }
@@ -21,6 +22,7 @@ impl From<v0::ClientErrorType> for ClientErrorType {
             v0::ClientErrorType::SettlementSucceededElsewhere => {
                 ClientErrorType::SettlementSucceededElsewhere
             }
+            v0::ClientErrorType::AbandonedByAdmin => ClientErrorType::AbandonedByAdmin,
         }
     }
 }
