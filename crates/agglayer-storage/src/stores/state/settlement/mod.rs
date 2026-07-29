@@ -48,8 +48,9 @@ impl StateStore {
     }
 
     /// Writes a settlement attempt and its per-wallet index entry in one
-    /// batch. The caller must hold the job's settlement write lock and have
-    /// checked its preconditions.
+    /// batch, refusing to overwrite an existing attempt. The caller must hold
+    /// the job's settlement write lock and have checked its other
+    /// preconditions.
     fn write_settlement_attempt_locked(
         &self,
         settlement_job_id: &SettlementJobId,
@@ -60,6 +61,14 @@ impl StateStore {
             settlement_job_id: *settlement_job_id,
             attempt_sequence_number,
         };
+
+        if self.db.get::<SettlementAttemptsColumn>(&key)?.is_some() {
+            return Err(Error::UnprocessedAction(format!(
+                "Settlement attempt already exists for job {settlement_job_id} and attempt \
+                 sequence number {attempt_sequence_number}"
+            )));
+        }
+
         let proto_settlement_attempt: v0::SettlementAttempt = settlement_attempt.into();
 
         let attempt_per_wallet_key = attempt_per_wallet::Key {
@@ -283,19 +292,6 @@ impl SettlementWriter for StateStore {
 
             if !job_exists {
                 return Err(Error::SettlementJobNotFound(*settlement_job_id));
-            }
-
-            let key = SettlementAttemptKey {
-                settlement_job_id: *settlement_job_id,
-                attempt_sequence_number,
-            };
-
-            let attempt_exists = self.db.get::<SettlementAttemptsColumn>(&key)?.is_some();
-            if attempt_exists {
-                return Err(Error::UnprocessedAction(format!(
-                    "Settlement attempt already exists for job {settlement_job_id} and attempt \
-                     sequence number {attempt_sequence_number}"
-                )));
             }
 
             self.write_settlement_attempt_locked(
