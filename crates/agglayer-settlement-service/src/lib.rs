@@ -9,8 +9,6 @@
 //! - `SettlementTask` (internal): worker task for processing individual
 //!   settlements
 
-#![allow(dead_code)] // TODO remove after settlement service is integrated in the rest of the app
-
 pub mod settlement_service;
 pub mod settlement_service_trait;
 mod settlement_task;

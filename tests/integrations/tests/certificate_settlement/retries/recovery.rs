@@ -17,15 +17,12 @@ use rstest::rstest;
 use tokio_util::sync::CancellationToken;
 
 #[rstest]
-#[case::cert_task_type_0_ecdsa(
-    &["certificate_task::process_impl::about_to_record_candidate", "network_task::make_progress::settlement_submitted"],
-    crate::common::type_0_ecdsa_forest()
-)]
+#[case::cert_task_type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 #[tokio::test]
 #[timeout(Duration::from_secs(90))]
-async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Forest) {
-    // Shutdown node immediately after sending the settlement transaction, without
-    // updating database. Try to recover by sending same certificate after
+async fn submitted_job_recover(#[case] state: Forest) {
+    // Shutdown the node after persisting the settlement job but before recording
+    // the certificate as Candidate. Recover by sending the same certificate after
     // startup.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
@@ -34,14 +31,15 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
     // Cancel (graceful shutdown) then panic when the failpoint fires, so the node
     // actually stops and `agglayer_shutdowned` resolves -- a plain panic only kills
     // the runtime thread without shutting the node down.
-    for f in failpoints {
-        let token = cancellation_token.clone();
-        fail::cfg_callback(*f, move || {
+    let token = cancellation_token.clone();
+    fail::cfg_callback(
+        "certificate_task::process_impl::about_to_record_candidate",
+        move || {
             token.cancel();
             panic!("killing node");
-        })
-        .expect("Failed to configure failpoint");
-    }
+        },
+    )
+    .expect("Failed to configure failpoint");
 
     // L1 is a RAII guard
     let (agglayer_shutdowned, l1, client) =
@@ -59,9 +57,11 @@ async fn sent_transaction_recover(#[case] failpoints: &[&str], #[case] state: Fo
 
     println!("Node killed, recovering...");
 
-    for f in failpoints {
-        fail::cfg(*f, "off").expect("Failed to configure failpoint");
-    }
+    fail::cfg(
+        "certificate_task::process_impl::about_to_record_candidate",
+        "off",
+    )
+    .expect("Failed to configure failpoint");
     let (_agglayer_shutdowned, client, _) = start_agglayer(&tmp_dir.path, &l1, None, None).await;
 
     println!("Node recovered, waiting for settlement...");

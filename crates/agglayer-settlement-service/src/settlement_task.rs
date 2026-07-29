@@ -232,7 +232,7 @@ struct NonRecoverableError {
 }
 pub enum StoredSettlementJob<L1Provider, SettlementStore> {
     Pending(SettlementTask<L1Provider, SettlementStore>),
-    Completed(SettlementJob, SettlementJobResult),
+    Completed(SettlementJobResult),
 }
 
 pub enum TaskAdminCommand {
@@ -485,7 +485,7 @@ impl<
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
         let (job, result) = Self::load_settlement_job_from_db(store.as_ref(), id).await?;
         if let Some(result) = result {
-            Ok(StoredSettlementJob::Completed(job, result))
+            Ok(StoredSettlementJob::Completed(result))
         } else {
             let mut this = SettlementTask {
                 id,
