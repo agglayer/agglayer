@@ -1,7 +1,7 @@
 use agglayer_contracts::L1RpcError;
 use agglayer_types::{
     aggchain_proof::AggchainProofPublicValues, bincode, CertificateId, CertificateStatusError,
-    Digest, Height, NetworkId, SettlementTxHash,
+    Digest, Height, NetworkId,
 };
 use pessimistic_proof::{
     core::commitment::StateCommitment, error::ProofVerificationError, PessimisticProofOutput,
@@ -192,54 +192,16 @@ pub enum Error {
     #[error("Internal error: {0}")]
     InternalError(String),
 
-    #[error("The status of the certificate is invalid")]
-    InvalidCertificateStatus,
-
-    #[error("The certificate header is not found")]
-    NotFoundCertificateHeader,
-
-    #[error("Unable to get verifier type for network")]
-    UnableToGetVerifierType {
-        certificate_id: CertificateId,
-        network_id: NetworkId,
-    },
-
-    #[error("Timeout waiting for {settlement_tx_hash} to settle {certificate_id}")]
-    PendingTransactionTimeout {
-        certificate_id: CertificateId,
-        settlement_tx_hash: SettlementTxHash,
-        source: eyre::Error,
-    },
-
-    #[error("Failed to settle the certificate {certificate_id}: {error}")]
-    SettlementError {
-        certificate_id: CertificateId,
-        error: String,
-    },
-
     #[error("Failed to persist the state after {certificate_id}: {error}")]
     PersistenceError {
         certificate_id: CertificateId,
         error: String,
-    },
-
-    #[error("Failed to communicate with L1: {0}")]
-    L1CommunicationError(#[source] Box<agglayer_contracts::L1RpcError>),
-
-    #[error("Failed to fetch the receipt for L1 transaction {tx_hash}: {error}")]
-    SettlementTransactionFetchReceiptError {
-        tx_hash: SettlementTxHash,
-        #[source]
-        error: Box<agglayer_contracts::L1RpcError>,
     },
 }
 
 impl From<Error> for CertificateStatusError {
     fn from(value: Error) -> Self {
         match value {
-            Error::L1CommunicationError(error) => {
-                CertificateStatusError::InternalError(error.to_string())
-            }
             Error::Clock(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::PreCertification(pre_certification_error) => {
                 CertificateStatusError::PreCertificationError(pre_certification_error.to_string())
@@ -249,28 +211,8 @@ impl From<Error> for CertificateStatusError {
             }
             Error::Storage(error) => CertificateStatusError::InternalError(error.to_string()),
             Error::InternalError(error) => CertificateStatusError::InternalError(error),
-            Error::UnableToGetVerifierType { network_id, .. } => {
-                CertificateStatusError::InternalError(format!(
-                    "Unable to get verifier type for NetworkId {network_id}"
-                ))
-            }
-            Error::InvalidCertificateStatus => {
-                CertificateStatusError::InternalError("InvalidCertificateStatus".to_string())
-            }
-            Error::NotFoundCertificateHeader => {
-                CertificateStatusError::InternalError("NotFoundCertificateHeader".to_string())
-            }
-            Error::SettlementError { error, .. } => CertificateStatusError::SettlementError(error),
             Error::PersistenceError { error, .. } => {
                 CertificateStatusError::InternalError(error.to_string())
-            }
-            error @ Error::PendingTransactionTimeout { .. } => {
-                CertificateStatusError::InternalError(format!("{error:?}"))
-            }
-            Error::SettlementTransactionFetchReceiptError { error, tx_hash } => {
-                CertificateStatusError::InternalError(format!(
-                    "Failed to fetch the receipt for L1 transaction {tx_hash}: {error}"
-                ))
             }
         }
     }

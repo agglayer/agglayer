@@ -33,13 +33,11 @@ mod certificate_task;
 mod certifier;
 mod error;
 mod network_task;
-mod settlement_client;
 #[cfg(test)]
 mod tests;
 
 pub use certifier::{CertificateInput, Certifier, CertifierOutput, CertifierResult};
 pub use error::{CertificationError, Error, PreCertificationError};
-pub use settlement_client::{NonceInfo, SettlementClient, TxReceiptStatus};
 
 const MAX_POLL_READS: usize = 1_000;
 

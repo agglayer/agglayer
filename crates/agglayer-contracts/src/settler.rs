@@ -102,22 +102,6 @@ where
             tx_call.calldata()
         );
 
-        // This is a fail point for testing purposes, it simulates low gas conditions.
-        // Check if the low gas fail point is active and set the low gas if it is.
-        #[cfg(feature = "testutils")]
-        if fail::eval(
-            "notifier::packer::settle_certificate::gas_estimate::low_gas",
-            |_| true,
-        )
-        .unwrap_or(false)
-        {
-            tracing::warn!(
-                "FAIL POINT ACTIVE: low gas fail point active for rollup_id: {}",
-                rollup_id
-            );
-            tx_call = tx_call.gas(30000);
-        }
-
         // Check if a gas multiplier factor is provided
         if self.gas_multiplier_factor != 100 {
             // Adjust the gas limit based on the configuration.
