@@ -206,7 +206,6 @@ impl Node {
                     (*rpc_pp_settlement).clone(),
                 ),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
-                config.l1.event_filter_block_range.get(),
             )
             .await?,
         );

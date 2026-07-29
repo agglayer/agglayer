@@ -52,10 +52,6 @@ pub struct L1RpcClient<RpcProvider> {
     /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
     /// Map<leaf_count, l1_info_root>
     l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
-    /// Number of blocks to query when filtering for events.
-    /// This is to avoid hitting provider limits when querying large block
-    /// ranges or errors like "query returned more than 10000 results".
-    event_filter_block_range: u64,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -144,7 +140,6 @@ where
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         global_exit_root_manager_contract: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
-        event_filter_block_range: u64,
     ) -> Self {
         Self {
             rpc,
@@ -152,7 +147,6 @@ where
             global_exit_root_manager_contract,
             default_l1_info_tree_entry,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
-            event_filter_block_range,
         }
     }
 
@@ -160,7 +154,6 @@ where
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         global_exit_root_manager_contract: Address,
-        event_filter_block_range: u64,
     ) -> eyre::Result<Self>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -234,7 +227,6 @@ where
             inner,
             global_exit_root_manager_contract,
             default_l1_info_tree_entry,
-            event_filter_block_range,
         ))
     }
 }
@@ -319,7 +311,6 @@ mod tests {
             Arc::new(rpc.clone()),
             contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
             contracts.ger_contract,
-            10000, // default event_filter_block_range
         )
         .await
         .expect("Failed to create L1RpcClient");
@@ -385,7 +376,6 @@ mod tests {
                 Arc::new(rpc.clone()),
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
-                10000,
             )
             .await
             .unwrap(),
@@ -438,7 +428,6 @@ mod tests {
             Arc::new(rpc.clone()),
             contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
             contracts.ger_contract,
-            10000, // default event_filter_block_range
         )
         .await
         .expect("Failed to create L1RpcClient");
