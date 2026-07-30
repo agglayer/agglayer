@@ -42,9 +42,10 @@ pub enum LiveTaskNotification {
     /// its waits are interrupted by cancellation, L1 progress, or attempt
     /// deadlines — never by this queue. A task parked in an L1 wait keeps
     /// acting on stale in-memory state until that wait returns. The retry
-    /// cap bounds the nonce-inclusion wait only; a settlement wait runs
-    /// until the configured settlement policy is satisfied. Abort the task
-    /// before editing when prompt observation matters.
+    /// policy caps individual backoff sleeps, not total wait duration;
+    /// settlement polling can continue until the configured settlement
+    /// policy is satisfied. Abort the task before editing when prompt
+    /// observation matters.
     Queued,
     /// No live task exists for this job. The edit persists and is picked up
     /// whenever a task is started for the job (e.g. on startup recovery).

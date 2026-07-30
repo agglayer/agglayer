@@ -890,6 +890,10 @@ async fn admin_mutation_queues_reload_for_parked_live_task() {
         .expect("admin mark should succeed");
 
     assert_eq!(live_task, LiveTaskNotification::Queued);
+    assert_eq!(
+        serde_json::to_value(live_task).expect("live-task notification should serialize"),
+        serde_json::json!("queued")
+    );
     assert!(matches!(
         task_control.try_recv_admin_command(),
         Some(TaskAdminCommand::ReloadAndRestart)
