@@ -89,9 +89,10 @@ Backups are requested by the write paths themselves,
 so a restored database stays usable without operator action.
 The state and pending DBs are backed up together when:
 
-- A certificate moves to `Candidate`,
-  which is the point from which its settlement job may already have reached L1.
-  This also captures its generated proof, which lives in the pending DB.
+- A certificate is proven.
+  Settlement is submitted from a spawned task shortly after,
+  so this is the last write still ordered ahead of the certificate reaching L1.
+  Its generated proof, which lives in the pending DB, is already persisted.
 - A settlement tx hash is recorded on or removed from a certificate header.
 - A local network state is written, which happens on settlement.
 

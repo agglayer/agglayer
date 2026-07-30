@@ -90,9 +90,10 @@ pub trait StateWriter: Send + Sync {
 
     /// Updates the stored status of `certificate_id`.
     ///
-    /// Moving a certificate to [`CertificateStatus::Candidate`] also requests a
-    /// backup, as that is the point from which the certificate may have an
-    /// in-flight settlement on L1 that a restored database has to know about.
+    /// Moving a certificate to [`CertificateStatus::Proven`] also requests a
+    /// backup: settlement is submitted from a spawned task shortly after, so
+    /// this is the last status write still ordered ahead of the certificate
+    /// reaching L1.
     fn update_certificate_header_status(
         &self,
         certificate_id: &CertificateId,

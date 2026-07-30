@@ -31,20 +31,20 @@ fn setup_store(
 }
 
 #[test]
-fn candidate_status_triggers_a_state_backup() {
-    let (_tmp, store, certificate, mut backups) = setup_store(CertificateStatus::Proven);
+fn proven_status_triggers_a_state_backup() {
+    let (_tmp, store, certificate, mut backups) = setup_store(CertificateStatus::Pending);
 
     store
-        .update_certificate_header_status(&certificate.hash(), &CertificateStatus::Candidate)
+        .update_certificate_header_status(&certificate.hash(), &CertificateStatus::Proven)
         .expect("Unable to update certificate header status");
 
     let request = backups
         .try_recv()
-        .expect("Moving a certificate to Candidate should request a backup");
+        .expect("Moving a certificate to Proven should request a backup");
 
     assert!(
         request.epoch_db.is_none(),
-        "Candidate should back up the state and pending DBs, not an epoch DB"
+        "Proven should back up the state and pending DBs, not an epoch DB"
     );
     assert!(
         backups.try_recv().is_err(),
@@ -53,10 +53,10 @@ fn candidate_status_triggers_a_state_backup() {
 }
 
 #[test]
-fn non_candidate_statuses_do_not_trigger_a_state_backup() {
+fn non_proven_statuses_do_not_trigger_a_state_backup() {
     for status in [
         CertificateStatus::Pending,
-        CertificateStatus::Proven,
+        CertificateStatus::Candidate,
         CertificateStatus::Settled,
         CertificateStatus::error(CertificateStatusError::InternalError("failed".to_string())),
     ] {
@@ -74,15 +74,15 @@ fn non_candidate_statuses_do_not_trigger_a_state_backup() {
 }
 
 #[test]
-fn candidate_status_from_settlement_tx_hash_triggers_a_state_backup() {
-    let (_tmp, store, certificate, mut backups) = setup_store(CertificateStatus::Proven);
+fn recording_a_settlement_tx_hash_triggers_a_state_backup() {
+    let (_tmp, store, certificate, mut backups) = setup_store(CertificateStatus::Candidate);
 
     store
         .update_settlement_tx_hash(
             &certificate.hash(),
             SettlementTxHash::new(Digest::from([1u8; 32])),
             UpdateEvenIfAlreadyPresent::No,
-            UpdateStatusToCandidate::Yes,
+            UpdateStatusToCandidate::No,
         )
         .expect("Unable to update settlement tx hash");
 

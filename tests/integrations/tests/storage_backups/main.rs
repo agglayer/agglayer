@@ -43,10 +43,9 @@ fn latest_backup_id(backups: &[BackupEngineInfo]) -> Option<u32> {
 ///
 /// Unlike [`wait_for_backup_counts`], this works under aggressive purging
 /// (where the retained backup count stays at 1) because RocksDB backup ids are
-/// monotonic. Each settled certificate produces three backups (one when it
-/// becomes `Candidate`, one when the L1 tx hash is known, one when it is
-/// settled), so the Nth settled certificate's durable state has backup id
-/// `3 * N`.
+/// monotonic. Each settled certificate produces three backups (one when it is
+/// proven, one when the L1 tx hash is known, one when it is settled), so the
+/// Nth settled certificate's durable state has backup id `3 * N`.
 async fn wait_for_backup_ids(
     backup_dir: &std::path::Path,
     minimum_state_backup_id: u32,
@@ -94,10 +93,10 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // Each settled certificate produces three backups (Candidate, tx-hash
-    // known, then settled). Wait for all of them so the restore captures the
-    // settled state rather than an earlier snapshot, which would leave the
-    // certificate non-Settled after restart.
+    // Each settled certificate produces three backups (proven, tx-hash known,
+    // then settled). Wait for all of them so the restore captures the settled
+    // state rather than an earlier snapshot, which would leave the certificate
+    // non-Settled after restart.
     wait_for_backup_counts(&backup_dir.path, 3, 3).await;
 
     handle.cancel();
@@ -171,9 +170,9 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // Each settled certificate produces three backups (Candidate, tx-hash
-    // known, then settled). Wait for certificate1 to be fully backed up
-    // (state/pending backup id >= 3) before sending certificate2.
+    // Each settled certificate produces three backups (proven, tx-hash known,
+    // then settled). Wait for certificate1 to be fully backed up (state/pending
+    // backup id >= 3) before sending certificate2.
     wait_for_backup_ids(&backup_dir.path, 3, 3).await;
 
     let certificate_id2: CertificateId = client
@@ -294,7 +293,7 @@ async fn report_contains_all_backups(#[case] state: Forest) {
     let backup_report = BackupEngine::list_backups(&backup_dir.path).unwrap();
 
     // There are 6 backups because 3 actions trigger a backup per cert:
-    // - One when the `Certificate` becomes a `Candidate`
+    // - One when the `Certificate` is proven
     // - One when the L1 `tx_hash` is known
     // - One when the `Certificate` is settled and the network state is updated
     assert_eq!(backup_report.get_state().len(), 6);
