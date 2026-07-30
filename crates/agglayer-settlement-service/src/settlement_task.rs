@@ -235,6 +235,7 @@ pub enum StoredSettlementJob<L1Provider, SettlementStore> {
     Completed(SettlementJobResult),
 }
 
+#[derive(Debug)]
 pub enum TaskAdminCommand {
     ReloadAndRestart,
 }

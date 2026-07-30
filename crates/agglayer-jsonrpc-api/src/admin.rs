@@ -22,7 +22,12 @@ use tracing::{error, info, instrument, warn};
 use unified_bridge::TokenInfo;
 
 use super::error::RpcResult;
-use crate::{error::Error, rpc_middleware, settlement_admin::map_admin_error, JsonRpcService};
+use crate::{
+    error::Error,
+    rpc_middleware,
+    settlement_admin::{edit_even_if_completed, map_admin_error, Force, MutationResponse},
+    JsonRpcService,
+};
 
 /// Controls whether the certificate is immediately submitted for reprocessing
 /// after edits are applied.
@@ -238,6 +243,48 @@ pub(crate) trait AdminAgglayer {
     /// queue returns `RpcErrorCode::Unavailable`'s code.
     #[method(name = "reloadSettlementTask")]
     async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Record that this settlement attempt will never land on L1.
+    ///
+    /// **JSON-RPC method:** `admin_markSettlementAttemptDefinitelyFailed`
+    ///
+    /// Overwrites the attempt's result with a client error carrying the
+    /// mandatory `reason`, bypassing the usual upgrade-only rule for attempt
+    /// results. This is terminal for the attempt, never for the job: the
+    /// reloaded task stops waiting on the attempt and drives the settlement
+    /// elsewhere.
+    ///
+    /// This is a trusted operator assertion. If the transaction can still
+    /// land, only the settlement contract's replay protection prevents
+    /// double settlement. Real on-chain evidence observed later supersedes
+    /// the assertion. It fails if the attempt does not exist, or if the job
+    /// already has a terminal result and `force` is not `"force=true"` (see
+    /// [`Force`]).
+    #[method(name = "markSettlementAttemptDefinitelyFailed")]
+    async fn mark_settlement_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: String,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
+
+    /// Remove the recorded result of a settlement attempt.
+    ///
+    /// **JSON-RPC method:** `admin_removeSettlementAttemptResult`
+    ///
+    /// Hands the attempt back to the settlement task as pending, so the task
+    /// re-derives its outcome from L1. This is the undo of
+    /// `admin_markSettlementAttemptDefinitelyFailed`. It fails if the attempt
+    /// does not exist, no result is recorded, or if the job already has a
+    /// terminal result and `force` is not `"force=true"` (see [`Force`]).
+    #[method(name = "removeSettlementAttemptResult")]
+    async fn remove_settlement_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
 }
 
 /// The Admin RPC agglayer service implementation.
@@ -864,5 +911,52 @@ where
             .admin_reload_and_restart_task(job_id)
             .await
             .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn mark_settlement_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: String,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!(
+            "(ADMIN) Marking settlement attempt {attempt_number} of job {job_id} as definitely \
+             failed"
+        );
+        let live_task = self
+            .settlement_service
+            .admin_mark_attempt_definitely_failed(
+                job_id,
+                attempt_number,
+                &reason,
+                edit_even_if_completed(force),
+            )
+            .await
+            .map_err(map_admin_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn remove_settlement_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!("(ADMIN) Removing result of settlement attempt {attempt_number} of job {job_id}");
+        let live_task = self
+            .settlement_service
+            .admin_remove_attempt_result(job_id, attempt_number, edit_even_if_completed(force))
+            .await
+            .map_err(map_admin_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
+        })
     }
 }
