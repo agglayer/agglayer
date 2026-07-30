@@ -72,12 +72,13 @@ pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<()> {
 mod tests {
     use std::{
         io,
+        num::NonZeroU64,
         sync::{Arc, Mutex},
         time::Duration,
     };
 
+    use agglayer_clock::BlockClock;
     use alloy::{
-        pubsub::PubSubConnect,
         rpc::json_rpc::{Id, Request, RequestPacket},
         transports::{http::Http, ws::WsConnect},
     };
@@ -96,9 +97,12 @@ mod tests {
     const TUNGSTENITE_SECRET: &str = "tungstenite-request-secret-803";
     const HTTP_PATH_SECRET: &str = "http-path-secret-803";
     const HTTP_QUERY_SECRET: &str = "http-query-secret-803";
+    const WS_USERNAME: &str = "ws-user-803";
+    const WS_PASSWORD: &str = "ws-pass-803";
     const WS_PATH_SECRET: &str = "ws-path-secret-803";
     const WS_QUERY_SECRET: &str = "ws-query-secret-803";
     const WS_BASIC_AUTH: &str = "Basic d3MtdXNlci04MDM6d3MtcGFzcy04MDM=";
+    const BLOCK_CLOCK_FAILURE: &str = "Failed to start BlockClock";
 
     #[derive(Clone, Default)]
     struct Capture(Arc<Mutex<Vec<u8>>>);
@@ -311,10 +315,24 @@ mod tests {
                 .unwrap();
         });
 
-        let ws = WsConnect::new(format!(
-            "ws://ws-user-803:ws-pass-803@127.0.0.1:{port}/{WS_PATH_SECRET}?key={WS_QUERY_SECRET}"
-        ));
-        let _ = ws.connect().await;
+        let Err(error) = BlockClock::new_with_ws(
+            WsConnect::new(format!(
+                "ws://{WS_USERNAME}:{WS_PASSWORD}@127.0.0.1:{port}/{WS_PATH_SECRET}?\
+                 key={WS_QUERY_SECRET}"
+            )),
+            0,
+            NonZeroU64::new(1).unwrap(),
+            Duration::from_secs(1),
+        )
+        .await
+        else {
+            panic!("test server accepted WebSocket upgrade");
+        };
+        tracing::error!(
+            target: "agglayer_node::node",
+            "Failed to start BlockClock: {:?}",
+            error
+        );
         server.await.unwrap();
     }
 
@@ -331,22 +349,35 @@ mod tests {
         capture.output()
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[test_log::test(tokio::test(flavor = "current_thread"))]
     async fn actual_dependency_transports_do_not_log_endpoint_credentials() {
-        tracing_log::LogTracer::init().expect("test process must own the log bridge");
+        // test-log may have already installed the process-wide bridge with a lower max
+        // level.
+        let _ = tracing_log::LogTracer::init();
+        tracing_log::log::set_max_level(tracing_log::log::LevelFilter::Trace);
 
         let filter = || {
             EnvFilter::new(
                 "off,alloy_transport_http::reqwest_transport=debug,\
                  tungstenite::handshake::client=trace,reqwest::connect=debug,\
                  hyper_util::client::legacy::connect::http=trace,\
-                 hyper_util::client::legacy::pool=trace",
+                 hyper_util::client::legacy::pool=trace,agglayer_node::node=error",
             )
         };
         let secrets = [
             HTTP_HOST_SECRET,
             HTTP_PATH_SECRET,
             HTTP_QUERY_SECRET,
+            WS_PATH_SECRET,
+            WS_QUERY_SECRET,
+            WS_BASIC_AUTH,
+        ];
+        let sensitive_components = [
+            HTTP_HOST_SECRET,
+            HTTP_PATH_SECRET,
+            HTTP_QUERY_SECRET,
+            WS_USERNAME,
+            WS_PASSWORD,
             WS_PATH_SECRET,
             WS_QUERY_SECRET,
             WS_BASIC_AUTH,
@@ -373,13 +404,21 @@ mod tests {
             for target in sensitive_targets {
                 assert!(output.contains(target), "missing {target:?} in {output}");
             }
+            assert!(
+                output.contains(BLOCK_CLOCK_FAILURE),
+                "missing {BLOCK_CLOCK_FAILURE:?} in {output}"
+            );
 
             let capture = Capture::default();
             let filtered = subscriber(format, BoxMakeWriter::new(capture.clone()), filter());
             let output = capture_actual_dependency_records(filtered, capture).await;
-            for secret in secrets {
+            for secret in sensitive_components {
                 assert!(!output.contains(secret), "found {secret:?} in {output}");
             }
+            assert!(
+                output.contains(BLOCK_CLOCK_FAILURE),
+                "missing {BLOCK_CLOCK_FAILURE:?} in {output}"
+            );
         }
     }
 }
