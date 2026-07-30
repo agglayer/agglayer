@@ -89,7 +89,7 @@ impl<
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
         cancellation_token: CancellationToken,
-    ) -> eyre::Result<Self> {
+    ) -> eyre::Result<(Self, u64)> {
         let this = Self {
             tx_config,
             provider,
@@ -99,12 +99,12 @@ impl<
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
             wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
         };
-        this.resume_pending_settlement_jobs().await?;
-        Ok(this)
+        let recovery_skipped_jobs = this.resume_pending_settlement_jobs().await?;
+        Ok((this, recovery_skipped_jobs))
     }
 
     #[tracing::instrument(skip_all)]
-    async fn resume_pending_settlement_jobs(&self) -> eyre::Result<()> {
+    async fn resume_pending_settlement_jobs(&self) -> eyre::Result<u64> {
         // TODO: Avoid scanning the whole settlement jobs CF on every startup.
         // Record the latest ULID before which all settlement job ids are known
         // to be fully complete in the metadata CF, then start future scans from
@@ -116,6 +116,7 @@ impl<
 
         let mut completed_jobs = 0usize;
         let mut resumed_jobs = 0usize;
+        let mut skipped_jobs = 0u64;
         for job_id in job_ids {
             let (task_control_handle, task_control) =
                 TaskControlHandle::new(&self.cancellation_token);
@@ -128,25 +129,36 @@ impl<
                 task_control,
             )
             .await
-            .wrap_err_with(|| {
-                format!("Failed to load settlement job {job_id} during startup recovery")
-            })? {
-                StoredSettlementJob::Completed(_) => {
+            {
+                Ok(StoredSettlementJob::Completed(_)) => {
                     completed_jobs += 1;
                 }
-                StoredSettlementJob::Pending(task) => {
+                Ok(StoredSettlementJob::Pending(task)) => {
                     self.spawn_settlement_task(job_id, task, task_control_handle)
                         .await;
                     resumed_jobs += 1;
+                }
+                // Load fails only when this job's stored rows cannot be read
+                // back (corrupt or undecodable data); never expected in
+                // normal operation. Such a job must not prevent node boot:
+                // skip it and report loudly so it can be inspected and
+                // repaired.
+                Err(error) => {
+                    error!(
+                        ?error,
+                        %job_id,
+                        "Failed to load settlement job during startup recovery; skipping"
+                    );
+                    skipped_jobs += 1;
                 }
             }
         }
 
         info!(
             completed_jobs,
-            resumed_jobs, "Settlement service startup recovery scan completed"
+            resumed_jobs, skipped_jobs, "Settlement service startup recovery scan completed"
         );
-        Ok(())
+        Ok(skipped_jobs)
     }
 
     async fn spawn_settlement_task(
