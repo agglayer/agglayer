@@ -169,7 +169,8 @@ impl TestContext {
             cancellation_token.clone(),
         )
         .await
-        .expect("settlement service should start");
+        .expect("settlement service should start")
+        .0;
 
         // Create the routers
         let router = agglayer_impl.start().await.unwrap();
