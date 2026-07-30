@@ -46,8 +46,9 @@ pub struct MutationResponse {
     /// Whether a reload command was queued for the live task. `queued` is
     /// not a promptness promise: the task drains its command queue only at
     /// run-loop control checks, so a task parked in an L1 wait acts on stale
-    /// state until its current retry backoff or attempt deadline elapses.
-    /// Anything but `queued` means not even that happened
+    /// state until that wait returns. The retry cap bounds nonce-inclusion
+    /// waits only; a settlement wait runs until the configured settlement
+    /// policy is satisfied. Anything but `queued` means not even that happened
     /// (`admin_reloadSettlementTask` is the manual escape hatch). Follow the
     /// abort → edit → reload flow when edits must be observed promptly.
     pub live_task: LiveTaskNotification,
