@@ -2138,3 +2138,142 @@ fn latest_pending_attempt_fees_for_nonce_ignores_errored_and_unknown() {
         None
     );
 }
+
+/// Builds the `eyre` error a failed broadcast produces: `submission_outcome`
+/// wraps the transport error the provider returned.
+fn submission_error(error: TransportError) -> eyre::Error {
+    match submission_outcome(Err(RetryCallbackError::Error(error))) {
+        Err(SubmitAttemptError::Failed(error)) => error,
+        _ => panic!("a non-transient transport error should map to a failed submission"),
+    }
+}
+
+fn error_response(message: &str) -> TransportError {
+    TransportError::ErrorResp(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32000,
+        message: message.to_string().into(),
+        data: None,
+    })
+}
+
+#[rstest]
+// Geth and its derivatives phrase nonce rejections this way; the match is
+// case-insensitive because node dialects differ on capitalization.
+#[case("nonce too low", SettlementAttemptErrorKind::NonceTooLow)]
+#[case(
+    "Nonce too low: next nonce 7, tx nonce 5",
+    SettlementAttemptErrorKind::NonceTooLow
+)]
+// Both the plain and the replacement phrasing must land in the fee bucket.
+#[case("transaction underpriced", SettlementAttemptErrorKind::Underpriced)]
+#[case(
+    "replacement transaction underpriced",
+    SettlementAttemptErrorKind::Underpriced
+)]
+// An error response the classifier does not recognize stays generic rather
+// than being mislabeled as a nonce or fee problem.
+#[case("execution reverted", SettlementAttemptErrorKind::Rpc)]
+fn classify_attempt_error_buckets_node_error_responses(
+    #[case] message: &str,
+    #[case] expected: SettlementAttemptErrorKind,
+) {
+    let error = submission_error(error_response(message));
+    assert_eq!(classify_attempt_error(&error), expected);
+}
+
+#[test]
+fn classify_attempt_error_buckets_transport_failures_as_rpc() {
+    // A transport-level failure carries no JSON-RPC payload to inspect, so it
+    // is generic RPC trouble rather than an unclassifiable error.
+    let error = submission_error(TransportError::Transport(TransportErrorKind::BackendGone));
+    assert_eq!(
+        classify_attempt_error(&error),
+        SettlementAttemptErrorKind::Rpc
+    );
+}
+
+#[test]
+fn classify_attempt_error_buckets_non_transport_errors_as_other() {
+    let error = eyre::eyre!("settlement attempt failed for a reason unrelated to transport");
+    assert_eq!(
+        classify_attempt_error(&error),
+        SettlementAttemptErrorKind::Other
+    );
+}
+
+/// Loads a pending job whose stored attempts are `attempts`, and reports the
+/// state the resumed task publishes to the settlement jobs gauge.
+async fn loaded_job_state(
+    attempts: Vec<(u64, SettlementAttempt)>,
+    results: Vec<(u64, SettlementAttemptResult)>,
+) -> SettlementJobState {
+    let job_id = mk_job_id(41);
+    let job = mk_job();
+    let mut store = MockStateStore::new();
+    store
+        .expect_get_settlement_job()
+        .once()
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .return_once(move |_| Ok(None));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .return_once(move |_| Ok(attempts));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .return_once(move |_| Ok(results));
+
+    let (handle, control) = TaskControlHandle::new(&CancellationToken::new());
+    let loaded = SettlementTask::load(
+        job_id,
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider()),
+        Arc::new(store),
+        Arc::new(WalletNonceLocks::default()),
+        control,
+    )
+    .await
+    .expect("pending settlement job should load");
+    assert!(
+        matches!(loaded, StoredSettlementJob::Pending(_)),
+        "job without a terminal result should load as pending"
+    );
+
+    handle.state()
+}
+
+#[tokio::test]
+async fn resumed_job_with_a_live_attempt_reports_submitted() {
+    // A job recovered at startup keeps whatever it already broadcast, so it
+    // must not be reported as still building while its own transaction may
+    // be sitting in the mempool.
+    let wallet = Address::repeat_byte(2);
+    let state = loaded_job_state(vec![(1, mk_stored_attempt(1, wallet, Nonce(7)))], vec![]).await;
+
+    assert_eq!(state, SettlementJobState::Submitted);
+}
+
+#[tokio::test]
+async fn resumed_job_whose_attempts_all_resolved_reports_building() {
+    // Every stored attempt already has a result, so nothing of this job's is
+    // live on L1 and the resumed task starts by building a new attempt.
+    let wallet = Address::repeat_byte(2);
+    let state = loaded_job_state(
+        vec![(1, mk_stored_attempt(1, wallet, Nonce(7)))],
+        vec![(1, mk_client_error(4))],
+    )
+    .await;
+
+    assert_eq!(state, SettlementJobState::Building);
+}
+
+#[tokio::test]
+async fn resumed_job_with_no_attempts_reports_building() {
+    let state = loaded_job_state(vec![], vec![]).await;
+
+    assert_eq!(state, SettlementJobState::Building);
+}

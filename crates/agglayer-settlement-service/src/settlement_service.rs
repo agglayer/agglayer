@@ -2,6 +2,7 @@ use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
 use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
+use agglayer_telemetry::settlement::{SettlementJobState, SettlementJobStateSample};
 use agglayer_types::{
     CertificateId, RpcErrorCode, SettlementJob, SettlementJobId, SettlementJobResult,
 };
@@ -35,7 +36,11 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
-    task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
+    /// The live tasks, and through their handles the state each reports to
+    /// the settlement jobs gauge. Guarded by a blocking mutex, never held
+    /// across an await, so the `/metrics` scrape can sample it without
+    /// awaiting; see [`Self::job_state_samples`].
+    task_controls: Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
     result_watchers:
         Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
     /// Per-wallet locks serializing the nonce read-to-save window across
@@ -43,6 +48,11 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     /// XREF: https://github.com/agglayer/agglayer/issues/1597
     wallet_nonce_locks: Arc<WalletNonceLocks>,
 }
+
+/// The `task_controls` guard is only ever held for a map lookup or a single
+/// insert/remove, none of which can panic, so a poisoned lock is not a state
+/// this service can reach.
+const TASK_CONTROLS_POISONED: &str = "settlement task controls lock poisoned";
 
 pub struct SettlementJobWatcher {
     watcher: watch::Receiver<Option<SettlementJobResult>>,
@@ -78,6 +88,53 @@ pub enum RetrievedSettlementResult {
     Completed(SettlementJobResult),
 }
 
+/// Metrics sampling, carrying only the bound it needs to name the settlement
+/// wallet, so the caller registering the gauge needs no knowledge of the
+/// store or the wider provider surface.
+impl<L1Provider: WalletProvider, SettlementStore> SettlementService<L1Provider, SettlementStore> {
+    /// One sample per state, counting the live settlement tasks reporting
+    /// it. Feeds the settlement jobs gauge; see
+    /// [`agglayer_telemetry::settlement::register_settlement_job_metrics`],
+    /// whose contract this satisfies by always reporting every state.
+    ///
+    /// Derived from the live task registry on every call rather than from a
+    /// tally kept across transitions, so it cannot drift away from the tasks
+    /// that actually exist.
+    ///
+    /// Every live job is labeled with the current default signer: that is the
+    /// wallet each of them will use for its next attempt, whatever wallet any
+    /// earlier attempt of theirs went out on.
+    pub fn job_state_samples(&self) -> Vec<SettlementJobStateSample> {
+        let wallet = self.provider.default_signer_address().to_string();
+        let (mut building, mut submitted) = (0, 0);
+        for handle in self
+            .task_controls
+            .lock()
+            .expect(TASK_CONTROLS_POISONED)
+            .values()
+        {
+            // Exhaustive on purpose: a new state must not silently vanish
+            // from the gauge.
+            match handle.state() {
+                SettlementJobState::Building => building += 1,
+                SettlementJobState::Submitted => submitted += 1,
+            }
+        }
+        vec![
+            SettlementJobStateSample {
+                state: SettlementJobState::Building,
+                wallet: wallet.clone(),
+                count: building,
+            },
+            SettlementJobStateSample {
+                state: SettlementJobState::Submitted,
+                wallet,
+                count: submitted,
+            },
+        ]
+    }
+}
+
 impl<
         L1Provider: Provider + WalletProvider + 'static,
         SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
@@ -95,7 +152,7 @@ impl<
             provider,
             store,
             cancellation_token,
-            task_controls: Arc::new(Mutex::new(HashMap::new())),
+            task_controls: Arc::new(std::sync::Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
             wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
         };
@@ -170,7 +227,7 @@ impl<
         let (result_sender, result_receiver) = watch::channel(None);
         self.task_controls
             .lock()
-            .await
+            .expect(TASK_CONTROLS_POISONED)
             .insert(job_id, task_control_handle);
         self.result_watchers
             .lock()
@@ -194,13 +251,19 @@ impl<
                                 "Failed to send settlement job result to watchers"
                             );
                         }
-                        task_controls.lock().await.remove(&job_id);
+                        task_controls
+                            .lock()
+                            .expect(TASK_CONTROLS_POISONED)
+                            .remove(&job_id);
                         break;
                     }
                     SettlementTaskRunResult::Cancelled => {
                         info!(?job_id, "Settlement task cancelled");
                         result_watchers.lock().await.remove(&job_id);
-                        task_controls.lock().await.remove(&job_id);
+                        task_controls
+                            .lock()
+                            .expect(TASK_CONTROLS_POISONED)
+                            .remove(&job_id);
                         break;
                     }
                     SettlementTaskRunResult::ReloadAndRestart => {
@@ -209,7 +272,7 @@ impl<
                             TaskControlHandle::new(&cancellation_token);
                         task_controls
                             .lock()
-                            .await
+                            .expect(TASK_CONTROLS_POISONED)
                             .insert(job_id, task_control_handle);
                         match SettlementTask::load(
                             job_id,
@@ -232,7 +295,10 @@ impl<
                                         "Failed to send settlement job result to watchers"
                                     );
                                 }
-                                task_controls.lock().await.remove(&job_id);
+                                task_controls
+                                    .lock()
+                                    .expect(TASK_CONTROLS_POISONED)
+                                    .remove(&job_id);
                                 break;
                             }
                             Err(error) => {
@@ -243,7 +309,10 @@ impl<
                                      state"
                                 );
                                 result_watchers.lock().await.remove(&job_id);
-                                task_controls.lock().await.remove(&job_id);
+                                task_controls
+                                    .lock()
+                                    .expect(TASK_CONTROLS_POISONED)
+                                    .remove(&job_id);
                                 break;
                             }
                         }
@@ -286,7 +355,12 @@ impl<
 
     #[tracing::instrument(skip_all)]
     async fn task_control(&self, job_id: SettlementJobId) -> eyre::Result<TaskControlHandle> {
-        let task_control = self.task_controls.lock().await.get(&job_id).cloned();
+        let task_control = self
+            .task_controls
+            .lock()
+            .expect(TASK_CONTROLS_POISONED)
+            .get(&job_id)
+            .cloned();
         match task_control {
             Some(task_control) => Ok(task_control),
             None => Err(self.classify_missing_task(job_id).await),

@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     future::IntoFuture as _,
     sync::{Arc, OnceLock},
-    time::{Duration, SystemTime},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use agglayer_config::{
@@ -10,6 +10,10 @@ use agglayer_config::{
     Multiplier,
 };
 use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
+use agglayer_telemetry::settlement::{
+    record_settlement_attempt, record_settlement_attempt_error, record_settlement_job_duration,
+    SettlementAttemptErrorKind, SettlementAttemptKind, SettlementJobOutcome, SettlementJobState,
+};
 use agglayer_types::{
     CertificateId, ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest,
     Nonce, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
@@ -183,6 +187,36 @@ fn submission_outcome(
     }
 }
 
+/// Buckets a failed broadcast for the attempt-error counter.
+///
+/// Only non-transient failures reach here: transient ones are retried inside
+/// [`SettlementTask::submit_attempt_to_l1`] and never surface as a failed
+/// attempt. Nonce and fee rejections are split out from the generic `rpc`
+/// bucket so nonce contention is legible on its own, which is the failure
+/// mode concurrent same-wallet jobs are most exposed to.
+///
+/// The node's error strings are matched case-insensitively on the substrings
+/// geth and its derivatives use (`nonce too low`, `... underpriced`); an
+/// unrecognized JSON-RPC error response is `rpc`, and anything that is not a
+/// transport error at all is `other`.
+fn classify_attempt_error(error: &eyre::Error) -> SettlementAttemptErrorKind {
+    let Some(transport_error) = error.downcast_ref::<TransportError>() else {
+        return SettlementAttemptErrorKind::Other;
+    };
+    let TransportError::ErrorResp(response) = transport_error else {
+        return SettlementAttemptErrorKind::Rpc;
+    };
+
+    let message = response.message.to_ascii_lowercase();
+    if message.contains("nonce too low") {
+        SettlementAttemptErrorKind::NonceTooLow
+    } else if message.contains("underpriced") {
+        SettlementAttemptErrorKind::Underpriced
+    } else {
+        SettlementAttemptErrorKind::Rpc
+    }
+}
+
 /// Error returned by the L1 polling callbacks; the "not yet" variants are
 /// transient and tell the retry loop to keep polling.
 #[derive(Debug)]
@@ -244,28 +278,60 @@ const ADMIN_CHANNEL_BUFFER_SIZE: usize = 10;
 pub struct TaskControl {
     cancellation_token: CancellationToken,
     admin_commands: mpsc::Receiver<TaskAdminCommand>,
+    state: Arc<std::sync::Mutex<SettlementJobState>>,
+}
+
+impl TaskControl {
+    /// Publishes that this job has a transaction of its own live on L1, for
+    /// the settlement jobs gauge.
+    ///
+    /// The only transition there is: a job starts out building and stays
+    /// submitted once it broadcasts. Nothing retracts a transaction already
+    /// in the mempool, so a later failed broadcast must not move the job
+    /// back — hence a one-way marker rather than a state setter.
+    pub(crate) fn mark_submitted(&self) {
+        *self
+            .state
+            .lock()
+            .expect("settlement job state lock poisoned") = SettlementJobState::Submitted;
+    }
 }
 
 #[derive(Clone)]
 pub struct TaskControlHandle {
     cancellation_token: CancellationToken,
     admin_commands: mpsc::Sender<TaskAdminCommand>,
+    state: Arc<std::sync::Mutex<SettlementJobState>>,
 }
 
 impl TaskControlHandle {
     pub fn new(parent_cancellation_token: &CancellationToken) -> (Self, TaskControl) {
         let (admin_commands, admin_command_receiver) = mpsc::channel(ADMIN_CHANNEL_BUFFER_SIZE);
         let cancellation_token = parent_cancellation_token.child_token();
+        // Both sides hold a strong reference: the handle must keep reporting
+        // the last known state even after the task side is dropped.
+        let state = Arc::new(std::sync::Mutex::new(SettlementJobState::Building));
         (
             Self {
                 cancellation_token: cancellation_token.clone(),
                 admin_commands,
+                state: state.clone(),
             },
             TaskControl {
                 cancellation_token,
                 admin_commands: admin_command_receiver,
+                state,
             },
         )
+    }
+
+    /// The task's current state, readable without awaiting so the
+    /// `/metrics` scrape can sample it.
+    pub fn state(&self) -> SettlementJobState {
+        *self
+            .state
+            .lock()
+            .expect("settlement job state lock poisoned")
     }
 
     pub fn cancel(&self) {
@@ -498,6 +564,13 @@ impl<
                 attempts: BTreeMap::new(),
             };
             this.load_settlement_attempts_from_db()?;
+            // A job resumed at startup, or reloaded by an admin, keeps
+            // whatever it already had in the mempool. Recovering the state
+            // from the stored attempts stops such a job from being reported
+            // as still building while a transaction of its own is live.
+            if this.has_pending_attempt() {
+                this.control.mark_submitted();
+            }
             Ok(StoredSettlementJob::Pending(this))
         }
     }
@@ -619,6 +692,18 @@ impl<
                     if deadline > SystemTime::now() {
                         continue 'nonces; // wait for deadline to be reached
                     }
+                    // Mirrors the branch `build_next_attempt_with_nonce` takes
+                    // on the same read: a live tx in the mempool is out-bid
+                    // (a gas bump), while a nonce whose every attempt errored
+                    // on broadcast is re-broadcast at fresh base fees.
+                    let attempt_kind = if self
+                        .latest_pending_attempt_fees_for_nonce(wallet, nonce)
+                        .is_some()
+                    {
+                        SettlementAttemptKind::GasBump
+                    } else {
+                        SettlementAttemptKind::Replacement
+                    };
                     let Some((attempt_number, tx)) = retry!(
                         self.build_next_attempt_with_nonce(wallet, nonce).await,
                         "building next settlement attempt for wallet {wallet} / nonce {nonce}",
@@ -632,6 +717,7 @@ impl<
                             wallet,
                             nonce,
                             attempt_number,
+                            attempt_kind,
                             tx,
                         )
                         .await
@@ -744,6 +830,7 @@ impl<
                         wallet,
                         nonce,
                         attempt_number,
+                        SettlementAttemptKind::Submission,
                         tx,
                     )
                     .await
@@ -815,16 +902,25 @@ impl<
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
+        attempt_kind: SettlementAttemptKind,
         tx: TxEnvelope,
     ) -> Option<SettlementTaskRunResult> {
         self.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
         // The nonce is recorded; other same-wallet tasks may now read it.
         drop(nonce_guard);
+        record_settlement_attempt(attempt_kind);
         match self.submit_attempt_to_l1(tx).await {
-            Ok(()) => None,
+            Ok(()) => {
+                self.control.mark_submitted();
+                None
+            }
             Err(SubmitAttemptError::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
             Err(SubmitAttemptError::Failed(error)) => {
                 warn!(?error, "Failed to submit settlement attempt to L1");
+                record_settlement_attempt_error(
+                    classify_attempt_error(&error),
+                    &wallet.to_string(),
+                );
                 self.write_client_error_to_db(
                     attempt_number,
                     ClientError {
@@ -863,6 +959,15 @@ impl<
             .max()
             .map_or(0, |max| max.saturating_add(1));
         SettlementAttemptNumber(next)
+    }
+
+    /// Whether any nonce of this job still has an attempt awaiting a result,
+    /// i.e. a transaction this job broadcast may be live on L1.
+    fn has_pending_attempt(&self) -> bool {
+        self.attempts
+            .values()
+            .flat_map(|attempts_for_nonce| attempts_for_nonce.values())
+            .any(|attempt| attempt.result.is_none())
     }
 
     fn is_any_attempt_pending_for_nonce(&self, wallet: Address, nonce: Nonce) -> bool {
@@ -1745,7 +1850,26 @@ impl<
                 )
             });
 
+        record_settlement_job_duration(
+            match job_result.contract_call_result.outcome {
+                ContractCallOutcome::Success => SettlementJobOutcome::Success,
+                ContractCallOutcome::Revert => SettlementJobOutcome::Revert,
+            },
+            &wallet.to_string(),
+            self.age().as_secs_f64(),
+        );
+
         job_result
+    }
+
+    /// Time since the job was created, taken from the timestamp embedded in
+    /// its ULID job id so the measurement survives a node restart, unlike an
+    /// in-memory start instant that a reload would reset.
+    fn age(&self) -> Duration {
+        let created = UNIX_EPOCH + Duration::from_millis(self.id.as_ulid().timestamp_ms());
+        SystemTime::now()
+            .duration_since(created)
+            .unwrap_or_default()
     }
 
     fn record_attempt_result_to_db(

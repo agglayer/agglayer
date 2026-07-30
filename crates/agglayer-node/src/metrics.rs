@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     columns::{
         latest_pending_certificate_per_network::PendingCertificate,
@@ -19,6 +20,7 @@ use agglayer_storage::{
 };
 use agglayer_telemetry::network::{NetworkErrorSample, NetworkHeightSample, NetworkStateSamplers};
 use agglayer_types::CertificateStatus;
+use alloy::providers::WalletProvider;
 use tracing::warn;
 
 /// Register the per-network certificate state gauges backed by the node
@@ -67,6 +69,30 @@ pub(crate) fn register_network_state_metrics(
             },
         ),
     });
+}
+
+/// Register the gauge counting live settlement jobs by state, backed by the
+/// running settlement service.
+///
+/// Same weak-reference contract as [`register_network_state_metrics`]: the
+/// global meter provider outlives in-process node shutdowns, so the closure
+/// must not keep the settlement service (and through it the state store)
+/// alive past the owning node instance. Once the service drops, the gauge
+/// reports zero jobs in every state.
+pub(crate) fn register_settlement_job_metrics<L1Provider, SettlementStore>(
+    settlement_service: &Arc<SettlementService<L1Provider, SettlementStore>>,
+) where
+    L1Provider: WalletProvider + Send + Sync + 'static,
+    SettlementStore: Send + Sync + 'static,
+{
+    let settlement_service = Arc::downgrade(settlement_service);
+
+    agglayer_telemetry::settlement::register_settlement_job_metrics(Box::new(move || {
+        match settlement_service.upgrade() {
+            Some(service) => service.job_state_samples(),
+            None => Vec::new(),
+        }
+    }));
 }
 
 fn collect_pending_heights(store: &PendingStore) -> Vec<NetworkHeightSample> {

@@ -15,8 +15,18 @@ use alloy::{
 
 use super::*;
 use crate::settlement_task::{
-    SettlementTask, StoredSettlementJob, TaskAdminCommand, TaskControlHandle,
+    SettlementTask, StoredSettlementJob, TaskAdminCommand, TaskControl, TaskControlHandle,
 };
+
+/// Counts the sample for `state`, treating an absent sample as zero the way
+/// the telemetry gauge does.
+fn state_count(samples: &[SettlementJobStateSample], state: SettlementJobState) -> u64 {
+    samples
+        .iter()
+        .filter(|sample| sample.state == state)
+        .map(|sample| sample.count)
+        .sum()
+}
 
 fn mk_provider() -> impl Provider + WalletProvider + 'static {
     ProviderBuilder::new()
@@ -123,7 +133,7 @@ async fn start_scans_jobs_and_skips_completed_ones() {
 
     let service = mk_service(Arc::new(store)).await;
 
-    assert!(service.task_controls.lock().await.is_empty());
+    assert!(service.task_controls.lock().unwrap().is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
 }
 
@@ -172,7 +182,7 @@ async fn start_skips_unloadable_jobs_and_keeps_scanning() {
     .expect("settlement service should start");
 
     assert_eq!(recovery_skipped_jobs, 1);
-    assert!(service.task_controls.lock().await.is_empty());
+    assert!(service.task_controls.lock().unwrap().is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
 }
 
@@ -364,7 +374,7 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
         .expect("reload should publish the stored terminal result");
 
     assert_eq!(result_receiver.borrow().as_ref(), Some(&completed_result));
-    assert!(service.task_controls.lock().await.is_empty());
+    assert!(service.task_controls.lock().unwrap().is_empty());
     assert!(service.result_watchers.lock().await.contains_key(&job_id));
 }
 
@@ -627,7 +637,7 @@ async fn admin_reload_with_full_admin_channel_is_tagged_unavailable() {
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -667,7 +677,7 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -679,6 +689,68 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
         error.downcast_ref::<RpcErrorCode>(),
         Some(&RpcErrorCode::NoLiveTask)
     );
+}
+
+#[tokio::test]
+async fn job_state_samples_count_live_tasks_per_state() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let service = mk_service(Arc::new(store)).await;
+
+    // Every state is reported even with no live task, so a drained gauge
+    // reads as zero rather than as missing data.
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 0);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
+
+    // Registering a task reports it as building until it broadcasts.
+    let mut controls: Vec<TaskControl> = Vec::new();
+    for seed in 0..3u128 {
+        let (handle, control) = TaskControlHandle::new(&service.cancellation_token);
+        controls.push(control);
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task controls lock poisoned")
+            .insert(mk_job_id(seed), handle);
+    }
+
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 3);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
+
+    // Every sample names the signer the next attempt will go out on.
+    let expected_wallet = service.provider.default_signer_address().to_string();
+    assert!(samples
+        .iter()
+        .all(|sample| sample.wallet == expected_wallet));
+
+    // A task that broadcasts moves to submitted; the total is unchanged
+    // because the gauge counts jobs, not transitions.
+    controls[0].mark_submitted();
+    controls[1].mark_submitted();
+
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 1);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 2);
+
+    // Dropping the task side must not lose the state: the handle the service
+    // holds is what the scrape reads, and a task can die without the service
+    // having removed its entry yet.
+    controls.clear();
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 1);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 2);
+
+    // Completing a job removes its entry, so the gauge falls.
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task controls lock poisoned")
+        .clear();
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 0);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
 }
 
 mod same_wallet_nonce_race;

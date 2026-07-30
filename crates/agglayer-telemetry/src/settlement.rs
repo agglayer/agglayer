@@ -1,9 +1,6 @@
-//! Settlement transaction metrics: attempt counts, attempt errors, and job
-//! durations, labeled by wallet where the wallet dimension matters.
-//!
-//! This module only declares the instruments and their record helpers. The
-//! settlement service is responsible for calling them; that wiring, and the
-//! jobs-by-state gauge it requires, land in follow-ups to issue #1676.
+//! Settlement transaction metrics: live jobs by state, attempt counts,
+//! attempt errors, and job durations, labeled by wallet where the wallet
+//! dimension matters.
 
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*, KeyValue};
@@ -20,6 +17,12 @@ const WALLET_LABEL_NAME: &str = "wallet";
 
 /// Name of the label carrying the job outcome.
 const OUTCOME_LABEL_NAME: &str = "outcome";
+
+/// Name of the label carrying the state of a live settlement job.
+const STATE_LABEL_NAME: &str = "state";
+
+/// Gauge name: number of live settlement jobs per `state` and `wallet`.
+pub const SETTLEMENT_JOBS: &str = "agglayer_node_settlement_jobs";
 
 /// Counter instrument name: settlement transaction attempts by `kind`.
 ///
@@ -86,6 +89,68 @@ pub enum SettlementAttemptErrorKind {
 pub enum SettlementJobOutcome {
     Success,
     Revert,
+}
+
+/// The state of a live settlement job, rendered as the `state` label value
+/// on [`SETTLEMENT_JOBS`].
+///
+/// The two states separate the incidents an operator must tell apart: a job
+/// stuck in [`Building`](Self::Building) never reached L1 (gas estimation,
+/// nonce assignment, or signing is wedged), while a job stuck in
+/// [`Submitted`](Self::Submitted) is broadcast and waiting on inclusion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum_macros::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum SettlementJobState {
+    Building,
+    Submitted,
+}
+
+/// The number of live settlement jobs in one state, on one wallet.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SettlementJobStateSample {
+    pub state: SettlementJobState,
+    pub wallet: String,
+    pub count: u64,
+}
+
+/// Register the observable gauge counting live settlement jobs by state and
+/// wallet.
+///
+/// `sampler` runs on every `/metrics` scrape, so the exported counts always
+/// reflect the live task set rather than a tally maintained across
+/// transitions, which would drift whenever a task exits on an unexpected
+/// path.
+///
+/// It must report every state on every call, including the ones no job
+/// currently occupies: a stuck job is spotted as a count that stops falling,
+/// which only reads correctly if the other states are present at zero.
+///
+/// # Runtime contract
+///
+/// The closure runs synchronously inside the `/metrics` HTTP handler: it
+/// must not panic, block, or await. Call this only after the global meter
+/// provider is installed (see [`crate::ServerBuilder`]), and at most once
+/// per provider — repeated registration accumulates duplicate callbacks.
+pub fn register_settlement_job_metrics(
+    sampler: Box<dyn Fn() -> Vec<SettlementJobStateSample> + Send + Sync>,
+) {
+    // The instrument handle is intentionally dropped: the callback
+    // registration lives in the meter provider, not in the handle.
+    let _ = global::meter(AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME)
+        .u64_observable_gauge(SETTLEMENT_JOBS)
+        .with_description("Number of live settlement jobs, by state and wallet")
+        .with_callback(move |observer| {
+            for sample in sampler() {
+                observer.observe(
+                    sample.count,
+                    &[
+                        KeyValue::new(STATE_LABEL_NAME, sample.state.to_string()),
+                        KeyValue::new(WALLET_LABEL_NAME, sample.wallet),
+                    ],
+                );
+            }
+        })
+        .build();
 }
 
 lazy_static! {
