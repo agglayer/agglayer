@@ -356,15 +356,8 @@ mod tests {
         let _ = tracing_log::LogTracer::init();
         tracing_log::log::set_max_level(tracing_log::log::LevelFilter::Trace);
 
-        let filter = || {
-            EnvFilter::new(
-                "off,alloy_transport_http::reqwest_transport=debug,\
-                 tungstenite::handshake::client=trace,reqwest::connect=debug,\
-                 hyper_util::client::legacy::connect::http=trace,\
-                 hyper_util::client::legacy::pool=trace,agglayer_node::node=error",
-            )
-        };
-        let secrets = [
+        let filter = || EnvFilter::new("trace");
+        let baseline_observed_leaks = [
             HTTP_HOST_SECRET,
             HTTP_PATH_SECRET,
             HTTP_QUERY_SECRET,
@@ -372,7 +365,9 @@ mod tests {
             WS_QUERY_SECRET,
             WS_BASIC_AUTH,
         ];
-        let sensitive_components = [
+        // Tungstenite encodes userinfo in `WS_BASIC_AUTH`; the raw values remain
+        // absence-only checks for a future dependency regression.
+        let all_sensitive_endpoint_components = [
             HTTP_HOST_SECRET,
             HTTP_PATH_SECRET,
             HTTP_QUERY_SECRET,
@@ -398,7 +393,7 @@ mod tests {
                 filter(),
             );
             let output = capture_actual_dependency_records(unfiltered, capture).await;
-            for secret in secrets {
+            for secret in baseline_observed_leaks {
                 assert!(output.contains(secret), "missing {secret:?} in {output}");
             }
             for target in sensitive_targets {
@@ -412,7 +407,7 @@ mod tests {
             let capture = Capture::default();
             let filtered = subscriber(format, BoxMakeWriter::new(capture.clone()), filter());
             let output = capture_actual_dependency_records(filtered, capture).await;
-            for secret in sensitive_components {
+            for secret in all_sensitive_endpoint_components {
                 assert!(!output.contains(secret), "found {secret:?} in {output}");
             }
             assert!(
