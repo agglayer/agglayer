@@ -66,6 +66,7 @@ rstest.workspace = true
 serde_json.workspace = true
 test-log.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
+tracing-log = "0.2"
 
 agglayer-jsonrpc-api = { workspace = true, features = ["testutils"] }
 agglayer-config = { workspace = true, features = ["testutils"] }
