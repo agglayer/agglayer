@@ -9,7 +9,7 @@ use agglayer_config::{
     settlement_service::{SettlementPolicy, SettlementTransactionConfig},
     Multiplier,
 };
-use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     CertificateId, ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest,
     Nonce, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
@@ -406,7 +406,7 @@ async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter,
+        SettlementStore: SettlementReader + SettlementWriter,
     > SettlementTask<L1Provider, SettlementStore>
 {
     pub async fn create(
@@ -428,7 +428,7 @@ impl<
         let id = Self::generate_settlement_job_id().await;
         // Persist the job and its certificate links in a single atomic write so a
         // crash can never leave a certificate pointing at a job that was never
-        // saved (issue #1609 item 3).
+        // saved.
         match certificate_id {
             Some(certificate_id) => {
                 store.insert_settlement_job_with_certificate(&id, &job, &certificate_id)
