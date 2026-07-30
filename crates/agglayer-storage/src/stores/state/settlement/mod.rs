@@ -1,8 +1,9 @@
 use agglayer_types::{
-    Address, CertificateId, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob,
-    SettlementJobId, SettlementJobResult,
+    Address, CertificateId, ClientError, ClientErrorType, Nonce, SettlementAttempt,
+    SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
 };
 use rocksdb::{Direction, WriteBatch};
+use tracing::warn;
 
 use super::StateStore;
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
         settlement_job_results::SettlementJobResultsColumn, settlement_jobs::SettlementJobsColumn,
     },
     error::Error,
-    stores::{SettlementReader, SettlementWriter},
+    stores::{EditEvenIfCompleted, SettlementReader, SettlementWriter},
     types::{
         generated::agglayer::storage::v0,
         settlement::{attempt::Key as SettlementAttemptKey, attempt_per_wallet},
@@ -46,6 +47,99 @@ impl StateStore {
         })?;
 
         callback()
+    }
+
+    /// Writes a settlement attempt and its per-wallet index entry in one
+    /// batch, refusing to overwrite an existing attempt. The caller must hold
+    /// the job's settlement write lock and have checked its other
+    /// preconditions.
+    fn write_settlement_attempt_locked(
+        &self,
+        settlement_job_id: &SettlementJobId,
+        attempt_sequence_number: u64,
+        settlement_attempt: &SettlementAttempt,
+    ) -> Result<(), Error> {
+        let key = SettlementAttemptKey {
+            settlement_job_id: *settlement_job_id,
+            attempt_sequence_number,
+        };
+
+        if self.db.get::<SettlementAttemptsColumn>(&key)?.is_some() {
+            return Err(Error::UnprocessedAction(format!(
+                "Settlement attempt already exists for job {settlement_job_id} and attempt \
+                 sequence number {attempt_sequence_number}"
+            )));
+        }
+
+        let proto_settlement_attempt: v0::SettlementAttempt = settlement_attempt.into();
+
+        let attempt_per_wallet_key = attempt_per_wallet::Key {
+            address: settlement_attempt.sender_wallet.into_array(),
+            nonce: settlement_attempt.nonce.0,
+            settlement_job_id: *settlement_job_id,
+            attempt_sequence_number,
+        };
+        let attempt_per_wallet_value = attempt_per_wallet::Value;
+
+        let mut batch = WriteBatch::default();
+        self.db.multi_insert_batch::<SettlementAttemptsColumn>(
+            [(&key, &proto_settlement_attempt)],
+            &mut batch,
+        )?;
+        self.db
+            .multi_insert_batch::<SettlementAttemptPerWalletColumn>(
+                [(&attempt_per_wallet_key, &attempt_per_wallet_value)],
+                &mut batch,
+            )?;
+
+        self.db.write_batch(batch)?;
+
+        Ok(())
+    }
+
+    /// Fails unless the settlement attempt at `key` exists. The caller must
+    /// hold the job's settlement write lock.
+    fn check_settlement_attempt_exists_locked(
+        &self,
+        key: &SettlementAttemptKey,
+    ) -> Result<(), Error> {
+        if self.db.get::<SettlementAttemptsColumn>(key)?.is_none() {
+            return Err(Error::SettlementAttemptNotFound {
+                job: key.settlement_job_id,
+                attempt: key.attempt_sequence_number,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Fails unless `settlement_job_id` exists and is open to admin attempt
+    /// edits: it has no terminal result yet, or `edit_even_if_completed`
+    /// forces the edit through. The caller must hold the job's settlement
+    /// write lock.
+    fn check_settlement_job_is_editable_locked(
+        &self,
+        settlement_job_id: &SettlementJobId,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> Result<(), Error> {
+        if self
+            .db
+            .get::<SettlementJobsColumn>(settlement_job_id)?
+            .is_none()
+        {
+            return Err(Error::SettlementJobNotFound(*settlement_job_id));
+        }
+
+        if edit_even_if_completed == EditEvenIfCompleted::No
+            && self
+                .db
+                .get::<SettlementJobResultsColumn>(settlement_job_id)?
+                .is_some()
+        {
+            return Err(Error::SettlementJobAlreadyCompleted(*settlement_job_id));
+        }
+
+        Ok(())
     }
 }
 
@@ -239,10 +333,6 @@ impl SettlementWriter for StateStore {
         attempt_sequence_number: u64,
         settlement_attempt: &SettlementAttempt,
     ) -> Result<(), Error> {
-        let sender_wallet = settlement_attempt.sender_wallet;
-        let nonce = settlement_attempt.nonce.0;
-        let proto_settlement_attempt: v0::SettlementAttempt = settlement_attempt.into();
-
         self.with_settlement_write_lock(settlement_job_id, || -> Result<(), Error> {
             let job_exists = self
                 .db
@@ -250,48 +340,14 @@ impl SettlementWriter for StateStore {
                 .is_some();
 
             if !job_exists {
-                return Err(Error::UnprocessedAction(format!(
-                    "Settlement job does not exist for id {settlement_job_id}"
-                )));
+                return Err(Error::SettlementJobNotFound(*settlement_job_id));
             }
 
-            let key = SettlementAttemptKey {
-                settlement_job_id: *settlement_job_id,
+            self.write_settlement_attempt_locked(
+                settlement_job_id,
                 attempt_sequence_number,
-            };
-
-            let attempt_exists = self.db.get::<SettlementAttemptsColumn>(&key)?.is_some();
-            if attempt_exists {
-                return Err(Error::UnprocessedAction(format!(
-                    "Settlement attempt already exists for job {settlement_job_id} and attempt \
-                     sequence number {attempt_sequence_number}"
-                )));
-            }
-
-            let address = sender_wallet.into_array();
-
-            let attempt_per_wallet_key = attempt_per_wallet::Key {
-                address,
-                nonce,
-                settlement_job_id: *settlement_job_id,
-                attempt_sequence_number,
-            };
-            let attempt_per_wallet_value = attempt_per_wallet::Value;
-
-            let mut batch = WriteBatch::default();
-            self.db.multi_insert_batch::<SettlementAttemptsColumn>(
-                [(&key, &proto_settlement_attempt)],
-                &mut batch,
-            )?;
-            self.db
-                .multi_insert_batch::<SettlementAttemptPerWalletColumn>(
-                    [(&attempt_per_wallet_key, &attempt_per_wallet_value)],
-                    &mut batch,
-                )?;
-
-            self.db.write_batch(batch)?;
-
-            Ok(())
+                settlement_attempt,
+            )
         })
     }
 
@@ -309,12 +365,7 @@ impl SettlementWriter for StateStore {
                 attempt_sequence_number,
             };
 
-            if self.db.get::<SettlementAttemptsColumn>(&key)?.is_none() {
-                return Err(Error::UnprocessedAction(format!(
-                    "Settlement attempt does not exist for job {settlement_job_id} and attempt \
-                     sequence number {attempt_sequence_number}"
-                )));
-            }
+            self.check_settlement_attempt_exists_locked(&key)?;
 
             if let Some(stored_result) = self
                 .db
@@ -327,6 +378,30 @@ impl SettlementWriter for StateStore {
                 }
 
                 if !stored_result.can_be_replaced_by(tx_result) {
+                    // An admin abandon assertion outranks any client-side
+                    // note derived from pre-override state; dropping the
+                    // weaker write (and reporting success) keeps a task that
+                    // has not reloaded yet from wedging on a conflict it
+                    // cannot resolve (cf. #1617). On-chain evidence still
+                    // replaces the assertion through `can_be_replaced_by`.
+                    if matches!(
+                        &stored_result,
+                        SettlementAttemptResult::ClientError(ClientError {
+                            kind: ClientErrorType::AbandonedByAdmin,
+                            ..
+                        })
+                    ) && matches!(tx_result, SettlementAttemptResult::ClientError(_))
+                    {
+                        warn!(
+                            %settlement_job_id,
+                            attempt_sequence_number,
+                            ?tx_result,
+                            "Kept admin-abandoned settlement attempt result, dropped weaker \
+                             client-side write"
+                        );
+                        return Ok(());
+                    }
+
                     return Err(Error::UnprocessedAction(format!(
                         "Cannot replace existing settlement attempt result {stored_result:?} with \
                          new settlement attempt result {tx_result:?} for job {settlement_job_id} \
@@ -338,6 +413,107 @@ impl SettlementWriter for StateStore {
             Ok(self
                 .db
                 .put::<SettlementAttemptResultsColumn>(&key, &proto_tx_result)?)
+        })
+    }
+
+    fn admin_insert_settlement_attempt(
+        &self,
+        settlement_job_id: &SettlementJobId,
+        settlement_attempt: &SettlementAttempt,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> Result<u64, Error> {
+        self.with_settlement_write_lock(settlement_job_id, || -> Result<u64, Error> {
+            self.check_settlement_job_is_editable_locked(
+                settlement_job_id,
+                edit_even_if_completed,
+            )?;
+
+            let attempt_sequence_number = match self
+                .db
+                .prefix_iterator_with_direction::<SettlementAttemptsColumn, _>(
+                    settlement_job_id,
+                    Direction::Reverse,
+                )?
+                .next()
+                .transpose()?
+            {
+                None => 0,
+                Some((key, _)) => key.attempt_sequence_number.checked_add(1).ok_or_else(|| {
+                    Error::UnprocessedAction(format!(
+                        "Settlement attempt sequence numbers are exhausted for job \
+                         {settlement_job_id}"
+                    ))
+                })?,
+            };
+
+            self.write_settlement_attempt_locked(
+                settlement_job_id,
+                attempt_sequence_number,
+                settlement_attempt,
+            )?;
+
+            Ok(attempt_sequence_number)
+        })
+    }
+
+    fn admin_override_settlement_attempt_result(
+        &self,
+        settlement_job_id: &SettlementJobId,
+        attempt_number: u64,
+        tx_result: &SettlementAttemptResult,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> Result<(), Error> {
+        self.with_settlement_write_lock(settlement_job_id, || {
+            self.check_settlement_job_is_editable_locked(
+                settlement_job_id,
+                edit_even_if_completed,
+            )?;
+
+            let key = SettlementAttemptKey {
+                settlement_job_id: *settlement_job_id,
+                attempt_sequence_number: attempt_number,
+            };
+
+            self.check_settlement_attempt_exists_locked(&key)?;
+
+            let proto_tx_result: v0::SettlementAttemptResult = tx_result.into();
+            Ok(self
+                .db
+                .put::<SettlementAttemptResultsColumn>(&key, &proto_tx_result)?)
+        })
+    }
+
+    fn admin_remove_settlement_attempt_result(
+        &self,
+        settlement_job_id: &SettlementJobId,
+        attempt_number: u64,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> Result<(), Error> {
+        self.with_settlement_write_lock(settlement_job_id, || {
+            self.check_settlement_job_is_editable_locked(
+                settlement_job_id,
+                edit_even_if_completed,
+            )?;
+
+            let key = SettlementAttemptKey {
+                settlement_job_id: *settlement_job_id,
+                attempt_sequence_number: attempt_number,
+            };
+
+            self.check_settlement_attempt_exists_locked(&key)?;
+
+            if self
+                .db
+                .get::<SettlementAttemptResultsColumn>(&key)?
+                .is_none()
+            {
+                return Err(Error::SettlementAttemptResultNotRecorded {
+                    job: *settlement_job_id,
+                    attempt: attempt_number,
+                });
+            }
+
+            Ok(self.db.delete::<SettlementAttemptResultsColumn>(&key)?)
         })
     }
 }
