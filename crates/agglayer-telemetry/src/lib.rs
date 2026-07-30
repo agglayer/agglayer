@@ -37,7 +37,7 @@ lazy_static! {
     /// observe residual callers.
     pub static ref SEND_TX: opentelemetry::metrics::Counter<u64> = global::meter(AGGLAYER_RPC_OTEL_SCOPE_NAME)
         .u64_counter("send_tx")
-        .with_description("Number of transactions received on the RPC")
+        .with_description("Number of calls to the disabled interop_sendTx method")
         .build();
 }
 

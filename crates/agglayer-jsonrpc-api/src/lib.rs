@@ -190,13 +190,19 @@ where
     DebugStore: DebugReader + DebugWriter + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
-    async fn send_tx(&self, _tx: serde_json::Value) -> RpcResult<B256> {
+    async fn send_tx(&self, tx: serde_json::Value) -> RpcResult<B256> {
         // The legacy `interop_sendTx` proof-settlement flow is disabled
         // (https://github.com/agglayer/agglayer/issues/1632). The method stays
         // registered so callers receive an explicit error instead of a generic
-        // "method not found". The payload is deliberately not parsed anymore.
+        // "method not found". The rollup id is extracted best-effort from the
+        // legacy wire shape to identify residual callers; the metric stays
+        // unlabeled to keep its cardinality bounded.
+        let rollup_id = tx.pointer("/tx/RollupID").and_then(|v| v.as_u64());
         agglayer_telemetry::SEND_TX.add(1, &[]);
-        warn!("Rejected interop_sendTx call: method is disabled");
+        warn!(
+            ?rollup_id,
+            "Rejected interop_sendTx call: method is disabled"
+        );
         Err(Error::MethodDisabled {
             method: "interop_sendTx",
         })
