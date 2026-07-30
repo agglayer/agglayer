@@ -279,9 +279,10 @@ async fn save_settlement_job_to_db_inserts_job() {
 async fn create_generates_settlement_job_id() {
     let mut store = MockStateStore::new();
     let job = mk_job();
-    // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+    // `create` applies the default 1.3x headroom to estimateGas (mock returns
+    // 200_000).
     let mut expected_job = job.clone();
-    expected_job.gas_limit = 200_000;
+    expected_job.gas_limit = 260_000;
     let recorded_job_id = Arc::new(Mutex::new(None));
     let recorded_job_id_for_store = recorded_job_id.clone();
 
@@ -315,9 +316,10 @@ async fn create_records_certificate_link_before_settlement_job() {
     let mut store = MockStateStore::new();
     let certificate_id = CertificateId::new(Digest::from([7; 32]));
     let job = mk_job();
-    // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+    // `create` applies the default 1.3x headroom to estimateGas (mock returns
+    // 200_000).
     let mut expected_job = job.clone();
-    expected_job.gas_limit = 200_000;
+    expected_job.gas_limit = 260_000;
     let recorded_job_id = Arc::new(Mutex::new(None));
     let ordering = Arc::new(Mutex::new(Vec::new()));
 
