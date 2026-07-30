@@ -15,6 +15,8 @@ const GOOGLE_KEY_NAME_LEGACY: &str = "GOOGLE_KEY_NAME";
 const GOOGLE_KEY_VERSION_LEGACY: &str = "GOOGLE_KEY_VERSION";
 const GOOGLE_KEY_NAME_PP_SETTLEMENT: &str = "GOOGLE_KEY_NAME_PP_SETTLEMENT";
 const GOOGLE_KEY_VERSION_PP_SETTLEMENT: &str = "GOOGLE_KEY_VERSION_PP_SETTLEMENT";
+const GOOGLE_KEY_NAME_TX_SETTLEMENT: &str = "GOOGLE_KEY_NAME_TX_SETTLEMENT";
+const GOOGLE_KEY_VERSION_TX_SETTLEMENT: &str = "GOOGLE_KEY_VERSION_TX_SETTLEMENT";
 
 #[derive(Debug)]
 pub struct KMSParameters {
@@ -80,6 +82,18 @@ impl TryFrom<&GcpKmsConfig> for KMSParameters {
             Some(GOOGLE_KEY_VERSION_LEGACY),
             &config.pp_settlement_key_version,
         )?;
+
+        for env_key in [
+            GOOGLE_KEY_NAME_TX_SETTLEMENT,
+            GOOGLE_KEY_VERSION_TX_SETTLEMENT,
+        ] {
+            if std::env::var_os(env_key).is_some() {
+                warn!(
+                    "{env_key} is ignored since the dedicated tx-settlement signer was removed \
+                     together with `interop_sendTx`"
+                );
+            }
+        }
 
         Ok(Self {
             project_id,

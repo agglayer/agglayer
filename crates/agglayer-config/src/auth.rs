@@ -125,9 +125,23 @@ impl<'de> Deserialize<'de> for GcpKmsConfig {
             #[serde(alias = "KeyVersion")]
             #[serde(default)]
             pub key_version: Option<u64>,
+            /// The tx-settlement keys configured the removed `interop_sendTx`
+            /// settlement flow. They are accepted and ignored so existing
+            /// configuration files keep parsing.
+            #[serde(default)]
+            pub tx_settlement_key_name: Option<serde::de::IgnoredAny>,
+            #[serde(default)]
+            pub tx_settlement_key_version: Option<serde::de::IgnoredAny>,
         }
 
         let d = Intermediate::deserialize(deserializer)?;
+
+        if d.tx_settlement_key_name.is_some() || d.tx_settlement_key_version.is_some() {
+            warn!(
+                "'tx-settlement-key-name' and 'tx-settlement-key-version' are ignored since the \
+                 dedicated tx-settlement signer was removed together with `interop_sendTx`"
+            );
+        }
 
         let (pp_settlement_key_name, pp_settlement_key_version) = match (
             d.pp_settlement_key_name,
