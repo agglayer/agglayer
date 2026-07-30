@@ -1,8 +1,10 @@
-use agglayer_storage::stores::SettlementWriter;
+use std::time::SystemTime;
+
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
-    Address, ContractCallOutcome, ContractCallResult, Digest, Nonce, RpcErrorCode,
-    SettlementAttemptNumber, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
-    B256, U256,
+    Address, ClientError as SettlementClientError, ContractCallOutcome, ContractCallResult, Digest,
+    Nonce, RpcErrorCode, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult,
+    SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash, B256, U256,
 };
 use jsonrpsee::{
     core::{client::ClientT, ClientError},
@@ -69,8 +71,19 @@ fn settlement_result() -> SettlementJobResult {
     }
 }
 
-fn call_error(result: Result<(), ClientError>, expected: RpcErrorCode) -> String {
-    let error = match result.unwrap_err() {
+fn settlement_attempt() -> SettlementAttempt {
+    SettlementAttempt {
+        sender_wallet: Address::from([0x21; 20]),
+        nonce: Nonce(0),
+        hash: SettlementTxHash::new(Digest::from([0x43; 32])),
+        submission_time: SystemTime::UNIX_EPOCH,
+        max_fee_per_gas: 10,
+        max_priority_fee_per_gas: 1,
+    }
+}
+
+fn error_payload(error: ClientError, expected: RpcErrorCode) -> String {
+    let error = match error {
         ClientError::Call(error) => error,
         error => panic!("expected JSON-RPC call error, got {error}"),
     };
@@ -86,6 +99,23 @@ fn call_error(result: Result<(), ClientError>, expected: RpcErrorCode) -> String
     });
     normalize_report_locations(&mut payload);
     serde_json::to_string_pretty(&payload).unwrap()
+}
+
+fn call_error(result: Result<(), ClientError>, expected: RpcErrorCode) -> String {
+    error_payload(
+        result.expect_err("expected JSON-RPC request to fail"),
+        expected,
+    )
+}
+
+fn mutation_error(
+    result: Result<serde_json::Value, ClientError>,
+    expected: RpcErrorCode,
+) -> String {
+    error_payload(
+        result.expect_err("expected JSON-RPC mutation to fail"),
+        expected,
+    )
 }
 
 #[test_log::test(tokio::test)]
@@ -180,4 +210,168 @@ async fn admin_reload_settlement_task_errors_are_classified() {
         RpcErrorCode::AlreadyCompleted,
     );
     insta::assert_snapshot!("admin_reload_settlement_task__completed_job", error);
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_attempt_result_mutations_round_trip_over_http() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let job_id = SettlementJobId::from(7_u128);
+    let reason = "the wallet nonce was burned";
+
+    context
+        .state_store
+        .insert_settlement_job(&job_id, &settlement_job())
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_attempt(&job_id, 0, &settlement_attempt())
+        .unwrap();
+
+    let mark_response: serde_json::Value = context
+        .admin_client
+        .request(
+            "admin_markSettlementAttemptDefinitelyFailed",
+            rpc_params![job_id, 0, reason],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        mark_response,
+        serde_json::json!({"attemptNumber": 0, "liveTask": "absent"})
+    );
+    assert_eq!(
+        context
+            .state_store
+            .list_settlement_attempt_results(&job_id)
+            .unwrap(),
+        vec![(
+            0,
+            SettlementAttemptResult::ClientError(SettlementClientError::abandoned_by_admin(reason))
+        )]
+    );
+
+    let remove_response: serde_json::Value = context
+        .admin_client
+        .request(
+            "admin_removeSettlementAttemptResult",
+            rpc_params![job_id, 0],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        remove_response,
+        serde_json::json!({"attemptNumber": 0, "liveTask": "absent"})
+    );
+    assert!(context
+        .state_store
+        .list_settlement_attempt_results(&job_id)
+        .unwrap()
+        .is_empty());
+
+    context
+        .state_store
+        .insert_settlement_job_result(&job_id, &settlement_result())
+        .unwrap();
+
+    let error = mutation_error(
+        context
+            .admin_client
+            .request::<serde_json::Value, _>(
+                "admin_markSettlementAttemptDefinitelyFailed",
+                rpc_params![job_id, 0, "cannot edit completed job"],
+            )
+            .await,
+        RpcErrorCode::AlreadyCompleted,
+    );
+    insta::assert_snapshot!(
+        "admin_mark_settlement_attempt_definitely_failed__completed_job",
+        error
+    );
+
+    let forced_response: serde_json::Value = context
+        .admin_client
+        .request(
+            "admin_markSettlementAttemptDefinitelyFailed",
+            rpc_params![job_id, 0, "operator override", "force=true"],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        forced_response,
+        serde_json::json!({"attemptNumber": 0, "liveTask": "absent"})
+    );
+    assert_eq!(
+        context
+            .state_store
+            .list_settlement_attempt_results(&job_id)
+            .unwrap(),
+        vec![(
+            0,
+            SettlementAttemptResult::ClientError(SettlementClientError::abandoned_by_admin(
+                "operator override"
+            ))
+        )]
+    );
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_attempt_result_mutation_unknown_jobs_are_not_found() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let unknown_job_id = SettlementJobId::from(8_u128);
+
+    let mark_error = mutation_error(
+        context
+            .admin_client
+            .request::<serde_json::Value, _>(
+                "admin_markSettlementAttemptDefinitelyFailed",
+                rpc_params![unknown_job_id, 0, "unknown job"],
+            )
+            .await,
+        RpcErrorCode::NotFound,
+    );
+    insta::assert_snapshot!(
+        "admin_mark_settlement_attempt_definitely_failed__unknown_job",
+        mark_error
+    );
+
+    let remove_error = mutation_error(
+        context
+            .admin_client
+            .request::<serde_json::Value, _>(
+                "admin_removeSettlementAttemptResult",
+                rpc_params![unknown_job_id, 0],
+            )
+            .await,
+        RpcErrorCode::NotFound,
+    );
+    insta::assert_snapshot!(
+        "admin_remove_settlement_attempt_result__unknown_job",
+        remove_error
+    );
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_attempt_result_mutation_rejects_unknown_force_literal() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+
+    let error = context
+        .admin_client
+        .request::<serde_json::Value, _>(
+            "admin_markSettlementAttemptDefinitelyFailed",
+            rpc_params![
+                SettlementJobId::from(9_u128),
+                0,
+                "invalid force",
+                "force=maybe"
+            ],
+        )
+        .await
+        .expect_err("an unknown force literal should be invalid params");
+
+    match error {
+        ClientError::Call(error) => {
+            assert_eq!(error.code(), jsonrpsee::types::error::INVALID_PARAMS_CODE);
+        }
+        error => panic!("expected JSON-RPC call error, got {error}"),
+    }
 }

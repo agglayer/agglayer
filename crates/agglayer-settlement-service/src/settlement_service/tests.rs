@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use agglayer_storage::tests::mocks::MockStateStore;
+use agglayer_storage::{
+    error::Error as StorageError, stores::EditEvenIfCompleted, tests::mocks::MockStateStore,
+};
 use agglayer_types::{
-    CertificateId, ContractCallOutcome, ContractCallResult, Digest, Nonce, RpcErrorCode,
-    SettlementAttemptNumber, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
-    B256, U256,
+    CertificateId, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
+    RpcErrorCode, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob, SettlementJobId,
+    SettlementJobResult, SettlementTxHash, B256, U256,
 };
 use alloy::{
     network::EthereumWallet,
@@ -659,6 +661,287 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
     assert_eq!(
         error.downcast_ref::<RpcErrorCode>(),
         Some(&RpcErrorCode::NoLiveTask)
+    );
+}
+
+#[tokio::test]
+async fn admin_mutations_forward_the_force_flag_to_storage() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let mark_without_force_job = mk_job_id(30);
+    let mark_with_force_job = mk_job_id(31);
+    let remove_without_force_job = mk_job_id(32);
+    let remove_with_force_job = mk_job_id(33);
+
+    store
+        .expect_admin_override_settlement_attempt_result()
+        .once()
+        .withf(
+            move |job_id, attempt_number, result, edit_even_if_completed| {
+                job_id == &mark_without_force_job
+                    && *attempt_number == 0
+                    && matches!(
+                        result,
+                        SettlementAttemptResult::ClientError(client_error)
+                            if client_error.kind == ClientErrorType::AbandonedByAdmin
+                                && client_error.message.contains("not final")
+                    )
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(|_, _, _, _| Ok(()));
+    store
+        .expect_admin_override_settlement_attempt_result()
+        .once()
+        .withf(
+            move |job_id, attempt_number, result, edit_even_if_completed| {
+                job_id == &mark_with_force_job
+                    && *attempt_number == 1
+                    && matches!(
+                        result,
+                        SettlementAttemptResult::ClientError(client_error)
+                            if client_error.kind == ClientErrorType::AbandonedByAdmin
+                                && client_error.message.contains("definitely final")
+                    )
+                    && *edit_even_if_completed == EditEvenIfCompleted::Yes
+            },
+        )
+        .return_once(|_, _, _, _| Ok(()));
+    store
+        .expect_admin_remove_settlement_attempt_result()
+        .once()
+        .withf(move |job_id, attempt_number, edit_even_if_completed| {
+            job_id == &remove_without_force_job
+                && *attempt_number == 2
+                && *edit_even_if_completed == EditEvenIfCompleted::No
+        })
+        .return_once(|_, _, _| Ok(()));
+    store
+        .expect_admin_remove_settlement_attempt_result()
+        .once()
+        .withf(move |job_id, attempt_number, edit_even_if_completed| {
+            job_id == &remove_with_force_job
+                && *attempt_number == 3
+                && *edit_even_if_completed == EditEvenIfCompleted::Yes
+        })
+        .return_once(|_, _, _| Ok(()));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    assert_eq!(
+        service
+            .admin_mark_attempt_definitely_failed(
+                mark_without_force_job,
+                0,
+                "not final",
+                EditEvenIfCompleted::No,
+            )
+            .await
+            .expect("unforced mark should succeed"),
+        LiveTaskNotification::Absent
+    );
+    assert_eq!(
+        service
+            .admin_mark_attempt_definitely_failed(
+                mark_with_force_job,
+                1,
+                "definitely final",
+                EditEvenIfCompleted::Yes,
+            )
+            .await
+            .expect("forced mark should succeed"),
+        LiveTaskNotification::Absent
+    );
+    assert_eq!(
+        service
+            .admin_remove_attempt_result(remove_without_force_job, 2, EditEvenIfCompleted::No,)
+            .await
+            .expect("unforced removal should succeed"),
+        LiveTaskNotification::Absent
+    );
+    assert_eq!(
+        service
+            .admin_remove_attempt_result(remove_with_force_job, 3, EditEvenIfCompleted::Yes)
+            .await
+            .expect("forced removal should succeed"),
+        LiveTaskNotification::Absent
+    );
+}
+
+#[tokio::test]
+async fn admin_mutation_storage_error_propagates_without_task_notification() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(34);
+
+    store
+        .expect_admin_override_settlement_attempt_result()
+        .once()
+        .withf(
+            move |requested_job_id, attempt_number, _, edit_even_if_completed| {
+                requested_job_id == &job_id
+                    && *attempt_number == 0
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(move |_, _, _, _| Err(StorageError::SettlementJobAlreadyCompleted(job_id)));
+
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, mut task_control) =
+        TaskControlHandle::new(&service.cancellation_token);
+    service
+        .task_controls
+        .lock()
+        .await
+        .insert(job_id, task_control_handle);
+
+    let error = service
+        .admin_mark_attempt_definitely_failed(job_id, 0, "stuck", EditEvenIfCompleted::No)
+        .await
+        .expect_err("a storage refusal should propagate");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::AlreadyCompleted)
+    );
+    assert!(format!("{error:#}").contains("already has a terminal result"));
+    assert!(
+        task_control.try_recv_admin_command().is_none(),
+        "a failed storage edit must not trigger a task reload"
+    );
+}
+
+#[tokio::test]
+async fn admin_mutation_reports_absent_live_task() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(35);
+
+    store
+        .expect_admin_remove_settlement_attempt_result()
+        .once()
+        .withf(
+            move |requested_job_id, attempt_number, edit_even_if_completed| {
+                requested_job_id == &job_id
+                    && *attempt_number == 4
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(|_, _, _| Ok(()));
+
+    let service = mk_service(Arc::new(store)).await;
+    let live_task = service
+        .admin_remove_attempt_result(job_id, 4, EditEvenIfCompleted::No)
+        .await
+        .expect("admin removal should succeed");
+
+    assert_eq!(live_task, LiveTaskNotification::Absent);
+}
+
+#[tokio::test]
+async fn admin_mutation_notifies_parked_live_task() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(36);
+
+    store
+        .expect_admin_override_settlement_attempt_result()
+        .once()
+        .withf(
+            move |requested_job_id, attempt_number, _, edit_even_if_completed| {
+                requested_job_id == &job_id
+                    && *attempt_number == 5
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(|_, _, _, _| Ok(()));
+
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, mut task_control) =
+        TaskControlHandle::new(&service.cancellation_token);
+    service
+        .task_controls
+        .lock()
+        .await
+        .insert(job_id, task_control_handle);
+
+    let live_task = service
+        .admin_mark_attempt_definitely_failed(job_id, 5, "nonce burned", EditEvenIfCompleted::No)
+        .await
+        .expect("admin mark should succeed");
+
+    assert_eq!(live_task, LiveTaskNotification::Notified);
+    assert!(matches!(
+        task_control.try_recv_admin_command(),
+        Some(TaskAdminCommand::ReloadAndRestart)
+    ));
+    assert!(task_control.try_recv_admin_command().is_none());
+}
+
+#[tokio::test]
+async fn admin_mutation_reports_closed_and_full_notification_channels() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let closed_job_id = mk_job_id(37);
+    let full_job_id = mk_job_id(38);
+
+    store
+        .expect_admin_remove_settlement_attempt_result()
+        .once()
+        .withf(
+            move |requested_job_id, attempt_number, edit_even_if_completed| {
+                requested_job_id == &closed_job_id
+                    && *attempt_number == 6
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(|_, _, _| Ok(()));
+    store
+        .expect_admin_remove_settlement_attempt_result()
+        .once()
+        .withf(
+            move |requested_job_id, attempt_number, edit_even_if_completed| {
+                requested_job_id == &full_job_id
+                    && *attempt_number == 7
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(|_, _, _| Ok(()));
+
+    let service = mk_service(Arc::new(store)).await;
+
+    let (closed_handle, closed_control) = TaskControlHandle::new(&service.cancellation_token);
+    drop(closed_control);
+    service
+        .task_controls
+        .lock()
+        .await
+        .insert(closed_job_id, closed_handle);
+
+    let (full_handle, _full_control) = TaskControlHandle::new(&service.cancellation_token);
+    while full_handle
+        .try_send(TaskAdminCommand::ReloadAndRestart)
+        .is_ok()
+    {}
+    service
+        .task_controls
+        .lock()
+        .await
+        .insert(full_job_id, full_handle);
+
+    assert_eq!(
+        service
+            .admin_remove_attempt_result(closed_job_id, 6, EditEvenIfCompleted::No)
+            .await
+            .expect("the persisted edit should survive a closed notification channel"),
+        LiveTaskNotification::NotifyFailed
+    );
+    assert_eq!(
+        service
+            .admin_remove_attempt_result(full_job_id, 7, EditEvenIfCompleted::No)
+            .await
+            .expect("the persisted edit should survive a full notification channel"),
+        LiveTaskNotification::NotifyFailed
     );
 }
 
