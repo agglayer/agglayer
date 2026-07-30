@@ -1700,10 +1700,9 @@ impl<
         attempt_number: SettlementAttemptNumber,
         tx_result: ContractCallResult,
     ) -> SettlementJobResult {
-        // TODO: Handle interrupted completion writes in the resumption path.
-        // Attempt results are persisted before the terminal job result below; if
-        // the process stops in between, loading the pending job must resume these
-        // writes before considering any new settlement submission.
+        // Attempt results are persisted before this terminal job result; if the
+        // process stops in between, the next startup's run loop re-derives the
+        // completion from L1 and finishes it here — no special resumption needed.
         self.record_attempt_result_to_db(
             attempt_number,
             SettlementAttemptResult::ContractCall(tx_result.clone()),

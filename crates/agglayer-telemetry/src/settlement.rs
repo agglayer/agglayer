@@ -39,6 +39,13 @@ pub const SETTLEMENT_ATTEMPT_ERRORS: &str = "agglayer_node_settlement_attempt_er
 /// terminal state, by `outcome` and `wallet`.
 pub const SETTLEMENT_JOB_DURATION_SECONDS: &str = "agglayer_node_settlement_job_duration_seconds";
 
+/// Counter instrument name: settlement jobs skipped during startup recovery
+/// because they could not be loaded from storage.
+///
+/// Exported as `agglayer_node_settlement_recovery_skipped_jobs_total`; see
+/// [`SETTLEMENT_ATTEMPTS`] for the suffix convention.
+pub const SETTLEMENT_RECOVERY_SKIPPED_JOBS: &str = "agglayer_node_settlement_recovery_skipped_jobs";
+
 /// A kind of settlement transaction attempt, rendered as the `kind` label
 /// value on [`SETTLEMENT_ATTEMPTS`].
 ///
@@ -100,6 +107,14 @@ lazy_static! {
             .with_description("Settlement job time from creation to terminal state, in seconds")
             .with_boundaries(DURATION_BUCKETS_SECONDS.to_vec())
             .build();
+    static ref SETTLEMENT_RECOVERY_SKIPPED_JOBS_COUNTER: Counter<u64> =
+        global::meter(AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME)
+            .u64_counter(SETTLEMENT_RECOVERY_SKIPPED_JOBS)
+            .with_description(
+                "Number of settlement jobs skipped during startup recovery because they could not \
+                 be loaded"
+            )
+            .build();
 }
 
 /// Records one settlement transaction attempt.
@@ -131,6 +146,14 @@ pub fn record_settlement_job_duration(outcome: SettlementJobOutcome, wallet: &st
             KeyValue::new(WALLET_LABEL_NAME, wallet.to_string()),
         ],
     );
+}
+
+/// Records how many settlement jobs the startup recovery scan skipped
+/// because they could not be loaded. Called once at node startup; a zero
+/// count still exports the series.
+#[inline]
+pub fn record_settlement_recovery_skipped_jobs(count: u64) {
+    SETTLEMENT_RECOVERY_SKIPPED_JOBS_COUNTER.add(count, &[]);
 }
 
 #[cfg(test)]
