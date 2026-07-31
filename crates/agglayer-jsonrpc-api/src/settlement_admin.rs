@@ -43,9 +43,15 @@ pub struct MutationResponse {
     /// The attempt number the mutation landed on.
     pub attempt_number: u64,
 
-    /// Whether the live task observed the edit. Anything but `notified`
-    /// means the task acts on stale state until it reloads
-    /// (`admin_reloadSettlementTask` is the manual escape hatch).
+    /// Whether a reload command was queued for the live task. `queued` is
+    /// not a promptness promise: the task drains its command queue only at
+    /// run-loop control checks, so a task parked in an L1 wait acts on stale
+    /// state until that wait returns. The retry policy caps individual
+    /// backoff sleeps, not total wait duration; settlement polling can
+    /// continue until the configured settlement policy is satisfied.
+    /// Anything but `queued` means not even that happened
+    /// (`admin_reloadSettlementTask` is the manual escape hatch). Follow
+    /// the abort → edit → reload flow when edits must be observed promptly.
     pub live_task: LiveTaskNotification,
 }
 

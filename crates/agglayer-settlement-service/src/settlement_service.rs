@@ -26,19 +26,27 @@ use crate::{
 /// How the live task for a job (if any) was told about an admin mutation.
 ///
 /// Admin mutations are declarative edits of stored state; a running task only
-/// picks them up by reloading from storage. Anything but [`Notified`] means
+/// picks them up by reloading from storage. Anything but [`Queued`] means
 /// the operator should check the job before relying on the edit being live.
 ///
-/// Serializes as `notified` / `absent` / `notify-failed` in admin RPC
+/// Serializes as `queued` / `absent` / `notify-failed` in admin RPC
 /// responses. Keeping serialization on this service-level response is a
 /// deliberate pragmatic choice; it is not an `agglayer-types` domain type.
 ///
-/// [`Notified`]: LiveTaskNotification::Notified
+/// [`Queued`]: LiveTaskNotification::Queued
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum LiveTaskNotification {
-    /// The running task was told to reload from storage and restart.
-    Notified,
+    /// A reload command was queued for the running task. Not a wake-up: the
+    /// task drains its command queue only at run-loop control checks, and
+    /// its waits are interrupted by cancellation, L1 progress, or attempt
+    /// deadlines — never by this queue. A task parked in an L1 wait keeps
+    /// acting on stale in-memory state until that wait returns. The retry
+    /// policy caps individual backoff sleeps, not total wait duration;
+    /// settlement polling can continue until the configured settlement
+    /// policy is satisfied. Abort the task before editing when prompt
+    /// observation matters.
+    Queued,
     /// No live task exists for this job. The edit persists and is picked up
     /// whenever a task is started for the job (e.g. on startup recovery).
     Absent,
@@ -374,11 +382,15 @@ impl<
             .await
     }
 
-    /// Tells the live task for `job_id`, if any, to drop its in-memory state
-    /// and reload from storage, so it observes an admin edit.
+    /// Queues a command telling the live task for `job_id`, if any, to drop
+    /// its in-memory state and reload from storage, so it observes an admin
+    /// edit.
     ///
     /// Best-effort: the edit is already persisted when this runs, and a task
     /// that cannot be notified will still observe it on its next reload.
+    /// Queueing does not interrupt a wait in progress; the task acts on the
+    /// command at its next control check (see
+    /// [`LiveTaskNotification::Queued`]).
     async fn notify_live_task_of_admin_edit(
         &self,
         job_id: SettlementJobId,
@@ -389,7 +401,7 @@ impl<
         };
 
         match task_control.try_send(TaskAdminCommand::ReloadAndRestart) {
-            Ok(()) => LiveTaskNotification::Notified,
+            Ok(()) => LiveTaskNotification::Queued,
             Err(error) => {
                 warn!(
                     ?job_id,

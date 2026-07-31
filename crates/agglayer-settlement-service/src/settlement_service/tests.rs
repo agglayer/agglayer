@@ -858,7 +858,7 @@ async fn admin_mutation_reports_absent_live_task() {
 }
 
 #[tokio::test]
-async fn admin_mutation_notifies_parked_live_task() {
+async fn admin_mutation_queues_reload_for_parked_live_task() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
     let job_id = mk_job_id(36);
@@ -889,7 +889,11 @@ async fn admin_mutation_notifies_parked_live_task() {
         .await
         .expect("admin mark should succeed");
 
-    assert_eq!(live_task, LiveTaskNotification::Notified);
+    assert_eq!(live_task, LiveTaskNotification::Queued);
+    assert_eq!(
+        serde_json::to_value(live_task).expect("live-task notification should serialize"),
+        serde_json::json!("queued")
+    );
     assert!(matches!(
         task_control.try_recv_admin_command(),
         Some(TaskAdminCommand::ReloadAndRestart)

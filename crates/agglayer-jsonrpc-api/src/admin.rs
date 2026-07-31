@@ -233,7 +233,9 @@ pub(crate) trait AdminAgglayer {
     ///
     /// The task drops its in-memory state and reloads from storage. It
     /// requires a live task, and is the escape hatch when a later mutation
-    /// reports `liveTask` other than `notified`.
+    /// reports `liveTask` other than `queued`. The command is queued, not a
+    /// wake-up: it takes effect at the task's next control check and does
+    /// not interrupt a wait in progress.
     ///
     /// # Errors
     ///
@@ -260,6 +262,11 @@ pub(crate) trait AdminAgglayer {
     /// the assertion. It fails if the attempt does not exist, or if the job
     /// already has a terminal result and `force` is not `"force=true"` (see
     /// [`Force`]).
+    ///
+    /// The edit is durable once this returns; the response's `liveTask` only
+    /// reports whether a reload command was queued, with no promptness
+    /// promise (see [`MutationResponse`]). Follow the abort → edit → reload
+    /// flow when the task must not act on stale state.
     #[method(name = "markSettlementAttemptDefinitelyFailed")]
     async fn mark_settlement_attempt_definitely_failed(
         &self,
@@ -278,6 +285,11 @@ pub(crate) trait AdminAgglayer {
     /// `admin_markSettlementAttemptDefinitelyFailed`. It fails if the attempt
     /// does not exist, no result is recorded, or if the job already has a
     /// terminal result and `force` is not `"force=true"` (see [`Force`]).
+    ///
+    /// The edit is durable once this returns; the response's `liveTask` only
+    /// reports whether a reload command was queued, with no promptness
+    /// promise (see [`MutationResponse`]). Follow the abort → edit → reload
+    /// flow when the task must not act on stale state.
     #[method(name = "removeSettlementAttemptResult")]
     async fn remove_settlement_attempt_result(
         &self,
