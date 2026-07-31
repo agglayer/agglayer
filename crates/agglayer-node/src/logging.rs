@@ -4,10 +4,11 @@ use tracing_subscriber::{
     filter::filter_fn, fmt::writer::BoxMakeWriter, prelude::*, util::SubscriberInitExt, EnvFilter,
 };
 
-// Reject pinned records that expose a full endpoint, HTTP authority, or
-// WebSocket handshake request before any user-configurable formatting layer.
-// The dependencies do not give every sensitive and benign record distinct
-// metadata, so same-target records at the filtered levels are also suppressed.
+// Reject pinned records that expose a full endpoint, HTTP authority, WebSocket
+// handshake request, or TLS server name before any user-configurable formatting
+// layer. The dependencies do not give every sensitive and benign record
+// distinct metadata, so same-target records at the filtered levels are also
+// suppressed.
 fn is_dependency_record_allowed(metadata: &Metadata<'_>) -> bool {
     let alloy_url_span = metadata.is_span()
         && metadata.target() == "alloy_transport_http::reqwest_transport"
@@ -24,12 +25,16 @@ fn is_dependency_record_allowed(metadata: &Metadata<'_>) -> bool {
     let tungstenite_client_trace = metadata.is_event()
         && metadata.target() == "tungstenite::handshake::client"
         && *metadata.level() == Level::TRACE;
+    let rustls_client_handshake = metadata.is_event()
+        && metadata.target() == "rustls::client::hs"
+        && matches!(*metadata.level(), Level::DEBUG | Level::TRACE);
 
     !alloy_url_span
         && !reqwest_connect
         && !hyper_connector
         && !hyper_pool
         && !tungstenite_client_trace
+        && !rustls_client_handshake
 }
 
 fn subscriber(
@@ -94,6 +99,7 @@ mod tests {
 
     const ALLOY_SECRET: &str = "alloy-url-secret-803";
     const HTTP_HOST_SECRET: &str = "http-host-secret-803.invalid";
+    const TLS_HOST_SECRET: &str = "tls-host-secret-803.localhost";
     const TUNGSTENITE_SECRET: &str = "tungstenite-request-secret-803";
     const HTTP_PATH_SECRET: &str = "http-path-secret-803";
     const HTTP_QUERY_SECRET: &str = "http-query-secret-803";
@@ -191,6 +197,21 @@ mod tests {
             target: "hyper_util::client::legacy::pool",
             "hyper-pool-info-control"
         );
+        tracing::debug!(
+            target: "rustls::client::hs",
+            server_name = TLS_HOST_SECRET,
+            "rustls-server-name"
+        );
+        tracing::trace!(
+            target: "rustls::client::hs",
+            client_hello = TLS_HOST_SECRET,
+            "rustls-client-hello"
+        );
+        tracing::info!(target: "rustls::client::hs", "rustls-info-control");
+        tracing::debug!(
+            target: "rustls::client::common",
+            "rustls-nearby-target-control"
+        );
         tracing::trace!(target: "safe_control", "unrelated-trace-control");
         let span = tracing::trace_span!(
             target: "tungstenite::handshake::client",
@@ -199,6 +220,15 @@ mod tests {
         );
         let _entered = span.enter();
         tracing::debug!(target: "safe_control", "tungstenite-trace-span-event-control");
+        drop(_entered);
+
+        let span = tracing::debug_span!(
+            target: "rustls::client::hs",
+            "RustlsHandshakeSpan",
+            marker = "rustls-debug-span-control"
+        );
+        let _entered = span.enter();
+        tracing::debug!(target: "safe_control", "rustls-debug-span-event-control");
         drop(_entered);
 
         let span = tracing::debug_span!(
@@ -218,7 +248,8 @@ mod tests {
                 "off,alloy_transport_http::reqwest_transport=debug,\
                  tungstenite::handshake::client=trace,reqwest::connect=trace,\
                  hyper_util::client::legacy::connect::http=trace,\
-                 hyper_util::client::legacy::pool=trace,safe_control=trace",
+                 hyper_util::client::legacy::pool=trace,rustls::client::hs=trace,\
+                 rustls::client::common=debug,safe_control=trace",
             );
             let subscriber = subscriber(format, BoxMakeWriter::new(capture.clone()), filter);
 
@@ -228,6 +259,7 @@ mod tests {
             assert!(!output.contains(ALLOY_SECRET));
             assert!(!output.contains(HTTP_HOST_SECRET));
             assert!(!output.contains(TUNGSTENITE_SECRET));
+            assert!(!output.contains(TLS_HOST_SECRET));
             for control in [
                 "alloy-request-control",
                 "same-alloy-name-event-control",
@@ -235,9 +267,13 @@ mod tests {
                 "reqwest-trace-control",
                 "hyper-connector-debug-control",
                 "hyper-pool-info-control",
+                "rustls-info-control",
+                "rustls-nearby-target-control",
                 "unrelated-trace-control",
                 "tungstenite-trace-span-control",
                 "tungstenite-trace-span-event-control",
+                "rustls-debug-span-control",
+                "rustls-debug-span-event-control",
                 "other-alloy-span-field-control",
                 "other-alloy-event-control",
             ] {
@@ -334,6 +370,63 @@ mod tests {
             error
         );
         server.await.unwrap();
+
+        // Rustls logs the SNI while producing ClientHello, before any peer response, so
+        // a loopback TCP peer exercises the real TLS logging path without a
+        // test certificate.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut client_hello = [0_u8; 2048];
+            let _ = stream.read(&mut client_hello).await.unwrap();
+        });
+
+        let client = reqwest13::Client::builder()
+            .no_proxy()
+            .resolve(TLS_HOST_SECRET, address)
+            .build()
+            .unwrap();
+        let url = format!(
+            "https://{TLS_HOST_SECRET}:{}/{HTTP_PATH_SECRET}?key={HTTP_QUERY_SECRET}",
+            address.port()
+        )
+        .parse()
+        .unwrap();
+        let request = Request::new("eth_blockNumber", Id::Number(1), ())
+            .serialize()
+            .unwrap();
+        let mut transport = Http::with_client(client, url);
+        let _ = transport.call(RequestPacket::Single(request)).await;
+        server.await.unwrap();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut client_hello = [0_u8; 2048];
+            let _ = stream.read(&mut client_hello).await.unwrap();
+        });
+
+        let Err(error) = BlockClock::new_with_ws(
+            WsConnect::new(format!(
+                "wss://{WS_USERNAME}:{WS_PASSWORD}@{TLS_HOST_SECRET}:{port}/{WS_PATH_SECRET}?\
+                 key={WS_QUERY_SECRET}"
+            )),
+            0,
+            NonZeroU64::new(1).unwrap(),
+            Duration::from_secs(1),
+        )
+        .await
+        else {
+            panic!("test server accepted WebSocket upgrade");
+        };
+        tracing::error!(
+            target: "agglayer_node::node",
+            "Failed to start BlockClock: {:?}",
+            error
+        );
+        server.await.unwrap();
     }
 
     async fn capture_actual_dependency_records<S>(subscriber: S, capture: Capture) -> String
@@ -359,6 +452,7 @@ mod tests {
         let filter = || EnvFilter::new("trace");
         let baseline_observed_leaks = [
             HTTP_HOST_SECRET,
+            TLS_HOST_SECRET,
             HTTP_PATH_SECRET,
             HTTP_QUERY_SECRET,
             WS_PATH_SECRET,
@@ -369,6 +463,7 @@ mod tests {
         // absence-only checks for a future dependency regression.
         let all_sensitive_endpoint_components = [
             HTTP_HOST_SECRET,
+            TLS_HOST_SECRET,
             HTTP_PATH_SECRET,
             HTTP_QUERY_SECRET,
             WS_USERNAME,
@@ -383,6 +478,7 @@ mod tests {
             "hyper_util::client::legacy::connect::http",
             "hyper_util::client::legacy::pool",
             "tungstenite::handshake::client",
+            "rustls::client::hs",
         ];
 
         for format in [LogFormat::Pretty, LogFormat::Json] {
