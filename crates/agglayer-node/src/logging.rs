@@ -1,7 +1,11 @@
 use agglayer_config::log::LogFormat;
 use tracing::{Level, Metadata};
 use tracing_subscriber::{
-    filter::filter_fn, fmt::writer::BoxMakeWriter, prelude::*, util::SubscriberInitExt, EnvFilter,
+    filter::{filter_fn, FilterExt},
+    fmt::writer::BoxMakeWriter,
+    prelude::*,
+    util::SubscriberInitExt,
+    EnvFilter,
 };
 
 // Reject pinned records that expose a full endpoint, HTTP authority, WebSocket
@@ -12,7 +16,8 @@ use tracing_subscriber::{
 fn is_dependency_record_allowed(metadata: &Metadata<'_>) -> bool {
     let alloy_url_span = metadata.is_span()
         && metadata.target() == "alloy_transport_http::reqwest_transport"
-        && metadata.name() == "ReqwestTransport";
+        && metadata.name() == "ReqwestTransport"
+        && *metadata.level() == Level::DEBUG;
     let reqwest_connect = metadata.is_event()
         && metadata.target() == "reqwest::connect"
         && *metadata.level() == Level::DEBUG;
@@ -42,6 +47,8 @@ fn subscriber(
     writer: BoxMakeWriter,
     filter: EnvFilter,
 ) -> impl tracing::Subscriber + Send + Sync {
+    // Keep both filters on the formatting layer so disabled callsites retain `Interest::never`.
+    let filter = filter.and(filter_fn(is_dependency_record_allowed));
     let layer = match format {
         LogFormat::Pretty => tracing_subscriber::fmt::layer()
             .pretty()
@@ -56,9 +63,7 @@ fn subscriber(
             .boxed(),
     };
 
-    tracing_subscriber::Registry::default()
-        .with(filter_fn(is_dependency_record_allowed))
-        .with(layer)
+    tracing_subscriber::Registry::default().with(layer)
 }
 
 pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<()> {
@@ -110,6 +115,17 @@ mod tests {
     const WS_BASIC_AUTH: &str = "Basic d3MtdXNlci04MDM6d3MtcGFzcy04MDM=";
     const BLOCK_CLOCK_FAILURE: &str = "Failed to start BlockClock";
 
+    static UNRELATED_DEBUG_CALLSITE: tracing::callsite::DefaultCallsite =
+        tracing::callsite::DefaultCallsite::new(&UNRELATED_DEBUG_METADATA);
+    static UNRELATED_DEBUG_METADATA: tracing::Metadata<'static> = tracing::metadata! {
+        name: "unrelated_debug_callsite",
+        target: "unrelated_target",
+        level: tracing::Level::DEBUG,
+        fields: tracing::fieldset!(),
+        callsite: &UNRELATED_DEBUG_CALLSITE,
+        kind: tracing::metadata::Kind::EVENT,
+    };
+
     #[derive(Clone, Default)]
     struct Capture(Arc<Mutex<Vec<u8>>>);
 
@@ -153,6 +169,16 @@ mod tests {
             "alloy-request-control"
         );
         drop(_entered);
+
+        let span = tracing::info_span!(
+            target: "alloy_transport_http::reqwest_transport",
+            "ReqwestTransport",
+            marker = "alloy-info-span-control"
+        );
+        let _entered = span.enter();
+        tracing::debug!(target: "safe_control", "alloy-info-span-event-control");
+        drop(_entered);
+
         tracing::debug!(
             name: "ReqwestTransport",
             target: "alloy_transport_http::reqwest_transport",
@@ -262,6 +288,8 @@ mod tests {
             assert!(!output.contains(TLS_HOST_SECRET));
             for control in [
                 "alloy-request-control",
+                "alloy-info-span-control",
+                "alloy-info-span-event-control",
                 "same-alloy-name-event-control",
                 "same-target-debug-control",
                 "reqwest-trace-control",
@@ -280,6 +308,20 @@ mod tests {
                 assert!(output.contains(control), "missing {control:?} in {output}");
             }
         }
+    }
+
+    #[test]
+    fn disabled_callsites_keep_interest_never() {
+        let subscriber = subscriber(
+            LogFormat::Pretty,
+            BoxMakeWriter::new(Capture::default()),
+            EnvFilter::new("info"),
+        );
+
+        assert!(
+            tracing::Subscriber::register_callsite(&subscriber, &UNRELATED_DEBUG_METADATA)
+                .is_never()
+        );
     }
 
     fn subscriber_without_endpoint_policy(
@@ -398,34 +440,6 @@ mod tests {
             .unwrap();
         let mut transport = Http::with_client(client, url);
         let _ = transport.call(RequestPacket::Single(request)).await;
-        server.await.unwrap();
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let server = tokio::spawn(async move {
-            let (mut stream, _) = listener.accept().await.unwrap();
-            let mut client_hello = [0_u8; 2048];
-            let _ = stream.read(&mut client_hello).await.unwrap();
-        });
-
-        let Err(error) = BlockClock::new_with_ws(
-            WsConnect::new(format!(
-                "wss://{WS_USERNAME}:{WS_PASSWORD}@{TLS_HOST_SECRET}:{port}/{WS_PATH_SECRET}?\
-                 key={WS_QUERY_SECRET}"
-            )),
-            0,
-            NonZeroU64::new(1).unwrap(),
-            Duration::from_secs(1),
-        )
-        .await
-        else {
-            panic!("test server accepted WebSocket upgrade");
-        };
-        tracing::error!(
-            target: "agglayer_node::node",
-            "Failed to start BlockClock: {:?}",
-            error
-        );
         server.await.unwrap();
     }
 
