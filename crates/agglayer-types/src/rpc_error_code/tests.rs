@@ -4,6 +4,12 @@ use super::*;
 fn display_and_tag_are_pinned() {
     let cases = [
         (
+            RpcErrorCode::InvalidParams,
+            "invalid params",
+            "invalid-params",
+            -32602,
+        ),
+        (
             RpcErrorCode::RollupNotRegistered,
             "rollup not registered",
             "rollup-not-registered",
@@ -94,6 +100,7 @@ fn display_and_tag_are_pinned() {
 #[test]
 fn serialization_matches_tag() {
     let codes = [
+        RpcErrorCode::InvalidParams,
         RpcErrorCode::RollupNotRegistered,
         RpcErrorCode::SignatureMismatch,
         RpcErrorCode::ValidationFailure,
