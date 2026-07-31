@@ -595,3 +595,91 @@ async fn admin_attempt_result_mutation_rejects_unknown_force_literal() {
         error => panic!("expected JSON-RPC call error, got {error}"),
     }
 }
+
+#[test_log::test(tokio::test)]
+async fn admin_force_remove_settlement_job_result_round_trips_over_http() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let job_id = SettlementJobId::from(20_u128);
+    let job_result = settlement_result();
+    let attempt_result =
+        SettlementAttemptResult::ContractCall(job_result.contract_call_result.clone());
+
+    context
+        .state_store
+        .insert_settlement_job(&job_id, &settlement_job())
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_attempt(&job_id, 0, &settlement_attempt())
+        .unwrap();
+    context
+        .state_store
+        .record_settlement_attempt_result(&job_id, 0, &attempt_result)
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_job_result(&job_id, &job_result)
+        .unwrap();
+
+    let _: () = context
+        .admin_client
+        .request("admin_forceRemoveSettlementJobResult", rpc_params![job_id])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        context
+            .state_store
+            .get_settlement_job_result(&job_id)
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        context
+            .state_store
+            .list_settlement_attempt_results(&job_id)
+            .unwrap(),
+        vec![(0, attempt_result)]
+    );
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_force_remove_settlement_job_result_errors_are_classified() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+
+    let pending_job_id = SettlementJobId::from(21_u128);
+    context
+        .state_store
+        .insert_settlement_job(&pending_job_id, &settlement_job())
+        .unwrap();
+    let pending_error = call_error(
+        context
+            .admin_client
+            .request(
+                "admin_forceRemoveSettlementJobResult",
+                rpc_params![pending_job_id],
+            )
+            .await,
+        RpcErrorCode::NotCompleted,
+    );
+    insta::assert_snapshot!(
+        "admin_force_remove_settlement_job_result__pending_job",
+        pending_error
+    );
+
+    let unknown_job_id = SettlementJobId::from(22_u128);
+    let unknown_error = call_error(
+        context
+            .admin_client
+            .request(
+                "admin_forceRemoveSettlementJobResult",
+                rpc_params![unknown_job_id],
+            )
+            .await,
+        RpcErrorCode::NotFound,
+    );
+    insta::assert_snapshot!(
+        "admin_force_remove_settlement_job_result__unknown_job",
+        unknown_error
+    );
+}

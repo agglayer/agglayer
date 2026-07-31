@@ -52,6 +52,9 @@ pub enum Error {
     )]
     SettlementJobAlreadyCompleted(SettlementJobId),
 
+    #[error("Settlement job {0} has no terminal result to remove")]
+    SettlementJobNotCompleted(SettlementJobId),
+
     #[error("Settlement attempt {attempt} does not exist for job {job}")]
     SettlementAttemptNotFound { job: SettlementJobId, attempt: u64 },
 

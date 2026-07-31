@@ -325,6 +325,26 @@ pub(crate) trait AdminAgglayer {
         attempt_number: u64,
         force: Option<Force>,
     ) -> RpcResult<MutationResponse>;
+
+    /// Remove the terminal result of a settlement job, turning it back into
+    /// a pending job that is immediately re-driven.
+    ///
+    /// **JSON-RPC method:** `admin_forceRemoveSettlementJobResult`
+    ///
+    /// The job's stale completed-result watcher is dropped and a fresh
+    /// settlement task is spawned from stored state. Attempts and their
+    /// results are untouched: correct them **first**, with the attempt
+    /// mutations' `"force=true"` parameter (see [`Force`]), while the terminal
+    /// result still blocks the job from being re-driven. The fresh task
+    /// spawned here could otherwise re-derive and re-record the removed result
+    /// from uncorrected attempts.
+    ///
+    /// **Force operation**: it un-completes a job. If the removed result was
+    /// real, only the settlement contract's replay protection stands between
+    /// the re-driven job and a double settlement. It fails if the job does not
+    /// exist, has no terminal result, or still has a live task.
+    #[method(name = "forceRemoveSettlementJobResult")]
+    async fn force_remove_settlement_job_result(&self, job_id: SettlementJobId) -> RpcResult<()>;
 }
 
 /// The Admin RPC agglayer service implementation.
@@ -1017,5 +1037,14 @@ where
             attempt_number,
             live_task,
         })
+    }
+
+    #[instrument(skip(self))]
+    async fn force_remove_settlement_job_result(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!("(ADMIN) Force-removing terminal result of settlement job {job_id}");
+        self.settlement_service
+            .admin_force_remove_settlement_job_result(job_id)
+            .await
+            .map_err(map_admin_error)
     }
 }

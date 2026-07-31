@@ -141,4 +141,18 @@ pub trait SettlementWriter: Send + Sync {
         attempt_number: u64,
         edit_even_if_completed: EditEvenIfCompleted,
     ) -> Result<(), Error>;
+
+    /// Removes the terminal result of `settlement_job_id`, turning it back
+    /// into a pending job that a settlement task will re-drive.
+    ///
+    /// Attempts and their results are untouched. This is a force operation:
+    /// if the removed result was real, only the settlement contract's replay
+    /// protection stands between the re-driven job and a double settlement.
+    /// It fails with [`Error::SettlementJobNotFound`] if the job does not
+    /// exist, or with [`Error::SettlementJobNotCompleted`] if it has no
+    /// terminal result.
+    fn admin_force_remove_settlement_job_result(
+        &self,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<(), Error>;
 }
