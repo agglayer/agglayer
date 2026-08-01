@@ -1,9 +1,7 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
-use agglayer_storage::stores::{
-    EditEvenIfCompleted, SettlementReader, SettlementWriter, StateReader, StateWriter,
-};
+use agglayer_storage::stores::{EditEvenIfCompleted, SettlementReader, SettlementWriter};
 use agglayer_types::{
     CertificateId, ClientError, RpcErrorCode, SettlementAttemptResult, SettlementJob,
     SettlementJobId, SettlementJobResult,
@@ -134,7 +132,7 @@ pub enum RetrievedSettlementResult {
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > SettlementService<L1Provider, SettlementStore>
 {
     pub async fn start(
@@ -545,7 +543,7 @@ pub struct RequestNewSettlement {
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<RequestNewSettlement> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = SettlementJobWatcher;
@@ -572,7 +570,7 @@ pub struct RetrieveSettlementResult(pub SettlementJobId);
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<RetrieveSettlementResult> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = RetrievedSettlementResult;
@@ -599,7 +597,7 @@ pub enum AdminCommand {
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<AdminCommand> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = ();
