@@ -53,24 +53,13 @@ pub fn main(
         bail!("Received cancellation signal before starting the node.");
     }
 
-    // Initialize the logger
-    match logging::tracing(&config.log) {
-        Ok(()) => {
-            info!("Tracing initialized successfully.");
-        }
-        Err(e)
-            if e.to_string()
-                .contains("trace dispatcher has already been set") =>
-        {
-            // This is a common case in integration tests where the logger is initialized
-            // multiple times. We can safely ignore this error.
-            debug!("Logger already initialized, ignoring error: {e}");
-        }
-        Err(e) => {
-            eprintln!("Failed to initialize logger: {e:?}");
-            return Err(e);
-        }
+    // Initialize the logger. The logging module permits repeated starts only
+    // after Agglayer has installed its endpoint-redaction policy itself.
+    if let Err(error) = logging::tracing(&config.log) {
+        eprintln!("Failed to initialize logger: {error:?}");
+        return Err(error);
     }
+    info!("Tracing initialized successfully.");
 
     if let Some(outbound) = &config.outbound {
         warn!("{}", outbound.ignored_config_warning());

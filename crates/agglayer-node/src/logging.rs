@@ -1,3 +1,5 @@
+use std::sync::{Mutex, OnceLock};
+
 use agglayer_config::log::LogFormat;
 use tracing::{Level, Metadata};
 use tracing_subscriber::{
@@ -7,6 +9,9 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
     EnvFilter,
 };
+
+static SUBSCRIBER_INIT: Mutex<()> = Mutex::new(());
+static SUBSCRIBER_INSTALLED: OnceLock<()> = OnceLock::new();
 
 // Reject pinned records that expose a full endpoint, HTTP authority, WebSocket
 // handshake request, or TLS server name before any user-configurable formatting
@@ -18,28 +23,49 @@ fn is_dependency_record_allowed(metadata: &Metadata<'_>) -> bool {
         && metadata.target() == "alloy_transport_http::reqwest_transport"
         && metadata.name() == "ReqwestTransport"
         && *metadata.level() == Level::DEBUG;
+    let alloy_hyper_url_span = metadata.is_span()
+        && metadata.target() == "alloy_transport_http::hyper_transport"
+        && metadata.name() == "HyperTransport"
+        && *metadata.level() == Level::DEBUG;
     let reqwest_connect = metadata.is_event()
         && metadata.target() == "reqwest::connect"
-        && *metadata.level() == Level::DEBUG;
+        && matches!(*metadata.level(), Level::DEBUG | Level::TRACE);
     let hyper_connector = metadata.is_event()
         && metadata.target() == "hyper_util::client::legacy::connect::http"
-        && *metadata.level() == Level::TRACE;
+        && matches!(*metadata.level(), Level::DEBUG | Level::TRACE);
     let hyper_pool = metadata.is_event()
         && metadata.target() == "hyper_util::client::legacy::pool"
         && matches!(*metadata.level(), Level::DEBUG | Level::TRACE);
+    let hyper_client = metadata.is_event()
+        && metadata.target() == "hyper_util::client::legacy::client"
+        && matches!(*metadata.level(), Level::DEBUG | Level::WARN);
+    let tungstenite_client = metadata.is_event()
+        && metadata.target() == "tungstenite::client"
+        && *metadata.level() == Level::DEBUG;
     let tungstenite_client_trace = metadata.is_event()
         && metadata.target() == "tungstenite::handshake::client"
         && *metadata.level() == Level::TRACE;
+    let jsonrpsee_client = metadata.is_event()
+        && metadata.target() == "jsonrpsee-client"
+        && *metadata.level() == Level::DEBUG;
     let rustls_client_handshake = metadata.is_event()
         && metadata.target() == "rustls::client::hs"
         && matches!(*metadata.level(), Level::DEBUG | Level::TRACE);
+    let rustls_client_tls12 = metadata.is_event()
+        && metadata.target() == "rustls::client::tls12"
+        && matches!(*metadata.level(), Level::DEBUG | Level::TRACE);
 
     !alloy_url_span
+        && !alloy_hyper_url_span
         && !reqwest_connect
         && !hyper_connector
         && !hyper_pool
+        && !hyper_client
+        && !tungstenite_client
         && !tungstenite_client_trace
+        && !jsonrpsee_client
         && !rustls_client_handshake
+        && !rustls_client_tls12
 }
 
 fn subscriber(
@@ -47,7 +73,8 @@ fn subscriber(
     writer: BoxMakeWriter,
     filter: EnvFilter,
 ) -> impl tracing::Subscriber + Send + Sync {
-    // Keep both filters on the formatting layer so disabled callsites retain `Interest::never`.
+    // Keep both filters on the formatting layer so disabled callsites retain
+    // `Interest::never`.
     let filter = filter.and(filter_fn(is_dependency_record_allowed));
     let layer = match format {
         LogFormat::Pretty => tracing_subscriber::fmt::layer()
@@ -67,13 +94,33 @@ fn subscriber(
 }
 
 pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<()> {
+    if SUBSCRIBER_INSTALLED.get().is_some() {
+        return Ok(());
+    }
+
+    let _init_guard = SUBSCRIBER_INIT
+        .lock()
+        .expect("Agglayer logging subscriber initialization lock was poisoned");
+    if SUBSCRIBER_INSTALLED.get().is_some() {
+        return Ok(());
+    }
+
     // TODO: Support multiple outputs.
     let writer = config.outputs.first().cloned().unwrap_or_default();
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into());
 
-    // We are using try_init because integration test may try to initialize this
-    // multiple times.
-    subscriber(config.format, writer.as_make_writer(), filter).try_init()?;
+    // Repeated node starts may reuse the subscriber installed by Agglayer. A
+    // subscriber installed by another component is rejected: continuing would
+    // leave dependency endpoint records outside this redaction policy.
+    subscriber(config.format, writer.as_make_writer(), filter)
+        .try_init()
+        .map_err(|error| {
+            eyre::eyre!(
+                "Agglayer logging requires its endpoint-redaction policy, but the global tracing \
+                 subscriber is already initialized: {error}"
+            )
+        })?;
+    let _ = SUBSCRIBER_INSTALLED.set(());
 
     Ok(())
 }
@@ -81,8 +128,9 @@ pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<()> {
 #[cfg(test)]
 mod tests {
     use std::{
-        io,
+        env, io,
         num::NonZeroU64,
+        process::Command,
         sync::{Arc, Mutex},
         time::Duration,
     };
@@ -105,6 +153,7 @@ mod tests {
     const ALLOY_SECRET: &str = "alloy-url-secret-803";
     const HTTP_HOST_SECRET: &str = "http-host-secret-803.invalid";
     const TLS_HOST_SECRET: &str = "tls-host-secret-803.localhost";
+    const JSONRPSEE_SECRET: &str = "jsonrpsee-url-secret-803";
     const TUNGSTENITE_SECRET: &str = "tungstenite-request-secret-803";
     const HTTP_PATH_SECRET: &str = "http-path-secret-803";
     const HTTP_QUERY_SECRET: &str = "http-query-secret-803";
@@ -185,6 +234,23 @@ mod tests {
             marker = "same-alloy-name-event-control"
         );
 
+        let span = tracing::debug_span!(
+            target: "alloy_transport_http::hyper_transport",
+            "HyperTransport",
+            url = ALLOY_SECRET
+        );
+        let _entered = span.enter();
+        tracing::debug!(target: "safe_control", "hyper-alloy-event-control");
+        drop(_entered);
+        let span = tracing::info_span!(
+            target: "alloy_transport_http::hyper_transport",
+            "HyperTransport",
+            marker = "hyper-alloy-info-span-control"
+        );
+        let _entered = span.enter();
+        tracing::debug!(target: "safe_control", "hyper-alloy-info-span-event-control");
+        drop(_entered);
+
         tracing::trace!(
             target: "tungstenite::handshake::client",
             request = TUNGSTENITE_SECRET,
@@ -196,9 +262,38 @@ mod tests {
             "reqwest-host-secret"
         );
         tracing::trace!(
+            target: "reqwest::connect",
+            request = HTTP_QUERY_SECRET,
+            "reqwest-trace-secret"
+        );
+        tracing::info!(target: "reqwest::connect", "reqwest-info-control");
+        tracing::trace!(
             target: "hyper_util::client::legacy::connect::http",
             host = HTTP_HOST_SECRET,
             "hyper-connector-host-secret"
+        );
+        tracing::debug!(
+            target: "hyper_util::client::legacy::connect::http",
+            host = HTTP_HOST_SECRET,
+            "hyper-connector-debug-secret"
+        );
+        tracing::info!(
+            target: "hyper_util::client::legacy::connect::http",
+            "hyper-connector-info-control"
+        );
+        tracing::warn!(
+            target: "hyper_util::client::legacy::client",
+            path = HTTP_PATH_SECRET,
+            "hyper-client-connect-path"
+        );
+        tracing::debug!(
+            target: "hyper_util::client::legacy::client",
+            uri = HTTP_QUERY_SECRET,
+            "hyper-client-uri"
+        );
+        tracing::info!(
+            target: "hyper_util::client::legacy::client",
+            "hyper-client-info-control"
         );
         tracing::debug!(
             target: "hyper_util::client::legacy::pool",
@@ -214,10 +309,23 @@ mod tests {
             target: "tungstenite::handshake::client",
             "same-target-debug-control"
         );
-        tracing::trace!(target: "reqwest::connect", "reqwest-trace-control");
         tracing::debug!(
-            target: "hyper_util::client::legacy::connect::http",
-            "hyper-connector-debug-control"
+            target: "tungstenite::client",
+            uri = JSONRPSEE_SECRET,
+            "tungstenite-client-secret"
+        );
+        tracing::info!(
+            target: "tungstenite::client",
+            "tungstenite-client-info-control"
+        );
+        tracing::debug!(
+            target: "jsonrpsee-client",
+            target_url = JSONRPSEE_SECRET,
+            "jsonrpsee-target-secret"
+        );
+        tracing::info!(
+            target: "jsonrpsee-client",
+            "jsonrpsee-info-control"
         );
         tracing::info!(
             target: "hyper_util::client::legacy::pool",
@@ -234,6 +342,20 @@ mod tests {
             "rustls-client-hello"
         );
         tracing::info!(target: "rustls::client::hs", "rustls-info-control");
+        tracing::debug!(
+            target: "rustls::client::tls12",
+            server_name = TLS_HOST_SECRET,
+            "rustls-tls12-server-name"
+        );
+        tracing::trace!(
+            target: "rustls::client::tls12",
+            server_certificate = TLS_HOST_SECRET,
+            "rustls-tls12-certificate"
+        );
+        tracing::info!(
+            target: "rustls::client::tls12",
+            "rustls-tls12-info-control"
+        );
         tracing::debug!(
             target: "rustls::client::common",
             "rustls-nearby-target-control"
@@ -272,10 +394,11 @@ mod tests {
             let capture = Capture::default();
             let filter = EnvFilter::new(
                 "off,alloy_transport_http::reqwest_transport=debug,\
-                 tungstenite::handshake::client=trace,reqwest::connect=trace,\
-                 hyper_util::client::legacy::connect::http=trace,\
-                 hyper_util::client::legacy::pool=trace,rustls::client::hs=trace,\
-                 rustls::client::common=debug,safe_control=trace",
+                 alloy_transport_http::hyper_transport=debug,tungstenite::handshake::client=trace,\
+                 reqwest::connect=trace,hyper_util::client::legacy::connect::http=trace,\
+                 hyper_util::client::legacy::pool=trace,hyper_util::client::legacy::client=debug,\
+                 tungstenite::client=debug,jsonrpsee-client=debug,rustls::client::hs=trace,\
+                 rustls::client::tls12=trace,rustls::client::common=debug,safe_control=trace",
             );
             let subscriber = subscriber(format, BoxMakeWriter::new(capture.clone()), filter);
 
@@ -284,18 +407,28 @@ mod tests {
 
             assert!(!output.contains(ALLOY_SECRET));
             assert!(!output.contains(HTTP_HOST_SECRET));
+            assert!(!output.contains(HTTP_PATH_SECRET));
+            assert!(!output.contains(HTTP_QUERY_SECRET));
             assert!(!output.contains(TUNGSTENITE_SECRET));
             assert!(!output.contains(TLS_HOST_SECRET));
+            assert!(!output.contains(JSONRPSEE_SECRET));
             for control in [
                 "alloy-request-control",
                 "alloy-info-span-control",
                 "alloy-info-span-event-control",
                 "same-alloy-name-event-control",
+                "hyper-alloy-event-control",
+                "hyper-alloy-info-span-control",
+                "hyper-alloy-info-span-event-control",
                 "same-target-debug-control",
-                "reqwest-trace-control",
-                "hyper-connector-debug-control",
+                "reqwest-info-control",
+                "hyper-connector-info-control",
+                "hyper-client-info-control",
                 "hyper-pool-info-control",
+                "tungstenite-client-info-control",
+                "jsonrpsee-info-control",
                 "rustls-info-control",
+                "rustls-tls12-info-control",
                 "rustls-nearby-target-control",
                 "unrelated-trace-control",
                 "tungstenite-trace-span-control",
@@ -322,6 +455,37 @@ mod tests {
             tracing::Subscriber::register_callsite(&subscriber, &UNRELATED_DEBUG_METADATA)
                 .is_never()
         );
+    }
+
+    #[test]
+    fn global_subscriber_contract_is_enforced() {
+        const CHILD_MODE: &str = "AGGLAYER_LOGGING_TEST_CHILD";
+
+        match env::var(CHILD_MODE).as_deref() {
+            Ok("preinstalled") => {
+                tracing::subscriber::set_global_default(tracing_subscriber::registry()).unwrap();
+                let error = tracing(&agglayer_config::Log::default()).unwrap_err();
+                assert!(error
+                    .to_string()
+                    .contains("requires its endpoint-redaction policy"));
+            }
+            Ok("repeated") => {
+                let config = agglayer_config::Log::default();
+                tracing(&config).unwrap();
+                tracing(&config).unwrap();
+            }
+            _ => {
+                for mode in ["preinstalled", "repeated"] {
+                    let status = Command::new(env::current_exe().unwrap())
+                        .arg("--exact")
+                        .arg("logging::tests::global_subscriber_contract_is_enforced")
+                        .env(CHILD_MODE, mode)
+                        .status()
+                        .unwrap();
+                    assert!(status.success(), "isolated {mode} logging test failed");
+                }
+            }
+        }
     }
 
     fn subscriber_without_endpoint_policy(

@@ -8,6 +8,8 @@ use url::Url;
 ///
 /// Formatting never exposes the endpoint because any URL component may contain
 /// credentials. Use [`Self::expose_url`] only when constructing a transport.
+// Serde stays transparent so configuration files preserve the endpoint;
+// Display and Debug are the redaction boundary for formatted values.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct L1RpcUrl(Url);

@@ -18,7 +18,7 @@ use tracing::info;
 
 const TEST_ROLLUP_MANAGER_ADDRESS: &str = "0x0B306BF915C4d645ff596e518fAf3F9669b97016";
 
-#[test_log::test(tokio::test)]
+#[tokio::test]
 async fn start_l1_network() {
     // Test l1 node start and block production
     // Check if we can run l1 node and produce blocks properly,
