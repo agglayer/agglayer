@@ -14,8 +14,16 @@ static SUBSCRIBER_INIT: Mutex<()> = Mutex::new(());
 
 enum InitializationState {
     Installed(tracing::Dispatch),
-    LogBridgeConflict { error: String },
-    TracingSubscriberConflict { error: String },
+    // The tracing dispatcher is process-global and cannot be rolled back when
+    // installing the independent `log` bridge fails. Retain it so the sticky
+    // failure state reflects the resources Agglayer actually owns.
+    LogBridgeConflict {
+        _dispatch: tracing::Dispatch,
+        error: String,
+    },
+    TracingSubscriberConflict {
+        error: String,
+    },
 }
 
 static SUBSCRIBER_STATE: OnceLock<InitializationState> = OnceLock::new();
@@ -24,7 +32,7 @@ impl InitializationState {
     fn dispatch(&self) -> eyre::Result<tracing::Dispatch> {
         match self {
             Self::Installed(dispatch) => Ok(dispatch.clone()),
-            Self::LogBridgeConflict { error } | Self::TracingSubscriberConflict { error } => {
+            Self::LogBridgeConflict { error, .. } | Self::TracingSubscriberConflict { error } => {
                 Err(eyre::eyre!("{error}"))
             }
         }
@@ -111,19 +119,6 @@ fn subscriber(
     tracing_subscriber::Registry::default().with(layer)
 }
 
-fn global_tracing_subscriber_is_installed() -> bool {
-    // `has_been_set` also reports thread-local defaults. Probe from a fresh
-    // thread so an embedding caller's scoped subscriber does not prevent
-    // Agglayer from installing its global fallback.
-    std::thread::spawn(|| {
-        tracing::dispatcher::get_default(|dispatch| {
-            !dispatch.is::<tracing::subscriber::NoSubscriber>()
-        })
-    })
-    .join()
-    .expect("global tracing subscriber probe thread panicked")
-}
-
 pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<tracing::Dispatch> {
     if let Some(state) = SUBSCRIBER_STATE.get() {
         return state.dispatch();
@@ -142,36 +137,11 @@ pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<tracing::Di
     let dispatch =
         tracing::Dispatch::new(subscriber(config.format, writer.as_make_writer(), filter));
 
-    if global_tracing_subscriber_is_installed() {
-        let error = String::from(
-            "Agglayer logging requires its endpoint-redaction policy, but the global tracing \
-             subscriber is already initialized",
-        );
-        let _ = SUBSCRIBER_STATE.set(InitializationState::TracingSubscriberConflict { error });
-        return SUBSCRIBER_STATE
-            .get()
-            .expect("logging initialization state was just stored")
-            .dispatch();
-    }
-
-    // Initialize the log bridge before mutating the global tracing dispatcher.
-    // This keeps a pre-existing log logger from leaving an Agglayer subscriber
-    // permanently installed after initialization reports an error.
-    if let Err(error) = tracing_log::LogTracer::builder()
-        .with_max_level(tracing_log::log::LevelFilter::Trace)
-        .init()
-    {
-        let error = format!(
-            "Agglayer logging requires its endpoint-redaction policy, but the global log logger \
-             is already initialized: {error}"
-        );
-        let _ = SUBSCRIBER_STATE.set(InitializationState::LogBridgeConflict { error });
-        return SUBSCRIBER_STATE
-            .get()
-            .expect("logging initialization state was just stored")
-            .dispatch();
-    }
-
+    // Claim the tracing dispatcher first. Unlike a fresh-thread probe, this
+    // correctly rejects every pre-existing global subscriber, including an
+    // explicitly installed `NoSubscriber`, without rejecting a caller's
+    // thread-local default. This ordering also preserves a host-owned `log`
+    // facade when tracing ownership is already taken.
     if let Err(error) = tracing::dispatcher::set_global_default(dispatch.clone()) {
         let error = format!(
             "Agglayer logging requires its endpoint-redaction policy, but the global tracing \
@@ -184,9 +154,32 @@ pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<tracing::Di
             .dispatch();
     }
 
+    // The two process-global facilities are not transactional. If the host
+    // already owns `log`, retain the Agglayer-owned tracing dispatch in the
+    // sticky failure state rather than retrying as if initialization were
+    // untouched. Startup still fails closed because the host logger may route
+    // `log` records outside the endpoint-redaction policy.
+    if let Err(error) = tracing_log::LogTracer::builder()
+        .with_max_level(tracing_log::log::LevelFilter::Trace)
+        .init()
+    {
+        let error = format!(
+            "Agglayer logging requires its endpoint-redaction policy, but the global log logger \
+             is already initialized: {error}"
+        );
+        let _ = SUBSCRIBER_STATE.set(InitializationState::LogBridgeConflict {
+            _dispatch: dispatch,
+            error,
+        });
+        return SUBSCRIBER_STATE
+            .get()
+            .expect("logging initialization state was just stored")
+            .dispatch();
+    }
+
     tracing_log::log::set_max_level(tracing::level_filters::LevelFilter::current().as_log());
 
-    let _ = SUBSCRIBER_STATE.set(InitializationState::Installed(dispatch.clone()));
+    let _ = SUBSCRIBER_STATE.set(InitializationState::Installed(dispatch));
 
     Ok(dispatch)
 }
@@ -559,13 +552,34 @@ mod tests {
             }
             Ok("preinstalled_log") => {
                 tracing_log::log::set_logger(&PREINSTALLED_LOGGER).unwrap();
+                tracing_log::log::set_max_level(tracing_log::log::LevelFilter::Off);
                 let error = tracing(&agglayer_config::Log::default()).unwrap_err();
                 assert!(error
                     .to_string()
                     .contains("global log logger is already initialized"));
                 let retry = tracing(&agglayer_config::Log::default()).unwrap_err();
                 assert_eq!(error.to_string(), retry.to_string());
-                assert!(!tracing::dispatcher::has_been_set());
+                assert!(tracing::dispatcher::has_been_set());
+                assert_eq!(
+                    tracing_log::log::max_level(),
+                    tracing_log::log::LevelFilter::Off
+                );
+            }
+            Ok("preinstalled_no_subscriber") => {
+                tracing::subscriber::set_global_default(tracing::subscriber::NoSubscriber::new())
+                    .unwrap();
+                tracing_log::log::set_max_level(tracing_log::log::LevelFilter::Off);
+                let error = tracing(&agglayer_config::Log::default()).unwrap_err();
+                assert!(error
+                    .to_string()
+                    .contains("global tracing subscriber is already initialized"));
+                let retry = tracing(&agglayer_config::Log::default()).unwrap_err();
+                assert_eq!(error.to_string(), retry.to_string());
+                assert!(tracing_log::log::set_logger(&PREINSTALLED_LOGGER).is_ok());
+                assert_eq!(
+                    tracing_log::log::max_level(),
+                    tracing_log::log::LevelFilter::Off
+                );
             }
             Ok("main_scoped") => {
                 let metrics_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -663,6 +677,7 @@ mod tests {
                 for mode in [
                     "preinstalled",
                     "preinstalled_log",
+                    "preinstalled_no_subscriber",
                     "main_scoped",
                     "repeated",
                     "scoped",

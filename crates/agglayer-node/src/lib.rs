@@ -28,7 +28,10 @@ use url_redact::UrlRedactLayer;
 /// fails if Agglayer cannot install its endpoint-redaction policy.
 /// Embedding callers must not race this initialization with another
 /// process-global tracing subscriber or `log` logger; those one-shot globals
-/// are independent, and pre-existing ownership is rejected.
+/// are independent, and pre-existing ownership is rejected. Agglayer claims
+/// the tracing dispatcher before installing its `log` bridge; if the bridge is
+/// already owned, startup still fails closed and Agglayer's tracing policy
+/// remains installed for the process.
 ///
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
