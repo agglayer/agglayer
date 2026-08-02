@@ -26,6 +26,9 @@ use url_redact::UrlRedactLayer;
 /// Logging initialization is process-wide: the first successful logging
 /// initialization owns the configuration, later starts reuse it, and startup
 /// fails if Agglayer cannot install its endpoint-redaction policy.
+/// Embedding callers must not race this initialization with another
+/// process-global tracing subscriber or `log` logger; those one-shot globals
+/// are independent, and pre-existing ownership is rejected.
 ///
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.

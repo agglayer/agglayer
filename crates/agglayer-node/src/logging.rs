@@ -34,8 +34,8 @@ impl InitializationState {
 // Reject pinned records that expose a full endpoint, HTTP authority, WebSocket
 // handshake request, or TLS server name before any user-configurable formatting
 // layer. The dependencies do not give every sensitive and benign record
-// distinct metadata, so same-target records at the filtered levels are also
-// suppressed.
+// distinct metadata, so same-target records at the filtered levels—including
+// Hyper legacy-client WARN events—are also suppressed.
 fn is_dependency_record_allowed(metadata: &Metadata<'_>) -> bool {
     let alloy_url_span = metadata.is_span()
         && metadata.target() == "alloy_transport_http::reqwest_transport"
@@ -111,6 +111,19 @@ fn subscriber(
     tracing_subscriber::Registry::default().with(layer)
 }
 
+fn global_tracing_subscriber_is_installed() -> bool {
+    // `has_been_set` also reports thread-local defaults. Probe from a fresh
+    // thread so an embedding caller's scoped subscriber does not prevent
+    // Agglayer from installing its global fallback.
+    std::thread::spawn(|| {
+        tracing::dispatcher::get_default(|dispatch| {
+            !dispatch.is::<tracing::subscriber::NoSubscriber>()
+        })
+    })
+    .join()
+    .expect("global tracing subscriber probe thread panicked")
+}
+
 pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<tracing::Dispatch> {
     if let Some(state) = SUBSCRIBER_STATE.get() {
         return state.dispatch();
@@ -128,6 +141,18 @@ pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<tracing::Di
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into());
     let dispatch =
         tracing::Dispatch::new(subscriber(config.format, writer.as_make_writer(), filter));
+
+    if global_tracing_subscriber_is_installed() {
+        let error = String::from(
+            "Agglayer logging requires its endpoint-redaction policy, but the global tracing \
+             subscriber is already initialized",
+        );
+        let _ = SUBSCRIBER_STATE.set(InitializationState::TracingSubscriberConflict { error });
+        return SUBSCRIBER_STATE
+            .get()
+            .expect("logging initialization state was just stored")
+            .dispatch();
+    }
 
     // Initialize the log bridge before mutating the global tracing dispatcher.
     // This keeps a pre-existing log logger from leaving an Agglayer subscriber
@@ -519,12 +544,18 @@ mod tests {
         match env::var(CHILD_MODE).as_deref() {
             Ok("preinstalled") => {
                 tracing::subscriber::set_global_default(tracing_subscriber::registry()).unwrap();
+                tracing_log::log::set_max_level(tracing_log::log::LevelFilter::Off);
                 let error = tracing(&agglayer_config::Log::default()).unwrap_err();
                 assert!(error
                     .to_string()
                     .contains("global tracing subscriber is already initialized"));
                 let retry = tracing(&agglayer_config::Log::default()).unwrap_err();
                 assert_eq!(error.to_string(), retry.to_string());
+                assert!(tracing_log::log::set_logger(&PREINSTALLED_LOGGER).is_ok());
+                assert_eq!(
+                    tracing_log::log::max_level(),
+                    tracing_log::log::LevelFilter::Off
+                );
             }
             Ok("preinstalled_log") => {
                 tracing_log::log::set_logger(&PREINSTALLED_LOGGER).unwrap();
@@ -535,6 +566,34 @@ mod tests {
                 let retry = tracing(&agglayer_config::Log::default()).unwrap_err();
                 assert_eq!(error.to_string(), retry.to_string());
                 assert!(!tracing::dispatcher::has_been_set());
+            }
+            Ok("main_scoped") => {
+                let metrics_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+                let metrics_addr = metrics_listener.local_addr().unwrap();
+                let config_path = env::temp_dir()
+                    .join(format!("agglayer-main-scoped-{}.toml", std::process::id()));
+                std::fs::write(
+                    &config_path,
+                    format!("[telemetry]\nprometheus-addr = \"{metrics_addr}\"\n"),
+                )
+                .unwrap();
+
+                let capture = Capture::default();
+                let outer = tracing::Dispatch::new(subscriber_without_endpoint_policy(
+                    LogFormat::Pretty,
+                    BoxMakeWriter::new(capture.clone()),
+                    EnvFilter::new("trace"),
+                ));
+                let outer_guard = tracing::dispatcher::set_default(&outer);
+                let error = crate::main(config_path.clone(), "test", None).unwrap_err();
+                drop(outer_guard);
+                drop(metrics_listener);
+                _ = std::fs::remove_file(config_path);
+
+                assert!(error.to_string().contains("Unable to bind metrics server"));
+                let output = capture.output();
+                assert!(!output.contains("Tracing initialized successfully"));
+                assert!(!output.contains("Starting metrics server"));
             }
             Ok("repeated") => {
                 env::remove_var("RUST_LOG");
@@ -601,7 +660,13 @@ mod tests {
                 });
             }
             _ => {
-                for mode in ["preinstalled", "preinstalled_log", "repeated", "scoped"] {
+                for mode in [
+                    "preinstalled",
+                    "preinstalled_log",
+                    "main_scoped",
+                    "repeated",
+                    "scoped",
+                ] {
                     let status = Command::new(env::current_exe().unwrap())
                         .arg("--exact")
                         .arg("logging::tests::global_subscriber_contract_is_enforced")
