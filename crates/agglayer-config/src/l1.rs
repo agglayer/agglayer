@@ -7,9 +7,11 @@ use url::Url;
 /// A configured L1 RPC endpoint.
 ///
 /// Formatting never exposes the endpoint because any URL component may contain
-/// credentials. Use [`Self::expose_url`] only when constructing a transport.
-// Serde stays transparent so configuration files preserve the endpoint;
-// Display and Debug are the redaction boundary for formatted values.
+/// credentials. [`Display`](std::fmt::Display) and [`Debug`](std::fmt::Debug)
+/// are redacted; serialization intentionally preserves the raw endpoint for
+/// configuration compatibility and must be treated as secret-bearing. Use
+/// [`Self::expose_url`] only when constructing a transport, and do not log
+/// serialized configuration.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct L1RpcUrl(Url);

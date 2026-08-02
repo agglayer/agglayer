@@ -2,16 +2,34 @@ use std::sync::{Mutex, OnceLock};
 
 use agglayer_config::log::LogFormat;
 use tracing::{Level, Metadata};
+use tracing_log::AsLog;
 use tracing_subscriber::{
     filter::{filter_fn, FilterExt},
     fmt::writer::BoxMakeWriter,
     prelude::*,
-    util::SubscriberInitExt,
     EnvFilter,
 };
 
 static SUBSCRIBER_INIT: Mutex<()> = Mutex::new(());
-static SUBSCRIBER_INSTALLED: OnceLock<()> = OnceLock::new();
+
+enum InitializationState {
+    Installed(tracing::Dispatch),
+    LogBridgeConflict { error: String },
+    TracingSubscriberConflict { error: String },
+}
+
+static SUBSCRIBER_STATE: OnceLock<InitializationState> = OnceLock::new();
+
+impl InitializationState {
+    fn dispatch(&self) -> eyre::Result<tracing::Dispatch> {
+        match self {
+            Self::Installed(dispatch) => Ok(dispatch.clone()),
+            Self::LogBridgeConflict { error } | Self::TracingSubscriberConflict { error } => {
+                Err(eyre::eyre!("{error}"))
+            }
+        }
+    }
+}
 
 // Reject pinned records that expose a full endpoint, HTTP authority, WebSocket
 // handshake request, or TLS server name before any user-configurable formatting
@@ -93,36 +111,59 @@ fn subscriber(
     tracing_subscriber::Registry::default().with(layer)
 }
 
-pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<()> {
-    if SUBSCRIBER_INSTALLED.get().is_some() {
-        return Ok(());
+pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<tracing::Dispatch> {
+    if let Some(state) = SUBSCRIBER_STATE.get() {
+        return state.dispatch();
     }
 
     let _init_guard = SUBSCRIBER_INIT
         .lock()
         .expect("Agglayer logging subscriber initialization lock was poisoned");
-    if SUBSCRIBER_INSTALLED.get().is_some() {
-        return Ok(());
+    if let Some(state) = SUBSCRIBER_STATE.get() {
+        return state.dispatch();
     }
 
     // TODO: Support multiple outputs.
     let writer = config.outputs.first().cloned().unwrap_or_default();
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| config.level.into());
+    let dispatch =
+        tracing::Dispatch::new(subscriber(config.format, writer.as_make_writer(), filter));
 
-    // Repeated node starts may reuse the subscriber installed by Agglayer. A
-    // subscriber installed by another component is rejected: continuing would
-    // leave dependency endpoint records outside this redaction policy.
-    subscriber(config.format, writer.as_make_writer(), filter)
-        .try_init()
-        .map_err(|error| {
-            eyre::eyre!(
-                "Agglayer logging requires its endpoint-redaction policy, but the global tracing \
-                 subscriber is already initialized: {error}"
-            )
-        })?;
-    let _ = SUBSCRIBER_INSTALLED.set(());
+    // Initialize the log bridge before mutating the global tracing dispatcher.
+    // This keeps a pre-existing log logger from leaving an Agglayer subscriber
+    // permanently installed after initialization reports an error.
+    if let Err(error) = tracing_log::LogTracer::builder()
+        .with_max_level(tracing_log::log::LevelFilter::Trace)
+        .init()
+    {
+        let error = format!(
+            "Agglayer logging requires its endpoint-redaction policy, but the global log logger \
+             is already initialized: {error}"
+        );
+        let _ = SUBSCRIBER_STATE.set(InitializationState::LogBridgeConflict { error });
+        return SUBSCRIBER_STATE
+            .get()
+            .expect("logging initialization state was just stored")
+            .dispatch();
+    }
 
-    Ok(())
+    if let Err(error) = tracing::dispatcher::set_global_default(dispatch.clone()) {
+        let error = format!(
+            "Agglayer logging requires its endpoint-redaction policy, but the global tracing \
+             subscriber is already initialized: {error}"
+        );
+        let _ = SUBSCRIBER_STATE.set(InitializationState::TracingSubscriberConflict { error });
+        return SUBSCRIBER_STATE
+            .get()
+            .expect("logging initialization state was just stored")
+            .dispatch();
+    }
+
+    tracing_log::log::set_max_level(tracing::level_filters::LevelFilter::current().as_log());
+
+    let _ = SUBSCRIBER_STATE.set(InitializationState::Installed(dispatch.clone()));
+
+    Ok(dispatch)
 }
 
 #[cfg(test)]
@@ -163,6 +204,20 @@ mod tests {
     const WS_QUERY_SECRET: &str = "ws-query-secret-803";
     const WS_BASIC_AUTH: &str = "Basic d3MtdXNlci04MDM6d3MtcGFzcy04MDM=";
     const BLOCK_CLOCK_FAILURE: &str = "Failed to start BlockClock";
+
+    struct PreinstalledLogger;
+
+    static PREINSTALLED_LOGGER: PreinstalledLogger = PreinstalledLogger;
+
+    impl tracing_log::log::Log for PreinstalledLogger {
+        fn enabled(&self, _: &tracing_log::log::Metadata<'_>) -> bool {
+            false
+        }
+
+        fn log(&self, _: &tracing_log::log::Record<'_>) {}
+
+        fn flush(&self) {}
+    }
 
     static UNRELATED_DEBUG_CALLSITE: tracing::callsite::DefaultCallsite =
         tracing::callsite::DefaultCallsite::new(&UNRELATED_DEBUG_METADATA);
@@ -467,15 +522,86 @@ mod tests {
                 let error = tracing(&agglayer_config::Log::default()).unwrap_err();
                 assert!(error
                     .to_string()
-                    .contains("requires its endpoint-redaction policy"));
+                    .contains("global tracing subscriber is already initialized"));
+                let retry = tracing(&agglayer_config::Log::default()).unwrap_err();
+                assert_eq!(error.to_string(), retry.to_string());
+            }
+            Ok("preinstalled_log") => {
+                tracing_log::log::set_logger(&PREINSTALLED_LOGGER).unwrap();
+                let error = tracing(&agglayer_config::Log::default()).unwrap_err();
+                assert!(error
+                    .to_string()
+                    .contains("global log logger is already initialized"));
+                let retry = tracing(&agglayer_config::Log::default()).unwrap_err();
+                assert_eq!(error.to_string(), retry.to_string());
+                assert!(!tracing::dispatcher::has_been_set());
             }
             Ok("repeated") => {
-                let config = agglayer_config::Log::default();
-                tracing(&config).unwrap();
-                tracing(&config).unwrap();
+                env::remove_var("RUST_LOG");
+                let output_path = env::temp_dir().join(format!(
+                    "agglayer-logging-first-config-{}.log",
+                    std::process::id()
+                ));
+                let first = agglayer_config::Log {
+                    level: agglayer_config::log::LogLevel::Error,
+                    outputs: vec![agglayer_config::log::LogOutput::File(output_path.clone())],
+                    ..Default::default()
+                };
+                let second = agglayer_config::Log {
+                    level: agglayer_config::log::LogLevel::Trace,
+                    outputs: vec![agglayer_config::log::LogOutput::File(output_path.clone())],
+                    ..Default::default()
+                };
+                let dispatch = tracing(&first).unwrap();
+                let second_dispatch = tracing(&second).unwrap();
+                tracing::dispatcher::with_default(&second_dispatch, || {
+                    tracing::info!(target: "agglayer", "first-config-wins");
+                });
+                let output = std::fs::read_to_string(&output_path).unwrap_or_default();
+                assert!(!output.contains("first-config-wins"));
+                drop(dispatch);
+                _ = std::fs::remove_file(output_path);
+            }
+            Ok("scoped") => {
+                env::set_var("RUST_LOG", "trace");
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    let capture = Capture::default();
+                    let outer = tracing::Dispatch::new(subscriber_without_endpoint_policy(
+                        LogFormat::Pretty,
+                        BoxMakeWriter::new(capture.clone()),
+                        EnvFilter::new("trace"),
+                    ));
+                    let outer_guard = tracing::dispatcher::set_default(&outer);
+                    let inner = tracing(&agglayer_config::Log::default()).unwrap();
+                    let inner_guard = tracing::dispatcher::set_default(&inner);
+                    timeout(Duration::from_secs(5), emit_actual_dependency_records())
+                        .await
+                        .expect("dependency transports did not finish");
+                    drop(inner_guard);
+                    drop(outer_guard);
+
+                    let output = capture.output();
+                    for secret in [
+                        HTTP_HOST_SECRET,
+                        TLS_HOST_SECRET,
+                        HTTP_PATH_SECRET,
+                        HTTP_QUERY_SECRET,
+                        WS_USERNAME,
+                        WS_PASSWORD,
+                        WS_PATH_SECRET,
+                        WS_QUERY_SECRET,
+                        WS_BASIC_AUTH,
+                    ] {
+                        assert!(!output.contains(secret), "found {secret:?} in {output}");
+                    }
+                });
             }
             _ => {
-                for mode in ["preinstalled", "repeated"] {
+                for mode in ["preinstalled", "preinstalled_log", "repeated", "scoped"] {
                     let status = Command::new(env::current_exe().unwrap())
                         .arg("--exact")
                         .arg("logging::tests::global_subscriber_contract_is_enforced")

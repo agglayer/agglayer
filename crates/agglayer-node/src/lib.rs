@@ -23,6 +23,10 @@ use url_redact::UrlRedactLayer;
 /// Starting by a Tokio runtime which can be used by the different components.
 /// The configuration file is parsed and used to configure the node.
 ///
+/// Logging initialization is process-wide: the first successful logging
+/// initialization owns the configuration, later starts reuse it, and startup
+/// fails if Agglayer cannot install its endpoint-redaction policy.
+///
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
 pub fn main(
@@ -55,10 +59,15 @@ pub fn main(
 
     // Initialize the logger. The logging module permits repeated starts only
     // after Agglayer has installed its endpoint-redaction policy itself.
-    if let Err(error) = logging::tracing(&config.log) {
+    let dispatch = logging::tracing(&config.log).map_err(|error| {
         eprintln!("Failed to initialize logger: {error:?}");
-        return Err(error);
-    }
+        error
+    })?;
+
+    // The global subscriber is only a fallback. Keep Agglayer's dispatcher active
+    // while this thread polls the startup and shutdown futures so an embedding
+    // caller's thread-local subscriber cannot bypass endpoint redaction.
+    let _dispatch_guard = tracing::dispatcher::set_default(&dispatch);
     info!("Tracing initialized successfully.");
 
     if let Some(outbound) = &config.outbound {
