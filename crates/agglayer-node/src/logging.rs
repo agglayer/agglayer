@@ -278,6 +278,16 @@ mod tests {
         }
     }
 
+    fn remove_stale_log_output(path: &std::path::Path) {
+        if let Err(error) = std::fs::remove_file(path) {
+            assert_eq!(
+                error.kind(),
+                std::io::ErrorKind::NotFound,
+                "failed to remove stale log output {path:?}: {error}"
+            );
+        }
+    }
+
     // Mirrors pinned dependency callsites; re-audit these identities on upgrade.
     fn emit_dependency_records() {
         let span = tracing::debug_span!(
@@ -558,6 +568,7 @@ mod tests {
                     "agglayer-preinstalled-log-{}.log",
                     std::process::id()
                 ));
+                remove_stale_log_output(&output_path);
                 let config = agglayer_config::Log {
                     level: agglayer_config::log::LogLevel::Trace,
                     outputs: vec![agglayer_config::log::LogOutput::File(output_path.clone())],
@@ -636,6 +647,7 @@ mod tests {
                     "agglayer-logging-first-config-{}.log",
                     std::process::id()
                 ));
+                remove_stale_log_output(&output_path);
                 let first = agglayer_config::Log {
                     level: agglayer_config::log::LogLevel::Error,
                     outputs: vec![agglayer_config::log::LogOutput::File(output_path.clone())],
