@@ -179,7 +179,7 @@ pub(crate) fn tracing(config: &agglayer_config::Log) -> eyre::Result<tracing::Di
 
     tracing_log::log::set_max_level(tracing::level_filters::LevelFilter::current().as_log());
 
-    let _ = SUBSCRIBER_STATE.set(InitializationState::Installed(dispatch));
+    let _ = SUBSCRIBER_STATE.set(InitializationState::Installed(dispatch.clone()));
 
     Ok(dispatch)
 }
@@ -553,17 +553,38 @@ mod tests {
             Ok("preinstalled_log") => {
                 tracing_log::log::set_logger(&PREINSTALLED_LOGGER).unwrap();
                 tracing_log::log::set_max_level(tracing_log::log::LevelFilter::Off);
-                let error = tracing(&agglayer_config::Log::default()).unwrap_err();
+                env::set_var("RUST_LOG", "trace");
+                let output_path = env::temp_dir().join(format!(
+                    "agglayer-preinstalled-log-{}.log",
+                    std::process::id()
+                ));
+                let config = agglayer_config::Log {
+                    level: agglayer_config::log::LogLevel::Trace,
+                    outputs: vec![agglayer_config::log::LogOutput::File(output_path.clone())],
+                    ..Default::default()
+                };
+                let error = tracing(&config).unwrap_err();
                 assert!(error
                     .to_string()
                     .contains("global log logger is already initialized"));
-                let retry = tracing(&agglayer_config::Log::default()).unwrap_err();
+                let retry = tracing(&config).unwrap_err();
                 assert_eq!(error.to_string(), retry.to_string());
                 assert!(tracing::dispatcher::has_been_set());
                 assert_eq!(
                     tracing_log::log::max_level(),
                     tracing_log::log::LevelFilter::Off
                 );
+
+                tracing::debug!(
+                    target: "reqwest::connect",
+                    host = HTTP_HOST_SECRET,
+                    "preinstalled-log-sensitive"
+                );
+                tracing::info!(target: "safe_control", "preinstalled-log-control");
+                let output = std::fs::read_to_string(&output_path).unwrap();
+                assert!(!output.contains(HTTP_HOST_SECRET));
+                assert!(output.contains("preinstalled-log-control"));
+                _ = std::fs::remove_file(output_path);
             }
             Ok("preinstalled_no_subscriber") => {
                 tracing::subscriber::set_global_default(tracing::subscriber::NoSubscriber::new())
