@@ -816,6 +816,37 @@ mod tests {
         );
         server.await.unwrap();
 
+        // Exercise the real WSS branch as far as the TLS handshake. The loopback peer
+        // intentionally stops after ClientHello, so the preceding plain-WS case remains
+        // the handshake-request producer for the path, query, and Authorization checks.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut client_hello = [0_u8; 2048];
+            let _ = stream.read(&mut client_hello).await.unwrap();
+        });
+
+        let Err(error) = BlockClock::new_with_ws(
+            WsConnect::new(format!(
+                "wss://{WS_USERNAME}:{WS_PASSWORD}@127.0.0.1:{port}/{WS_PATH_SECRET}?\
+                 key={WS_QUERY_SECRET}"
+            )),
+            0,
+            NonZeroU64::new(1).unwrap(),
+            Duration::from_secs(1),
+        )
+        .await
+        else {
+            panic!("test server completed an unexpected WSS handshake");
+        };
+        tracing::error!(
+            target: "agglayer_node::node",
+            "Failed to start BlockClock: {:?}",
+            error
+        );
+        server.await.unwrap();
+
         // Rustls logs the SNI while producing ClientHello, before any peer response, so
         // a loopback TCP peer exercises the real TLS logging path without a
         // test certificate.
@@ -861,8 +892,8 @@ mod tests {
 
     #[test_log::test(tokio::test(flavor = "current_thread"))]
     async fn actual_dependency_transports_do_not_log_endpoint_credentials() {
-        // test-log may have already installed the process-wide bridge with a lower max
-        // level.
+        // The test-log macro initializes tracing for the test; install the log bridge
+        // explicitly so log-based dependency records reach the current dispatcher.
         let _ = tracing_log::LogTracer::init();
         tracing_log::log::set_max_level(tracing_log::log::LevelFilter::Trace);
 
