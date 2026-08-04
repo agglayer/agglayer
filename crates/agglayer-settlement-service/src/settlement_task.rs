@@ -9,7 +9,7 @@ use agglayer_config::{
     settlement_service::{SettlementPolicy, SettlementTransactionConfig},
     Multiplier,
 };
-use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
     CertificateId, ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest,
     Nonce, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
@@ -410,7 +410,7 @@ async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter,
+        SettlementStore: SettlementReader + SettlementWriter,
     > SettlementTask<L1Provider, SettlementStore>
 {
     pub async fn create(
@@ -429,7 +429,17 @@ impl<
             &control.cancellation_token,
         )
         .await?;
-        let id = Self::reserve_settlement_job_id(store.as_ref(), certificate_id).await?;
+        let id = Self::generate_settlement_job_id().await;
+        // Persist the job and its certificate links in a single atomic write so a
+        // crash can never leave a certificate pointing at a job that was never
+        // saved.
+        match certificate_id {
+            Some(certificate_id) => {
+                store.insert_settlement_job_with_certificate(&id, &job, &certificate_id)
+            }
+            None => store.insert_settlement_job(&id, &job),
+        }
+        .wrap_err_with(|| format!("Failed to persist settlement job {id}"))?;
         let this = Self {
             id,
             job,
@@ -440,29 +450,7 @@ impl<
             control,
             attempts: BTreeMap::new(),
         };
-        this.save_settlement_job_to_db().await?;
         Ok((id, this))
-    }
-
-    async fn reserve_settlement_job_id(
-        store: &SettlementStore,
-        certificate_id: Option<CertificateId>,
-    ) -> eyre::Result<SettlementJobId> {
-        let Some(certificate_id) = certificate_id else {
-            return Ok(Self::generate_settlement_job_id().await);
-        };
-
-        let settlement_job_id = Self::generate_settlement_job_id().await;
-        store
-            .insert_certificate_settlement_job_id(&certificate_id, &settlement_job_id)
-            .wrap_err_with(|| {
-                format!(
-                    "Failed to write settlement job id {settlement_job_id} for certificate \
-                     {certificate_id}"
-                )
-            })?;
-
-        Ok(settlement_job_id)
     }
 
     async fn generate_settlement_job_id() -> SettlementJobId {
@@ -1527,14 +1515,6 @@ impl<
         .map(drop);
 
         submission_outcome(submission)
-    }
-
-    async fn save_settlement_job_to_db(&self) -> eyre::Result<()> {
-        self.store
-            .insert_settlement_job(&self.id, &self.job)
-            .wrap_err_with(|| format!("Failed to write settlement job {}", self.id))?;
-
-        Ok(())
     }
 
     async fn load_settlement_job_from_db(
