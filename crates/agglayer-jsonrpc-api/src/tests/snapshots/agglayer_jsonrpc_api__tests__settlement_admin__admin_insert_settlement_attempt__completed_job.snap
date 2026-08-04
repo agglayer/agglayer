@@ -1,0 +1,14 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/settlement_admin.rs
+expression: completed_error
+---
+{
+  "code": -10010,
+  "data": {
+    "classified": {
+      "code": "already-completed",
+      "message": "Failed to insert settlement attempt for job 0000000000000000000000000D\n\nCaused by:\n   0: already completed\n   1: Settlement job 0000000000000000000000000D already has a terminal result; pass force to edit its attempts anyway\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:<line>:<column>"
+    }
+  },
+  "message": "Failed to insert settlement attempt for job 0000000000000000000000000D\n\nCaused by:\n   0: already completed\n   1: Settlement job 0000000000000000000000000D already has a terminal result; pass force to edit its attempts anyway\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:<line>:<column>"
+}

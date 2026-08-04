@@ -17,7 +17,7 @@ use alloy::{
     providers::{
         fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
         mock::Asserter,
-        Identity, ProviderBuilder, RootProvider,
+        Identity, Provider, ProviderBuilder, RootProvider, WalletProvider,
     },
     signers::local::PrivateKeySigner,
     transports::mock::MockTransport,
@@ -95,7 +95,37 @@ impl TestContext {
     /// Common implementation for creating TestContext with any provider
     pub async fn new_with_provider<P>(config: Config, provider: P) -> Self
     where
-        P: alloy::providers::Provider + Clone + 'static,
+        P: Provider + Clone + 'static,
+    {
+        // Give the settlement service a wallet-carrying provider pointed at a
+        // dead endpoint. Tests that exercise settlement L1 reads inject a
+        // mocked provider through `new_with_settlement_provider`.
+        let settlement_provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(
+                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+            ))
+            .connect_http(
+                "http://127.0.0.1:0"
+                    .parse()
+                    .expect("test provider URL should parse"),
+            );
+        Self::new_with_providers(config, provider, settlement_provider).await
+    }
+
+    /// Create a [`TestContext`] with a custom settlement L1 provider.
+    pub async fn new_with_settlement_provider<S>(config: Config, settlement_provider: S) -> Self
+    where
+        S: Provider + WalletProvider + 'static,
+    {
+        let asserter = Asserter::new();
+        let mock_provider = ProviderBuilder::new().connect_mocked_client(asserter);
+        Self::new_with_providers(config, mock_provider, settlement_provider).await
+    }
+
+    async fn new_with_providers<P, S>(config: Config, provider: P, settlement_provider: S) -> Self
+    where
+        P: Provider + Clone + 'static,
+        S: Provider + WalletProvider + 'static,
     {
         let cancellation_token = CancellationToken::new();
         let config = Arc::new(config);
@@ -148,19 +178,6 @@ impl TestContext {
         // Create AgglayerImpl
         let agglayer_impl = crate::AgglayerImpl::new(rpc_service);
 
-        // A settlement service over the (empty) state store, with its own
-        // wallet-carrying provider pointed at a dead endpoint: startup
-        // recovery finds no jobs, and admin methods that reach L1 error out
-        // instead of hanging.
-        let settlement_provider = ProviderBuilder::new()
-            .wallet(EthereumWallet::from(
-                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
-            ))
-            .connect_http(
-                "http://127.0.0.1:0"
-                    .parse()
-                    .expect("test provider URL should parse"),
-            );
         let settlement_service = SettlementService::start(
             SettlementServiceConfig::default(),
             Arc::new(SettlementTransactionConfig::default()),
