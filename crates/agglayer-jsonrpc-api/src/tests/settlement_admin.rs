@@ -6,6 +6,11 @@ use agglayer_types::{
     Nonce, RpcErrorCode, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult,
     SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash, B256, U256,
 };
+use alloy::{
+    network::EthereumWallet,
+    providers::{mock::Asserter, ProviderBuilder},
+    signers::local::PrivateKeySigner,
+};
 use jsonrpsee::{
     core::{client::ClientT, ClientError},
     rpc_params,
@@ -80,6 +85,65 @@ fn settlement_attempt() -> SettlementAttempt {
         max_fee_per_gas: 10,
         max_priority_fee_per_gas: 1,
     }
+}
+
+fn l1_transaction(seed: u8) -> alloy::rpc::types::Transaction {
+    let transaction =
+        alloy::consensus::TxEnvelope::Eip1559(alloy::consensus::Signed::new_unhashed(
+            alloy::consensus::TxEip1559 {
+                chain_id: 1,
+                nonce: seed as u64,
+                gas_limit: 21_000,
+                max_fee_per_gas: seed as u128 + 30,
+                max_priority_fee_per_gas: seed as u128 + 3,
+                ..Default::default()
+            },
+            alloy::primitives::Signature::new(U256::from(1), U256::from(2), false),
+        ));
+
+    alloy::rpc::types::Transaction {
+        inner: alloy::consensus::transaction::Recovered::new_unchecked(
+            transaction,
+            Address::from([seed; 20]).into(),
+        ),
+        block_hash: None,
+        block_number: None,
+        transaction_index: None,
+        effective_gas_price: Some(seed as u128 + 30),
+    }
+}
+
+fn insert_attempt_params(seed: u8) -> serde_json::Value {
+    let transaction = l1_transaction(seed);
+    serde_json::json!({
+        "txHash": SettlementTxHash::from(
+            alloy::network::TransactionResponse::tx_hash(&transaction)
+        ),
+        "senderWallet": Address::from([seed; 20]),
+        "nonce": seed as u64,
+        "submissionTimeUnixSecs": seed as u64 + 1_700_000_000,
+        "maxFeePerGas": seed as u128 + 30,
+        "maxPriorityFeePerGas": seed as u128 + 3,
+    })
+}
+
+async fn context_with_settlement_transactions(
+    transactions: impl IntoIterator<Item = Option<alloy::rpc::types::Transaction>>,
+) -> TestContext {
+    let asserter = Asserter::new();
+    for transaction in transactions {
+        asserter.push_success(&transaction);
+    }
+    let settlement_provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(
+            PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+        ))
+        .connect_mocked_client(asserter);
+    TestContext::new_with_settlement_provider(
+        TestContext::get_default_config(),
+        settlement_provider,
+    )
+    .await
 }
 
 fn error_payload(error: ClientError, expected: RpcErrorCode) -> String {
@@ -210,6 +274,162 @@ async fn admin_reload_settlement_task_errors_are_classified() {
         RpcErrorCode::AlreadyCompleted,
     );
     insta::assert_snapshot!("admin_reload_settlement_task__completed_job", error);
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_insert_settlement_attempt_round_trips_over_http() {
+    let context =
+        context_with_settlement_transactions([Some(l1_transaction(1)), Some(l1_transaction(2))])
+            .await;
+    let job_id = SettlementJobId::from(10_u128);
+
+    context
+        .state_store
+        .insert_settlement_job(&job_id, &settlement_job())
+        .unwrap();
+
+    // All identity fields are explicit, but the service still queries L1 and
+    // verifies that sender and nonce match the authoritative transaction.
+    let first_response: serde_json::Value = context
+        .admin_client
+        .request(
+            "admin_insertSettlementAttempt",
+            rpc_params![job_id, insert_attempt_params(1)],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        first_response,
+        serde_json::json!({"attemptNumber": 0, "liveTask": "absent"})
+    );
+
+    let second_response: serde_json::Value = context
+        .admin_client
+        .request(
+            "admin_insertSettlementAttempt",
+            rpc_params![job_id, insert_attempt_params(2)],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        second_response,
+        serde_json::json!({"attemptNumber": 1, "liveTask": "absent"})
+    );
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_insert_settlement_attempt_rejects_invalid_attempt_params() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let job_id = SettlementJobId::from(11_u128);
+    let missing_tx_hash = serde_json::json!({
+        "senderWallet": Address::from([0x11; 20]),
+        "nonce": 1,
+        "submissionTimeUnixSecs": 1_700_000_001_u64,
+        "maxFeePerGas": 31,
+        "maxPriorityFeePerGas": 4,
+    });
+    let mut unknown_field = insert_attempt_params(3);
+    unknown_field
+        .as_object_mut()
+        .expect("attempt params should be an object")
+        .insert("unexpected".to_owned(), serde_json::Value::Bool(true));
+
+    for attempt in [missing_tx_hash, unknown_field] {
+        let error = context
+            .admin_client
+            .request::<serde_json::Value, _>(
+                "admin_insertSettlementAttempt",
+                rpc_params![job_id, attempt],
+            )
+            .await
+            .expect_err("invalid attempt parameters should be rejected");
+
+        match error {
+            ClientError::Call(error) => {
+                assert_eq!(error.code(), jsonrpsee::types::error::INVALID_PARAMS_CODE);
+            }
+            error => panic!("expected JSON-RPC call error, got {error}"),
+        }
+    }
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_insert_settlement_attempt_errors_are_classified() {
+    let context = context_with_settlement_transactions([None, None]).await;
+
+    let unknown_job_id = SettlementJobId::from(12_u128);
+    let unknown_error = mutation_error(
+        context
+            .admin_client
+            .request::<serde_json::Value, _>(
+                "admin_insertSettlementAttempt",
+                rpc_params![unknown_job_id, insert_attempt_params(4)],
+            )
+            .await,
+        RpcErrorCode::NotFound,
+    );
+    insta::assert_snapshot!(
+        "admin_insert_settlement_attempt__unknown_job",
+        unknown_error
+    );
+
+    let completed_job_id = SettlementJobId::from(13_u128);
+    context
+        .state_store
+        .insert_settlement_job(&completed_job_id, &settlement_job())
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_job_result(&completed_job_id, &settlement_result())
+        .unwrap();
+    let completed_error = mutation_error(
+        context
+            .admin_client
+            .request::<serde_json::Value, _>(
+                "admin_insertSettlementAttempt",
+                rpc_params![completed_job_id, insert_attempt_params(5)],
+            )
+            .await,
+        RpcErrorCode::AlreadyCompleted,
+    );
+    insta::assert_snapshot!(
+        "admin_insert_settlement_attempt__completed_job",
+        completed_error
+    );
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_insert_settlement_attempt_identity_mismatch_is_invalid_params() {
+    let context = context_with_settlement_transactions([Some(l1_transaction(6))]).await;
+    let job_id = SettlementJobId::from(14_u128);
+    context
+        .state_store
+        .insert_settlement_job(&job_id, &settlement_job())
+        .unwrap();
+    let mut attempt = insert_attempt_params(6);
+    attempt
+        .as_object_mut()
+        .expect("attempt params should be an object")
+        .insert(
+            "senderWallet".to_owned(),
+            serde_json::json!(Address::from([0xff; 20])),
+        );
+
+    let error = context
+        .admin_client
+        .request::<serde_json::Value, _>(
+            "admin_insertSettlementAttempt",
+            rpc_params![job_id, attempt],
+        )
+        .await
+        .expect_err("an identity mismatch should be rejected");
+
+    match error {
+        ClientError::Call(error) => {
+            assert_eq!(error.code(), RpcErrorCode::InvalidParams.code());
+        }
+        error => panic!("expected JSON-RPC call error, got {error}"),
+    }
 }
 
 #[test_log::test(tokio::test)]

@@ -25,7 +25,6 @@ use crate::{
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
-        certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
@@ -208,35 +207,6 @@ impl StateWriter for StateStore {
         }
 
         Ok(())
-    }
-
-    fn insert_certificate_settlement_job_id(
-        &self,
-        certificate_id: &CertificateId,
-        settlement_job_id: &SettlementJobId,
-    ) -> Result<(), Error> {
-        if self
-            .db
-            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
-            .is_some()
-        {
-            return Err(Error::UnprocessedAction(format!(
-                "Certificate {certificate_id} already has a settlement job id"
-            )));
-        }
-
-        let mut batch = WriteBatch::default();
-        self.db
-            .multi_insert_batch::<SettlementJobIdPerCertificateIdColumn>(
-                [(certificate_id, settlement_job_id)],
-                &mut batch,
-            )?;
-        self.db
-            .multi_insert_batch::<CertificateIdPerSettlementJobIdColumn>(
-                [(settlement_job_id, certificate_id)],
-                &mut batch,
-            )?;
-        Ok(self.db.write_batch(batch)?)
     }
 
     fn assign_certificate_to_epoch(

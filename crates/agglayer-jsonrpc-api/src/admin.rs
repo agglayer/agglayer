@@ -25,7 +25,9 @@ use super::error::RpcResult;
 use crate::{
     error::Error,
     rpc_middleware,
-    settlement_admin::{edit_even_if_completed, map_admin_error, Force, MutationResponse},
+    settlement_admin::{
+        edit_even_if_completed, map_admin_error, Force, InsertAttemptParams, MutationResponse,
+    },
     JsonRpcService,
 };
 
@@ -233,7 +235,9 @@ pub(crate) trait AdminAgglayer {
     ///
     /// The task drops its in-memory state and reloads from storage. It
     /// requires a live task, and is the escape hatch when a later mutation
-    /// reports `liveTask` other than `notified`.
+    /// reports `liveTask` other than `queued`. The command is queued, not a
+    /// wake-up: it takes effect at the task's next control check and does
+    /// not interrupt a wait in progress.
     ///
     /// # Errors
     ///
@@ -243,6 +247,32 @@ pub(crate) trait AdminAgglayer {
     /// queue returns `RpcErrorCode::Unavailable`'s code.
     #[method(name = "reloadSettlementTask")]
     async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Append one new settlement attempt to a settlement job.
+    ///
+    /// **JSON-RPC method:** `admin_insertSettlementAttempt`
+    ///
+    /// Registers a settlement transaction the service does not know about
+    /// (for example, one submitted out of band or ported from the legacy
+    /// settlement path) so the settlement task tracks it like its own
+    /// attempts. Only `txHash` is mandatory. The transaction is always queried
+    /// on L1: its sender and nonce are authoritative when found, so explicit
+    /// values must match and missing values are resolved from it. An unknown
+    /// transaction is accepted with a warning only when both identity fields
+    /// are explicit; otherwise it is rejected.
+    ///
+    /// This always appends one new attempt under the next unused attempt
+    /// number, never overwrites an existing attempt, and returns the
+    /// store-assigned number. It fails if the job does not exist, or if it
+    /// already has a terminal result and `force` is not `"force=true"` (see
+    /// [`Force`]).
+    #[method(name = "insertSettlementAttempt")]
+    async fn insert_settlement_attempt(
+        &self,
+        job_id: SettlementJobId,
+        attempt: InsertAttemptParams,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
 
     /// Record that this settlement attempt will never land on L1.
     ///
@@ -260,6 +290,11 @@ pub(crate) trait AdminAgglayer {
     /// the assertion. It fails if the attempt does not exist, or if the job
     /// already has a terminal result and `force` is not `"force=true"` (see
     /// [`Force`]).
+    ///
+    /// The edit is durable once this returns; the response's `liveTask` only
+    /// reports whether a reload command was queued, with no promptness
+    /// promise (see [`MutationResponse`]). Follow the abort → edit → reload
+    /// flow when the task must not act on stale state.
     #[method(name = "markSettlementAttemptDefinitelyFailed")]
     async fn mark_settlement_attempt_definitely_failed(
         &self,
@@ -278,6 +313,11 @@ pub(crate) trait AdminAgglayer {
     /// `admin_markSettlementAttemptDefinitelyFailed`. It fails if the attempt
     /// does not exist, no result is recorded, or if the job already has a
     /// terminal result and `force` is not `"force=true"` (see [`Force`]).
+    ///
+    /// The edit is durable once this returns; the response's `liveTask` only
+    /// reports whether a reload command was queued, with no promptness
+    /// promise (see [`MutationResponse`]). Follow the abort → edit → reload
+    /// flow when the task must not act on stale state.
     #[method(name = "removeSettlementAttemptResult")]
     async fn remove_settlement_attempt_result(
         &self,
@@ -911,6 +951,25 @@ where
             .admin_reload_and_restart_task(job_id)
             .await
             .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn insert_settlement_attempt(
+        &self,
+        job_id: SettlementJobId,
+        attempt: InsertAttemptParams,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!("(ADMIN) Inserting settlement attempt for job {job_id}");
+        let (attempt_number, live_task) = self
+            .settlement_service
+            .admin_insert_settlement_attempt(job_id, attempt.into(), edit_even_if_completed(force))
+            .await
+            .map_err(map_admin_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
+        })
     }
 
     #[instrument(skip(self))]

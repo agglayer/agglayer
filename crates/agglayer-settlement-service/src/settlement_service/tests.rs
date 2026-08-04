@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Mutex,
+};
 
 use agglayer_config::Multiplier;
 use agglayer_storage::{
@@ -6,8 +9,8 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     CertificateId, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest, Nonce,
-    RpcErrorCode, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob, SettlementJobId,
-    SettlementJobResult, SettlementTxHash, B256, U256,
+    RpcErrorCode, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult,
+    SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash, B256, U256,
 };
 use alloy::{
     network::EthereumWallet,
@@ -372,7 +375,7 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
 }
 
 #[tokio::test]
-async fn request_new_settlement_records_certificate_link_before_job() {
+async fn request_new_settlement_persists_job_with_certificate_link() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
     let certificate_id = CertificateId::new(Digest::from([7; 32]));
@@ -381,35 +384,20 @@ async fn request_new_settlement_records_certificate_link_before_job() {
     let mut expected_job = job.clone();
     expected_job.gas_limit = 300_000;
     let recorded_job_id = Arc::new(Mutex::new(None));
-    let ordering = Arc::new(Mutex::new(Vec::new()));
+    let recorded_job_id_for_store = recorded_job_id.clone();
 
+    // The job and both certificate links are persisted in one atomic call.
     store
-        .expect_insert_certificate_settlement_job_id()
+        .expect_insert_settlement_job_with_certificate()
         .once()
-        .withf(move |recorded_certificate_id, _| recorded_certificate_id == &certificate_id)
-        .return_once({
-            let ordering = ordering.clone();
-            let recorded_job_id = recorded_job_id.clone();
-            move |_, settlement_job_id| {
-                ordering.lock().unwrap().push("write_link");
-                *recorded_job_id.lock().unwrap() = Some(*settlement_job_id);
-                Ok(())
-            }
+        .withf(move |_, recorded_job, recorded_certificate_id| {
+            recorded_job == &expected_job && recorded_certificate_id == &certificate_id
+        })
+        .return_once(move |settlement_job_id, _, _| {
+            *recorded_job_id_for_store.lock().unwrap() = Some(*settlement_job_id);
+            Ok(())
         });
-
-    store
-        .expect_insert_settlement_job()
-        .once()
-        .withf(move |_, recorded_job| recorded_job == &expected_job)
-        .return_once({
-            let ordering = ordering.clone();
-            let recorded_job_id = recorded_job_id.clone();
-            move |settlement_job_id, _| {
-                ordering.lock().unwrap().push("write_job");
-                assert_eq!(*recorded_job_id.lock().unwrap(), Some(*settlement_job_id));
-                Ok(())
-            }
-        });
+    store.expect_insert_settlement_job().never();
 
     // `create` runs `estimateGas` before persisting. Configure the ceiling
     // strictly between the raw and multiplied estimates so both knobs bind.
@@ -438,10 +426,6 @@ async fn request_new_settlement_records_certificate_link_before_job() {
     cancellation_token.cancel();
 
     assert_eq!(*recorded_job_id.lock().unwrap(), Some(watcher.job_id()));
-    assert_eq!(
-        ordering.lock().unwrap().as_slice(),
-        ["write_link", "write_job"]
-    );
 }
 
 #[tokio::test]
@@ -689,6 +673,487 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
     );
 }
 
+/// A fully specified admin attempt.
+fn mk_new_attempt(seed: u8, tx_hash: SettlementTxHash) -> NewSettlementAttempt {
+    NewSettlementAttempt {
+        tx_hash,
+        sender_wallet: Some(agglayer_types::Address::from([seed; 20])),
+        nonce: Some(Nonce(seed as u64)),
+        submission_time: Some(std::time::SystemTime::UNIX_EPOCH),
+        max_fee_per_gas: Some(30),
+        max_priority_fee_per_gas: Some(3),
+    }
+}
+
+/// What [`mk_new_attempt`] resolves to when its identity matches L1.
+fn mk_resolved_attempt(seed: u8, tx_hash: SettlementTxHash) -> SettlementAttempt {
+    SettlementAttempt {
+        sender_wallet: agglayer_types::Address::from([seed; 20]),
+        nonce: Nonce(seed as u64),
+        hash: tx_hash,
+        submission_time: std::time::SystemTime::UNIX_EPOCH,
+        max_fee_per_gas: 30,
+        max_priority_fee_per_gas: 3,
+    }
+}
+
+fn mk_l1_transaction(
+    sender: agglayer_types::Address,
+    nonce: u64,
+    max_fee_per_gas: u128,
+    max_priority_fee_per_gas: u128,
+) -> alloy::rpc::types::Transaction {
+    let transaction =
+        alloy::consensus::TxEnvelope::Eip1559(alloy::consensus::Signed::new_unhashed(
+            alloy::consensus::TxEip1559 {
+                chain_id: 1,
+                nonce,
+                gas_limit: 21_000,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                ..Default::default()
+            },
+            alloy::primitives::Signature::new(U256::from(1), U256::from(2), false),
+        ));
+
+    alloy::rpc::types::Transaction {
+        inner: alloy::consensus::transaction::Recovered::new_unchecked(transaction, sender.into()),
+        block_hash: None,
+        block_number: None,
+        transaction_index: None,
+        effective_gas_price: Some(max_fee_per_gas),
+    }
+}
+
+fn mk_provider_with_tx_response(
+    transaction: Option<alloy::rpc::types::Transaction>,
+) -> impl Provider + WalletProvider + 'static {
+    let asserter = Asserter::new();
+    asserter.push_success(&transaction);
+    ProviderBuilder::new()
+        .wallet(EthereumWallet::from(
+            PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+        ))
+        .connect_mocked_client(asserter)
+}
+
+const UNKNOWN_TX_WARNING: &str = "Settlement transaction is not known to the L1 RPC; trusting \
+                                  explicitly provided sender wallet and nonce";
+
+struct ExpectedWarnCountingSubscriber {
+    warn_events: Arc<AtomicUsize>,
+}
+
+impl tracing::Subscriber for ExpectedWarnCountingSubscriber {
+    fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+
+    fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+
+    fn event(&self, event: &tracing::Event<'_>) {
+        if *event.metadata().level() != tracing::Level::WARN
+            || event.metadata().target() != "agglayer_settlement_service::settlement_service"
+        {
+            return;
+        }
+
+        struct ExpectedMessageVisitor(bool);
+
+        impl tracing::field::Visit for ExpectedMessageVisitor {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" && format!("{value:?}") == UNKNOWN_TX_WARNING {
+                    self.0 = true;
+                }
+            }
+
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                if field.name() == "message" && value == UNKNOWN_TX_WARNING {
+                    self.0 = true;
+                }
+            }
+        }
+
+        let mut visitor = ExpectedMessageVisitor(false);
+        event.record(&mut visitor);
+        if visitor.0 {
+            self.warn_events.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    fn enter(&self, _span: &tracing::span::Id) {}
+
+    fn exit(&self, _span: &tracing::span::Id) {}
+}
+
+#[tokio::test]
+async fn admin_insert_attempt_returns_assigned_number_and_reports_absent_task() {
+    let transaction = mk_l1_transaction(agglayer_types::Address::from([30; 20]), 30, 30, 3);
+    let tx_hash =
+        SettlementTxHash::from(alloy::network::TransactionResponse::tx_hash(&transaction));
+    let provider = mk_provider_with_tx_response(Some(transaction));
+
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(30);
+    let expected_attempt = mk_resolved_attempt(30, tx_hash);
+
+    store
+        .expect_admin_insert_settlement_attempt()
+        .once()
+        .withf(
+            move |requested_job_id, requested_attempt, edit_even_if_completed| {
+                requested_job_id == &job_id
+                    && requested_attempt == &expected_attempt
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(|_, _, _| Ok(3));
+
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    let result = service
+        .admin_insert_settlement_attempt(
+            job_id,
+            mk_new_attempt(30, tx_hash),
+            EditEvenIfCompleted::No,
+        )
+        .await
+        .expect("admin insert should succeed");
+
+    assert_eq!(result, (3, LiveTaskNotification::Absent));
+}
+
+#[tokio::test]
+async fn admin_insert_attempt_trusts_explicit_identity_for_unknown_tx_and_warns() {
+    let tx_hash = SettlementTxHash::new(Digest::from([0x40; 32]));
+    let expected_attempt = mk_resolved_attempt(40, tx_hash);
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(40);
+    store
+        .expect_admin_insert_settlement_attempt()
+        .once()
+        .withf(move |requested_job_id, attempt, edit_even_if_completed| {
+            requested_job_id == &job_id
+                && attempt == &expected_attempt
+                && *edit_even_if_completed == EditEvenIfCompleted::No
+        })
+        .return_once(|_, _, _| Ok(4));
+
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider_with_tx_response(None)),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    let warn_events = Arc::new(AtomicUsize::new(0));
+    // Thread-local default: `#[tokio::test]` uses a current-thread runtime, so
+    // the warning from this call is isolated from concurrently running tests.
+    let _guard = tracing::subscriber::set_default(ExpectedWarnCountingSubscriber {
+        warn_events: warn_events.clone(),
+    });
+    let result = service
+        .admin_insert_settlement_attempt(
+            job_id,
+            mk_new_attempt(40, tx_hash),
+            EditEvenIfCompleted::No,
+        )
+        .await
+        .expect("an unknown transaction with explicit identity should be accepted");
+
+    assert_eq!(result, (4, LiveTaskNotification::Absent));
+    assert_eq!(warn_events.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn admin_insert_attempt_resolves_missing_fields_from_l1() {
+    let sender = agglayer_types::Address::from([0x41; 20]);
+    let nonce = 7;
+    let max_fee_per_gas = 2_000_000_000;
+    let max_priority_fee_per_gas = 1_000_000_000;
+    let transaction = mk_l1_transaction(sender, nonce, max_fee_per_gas, max_priority_fee_per_gas);
+    let tx_hash =
+        SettlementTxHash::from(alloy::network::TransactionResponse::tx_hash(&transaction));
+    let provider = mk_provider_with_tx_response(Some(transaction));
+
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(31);
+    store
+        .expect_admin_insert_settlement_attempt()
+        .once()
+        .withf(move |requested_job_id, attempt, edit_even_if_completed| {
+            requested_job_id == &job_id
+                && attempt.sender_wallet == sender
+                && attempt.nonce == Nonce(nonce)
+                && attempt.hash == tx_hash
+                && attempt.max_fee_per_gas == max_fee_per_gas
+                && attempt.max_priority_fee_per_gas == max_priority_fee_per_gas
+                && *edit_even_if_completed == EditEvenIfCompleted::No
+        })
+        .return_once(|_, _, _| Ok(0));
+
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    let result = service
+        .admin_insert_settlement_attempt(
+            job_id,
+            NewSettlementAttempt {
+                tx_hash,
+                sender_wallet: None,
+                nonce: None,
+                submission_time: None,
+                max_fee_per_gas: None,
+                max_priority_fee_per_gas: None,
+            },
+            EditEvenIfCompleted::No,
+        )
+        .await
+        .expect("admin insert should resolve the attempt from L1");
+
+    assert_eq!(result, (0, LiveTaskNotification::Absent));
+}
+
+#[tokio::test]
+async fn admin_insert_attempt_rejects_explicit_sender_mismatch_with_l1() {
+    let l1_sender_wallet = agglayer_types::Address::from([0x51; 20]);
+    let provided_sender_wallet = agglayer_types::Address::from([0x52; 20]);
+    let nonce = 9;
+    let transaction = mk_l1_transaction(l1_sender_wallet, nonce, 30, 3);
+    let tx_hash =
+        SettlementTxHash::from(alloy::network::TransactionResponse::tx_hash(&transaction));
+
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    store.expect_admin_insert_settlement_attempt().never();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider_with_tx_response(Some(transaction))),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    let error = service
+        .admin_insert_settlement_attempt(
+            mk_job_id(41),
+            NewSettlementAttempt {
+                tx_hash,
+                sender_wallet: Some(provided_sender_wallet),
+                nonce: Some(Nonce(nonce)),
+                submission_time: None,
+                max_fee_per_gas: None,
+                max_priority_fee_per_gas: None,
+            },
+            EditEvenIfCompleted::No,
+        )
+        .await
+        .expect_err("an explicit sender that disagrees with L1 should be rejected");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::InvalidParams)
+    );
+    assert_eq!(
+        error.chain().map(ToString::to_string).collect::<Vec<_>>(),
+        vec![
+            "invalid params".to_owned(),
+            format!(
+                "Explicit sender wallet {provided_sender_wallet} does not match L1 sender wallet \
+                 {l1_sender_wallet} for settlement transaction {tx_hash}"
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn admin_insert_attempt_rejects_explicit_nonce_mismatch_with_l1() {
+    let sender_wallet = agglayer_types::Address::from([0x53; 20]);
+    let l1_nonce = Nonce(10);
+    let provided_nonce = Nonce(11);
+    let transaction = mk_l1_transaction(sender_wallet, l1_nonce.0, 30, 3);
+    let tx_hash =
+        SettlementTxHash::from(alloy::network::TransactionResponse::tx_hash(&transaction));
+
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    store.expect_admin_insert_settlement_attempt().never();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider_with_tx_response(Some(transaction))),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    let error = service
+        .admin_insert_settlement_attempt(
+            mk_job_id(42),
+            NewSettlementAttempt {
+                tx_hash,
+                sender_wallet: Some(sender_wallet),
+                nonce: Some(provided_nonce),
+                submission_time: None,
+                max_fee_per_gas: None,
+                max_priority_fee_per_gas: None,
+            },
+            EditEvenIfCompleted::No,
+        )
+        .await
+        .expect_err("an explicit nonce that disagrees with L1 should be rejected");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::InvalidParams)
+    );
+    assert_eq!(
+        error.chain().map(ToString::to_string).collect::<Vec<_>>(),
+        vec![
+            "invalid params".to_owned(),
+            format!(
+                "Explicit nonce {provided_nonce} does not match L1 nonce {l1_nonce} for \
+                 settlement transaction {tx_hash}"
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn admin_insert_attempt_fails_for_unknown_tx_when_fields_missing() {
+    for (sender_wallet, nonce) in [
+        (None, None),
+        (Some(agglayer_types::Address::from([0x42; 20])), None),
+        (None, Some(Nonce(42))),
+    ] {
+        let mut store = MockStateStore::new();
+        expect_empty_startup_recovery(&mut store);
+        store.expect_admin_insert_settlement_attempt().never();
+
+        let service = SettlementService::start(
+            SettlementServiceConfig::default(),
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(mk_provider_with_tx_response(None)),
+            Arc::new(store),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("settlement service should start")
+        .0;
+
+        let error = service
+            .admin_insert_settlement_attempt(
+                mk_job_id(32),
+                NewSettlementAttempt {
+                    tx_hash: SettlementTxHash::new(Digest::from([0x42; 32])),
+                    sender_wallet,
+                    nonce,
+                    submission_time: None,
+                    max_fee_per_gas: None,
+                    max_priority_fee_per_gas: None,
+                },
+                EditEvenIfCompleted::No,
+            )
+            .await
+            .expect_err("unknown transaction with an incomplete identity should be rejected");
+
+        assert_eq!(
+            error.downcast_ref::<RpcErrorCode>(),
+            Some(&RpcErrorCode::NotFound)
+        );
+        assert!(format!("{error:#}").contains("not known to the L1 RPC"));
+    }
+}
+
+#[tokio::test]
+async fn admin_insert_attempt_completed_job_error_is_tagged_without_notification() {
+    let transaction = mk_l1_transaction(agglayer_types::Address::from([33; 20]), 33, 30, 3);
+    let tx_hash =
+        SettlementTxHash::from(alloy::network::TransactionResponse::tx_hash(&transaction));
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(33);
+
+    store
+        .expect_admin_insert_settlement_attempt()
+        .once()
+        .withf(move |requested_job_id, _, edit_even_if_completed| {
+            requested_job_id == &job_id && *edit_even_if_completed == EditEvenIfCompleted::No
+        })
+        .return_once(move |_, _, _| Err(StorageError::SettlementJobAlreadyCompleted(job_id)));
+
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider_with_tx_response(Some(transaction))),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+    let (task_control_handle, mut task_control) =
+        TaskControlHandle::new(&service.cancellation_token);
+    service
+        .task_controls
+        .lock()
+        .await
+        .insert(job_id, task_control_handle);
+
+    let error = service
+        .admin_insert_settlement_attempt(
+            job_id,
+            mk_new_attempt(33, tx_hash),
+            EditEvenIfCompleted::No,
+        )
+        .await
+        .expect_err("a completed job should reject an unforced insert");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::AlreadyCompleted)
+    );
+    assert!(
+        task_control.try_recv_admin_command().is_none(),
+        "a failed storage insert must not trigger a task reload"
+    );
+}
+
 #[tokio::test]
 async fn admin_mutations_forward_the_force_flag_to_storage() {
     let mut store = MockStateStore::new();
@@ -864,7 +1329,7 @@ async fn admin_mutation_reports_absent_live_task() {
 }
 
 #[tokio::test]
-async fn admin_mutation_notifies_parked_live_task() {
+async fn admin_mutation_queues_reload_for_parked_live_task() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
     let job_id = mk_job_id(36);
@@ -895,7 +1360,11 @@ async fn admin_mutation_notifies_parked_live_task() {
         .await
         .expect("admin mark should succeed");
 
-    assert_eq!(live_task, LiveTaskNotification::Notified);
+    assert_eq!(live_task, LiveTaskNotification::Queued);
+    assert_eq!(
+        serde_json::to_value(live_task).expect("live-task notification should serialize"),
+        serde_json::json!("queued")
+    );
     assert!(matches!(
         task_control.try_recv_admin_command(),
         Some(TaskAdminCommand::ReloadAndRestart)
