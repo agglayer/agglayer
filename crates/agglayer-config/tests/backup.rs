@@ -1,7 +1,6 @@
 use std::path::Path;
 
-use agglayer_config::Config;
-use insta::assert_toml_snapshot;
+use agglayer_config::{assert_toml_snapshot, Config};
 
 #[test]
 fn backup_enabled() {
@@ -9,7 +8,5 @@ fn backup_enabled() {
 
     let config = Config::try_load(Path::new(input)).unwrap();
 
-    assert_toml_snapshot!(config, {
-        ".storage.*" => agglayer_config::redact_storage_path(),
-    });
+    assert_toml_snapshot!(config);
 }

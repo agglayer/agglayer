@@ -1,4 +1,6 @@
-use agglayer_types::{CertificateId, CertificateStatusError, EpochNumber, Height, NetworkId};
+use agglayer_types::{
+    CertificateId, CertificateStatusError, EpochNumber, Height, NetworkId, SettlementJobId,
+};
 
 use crate::storage::{DBError, DBOpenError};
 
@@ -41,6 +43,20 @@ pub enum Error {
 
     #[error("Unprocessed action: {0}")]
     UnprocessedAction(String),
+
+    #[error("Settlement job {0} does not exist")]
+    SettlementJobNotFound(SettlementJobId),
+
+    #[error(
+        "Settlement job {0} already has a terminal result; pass force to edit its attempts anyway"
+    )]
+    SettlementJobAlreadyCompleted(SettlementJobId),
+
+    #[error("Settlement attempt {attempt} does not exist for job {job}")]
+    SettlementAttemptNotFound { job: SettlementJobId, attempt: u64 },
+
+    #[error("No result is recorded for settlement attempt {attempt} of job {job}")]
+    SettlementAttemptResultNotRecorded { job: SettlementJobId, attempt: u64 },
 
     #[error("Inconsistent state for network: {network_id}")]
     InconsistentState { network_id: NetworkId },

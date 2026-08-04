@@ -102,7 +102,8 @@ async fn concurrent_jobs_on_same_wallet_get_distinct_nonces() {
         CancellationToken::new(),
     )
     .await
-    .expect("settlement service should start");
+    .expect("settlement service should start")
+    .0;
 
     let (watcher_a, watcher_b) = tokio::join!(
         service.request_new_settlement(None, mk_job(1)),

@@ -140,3 +140,38 @@ fn settlement_metrics_export_the_issue_1676_series() {
         Some(1.0),
     );
 }
+
+#[test]
+fn recovery_skipped_jobs_counter_exports() {
+    let harness = MetricsHarness::install();
+
+    // The counter carries no labels, so the sample line may or may not have
+    // a `{...}` label set depending on exporter attributes; match on the
+    // series name prefix only.
+    let skipped_series = format!("{SETTLEMENT_RECOVERY_SKIPPED_JOBS}_total");
+    let skipped_value = |metrics: &str| {
+        metrics
+            .lines()
+            .find(|line| line.starts_with(&skipped_series))
+            .and_then(|line| line.rsplit(' ').next())
+            .and_then(|value| value.parse::<f64>().ok())
+    };
+
+    // A zero count must still export the series, so alerting can tell
+    // "scan ran, nothing skipped" apart from "no data".
+    record_settlement_recovery_skipped_jobs(0);
+    let metrics = harness.gather();
+    assert_eq!(
+        skipped_value(&metrics),
+        Some(0.0),
+        "zero count should still export the series, got:\n{metrics}"
+    );
+
+    record_settlement_recovery_skipped_jobs(2);
+    let metrics = harness.gather();
+    assert_eq!(
+        skipped_value(&metrics),
+        Some(2.0),
+        "recovery skipped counter, got:\n{metrics}"
+    );
+}

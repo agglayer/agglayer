@@ -6,3 +6,4 @@ mod get_token_balance;
 mod get_tx_status;
 mod send_certificate;
 mod send_tx;
+mod settlement_admin;

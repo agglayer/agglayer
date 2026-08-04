@@ -90,20 +90,17 @@ fn mock_settlement_persisting<S>(
     tx_hash: SettlementTxHash,
     outcome: ContractCallOutcome,
 ) where
-    S: SettlementWriter + StateWriter + Send + Sync + 'static,
+    S: SettlementWriter + Send + Sync + 'static,
 {
     let next_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
     settlement_service
         .expect_submit_settlement_job()
         .returning(move |certificate_id, job| {
             let id = job_id(next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u128);
+            // The real service writes the job and the certificate <-> job-id links
+            // in one atomic call; mirror it so process_from_candidate can resume.
             store
-                .insert_settlement_job(&id, &job)
-                .map_err(|error| eyre::eyre!("{error}"))?;
-            // The real service records the certificate <-> job-id link as part of
-            // creating the job; mirror it so process_from_candidate can resume.
-            store
-                .insert_certificate_settlement_job_id(&certificate_id, &id)
+                .insert_settlement_job_with_certificate(&id, &job, &certificate_id)
                 .map_err(|error| eyre::eyre!("{error}"))?;
             Ok(id)
         });
@@ -249,9 +246,6 @@ async fn start_from_zero() {
         )
         .returning(|_, _, _, _, _| Ok(()));
 
-    state
-        .expect_insert_certificate_settlement_job_id()
-        .returning(|_, _| Ok(()));
     state
         .expect_get_certificate_settlement_job_id()
         .returning(|_| Ok(Some(job_id(1))));
@@ -637,9 +631,6 @@ async fn retries() {
         .withf(|_, status| matches!(status, CertificateStatus::Candidate))
         .returning(|_, _| Ok(()));
 
-    state
-        .expect_insert_certificate_settlement_job_id()
-        .returning(|_, _| Ok(()));
     state
         .expect_get_certificate_settlement_job_id()
         .returning(|_| Ok(Some(job_id(1))));

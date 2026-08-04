@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
+use agglayer_settlement_service::SettlementService;
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, StateReader,
-    StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
+    SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+    UpdateStatusToCandidate,
 };
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    CertificateStatusError, Digest, Height, NetworkId, SettlementTxHash, U256,
+    CertificateStatusError, Digest, Height, NetworkId, SettlementJobId, SettlementTxHash, U256,
 };
+use alloy::providers::{Provider, WalletProvider};
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pessimistic_proof::local_balance_tree::BalanceTree;
 use serde::{Deserialize, Serialize};
@@ -19,7 +22,14 @@ use tracing::{error, info, instrument, warn};
 use unified_bridge::TokenInfo;
 
 use super::error::RpcResult;
-use crate::{error::Error, rpc_middleware, JsonRpcService};
+use crate::{
+    error::Error,
+    rpc_middleware,
+    settlement_admin::{
+        edit_even_if_completed, map_admin_error, Force, InsertAttemptParams, MutationResponse,
+    },
+    JsonRpcService,
+};
 
 /// Controls whether the certificate is immediately submitted for reprocessing
 /// after edits are applied.
@@ -198,18 +208,138 @@ pub(crate) trait AdminAgglayer {
     async fn disable_network(&self, network_id: NetworkId) -> RpcResult<()>;
     #[method(name = "enableNetwork")]
     async fn enable_network(&self, network_id: NetworkId) -> RpcResult<()>;
+
+    /// Stop the in-memory settlement task for a job.
+    ///
+    /// **JSON-RPC method:** `admin_abortSettlementTask`
+    ///
+    /// This is runtime-only: the stored job remains pending and is untouched.
+    /// There is no respawn in this stack, so recovery is a node restart;
+    /// startup recovery respawns pending jobs. Aborting a job whose waiter is
+    /// live makes its certificate `InError` while the job can still settle
+    /// after restart. That certificate-status/storage divergence must be
+    /// reconciled manually by the operator.
+    ///
+    /// # Errors
+    ///
+    /// Unknown job IDs return `RpcErrorCode::NotFound`'s code; completed jobs
+    /// return `RpcErrorCode::AlreadyCompleted`'s code; pending jobs without a
+    /// task return `RpcErrorCode::NoLiveTask`'s code; and a full task command
+    /// queue returns `RpcErrorCode::Unavailable`'s code.
+    #[method(name = "abortSettlementTask")]
+    async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Make a live settlement task reload its state from storage.
+    ///
+    /// **JSON-RPC method:** `admin_reloadSettlementTask`
+    ///
+    /// The task drops its in-memory state and reloads from storage. It
+    /// requires a live task, and is the escape hatch when a later mutation
+    /// reports `liveTask` other than `queued`. The command is queued, not a
+    /// wake-up: it takes effect at the task's next control check and does
+    /// not interrupt a wait in progress.
+    ///
+    /// # Errors
+    ///
+    /// Unknown job IDs return `RpcErrorCode::NotFound`'s code; completed jobs
+    /// return `RpcErrorCode::AlreadyCompleted`'s code; pending jobs without a
+    /// task return `RpcErrorCode::NoLiveTask`'s code; and a full task command
+    /// queue returns `RpcErrorCode::Unavailable`'s code.
+    #[method(name = "reloadSettlementTask")]
+    async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Append one new settlement attempt to a settlement job.
+    ///
+    /// **JSON-RPC method:** `admin_insertSettlementAttempt`
+    ///
+    /// Registers a settlement transaction the service does not know about
+    /// (for example, one submitted out of band or ported from the legacy
+    /// settlement path) so the settlement task tracks it like its own
+    /// attempts. Only `txHash` is mandatory. The transaction is always queried
+    /// on L1: its sender and nonce are authoritative when found, so explicit
+    /// values must match and missing values are resolved from it. An unknown
+    /// transaction is accepted with a warning only when both identity fields
+    /// are explicit; otherwise it is rejected.
+    ///
+    /// This always appends one new attempt under the next unused attempt
+    /// number, never overwrites an existing attempt, and returns the
+    /// store-assigned number. It fails if the job does not exist, or if it
+    /// already has a terminal result and `force` is not `"force=true"` (see
+    /// [`Force`]).
+    #[method(name = "insertSettlementAttempt")]
+    async fn insert_settlement_attempt(
+        &self,
+        job_id: SettlementJobId,
+        attempt: InsertAttemptParams,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
+
+    /// Record that this settlement attempt will never land on L1.
+    ///
+    /// **JSON-RPC method:** `admin_markSettlementAttemptDefinitelyFailed`
+    ///
+    /// Overwrites the attempt's result with a client error carrying the
+    /// mandatory `reason`, bypassing the usual upgrade-only rule for attempt
+    /// results. This is terminal for the attempt, never for the job: the
+    /// reloaded task stops waiting on the attempt and drives the settlement
+    /// elsewhere.
+    ///
+    /// This is a trusted operator assertion. If the transaction can still
+    /// land, only the settlement contract's replay protection prevents
+    /// double settlement. Real on-chain evidence observed later supersedes
+    /// the assertion. It fails if the attempt does not exist, or if the job
+    /// already has a terminal result and `force` is not `"force=true"` (see
+    /// [`Force`]).
+    ///
+    /// The edit is durable once this returns; the response's `liveTask` only
+    /// reports whether a reload command was queued, with no promptness
+    /// promise (see [`MutationResponse`]). Follow the abort → edit → reload
+    /// flow when the task must not act on stale state.
+    #[method(name = "markSettlementAttemptDefinitelyFailed")]
+    async fn mark_settlement_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: String,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
+
+    /// Remove the recorded result of a settlement attempt.
+    ///
+    /// **JSON-RPC method:** `admin_removeSettlementAttemptResult`
+    ///
+    /// Hands the attempt back to the settlement task as pending, so the task
+    /// re-derives its outcome from L1. This is the undo of
+    /// `admin_markSettlementAttemptDefinitelyFailed`. It fails if the attempt
+    /// does not exist, no result is recorded, or if the job already has a
+    /// terminal result and `force` is not `"force=true"` (see [`Force`]).
+    ///
+    /// The edit is durable once this returns; the response's `liveTask` only
+    /// reports whether a reload command was queued, with no promptness
+    /// promise (see [`MutationResponse`]). Follow the abort → edit → reload
+    /// flow when the task must not act on stale state.
+    #[method(name = "removeSettlementAttemptResult")]
+    async fn remove_settlement_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse>;
 }
 
 /// The Admin RPC agglayer service implementation.
-pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider> {
     certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
     pending_store: Arc<PendingStore>,
     state: Arc<StateStore>,
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
+    settlement_service: SettlementService<L1Provider, StateStore>,
 }
 
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore> {
+impl<PendingStore, StateStore, DebugStore, L1Provider>
+    AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
+{
     /// Create an instance of the admin RPC agglayer service.
     pub fn new(
         certificate_sender: mpsc::Sender<(NetworkId, Height, CertificateId)>,
@@ -217,6 +347,7 @@ impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, State
         state: Arc<StateStore>,
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
+        settlement_service: SettlementService<L1Provider, StateStore>,
     ) -> Self {
         Self {
             certificate_sender,
@@ -224,15 +355,18 @@ impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, State
             state,
             debug_store,
             config,
+            settlement_service,
         }
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider>
+    AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Provider: Provider + WalletProvider + 'static,
 {
     pub async fn start(self) -> eyre::Result<axum::Router> {
         // Create the RPC service
@@ -295,8 +429,8 @@ where
     }
 }
 
-impl<PendingStore, StateStore, DebugStore> Drop
-    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider> Drop
+    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer service");
@@ -304,12 +438,13 @@ impl<PendingStore, StateStore, DebugStore> Drop
 }
 
 #[async_trait]
-impl<PendingStore, StateStore, DebugStore> AdminAgglayerServer
-    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore>
+impl<PendingStore, StateStore, DebugStore, L1Provider> AdminAgglayerServer
+    for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
+    L1Provider: Provider + WalletProvider + 'static,
 {
     #[instrument(skip(self))]
     async fn get_token_balance(
@@ -797,6 +932,90 @@ where
         self.state.enable_network(&network_id).map_err(|error| {
             error!(?error, "Failed to enable network {network_id}");
             Error::internal(format!("Unable to enable network {network_id}"))
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!("(ADMIN) Aborting settlement task for job {job_id}");
+        self.settlement_service
+            .admin_abort_task(job_id)
+            .await
+            .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()> {
+        warn!("(ADMIN) Reloading settlement task for job {job_id}");
+        self.settlement_service
+            .admin_reload_and_restart_task(job_id)
+            .await
+            .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn insert_settlement_attempt(
+        &self,
+        job_id: SettlementJobId,
+        attempt: InsertAttemptParams,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!("(ADMIN) Inserting settlement attempt for job {job_id}");
+        let (attempt_number, live_task) = self
+            .settlement_service
+            .admin_insert_settlement_attempt(job_id, attempt.into(), edit_even_if_completed(force))
+            .await
+            .map_err(map_admin_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn mark_settlement_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: String,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!(
+            "(ADMIN) Marking settlement attempt {attempt_number} of job {job_id} as definitely \
+             failed"
+        );
+        let live_task = self
+            .settlement_service
+            .admin_mark_attempt_definitely_failed(
+                job_id,
+                attempt_number,
+                &reason,
+                edit_even_if_completed(force),
+            )
+            .await
+            .map_err(map_admin_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn remove_settlement_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        force: Option<Force>,
+    ) -> RpcResult<MutationResponse> {
+        warn!("(ADMIN) Removing result of settlement attempt {attempt_number} of job {job_id}");
+        let live_task = self
+            .settlement_service
+            .admin_remove_attempt_result(job_id, attempt_number, edit_even_if_completed(force))
+            .await
+            .map_err(map_admin_error)?;
+        Ok(MutationResponse {
+            attempt_number,
+            live_task,
         })
     }
 }

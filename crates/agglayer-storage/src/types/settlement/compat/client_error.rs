@@ -9,6 +9,7 @@ impl From<&ClientErrorType> for v0::ClientErrorType {
             ClientErrorType::Unknown => Self::Unspecified,
             ClientErrorType::NonceAlreadyUsed => Self::NonceAlreadyUsed,
             ClientErrorType::SettlementSucceededElsewhere => Self::SettlementSucceededElsewhere,
+            ClientErrorType::AbandonedByAdmin => Self::AbandonedByAdmin,
         }
     }
 }
@@ -21,6 +22,7 @@ impl From<v0::ClientErrorType> for ClientErrorType {
             v0::ClientErrorType::SettlementSucceededElsewhere => {
                 ClientErrorType::SettlementSucceededElsewhere
             }
+            v0::ClientErrorType::AbandonedByAdmin => ClientErrorType::AbandonedByAdmin,
         }
     }
 }
@@ -53,29 +55,4 @@ impl TryFrom<v0::ClientError> for ClientError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn client_error_round_trip() {
-        let error = ClientError {
-            kind: ClientErrorType::NonceAlreadyUsed,
-            message: "nonce already used".to_string(),
-        };
-
-        let proto: v0::ClientError = (&error).into();
-        let decoded = ClientError::try_from(proto).unwrap();
-
-        assert_eq!(decoded, error);
-    }
-
-    #[test]
-    fn invalid_client_error_type_fails() {
-        let proto = v0::ClientError {
-            error_type: 999,
-            error_message: "oops".to_string(),
-        };
-
-        assert!(ClientError::try_from(proto).is_err());
-    }
-}
+mod tests;

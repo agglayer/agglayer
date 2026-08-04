@@ -1,7 +1,11 @@
 use std::{future::IntoFuture as _, net::SocketAddr, sync::Arc};
 
-use agglayer_config::Config;
+use agglayer_config::{
+    settlement_service::{SettlementServiceConfig, SettlementTransactionConfig},
+    Config,
+};
 use agglayer_contracts::L1RpcClient;
+use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     backup::BackupClient,
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
@@ -9,11 +13,13 @@ use agglayer_storage::{
 };
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
 use alloy::{
+    network::EthereumWallet,
     providers::{
         fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
         mock::Asserter,
-        Identity, ProviderBuilder, RootProvider,
+        Identity, Provider, ProviderBuilder, RootProvider, WalletProvider,
     },
+    signers::local::PrivateKeySigner,
     transports::mock::MockTransport,
 };
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -90,7 +96,37 @@ impl TestContext {
     /// Common implementation for creating TestContext with any provider
     pub async fn new_with_provider<P>(config: Config, provider: P) -> Self
     where
-        P: alloy::providers::Provider + Clone + 'static,
+        P: Provider + Clone + 'static,
+    {
+        // Give the settlement service a wallet-carrying provider pointed at a
+        // dead endpoint. Tests that exercise settlement L1 reads inject a
+        // mocked provider through `new_with_settlement_provider`.
+        let settlement_provider = ProviderBuilder::new()
+            .wallet(EthereumWallet::from(
+                PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+            ))
+            .connect_http(
+                "http://127.0.0.1:0"
+                    .parse()
+                    .expect("test provider URL should parse"),
+            );
+        Self::new_with_providers(config, provider, settlement_provider).await
+    }
+
+    /// Create a [`TestContext`] with a custom settlement L1 provider.
+    pub async fn new_with_settlement_provider<S>(config: Config, settlement_provider: S) -> Self
+    where
+        S: Provider + WalletProvider + 'static,
+    {
+        let asserter = Asserter::new();
+        let mock_provider = ProviderBuilder::new().connect_mocked_client(asserter);
+        Self::new_with_providers(config, mock_provider, settlement_provider).await
+    }
+
+    async fn new_with_providers<P, S>(config: Config, provider: P, settlement_provider: S) -> Self
+    where
+        P: Provider + Clone + 'static,
+        S: Provider + WalletProvider + 'static,
     {
         let cancellation_token = CancellationToken::new();
         let config = Arc::new(config);
@@ -148,6 +184,17 @@ impl TestContext {
         // Create AgglayerImpl
         let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
 
+        let settlement_service = SettlementService::start(
+            SettlementServiceConfig::default(),
+            Arc::new(SettlementTransactionConfig::default()),
+            Arc::new(settlement_provider),
+            state_store.clone(),
+            cancellation_token.clone(),
+        )
+        .await
+        .expect("settlement service should start")
+        .0;
+
         // Create the routers
         let router = agglayer_impl.start().await.unwrap();
         let admin_router = AdminAgglayerImpl::new(
@@ -156,6 +203,7 @@ impl TestContext {
             state_store.clone(),
             debug_store.clone(),
             config.clone(),
+            settlement_service,
         )
         .start()
         .await
