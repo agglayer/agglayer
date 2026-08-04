@@ -49,12 +49,6 @@ mock! {
             certificate_id: &CertificateId,
         ) -> Result<(), Error>;
 
-        fn insert_certificate_settlement_job_id(
-            &self,
-            certificate_id: &CertificateId,
-            settlement_job_id: &SettlementJobId,
-        ) -> Result<(), Error>;
-
         fn assign_certificate_to_epoch(
             &self,
             certificate_id: &CertificateId,
@@ -165,6 +159,13 @@ mock! {
             &self,
             settlement_job_id: &SettlementJobId,
             settlement_job: &SettlementJob,
+        ) -> Result<(), Error>;
+
+        fn insert_settlement_job_with_certificate(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            settlement_job: &SettlementJob,
+            certificate_id: &CertificateId,
         ) -> Result<(), Error>;
 
         fn insert_settlement_job_result(

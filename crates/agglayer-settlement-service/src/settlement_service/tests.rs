@@ -465,7 +465,7 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
 }
 
 #[tokio::test]
-async fn request_new_settlement_records_certificate_link_before_job() {
+async fn request_new_settlement_persists_job_with_certificate_link() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
     let certificate_id = CertificateId::new(Digest::from([7; 32]));
@@ -474,35 +474,20 @@ async fn request_new_settlement_records_certificate_link_before_job() {
     let mut expected_job = job.clone();
     expected_job.gas_limit = 200_000;
     let recorded_job_id = Arc::new(Mutex::new(None));
-    let ordering = Arc::new(Mutex::new(Vec::new()));
+    let recorded_job_id_for_store = recorded_job_id.clone();
 
+    // The job and both certificate links are persisted in one atomic call.
     store
-        .expect_insert_certificate_settlement_job_id()
+        .expect_insert_settlement_job_with_certificate()
         .once()
-        .withf(move |recorded_certificate_id, _| recorded_certificate_id == &certificate_id)
-        .return_once({
-            let ordering = ordering.clone();
-            let recorded_job_id = recorded_job_id.clone();
-            move |_, settlement_job_id| {
-                ordering.lock().unwrap().push("write_link");
-                *recorded_job_id.lock().unwrap() = Some(*settlement_job_id);
-                Ok(())
-            }
+        .withf(move |_, recorded_job, recorded_certificate_id| {
+            recorded_job == &expected_job && recorded_certificate_id == &certificate_id
+        })
+        .return_once(move |settlement_job_id, _, _| {
+            *recorded_job_id_for_store.lock().unwrap() = Some(*settlement_job_id);
+            Ok(())
         });
-
-    store
-        .expect_insert_settlement_job()
-        .once()
-        .withf(move |_, recorded_job| recorded_job == &expected_job)
-        .return_once({
-            let ordering = ordering.clone();
-            let recorded_job_id = recorded_job_id.clone();
-            move |settlement_job_id, _| {
-                ordering.lock().unwrap().push("write_job");
-                assert_eq!(*recorded_job_id.lock().unwrap(), Some(*settlement_job_id));
-                Ok(())
-            }
-        });
+    store.expect_insert_settlement_job().never();
 
     // `create` runs `estimateGas` before persisting; answer it above the
     // ceiling so the stored limit is unchanged. Live token for estimation,
@@ -526,10 +511,6 @@ async fn request_new_settlement_records_certificate_link_before_job() {
     cancellation_token.cancel();
 
     assert_eq!(*recorded_job_id.lock().unwrap(), Some(watcher.job_id()));
-    assert_eq!(
-        ordering.lock().unwrap().as_slice(),
-        ["write_link", "write_job"]
-    );
 }
 
 #[tokio::test]
