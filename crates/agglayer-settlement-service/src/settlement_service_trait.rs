@@ -7,7 +7,7 @@
 //!
 //! [`SettlementJobWatcher`]: crate::settlement_service::SettlementJobWatcher
 
-use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
+use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{CertificateId, SettlementJob, SettlementJobId, SettlementJobResult};
 use alloy::providers::{Provider, WalletProvider};
 
@@ -45,8 +45,7 @@ impl<L1Provider, SettlementStore> SettlementServiceTrait
     for SettlementService<L1Provider, SettlementStore>
 where
     L1Provider: Provider + WalletProvider + 'static,
-    SettlementStore:
-        SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+    SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
 {
     async fn submit_settlement_job(
         &self,
