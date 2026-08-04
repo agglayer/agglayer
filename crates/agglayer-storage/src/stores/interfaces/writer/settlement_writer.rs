@@ -1,5 +1,6 @@
 use agglayer_types::{
-    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
+    CertificateId, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
+    SettlementJobResult,
 };
 
 use crate::error::Error;
@@ -46,6 +47,26 @@ pub trait SettlementWriter: Send + Sync {
         &self,
         settlement_job_id: &SettlementJobId,
         settlement_job: &SettlementJob,
+    ) -> Result<(), Error>;
+
+    /// Inserts a settlement job together with its certificate links, in one
+    /// atomic batch: the job, the certificate→job-id forward link, and the
+    /// job-id→certificate reverse link.
+    ///
+    /// Writing all three together means a crash can never leave a certificate
+    /// pointing at a settlement job that was never saved. Insert-only: fails if
+    /// `settlement_job_id` already exists or `certificate_id` already has a
+    /// job.
+    ///
+    /// The `certificate_id` uniqueness check is serialized per settlement job
+    /// id, not per certificate, so this must not be called concurrently with
+    /// the same `certificate_id` (production calls it only from the single
+    /// per-certificate task).
+    fn insert_settlement_job_with_certificate(
+        &self,
+        settlement_job_id: &SettlementJobId,
+        settlement_job: &SettlementJob,
+        certificate_id: &CertificateId,
     ) -> Result<(), Error>;
 
     /// Inserts a terminal settlement job result under `settlement_job_id`.

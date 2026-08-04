@@ -17,6 +17,7 @@ eyre.workspace = true
 fail.workspace = true
 mockall = { workspace = true, optional = true }
 rand.workspace = true
+serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
