@@ -135,6 +135,22 @@ fn get_certificate_settlement_job_id_returns_none_when_missing() {
 }
 
 #[test]
+fn get_settlement_job_certificate_id_returns_none_when_missing() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_job_id(2);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(2))
+        .expect("job insert must succeed");
+
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&job_id)
+            .expect("reverse read must succeed"),
+        None
+    );
+}
+
+#[test]
 fn insert_settlement_job_with_certificate_writes_job_and_both_links() {
     let (_tmp, db, store) = setup_store();
     let certificate_id = mk_certificate_id(5);
@@ -158,6 +174,12 @@ fn insert_settlement_job_with_certificate_writes_job_and_both_links() {
     assert_eq!(
         db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
             .expect("Unable to read stored value"),
+        Some(certificate_id)
+    );
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&job_id)
+            .expect("reverse read must succeed"),
         Some(certificate_id)
     );
     assert_eq!(
