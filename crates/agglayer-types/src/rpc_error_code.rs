@@ -10,6 +10,13 @@
 #[serde(rename_all = "kebab-case")]
 #[repr(i32)]
 pub enum RpcErrorCode {
+    /// A client-provided argument is structurally valid but conflicts with
+    /// authoritative state. This uses JSON-RPC's standard `INVALID_PARAMS`
+    /// code so service-layer validation can carry the wire classification as
+    /// an `eyre` tag.
+    #[error("invalid params")]
+    InvalidParams = -32602,
+
     /// Rollup is not registered.
     #[error("rollup not registered")]
     RollupNotRegistered = -10001,
@@ -83,6 +90,7 @@ impl RpcErrorCode {
     /// Stable machine-readable tag for wire payloads.
     pub const fn tag(&self) -> &'static str {
         match self {
+            Self::InvalidParams => "invalid-params",
             Self::RollupNotRegistered => "rollup-not-registered",
             Self::SignatureMismatch => "signature-mismatch",
             Self::ValidationFailure => "validation-failure",
