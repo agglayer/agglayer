@@ -343,6 +343,12 @@ pub(crate) trait AdminAgglayer {
     /// real, only the settlement contract's replay protection stands between
     /// the re-driven job and a double settlement. It fails if the job does not
     /// exist, has no terminal result, or still has a live task.
+    ///
+    /// Outstanding callers that already hold the job's result watcher are not
+    /// revoked by this operation. Before invoking it, the operator must ensure
+    /// certificate processing for the associated job is quiesced; otherwise a
+    /// certificate task could still act on the removed result while the fresh
+    /// settlement task re-drives the job.
     #[method(name = "forceRemoveSettlementJobResult")]
     async fn force_remove_settlement_job_result(&self, job_id: SettlementJobId) -> RpcResult<()>;
 }
