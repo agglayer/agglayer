@@ -215,7 +215,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 // For read-write access, handle empty checkpoint
                 if checkpoint.is_empty() {
                     if next_certificate_index.load(Ordering::Relaxed) != 0 {
-                        return Err(Error::Unexpected(
+                        Err(Error::Unexpected(
                             "End checkpoint is empty, but there are certificates in the DB"
                                 .to_string(),
                         ))?;
@@ -282,7 +282,7 @@ where
         let lock = self.lock_for_adding_certificate();
 
         if *lock {
-            return Err(Error::AlreadyPacked(*self.epoch_number))?;
+            Err(Error::AlreadyPacked(*self.epoch_number))?;
         }
 
         let certificate_header = self
@@ -377,7 +377,8 @@ where
                     network_id,
                     height,
                     *current_height.get(),
-                ))?;
+                )
+                .into());
             }
             // If the network is found in the end checkpoint and the height minus one is equal to
             // the current network height. We can add the certificate.
@@ -405,7 +406,8 @@ where
                     network_id,
                     height,
                     *current_height.get(),
-                ))?;
+                )
+                .into());
             }
         }
 
@@ -476,7 +478,7 @@ where
         let mut lock = self.lock_for_packing();
 
         if *lock {
-            return Err(Error::AlreadyPacked(*self.epoch_number))?;
+            Err(Error::AlreadyPacked(*self.epoch_number))?;
         }
 
         self.db.put::<PerEpochMetadataColumn>(

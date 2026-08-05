@@ -11,6 +11,7 @@ axum.workspace = true
 buildstructor.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
+strum_macros.workspace = true
 opentelemetry = { version = "0.31.0", features = ["metrics"] }
 opentelemetry-prometheus = "0.31.0"
 opentelemetry_sdk = { version = "0.31.0", features = ["metrics"] }
@@ -19,3 +20,14 @@ eyre.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
 tracing.workspace = true
+
+[dev-dependencies]
+agglayer-telemetry = { workspace = true, features = ["testutils"] }
+
+[features]
+testutils = []
+
+# The self dev-dependency only activates `testutils` for this crate's own
+# unit tests; cargo-udeps cannot see that usage (same as agglayer-clock).
+[package.metadata.cargo-udeps.ignore]
+development = ["agglayer-telemetry"]

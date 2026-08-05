@@ -209,26 +209,6 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
-    fn insert_certificate_settlement_job_id(
-        &self,
-        certificate_id: &CertificateId,
-        settlement_job_id: &SettlementJobId,
-    ) -> Result<(), Error> {
-        if self
-            .db
-            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
-            .is_some()
-        {
-            return Err(Error::UnprocessedAction(format!(
-                "Certificate {certificate_id} already has a settlement job id"
-            )));
-        }
-
-        Ok(self
-            .db
-            .put::<SettlementJobIdPerCertificateIdColumn>(certificate_id, settlement_job_id)?)
-    }
-
     fn assign_certificate_to_epoch(
         &self,
         certificate_id: &CertificateId,

@@ -356,11 +356,11 @@ async fn from_candidate_to_settled() {
     // the id up and waits for the settlement result.
     storage
         .state
-        .insert_settlement_job(&job_id(1), &dummy_settlement_job())
-        .unwrap();
-    storage
-        .state
-        .insert_certificate_settlement_job_id(&certificate_id, &job_id(1))
+        .insert_settlement_job_with_certificate(
+            &job_id(1),
+            &dummy_settlement_job(),
+            &certificate_id,
+        )
         .unwrap();
 
     certifier.expect_certify().never();
@@ -473,11 +473,11 @@ async fn from_candidate_to_settle_via_pending() {
     // `process_from_candidate` recomputes state then waits for the result.
     storage
         .state
-        .insert_settlement_job(&job_id(1), &dummy_settlement_job())
-        .unwrap();
-    storage
-        .state
-        .insert_certificate_settlement_job_id(&certificate_id, &job_id(1))
+        .insert_settlement_job_with_certificate(
+            &job_id(1),
+            &dummy_settlement_job(),
+            &certificate_id,
+        )
         .unwrap();
 
     certifier.expect_certify().never();

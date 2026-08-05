@@ -9,8 +9,9 @@ use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
     stores::{
-        MetadataReader, MetadataWriter, NetworkInfoReader, SettlementReader, SettlementWriter,
-        StateReader, StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        EditEvenIfCompleted, MetadataReader, MetadataWriter, NetworkInfoReader, SettlementReader,
+        SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+        UpdateStatusToCandidate,
     },
 };
 mock! {
@@ -46,12 +47,6 @@ mock! {
         fn remove_settlement_tx_hash(
             &self,
             certificate_id: &CertificateId,
-        ) -> Result<(), Error>;
-
-        fn insert_certificate_settlement_job_id(
-            &self,
-            certificate_id: &CertificateId,
-            settlement_job_id: &SettlementJobId,
         ) -> Result<(), Error>;
 
         fn assign_certificate_to_epoch(
@@ -166,6 +161,13 @@ mock! {
             settlement_job: &SettlementJob,
         ) -> Result<(), Error>;
 
+        fn insert_settlement_job_with_certificate(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            settlement_job: &SettlementJob,
+            certificate_id: &CertificateId,
+        ) -> Result<(), Error>;
+
         fn insert_settlement_job_result(
             &self,
             settlement_job_id: &SettlementJobId,
@@ -184,6 +186,33 @@ mock! {
             settlement_job_id: &SettlementJobId,
             attempt_sequence_number: u64,
             tx_result: &SettlementAttemptResult,
+        ) -> Result<(), Error>;
+
+        fn admin_insert_settlement_attempt(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            settlement_attempt: &SettlementAttempt,
+            edit_even_if_completed: EditEvenIfCompleted,
+        ) -> Result<u64, Error>;
+
+        fn admin_override_settlement_attempt_result(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            attempt_number: u64,
+            tx_result: &SettlementAttemptResult,
+            edit_even_if_completed: EditEvenIfCompleted,
+        ) -> Result<(), Error>;
+
+        fn admin_remove_settlement_attempt_result(
+            &self,
+            settlement_job_id: &SettlementJobId,
+            attempt_number: u64,
+            edit_even_if_completed: EditEvenIfCompleted,
+        ) -> Result<(), Error>;
+
+        fn admin_force_remove_settlement_job_result(
+            &self,
+            settlement_job_id: &SettlementJobId,
         ) -> Result<(), Error>;
     }
 }

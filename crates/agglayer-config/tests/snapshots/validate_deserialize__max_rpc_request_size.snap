@@ -29,22 +29,6 @@ send-tx = "unlimited"
 
 [rate-limiting.network]
 
-[outbound.rpc.settle-tx]
-max-retries = 30
-retry-interval = "10s"
-confirmations = 12
-
-[outbound.rpc.settle-tx.gas-price]
-ceiling = "100gwei"
-
-[outbound.rpc.settle-cert]
-max-retries = 30
-retry-interval = "10s"
-confirmations = 12
-
-[outbound.rpc.settle-cert.gas-price]
-ceiling = "100gwei"
-
 [l1]
 chain-id = 1337
 node-url = "http://zkevm-mock-l1-network:8545/"

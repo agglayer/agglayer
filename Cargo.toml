@@ -102,7 +102,7 @@ gcloud-sdk = { version = "0.29.0", default-features = false }
 hex = "0.4.3"
 http = "1.4"
 hyper = "1.8"
-insta = { git = "https://github.com/freyskeyd/insta", branch = "chore/updating-deps-to-avoid-serialize-error", features = [
+insta = { version = "1.48", features = [
     "toml",
     "yaml",
     "json",

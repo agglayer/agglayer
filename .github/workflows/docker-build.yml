@@ -85,10 +85,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: ${{ inputs.push == true && 'type=image' || format('type=docker,dest={0}/{1}.tar', inputs.local-artifact-dir, inputs.local-artifact-name) }}
-          cache-from: type=gha
-          # Keep merge queue/local artifact builds cache-read-only; cache export is
-          # expensive and blocks the E2E required check.
-          cache-to: ${{ inputs.push == true && 'type=gha,mode=max' || '' }}
+          # The buildx cache lives in GHCR instead of the 10GB Actions cache so
+          # rust-cache churn from other jobs cannot evict the cargo-chef layers.
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-buildcache:main
+          # Only builds on the main ref export the cache: pushes to main, and
+          # manual dispatches on main (useful to warm or refresh the cache).
+          # Merge queue, PR, and branch dispatch builds stay cache-read-only
+          # (see PR #1593). Cache export is expensive and blocks the E2E
+          # required check.
+          cache-to: ${{ inputs.push == true && github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}-buildcache:main,mode=max,image-manifest=true', env.REGISTRY, env.IMAGE_NAME) || '' }}
 
       - name: Upload artifact
         if: inputs.push == false

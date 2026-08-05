@@ -4,11 +4,12 @@ use agglayer_config::Config;
 use eyre::bail;
 use node::Node;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 mod logging;
 
 mod epoch_synchronizer;
 mod l1_tracing;
+mod metrics;
 mod node;
 mod url_redact;
 
@@ -43,7 +44,7 @@ pub fn main(
         bail!(
             "Provided configuration file path is not a file: {}",
             cfg.display()
-        )
+        );
     };
 
     let global_cancellation_token = cancellation_token.unwrap_or_default();
@@ -69,6 +70,10 @@ pub fn main(
             eprintln!("Failed to initialize logger: {e:?}");
             return Err(e);
         }
+    }
+
+    if let Some(outbound) = &config.outbound {
+        warn!("{}", outbound.ignored_config_warning());
     }
 
     info!("Starting agglayer node version info: {}", version);

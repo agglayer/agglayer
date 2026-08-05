@@ -121,6 +121,8 @@ impl Node {
 
         info!("Storage initialized.");
 
+        crate::metrics::register_network_state_metrics(&pending_store, &state_store);
+
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
             Epoch::BlockClock(cfg) => {
@@ -222,6 +224,11 @@ impl Node {
         };
 
         tracing::debug!("RPC provider created");
+        let settle_cert_config = config
+            .outbound
+            .as_ref()
+            .map(|outbound| outbound.rpc.settle_cert.clone())
+            .unwrap_or_default();
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
                 rpc_pp_settlement.clone(),
@@ -230,9 +237,9 @@ impl Node {
                     (*rpc_pp_settlement).clone(),
                 ),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
-                config.outbound.rpc.settle_cert.gas_multiplier_factor,
+                settle_cert_config.gas_multiplier_factor,
                 {
-                    let gas_config = &config.outbound.rpc.settle_cert.gas_price;
+                    let gas_config = &settle_cert_config.gas_price;
                     agglayer_contracts::GasPriceParams::new(
                         gas_config.multiplier.as_u64_per_1000(),
                         gas_config.floor..=gas_config.ceiling,
@@ -265,7 +272,7 @@ impl Node {
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
 
         let settlement_config = Arc::new(config.settlement.pessimistic_proof_tx_config.clone());
-        let settlement_service = Arc::new(
+        let (settlement_service, recovery_skipped_jobs) =
             agglayer_settlement_service::SettlementService::start(
                 config.settlement.settlement_service_config.clone(),
                 settlement_config.clone(),
@@ -273,8 +280,13 @@ impl Node {
                 state_store.clone(),
                 cancellation_token.clone(),
             )
-            .await?,
+            .await?;
+        let settlement_service = Arc::new(settlement_service);
+        agglayer_telemetry::settlement::record_settlement_recovery_skipped_jobs(
+            recovery_skipped_jobs,
         );
+
+        let settlement_service_for_admin = (*settlement_service).clone();
 
         let (data_sender, data_receiver) = mpsc::channel(
             config
@@ -316,6 +328,7 @@ impl Node {
             state_store.clone(),
             debug_store.clone(),
             config.clone(),
+            settlement_service_for_admin,
         )
         .start()
         .await

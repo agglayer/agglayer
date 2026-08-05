@@ -1,7 +1,6 @@
 use std::path::Path;
 
-use agglayer_config::{AuthConfig, Config};
-use insta::assert_toml_snapshot;
+use agglayer_config::{assert_toml_snapshot, AuthConfig, Config};
 
 #[test]
 fn auth_legacy() {
@@ -21,9 +20,7 @@ fn auth_legacy() {
     assert_eq!(gkms.tx_settlement_key_name, Some("key-name-test".into()));
     assert_eq!(gkms.tx_settlement_key_version, Some(2));
 
-    assert_toml_snapshot!(config, {
-        ".storage.*" => agglayer_config::redact_storage_path(),
-    });
+    assert_toml_snapshot!(config);
 }
 
 #[test]
@@ -50,9 +47,7 @@ fn auth_transition() {
     );
     assert_eq!(gkms.tx_settlement_key_version, Some(4));
 
-    assert_toml_snapshot!(config, {
-        ".storage.*" => agglayer_config::redact_storage_path(),
-    });
+    assert_toml_snapshot!(config);
 }
 
 #[test]
@@ -79,9 +74,7 @@ fn auth_update() {
     );
     assert_eq!(gkms.tx_settlement_key_version, Some(4));
 
-    assert_toml_snapshot!(config, {
-        ".storage.*" => agglayer_config::redact_storage_path(),
-    });
+    assert_toml_snapshot!(config);
 }
 
 #[test]
@@ -106,7 +99,5 @@ fn auth_distinct_pp_and_tx_settlement_keys_are_preserved() {
     );
     assert_eq!(gkms.tx_settlement_key_version, Some(22));
 
-    assert_toml_snapshot!(config, {
-        ".storage.*" => agglayer_config::redact_storage_path(),
-    });
+    assert_toml_snapshot!(config);
 }

@@ -191,3 +191,65 @@ fn multi_get_proof_reports_unreadable_pending_proofs() {
 
     assert!(matches!(err, Error::UnreadableProof { id, .. } if id == invalid_id));
 }
+
+#[test]
+fn get_current_pending_heights_returns_all_networks() {
+    use std::collections::BTreeMap;
+
+    use crate::columns::latest_pending_certificate_per_network::PendingCertificate;
+
+    let (_tmp, store) = store();
+
+    assert_eq!(store.get_current_pending_heights().unwrap(), vec![]);
+
+    let network_1 = NetworkId::new(1);
+    let network_15 = NetworkId::new(15);
+    let certificate_1 = Certificate::new_for_test(network_1, Height::ZERO);
+    let certificate_15 = Certificate::new_for_test(network_15, Height::new(3));
+
+    store
+        .insert_pending_certificate(network_1, Height::ZERO, &certificate_1)
+        .unwrap();
+    store
+        .insert_pending_certificate(network_15, Height::new(3), &certificate_15)
+        .unwrap();
+
+    let heights: BTreeMap<_, _> = store
+        .get_current_pending_heights()
+        .unwrap()
+        .into_iter()
+        .collect();
+
+    assert_eq!(heights.len(), 2);
+    assert_eq!(
+        heights[&network_1],
+        PendingCertificate(certificate_1.hash(), Height::ZERO)
+    );
+    assert_eq!(
+        heights[&network_15],
+        PendingCertificate(certificate_15.hash(), Height::new(3))
+    );
+
+    // Inserting a newer pending certificate for the same network overwrites
+    // the latest pointer instead of adding a new entry.
+    let certificate_1_next = Certificate::new_for_test(network_1, Height::new(1));
+    store
+        .insert_pending_certificate(network_1, Height::new(1), &certificate_1_next)
+        .unwrap();
+
+    let heights: BTreeMap<_, _> = store
+        .get_current_pending_heights()
+        .unwrap()
+        .into_iter()
+        .collect();
+
+    assert_eq!(heights.len(), 2);
+    assert_eq!(
+        heights[&network_1],
+        PendingCertificate(certificate_1_next.hash(), Height::new(1))
+    );
+    assert_eq!(
+        heights[&network_15],
+        PendingCertificate(certificate_15.hash(), Height::new(3))
+    );
+}

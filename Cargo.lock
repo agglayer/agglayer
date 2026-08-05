@@ -79,16 +79,13 @@ dependencies = [
  "agglayer-types",
  "alloy",
  "anyhow",
- "arc-swap",
  "async-trait",
  "eyre",
  "fail",
  "futures",
- "hex",
  "mockall",
  "pessimistic-proof",
  "pessimistic-proof-test-suite",
- "prover-alloy",
  "prover-config",
  "prover-executor",
  "reqwest 0.12.28",
@@ -101,10 +98,8 @@ dependencies = [
  "test-log",
  "thiserror 2.0.18",
  "tokio",
- "tokio-util",
  "tower 0.4.13",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -137,9 +132,9 @@ dependencies = [
  "agglayer-contracts",
  "agglayer-settlement-service",
  "agglayer-storage",
+ "agglayer-telemetry 0.1.0",
  "agglayer-test-suite",
  "agglayer-types",
- "alloy",
  "arc-swap",
  "async-trait",
  "buildstructor 0.6.0",
@@ -219,7 +214,6 @@ dependencies = [
  "alloy",
  "async-trait",
  "eyre",
- "fail",
  "hex",
  "num-derive",
  "num-traits",
@@ -417,6 +411,7 @@ dependencies = [
  "agglayer-contracts",
  "agglayer-rate-limiting",
  "agglayer-rpc",
+ "agglayer-settlement-service",
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
  "agglayer-tries 0.18.0",
@@ -425,7 +420,6 @@ dependencies = [
  "axum 0.8.8",
  "buildstructor 0.6.0",
  "eyre",
- "fail",
  "futures",
  "hex",
  "http 1.4.0",
@@ -601,6 +595,7 @@ dependencies = [
  "mockall",
  "rand 0.9.3",
  "rstest",
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
@@ -689,6 +684,7 @@ dependencies = [
 name = "agglayer-telemetry"
 version = "0.1.0"
 dependencies = [
+ "agglayer-telemetry 0.1.0",
  "axum 0.8.8",
  "buildstructor 0.6.0",
  "eyre",
@@ -698,6 +694,7 @@ dependencies = [
  "opentelemetry-prometheus 0.31.0",
  "opentelemetry_sdk 0.31.0",
  "prometheus",
+ "strum_macros 0.28.0",
  "tokio",
  "tokio-util",
  "tracing",
@@ -777,6 +774,7 @@ dependencies = [
  "rand 0.9.3",
  "rstest",
  "serde",
+ "serde_json",
  "serde_with",
  "strum_macros 0.28.0",
  "thiserror 2.0.18",
@@ -1871,6 +1869,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-ff"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7a806ac6c8307b929df4645776290a50ee2aac754ad09d8bdf73391309e43af"
+dependencies = [
+ "ark-ff-asm 0.6.0",
+ "ark-ff-macros 0.6.0",
+ "ark-serialize 0.6.0",
+ "ark-std 0.6.0",
+ "digest 0.10.7",
+ "educe",
+ "num-bigint 0.4.6",
+ "num-traits",
+ "zeroize",
+]
+
+[[package]]
 name = "ark-ff-asm"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1895,6 +1910,16 @@ name = "ark-ff-asm"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62945a2f7e6de02a31fe400aa489f0e0f5b2502e69f95f853adb82a96c7a6b60"
+dependencies = [
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "ark-ff-asm"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1479009684adc073dff49a1025d3a7065b317a9ead25aaaca38cdc70058ba8a2"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -1939,6 +1964,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-ff-macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a0691ed21ef00ef89c1e9bda832eba493dda3ec2f8d892fb25b705f73f06bb8"
+dependencies = [
+ "num-bigint 0.4.6",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "ark-serialize"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1972,6 +2010,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-serialize"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a74dd304fd536fb95d0a328e72be759209cc496a9da094c5bc56e5fea4f9e86b"
+dependencies = [
+ "ark-serialize-derive",
+ "ark-std 0.6.0",
+ "digest 0.10.7",
+ "num-bigint 0.4.6",
+ "serde_with",
+]
+
+[[package]]
+name = "ark-serialize-derive"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f153690697a2b91e5e1251ff98411ee5371500a111a0fd317a70e588eb300f9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "ark-std"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1996,6 +2058,16 @@ name = "ark-std"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "246a225cc6131e9ee4f24619af0f19d67761fff15d7ccc22e42b80846e69449a"
+dependencies = [
+ "num-traits",
+ "rand 0.8.6",
+]
+
+[[package]]
+name = "ark-std"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "367c9c827ed431bff6868b7aa926e05b16eb46603cc8b6e768e4a5553fa1d155"
 dependencies = [
  "num-traits",
  "rand 0.8.6",
@@ -3512,6 +3584,17 @@ dependencies = [
  "once_cell",
  "unicode-width 0.2.2",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "console"
+version = "0.16.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fe5f465a4f6fee88fad41b85d990f84c835335e85b5d9e6e63e0d06d28cba7c"
+dependencies = [
+ "encode_unicode",
+ "libc",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5625,7 +5708,7 @@ version = "0.17.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "183b3088984b400f4cfac3620d5e076c84da5364016b4f49473de574b2586235"
 dependencies = [
- "console",
+ "console 0.15.11",
  "number_prefix",
  "portable-atomic",
  "unicode-width 0.2.2",
@@ -5643,18 +5726,21 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.41.0"
-source = "git+https://github.com/freyskeyd/insta?branch=chore%2Fupdating-deps-to-avoid-serialize-error#69c07695a1fb68beafc9b7bd949ab4f9d353b17f"
+version = "1.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86f0f8fee8c926415c58d6ae43a08523a26faccb2323f5e6b644fe7dd4ef6b82"
 dependencies = [
- "console",
- "lazy_static",
- "linked-hash-map",
+ "console 0.16.4",
+ "once_cell",
  "pest",
  "pest_derive",
  "regex",
  "serde",
  "similar",
- "toml 0.8.23",
+ "strip-ansi-escapes",
+ "tempfile",
+ "toml_edit 0.25.4+spec-1.1.0",
+ "toml_writer",
 ]
 
 [[package]]
@@ -6226,12 +6312,6 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
-
-[[package]]
-name = "linked-hash-map"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linked_list_allocator"
@@ -8094,7 +8174,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -8844,15 +8924,16 @@ dependencies = [
 
 [[package]]
 name = "ruint"
-version = "1.17.2"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c141e807189ad38a07276942c6623032d3753c8859c146104ac2e4d68865945a"
+checksum = "f5e99bff0393163bb25029a6af25d3d8d202ba5b5438a74d1bd8789f5c822970"
 dependencies = [
  "alloy-rlp",
  "arbitrary",
  "ark-ff 0.3.0",
  "ark-ff 0.4.2",
  "ark-ff 0.5.0",
+ "ark-ff 0.6.0",
  "bytes",
  "fastrlp 0.3.1",
  "fastrlp 0.4.0",
@@ -11240,6 +11321,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 
 [[package]]
+name = "strip-ansi-escapes"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a8f8038e7e7969abb3f1b7c2a811225e9296da208539e0f79c5251d6cac0025"
+dependencies = [
+ "vte",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11856,8 +11946,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7193cbd0ce53dc966037f54351dbbcf0d5a642c7f0038c382ef9e677ce8c13f2"
 dependencies = [
  "indexmap 2.13.0",
+ "serde_core",
+ "serde_spanned 1.0.4",
  "toml_datetime 1.0.0+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 0.7.15",
 ]
 
@@ -12603,6 +12696,15 @@ name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
+
+[[package]]
+name = "vte"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "231fdcd7ef3037e8330d8e17e61011a2c244126acc0a982f4040ac3f9f0bc077"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "wait-timeout"
