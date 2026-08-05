@@ -23,7 +23,7 @@ fn deserialize_default_settlement_tx_config() {
     assert_eq!(config.gas_limit_ceiling, U256::from(60_000_000_u64));
     assert_eq!(config.max_fee_per_gas_ceiling, 100_000_000_000_u128);
     assert_eq!(config.max_fee_per_gas_floor, 0);
-    assert_eq!(config.gas_limit_multiplier_factor, Multiplier::default());
+    assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.3);
     assert_eq!(
         config.max_fee_per_gas_multiplier_factor,
         Multiplier::default()
@@ -173,6 +173,9 @@ fn test_finality_default_is_justified() {
 #[test]
 fn test_settlement_transaction_config_defaults() {
     let config = SettlementTransactionConfig::default();
+    let deserialized_config: SettlementTransactionConfig = toml::from_str("").unwrap();
+
+    assert_eq!(deserialized_config, config);
 
     // Test retry configuration
     assert_eq!(
@@ -185,7 +188,7 @@ fn test_settlement_transaction_config_defaults() {
     assert_eq!(config.settlement_policy, SettlementPolicy::SafeBlock);
 
     // Test gas configuration
-    assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.0);
+    assert_eq!(config.gas_limit_multiplier_factor.as_f64(), 1.3);
     assert_eq!(config.gas_limit_ceiling, U256::from(60_000_000_u64));
     assert_eq!(config.max_fee_per_gas_multiplier_factor.as_f64(), 1.0);
     assert_eq!(config.max_fee_per_gas_floor, 0_u128);
