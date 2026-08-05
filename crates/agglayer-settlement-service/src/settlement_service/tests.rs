@@ -508,7 +508,7 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
         service.tx_config.clone(),
         service.provider.clone(),
         service.store.clone(),
-        service.wallet_nonce_locks.clone(),
+        service.nonce_allocators.clone(),
         task_control,
     )
     .await

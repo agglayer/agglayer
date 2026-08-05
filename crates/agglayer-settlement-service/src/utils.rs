@@ -170,6 +170,16 @@ pub(crate) async fn tx_hash_on_l1_for_nonce(
         {
             return Ok(None);
         }
+        // Anvil (used by settlement unit tests) does not implement
+        // `eth_getTransactionBySenderAndNonce` and answers `-32601`.
+        // Treat that as "not included yet" in tests only; production RPCs
+        // that lack the method should still fail loudly.
+        #[cfg(test)]
+        Err(TransportError::ErrorResp(error))
+            if error.code == -32601 && error.message == "Method not found" =>
+        {
+            return Ok(None);
+        }
         Err(error) => return Err(error),
     };
     Ok(tx
