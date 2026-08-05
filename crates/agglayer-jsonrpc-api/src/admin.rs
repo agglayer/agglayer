@@ -214,37 +214,39 @@ pub(crate) trait AdminAgglayer {
     /// **JSON-RPC method:** `admin_abortSettlementTask`
     ///
     /// This is runtime-only: the stored job remains pending and is untouched.
-    /// There is no respawn in this stack, so recovery is a node restart;
-    /// startup recovery respawns pending jobs. Aborting a job whose waiter is
-    /// live makes its certificate `InError` while the job can still settle
-    /// after restart. That certificate-status/storage divergence must be
-    /// reconciled manually by the operator.
+    /// Recover it with `admin_reloadSettlementTask`, which reloads the pending
+    /// job from storage and spawns a fresh task without restarting the node.
+    /// Aborting a job whose waiter is live makes its certificate `InError`
+    /// while the respawned job can still settle on L1. That certificate-status
+    /// versus storage-result divergence must be reconciled manually by the
+    /// operator.
     ///
     /// # Errors
     ///
     /// Unknown job IDs return `RpcErrorCode::NotFound`'s code; completed jobs
-    /// return `RpcErrorCode::AlreadyCompleted`'s code; pending jobs without a
-    /// task return `RpcErrorCode::NoLiveTask`'s code; and a full task command
-    /// queue returns `RpcErrorCode::Unavailable`'s code.
+    /// return `RpcErrorCode::AlreadyCompleted`'s code; and pending jobs without
+    /// a task return `RpcErrorCode::NoLiveTask`'s code.
     #[method(name = "abortSettlementTask")]
     async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 
-    /// Make a live settlement task reload its state from storage.
+    /// Reload a settlement task's state from storage, respawning it if needed.
     ///
     /// **JSON-RPC method:** `admin_reloadSettlementTask`
     ///
-    /// The task drops its in-memory state and reloads from storage. It
-    /// requires a live task, and is the escape hatch when a later mutation
-    /// reports `liveTask` other than `queued`. The command is queued, not a
-    /// wake-up: it takes effect at the task's next control check and does
-    /// not interrupt a wait in progress.
+    /// A live task reloads in place. The command is queued, not a wake-up: it
+    /// takes effect at the task's next control check and does not interrupt a
+    /// wait in progress. If the task is gone after an abort, panic, or failed
+    /// in-task reload, the pending job is loaded from storage and a fresh task
+    /// and result watcher are spawned. Together with
+    /// `admin_abortSettlementTask`, this completes the abort, inspect/fix,
+    /// reload recovery cycle without a node restart.
     ///
     /// # Errors
     ///
-    /// Unknown job IDs return `RpcErrorCode::NotFound`'s code; completed jobs
-    /// return `RpcErrorCode::AlreadyCompleted`'s code; pending jobs without a
-    /// task return `RpcErrorCode::NoLiveTask`'s code; and a full task command
-    /// queue returns `RpcErrorCode::Unavailable`'s code.
+    /// Unknown job IDs return `RpcErrorCode::NotFound`'s `-10008` code;
+    /// completed jobs return `RpcErrorCode::AlreadyCompleted`'s code; and a
+    /// full task command queue or failed storage reload returns
+    /// `RpcErrorCode::Unavailable`'s code.
     #[method(name = "reloadSettlementTask")]
     async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 

@@ -59,7 +59,7 @@ pub enum LiveTaskNotification {
     /// wedged/slow; commands drain only at control checks) and a closed
     /// channel (the task just died or completed). The warning log records
     /// which case occurred. Use `admin_reloadSettlementTask` as the escape
-    /// hatch, or abort the task and restart the node.
+    /// hatch; if the task is wedged, abort it and then reload it from storage.
     NotifyFailed,
 }
 
@@ -113,14 +113,13 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     task_controls: Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
     result_watchers:
         Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
-    /// Serializes spawn-capable admin operations so two concurrent calls
-    /// cannot both observe "no live task + result present" and spawn two
-    /// tasks for one job. Today only force-remove takes this lock. A global
-    /// lock is deliberate at this stack's scope: admin operations are rare
-    /// and operator-driven, and no create/spawn/run-loop/retrieve hot path
-    /// takes it. Revisit per-job keying, like `wallet_nonce_locks` and
-    /// `settlement_write_locks`, before adding more operations such as a
-    /// future respawn-capable reload.
+    /// Serializes the spawn-capable force-remove and reload admin operations
+    /// so two concurrent calls cannot both conclude that a job needs a fresh
+    /// task and spawn duplicates. A global lock is deliberate at this stack's
+    /// scope: admin operations are rare and operator-driven, and no
+    /// create/spawn/run-loop/retrieve hot path takes it. Revisit per-job
+    /// keying, like `wallet_nonce_locks` and `settlement_write_locks`, before
+    /// adding more spawn-capable admin operations.
     admin_operation_lock: Arc<Mutex<()>>,
     /// Per-wallet locks serializing the nonce read-to-save window across
     /// concurrent settlement tasks.
@@ -407,38 +406,95 @@ impl<
     }
 
     #[tracing::instrument(skip_all)]
-    async fn admin_task(
-        &self,
-        job_id: SettlementJobId,
-        command: TaskAdminCommand,
-    ) -> eyre::Result<()> {
-        let task_control = self.task_control(job_id).await?;
-        match task_control.try_send(command) {
-            Ok(()) => Ok(()),
-            Err(error @ mpsc::error::TrySendError::Full(_)) => Err(eyre::Report::new(error)
-                .wrap_err(format!(
-                    "Failed to forward admin command to settlement task {job_id}: admin command \
-                     queue full"
-                ))
-                .wrap_err(RpcErrorCode::Unavailable)),
-            // The task completed or died between the `task_control` lookup above and this
-            // `try_send` call; classify the same way as a missing task control entry.
-            Err(mpsc::error::TrySendError::Closed(_)) => {
-                Err(self.classify_missing_task(job_id).await)
-            }
-        }
-    }
-
-    #[tracing::instrument(skip_all)]
     pub async fn admin_abort_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
         self.task_control(job_id).await?.cancel();
         Ok(())
     }
 
+    /// Whether an in-memory task is currently registered for `job_id`.
+    ///
+    /// Advisory: the answer can be stale by the time the caller acts on it.
+    /// Task teardown removes the registration even when a task panics, so
+    /// `false` reliably means that no task is registered.
+    pub fn has_live_task(&self, job_id: SettlementJobId) -> bool {
+        self.task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .contains_key(&job_id)
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn admin_reload_and_restart_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
-        self.admin_task(job_id, TaskAdminCommand::ReloadAndRestart)
+        let _admin_op = self.admin_operation_lock.lock().await;
+
+        // The run loop can replace its own control handle without taking the
+        // admin-operation lock. Examine and act on the map's current handle
+        // while holding the map lock so this liveness decision cannot race
+        // with that replacement.
+        {
+            let mut task_controls = self
+                .task_controls
+                .lock()
+                .expect("settlement task_controls lock poisoned");
+            let send_result = task_controls
+                .get(&job_id)
+                .map(|task_control| task_control.try_send(TaskAdminCommand::ReloadAndRestart));
+
+            match send_result {
+                Some(Ok(())) => return Ok(()),
+                Some(Err(error @ mpsc::error::TrySendError::Full(_))) => {
+                    return Err(eyre::Report::new(error)
+                        .wrap_err(format!(
+                            "Failed to forward admin command to settlement task {job_id}: admin \
+                             command queue full"
+                        ))
+                        .wrap_err(RpcErrorCode::Unavailable));
+                }
+                Some(Err(mpsc::error::TrySendError::Closed(_))) => {
+                    // A closed channel is a stale registration left by a task
+                    // that has already died. Remove exactly the handle we
+                    // examined before deciding whether to respawn.
+                    task_controls.remove(&job_id);
+                }
+                None => {}
+            }
+        }
+
+        let classification = self.classify_missing_task(job_id).await;
+        if classification.downcast_ref::<RpcErrorCode>() != Some(&RpcErrorCode::NoLiveTask) {
+            return Err(classification);
+        }
+
+        // A panicked task can leave its closed receiver in the watcher map.
+        // No replacement registration is created until loading succeeds, so
+        // clearing it here also leaves a load failure with no stale control or
+        // watcher for this job.
+        self.result_watchers.lock().await.remove(&job_id);
+
+        let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
+        let stored_job = self
+            .load_stored_job(job_id, task_control)
             .await
+            .wrap_err(RpcErrorCode::Unavailable)
+            .wrap_err_with(|| format!("Failed to reload pending settlement job {job_id}"))?;
+
+        match stored_job {
+            StoredSettlementJob::Pending(task) => {
+                // Keep the admin lock until both fresh registrations are
+                // installed. `spawn_settlement_task` creates a fresh watcher.
+                self.spawn_settlement_task(job_id, task, task_control_handle)
+                    .await;
+                Ok(())
+            }
+            // The job completed between the classification read and the load.
+            // Keep completed-job behavior consistent regardless of which read
+            // observes the terminal result: reload refuses it and the result
+            // remains authoritative in storage.
+            StoredSettlementJob::Completed(_) => Err(eyre::eyre!(
+                "settlement job {job_id} completed while it was being reloaded"
+            )
+            .wrap_err(RpcErrorCode::AlreadyCompleted)),
+        }
     }
 
     /// Queues a command telling the live task for `job_id`, if any, to drop
@@ -691,7 +747,8 @@ impl<
         // Nothing stale is registered at this point: the watcher was removed,
         // and the new control handle is not inserted until spawning succeeds.
         // A load failure therefore leaves the job explicitly aborted: pending
-        // in storage, with no task, and recoverable by the next node restart.
+        // in storage, with no task, and recoverable by fixing the stored state
+        // and calling `admin_reloadSettlementTask`.
         let stored_job = self
             .load_stored_job(job_id, task_control)
             .await
@@ -699,7 +756,7 @@ impl<
             .wrap_err_with(|| {
                 format!(
                     "Removed the terminal result of settlement job {job_id} but failed to reload \
-                     the job; it will be re-driven after the next node restart"
+                     the job; repair its stored state and call admin_reloadSettlementTask"
                 )
             })?;
 

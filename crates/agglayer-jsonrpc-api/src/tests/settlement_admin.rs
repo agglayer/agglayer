@@ -243,20 +243,6 @@ async fn admin_reload_settlement_task_errors_are_classified() {
     );
     insta::assert_snapshot!("admin_reload_settlement_task__unknown_job", error);
 
-    let pending_job_id = SettlementJobId::from(5_u128);
-    context
-        .state_store
-        .insert_settlement_job(&pending_job_id, &settlement_job())
-        .unwrap();
-    let error = call_error(
-        context
-            .admin_client
-            .request("admin_reloadSettlementTask", rpc_params![pending_job_id])
-            .await,
-        RpcErrorCode::NoLiveTask,
-    );
-    insta::assert_snapshot!("admin_reload_settlement_task__no_live_task", error);
-
     let completed_job_id = SettlementJobId::from(6_u128);
     context
         .state_store
