@@ -188,7 +188,10 @@ pub struct SettlementTransactionConfig {
     /// Gas limit multiplier factor for the transaction.
     /// The gas is calculated as follows:
     /// `gas = estimated_gas * gas_multiplier_factor`
-    #[serde(default, skip_serializing_if = "crate::is_default")]
+    #[serde(
+        default = "default_gas_limit_multiplier_factor",
+        skip_serializing_if = "same_as_default_gas_limit_multiplier_factor"
+    )]
     pub gas_limit_multiplier_factor: Multiplier,
 
     /// Ceiling for the gas limit for the transaction.
@@ -244,7 +247,7 @@ impl Default for SettlementTransactionConfig {
                     .unwrap(),
             confirmations: default_confirmations(),
             settlement_policy: SettlementPolicy::default(),
-            gas_limit_multiplier_factor: Multiplier::default(),
+            gas_limit_multiplier_factor: default_gas_limit_multiplier_factor(),
             gas_limit_ceiling: default_gas_limit_ceiling(),
             max_fee_per_gas_multiplier_factor: Multiplier::default(),
             max_fee_per_gas_floor: 0,
@@ -337,6 +340,14 @@ pub struct SettlementConfig {
 /// for the transaction to resolve a receipt.
 const fn default_confirmations() -> usize {
     12
+}
+
+const fn default_gas_limit_multiplier_factor() -> Multiplier {
+    Multiplier::from_u64_per_1000(1300)
+}
+
+fn same_as_default_gas_limit_multiplier_factor(multiplier: &Multiplier) -> bool {
+    *multiplier == default_gas_limit_multiplier_factor()
 }
 
 fn default_gas_limit_ceiling() -> U256 {
