@@ -7,8 +7,7 @@ use std::{
 use agglayer_config::Multiplier;
 use agglayer_storage::{error::Error, tests::mocks::MockStateStore};
 use agglayer_types::{
-    CertificateId, ClientError, ClientErrorType, ContractCallOutcome, Digest,
-    SettlementAttemptResult, B256, U256,
+    ClientError, ClientErrorType, ContractCallOutcome, Digest, SettlementAttemptResult, B256, U256,
 };
 use alloy::{
     consensus::{Signed, TxEip1559},
@@ -24,6 +23,13 @@ use rstest::rstest;
 
 use super::*;
 use crate::utils::build_provider;
+
+impl TaskControl {
+    /// Test-only: pops the next queued admin command, if any.
+    pub(crate) fn try_recv_admin_command(&mut self) -> Option<TaskAdminCommand> {
+        self.admin_commands.try_recv().ok()
+    }
+}
 
 fn test_signer() -> PrivateKeySigner {
     PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key")
@@ -247,34 +253,13 @@ async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
 }
 
 #[tokio::test]
-async fn save_settlement_job_to_db_inserts_job() {
-    let mut store = MockStateStore::new();
-    let job_id = mk_job_id(1);
-    let job = mk_job();
-    let expected_job = job.clone();
-
-    store
-        .expect_insert_settlement_job()
-        .once()
-        .withf(move |recorded_job_id, recorded_job| {
-            recorded_job_id == &job_id && recorded_job == &expected_job
-        })
-        .return_once(|_, _| Ok(()));
-
-    let task = mk_task(Arc::new(store), BTreeMap::new());
-
-    task.save_settlement_job_to_db()
-        .await
-        .expect("settlement job should be saved");
-}
-
-#[tokio::test]
 async fn create_generates_settlement_job_id() {
     let mut store = MockStateStore::new();
     let job = mk_job();
-    // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+    // `create` applies the default 1.3x headroom to estimateGas (mock returns
+    // 200_000).
     let mut expected_job = job.clone();
-    expected_job.gas_limit = 200_000;
+    expected_job.gas_limit = 260_000;
     let recorded_job_id = Arc::new(Mutex::new(None));
     let recorded_job_id_for_store = recorded_job_id.clone();
 
@@ -301,123 +286,6 @@ async fn create_generates_settlement_job_id() {
 
     assert_eq!(task.id, job_id);
     assert_eq!(*recorded_job_id.lock().unwrap(), Some(job_id));
-}
-
-#[tokio::test]
-async fn create_records_certificate_link_before_settlement_job() {
-    let mut store = MockStateStore::new();
-    let certificate_id = CertificateId::new(Digest::from([7; 32]));
-    let job = mk_job();
-    // `create` resolves the gas limit via estimateGas (mock returns 200_000).
-    let mut expected_job = job.clone();
-    expected_job.gas_limit = 200_000;
-    let recorded_job_id = Arc::new(Mutex::new(None));
-    let ordering = Arc::new(Mutex::new(Vec::new()));
-
-    store
-        .expect_insert_certificate_settlement_job_id()
-        .once()
-        .withf(move |recorded_certificate_id, _| recorded_certificate_id == &certificate_id)
-        .return_once({
-            let ordering = ordering.clone();
-            let recorded_job_id = recorded_job_id.clone();
-            move |_, settlement_job_id| {
-                ordering.lock().unwrap().push("write_link");
-                *recorded_job_id.lock().unwrap() = Some(*settlement_job_id);
-                Ok(())
-            }
-        });
-
-    store
-        .expect_insert_settlement_job()
-        .once()
-        .withf(move |_, recorded_job| recorded_job == &expected_job)
-        .return_once({
-            let ordering = ordering.clone();
-            let recorded_job_id = recorded_job_id.clone();
-            move |settlement_job_id, _| {
-                ordering.lock().unwrap().push("write_job");
-                assert_eq!(*recorded_job_id.lock().unwrap(), Some(*settlement_job_id));
-                Ok(())
-            }
-        });
-
-    let (job_id, task) = SettlementTask::create(
-        Some(certificate_id),
-        job,
-        Arc::new(SettlementTransactionConfig::default()),
-        Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
-        Arc::new(store),
-        Arc::new(WalletNonceLocks::default()),
-        mk_control(),
-    )
-    .await
-    .expect("settlement task should be created");
-
-    assert_eq!(task.id, job_id);
-    assert_eq!(*recorded_job_id.lock().unwrap(), Some(job_id));
-    assert_eq!(
-        ordering.lock().unwrap().as_slice(),
-        ["write_link", "write_job"]
-    );
-}
-
-#[tokio::test]
-async fn create_fails_when_certificate_link_already_exists() {
-    let mut store = MockStateStore::new();
-    let certificate_id = CertificateId::new(Digest::from([8; 32]));
-    let job = mk_job();
-
-    store
-        .expect_insert_certificate_settlement_job_id()
-        .once()
-        .withf(move |recorded_certificate_id, _| recorded_certificate_id == &certificate_id)
-        .return_once(|_, _| {
-            Err(Error::Unexpected(
-                "Certificate already has a settlement job id".to_string(),
-            ))
-        });
-
-    store.expect_insert_settlement_job().never();
-
-    let result = SettlementTask::create(
-        Some(certificate_id),
-        job,
-        Arc::new(SettlementTransactionConfig::default()),
-        Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
-        Arc::new(store),
-        Arc::new(WalletNonceLocks::default()),
-        mk_control(),
-    )
-    .await;
-
-    let error = result
-        .err()
-        .expect("duplicate certificate link should fail");
-    assert!(
-        error
-            .to_string()
-            .contains("Failed to write settlement job id"),
-        "{error:?}"
-    );
-}
-
-#[tokio::test]
-async fn save_settlement_job_to_db_reports_storage_error() {
-    let mut store = MockStateStore::new();
-    store
-        .expect_insert_settlement_job()
-        .once()
-        .return_once(|_, _| Err(Error::Unexpected("injected storage failure".to_string())));
-
-    let task = mk_task(Arc::new(store), BTreeMap::new());
-
-    let error = task
-        .save_settlement_job_to_db()
-        .await
-        .expect_err("storage errors should be surfaced");
-
-    assert!(error.to_string().contains("Failed to write settlement job"));
 }
 
 #[tokio::test]

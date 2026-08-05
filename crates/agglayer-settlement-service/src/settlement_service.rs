@@ -1,17 +1,22 @@
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc, time::SystemTime};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
-use agglayer_storage::stores::{SettlementReader, SettlementWriter, StateReader, StateWriter};
+use agglayer_storage::stores::{EditEvenIfCompleted, SettlementReader, SettlementWriter};
 use agglayer_telemetry::settlement::{SettlementJobState, SettlementJobStateSample};
 use agglayer_types::{
-    CertificateId, RpcErrorCode, SettlementJob, SettlementJobId, SettlementJobResult,
+    Address, CertificateId, ClientError, Nonce, RpcErrorCode, SettlementAttempt,
+    SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
-use alloy::providers::{Provider, WalletProvider};
+use alloy::{
+    consensus::Transaction as _,
+    network::TransactionResponse as _,
+    providers::{Provider, WalletProvider},
+};
 use educe::Educe;
 use eyre::Context as _;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     settlement_task::{
@@ -20,6 +25,75 @@ use crate::{
     },
     wallet_nonce_locks::WalletNonceLocks,
 };
+
+/// How the live task for a job (if any) was told about an admin mutation.
+///
+/// Admin mutations are declarative edits of stored state; a running task only
+/// picks them up by reloading from storage. Anything but [`Queued`] means
+/// the operator should check the job before relying on the edit being live.
+///
+/// Serializes as `queued` / `absent` / `notify-failed` in admin RPC
+/// responses. Keeping serialization on this service-level response is a
+/// deliberate pragmatic choice; it is not an `agglayer-types` domain type.
+///
+/// [`Queued`]: LiveTaskNotification::Queued
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LiveTaskNotification {
+    /// A reload command was queued for the running task. Not a wake-up: the
+    /// task drains its command queue only at run-loop control checks, and
+    /// its waits are interrupted by cancellation, L1 progress, or attempt
+    /// deadlines — never by this queue. A task parked in an L1 wait keeps
+    /// acting on stale in-memory state until that wait returns. The retry
+    /// policy caps individual backoff sleeps, not total wait duration;
+    /// settlement polling can continue until the configured settlement
+    /// policy is satisfied. Abort the task before editing when prompt
+    /// observation matters.
+    Queued,
+    /// No live task exists for this job. The edit persists and is picked up
+    /// whenever a task is started for the job (e.g. on startup recovery).
+    Absent,
+    /// A live task exists but could not be notified, so it keeps acting on
+    /// stale in-memory state until it reloads.
+    ///
+    /// This covers both a full command queue (the task is alive but
+    /// wedged/slow; commands drain only at control checks) and a closed
+    /// channel (the task just died or completed). The warning log records
+    /// which case occurred. Use `admin_reloadSettlementTask` as the escape
+    /// hatch, or abort the task and restart the node.
+    NotifyFailed,
+}
+
+/// A settlement attempt to register through the admin surface.
+///
+/// Only the transaction hash is mandatory. The transaction is fetched from L1
+/// by hash when available: explicit sender and nonce values must match it, and
+/// missing values are resolved from it. An unknown transaction is accepted
+/// only when both identity fields are explicit, with a warning. Missing fees
+/// fall back to the fetched transaction's fees, or 0 when it is unknown. A
+/// missing submission time defaults to now.
+#[derive(Clone, Debug)]
+pub struct NewSettlementAttempt {
+    pub tx_hash: SettlementTxHash,
+    pub sender_wallet: Option<Address>,
+    pub nonce: Option<Nonce>,
+    pub submission_time: Option<SystemTime>,
+    pub max_fee_per_gas: Option<u128>,
+    pub max_priority_fee_per_gas: Option<u128>,
+}
+
+fn tag_admin_storage_error(error: agglayer_storage::error::Error) -> eyre::Report {
+    use agglayer_storage::error::Error as E;
+
+    let code = match &error {
+        E::SettlementJobNotFound(_)
+        | E::SettlementAttemptNotFound { .. }
+        | E::SettlementAttemptResultNotRecorded { .. } => RpcErrorCode::NotFound,
+        E::SettlementJobAlreadyCompleted(_) => RpcErrorCode::AlreadyCompleted,
+        _ => return error.into(),
+    };
+    eyre::Report::new(error).wrap_err(code)
+}
 
 /// The Settlement Service is responsible for managing settlement jobs and
 /// answering settlement result requests.
@@ -137,7 +211,7 @@ impl<L1Provider: WalletProvider, SettlementStore> SettlementService<L1Provider, 
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > SettlementService<L1Provider, SettlementStore>
 {
     pub async fn start(
@@ -402,6 +476,209 @@ impl<
             .await
     }
 
+    /// Queues a command telling the live task for `job_id`, if any, to drop
+    /// its in-memory state and reload from storage, so it observes an admin
+    /// edit.
+    ///
+    /// Best-effort: the edit is already persisted when this runs, and a task
+    /// that cannot be notified will still observe it on its next reload.
+    /// Queueing does not interrupt a wait in progress; the task acts on the
+    /// command at its next control check (see
+    /// [`LiveTaskNotification::Queued`]).
+    async fn notify_live_task_of_admin_edit(
+        &self,
+        job_id: SettlementJobId,
+    ) -> LiveTaskNotification {
+        let task_controls = self.task_controls.lock().expect(TASK_CONTROLS_POISONED);
+        let Some(task_control) = task_controls.get(&job_id) else {
+            return LiveTaskNotification::Absent;
+        };
+
+        match task_control.try_send(TaskAdminCommand::ReloadAndRestart) {
+            Ok(()) => LiveTaskNotification::Queued,
+            Err(error) => {
+                warn!(
+                    ?job_id,
+                    ?error,
+                    "Failed to notify live settlement task of an admin edit; the task acts on \
+                     stale in-memory state until it reloads"
+                );
+                LiveTaskNotification::NotifyFailed
+            }
+        }
+    }
+
+    /// Resolves an admin-provided attempt into a full [`SettlementAttempt`].
+    ///
+    /// The transaction is always queried on L1. When found, its sender and
+    /// nonce are authoritative: explicit values must match, and missing values
+    /// are filled from it. When it is unknown, both values must be explicit and
+    /// are trusted with a warning. Fees use explicit values, then fetched
+    /// values, then `0`; zero makes a fee-bumping retry start over from freshly
+    /// estimated fees. Submission time uses the explicit value or the current
+    /// time, seeding the task's retry backoff for this attempt.
+    async fn resolve_new_settlement_attempt(
+        &self,
+        attempt: NewSettlementAttempt,
+    ) -> eyre::Result<SettlementAttempt> {
+        let tx_hash = attempt.tx_hash;
+        let fetched_tx = self
+            .provider
+            .get_transaction_by_hash(tx_hash.into())
+            .await
+            .wrap_err(RpcErrorCode::Unavailable)
+            .wrap_err_with(|| {
+                format!("Failed to fetch settlement transaction {tx_hash} from L1")
+            })?;
+
+        let (sender_wallet, nonce) = match fetched_tx.as_ref() {
+            Some(transaction) => {
+                let l1_sender_wallet = transaction.from().into();
+                let l1_nonce = Nonce(transaction.nonce());
+
+                if let Some(provided_sender_wallet) = attempt.sender_wallet {
+                    if provided_sender_wallet != l1_sender_wallet {
+                        return Err(eyre::eyre!(
+                            "Explicit sender wallet {provided_sender_wallet} does not match L1 \
+                             sender wallet {l1_sender_wallet} for settlement transaction {tx_hash}"
+                        )
+                        .wrap_err(RpcErrorCode::InvalidParams));
+                    }
+                }
+                if let Some(provided_nonce) = attempt.nonce {
+                    if provided_nonce != l1_nonce {
+                        return Err(eyre::eyre!(
+                            "Explicit nonce {provided_nonce} does not match L1 nonce {l1_nonce} \
+                             for settlement transaction {tx_hash}"
+                        )
+                        .wrap_err(RpcErrorCode::InvalidParams));
+                    }
+                }
+
+                (l1_sender_wallet, l1_nonce)
+            }
+            None => match (attempt.sender_wallet, attempt.nonce) {
+                (Some(sender_wallet), Some(nonce)) => {
+                    warn!(
+                        %tx_hash,
+                        %sender_wallet,
+                        %nonce,
+                        "Settlement transaction is not known to the L1 RPC; trusting explicitly \
+                         provided sender wallet and nonce"
+                    );
+                    (sender_wallet, nonce)
+                }
+                _ => {
+                    return Err(eyre::eyre!(
+                        "Settlement transaction {tx_hash} is not known to the L1 RPC; provide \
+                         sender_wallet and nonce explicitly"
+                    )
+                    .wrap_err(RpcErrorCode::NotFound));
+                }
+            },
+        };
+
+        Ok(SettlementAttempt {
+            sender_wallet,
+            nonce,
+            hash: tx_hash,
+            submission_time: attempt.submission_time.unwrap_or_else(SystemTime::now),
+            max_fee_per_gas: attempt
+                .max_fee_per_gas
+                // Fully qualified: the RPC transaction type also offers
+                // `TransactionResponse::max_fee_per_gas`.
+                .or_else(|| {
+                    fetched_tx
+                        .as_ref()
+                        .map(alloy::consensus::Transaction::max_fee_per_gas)
+                })
+                .unwrap_or(0),
+            max_priority_fee_per_gas: attempt
+                .max_priority_fee_per_gas
+                .or_else(|| {
+                    fetched_tx
+                        .as_ref()
+                        .and_then(|tx| tx.max_priority_fee_per_gas())
+                })
+                .unwrap_or(0),
+        })
+    }
+
+    /// Appends a new settlement attempt to `job_id` and returns its assigned
+    /// attempt number.
+    ///
+    /// This always adds one new attempt under the next unused number and never
+    /// overwrites an existing one, so it is safe for porting an externally
+    /// submitted settlement transaction into the job.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_insert_settlement_attempt(
+        &self,
+        job_id: SettlementJobId,
+        attempt: NewSettlementAttempt,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> eyre::Result<(u64, LiveTaskNotification)> {
+        let attempt = self.resolve_new_settlement_attempt(attempt).await?;
+        let attempt_number = self
+            .store
+            .admin_insert_settlement_attempt(&job_id, &attempt, edit_even_if_completed)
+            .map_err(tag_admin_storage_error)
+            .wrap_err_with(|| format!("Failed to insert settlement attempt for job {job_id}"))?;
+        let live_task = self.notify_live_task_of_admin_edit(job_id).await;
+        Ok((attempt_number, live_task))
+    }
+
+    /// Records that an administrator asserts the attempt will never land on
+    /// L1, overwriting any previously recorded result for it.
+    ///
+    /// Terminal for the attempt, never for the job: the reloaded task no
+    /// longer waits on this attempt and drives the settlement elsewhere.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_mark_attempt_definitely_failed(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        reason: &str,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> eyre::Result<LiveTaskNotification> {
+        let result = SettlementAttemptResult::ClientError(ClientError::abandoned_by_admin(reason));
+        self.store
+            .admin_override_settlement_attempt_result(
+                &job_id,
+                attempt_number,
+                &result,
+                edit_even_if_completed,
+            )
+            .map_err(tag_admin_storage_error)
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to mark settlement attempt {attempt_number} of job {job_id} as \
+                     definitely failed"
+                )
+            })?;
+        Ok(self.notify_live_task_of_admin_edit(job_id).await)
+    }
+
+    /// Removes the recorded result of an attempt, handing the attempt back to
+    /// the settlement task as pending.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_remove_attempt_result(
+        &self,
+        job_id: SettlementJobId,
+        attempt_number: u64,
+        edit_even_if_completed: EditEvenIfCompleted,
+    ) -> eyre::Result<LiveTaskNotification> {
+        self.store
+            .admin_remove_settlement_attempt_result(&job_id, attempt_number, edit_even_if_completed)
+            .map_err(tag_admin_storage_error)
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to remove result of settlement attempt {attempt_number} of job \
+                     {job_id}"
+                )
+            })?;
+        Ok(self.notify_live_task_of_admin_edit(job_id).await)
+    }
+
     #[tracing::instrument(skip(self))]
     pub async fn request_new_settlement(
         &self,
@@ -481,7 +758,7 @@ pub struct RequestNewSettlement {
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<RequestNewSettlement> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = SettlementJobWatcher;
@@ -508,7 +785,7 @@ pub struct RetrieveSettlementResult(pub SettlementJobId);
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<RetrieveSettlementResult> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = RetrievedSettlementResult;
@@ -535,7 +812,7 @@ pub enum AdminCommand {
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter + StateReader + StateWriter + Send + Sync + 'static,
+        SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
     > tower::Service<AdminCommand> for SettlementService<L1Provider, SettlementStore>
 {
     type Response = ();

@@ -22,7 +22,7 @@ use crate::{
     error::Error,
     stores::{
         state::StateStore, EditEvenIfCompleted, SettlementReader as _, SettlementWriter as _,
-        StateReader as _, StateWriter as _,
+        StateReader as _,
     },
     tests::TempDBDir,
     types::{
@@ -135,95 +135,71 @@ fn get_certificate_settlement_job_id_returns_none_when_missing() {
 }
 
 #[test]
-fn insert_certificate_settlement_job_id_allows_missing_job() {
+fn insert_settlement_job_with_certificate_writes_job_and_both_links() {
     let (_tmp, db, store) = setup_store();
-    let certificate_id = mk_certificate_id(2);
-    let job_id = mk_job_id(200);
+    let certificate_id = mk_certificate_id(5);
+    let job_id = mk_job_id(500);
+    let job = mk_settlement_job(5);
 
     store
-        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
-        .expect("mapping insert must not require an existing job");
+        .insert_settlement_job_with_certificate(&job_id, &job, &certificate_id)
+        .expect("atomic insert must succeed");
 
+    assert_eq!(
+        db.get::<SettlementJobsColumn>(&job_id)
+            .expect("Unable to read stored value"),
+        Some((&job).into())
+    );
     assert_eq!(
         db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
             .expect("Unable to read stored value"),
         Some(job_id)
     );
-
     assert_eq!(
         db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
             .expect("Unable to read stored value"),
         Some(certificate_id)
     );
-
-    assert_eq!(
-        db.get::<SettlementJobsColumn>(&job_id)
-            .expect("Unable to read stored value"),
-        None
-    );
-}
-
-#[test]
-fn insert_certificate_settlement_job_id_returns_value_after_insert() {
-    let (_tmp, db, store) = setup_store();
-    let certificate_id = mk_certificate_id(3);
-    let job_id = mk_job_id(300);
-
-    store
-        .insert_settlement_job(&job_id, &mk_settlement_job(3))
-        .expect("job insert must succeed");
-    store
-        .insert_certificate_settlement_job_id(&certificate_id, &job_id)
-        .expect("mapping insert must succeed");
-
     assert_eq!(
         store
             .get_certificate_settlement_job_id(&certificate_id)
             .expect("read must succeed"),
         Some(job_id)
     );
-
-    assert_eq!(
-        db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
-            .expect("Unable to read stored value"),
-        Some(certificate_id)
-    );
 }
 
 #[test]
-fn insert_certificate_settlement_job_id_duplicate_fails() {
+fn insert_settlement_job_with_certificate_duplicate_certificate_writes_nothing() {
     let (_tmp, db, store) = setup_store();
-    let certificate_id = mk_certificate_id(4);
-    let first_job_id = mk_job_id(400);
-    let second_job_id = mk_job_id(401);
+    let certificate_id = mk_certificate_id(7);
+    let first_job_id = mk_job_id(700);
+    let second_job_id = mk_job_id(701);
 
     store
-        .insert_settlement_job(&first_job_id, &mk_settlement_job(4))
-        .expect("first job insert must succeed");
-    store
-        .insert_settlement_job(&second_job_id, &mk_settlement_job(5))
-        .expect("second job insert must succeed");
-    store
-        .insert_certificate_settlement_job_id(&certificate_id, &first_job_id)
-        .expect("first mapping insert must succeed");
+        .insert_settlement_job_with_certificate(
+            &first_job_id,
+            &mk_settlement_job(7),
+            &certificate_id,
+        )
+        .expect("first atomic insert must succeed");
 
-    let res = store.insert_certificate_settlement_job_id(&certificate_id, &second_job_id);
+    let res = store.insert_settlement_job_with_certificate(
+        &second_job_id,
+        &mk_settlement_job(8),
+        &certificate_id,
+    );
 
     assert!(matches!(res, Err(Error::UnprocessedAction(_))));
+    // The second job is not written when the certificate is already linked.
+    assert_eq!(
+        db.get::<SettlementJobsColumn>(&second_job_id)
+            .expect("Unable to read stored value"),
+        None
+    );
     assert_eq!(
         db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
             .expect("Unable to read stored value"),
         Some(first_job_id)
-    );
-    assert_eq!(
-        db.get::<CertificateIdPerSettlementJobIdColumn>(&first_job_id)
-            .expect("Unable to read stored value"),
-        Some(certificate_id)
-    );
-    assert_eq!(
-        db.get::<CertificateIdPerSettlementJobIdColumn>(&second_job_id)
-            .expect("Unable to read stored value"),
-        None
     );
 }
 
