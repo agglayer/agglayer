@@ -209,5 +209,10 @@ mock! {
             attempt_number: u64,
             edit_even_if_completed: EditEvenIfCompleted,
         ) -> Result<(), Error>;
+
+        fn admin_force_remove_settlement_job_result(
+            &self,
+            settlement_job_id: &SettlementJobId,
+        ) -> Result<(), Error>;
     }
 }
