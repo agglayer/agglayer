@@ -436,34 +436,43 @@ impl<
                 .task_controls
                 .lock()
                 .expect("settlement task_controls lock poisoned");
-            let send_result = task_controls
-                .get(&job_id)
-                .map(|task_control| task_control.try_send(TaskAdminCommand::ReloadAndRestart));
+            if let Some(task_control) = task_controls.get(&job_id) {
+                // Abort cancels the task before its teardown guard removes the
+                // registration. Queueing during that window would report
+                // success even though the task prioritizes cancellation and
+                // will never drain the command.
+                if task_control.is_cancelled() {
+                    return Err(eyre::eyre!(
+                        "Settlement task {job_id} teardown after cancellation is in progress; \
+                         retry"
+                    )
+                    .wrap_err(RpcErrorCode::Unavailable));
+                }
 
-            match send_result {
-                Some(Ok(())) => return Ok(()),
-                Some(Err(error @ mpsc::error::TrySendError::Full(_))) => {
-                    return Err(eyre::Report::new(error)
-                        .wrap_err(format!(
-                            "Failed to forward admin command to settlement task {job_id}: admin \
-                             command queue full"
-                        ))
-                        .wrap_err(RpcErrorCode::Unavailable));
+                match task_control.try_send(TaskAdminCommand::ReloadAndRestart) {
+                    Ok(()) => return Ok(()),
+                    Err(error @ mpsc::error::TrySendError::Full(_)) => {
+                        return Err(eyre::Report::new(error)
+                            .wrap_err(format!(
+                                "Failed to forward admin command to settlement task {job_id}: \
+                                 admin command queue full"
+                            ))
+                            .wrap_err(RpcErrorCode::Unavailable));
+                    }
+                    Err(error @ mpsc::error::TrySendError::Closed(_)) => {
+                        // The receiver can close just before the task's teardown
+                        // guard deregisters this handle. Respawning in that window
+                        // would let the old teardown remove the fresh task's
+                        // registrations, so leave cleanup to the guard and ask the
+                        // operator to retry.
+                        return Err(eyre::Report::new(error)
+                            .wrap_err(format!(
+                                "Failed to forward admin command to settlement task {job_id}: \
+                                 task teardown in progress; retry"
+                            ))
+                            .wrap_err(RpcErrorCode::Unavailable));
+                    }
                 }
-                Some(Err(error @ mpsc::error::TrySendError::Closed(_))) => {
-                    // The receiver can close just before the task's teardown
-                    // guard deregisters this handle. Respawning in that window
-                    // would let the old teardown remove the fresh task's
-                    // registrations, so leave cleanup to the guard and ask the
-                    // operator to retry.
-                    return Err(eyre::Report::new(error)
-                        .wrap_err(format!(
-                            "Failed to forward admin command to settlement task {job_id}: task \
-                             teardown in progress; retry"
-                        ))
-                        .wrap_err(RpcErrorCode::Unavailable));
-                }
-                None => {}
             }
         }
 

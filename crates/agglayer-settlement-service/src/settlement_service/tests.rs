@@ -896,6 +896,35 @@ async fn admin_reload_with_full_admin_channel_is_tagged_unavailable() {
 }
 
 #[tokio::test]
+async fn abort_then_immediate_reload_is_tagged_unavailable() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(74);
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, _task_control) = TaskControlHandle::new(&service.cancellation_token);
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .insert(job_id, task_control_handle);
+
+    service
+        .admin_abort_task(job_id)
+        .await
+        .expect("abort should cancel the registered task");
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload should not queue onto a cancelled task");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::Unavailable)
+    );
+    assert!(service.has_live_task(job_id));
+}
+
+#[tokio::test]
 async fn reload_retries_after_closed_handle_teardown() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);

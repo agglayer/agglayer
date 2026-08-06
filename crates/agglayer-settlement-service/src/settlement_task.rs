@@ -273,6 +273,11 @@ impl TaskControlHandle {
         self.cancellation_token.cancel();
     }
 
+    /// Whether cancellation has been requested for this task.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancellation_token.is_cancelled()
+    }
+
     /// Queues an admin command for the task. This does not interrupt a wait
     /// in progress: the task drains the queue only at its run-loop control
     /// checks, unlike [`cancel`](Self::cancel) which its waits select on.
