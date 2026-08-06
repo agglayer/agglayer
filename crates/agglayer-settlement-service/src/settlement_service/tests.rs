@@ -109,14 +109,18 @@ fn mk_parked_provider() -> (impl Provider + WalletProvider + 'static, Arc<Atomic
     (provider, request_count)
 }
 
-async fn wait_until_l1_request_is_parked(request_count: &AtomicUsize) {
-    tokio::time::timeout(Duration::from_secs(1), async {
-        while request_count.load(Ordering::SeqCst) == 0 {
-            tokio::task::yield_now().await;
+async fn wait_until(mut condition: impl FnMut() -> bool) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !condition() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
     .await
-    .expect("settlement task should park in its first L1 request");
+    .expect("condition should become true");
+}
+
+async fn wait_until_l1_request_is_parked(request_count: &AtomicUsize) {
+    wait_until(|| request_count.load(Ordering::SeqCst) > 0).await;
 }
 
 fn expect_empty_startup_recovery(store: &mut MockStateStore) {
@@ -230,7 +234,11 @@ async fn start_scans_jobs_and_skips_completed_ones() {
 
     let service = mk_service(Arc::new(store)).await;
 
-    assert!(service.task_controls.lock().unwrap().is_empty());
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
 }
 
@@ -279,7 +287,11 @@ async fn start_skips_unloadable_jobs_and_keeps_scanning() {
     .expect("settlement service should start");
 
     assert_eq!(recovery_skipped_jobs, 1);
-    assert!(service.task_controls.lock().unwrap().is_empty());
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
 }
 
@@ -471,7 +483,11 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
         .expect("reload should publish the stored terminal result");
 
     assert_eq!(result_receiver.borrow().as_ref(), Some(&completed_result));
-    assert!(service.task_controls.lock().unwrap().is_empty());
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
     assert!(service.result_watchers.lock().await.contains_key(&job_id));
 }
 
@@ -618,6 +634,61 @@ async fn admin_abort_pending_job_without_task_is_tagged_no_live_task() {
 }
 
 #[tokio::test]
+async fn panicked_task_deregisters_control_and_abort_reports_no_live_task() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(28);
+    let job = mk_job(28);
+    let attempt = mk_resolved_attempt(28, SettlementTxHash::new(Digest::from([29; 32])));
+
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![job_id]));
+    store
+        .expect_get_settlement_job()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(Some(job.clone())));
+    store
+        .expect_get_settlement_job_result()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(vec![(0, attempt)]));
+
+    // `mk_service` uses the dead endpoint at http://127.0.0.1:0. The task's
+    // first L1 query fails non-recoverably and deliberately panics.
+    let service = mk_service(Arc::new(store)).await;
+    wait_until(|| {
+        !service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .contains_key(&job_id)
+    })
+    .await;
+
+    let error = service
+        .admin_abort_task(job_id)
+        .await
+        .expect_err("abort after task panic should report no live task");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::NoLiveTask)
+    );
+}
+
+#[tokio::test]
 async fn admin_reload_unknown_job_is_tagged_not_found() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
@@ -720,7 +791,7 @@ async fn admin_reload_with_full_admin_channel_is_tagged_unavailable() {
     service
         .task_controls
         .lock()
-        .expect("settlement task controls lock poisoned")
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -760,7 +831,7 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
     service
         .task_controls
         .lock()
-        .expect("settlement task controls lock poisoned")
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -772,68 +843,6 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
         error.downcast_ref::<RpcErrorCode>(),
         Some(&RpcErrorCode::NoLiveTask)
     );
-}
-
-#[tokio::test]
-async fn job_state_samples_count_live_tasks_per_state() {
-    let mut store = MockStateStore::new();
-    expect_empty_startup_recovery(&mut store);
-    let service = mk_service(Arc::new(store)).await;
-
-    // Every state is reported even with no live task, so a drained gauge
-    // reads as zero rather than as missing data.
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 0);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
-
-    // Registering a task reports it as building until it broadcasts.
-    let mut controls: Vec<TaskControl> = Vec::new();
-    for seed in 0..3u128 {
-        let (handle, control) = TaskControlHandle::new(&service.cancellation_token);
-        controls.push(control);
-        service
-            .task_controls
-            .lock()
-            .expect("settlement task controls lock poisoned")
-            .insert(mk_job_id(seed), handle);
-    }
-
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 3);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
-
-    // Every sample names the signer the next attempt will go out on.
-    let expected_wallet = service.provider.default_signer_address().to_string();
-    assert!(samples
-        .iter()
-        .all(|sample| sample.wallet == expected_wallet));
-
-    // A task that broadcasts moves to submitted; the total is unchanged
-    // because the gauge counts jobs, not transitions.
-    controls[0].mark_submitted();
-    controls[1].mark_submitted();
-
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 1);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 2);
-
-    // Dropping the task side must not lose the state: the handle the service
-    // holds is what the scrape reads, and a task can die without the service
-    // having removed its entry yet.
-    controls.clear();
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 1);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 2);
-
-    // Completing a job removes its entry, so the gauge falls.
-    service
-        .task_controls
-        .lock()
-        .expect("settlement task controls lock poisoned")
-        .clear();
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 0);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
 }
 
 #[tokio::test]
@@ -866,7 +875,7 @@ async fn admin_force_remove_job_result_refuses_while_task_is_live() {
     let live_control = service
         .task_controls
         .lock()
-        .expect("settlement task controls lock poisoned")
+        .expect("settlement task_controls lock poisoned")
         .get(&job_id)
         .cloned()
         .expect("the parked task must have a registered control");
@@ -925,7 +934,11 @@ async fn admin_force_remove_job_result_respawns_task() {
         .expect("force-remove should respawn the pending job");
     wait_until_l1_request_is_parked(&request_count).await;
 
-    assert!(service.task_controls.lock().unwrap().contains_key(&job_id));
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
     let result_watchers = service.result_watchers.lock().await;
     let fresh_watcher = result_watchers
         .get(&job_id)
@@ -1027,7 +1040,11 @@ async fn force_remove_load_failure_leaves_clean_aborted_state() {
         error.downcast_ref::<RpcErrorCode>(),
         Some(&RpcErrorCode::Unavailable)
     );
-    assert!(!service.task_controls.lock().unwrap().contains_key(&job_id));
+    assert!(!service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
     assert!(!service.result_watchers.lock().await.contains_key(&job_id));
 }
 
@@ -1490,7 +1507,7 @@ async fn admin_insert_attempt_completed_job_error_is_tagged_without_notification
     service
         .task_controls
         .lock()
-        .expect("settlement task controls lock poisoned")
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -1640,7 +1657,7 @@ async fn admin_mutation_storage_error_propagates_without_task_notification() {
     service
         .task_controls
         .lock()
-        .expect("settlement task controls lock poisoned")
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -1710,7 +1727,7 @@ async fn admin_mutation_queues_reload_for_parked_live_task() {
     service
         .task_controls
         .lock()
-        .expect("settlement task controls lock poisoned")
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let live_task = service
@@ -1767,7 +1784,7 @@ async fn admin_mutation_reports_closed_and_full_notification_channels() {
     service
         .task_controls
         .lock()
-        .expect("settlement task controls lock poisoned")
+        .expect("settlement task_controls lock poisoned")
         .insert(closed_job_id, closed_handle);
 
     let (full_handle, _full_control) = TaskControlHandle::new(&service.cancellation_token);
@@ -1778,7 +1795,7 @@ async fn admin_mutation_reports_closed_and_full_notification_channels() {
     service
         .task_controls
         .lock()
-        .expect("settlement task controls lock poisoned")
+        .expect("settlement task_controls lock poisoned")
         .insert(full_job_id, full_handle);
 
     assert_eq!(
@@ -1795,6 +1812,68 @@ async fn admin_mutation_reports_closed_and_full_notification_channels() {
             .expect("the persisted edit should survive a full notification channel"),
         LiveTaskNotification::NotifyFailed
     );
+}
+
+#[tokio::test]
+async fn job_state_samples_count_live_tasks_per_state() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let service = mk_service(Arc::new(store)).await;
+
+    // Every state is reported even with no live task, so a drained gauge
+    // reads as zero rather than as missing data.
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 0);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
+
+    // Registering a task reports it as building until it broadcasts.
+    let mut controls: Vec<TaskControl> = Vec::new();
+    for seed in 0..3u128 {
+        let (handle, control) = TaskControlHandle::new(&service.cancellation_token);
+        controls.push(control);
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task controls lock poisoned")
+            .insert(mk_job_id(seed), handle);
+    }
+
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 3);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
+
+    // Every sample names the signer the next attempt will go out on.
+    let expected_wallet = service.provider.default_signer_address().to_string();
+    assert!(samples
+        .iter()
+        .all(|sample| sample.wallet == expected_wallet));
+
+    // A task that broadcasts moves to submitted; the total is unchanged
+    // because the gauge counts jobs, not transitions.
+    controls[0].mark_submitted();
+    controls[1].mark_submitted();
+
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 1);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 2);
+
+    // Dropping the task side must not lose the state: the handle the service
+    // holds is what the scrape reads, and a task can die without the service
+    // having removed its entry yet.
+    controls.clear();
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 1);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 2);
+
+    // Completing a job removes its entry, so the gauge falls.
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task controls lock poisoned")
+        .clear();
+    let samples = service.job_state_samples();
+    assert_eq!(state_count(&samples, SettlementJobState::Building), 0);
+    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
 }
 
 mod same_wallet_nonce_race;

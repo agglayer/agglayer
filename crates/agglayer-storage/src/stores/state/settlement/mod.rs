@@ -162,6 +162,15 @@ impl SettlementReader for StateStore {
             .transpose()?)
     }
 
+    fn get_settlement_job_certificate_id(
+        &self,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<Option<CertificateId>, Error> {
+        Ok(self
+            .db
+            .get::<CertificateIdPerSettlementJobIdColumn>(settlement_job_id)?)
+    }
+
     fn get_settlement_job_result(
         &self,
         settlement_job_id: &SettlementJobId,
