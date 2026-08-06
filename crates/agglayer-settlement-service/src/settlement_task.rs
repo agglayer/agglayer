@@ -515,8 +515,7 @@ impl<
         wallet_nonce_locks: Arc<WalletNonceLocks>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
-        match Self::recover_from_storage(id, tx_config, provider, store, wallet_nonce_locks)
-            .await?
+        match Self::recover_from_storage(id, tx_config, provider, store, wallet_nonce_locks).await?
         {
             RecoveredSettlementJob::Pending(pending) => {
                 Ok(StoredSettlementJob::Pending(pending.into_task(control)))

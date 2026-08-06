@@ -268,24 +268,23 @@ async fn start_resumes_pending_job_with_task_controls_tied_to_service_cancellati
     let cancellation_token = CancellationToken::new();
     let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
 
-    assert!(service.task_controls.lock().await.contains_key(&job_id));
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
     assert!(service.result_watchers.lock().await.contains_key(&job_id));
 
     cancellation_token.cancel();
 
-    let wait_for_shutdown = async {
-        while !service.task_controls.lock().await.is_empty() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    };
-    tokio::time::timeout(Duration::from_secs(1), wait_for_shutdown)
-        .await
-        .expect("recovered pending task should stop within timeout");
-
-    assert!(
-        service.task_controls.lock().await.is_empty(),
-        "recovered task should stop and clear control on service cancellation"
-    );
+    wait_until(|| {
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .is_empty()
+    })
+    .await;
 }
 
 #[tokio::test]
