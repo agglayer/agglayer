@@ -1,4 +1,8 @@
-use std::time::SystemTime;
+use std::{
+    future::pending,
+    task::{Context, Poll},
+    time::SystemTime,
+};
 
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
 use agglayer_types::{
@@ -9,7 +13,9 @@ use agglayer_types::{
 use alloy::{
     network::EthereumWallet,
     providers::{mock::Asserter, ProviderBuilder},
+    rpc::{client::RpcClient, json_rpc::RequestPacket},
     signers::local::PrivateKeySigner,
+    transports::{TransportError, TransportFut},
 };
 use jsonrpsee::{
     core::{client::ClientT, ClientError},
@@ -146,6 +152,51 @@ async fn context_with_settlement_transactions(
     .await
 }
 
+/// Mock transport that keeps settlement L1 requests pending when its asserter
+/// has no queued response, leaving a spawned task live until the test aborts
+/// it.
+#[derive(Clone, Debug)]
+struct ParkingAsserterTransport {
+    asserter: Asserter,
+}
+
+impl tower::Service<RequestPacket> for ParkingAsserterTransport {
+    type Response = alloy::rpc::json_rpc::ResponsePacket;
+    type Error = TransportError;
+    type Future = TransportFut<'static>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _request: RequestPacket) -> Self::Future {
+        assert!(
+            self.asserter.read_q().is_empty(),
+            "parking transport must not have a queued response"
+        );
+        Box::pin(pending())
+    }
+}
+
+async fn context_with_parked_settlement_provider() -> TestContext {
+    let client = RpcClient::new(
+        ParkingAsserterTransport {
+            asserter: Asserter::new(),
+        },
+        true,
+    );
+    let settlement_provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(
+            PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+        ))
+        .connect_client(client);
+    TestContext::new_with_settlement_provider(
+        TestContext::get_default_config(),
+        settlement_provider,
+    )
+    .await
+}
+
 fn error_payload(error: ClientError, expected: RpcErrorCode) -> String {
     let error = match error {
         ClientError::Call(error) => error,
@@ -227,6 +278,29 @@ async fn admin_abort_settlement_task_errors_are_classified() {
         RpcErrorCode::AlreadyCompleted,
     );
     insta::assert_snapshot!("admin_abort_settlement_task__completed_job", error);
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_reload_settlement_task_respawns_pending_job_over_http() {
+    let context = context_with_parked_settlement_provider().await;
+    let job_id = SettlementJobId::from(5_u128);
+    context
+        .state_store
+        .insert_settlement_job(&job_id, &settlement_job())
+        .unwrap();
+
+    let _: () = context
+        .admin_client
+        .request("admin_reloadSettlementTask", rpc_params![job_id])
+        .await
+        .unwrap();
+
+    // A successful abort proves that reload registered the respawned task.
+    let _: () = context
+        .admin_client
+        .request("admin_abortSettlementTask", rpc_params![job_id])
+        .await
+        .unwrap();
 }
 
 #[test_log::test(tokio::test)]

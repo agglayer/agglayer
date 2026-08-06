@@ -4,8 +4,8 @@ This runbook maps the five settlement-job recovery scenarios from
 [#1675](https://github.com/agglayer/agglayer/issues/1675) to the operations
 available in the current phase.
 Scenario 1 still awaits discovery reads.
-Scenario 2 supports reloading a live task but cannot respawn a missing task.
-Scenarios 3–5 are covered by the shipped abort control and state mutations.
+Scenarios 2–5 are covered by the shipped reload and abort controls and state
+mutations.
 Use these methods only through the private `admin` JSON-RPC listener.
 They edit stored settlement state or control a live task and can cause an L1
 transaction to be re-driven.
@@ -24,8 +24,8 @@ ID and attempt number from existing logs or storage inspection.
 | Failure scenario | Method | Effect and recovery |
 |---|---|---|
 | 1. A job looks stuck and must be inspected | Not shipped: `admin_listSettlementJobs` and `admin_getSettlementJob` | Use existing logs or storage inspection until the read phase adds job discovery and detail. |
-| 2. A live task is wedged by transient or stale state | `admin_reloadSettlementTask(job_id)` | Queues a reload from storage for an existing task. It cannot respawn a missing task; restart the node in that case. |
-| 3. A job blocks a wallet's nonce pipeline | `admin_abortSettlementTask(job_id)` | Stops the in-memory task without changing stored state. Restart the node; startup recovery respawns pending jobs. |
+| 2. A task is wedged or missing | `admin_reloadSettlementTask(job_id)` | Reloads a live task from storage or respawns a missing task for a pending job. Retry if task teardown is still in progress. |
+| 3. A job blocks a wallet's nonce pipeline | `admin_abortSettlementTask(job_id)` | Stops the in-memory task without changing stored state. Inspect or fix the job, then reload it to spawn a fresh task. |
 | 4. A transaction was handled outside the node | `admin_insertSettlementAttempt(job_id, attempt, force?)` | Registers the external transaction as a stored attempt. Only `txHash` is required when L1 returns the transaction; the service resolves identity and available fees from L1. |
 | 4. An attempt will never land | `admin_markSettlementAttemptDefinitelyFailed(job_id, attempt_number, reason, force?)` | Records a trusted terminal outcome for that attempt, then lets the job drive settlement elsewhere. |
 | 5. An attempt result is wrong | `admin_removeSettlementAttemptResult(job_id, attempt_number, force?)` | Removes the result so the task re-derives it from L1. |
@@ -41,7 +41,7 @@ inspection.
 The follow-up read phase can replace that temporary discovery step with the
 two admin reads without changing the recovery procedures below.
 
-### Scenario 2: reload a live task
+### Scenario 2: reload or respawn a task
 
 Call `admin_reloadSettlementTask` with the job ID:
 
@@ -54,11 +54,13 @@ state, reload from storage, and restart its run loop.
 The command does not interrupt an L1 wait, so a successful RPC response is not
 a promptness guarantee.
 
-This phase cannot reload a pending job that has no live task.
-If the method returns `NoLiveTask`, restart the node so startup recovery
-respawns the task.
-A later respawn-capable reload can extend this procedure by removing that
-restart step.
+If no task is registered, the method loads the pending job from storage and
+spawns a fresh task and result watcher.
+If the call overlaps task teardown, it returns `Unavailable` rather than
+spawning before the old task finishes cleanup.
+Retry the call after teardown completes.
+Unknown job IDs return `NotFound`, and completed jobs return
+`AlreadyCompleted` because their stored results still stand.
 
 ### Scenario 3: release a wallet nonce pipeline
 
@@ -69,13 +71,16 @@ Call `admin_abortSettlementTask` with the job ID:
 ```
 
 The abort is runtime-only.
-It leaves the pending job in storage, and this phase has no respawn-capable
-reload, so restart the node to recover it.
-Startup recovery loads pending jobs and spawns their settlement tasks.
+It leaves the pending job in storage.
+Inspect and fix the cause of the blockage, then call
+`admin_reloadSettlementTask` to load the pending job and spawn a fresh task
+without restarting the node.
+An immediate reload can return `Unavailable` while abort teardown is still in
+progress; retry after teardown completes.
 
 A live certificate waiter observes the abort as an error.
 The certificate can therefore move to `InError` even though the pending job
-is respawned at restart and later settles.
+is respawned and later settles.
 After recovery, compare the certificate state, stored settlement result, and
 L1 outcome, then reconcile that divergence manually.
 
