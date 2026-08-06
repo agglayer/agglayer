@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use agglayer_config::Multiplier;
 use agglayer_storage::{
     error::Error as StorageError, stores::EditEvenIfCompleted, tests::mocks::MockStateStore,
 };
@@ -486,9 +487,9 @@ async fn request_new_settlement_persists_job_with_certificate_link() {
     expect_empty_startup_recovery(&mut store);
     let certificate_id = CertificateId::new(Digest::from([7; 32]));
     let job = mk_job(7);
-    // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+    // `create` multiplies the 200_000 estimate by 2.0 and caps it at 300_000.
     let mut expected_job = job.clone();
-    expected_job.gas_limit = 200_000;
+    expected_job.gas_limit = 300_000;
     let recorded_job_id = Arc::new(Mutex::new(None));
     let recorded_job_id_for_store = recorded_job_id.clone();
 
@@ -505,13 +506,18 @@ async fn request_new_settlement_persists_job_with_certificate_link() {
         });
     store.expect_insert_settlement_job().never();
 
-    // `create` runs `estimateGas` before persisting; answer it above the
-    // ceiling so the stored limit is unchanged. Live token for estimation,
-    // then cancel to stop the spawned task.
+    // `create` runs `estimateGas` before persisting. Configure the ceiling
+    // strictly between the raw and multiplied estimates so both knobs bind.
+    // Live token for estimation, then cancel to stop the spawned task.
     let cancellation_token = CancellationToken::new();
+    let tx_config = SettlementTransactionConfig {
+        gas_limit_multiplier_factor: Multiplier::from_u64_per_1000(2000),
+        gas_limit_ceiling: U256::from(300_000),
+        ..SettlementTransactionConfig::default()
+    };
     let service = SettlementService::start(
         SettlementServiceConfig::default(),
-        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(tx_config),
         Arc::new(mk_provider_with_gas_estimate(200_000)),
         Arc::new(store),
         cancellation_token.clone(),
