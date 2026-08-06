@@ -516,4 +516,31 @@ impl SettlementWriter for StateStore {
             Ok(self.db.delete::<SettlementAttemptResultsColumn>(&key)?)
         })
     }
+
+    fn admin_force_remove_settlement_job_result(
+        &self,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<(), Error> {
+        self.with_settlement_write_lock(settlement_job_id, || {
+            if self
+                .db
+                .get::<SettlementJobsColumn>(settlement_job_id)?
+                .is_none()
+            {
+                return Err(Error::SettlementJobNotFound(*settlement_job_id));
+            }
+
+            if self
+                .db
+                .get::<SettlementJobResultsColumn>(settlement_job_id)?
+                .is_none()
+            {
+                return Err(Error::SettlementJobNotCompleted(*settlement_job_id));
+            }
+
+            Ok(self
+                .db
+                .delete::<SettlementJobResultsColumn>(settlement_job_id)?)
+        })
+    }
 }
