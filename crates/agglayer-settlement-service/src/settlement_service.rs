@@ -110,7 +110,7 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
-    task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
+    task_controls: Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
     result_watchers:
         Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
     /// Serializes spawn-capable admin operations so two concurrent calls
@@ -126,6 +126,20 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     /// concurrent settlement tasks.
     /// XREF: https://github.com/agglayer/agglayer/issues/1597
     wallet_nonce_locks: Arc<WalletNonceLocks>,
+}
+
+struct TaskControlRegistrationGuard {
+    job_id: SettlementJobId,
+    task_controls: Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
+}
+
+impl Drop for TaskControlRegistrationGuard {
+    fn drop(&mut self) {
+        self.task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .remove(&self.job_id);
+    }
 }
 
 pub struct SettlementJobWatcher {
@@ -179,7 +193,7 @@ impl<
             provider,
             store,
             cancellation_token,
-            task_controls: Arc::new(Mutex::new(HashMap::new())),
+            task_controls: Arc::new(std::sync::Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
             admin_operation_lock: Arc::new(Mutex::new(())),
             wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
@@ -260,14 +274,16 @@ impl<
         task_control_handle: TaskControlHandle,
     ) -> watch::Receiver<Option<SettlementJobResult>> {
         let (result_sender, result_receiver) = watch::channel(None);
-        self.task_controls
-            .lock()
-            .await
-            .insert(job_id, task_control_handle);
+        // Register the watcher first so a concurrent retrieval observes a
+        // harmless pending watcher, never a task without a watcher.
         self.result_watchers
             .lock()
             .await
             .insert(job_id, result_receiver.clone());
+        self.task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .insert(job_id, task_control_handle);
         let task_controls = self.task_controls.clone();
         let result_watchers = self.result_watchers.clone();
         let tx_config = self.tx_config.clone();
@@ -276,6 +292,10 @@ impl<
         let wallet_nonce_locks = self.wallet_nonce_locks.clone();
         let cancellation_token = self.cancellation_token.clone();
         tokio::task::spawn(async move {
+            let _task_control_registration = TaskControlRegistrationGuard {
+                job_id,
+                task_controls: task_controls.clone(),
+            };
             loop {
                 match task.run().await {
                     SettlementTaskRunResult::Completed(result) => {
@@ -286,13 +306,11 @@ impl<
                                 "Failed to send settlement job result to watchers"
                             );
                         }
-                        task_controls.lock().await.remove(&job_id);
                         break;
                     }
                     SettlementTaskRunResult::Cancelled => {
                         info!(?job_id, "Settlement task cancelled");
                         result_watchers.lock().await.remove(&job_id);
-                        task_controls.lock().await.remove(&job_id);
                         break;
                     }
                     SettlementTaskRunResult::ReloadAndRestart => {
@@ -301,7 +319,7 @@ impl<
                             TaskControlHandle::new(&cancellation_token);
                         task_controls
                             .lock()
-                            .await
+                            .expect("settlement task_controls lock poisoned")
                             .insert(job_id, task_control_handle);
                         match SettlementTask::load(
                             job_id,
@@ -324,7 +342,6 @@ impl<
                                         "Failed to send settlement job result to watchers"
                                     );
                                 }
-                                task_controls.lock().await.remove(&job_id);
                                 break;
                             }
                             Err(error) => {
@@ -335,7 +352,6 @@ impl<
                                      state"
                                 );
                                 result_watchers.lock().await.remove(&job_id);
-                                task_controls.lock().await.remove(&job_id);
                                 break;
                             }
                         }
@@ -378,7 +394,12 @@ impl<
 
     #[tracing::instrument(skip_all)]
     async fn task_control(&self, job_id: SettlementJobId) -> eyre::Result<TaskControlHandle> {
-        let task_control = self.task_controls.lock().await.get(&job_id).cloned();
+        let task_control = self
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .get(&job_id)
+            .cloned();
         match task_control {
             Some(task_control) => Ok(task_control),
             None => Err(self.classify_missing_task(job_id).await),
@@ -433,7 +454,10 @@ impl<
         &self,
         job_id: SettlementJobId,
     ) -> LiveTaskNotification {
-        let task_controls = self.task_controls.lock().await;
+        let task_controls = self
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned");
         let Some(task_control) = task_controls.get(&job_id) else {
             return LiveTaskNotification::Absent;
         };
@@ -639,7 +663,12 @@ impl<
         // A completed job has no live task. Refusing while one is still
         // registered (e.g. mid-completion, or the job is simply not done)
         // keeps the old task and the fresh one below from racing.
-        if self.task_controls.lock().await.contains_key(&job_id) {
+        if self
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .contains_key(&job_id)
+        {
             return Err(eyre::eyre!(
                 "a settlement task is still live for job {job_id}; its terminal result can only \
                  be removed once it has completed"
