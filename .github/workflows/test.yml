@@ -39,6 +39,19 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: protoc,cargo-hack
+      # sp1-core-executor-runner's build script writes its runner binary inside
+      # its own registry source directory and embeds it with
+      # `include_bytes!(env!("SP1_CORE_RUNNER_BINARY"))`. rust-cache prunes
+      # `registry/src` when it saves, re-extracting it from the .crate archives
+      # on restore, so that binary is missing while the cached build-script
+      # output still points at it and still counts as fresh. Whole-workspace
+      # jobs never notice, but `cargo hack` re-checks each crate under its own
+      # feature set, and any re-check of that crate then reads the dead path:
+      #   couldn't read .../target/sp1-native-bins/debug/...: No such file
+      # Dropping the stale build-script output forces the script to re-run and
+      # regenerate the binary. Remove once the crate stops writing build
+      # artifacts into the registry source directory.
+      - run: rm -rf target/debug/build/sp1-core-executor-runner-*
       - run: cargo hack --each-feature --all check --all-targets --locked
 
   integrations:
