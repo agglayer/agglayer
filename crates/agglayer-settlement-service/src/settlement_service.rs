@@ -432,7 +432,7 @@ impl<
         // while holding the map lock so this liveness decision cannot race
         // with that replacement.
         {
-            let mut task_controls = self
+            let task_controls = self
                 .task_controls
                 .lock()
                 .expect("settlement task_controls lock poisoned");
@@ -450,11 +450,18 @@ impl<
                         ))
                         .wrap_err(RpcErrorCode::Unavailable));
                 }
-                Some(Err(mpsc::error::TrySendError::Closed(_))) => {
-                    // A closed channel is a stale registration left by a task
-                    // that has already died. Remove exactly the handle we
-                    // examined before deciding whether to respawn.
-                    task_controls.remove(&job_id);
+                Some(Err(error @ mpsc::error::TrySendError::Closed(_))) => {
+                    // The receiver can close just before the task's teardown
+                    // guard deregisters this handle. Respawning in that window
+                    // would let the old teardown remove the fresh task's
+                    // registrations, so leave cleanup to the guard and ask the
+                    // operator to retry.
+                    return Err(eyre::Report::new(error)
+                        .wrap_err(format!(
+                            "Failed to forward admin command to settlement task {job_id}: task \
+                             teardown in progress; retry"
+                        ))
+                        .wrap_err(RpcErrorCode::Unavailable));
                 }
                 None => {}
             }

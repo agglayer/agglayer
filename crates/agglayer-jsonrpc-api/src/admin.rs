@@ -239,14 +239,15 @@ pub(crate) trait AdminAgglayer {
     /// in-task reload, the pending job is loaded from storage and a fresh task
     /// and result watcher are spawned. Together with
     /// `admin_abortSettlementTask`, this completes the abort, inspect/fix,
-    /// reload recovery cycle without a node restart.
+    /// reload recovery cycle without a node restart. A call that overlaps task
+    /// teardown returns `Unavailable`; retry after teardown completes.
     ///
     /// # Errors
     ///
     /// Unknown job IDs return `RpcErrorCode::NotFound`'s `-10008` code;
     /// completed jobs return `RpcErrorCode::AlreadyCompleted`'s code; and a
-    /// full task command queue or failed storage reload returns
-    /// `RpcErrorCode::Unavailable`'s code.
+    /// full task command queue, task teardown in progress, or failed storage
+    /// reload returns `RpcErrorCode::Unavailable`'s code.
     #[method(name = "reloadSettlementTask")]
     async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 

@@ -890,7 +890,7 @@ async fn admin_reload_with_full_admin_channel_is_tagged_unavailable() {
 }
 
 #[tokio::test]
-async fn reload_respawns_over_stale_closed_handle() {
+async fn reload_retries_after_closed_handle_teardown() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
     let job_id = mk_job_id(27);
@@ -932,7 +932,7 @@ async fn reload_respawns_over_stale_closed_handle() {
     .0;
     let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
     // Drop the receiver side so the admin channel is closed rather than full,
-    // simulating a stale registration left by a panicked task.
+    // simulating the window before the task's teardown guard deregisters it.
     drop(task_control);
     service
         .task_controls
@@ -947,10 +947,31 @@ async fn reload_respawns_over_stale_closed_handle() {
         .await
         .insert(job_id, stale_watcher.clone());
 
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload should wait for closed-handle teardown");
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::Unavailable)
+    );
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
+
+    // Simulate the teardown guard completing. A retry now sees no task and
+    // safely follows the normal respawn path.
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .remove(&job_id);
     service
         .admin_reload_and_restart_task(job_id)
         .await
-        .expect("reload should replace a stale closed handle");
+        .expect("reload should respawn after teardown completes");
     wait_until_l1_request_is_parked(&request_count).await;
 
     assert!(service.has_live_task(job_id));
