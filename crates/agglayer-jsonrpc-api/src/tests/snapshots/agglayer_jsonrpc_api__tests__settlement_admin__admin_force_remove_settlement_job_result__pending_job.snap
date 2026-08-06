@@ -1,0 +1,14 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/settlement_admin.rs
+expression: pending_error
+---
+{
+  "code": -10011,
+  "data": {
+    "classified": {
+      "code": "not-completed",
+      "message": "Failed to remove terminal result of settlement job 0000000000000000000000000N\n\nCaused by:\n   0: not completed\n   1: Settlement job 0000000000000000000000000N has no terminal result to remove\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:<line>:<column>"
+    }
+  },
+  "message": "Failed to remove terminal result of settlement job 0000000000000000000000000N\n\nCaused by:\n   0: not completed\n   1: Settlement job 0000000000000000000000000N has no terminal result to remove\n\nLocation:\n    crates/agglayer-settlement-service/src/settlement_service.rs:<line>:<column>"
+}

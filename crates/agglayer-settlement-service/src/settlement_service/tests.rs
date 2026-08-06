@@ -1,8 +1,14 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc, Mutex,
+use std::{
+    future::pending,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+    task::{Context, Poll},
+    time::Duration,
 };
 
+use agglayer_config::Multiplier;
 use agglayer_storage::{
     error::Error as StorageError, stores::EditEvenIfCompleted, tests::mocks::MockStateStore,
 };
@@ -15,7 +21,9 @@ use alloy::{
     network::EthereumWallet,
     primitives::U64,
     providers::{mock::Asserter, ProviderBuilder},
+    rpc::{client::RpcClient, json_rpc::RequestPacket},
     signers::local::PrivateKeySigner,
+    transports::{TransportError, TransportFut},
 };
 
 use super::*;
@@ -43,6 +51,66 @@ fn mk_provider_with_gas_estimate(gas_estimate: u64) -> impl Provider + WalletPro
             PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
         ))
         .connect_mocked_client(asserter)
+}
+
+/// Mock transport that records the first request and keeps it pending when
+/// its asserter has no queued response. This gives service tests a live task
+/// parked in an L1 call, rather than a task that panics against a dead HTTP
+/// endpoint.
+#[derive(Clone, Debug)]
+struct ParkingAsserterTransport {
+    asserter: Asserter,
+    request_count: Arc<AtomicUsize>,
+}
+
+impl tower::Service<RequestPacket> for ParkingAsserterTransport {
+    type Response = alloy::rpc::json_rpc::ResponsePacket;
+    type Error = TransportError;
+    type Future = TransportFut<'static>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _request: RequestPacket) -> Self::Future {
+        assert!(
+            self.asserter.read_q().is_empty(),
+            "parking transport must not have a queued response"
+        );
+        self.request_count.fetch_add(1, Ordering::SeqCst);
+        Box::pin(pending())
+    }
+}
+
+fn mk_parked_provider() -> (impl Provider + WalletProvider + 'static, Arc<AtomicUsize>) {
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let client = RpcClient::new(
+        ParkingAsserterTransport {
+            asserter: Asserter::new(),
+            request_count: request_count.clone(),
+        },
+        true,
+    );
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(
+            PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+        ))
+        .connect_client(client);
+    (provider, request_count)
+}
+
+async fn wait_until(mut condition: impl FnMut() -> bool) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !condition() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("condition should become true");
+}
+
+async fn wait_until_l1_request_is_parked(request_count: &AtomicUsize) {
+    wait_until(|| request_count.load(Ordering::SeqCst) > 0).await;
 }
 
 fn expect_empty_startup_recovery(store: &mut MockStateStore) {
@@ -87,6 +155,34 @@ fn mk_job(seed: u8) -> SettlementJob {
     }
 }
 
+fn expect_pending_job_load(store: &mut MockStateStore, job_id: SettlementJobId, seed: u8) {
+    let job = mk_job(seed);
+    let attempt = mk_resolved_attempt(
+        seed,
+        SettlementTxHash::new(Digest::from([seed.wrapping_add(1); 32])),
+    );
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(vec![(0, attempt)]));
+}
+
 fn mk_result(seed: u8, outcome: ContractCallOutcome) -> SettlementJobResult {
     SettlementJobResult {
         wallet: agglayer_types::Address::from([seed.wrapping_add(3); 20]),
@@ -128,7 +224,11 @@ async fn start_scans_jobs_and_skips_completed_ones() {
 
     let service = mk_service(Arc::new(store)).await;
 
-    assert!(service.task_controls.lock().await.is_empty());
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
 }
 
@@ -177,7 +277,11 @@ async fn start_skips_unloadable_jobs_and_keeps_scanning() {
     .expect("settlement service should start");
 
     assert_eq!(recovery_skipped_jobs, 1);
-    assert!(service.task_controls.lock().await.is_empty());
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
 }
 
@@ -369,7 +473,11 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
         .expect("reload should publish the stored terminal result");
 
     assert_eq!(result_receiver.borrow().as_ref(), Some(&completed_result));
-    assert!(service.task_controls.lock().await.is_empty());
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
     assert!(service.result_watchers.lock().await.contains_key(&job_id));
 }
 
@@ -379,9 +487,9 @@ async fn request_new_settlement_persists_job_with_certificate_link() {
     expect_empty_startup_recovery(&mut store);
     let certificate_id = CertificateId::new(Digest::from([7; 32]));
     let job = mk_job(7);
-    // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+    // `create` multiplies the 200_000 estimate by 2.0 and caps it at 300_000.
     let mut expected_job = job.clone();
-    expected_job.gas_limit = 200_000;
+    expected_job.gas_limit = 300_000;
     let recorded_job_id = Arc::new(Mutex::new(None));
     let recorded_job_id_for_store = recorded_job_id.clone();
 
@@ -398,13 +506,18 @@ async fn request_new_settlement_persists_job_with_certificate_link() {
         });
     store.expect_insert_settlement_job().never();
 
-    // `create` runs `estimateGas` before persisting; answer it above the
-    // ceiling so the stored limit is unchanged. Live token for estimation,
-    // then cancel to stop the spawned task.
+    // `create` runs `estimateGas` before persisting. Configure the ceiling
+    // strictly between the raw and multiplied estimates so both knobs bind.
+    // Live token for estimation, then cancel to stop the spawned task.
     let cancellation_token = CancellationToken::new();
+    let tx_config = SettlementTransactionConfig {
+        gas_limit_multiplier_factor: Multiplier::from_u64_per_1000(2000),
+        gas_limit_ceiling: U256::from(300_000),
+        ..SettlementTransactionConfig::default()
+    };
     let service = SettlementService::start(
         SettlementServiceConfig::default(),
-        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(tx_config),
         Arc::new(mk_provider_with_gas_estimate(200_000)),
         Arc::new(store),
         cancellation_token.clone(),
@@ -503,6 +616,61 @@ async fn admin_abort_pending_job_without_task_is_tagged_no_live_task() {
         .admin_abort_task(job_id)
         .await
         .expect_err("abort on pending job without a task should fail");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::NoLiveTask)
+    );
+}
+
+#[tokio::test]
+async fn panicked_task_deregisters_control_and_abort_reports_no_live_task() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(28);
+    let job = mk_job(28);
+    let attempt = mk_resolved_attempt(28, SettlementTxHash::new(Digest::from([29; 32])));
+
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![job_id]));
+    store
+        .expect_get_settlement_job()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(Some(job.clone())));
+    store
+        .expect_get_settlement_job_result()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(vec![(0, attempt)]));
+
+    // `mk_service` uses the dead endpoint at http://127.0.0.1:0. The task's
+    // first L1 query fails non-recoverably and deliberately panics.
+    let service = mk_service(Arc::new(store)).await;
+    wait_until(|| {
+        !service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .contains_key(&job_id)
+    })
+    .await;
+
+    let error = service
+        .admin_abort_task(job_id)
+        .await
+        .expect_err("abort after task panic should report no live task");
 
     assert_eq!(
         error.downcast_ref::<RpcErrorCode>(),
@@ -613,7 +781,7 @@ async fn admin_reload_with_full_admin_channel_is_tagged_unavailable() {
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -653,7 +821,7 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -665,6 +833,209 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
         error.downcast_ref::<RpcErrorCode>(),
         Some(&RpcErrorCode::NoLiveTask)
     );
+}
+
+#[tokio::test]
+async fn admin_force_remove_job_result_refuses_while_task_is_live() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(70);
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![job_id]));
+    expect_pending_job_load(&mut store, job_id, 70);
+    store
+        .expect_admin_force_remove_settlement_job_result()
+        .never();
+
+    let cancellation_token = CancellationToken::new();
+    let (provider, request_count) = mk_parked_provider();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+    wait_until_l1_request_is_parked(&request_count).await;
+
+    let live_control = service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .get(&job_id)
+        .cloned()
+        .expect("the parked task must have a registered control");
+    live_control
+        .try_send(TaskAdminCommand::ReloadAndRestart)
+        .expect("the parked task's control channel must still be open");
+
+    let error = service
+        .admin_force_remove_settlement_job_result(job_id)
+        .await
+        .expect_err("force-remove must refuse a job with a live task");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::TaskStillLive)
+    );
+    cancellation_token.cancel();
+}
+
+#[tokio::test]
+async fn admin_force_remove_job_result_respawns_task() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(71);
+    store
+        .expect_admin_force_remove_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(()));
+    expect_pending_job_load(&mut store, job_id, 71);
+
+    let cancellation_token = CancellationToken::new();
+    let (provider, request_count) = mk_parked_provider();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    let (_old_sender, old_watcher) =
+        watch::channel(Some(mk_result(71, ContractCallOutcome::Success)));
+    service
+        .result_watchers
+        .lock()
+        .await
+        .insert(job_id, old_watcher.clone());
+
+    service
+        .admin_force_remove_settlement_job_result(job_id)
+        .await
+        .expect("force-remove should respawn the pending job");
+    wait_until_l1_request_is_parked(&request_count).await;
+
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
+    let result_watchers = service.result_watchers.lock().await;
+    let fresh_watcher = result_watchers
+        .get(&job_id)
+        .expect("the respawned task must have a watcher");
+    assert!(!fresh_watcher.same_channel(&old_watcher));
+    assert!(fresh_watcher.borrow().is_none());
+    drop(result_watchers);
+    cancellation_token.cancel();
+}
+
+#[tokio::test]
+async fn concurrent_force_removes_are_serialized() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(72);
+    let delete_count = Arc::new(AtomicUsize::new(0));
+    store
+        .expect_admin_force_remove_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once({
+            let delete_count = delete_count.clone();
+            move |_| {
+                delete_count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        });
+    expect_pending_job_load(&mut store, job_id, 72);
+
+    let cancellation_token = CancellationToken::new();
+    let (provider, request_count) = mk_parked_provider();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    let (first, second) = tokio::join!(
+        service.admin_force_remove_settlement_job_result(job_id),
+        service.admin_force_remove_settlement_job_result(job_id),
+    );
+    let loser = match (first, second) {
+        (Ok(()), Err(error)) | (Err(error), Ok(())) => error,
+        (Ok(()), Ok(())) => panic!("the admin lock must prevent a second successful respawn"),
+        (Err(first), Err(second)) => {
+            panic!("one force-remove should succeed, got {first:?} and {second:?}")
+        }
+    };
+
+    assert!(matches!(
+        loser.downcast_ref::<RpcErrorCode>(),
+        Some(RpcErrorCode::TaskStillLive | RpcErrorCode::NotCompleted)
+    ));
+    assert_eq!(delete_count.load(Ordering::SeqCst), 1);
+    wait_until_l1_request_is_parked(&request_count).await;
+    cancellation_token.cancel();
+}
+
+#[tokio::test]
+async fn force_remove_load_failure_leaves_clean_aborted_state() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(73);
+    store
+        .expect_admin_force_remove_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(()));
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| {
+            Err(StorageError::UnprocessedAction(
+                "settlement job row became unreadable".to_owned(),
+            ))
+        });
+
+    let service = mk_service(Arc::new(store)).await;
+    let (_old_sender, old_watcher) =
+        watch::channel(Some(mk_result(73, ContractCallOutcome::Success)));
+    service
+        .result_watchers
+        .lock()
+        .await
+        .insert(job_id, old_watcher);
+
+    let error = service
+        .admin_force_remove_settlement_job_result(job_id)
+        .await
+        .expect_err("an unreadable pending job should fail to reload");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::Unavailable)
+    );
+    assert!(!service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
+    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
 }
 
 /// A fully specified admin attempt.
@@ -1126,7 +1497,7 @@ async fn admin_insert_attempt_completed_job_error_is_tagged_without_notification
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -1276,7 +1647,7 @@ async fn admin_mutation_storage_error_propagates_without_task_notification() {
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let error = service
@@ -1346,7 +1717,7 @@ async fn admin_mutation_queues_reload_for_parked_live_task() {
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task_controls lock poisoned")
         .insert(job_id, task_control_handle);
 
     let live_task = service
@@ -1403,7 +1774,7 @@ async fn admin_mutation_reports_closed_and_full_notification_channels() {
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task_controls lock poisoned")
         .insert(closed_job_id, closed_handle);
 
     let (full_handle, _full_control) = TaskControlHandle::new(&service.cancellation_token);
@@ -1414,7 +1785,7 @@ async fn admin_mutation_reports_closed_and_full_notification_channels() {
     service
         .task_controls
         .lock()
-        .await
+        .expect("settlement task_controls lock poisoned")
         .insert(full_job_id, full_handle);
 
     assert_eq!(
