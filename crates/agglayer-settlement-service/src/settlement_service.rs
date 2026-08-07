@@ -52,14 +52,16 @@ pub enum LiveTaskNotification {
     /// No live task exists for this job. The edit persists and is picked up
     /// whenever a task is started for the job (e.g. on startup recovery).
     Absent,
-    /// A live task exists but could not be notified, so it keeps acting on
-    /// stale in-memory state until it reloads.
+    /// A task registration exists but could not be notified. A running task
+    /// can keep acting on stale in-memory state until it reloads; a cancelled
+    /// or closed task leaves the edit for its eventual replacement to load.
     ///
-    /// This covers both a full command queue (the task is alive but
-    /// wedged/slow; commands drain only at control checks) and a closed
-    /// channel (the task just died or completed). The warning log records
-    /// which case occurred. Use `admin_reloadSettlementTask` as the escape
-    /// hatch; if the task is wedged, abort it and then reload it from storage.
+    /// This covers cancellation in progress, a full command queue (the task
+    /// is alive but wedged/slow; commands drain only at control checks), and a
+    /// closed channel (the task just died or completed). The warning log
+    /// records which case occurred. Use `admin_reloadSettlementTask` as the
+    /// escape hatch; if the task is wedged, abort it and then reload it from
+    /// storage.
     NotifyFailed,
 }
 
@@ -533,6 +535,15 @@ impl<
         let Some(task_control) = task_controls.get(&job_id) else {
             return LiveTaskNotification::Absent;
         };
+
+        if task_control.is_cancelled() {
+            warn!(
+                ?job_id,
+                "Failed to notify settlement task of an admin edit: task cancellation is in \
+                 progress; a replacement task must load the persisted edit"
+            );
+            return LiveTaskNotification::NotifyFailed;
+        }
 
         match task_control.try_send(TaskAdminCommand::ReloadAndRestart) {
             Ok(()) => LiveTaskNotification::Queued,

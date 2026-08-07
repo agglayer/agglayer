@@ -2020,6 +2020,46 @@ async fn admin_mutation_queues_reload_for_parked_live_task() {
 }
 
 #[tokio::test]
+async fn admin_mutation_reports_cancelled_task_notification_failure() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(75);
+
+    store
+        .expect_admin_remove_settlement_attempt_result()
+        .once()
+        .withf(
+            move |requested_job_id, attempt_number, edit_even_if_completed| {
+                requested_job_id == &job_id
+                    && *attempt_number == 8
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(|_, _, _| Ok(()));
+
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, mut task_control) =
+        TaskControlHandle::new(&service.cancellation_token);
+    task_control_handle.cancel();
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .insert(job_id, task_control_handle);
+
+    let live_task = service
+        .admin_remove_attempt_result(job_id, 8, EditEvenIfCompleted::No)
+        .await
+        .expect("the persisted edit should survive task cancellation");
+
+    assert_eq!(live_task, LiveTaskNotification::NotifyFailed);
+    assert!(
+        task_control.try_recv_admin_command().is_none(),
+        "a cancelled task must not receive a reload command"
+    );
+}
+
+#[tokio::test]
 async fn admin_mutation_reports_closed_and_full_notification_channels() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
