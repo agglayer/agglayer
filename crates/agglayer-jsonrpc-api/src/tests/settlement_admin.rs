@@ -4,11 +4,12 @@ use std::{
     time::SystemTime,
 };
 
-use agglayer_storage::stores::{SettlementReader, SettlementWriter};
+use agglayer_storage::stores::{EditEvenIfCompleted, SettlementReader, SettlementWriter};
 use agglayer_types::{
-    Address, ClientError as SettlementClientError, ContractCallOutcome, ContractCallResult, Digest,
-    Nonce, RpcErrorCode, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult,
-    SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash, B256, U256,
+    Address, CertificateId, ClientError as SettlementClientError, ClientErrorType,
+    ContractCallOutcome, ContractCallResult, Digest, Nonce, RpcErrorCode, SettlementAttempt,
+    SettlementAttemptNumber, SettlementAttemptResult, SettlementJob, SettlementJobId,
+    SettlementJobResult, SettlementTxHash, B256, U256,
 };
 use alloy::{
     network::EthereumWallet,
@@ -22,7 +23,10 @@ use jsonrpsee::{
     rpc_params,
 };
 
-use crate::testutils::TestContext;
+use crate::{
+    settlement_admin::{SettlementJobDetail, SettlementJobStatus, SettlementJobSummary},
+    testutils::TestContext,
+};
 
 fn normalize_report_locations(value: &mut serde_json::Value) {
     match value {
@@ -742,4 +746,288 @@ async fn admin_force_remove_settlement_job_result_errors_are_classified() {
         "admin_force_remove_settlement_job_result__unknown_job",
         unknown_error
     );
+}
+
+struct ReadFixtures {
+    pending_job_id: SettlementJobId,
+    pending_certificate_id: CertificateId,
+    completed_job_id: SettlementJobId,
+    completed_certificate_id: CertificateId,
+}
+
+fn read_attempt(seed: u8, nonce: u64) -> SettlementAttempt {
+    SettlementAttempt {
+        sender_wallet: Address::from([seed; 20]),
+        nonce: Nonce(nonce),
+        hash: SettlementTxHash::new(Digest::from([seed.wrapping_add(1); 32])),
+        submission_time: SystemTime::UNIX_EPOCH
+            + std::time::Duration::from_secs(1_700_000_000 + nonce),
+        max_fee_per_gas: 100 + nonce as u128,
+        max_priority_fee_per_gas: 10 + nonce as u128,
+    }
+}
+
+fn seed_read_fixtures(context: &TestContext) -> ReadFixtures {
+    let pending_job_id = SettlementJobId::from(1_u128);
+    let pending_certificate_id = CertificateId::new(Digest::from([0xa1; 32]));
+    context
+        .state_store
+        .insert_settlement_job_with_certificate(
+            &pending_job_id,
+            &settlement_job(),
+            &pending_certificate_id,
+        )
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_attempt(&pending_job_id, 0, &read_attempt(0x31, 10))
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_attempt(&pending_job_id, 1, &read_attempt(0x32, 11))
+        .unwrap();
+    context
+        .state_store
+        .record_settlement_attempt_result(
+            &pending_job_id,
+            0,
+            &SettlementAttemptResult::ClientError(SettlementClientError {
+                kind: ClientErrorType::Unknown,
+                message: "temporary RPC failure".to_string(),
+            }),
+        )
+        .unwrap();
+
+    let completed_job_id = SettlementJobId::from(2_u128);
+    let completed_certificate_id = CertificateId::new(Digest::from([0xb2; 32]));
+    let completed_attempt = read_attempt(0x41, 20);
+    let completed_call = ContractCallResult {
+        outcome: ContractCallOutcome::Success,
+        metadata: vec![0x51].into(),
+        block_hash: B256::from([0x52; 32]),
+        block_number: 42,
+        tx_hash: SettlementTxHash::new(Digest::from([0x53; 32])),
+    };
+    context
+        .state_store
+        .insert_settlement_job_with_certificate(
+            &completed_job_id,
+            &settlement_job(),
+            &completed_certificate_id,
+        )
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_attempt(&completed_job_id, 0, &completed_attempt)
+        .unwrap();
+    context
+        .state_store
+        .record_settlement_attempt_result(
+            &completed_job_id,
+            0,
+            &SettlementAttemptResult::ContractCall(completed_call.clone()),
+        )
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_job_result(
+            &completed_job_id,
+            &SettlementJobResult {
+                wallet: completed_attempt.sender_wallet,
+                nonce: completed_attempt.nonce,
+                attempt_number: SettlementAttemptNumber(0),
+                contract_call_result: completed_call,
+            },
+        )
+        .unwrap();
+
+    ReadFixtures {
+        pending_job_id,
+        pending_certificate_id,
+        completed_job_id,
+        completed_certificate_id,
+    }
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_list_settlement_jobs_returns_empty_store() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+
+    let jobs_json: serde_json::Value = context
+        .admin_client
+        .request("admin_listSettlementJobs", rpc_params![])
+        .await
+        .unwrap();
+    let jobs: Vec<SettlementJobSummary> =
+        serde_json::from_value(jobs_json.clone()).expect("list response must match its DTO");
+
+    assert!(jobs.is_empty());
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_list_settlement_jobs_returns_full_summaries() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let fixtures = seed_read_fixtures(&context);
+
+    let jobs_json: serde_json::Value = context
+        .admin_client
+        .request("admin_listSettlementJobs", rpc_params![])
+        .await
+        .unwrap();
+    let jobs: Vec<SettlementJobSummary> =
+        serde_json::from_value(jobs_json.clone()).expect("list response must match its DTO");
+
+    assert_eq!(jobs.len(), 2);
+    let pending = jobs
+        .iter()
+        .find(|job| job.job_id == fixtures.pending_job_id)
+        .expect("pending job must be listed");
+    assert_eq!(
+        pending.certificate_id,
+        Some(fixtures.pending_certificate_id)
+    );
+    assert_eq!(pending.status, SettlementJobStatus::Pending);
+    assert!(!pending.has_live_task);
+    assert_eq!(pending.attempt_count, 2);
+    assert_eq!(
+        pending
+            .latest_attempt
+            .as_ref()
+            .expect("latest attempt must be set")
+            .attempt_number,
+        1
+    );
+    assert_eq!(
+        pending.last_error.as_deref(),
+        Some("unknown: temporary RPC failure")
+    );
+
+    let completed = jobs
+        .iter()
+        .find(|job| job.job_id == fixtures.completed_job_id)
+        .expect("completed job must be listed");
+    assert_eq!(
+        completed.certificate_id,
+        Some(fixtures.completed_certificate_id)
+    );
+    assert_eq!(completed.status, SettlementJobStatus::Completed);
+    assert!(!completed.has_live_task);
+    assert_eq!(completed.attempt_count, 1);
+    assert_eq!(
+        completed
+            .latest_attempt
+            .as_ref()
+            .expect("latest attempt must be set")
+            .attempt_number,
+        0
+    );
+    assert!(completed.last_error.is_none());
+
+    insta::assert_snapshot!(
+        "admin_list_settlement_jobs__full",
+        serde_json::to_string_pretty(&jobs_json).unwrap()
+    );
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_get_settlement_job_returns_full_pending_and_completed_details() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let fixtures = seed_read_fixtures(&context);
+
+    let pending_json: serde_json::Value = context
+        .admin_client
+        .request(
+            "admin_getSettlementJob",
+            rpc_params![fixtures.pending_job_id],
+        )
+        .await
+        .unwrap();
+    let pending: SettlementJobDetail = serde_json::from_value(pending_json.clone())
+        .expect("pending detail response must match its DTO");
+    assert_eq!(pending.status, SettlementJobStatus::Pending);
+    assert!(!pending.has_live_task);
+    assert_eq!(pending.attempts.len(), 2);
+    assert!(pending.attempts[0].result.is_some());
+    assert!(pending.attempts[1].result.is_none());
+    assert!(pending.job_result.is_none());
+    insta::assert_snapshot!(
+        "admin_get_settlement_job__pending",
+        serde_json::to_string_pretty(&pending_json).unwrap()
+    );
+
+    let completed_json: serde_json::Value = context
+        .admin_client
+        .request(
+            "admin_getSettlementJob",
+            rpc_params![fixtures.completed_job_id],
+        )
+        .await
+        .unwrap();
+    let completed: SettlementJobDetail = serde_json::from_value(completed_json.clone())
+        .expect("completed detail response must match its DTO");
+    assert_eq!(completed.status, SettlementJobStatus::Completed);
+    assert!(!completed.has_live_task);
+    assert_eq!(completed.attempts.len(), 1);
+    assert!(completed.attempts[0].result.is_some());
+    let job_result = completed
+        .job_result
+        .as_ref()
+        .expect("completed job must carry its terminal result");
+    assert_eq!(job_result.outcome, "success");
+    assert_eq!(job_result.attempt_number, 0);
+    insta::assert_snapshot!(
+        "admin_get_settlement_job__completed",
+        serde_json::to_string_pretty(&completed_json).unwrap()
+    );
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_get_settlement_job_serializes_abandoned_attempts() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let job_id = SettlementJobId::from(3_u128);
+    let certificate_id = CertificateId::new(Digest::from([0xc3; 32]));
+    context
+        .state_store
+        .insert_settlement_job_with_certificate(&job_id, &settlement_job(), &certificate_id)
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_attempt(&job_id, 0, &read_attempt(0x61, 30))
+        .unwrap();
+    context
+        .state_store
+        .admin_override_settlement_attempt_result(
+            &job_id,
+            0,
+            &SettlementAttemptResult::ClientError(SettlementClientError::abandoned_by_admin(
+                "replacement transaction finalized",
+            )),
+            EditEvenIfCompleted::No,
+        )
+        .unwrap();
+
+    let detail: serde_json::Value = context
+        .admin_client
+        .request("admin_getSettlementJob", rpc_params![job_id])
+        .await
+        .unwrap();
+
+    assert_eq!(detail["attempts"][0]["result"]["type"], "clientError");
+    assert_eq!(detail["attempts"][0]["result"]["kind"], "abandonedByAdmin");
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_get_settlement_job_unknown_id_is_not_found() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+
+    let error = context
+        .admin_client
+        .request::<SettlementJobDetail, _>(
+            "admin_getSettlementJob",
+            rpc_params![SettlementJobId::from(99_u128)],
+        )
+        .await
+        .expect_err("unknown job must fail");
+
+    let _ = error_payload(error, RpcErrorCode::NotFound);
 }
