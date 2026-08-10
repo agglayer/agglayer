@@ -200,6 +200,8 @@ fn mk_result(seed: u8, outcome: ContractCallOutcome) -> SettlementJobResult {
 
 #[tokio::test]
 async fn start_scans_jobs_and_skips_completed_ones() {
+    // Completed jobs are classified via recover_from_storage (no TaskControl)
+    // and must leave neither controls nor watchers installed.
     let mut store = MockStateStore::new();
     let job_id = mk_job_id(9);
     let job = mk_job(9);
@@ -230,6 +232,59 @@ async fn start_scans_jobs_and_skips_completed_ones() {
         .expect("settlement task_controls lock poisoned")
         .is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn start_resumes_pending_job_with_task_controls_tied_to_service_cancellation() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(10);
+    let job = mk_job(10);
+
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![job_id]));
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
+    assert!(service.result_watchers.lock().await.contains_key(&job_id));
+
+    cancellation_token.cancel();
+
+    wait_until(|| {
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .is_empty()
+    })
+    .await;
 }
 
 #[tokio::test]
