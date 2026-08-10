@@ -248,11 +248,7 @@ pub(crate) struct PendingSettlementJob<L1Provider, SettlementStore> {
     attempts: ActiveSettlementAttempts,
 }
 
-impl<
-        L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter,
-    > PendingSettlementJob<L1Provider, SettlementStore>
-{
+impl<L1Provider, SettlementStore> PendingSettlementJob<L1Provider, SettlementStore> {
     pub(crate) fn into_task(
         self,
         control: TaskControl,
