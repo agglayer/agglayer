@@ -98,18 +98,23 @@ fn job_summary_selects_latest_attempt_by_number() {
         SettlementAttemptDetail::new(0, &attempt(0), None),
     ];
     let summary = SettlementJobSummary::from(&job_detail(attempts));
+    let summary = summary
+        .as_readable()
+        .expect("readable detail must produce a readable summary");
 
     assert_eq!(summary.status, SettlementJobStatus::Pending);
     assert_eq!(summary.attempt_count, 2);
     assert_eq!(
         summary
             .latest_attempt
+            .as_ref()
             .expect("latest attempt must be set")
             .attempt_number,
         1
     );
     assert!(summary
         .last_error
+        .as_ref()
         .expect("last error must be set")
         .contains("newest failure"));
 }
@@ -152,7 +157,7 @@ fn client_error_kinds_serialize_as_stable_camel_case_tags() {
 
 #[test]
 fn job_summary_serializes_camel_case() {
-    let summary = SettlementJobSummary {
+    let summary = SettlementJobSummary::Readable(ReadableSettlementJobSummary {
         job_id: SettlementJobId::from(1_u128),
         certificate_id: None,
         status: SettlementJobStatus::Pending,
@@ -162,11 +167,29 @@ fn job_summary_serializes_camel_case() {
             &SettlementAttemptDetail::new(0, &attempt(0), None),
         )),
         last_error: None,
-    };
+    });
 
     let json = serde_json::to_value(summary).expect("summary must serialize");
     assert!(json.get("hasLiveTask").is_some());
     assert!(json.get("attemptCount").is_some());
     assert_eq!(json["status"], "pending");
     assert!(json["latestAttempt"].get("senderWallet").is_some());
+}
+
+#[test]
+fn unreadable_job_summary_serializes_the_exact_error() {
+    let summary = SettlementJobSummary::unreadable(
+        SettlementJobId::from(1_u128),
+        "Failed to read settlement job: invalid protobuf".to_string(),
+    );
+
+    let json = serde_json::to_value(summary).expect("summary must serialize");
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "jobId": "00000000000000000000000001",
+            "status": "unreadable",
+            "error": "Failed to read settlement job: invalid protobuf",
+        })
+    );
 }
