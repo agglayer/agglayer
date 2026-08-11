@@ -10,15 +10,17 @@ use agglayer_storage::stores::{
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    CertificateStatusError, Digest, Height, NetworkId, SettlementJobId, SettlementTxHash, U256,
+    CertificateStatusError, Digest, Height, NetworkId, RpcErrorCode, SettlementJobId,
+    SettlementTxHash, U256,
 };
 use alloy::providers::{Provider, WalletProvider};
+use eyre::Context as _;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pessimistic_proof::local_balance_tree::BalanceTree;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
-use tracing::{error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use unified_bridge::TokenInfo;
 
 use super::error::RpcResult;
@@ -26,7 +28,9 @@ use crate::{
     error::Error,
     rpc_middleware,
     settlement_admin::{
-        edit_even_if_completed, map_admin_error, Force, InsertAttemptParams, MutationResponse,
+        edit_even_if_completed, map_admin_error, render_last_error, Force, InsertAttemptParams,
+        MutationResponse, SettlementAttemptDetail, SettlementJobDetail, SettlementJobResultDto,
+        SettlementJobStatus, SettlementJobSummary,
     },
     JsonRpcService,
 };
@@ -251,6 +255,38 @@ pub(crate) trait AdminAgglayer {
     #[method(name = "reloadSettlementTask")]
     async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 
+    /// List every settlement job known to storage.
+    ///
+    /// **JSON-RPC method:** `admin_listSettlementJobs`
+    ///
+    /// Returns each job's certificate link, status, live-task flag, attempt
+    /// count, latest attempt, and latest error. A pending job with
+    /// `hasLiveTask: false` needs `admin_reloadSettlementTask`. If one job's
+    /// storage records cannot be read, its row instead has `unreadable` status
+    /// and the full contextual error; other jobs remain visible.
+    ///
+    /// This performs a full settlement-jobs column-family scan followed by
+    /// per-job lookups; the startup-recovery TODO for bounding that scan also
+    /// applies here. Reads are point-in-time, not transactional, so a job
+    /// completing mid-read can briefly appear pending without a live task.
+    /// They log at `debug`; warning-level logs remain for admin mutations.
+    #[method(name = "listSettlementJobs")]
+    async fn list_settlement_jobs(&self) -> RpcResult<Vec<SettlementJobSummary>>;
+
+    /// Get one settlement job with its parameters and full attempt history.
+    ///
+    /// **JSON-RPC method:** `admin_getSettlementJob`
+    ///
+    /// Returns the certificate link, status, live-task flag, parameters,
+    /// attempts, and terminal result. Reads are point-in-time, not
+    /// transactional, so a job completing mid-read can briefly appear pending
+    /// without a live task. A pending job with `hasLiveTask: false` needs
+    /// `admin_reloadSettlementTask`. Reads log at `debug`; mutations at `warn`.
+    ///
+    /// Unknown job IDs return `RpcErrorCode::NotFound`'s `-10008` code.
+    #[method(name = "getSettlementJob")]
+    async fn get_settlement_job(&self, job_id: SettlementJobId) -> RpcResult<SettlementJobDetail>;
+
     /// Append one new settlement attempt to a settlement job.
     ///
     /// **JSON-RPC method:** `admin_insertSettlementAttempt`
@@ -456,6 +492,98 @@ where
             .route("/", axum::routing::post_service(service.clone()))
             .layer(middleware))
     }
+
+    fn read_settlement_job(
+        &self,
+        job_id: SettlementJobId,
+    ) -> eyre::Result<Option<SettlementJobDetail>> {
+        let Some(job) = self
+            .state
+            .get_settlement_job(&job_id)
+            .wrap_err_with(|| format!("Failed to read settlement job {job_id}"))?
+        else {
+            return Ok(None);
+        };
+        let job_result = self
+            .state
+            .get_settlement_job_result(&job_id)
+            .wrap_err_with(|| {
+                format!("Failed to read terminal result for settlement job {job_id}")
+            })?;
+        let attempts = self
+            .state
+            .list_settlement_attempts(&job_id)
+            .wrap_err_with(|| format!("Failed to list attempts for settlement job {job_id}"))?;
+        let attempt_results = self
+            .state
+            .list_settlement_attempt_results(&job_id)
+            .wrap_err_with(|| {
+                format!("Failed to list attempt results for settlement job {job_id}")
+            })?;
+        let certificate_id = self
+            .state
+            .get_settlement_job_certificate_id(&job_id)
+            .wrap_err_with(|| {
+                format!("Failed to read certificate link for settlement job {job_id}")
+            })?;
+        let attempts = attempts
+            .iter()
+            .map(|(number, attempt)| {
+                let result = attempt_results
+                    .iter()
+                    .find(|(result_number, _)| result_number == number)
+                    .map(|(_, result)| result);
+                SettlementAttemptDetail::new(*number, attempt, result)
+            })
+            .collect();
+
+        Ok(Some(SettlementJobDetail {
+            job_id,
+            certificate_id,
+            has_live_task: self.settlement_service.has_live_task(job_id),
+            status: if job_result.is_some() {
+                SettlementJobStatus::Completed
+            } else {
+                SettlementJobStatus::Pending
+            },
+            contract_address: job.contract_address,
+            eth_value: job.eth_value,
+            gas_limit: job.gas_limit,
+            calldata: job.calldata,
+            attempts,
+            job_result: job_result.as_ref().map(SettlementJobResultDto::from),
+            last_error: render_last_error(&attempt_results),
+        }))
+    }
+
+    fn read_settlement_job_summaries(&self) -> eyre::Result<Vec<SettlementJobSummary>> {
+        let job_ids = self
+            .state
+            .list_settlement_job_ids()
+            .wrap_err("Failed to scan settlement job ids")?;
+
+        Ok(job_ids
+            .into_iter()
+            .map(|job_id| summarize_settlement_job(job_id, self.read_settlement_job(job_id)))
+            .collect())
+    }
+}
+
+fn summarize_settlement_job(
+    job_id: SettlementJobId,
+    job: eyre::Result<Option<SettlementJobDetail>>,
+) -> SettlementJobSummary {
+    let error = match job {
+        Ok(Some(job)) => return SettlementJobSummary::from(&job),
+        Ok(None) => {
+            eyre::eyre!("Settlement job {job_id} disappeared after listing its storage key")
+        }
+        Err(error) => error,
+    };
+
+    let error_details = format!("{error:#}");
+    error!(%job_id, ?error, "Unable to read listed settlement job");
+    SettlementJobSummary::unreadable(job_id, error_details)
 }
 
 impl<PendingStore, StateStore, DebugStore, L1Provider> Drop
@@ -983,6 +1111,26 @@ where
     }
 
     #[instrument(skip(self))]
+    async fn list_settlement_jobs(&self) -> RpcResult<Vec<SettlementJobSummary>> {
+        debug!("Listing settlement jobs");
+        self.read_settlement_job_summaries()
+            .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn get_settlement_job(&self, job_id: SettlementJobId) -> RpcResult<SettlementJobDetail> {
+        debug!("Reading settlement job {job_id}");
+        self.read_settlement_job(job_id)
+            .and_then(|job| {
+                job.ok_or_else(|| {
+                    eyre::eyre!("No settlement job found for id {job_id}")
+                        .wrap_err(RpcErrorCode::NotFound)
+                })
+            })
+            .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
     async fn insert_settlement_attempt(
         &self,
         job_id: SettlementJobId,
@@ -1055,5 +1203,32 @@ where
             .admin_force_remove_settlement_job_result(job_id)
             .await
             .map_err(map_admin_error)
+    }
+}
+
+#[cfg(test)]
+mod settlement_job_summary_tests {
+    use eyre::Context as _;
+
+    use super::*;
+
+    #[test]
+    fn failed_job_read_becomes_unreadable_summary_with_full_error_chain() {
+        let job_id = SettlementJobId::from(1_u128);
+        let error = Err::<(), _>(eyre::eyre!("invalid protobuf"))
+            .wrap_err("Failed to decode settlement job")
+            .expect_err("test error must propagate");
+
+        let summary = summarize_settlement_job(job_id, Err(error));
+
+        assert!(matches!(
+            summary,
+            SettlementJobSummary::Unreadable {
+                job_id: unreadable_job_id,
+                status: SettlementJobStatus::Unreadable,
+                error,
+            } if unreadable_job_id == job_id
+                && error == "Failed to decode settlement job: invalid protobuf"
+        ));
     }
 }

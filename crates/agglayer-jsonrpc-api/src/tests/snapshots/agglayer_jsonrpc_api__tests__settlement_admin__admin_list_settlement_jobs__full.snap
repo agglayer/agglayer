@@ -1,0 +1,34 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/settlement_admin.rs
+expression: "serde_json::to_string_pretty(&jobs_json).unwrap()"
+---
+[
+  {
+    "attemptCount": 2,
+    "certificateId": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "hasLiveTask": false,
+    "jobId": "00000000000000000000000001",
+    "lastError": "unknown: temporary RPC failure",
+    "latestAttempt": {
+      "attemptNumber": 1,
+      "nonce": 11,
+      "senderWallet": "0x3232323232323232323232323232323232323232",
+      "txHash": "0x3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "status": "pending"
+  },
+  {
+    "attemptCount": 1,
+    "certificateId": "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "hasLiveTask": false,
+    "jobId": "00000000000000000000000002",
+    "lastError": null,
+    "latestAttempt": {
+      "attemptNumber": 0,
+      "nonce": 20,
+      "senderWallet": "0x4141414141414141414141414141414141414141",
+      "txHash": "0x4242424242424242424242424242424242424242424242424242424242424242"
+    },
+    "status": "completed"
+  }
+]
