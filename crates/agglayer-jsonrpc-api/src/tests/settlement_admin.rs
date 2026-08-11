@@ -880,6 +880,7 @@ async fn admin_list_settlement_jobs_returns_full_summaries() {
     assert_eq!(jobs.len(), 2);
     let pending = jobs
         .iter()
+        .filter_map(SettlementJobSummary::as_readable)
         .find(|job| job.job_id == fixtures.pending_job_id)
         .expect("pending job must be listed");
     assert_eq!(
@@ -904,6 +905,7 @@ async fn admin_list_settlement_jobs_returns_full_summaries() {
 
     let completed = jobs
         .iter()
+        .filter_map(SettlementJobSummary::as_readable)
         .find(|job| job.job_id == fixtures.completed_job_id)
         .expect("completed job must be listed");
     assert_eq!(

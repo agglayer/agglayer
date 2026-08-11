@@ -19,8 +19,8 @@ use tracing::{error, info, warn};
 
 use crate::{
     settlement_task::{
-        SettlementTask, SettlementTaskRunResult, StoredSettlementJob, TaskAdminCommand,
-        TaskControl, TaskControlHandle,
+        RecoveredSettlementJob, SettlementTask, SettlementTaskRunResult, StoredSettlementJob,
+        TaskAdminCommand, TaskControl, TaskControlHandle,
     },
     wallet_nonce_locks::WalletNonceLocks,
 };
@@ -234,13 +234,22 @@ impl<
         let mut resumed_jobs = 0usize;
         let mut skipped_jobs = 0u64;
         for job_id in job_ids {
-            let (task_control_handle, task_control) =
-                TaskControlHandle::new(&self.cancellation_token);
-            match self.load_stored_job(job_id, task_control).await {
-                Ok(StoredSettlementJob::Completed(_)) => {
+            match SettlementTask::recover_from_storage(
+                job_id,
+                self.tx_config.clone(),
+                self.provider.clone(),
+                self.store.clone(),
+                self.wallet_nonce_locks.clone(),
+            )
+            .await
+            {
+                Ok(RecoveredSettlementJob::Completed(_)) => {
                     completed_jobs += 1;
                 }
-                Ok(StoredSettlementJob::Pending(task)) => {
+                Ok(RecoveredSettlementJob::Pending(pending)) => {
+                    let (task_control_handle, task_control) =
+                        TaskControlHandle::new(&self.cancellation_token);
+                    let task = pending.into_task(task_control);
                     self.spawn_settlement_task(job_id, task, task_control_handle)
                         .await;
                     resumed_jobs += 1;

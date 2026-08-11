@@ -31,13 +31,17 @@ The examples use positional parameters in their wire order and target
 ### Scenario 1: find and inspect a job
 
 Call `admin_listSettlementJobs` first.
-Each summary carries:
+Each readable summary carries:
 
 - `jobId`, the optional `certificateId`, and storage-derived `status`;
 - `hasLiveTask`, `attemptCount`, and the latest attempt's number, wallet, nonce, and transaction
   hash;
 - `lastError`, a human-readable rendering of the latest recorded attempt result when it is a
   client error or L1 revert.
+
+If one job's related storage records cannot be read, the list keeps the other jobs visible.
+The failed row instead carries `jobId`, `status: "unreadable"`, and `error` with the full
+contextual storage error.
 
 Then call `admin_getSettlementJob` for full detail.
 It carries `jobId`, `certificateId`, `status`, `hasLiveTask`, the contract address, ETH value,
