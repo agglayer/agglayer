@@ -1,10 +1,10 @@
 # Settlement operations
 
-This runbook maps the five settlement-job recovery scenarios from
+This runbook maps the seven settlement-job recovery scenarios from
 [#1675](https://github.com/agglayer/agglayer/issues/1675) to the operations
 available in the current phase.
 Scenario 1 still awaits discovery reads.
-Scenarios 2–5 are covered by the shipped reload and abort controls and state
+Scenarios 2–7 are covered by the shipped reload and abort controls and state
 mutations.
 Use these methods only through the private `admin` JSON-RPC listener.
 They edit stored settlement state or control a live task and can cause an L1
@@ -27,9 +27,9 @@ ID and attempt number from existing logs or storage inspection.
 | 2. A task is wedged or missing | `admin_reloadSettlementTask(job_id)` | Reloads a live task from storage or respawns a missing task for a pending job. Retry if task teardown is still in progress. |
 | 3. A job blocks a wallet's nonce pipeline | `admin_abortSettlementTask(job_id)` | Stops the in-memory task without changing stored state. Inspect or fix the job, then reload it to spawn a fresh task. |
 | 4. A transaction was handled outside the node | `admin_insertSettlementAttempt(job_id, attempt, force?)` | Registers the external transaction as a stored attempt. Only `txHash` is required when L1 returns the transaction; the service resolves identity and available fees from L1. |
-| 4. An attempt will never land | `admin_markSettlementAttemptDefinitelyFailed(job_id, attempt_number, reason, force?)` | Records a trusted terminal outcome for that attempt, then lets the job drive settlement elsewhere. |
-| 5. An attempt result is wrong | `admin_removeSettlementAttemptResult(job_id, attempt_number, force?)` | Removes the result so the task re-derives it from L1. |
-| 5. A completed job result is wrong | `admin_forceRemoveSettlementJobResult(job_id)` | Removes the terminal job result and immediately spawns a task that re-derives the result from stored attempts. |
+| 5. An attempt will never land | `admin_markSettlementAttemptDefinitelyFailed(job_id, attempt_number, reason, force?)` | Records a trusted terminal outcome for that attempt, then lets the job drive settlement elsewhere. |
+| 6. An attempt result is wrong | `admin_removeSettlementAttemptResult(job_id, attempt_number, force?)` | Removes the result so the task re-derives it from L1. |
+| 7. A completed job result is wrong | `admin_forceRemoveSettlementJobResult(job_id)` | Removes the terminal job result and immediately spawns a task that re-derives the result from stored attempts. |
 
 ### Scenario 1: find and inspect a job
 
@@ -84,7 +84,7 @@ is respawned and later settles.
 After recovery, compare the certificate state, stored settlement result, and
 L1 outcome, then reconcile that divergence manually.
 
-### Scenario 4: register or abandon an externally handled transaction
+### Scenarios 4 and 5: register or abandon an externally handled transaction
 
 To register a transaction submitted outside the node, call
 `admin_insertSettlementAttempt`:
@@ -122,7 +122,7 @@ Make this assertion only after confirming the transaction cannot land.
 Once the task observes the edit, it can re-drive the job with another nonce or
 wallet.
 
-### Scenario 5: correct a recorded result
+### Scenarios 6 and 7: correct a recorded result
 
 To undo an attempt result, call `admin_removeSettlementAttemptResult`:
 
