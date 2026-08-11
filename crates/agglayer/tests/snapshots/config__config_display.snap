@@ -2,6 +2,7 @@
 source: crates/agglayer/tests/config.rs
 expression: sanitize_config_folder_path(result)
 ---
+proof-wrapping = "groth16"
 prover-buffer-size = 100
 
 [full-node-rpcs]

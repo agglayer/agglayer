@@ -8,7 +8,7 @@ cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --help
 
 ## Local mode
 
-The following command will generate one plonk proof with the default mode which is local.
+The following command will generate one Groth16 proof with the default mode which is local.
 
 ```
 RUST_LOG=info cargo run -r -p pessimistic-proof-test-suite --bin ppgen -- --proof-dir ./data/proofs/ --n-exits 10
@@ -55,7 +55,7 @@ Expected logs:
 2024-10-01T10:31:05.958692Z  INFO View in explorer: https://explorer.succinct.xyz/proofrequest_01j93t47b4e8dv7kgcm0a02dra
 2024-10-01T10:31:10.517512Z  INFO Proof request claimed, proving...
 2024-10-01T10:34:23.797319Z  INFO Proof request fulfilled
-2024-10-01T10:34:24.767493Z  INFO Successfully generated the plonk proof with a latency of 223.186621825s
+2024-10-01T10:34:24.767493Z  INFO Successfully generated the proof with a latency of 223.186621825s
 2024-10-01T10:34:24.767799Z  INFO Writing the proof to "./data/proofs/1-exits-v0x00c745-b99b2bf1-c58c-4808-8b3a-7548d13a151d.json"
 ```
 

@@ -1,7 +1,8 @@
 ---
 source: crates/agglayer-config/tests/auth_config.rs
-expression: config
+expression: "$crate :: toml_snapshot_string(& config)"
 ---
+proof-wrapping = "groth16"
 prover-buffer-size = 100
 
 [full-node-rpcs]

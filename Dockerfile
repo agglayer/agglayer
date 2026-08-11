@@ -24,17 +24,20 @@ FROM --platform=${BUILDPLATFORM} golang:1.22 AS go-builder
 FROM debian:bookworm-slim AS circuits
 
 ARG CIRCUIT_ARTIFACTS_URL_BASE=https://sp1-circuits.s3-us-east-2.amazonaws.com
-ARG CIRCUIT_TYPE=plonk
+# Both wrappings ship: groth16 is the default, plonk is the rollback target.
+ARG CIRCUIT_TYPES="groth16 plonk"
 ARG CIRCUIT_VERSION=v6.1.0
 
 RUN apt-get update && \
     apt-get --no-install-recommends install -y ca-certificates curl && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
-RUN mkdir -p /root/.sp1/circuits/${CIRCUIT_TYPE}/${CIRCUIT_VERSION} \
-    && curl -s -o /tmp/circuits.tar.gz ${CIRCUIT_ARTIFACTS_URL_BASE}/${CIRCUIT_VERSION}-${CIRCUIT_TYPE}.tar.gz \
-    && tar -Pxzf /tmp/circuits.tar.gz -C /root/.sp1/circuits/${CIRCUIT_TYPE}/${CIRCUIT_VERSION} \
-    && rm /tmp/circuits.tar.gz
+RUN set -eu; for circuit_type in ${CIRCUIT_TYPES}; do \
+        mkdir -p /root/.sp1/circuits/${circuit_type}/${CIRCUIT_VERSION} \
+        && curl -sSf -o /tmp/circuits.tar.gz ${CIRCUIT_ARTIFACTS_URL_BASE}/${CIRCUIT_VERSION}-${circuit_type}.tar.gz \
+        && tar -Pxzf /tmp/circuits.tar.gz -C /root/.sp1/circuits/${circuit_type}/${CIRCUIT_VERSION} \
+        && rm /tmp/circuits.tar.gz; \
+    done
 
 FROM chef AS builder
 

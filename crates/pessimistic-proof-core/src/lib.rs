@@ -13,5 +13,13 @@ pub mod nullifier_tree;
 pub use local_state::NetworkState;
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
-pub const PESSIMISTIC_PROOF_PROGRAM_SELECTOR: [u8; 4] =
-    PESSIMISTIC_PROOF_PROGRAM_VERSION.to_be_bytes();
+
+/// Selector high byte is the proof wrapping, low three bytes are the program
+/// major, so the two wrappings can never claim the same route.
+const fn selector(wrapping: u8) -> [u8; 4] {
+    let [_, a, b, c] = PESSIMISTIC_PROOF_PROGRAM_VERSION.to_be_bytes();
+    [wrapping, a, b, c]
+}
+
+pub const PP_SELECTOR_PLONK: [u8; 4] = selector(0x00);
+pub const PP_SELECTOR_GROTH16: [u8; 4] = selector(0x01);
