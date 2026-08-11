@@ -261,7 +261,9 @@ pub(crate) trait AdminAgglayer {
     ///
     /// Returns each job's certificate link, status, live-task flag, attempt
     /// count, latest attempt, and latest error. A pending job with
-    /// `hasLiveTask: false` needs `admin_reloadSettlementTask`.
+    /// `hasLiveTask: false` needs `admin_reloadSettlementTask`. If one job's
+    /// storage records cannot be read, its row instead has `unreadable` status
+    /// and the full contextual error; other jobs remain visible.
     ///
     /// This performs a full settlement-jobs column-family scan followed by
     /// per-job lookups; the startup-recovery TODO for bounding that scan also
@@ -555,21 +557,33 @@ where
     }
 
     fn read_settlement_job_summaries(&self) -> eyre::Result<Vec<SettlementJobSummary>> {
-        self.state
+        let job_ids = self
+            .state
             .list_settlement_job_ids()
-            .wrap_err("Failed to scan settlement job ids")?
+            .wrap_err("Failed to scan settlement job ids")?;
+
+        Ok(job_ids
             .into_iter()
-            .map(|job_id| {
-                self.read_settlement_job(job_id)?
-                    .map(|job| SettlementJobSummary::from(&job))
-                    .ok_or_else(|| {
-                        eyre::eyre!(
-                            "Settlement job {job_id} disappeared after listing its storage key"
-                        )
-                    })
-            })
-            .collect()
+            .map(|job_id| summarize_settlement_job(job_id, self.read_settlement_job(job_id)))
+            .collect())
     }
+}
+
+fn summarize_settlement_job(
+    job_id: SettlementJobId,
+    job: eyre::Result<Option<SettlementJobDetail>>,
+) -> SettlementJobSummary {
+    let error = match job {
+        Ok(Some(job)) => return SettlementJobSummary::from(&job),
+        Ok(None) => {
+            eyre::eyre!("Settlement job {job_id} disappeared after listing its storage key")
+        }
+        Err(error) => error,
+    };
+
+    let error_details = format!("{error:#}");
+    error!(%job_id, ?error, "Unable to read listed settlement job");
+    SettlementJobSummary::unreadable(job_id, error_details)
 }
 
 impl<PendingStore, StateStore, DebugStore, L1Provider> Drop
@@ -1189,5 +1203,32 @@ where
             .admin_force_remove_settlement_job_result(job_id)
             .await
             .map_err(map_admin_error)
+    }
+}
+
+#[cfg(test)]
+mod settlement_job_summary_tests {
+    use eyre::Context as _;
+
+    use super::*;
+
+    #[test]
+    fn failed_job_read_becomes_unreadable_summary_with_full_error_chain() {
+        let job_id = SettlementJobId::from(1_u128);
+        let error = Err::<(), _>(eyre::eyre!("invalid protobuf"))
+            .wrap_err("Failed to decode settlement job")
+            .expect_err("test error must propagate");
+
+        let summary = summarize_settlement_job(job_id, Err(error));
+
+        assert!(matches!(
+            summary,
+            SettlementJobSummary::Unreadable {
+                job_id: unreadable_job_id,
+                status: SettlementJobStatus::Unreadable,
+                error,
+            } if unreadable_job_id == job_id
+                && error == "Failed to decode settlement job: invalid protobuf"
+        ));
     }
 }

@@ -20,19 +20,57 @@ use crate::error::Error;
 #[cfg(test)]
 mod tests;
 
-/// Storage-derived job state: pending while no terminal result exists,
-/// completed once it does.
+/// Status reported for a settlement job.
+///
+/// Readable jobs are pending while no terminal result exists and completed
+/// once it does. `Unreadable` is only emitted by the list method when a
+/// per-job storage read fails.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SettlementJobStatus {
     Pending,
     Completed,
+    Unreadable,
 }
 
 /// One row returned by `admin_listSettlementJobs`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum SettlementJobSummary {
+    /// A job whose storage records could be read.
+    Readable(ReadableSettlementJobSummary),
+    /// A listed job whose related storage records could not be read.
+    #[serde(rename_all = "camelCase")]
+    Unreadable {
+        job_id: SettlementJobId,
+        status: SettlementJobStatus,
+        /// Full contextual error chain from the failed storage read.
+        error: String,
+    },
+}
+
+impl SettlementJobSummary {
+    #[cfg(test)]
+    pub(crate) fn as_readable(&self) -> Option<&ReadableSettlementJobSummary> {
+        match self {
+            Self::Readable(summary) => Some(summary),
+            Self::Unreadable { .. } => None,
+        }
+    }
+
+    pub(crate) fn unreadable(job_id: SettlementJobId, error: String) -> Self {
+        Self::Unreadable {
+            job_id,
+            status: SettlementJobStatus::Unreadable,
+            error,
+        }
+    }
+}
+
+/// Summary fields available when all related storage records can be read.
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SettlementJobSummary {
+pub struct ReadableSettlementJobSummary {
     pub job_id: SettlementJobId,
     pub certificate_id: Option<CertificateId>,
     pub status: SettlementJobStatus,
@@ -122,7 +160,7 @@ impl From<&SettlementAttemptDetail> for SettlementAttemptSummary {
 
 impl From<&SettlementJobDetail> for SettlementJobSummary {
     fn from(job: &SettlementJobDetail) -> Self {
-        Self {
+        Self::Readable(ReadableSettlementJobSummary {
             job_id: job.job_id,
             certificate_id: job.certificate_id,
             status: job.status,
@@ -134,7 +172,7 @@ impl From<&SettlementJobDetail> for SettlementJobSummary {
                 .max_by_key(|attempt| attempt.attempt_number)
                 .map(SettlementAttemptSummary::from),
             last_error: job.last_error.clone(),
-        }
+        })
     }
 }
 
