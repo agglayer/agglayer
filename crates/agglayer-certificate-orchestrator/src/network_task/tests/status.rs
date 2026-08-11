@@ -1,12 +1,16 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
-    stores::{PendingCertificateReader, PendingCertificateWriter, SettlementWriter, StateWriter},
-    tests::TempDBDir,
+    stores::{
+        state::StateStore, PendingCertificateReader, PendingCertificateWriter, SettlementWriter,
+        StateReader, StateWriter,
+    },
+    tests::{mocks::MockPerEpochStore, TempDBDir},
 };
 use agglayer_test_suite::{new_storage, sample_data::USDC, Forest};
 use agglayer_types::{aggchain_data::CertificateAggchainDataCtx, L1WitnessCtx};
+use arc_swap::ArcSwap;
 use mockall::predicate::{always, eq};
 use pessimistic_proof::{
     core::{commitment::PessimisticRootCommitmentVersion, generate_pessimistic_proof},
@@ -19,6 +23,23 @@ use super::{mock_current_epoch, *};
 use crate::tests::{clock, mocks::MockCertifier};
 
 const SETTLEMENT_TX_HASH_TEST: SettlementTxHash = SettlementTxHash::new(Digest([1; 32]));
+
+fn mock_current_epoch_assigning_certificate(
+    state_store: Arc<StateStore>,
+) -> Arc<ArcSwap<MockPerEpochStore>> {
+    let mut mock_epoch = MockPerEpochStore::new();
+    mock_epoch.expect_add_certificate().returning(move |id, _| {
+        state_store.assign_certificate_to_epoch(
+            &id,
+            &EpochNumber::ZERO,
+            &CertificateIndex::ZERO,
+        )?;
+
+        Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
+    });
+    mock_epoch.expect_is_epoch_packed().returning(|| false);
+    Arc::new(ArcSwap::new(Arc::new(mock_epoch)))
+}
 
 #[rstest]
 #[test_log::test(tokio::test)]
@@ -128,7 +149,7 @@ async fn from_pending_to_settled() {
         network_id,
         certificate_stream,
         Arc::new(settlement_service),
-        mock_current_epoch(),
+        mock_current_epoch_assigning_certificate(Arc::clone(&storage.state)),
     )
     .expect("Failed to create a new network task");
 
@@ -151,6 +172,13 @@ async fn from_pending_to_settled() {
         .unwrap();
 
     assert!(header.status == CertificateStatus::Settled);
+
+    let cursor = storage
+        .state
+        .get_certificate_header_by_cursor(network_id, Height::ZERO)
+        .expect("cursor lookup must succeed")
+        .expect("cursor index must be present after settlement");
+    assert_eq!(cursor.certificate_id, certificate_id);
 }
 
 #[rstest]
@@ -261,7 +289,7 @@ async fn from_proven_to_settled() {
         network_id,
         certificate_stream,
         Arc::new(settlement_service),
-        mock_current_epoch(),
+        mock_current_epoch_assigning_certificate(Arc::clone(&storage.state)),
     )
     .expect("Failed to create a new network task");
 
@@ -284,6 +312,13 @@ async fn from_proven_to_settled() {
         .unwrap();
 
     assert!(header.status == CertificateStatus::Settled);
+
+    let cursor = storage
+        .state
+        .get_certificate_header_by_cursor(network_id, Height::ZERO)
+        .expect("cursor lookup must succeed")
+        .expect("cursor index must be present after settlement");
+    assert_eq!(cursor.certificate_id, certificate_id);
 }
 
 #[rstest]
@@ -372,7 +407,7 @@ async fn from_candidate_to_settled() {
         network_id,
         certificate_stream,
         Arc::new(settlement_service),
-        mock_current_epoch(),
+        mock_current_epoch_assigning_certificate(Arc::clone(&storage.state)),
     )
     .expect("Failed to create a new network task");
 
@@ -395,6 +430,13 @@ async fn from_candidate_to_settled() {
         .unwrap();
 
     assert!(header.status == CertificateStatus::Settled);
+
+    let cursor = storage
+        .state
+        .get_certificate_header_by_cursor(network_id, Height::ZERO)
+        .expect("cursor lookup must succeed")
+        .expect("cursor index must be present after settlement");
+    assert_eq!(cursor.certificate_id, certificate_id);
 }
 
 #[rstest]
@@ -482,7 +524,7 @@ async fn from_candidate_to_settle_via_pending() {
         network_id,
         certificate_stream,
         Arc::new(settlement_service),
-        mock_current_epoch(),
+        mock_current_epoch_assigning_certificate(Arc::clone(&storage.state)),
     )
     .expect("Failed to create a new network task");
 
@@ -505,6 +547,13 @@ async fn from_candidate_to_settle_via_pending() {
         .unwrap();
 
     assert!(header.status == CertificateStatus::Settled);
+
+    let cursor = storage
+        .state
+        .get_certificate_header_by_cursor(network_id, Height::ZERO)
+        .expect("cursor lookup must succeed")
+        .expect("cursor index must be present after settlement");
+    assert_eq!(cursor.certificate_id, certificate_id);
 }
 
 #[rstest]

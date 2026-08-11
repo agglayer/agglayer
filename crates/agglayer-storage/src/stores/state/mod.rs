@@ -234,6 +234,14 @@ impl StateWriter for StateStore {
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+
+            self.db.put::<CertificatePerNetworkColumn>(
+                &certificate_per_network::Key {
+                    network_id: certificate_header.network_id.to_u32(),
+                    height: certificate_header.height,
+                },
+                certificate_id,
+            )?;
         }
 
         Ok(())
@@ -287,16 +295,6 @@ impl StateWriter for StateStore {
             certificate_header.status = status.clone();
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
-
-            if let CertificateStatus::Settled = status {
-                self.db.put::<CertificatePerNetworkColumn>(
-                    &certificate_per_network::Key {
-                        network_id: certificate_header.network_id.to_u32(),
-                        height: certificate_header.height,
-                    },
-                    &certificate_header.certificate_id,
-                )?;
-            }
         }
 
         Ok(())
