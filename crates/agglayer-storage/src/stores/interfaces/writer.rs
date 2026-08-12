@@ -75,6 +75,12 @@ pub trait StateWriter: Send + Sync {
         status: CertificateStatus,
     ) -> Result<(), Error>;
 
+    /// Updates the stored status of `certificate_id`.
+    ///
+    /// Moving a certificate to [`CertificateStatus::Proven`] also requests a
+    /// backup: settlement is submitted from a spawned task shortly after, so
+    /// this is the last status write still ordered ahead of the certificate
+    /// reaching L1.
     fn update_certificate_header_status(
         &self,
         certificate_id: &CertificateId,
