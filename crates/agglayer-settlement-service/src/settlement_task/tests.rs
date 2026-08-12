@@ -176,7 +176,7 @@ fn mk_task_with_id_and_provider<L1Provider: Provider + WalletProvider + 'static>
         tx_config: Arc::new(SettlementTransactionConfig::default()),
         provider: Arc::new(provider),
         store,
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts,
     }
@@ -192,13 +192,11 @@ fn mk_task_with_tx_config<P: Provider + WalletProvider + 'static>(
         tx_config: Arc::new(tx_config),
         provider: Arc::new(provider),
         store: Arc::new(MockStateStore::new()),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts: BTreeMap::new(),
     }
 }
-
-mod nonce_lock;
 
 #[test]
 fn next_attempt_number_starts_at_zero_and_increments_past_max() {
@@ -278,7 +276,7 @@ async fn create_generates_settlement_job_id() {
         Arc::new(SettlementTransactionConfig::default()),
         Arc::new(mk_mock_provider_with_gas_estimate(200_000)),
         Arc::new(store),
-        Arc::new(WalletNonceLocks::default()),
+        Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         mk_control(),
     )
     .await
@@ -386,7 +384,7 @@ async fn recover_from_storage_returns_completed_without_loading_attempts() {
         Arc::new(SettlementTransactionConfig::default()),
         Arc::new(mk_provider()),
         Arc::new(store),
-        Arc::new(WalletNonceLocks::default()),
+        Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
     )
     .await
     .expect("completed settlement job should recover");
@@ -434,7 +432,7 @@ async fn recover_from_storage_returns_pending_with_hydrated_attempts() {
         Arc::new(SettlementTransactionConfig::default()),
         Arc::new(mk_provider()),
         Arc::new(store),
-        Arc::new(WalletNonceLocks::default()),
+        Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
     )
     .await
     .expect("pending settlement job should recover");
@@ -477,7 +475,7 @@ async fn load_returns_completed_settlement_job() {
         Arc::new(SettlementTransactionConfig::default()),
         Arc::new(mk_provider()),
         Arc::new(store),
-        Arc::new(WalletNonceLocks::default()),
+        Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         mk_control(),
     )
     .await
@@ -980,6 +978,11 @@ async fn run_finishes_interrupted_completion_before_other_nonces() {
     );
 
     let asserter = Asserter::new();
+    // Run-loop reconcile reads pending counts for every tracked wallet plus
+    // the default signer before scanning nonces.
+    asserter.push_success(&U64::from(0));
+    asserter.push_success(&U64::from(0));
+    asserter.push_success(&U64::from(0));
     // The other wallet's nonce sorts lower, so it is scanned first: it is not
     // on L1 and its wallet key is unknown, so the loop moves on without
     // submitting or completing anything.
@@ -1028,7 +1031,7 @@ async fn run_finishes_interrupted_completion_before_other_nonces() {
         tx_config: Arc::new(SettlementTransactionConfig::default()),
         provider: Arc::new(provider),
         store: Arc::new(store),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control,
         attempts,
     };
@@ -1323,7 +1326,7 @@ async fn submit_attempt_to_l1_broadcasts_signed_envelope() {
         tx_config: Arc::new(SettlementTransactionConfig::default()),
         provider: Arc::new(provider),
         store: Arc::new(MockStateStore::new()),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts: BTreeMap::new(),
     };
@@ -1370,7 +1373,7 @@ async fn submit_attempt_to_l1_skips_broadcast_when_already_cancelled() {
         tx_config: Arc::new(SettlementTransactionConfig::default()),
         provider: Arc::new(provider),
         store: Arc::new(MockStateStore::new()),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts: BTreeMap::new(),
     };
@@ -1716,12 +1719,12 @@ async fn build_next_attempt_with_new_nonce_uses_assigned_nonce_and_default_walle
         tx_config: Arc::new(SettlementTransactionConfig::default()),
         provider: Arc::new(provider),
         store: Arc::new(store),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts: BTreeMap::new(),
     };
 
-    let (used_wallet, nonce, attempt_number, envelope) = task
+    let (used_wallet, nonce, attempt_number, envelope, _reservation) = task
         .build_next_attempt_with_new_nonce()
         .await
         .expect("attempt should build");
@@ -1816,7 +1819,7 @@ async fn build_next_attempt_with_nonce_bumps_fees_over_previous_attempt() {
         tx_config: Arc::new(SettlementTransactionConfig::default()),
         provider: Arc::new(provider),
         store: Arc::new(MockStateStore::new()),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts,
     };
@@ -1880,7 +1883,7 @@ async fn build_next_attempt_with_nonce_returns_none_at_ceiling() {
         tx_config: Arc::new(config),
         provider: Arc::new(provider),
         store: Arc::new(MockStateStore::new()),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts,
     };
@@ -1940,7 +1943,7 @@ async fn build_next_attempt_with_nonce_rebroadcasts_errored_attempt_at_ceiling()
         tx_config: Arc::new(config),
         provider: Arc::new(provider),
         store: Arc::new(MockStateStore::new()),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts,
     };
@@ -2023,7 +2026,7 @@ async fn build_next_attempt_with_nonce_bumps_over_live_tx_ignoring_errored_ceili
         tx_config: Arc::new(config),
         provider: Arc::new(provider),
         store: Arc::new(MockStateStore::new()),
-        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        nonce_allocator: Arc::new(crate::nonce_allocator::NonceAllocatorRegistry::new()),
         control: mk_control(),
         attempts,
     };

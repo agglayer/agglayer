@@ -18,11 +18,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::{
+    nonce_allocator::NonceAllocatorRegistry,
     settlement_task::{
         RecoveredSettlementJob, SettlementTask, SettlementTaskRunResult, StoredSettlementJob,
         TaskAdminCommand, TaskControl, TaskControlHandle,
     },
-    wallet_nonce_locks::WalletNonceLocks,
 };
 
 /// How the live task for a job (if any) was told about an admin mutation.
@@ -120,13 +120,13 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     /// task and spawn duplicates. A global lock is deliberate at this stack's
     /// scope: admin operations are rare and operator-driven, and no
     /// create/spawn/run-loop/retrieve hot path takes it. Revisit per-job
-    /// keying, like `wallet_nonce_locks` and `settlement_write_locks`, before
+    /// keying, like `nonce_allocators` and `settlement_write_locks`, before
     /// adding more spawn-capable admin operations.
     admin_operation_lock: Arc<Mutex<()>>,
-    /// Per-wallet locks serializing the nonce read-to-save window across
-    /// concurrent settlement tasks.
-    /// XREF: https://github.com/agglayer/agglayer/issues/1597
-    wallet_nonce_locks: Arc<WalletNonceLocks>,
+    /// Shared per-wallet nonce allocator for exclusive, gap-free handout across
+    /// concurrent settlement tasks that share an L1 wallet.
+    /// XREF: https://github.com/agglayer/agglayer/issues/1575
+    nonce_allocators: Arc<NonceAllocatorRegistry>,
 }
 
 struct TaskControlRegistrationGuard {
@@ -197,7 +197,7 @@ impl<
             task_controls: Arc::new(std::sync::Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
             admin_operation_lock: Arc::new(Mutex::new(())),
-            wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+            nonce_allocators: Arc::new(NonceAllocatorRegistry::new()),
         };
         let recovery_skipped_jobs = this.resume_pending_settlement_jobs().await?;
         Ok((this, recovery_skipped_jobs))
@@ -213,7 +213,7 @@ impl<
             self.tx_config.clone(),
             self.provider.clone(),
             self.store.clone(),
-            self.wallet_nonce_locks.clone(),
+            self.nonce_allocators.clone(),
             task_control,
         )
         .await
@@ -239,7 +239,7 @@ impl<
                 self.tx_config.clone(),
                 self.provider.clone(),
                 self.store.clone(),
-                self.wallet_nonce_locks.clone(),
+                self.nonce_allocators.clone(),
             )
             .await
             {
@@ -299,7 +299,7 @@ impl<
         let tx_config = self.tx_config.clone();
         let provider = self.provider.clone();
         let store = self.store.clone();
-        let wallet_nonce_locks = self.wallet_nonce_locks.clone();
+        let nonce_allocators = self.nonce_allocators.clone();
         let cancellation_token = self.cancellation_token.clone();
         tokio::task::spawn(async move {
             let _task_control_registration = TaskControlRegistrationGuard {
@@ -336,7 +336,7 @@ impl<
                             tx_config.clone(),
                             provider.clone(),
                             store.clone(),
-                            wallet_nonce_locks.clone(),
+                            nonce_allocators.clone(),
                             task_control,
                         )
                         .await
@@ -683,6 +683,10 @@ impl<
             .admin_insert_settlement_attempt(&job_id, &attempt, edit_even_if_completed)
             .map_err(tag_admin_storage_error)
             .wrap_err_with(|| format!("Failed to insert settlement attempt for job {job_id}"))?;
+        // Keep the shared allocator ahead of store-recorded nonces so a later
+        // handout cannot reuse an admin-inserted (or externally ported) nonce.
+        self.nonce_allocators
+            .mark_consumed(attempt.sender_wallet.into_alloy(), attempt.nonce.0);
         let live_task = self.notify_live_task_of_admin_edit(job_id).await;
         Ok((attempt_number, live_task))
     }
@@ -824,7 +828,7 @@ impl<
             self.tx_config.clone(),
             self.provider.clone(),
             self.store.clone(),
-            self.wallet_nonce_locks.clone(),
+            self.nonce_allocators.clone(),
             task_control,
         )
         .await?;

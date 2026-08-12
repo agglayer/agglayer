@@ -28,11 +28,14 @@ use alloy::{
     transports::{TransportError, TransportErrorKind},
 };
 use eyre::Context as _;
-use tokio::sync::{mpsc, OwnedMutexGuard};
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
-use crate::{utils::RetryCallbackError, wallet_nonce_locks::WalletNonceLocks};
+use crate::{
+    nonce_allocator::{NonceAllocatorRegistry, NonceReservation},
+    utils::RetryCallbackError,
+};
 
 type TxEnvelope = EthereumTxEnvelope<TxEip4844Variant>;
 
@@ -244,7 +247,7 @@ pub(crate) struct PendingSettlementJob<L1Provider, SettlementStore> {
     tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
-    wallet_nonce_locks: Arc<WalletNonceLocks>,
+    nonce_allocator: Arc<NonceAllocatorRegistry>,
     attempts: ActiveSettlementAttempts,
 }
 
@@ -259,7 +262,7 @@ impl<L1Provider, SettlementStore> PendingSettlementJob<L1Provider, SettlementSto
             tx_config: self.tx_config,
             provider: self.provider,
             store: self.store,
-            wallet_nonce_locks: self.wallet_nonce_locks,
+            nonce_allocator: self.nonce_allocator,
             control,
             attempts: self.attempts,
         }
@@ -393,11 +396,11 @@ pub struct SettlementTask<L1Provider, SettlementStore> {
     tx_config: Arc<SettlementTransactionConfig>,
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
-    /// Shared per-wallet locks from
-    /// [`SettlementService`](crate::SettlementService); held across the
-    /// nonce read-to-save window in [`Self::run`].
-    /// XREF: https://github.com/agglayer/agglayer/issues/1597
-    wallet_nonce_locks: Arc<WalletNonceLocks>,
+    /// Shared per-wallet nonce allocator owned by
+    /// [`SettlementService`](crate::SettlementService). Hands out exclusive
+    /// nonces across concurrent tasks on the same wallet.
+    /// XREF: https://github.com/agglayer/agglayer/issues/1575
+    nonce_allocator: Arc<NonceAllocatorRegistry>,
     control: TaskControl,
     attempts: ActiveSettlementAttempts,
 }
@@ -460,7 +463,7 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
-        wallet_nonce_locks: Arc<WalletNonceLocks>,
+        nonce_allocator: Arc<NonceAllocatorRegistry>,
         control: TaskControl,
     ) -> eyre::Result<(SettlementJobId, Self)> {
         let job = resolve_settlement_gas_limit(
@@ -487,7 +490,7 @@ impl<
             tx_config,
             provider,
             store,
-            wallet_nonce_locks,
+            nonce_allocator,
             control,
             attempts: BTreeMap::new(),
         };
@@ -513,10 +516,10 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
-        wallet_nonce_locks: Arc<WalletNonceLocks>,
+        nonce_allocator: Arc<NonceAllocatorRegistry>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
-        match Self::recover_from_storage(id, tx_config, provider, store, wallet_nonce_locks).await?
+        match Self::recover_from_storage(id, tx_config, provider, store, nonce_allocator).await?
         {
             RecoveredSettlementJob::Pending(pending) => {
                 Ok(StoredSettlementJob::Pending(pending.into_task(control)))
@@ -533,7 +536,7 @@ impl<
         tx_config: Arc<SettlementTransactionConfig>,
         provider: Arc<L1Provider>,
         store: Arc<SettlementStore>,
-        wallet_nonce_locks: Arc<WalletNonceLocks>,
+        nonce_allocator: Arc<NonceAllocatorRegistry>,
     ) -> eyre::Result<RecoveredSettlementJob<L1Provider, SettlementStore>> {
         match Self::load_settlement_job_from_db(store.as_ref(), id).await? {
             (_job, Some(result)) => Ok(RecoveredSettlementJob::Completed(result)),
@@ -545,7 +548,7 @@ impl<
                     tx_config,
                     provider,
                     store,
-                    wallet_nonce_locks,
+                    nonce_allocator,
                     attempts,
                 }))
             }
@@ -582,6 +585,11 @@ impl<
                 return run_result;
             }
 
+            retry!(
+                self.reconcile_nonce_allocator_for_tracked_wallets().await,
+                "reconciling nonce allocator with L1 pending counts",
+            );
+
             // Process in a big loop. We'll come back here whenever a reorg is detected, and
             // after waiting when we're done with one cycle.
 
@@ -609,6 +617,7 @@ impl<
                         self.settlement_attempt_number_for(wallet, nonce, tx_hash)
                     else {
                         nonces_used_externally.insert((wallet, nonce), tx_hash);
+                        self.mark_nonce_consumed_on_allocator(wallet, nonce);
                         continue 'nonces;
                     };
                     let tx_result = retry!(
@@ -620,6 +629,7 @@ impl<
                     };
                     if tx_result.outcome != ContractCallOutcome::Success {
                         reverts.insert((wallet, nonce), (attempt_number, tx_hash, tx_result));
+                        self.mark_nonce_consumed_on_allocator(wallet, nonce);
                         continue 'nonces;
                     }
                     let settlement_result = retry!(
@@ -635,6 +645,7 @@ impl<
                     let job_result = self
                         .write_job_result_to_db(wallet, nonce, attempt_number, tx_result.clone())
                         .await;
+                    self.mark_nonce_consumed_on_allocator(wallet, nonce);
                     return SettlementTaskRunResult::Completed(job_result);
                 } else {
                     // If the nonce is not used on L1, we'll need to either wait more or submit a
@@ -753,6 +764,10 @@ impl<
                         earliest_revert_result,
                     )
                     .await;
+                self.mark_nonce_consumed_on_allocator(
+                    earliest_revert_wallet,
+                    earliest_revert_nonce,
+                );
                 return SettlementTaskRunResult::Completed(job_result);
             }
             // There was no successful attempt, and either at least one nonce was not yet
@@ -764,33 +779,14 @@ impl<
                 // used externally, or that we no longer have the required wallets to bump
                 // pending nonces. So we need to submit a new attempt with a new
                 // nonce.
-                //
-                // Hold the wallet's nonce lock from before the nonce is read
-                // until the attempt is saved, so no other same-wallet task
-                // can pick the same nonce in that window; XREF:
-                // https://github.com/agglayer/agglayer/issues/1597.
-                let locked_wallet = self.provider.default_signer_address();
-                // Race the lock wait against cancellation: the holder may be
-                // stuck in transient L1 retries, and an aborted task must not
-                // stay parked in the lock queue until the holder releases.
-                let nonce_guard = tokio::select! {
-                    biased;
-                    _ = self.control.cancellation_token.cancelled() => {
-                        return SettlementTaskRunResult::Cancelled;
-                    }
-                    guard = self.wallet_nonce_locks.lock(locked_wallet) => guard,
-                };
-                let (wallet, nonce, attempt_number, tx) = retry!(
+                let (wallet, nonce, attempt_number, tx, reservation) = retry!(
                     self.build_next_attempt_with_new_nonce().await,
                     "building next settlement attempt with a new nonce",
                 );
-                // The build derives its wallet the same way; if wallet
-                // selection ever becomes dynamic, the lock key must follow.
-                debug_assert_eq!(wallet, locked_wallet);
                 not_included_on_l1.insert((wallet, nonce));
                 if let Some(run_result) = self
                     .save_attempt_to_db_and_submit_to_l1(
-                        Some(nonce_guard),
+                        Some(reservation),
                         wallet,
                         nonce,
                         attempt_number,
@@ -846,13 +842,10 @@ impl<
 
     /// Saves the attempt, then submits it to L1.
     ///
-    /// `nonce_guard` is the per-wallet nonce lock held since before the
-    /// nonce was assigned; XREF:
-    /// https://github.com/agglayer/agglayer/issues/1597. It is dropped as
-    /// soon as the attempt is saved: from that point the nonce is visible to
-    /// other tasks through the store, and the L1 submission does not need to
-    /// block them. The retry path passes `None` because it reuses a nonce
-    /// this job already owns.
+    /// `nonce_reservation` is the armed handout from a new-nonce build; it is
+    /// committed only after the attempt is persisted so a panic before save
+    /// releases the nonce for peers. The same-nonce retry path passes `None`
+    /// because it reuses a nonce this job already owns.
     ///
     /// Returns `Some(SettlementTaskRunResult::Cancelled)` when submission was
     /// interrupted by a shutdown, so the runner stops promptly while leaving
@@ -861,15 +854,17 @@ impl<
     /// recorded client error).
     async fn save_attempt_to_db_and_submit_to_l1(
         &mut self,
-        nonce_guard: Option<OwnedMutexGuard<()>>,
+        nonce_reservation: Option<NonceReservation>,
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
         tx: TxEnvelope,
     ) -> Option<SettlementTaskRunResult> {
         self.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
-        // The nonce is recorded; other same-wallet tasks may now read it.
-        drop(nonce_guard);
+        // Attempt is recorded; keep the nonce reserved until L1/`mark_consumed`.
+        if let Some(reservation) = nonce_reservation {
+            reservation.commit();
+        }
         match self.submit_attempt_to_l1(tx).await {
             Ok(()) => None,
             Err(SubmitAttemptError::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
@@ -967,6 +962,68 @@ impl<
         self.provider.has_signer_for(&wallet)
     }
 
+    /// Notifies the shared allocator that `nonce` is consumed on L1 for
+    /// `wallet`.
+    fn mark_nonce_consumed_on_allocator(&self, wallet: Address, nonce: Nonce) {
+        self.nonce_allocator.mark_consumed(wallet, nonce.0);
+    }
+
+    /// Syncs the shared allocator with each tracked wallet's chain pending
+    /// count.
+    async fn reconcile_nonce_allocator_for_tracked_wallets(
+        &self,
+    ) -> Result<(), RetryCallbackError<TransportError>> {
+        let mut wallets: BTreeSet<Address> = self
+            .all_used_nonces()
+            .into_iter()
+            .map(|(wallet, _)| wallet)
+            .collect();
+        let default_wallet = self.provider.default_signer_address();
+        if self.is_wallet_privkey_known(default_wallet) {
+            wallets.insert(default_wallet);
+        }
+
+        for wallet in wallets {
+            let chain_pending = self.pending_transaction_count(wallet).await?;
+            self.nonce_allocator
+                .reconcile_next_pending(wallet, chain_pending);
+        }
+
+        Ok(())
+    }
+
+    async fn pending_transaction_count(
+        &self,
+        wallet: Address,
+    ) -> Result<u64, RetryCallbackError<TransportError>> {
+        crate::utils::retry_alloy_callback_until_success(
+            &self.tx_config.retry_on_transient_failure,
+            &self.control.cancellation_token,
+            || {
+                self.provider
+                    .get_transaction_count(wallet)
+                    .pending()
+                    .into_future()
+            },
+        )
+        .await
+    }
+
+    /// Computes the store/L1 floor (`max(L1 pending, DB max + 1)`), applies it
+    /// under the allocator lock, and returns an armed [`NonceReservation`].
+    ///
+    /// Re-reading the floor on every reservation preserves the store as a
+    /// lower bound (admin inserts, recovered attempts) without holding a
+    /// per-wallet lock across build/sign. Drop releases the nonce unless
+    /// [`NonceReservation::commit`] runs after a successful save.
+    async fn reserve_nonce_for_build(
+        &self,
+        wallet: Address,
+    ) -> Result<NonceReservation, RetryCallbackError<BuildAttemptError>> {
+        let floor = self.assign_next_nonce_for_wallet(wallet).await?;
+        Ok(self.nonce_allocator.reserve_at_floor(wallet, floor.0))
+    }
+
     /// Returns when the next attempt for `(wallet, nonce)` is due: the most
     /// recent attempt's submission time plus exponential backoff (the fast
     /// transient policy after an RPC `ClientError`, else the slower
@@ -1058,15 +1115,24 @@ impl<
         .await
     }
 
+    /// Computes the next-nonce floor for `wallet`:
+    /// `max(L1 pending, highest stored settlement nonce + 1)`.
+    ///
+    /// Used by [`Self::reserve_nonce_for_build`] so every handout respects the
+    /// attempt store and L1 as a lower bound.
     async fn assign_next_nonce_for_wallet(
         &self,
         wallet: Address,
-    ) -> Result<Nonce, BuildAttemptError> {
+    ) -> Result<Nonce, RetryCallbackError<BuildAttemptError>> {
         let l1_nonce = Nonce(
-            self.provider
-                .get_transaction_count(wallet)
-                .pending()
-                .await?,
+            self.pending_transaction_count(wallet)
+                .await
+                .map_err(|error| match error {
+                    RetryCallbackError::Cancelled => RetryCallbackError::Cancelled,
+                    RetryCallbackError::Error(transport) => {
+                        RetryCallbackError::Error(BuildAttemptError::Transport(transport))
+                    }
+                })?,
         );
 
         let Some(max_local_nonce) = self
@@ -1075,15 +1141,17 @@ impl<
             .wrap_err_with(|| {
                 format!("Failed to inspect recorded settlement attempts for wallet {wallet}")
             })
-            .map_err(BuildAttemptError::NonceAssignment)?
+            .map_err(|error| {
+                RetryCallbackError::Error(BuildAttemptError::NonceAssignment(error))
+            })?
         else {
             return Ok(l1_nonce);
         };
 
         let next_local_nonce = Nonce(max_local_nonce.0.checked_add(1).ok_or_else(|| {
-            BuildAttemptError::NonceAssignment(eyre::eyre!(
+            RetryCallbackError::Error(BuildAttemptError::NonceAssignment(eyre::eyre!(
                 "Unable to assign settlement nonce for wallet {wallet}: nonce overflow"
-            ))
+            )))
         })?);
 
         Ok(l1_nonce.max(next_local_nonce))
@@ -1505,29 +1573,41 @@ impl<
         .await
     }
 
-    /// Selects a wallet and a fresh nonce, resolves base gas parameters from
-    /// the latest L1 fee estimate, and builds a signed settlement attempt.
+    /// Selects a wallet, reserves a fresh nonce from the shared allocator
+    /// (floor `max(L1 pending, DB max + 1)` applied under the allocator lock),
+    /// resolves base gas parameters from the latest L1 fee estimate, and builds
+    /// a signed settlement attempt.
     ///
-    /// Transient L1 RPC failures are retried in place using the configured
-    /// transient-failure policy; a build/sign failure is non-recoverable.
+    /// Nonce handout happens once per call (outside the retry loop) and returns
+    /// an armed [`NonceReservation`]. A failed or cancelled build drops it
+    /// (releasing the nonce). The caller must call [`NonceReservation::commit`]
+    /// only after the attempt is saved. Floor reads and run-loop reconciliation
+    /// use `retry_on_transient_failure`. Transient L1 RPC failures while
+    /// fetching chain id or fees are retried in place using the same policy; a
+    /// build/sign failure is non-recoverable.
     async fn build_next_attempt_with_new_nonce(
         &self,
     ) -> Result<
-        (Address, Nonce, SettlementAttemptNumber, TxEnvelope),
+        (
+            Address,
+            Nonce,
+            SettlementAttemptNumber,
+            TxEnvelope,
+            NonceReservation,
+        ),
         RetryCallbackError<BuildAttemptError>,
     > {
         let wallet = self.provider.default_signer_address();
         let attempt_number = self.next_attempt_number();
+        let reservation = self.reserve_nonce_for_build(wallet).await?;
+        let nonce = Nonce(reservation.nonce());
         let mut retry_policy = BuildRetryPolicy::new();
 
-        crate::utils::retry_callback_until_success(
+        match crate::utils::retry_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || async {
-                // These fetches are independent, so run them concurrently to
-                // keep each (retried) build to one round-trip.
-                let (nonce, chain_id, estimate) = tokio::try_join!(
-                    self.assign_next_nonce_for_wallet(wallet),
+                let (chain_id, estimate) = tokio::try_join!(
                     async {
                         self.provider
                             .get_chain_id()
@@ -1549,6 +1629,12 @@ impl<
             |_| true,
         )
         .await
+        {
+            Ok((wallet, nonce, attempt_number, tx)) => {
+                Ok((wallet, nonce, attempt_number, tx, reservation))
+            }
+            Err(error) => Err(error),
+        }
     }
 
     async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> Result<(), SubmitAttemptError> {
