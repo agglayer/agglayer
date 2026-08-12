@@ -151,12 +151,7 @@ impl StateWriter for StateStore {
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
 
-            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-                warn!(
-                    hash = certificate_id.to_string(),
-                    "Unable to trigger backup for the state database: {}", error
-                );
-            }
+            self.request_backup();
         } else {
             info!(
                 "Certificate header not found for certificate_id: {}",
@@ -193,12 +188,7 @@ impl StateWriter for StateStore {
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
 
-            if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-                warn!(
-                    hash = certificate_id.to_string(),
-                    "Unable to trigger backup for the state database: {}", error
-                );
-            }
+            self.request_backup();
         } else {
             info!(
                 "Certificate header not found for certificate_id: {}",
@@ -275,6 +265,7 @@ impl StateWriter for StateStore {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn update_certificate_header_status(
         &self,
         certificate_id: &CertificateId,
@@ -296,6 +287,13 @@ impl StateWriter for StateStore {
                     },
                     &certificate_header.certificate_id,
                 )?;
+            }
+
+            // A `Proven` certificate is submitted to L1 from a spawned task shortly
+            // after, so this is the last status write still ordered ahead of the
+            // settlement tx. Its proof is already persisted by now.
+            if let CertificateStatus::Proven = status {
+                self.request_backup();
             }
         }
 
@@ -402,15 +400,20 @@ impl StateWriter for StateStore {
         // Atomic write across the 3 cfs
         self.db.write_batch(atomic_batch)?;
 
-        if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-            warn!("Unable to trigger backup for the state database: {}", error);
-        }
+        self.request_backup();
 
         Ok(())
     }
 }
 
 impl StateStore {
+    /// Requests a best-effort backup of the state and pending databases.
+    fn request_backup(&self) {
+        if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+            warn!("Unable to trigger backup for the state database: {}", error);
+        }
+    }
+
     fn write_smt<C, const DEPTH: usize>(
         &self,
         network_id: u32,

@@ -88,6 +88,20 @@ impl BackupClient {
         BackupClient { sender: None }
     }
 
+    /// Create a backup client whose requests are collected instead of being
+    /// executed, so tests can assert on the triggers.
+    #[cfg(test)]
+    pub(crate) fn observable() -> (BackupClient, sync::mpsc::Receiver<BackupRequest>) {
+        let (sender, receiver) = sync::mpsc::channel(10);
+
+        (
+            BackupClient {
+                sender: Some(sender),
+            },
+            receiver,
+        )
+    }
+
     /// Send a backup request.
     ///
     /// This function will send the request to the backup engine.
