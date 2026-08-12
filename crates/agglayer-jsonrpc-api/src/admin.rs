@@ -4,14 +4,12 @@ use agglayer_config::Config;
 use agglayer_settlement_service::SettlementService;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
-    SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
-    UpdateStatusToCandidate,
+    SettlementWriter, StateReader, StateWriter,
 };
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    CertificateStatusError, Digest, Height, NetworkId, RpcErrorCode, SettlementJobId,
-    SettlementTxHash, U256,
+    CertificateStatusError, Digest, Height, NetworkId, RpcErrorCode, SettlementJobId, U256,
 };
 use alloy::providers::{Provider, WalletProvider};
 use eyre::Context as _;
@@ -152,15 +150,12 @@ pub(crate) trait AdminAgglayer {
     /// precondition.  When `to=InError` the error is recorded as
     /// `"Set to InError by administrator"`.
     ///
-    /// ## `set-settlement-tx-hash`
+    /// ## `set-settlement-tx-hash` (retired)
     ///
-    /// ```text
-    /// set-settlement-tx-hash,from=<HASH_OR_null>,to=<HASH_OR_null>
-    /// ```
-    ///
-    /// Sets or clears the settlement transaction hash.  Use the literal
-    /// `null` to represent the absence of a hash.  Any other value must be a
-    /// hex-encoded [`SettlementTxHash`] (a 32-byte keccak digest).
+    /// Always rejected.  Settlement is resolved through the certificate to
+    /// settlement-job link, so editing this header field could neither restart
+    /// nor redirect a settlement; it only looked like it worked.  Recovering a
+    /// stuck settlement is a matter of acting on the job.
     ///
     /// # Guards
     ///
@@ -173,7 +168,7 @@ pub(crate) trait AdminAgglayer {
     ///
     /// | Error | When |
     /// |---|---|
-    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate |
+    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate; the retired `set-settlement-tx-hash` operation |
     /// | `ResourceNotFound` (`-10008`) | No certificate header found for `certificate_id` |
     /// | `INTERNAL_ERROR` | Storage read/write failure; orchestrator channel failure |
     #[method(name = "forceEditCertificate")]
@@ -732,10 +727,6 @@ where
                 from: CertificateStatus,
                 to: CertificateStatus,
             },
-            SetSettlementTxHash {
-                from: Option<SettlementTxHash>,
-                to: Option<SettlementTxHash>,
-            },
         }
 
         impl Operation {
@@ -769,34 +760,16 @@ where
                         from: parse_status(from_status)?,
                         to: parse_status(to_status)?,
                     })
-                } else if let Some(operation) =
-                    operation.strip_prefix("set-settlement-tx-hash,from=")
+                } else if operation
+                    .strip_prefix("set-settlement-tx-hash")
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with(','))
                 {
-                    let parts = operation.split(",to=").collect::<Vec<_>>();
-                    let [from_tx_hash, to_tx_hash] = parts[..] else {
-                        return Err(Error::InvalidArgument(
-                            "Invalid set settlement tx hash operation format".to_string(),
-                        ));
-                    };
-                    fn parse_tx_hash(tx_hash_str: &str) -> Result<Option<SettlementTxHash>, Error> {
-                        if tx_hash_str == "null" {
-                            Ok(None)
-                        } else {
-                            SettlementTxHash::deserialize(
-                                serde::de::value::BorrowedStrDeserializer::new(tx_hash_str),
-                            )
-                            .map(Some)
-                            .map_err(|e: serde::de::value::Error| {
-                                Error::InvalidArgument(format!(
-                                    "Invalid settlement tx hash {tx_hash_str}: {e:?}"
-                                ))
-                            })
-                        }
-                    }
-                    Ok(Operation::SetSettlementTxHash {
-                        from: parse_tx_hash(from_tx_hash)?,
-                        to: parse_tx_hash(to_tx_hash)?,
-                    })
+                    Err(Error::InvalidArgument(
+                        "The set-settlement-tx-hash operation is retired: settlement is driven by \
+                         a settlement job, so editing this field cannot recover it. Act on the \
+                         settlement job instead."
+                            .to_string(),
+                    ))
                 } else {
                     Err(Error::InvalidArgument(format!(
                         "Unknown operation: {operation:?}"
@@ -852,15 +825,6 @@ where
                         )));
                     }
                 }
-                Operation::SetSettlementTxHash { from, to: _ } => {
-                    if &header.settlement_tx_hash != from {
-                        return Err(Error::InvalidArgument(format!(
-                            "Current settlement_tx_hash ({:?}) does not match expected 'from' \
-                             settlement_tx_hash ({:?})",
-                            header.settlement_tx_hash, from
-                        )));
-                    }
-                }
             }
         }
 
@@ -873,30 +837,6 @@ where
                         .map_err(|error| {
                             error!(?error, ?to, "Failed to update certificate status");
                             Error::internal("Unable to update certificate status")
-                        })?;
-                }
-                Operation::SetSettlementTxHash {
-                    from: _,
-                    to: Some(to),
-                } => {
-                    self.state
-                        .update_settlement_tx_hash(
-                            &certificate_id,
-                            to,
-                            UpdateEvenIfAlreadyPresent::Yes,
-                            UpdateStatusToCandidate::No,
-                        )
-                        .map_err(|error| {
-                            error!(?error, ?to, "Failed to update settlement_tx_hash");
-                            Error::internal("Unable to update settlement_tx_hash")
-                        })?;
-                }
-                Operation::SetSettlementTxHash { from: _, to: None } => {
-                    self.state
-                        .remove_settlement_tx_hash(&certificate_id)
-                        .map_err(|error| {
-                            error!(?error, "Failed to remove settlement_tx_hash");
-                            Error::internal("Unable to remove settlement_tx_hash")
                         })?;
                 }
             }

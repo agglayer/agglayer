@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agglayer_contracts::{
     rollup::VerifierType, settler::verify_pessimistic_trusted_aggregator_calldata,
 };
+use agglayer_errors::ResultExt as _;
 use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::stores::{
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
@@ -322,13 +323,18 @@ where
         // The settlement service records the certificate -> job-id link
         // atomically when creating the job and rejects duplicates, so the
         // orchestrator does not persist the link itself.
-        let job = self.build_settlement_job().await?;
+        let job = self
+            .build_settlement_job()
+            .await
+            .log_err("Failed to build the settlement job")?;
+        // Not logged here: submission fails with an expected cancellation error
+        // during graceful shutdown, and `process` suppresses that before logging.
         let job_id = self
             .settlement_service
             .submit_settlement_job(certificate_id, job)
             .await
             .map_err(|error| {
-                CertificateStatusError::SettlementError(format!(
+                CertificateStatusError::InternalError(format!(
                     "Failed to submit settlement job: {error}"
                 ))
             })?;
