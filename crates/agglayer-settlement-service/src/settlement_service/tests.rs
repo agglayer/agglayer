@@ -2654,3 +2654,4 @@ async fn live_job_count_tracks_the_task_registry() {
 }
 
 mod same_wallet_nonce_race;
+mod spawn_to_completed;
