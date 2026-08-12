@@ -327,13 +327,14 @@ where
             .build_settlement_job()
             .await
             .log_err("Failed to build the settlement job")?;
+        // Not logged here: submission fails with an expected cancellation error
+        // during graceful shutdown, and `process` suppresses that before logging.
         let job_id = self
             .settlement_service
             .submit_settlement_job(certificate_id, job)
             .await
-            .log_err("Failed to submit the settlement job")
             .map_err(|error| {
-                CertificateStatusError::SettlementError(format!(
+                CertificateStatusError::InternalError(format!(
                     "Failed to submit settlement job: {error}"
                 ))
             })?;

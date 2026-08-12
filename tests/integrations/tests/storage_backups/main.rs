@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use agglayer_config::storage::backup::BackupConfig;
 use agglayer_storage::{
-    backup::{BackupEngine, BackupEngineInfo},
+    backup::{BackupClient, BackupEngine, BackupEngineInfo},
+    stores::{
+        pending::PendingStore, state::StateStore, PendingCertificateReader as _, StateReader as _,
+    },
     tests::TempDBDir,
 };
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
@@ -36,6 +39,29 @@ async fn wait_for_backup_counts(
 
 fn latest_backup_id(backups: &[BackupEngineInfo]) -> Option<u32> {
     backups.iter().map(|backup| backup.backup_id).max()
+}
+
+/// Restores backup `backup_id` from both `state/` and `pending/` into a fresh
+/// directory, so one specific snapshot can be inspected without touching the
+/// node's live databases.
+///
+/// The returned [`TempDBDir`] owns the restored files and must be kept alive
+/// for as long as the stores are used.
+fn restore_snapshot(
+    backup_dir: &std::path::Path,
+    backup_id: u32,
+) -> (TempDBDir, StateStore, PendingStore) {
+    let restored = TempDBDir::new();
+    let state_path = restored.path.join("state");
+    let pending_path = restored.path.join("pending");
+
+    BackupEngine::restore_at(&backup_dir.join("state"), &state_path, backup_id).unwrap();
+    BackupEngine::restore_at(&backup_dir.join("pending"), &pending_path, backup_id).unwrap();
+
+    let state = StateStore::new_with_path(&state_path, BackupClient::noop()).unwrap();
+    let pending = PendingStore::new_with_path(&pending_path).unwrap();
+
+    (restored, state, pending)
 }
 
 /// Waits until the latest state and pending backup ids reach at least the given
@@ -101,6 +127,37 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
+
+    // The invariant the `Proven` trigger exists for: backup 1 is requested before
+    // the settlement tx is submitted, and must carry the certificate header and
+    // its generated proof together — they live in two different databases, and
+    // the later backups no longer hold the proof.
+    //
+    // The status is asserted as a range rather than exactly `Proven`: the backup
+    // engine flushes on a blocking task, so under load it can run after the
+    // certificate task has advanced to `Candidate`. Both are pre-settlement and
+    // both recover; pinning `Proven` would only buy a flaky test.
+    {
+        let (_restored, state, pending) = restore_snapshot(&backup_dir.path, 1);
+
+        let header = state
+            .get_certificate_header(&certificate_id)
+            .unwrap()
+            .expect("backup 1 should contain the certificate header");
+        assert!(
+            matches!(
+                header.status,
+                CertificateStatus::Proven | CertificateStatus::Candidate
+            ),
+            "backup 1 should predate settlement, got {:?}",
+            header.status
+        );
+
+        assert!(
+            pending.get_proof(certificate_id).unwrap().is_some(),
+            "backup 1 should contain the generated proof"
+        );
+    }
 
     let config = agglayer_config::Config::new(&tmp_dir.path);
     std::fs::remove_dir_all(&config.storage.pending_db_path).unwrap();
