@@ -235,6 +235,42 @@ pub enum StoredSettlementJob<L1Provider, SettlementStore> {
     Completed(SettlementJobResult),
 }
 
+/// Hydrated pending settlement job that has not yet been bound to runtime
+/// task controls. Used by startup recovery so completed jobs never allocate
+/// admin channels or cancellation tokens.
+pub(crate) struct PendingSettlementJob<L1Provider, SettlementStore> {
+    id: SettlementJobId,
+    job: SettlementJob,
+    tx_config: Arc<SettlementTransactionConfig>,
+    provider: Arc<L1Provider>,
+    store: Arc<SettlementStore>,
+    wallet_nonce_locks: Arc<WalletNonceLocks>,
+    attempts: ActiveSettlementAttempts,
+}
+
+impl<L1Provider, SettlementStore> PendingSettlementJob<L1Provider, SettlementStore> {
+    pub(crate) fn into_task(
+        self,
+        control: TaskControl,
+    ) -> SettlementTask<L1Provider, SettlementStore> {
+        SettlementTask {
+            id: self.id,
+            job: self.job,
+            tx_config: self.tx_config,
+            provider: self.provider,
+            store: self.store,
+            wallet_nonce_locks: self.wallet_nonce_locks,
+            control,
+            attempts: self.attempts,
+        }
+    }
+}
+
+pub(crate) enum RecoveredSettlementJob<L1Provider, SettlementStore> {
+    Pending(PendingSettlementJob<L1Provider, SettlementStore>),
+    Completed(SettlementJobResult),
+}
+
 #[derive(Debug)]
 pub enum TaskAdminCommand {
     ReloadAndRestart,
@@ -271,6 +307,11 @@ impl TaskControlHandle {
 
     pub fn cancel(&self) {
         self.cancellation_token.cancel();
+    }
+
+    /// Whether cancellation has been requested for this task.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancellation_token.is_cancelled()
     }
 
     /// Queues an admin command for the task. This does not interrupt a wait
@@ -475,22 +516,39 @@ impl<
         wallet_nonce_locks: Arc<WalletNonceLocks>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
-        let (job, result) = Self::load_settlement_job_from_db(store.as_ref(), id).await?;
-        if let Some(result) = result {
-            Ok(StoredSettlementJob::Completed(result))
-        } else {
-            let mut this = SettlementTask {
-                id,
-                job,
-                tx_config,
-                provider,
-                store,
-                wallet_nonce_locks,
-                control,
-                attempts: BTreeMap::new(),
-            };
-            this.load_settlement_attempts_from_db()?;
-            Ok(StoredSettlementJob::Pending(this))
+        match Self::recover_from_storage(id, tx_config, provider, store, wallet_nonce_locks).await?
+        {
+            RecoveredSettlementJob::Pending(pending) => {
+                Ok(StoredSettlementJob::Pending(pending.into_task(control)))
+            }
+            RecoveredSettlementJob::Completed(result) => Ok(StoredSettlementJob::Completed(result)),
+        }
+    }
+
+    /// Classify and hydrate a settlement job from storage without allocating
+    /// runtime task controls. Startup recovery attaches controls only for
+    /// [`RecoveredSettlementJob::Pending`].
+    pub(crate) async fn recover_from_storage(
+        id: SettlementJobId,
+        tx_config: Arc<SettlementTransactionConfig>,
+        provider: Arc<L1Provider>,
+        store: Arc<SettlementStore>,
+        wallet_nonce_locks: Arc<WalletNonceLocks>,
+    ) -> eyre::Result<RecoveredSettlementJob<L1Provider, SettlementStore>> {
+        match Self::load_settlement_job_from_db(store.as_ref(), id).await? {
+            (_job, Some(result)) => Ok(RecoveredSettlementJob::Completed(result)),
+            (job, None) => {
+                let attempts = Self::load_settlement_attempts_from_store(store.as_ref(), id)?;
+                Ok(RecoveredSettlementJob::Pending(PendingSettlementJob {
+                    id,
+                    job,
+                    tx_config,
+                    provider,
+                    store,
+                    wallet_nonce_locks,
+                    attempts,
+                }))
+            }
         }
     }
 
@@ -1535,12 +1593,19 @@ impl<
         Ok((job, result))
     }
 
+    #[cfg(test)]
     fn load_settlement_attempts_from_db(&mut self) -> eyre::Result<()> {
-        let results = self.store.list_settlement_attempt_results(&self.id)?;
-        let attempts = self.store.list_settlement_attempts(&self.id)?;
-
-        self.attempts = hydrate_settlement_attempts(attempts, results, self.id)?;
+        self.attempts = Self::load_settlement_attempts_from_store(self.store.as_ref(), self.id)?;
         Ok(())
+    }
+
+    fn load_settlement_attempts_from_store(
+        store: &SettlementStore,
+        id: SettlementJobId,
+    ) -> eyre::Result<ActiveSettlementAttempts> {
+        let results = store.list_settlement_attempt_results(&id)?;
+        let attempts = store.list_settlement_attempts(&id)?;
+        hydrate_settlement_attempts(attempts, results, id)
     }
 
     fn save_attempt_to_db(

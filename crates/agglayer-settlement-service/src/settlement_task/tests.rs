@@ -361,6 +361,97 @@ async fn load_settlement_job_from_db_reports_missing_job() {
 }
 
 #[tokio::test]
+async fn recover_from_storage_returns_completed_without_loading_attempts() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(50);
+    let job = mk_job();
+    let job_result = mk_job_result(6, ContractCallOutcome::Success);
+    let expected_job_result = job_result.clone();
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job_result)));
+    store.expect_list_settlement_attempts().never();
+    store.expect_list_settlement_attempt_results().never();
+
+    let loaded = SettlementTask::recover_from_storage(
+        job_id,
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider()),
+        Arc::new(store),
+        Arc::new(WalletNonceLocks::default()),
+    )
+    .await
+    .expect("completed settlement job should recover");
+
+    match loaded {
+        RecoveredSettlementJob::Completed(loaded_result) => {
+            assert_eq!(loaded_result, expected_job_result);
+        }
+        RecoveredSettlementJob::Pending(_) => {
+            panic!("completed settlement job should not recover as pending")
+        }
+    }
+}
+
+#[tokio::test]
+async fn recover_from_storage_returns_pending_with_hydrated_attempts() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(51);
+    let job = mk_job();
+    let expected_job = job.clone();
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+
+    let loaded = SettlementTask::recover_from_storage(
+        job_id,
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider()),
+        Arc::new(store),
+        Arc::new(WalletNonceLocks::default()),
+    )
+    .await
+    .expect("pending settlement job should recover");
+
+    match loaded {
+        RecoveredSettlementJob::Pending(pending) => {
+            assert_eq!(pending.id, job_id);
+            assert_eq!(pending.job, expected_job);
+            assert!(pending.attempts.is_empty());
+        }
+        RecoveredSettlementJob::Completed(_) => {
+            panic!("pending settlement job should not recover as completed")
+        }
+    }
+}
+
+#[tokio::test]
 async fn load_returns_completed_settlement_job() {
     let mut store = MockStateStore::new();
     let job_id = mk_job_id(5);
