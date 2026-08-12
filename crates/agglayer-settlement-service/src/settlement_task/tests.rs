@@ -1724,7 +1724,7 @@ async fn build_next_attempt_with_new_nonce_uses_assigned_nonce_and_default_walle
         attempts: BTreeMap::new(),
     };
 
-    let (used_wallet, nonce, attempt_number, envelope) = task
+    let (used_wallet, nonce, attempt_number, envelope, _reservation) = task
         .build_next_attempt_with_new_nonce()
         .await
         .expect("attempt should build");

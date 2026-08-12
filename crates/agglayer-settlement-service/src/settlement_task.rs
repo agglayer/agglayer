@@ -688,7 +688,13 @@ impl<
                                           // the existing attempt
                     };
                     if let Some(run_result) = self
-                        .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
+                        .save_attempt_to_db_and_submit_to_l1(
+                            None,
+                            wallet,
+                            nonce,
+                            attempt_number,
+                            tx,
+                        )
                         .await
                     {
                         return run_result;
@@ -773,13 +779,19 @@ impl<
                 // used externally, or that we no longer have the required wallets to bump
                 // pending nonces. So we need to submit a new attempt with a new
                 // nonce.
-                let (wallet, nonce, attempt_number, tx) = retry!(
+                let (wallet, nonce, attempt_number, tx, reservation) = retry!(
                     self.build_next_attempt_with_new_nonce().await,
                     "building next settlement attempt with a new nonce",
                 );
                 not_included_on_l1.insert((wallet, nonce));
                 if let Some(run_result) = self
-                    .save_attempt_to_db_and_submit_to_l1(wallet, nonce, attempt_number, tx)
+                    .save_attempt_to_db_and_submit_to_l1(
+                        Some(reservation),
+                        wallet,
+                        nonce,
+                        attempt_number,
+                        tx,
+                    )
                     .await
                 {
                     return run_result;
@@ -830,6 +842,11 @@ impl<
 
     /// Saves the attempt, then submits it to L1.
     ///
+    /// `nonce_reservation` is the armed handout from a new-nonce build; it is
+    /// committed only after the attempt is persisted so a panic before save
+    /// releases the nonce for peers. The same-nonce retry path passes `None`
+    /// because it reuses a nonce this job already owns.
+    ///
     /// Returns `Some(SettlementTaskRunResult::Cancelled)` when submission was
     /// interrupted by a shutdown, so the runner stops promptly while leaving
     /// the already-saved attempt pending; returns `None` when the runner
@@ -837,12 +854,17 @@ impl<
     /// recorded client error).
     async fn save_attempt_to_db_and_submit_to_l1(
         &mut self,
+        nonce_reservation: Option<NonceReservation>,
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
         tx: TxEnvelope,
     ) -> Option<SettlementTaskRunResult> {
         self.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
+        // Attempt is recorded; keep the nonce reserved until L1/`mark_consumed`.
+        if let Some(reservation) = nonce_reservation {
+            reservation.commit();
+        }
         match self.submit_attempt_to_l1(tx).await {
             Ok(()) => None,
             Err(SubmitAttemptError::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
@@ -992,8 +1014,8 @@ impl<
     ///
     /// Re-reading the floor on every reservation preserves the store as a
     /// lower bound (admin inserts, recovered attempts) without holding a
-    /// per-wallet lock across build/sign. Drop releases on build failure;
-    /// call [`NonceReservation::commit`] after a successful build.
+    /// per-wallet lock across build/sign. Drop releases the nonce unless
+    /// [`NonceReservation::commit`] runs after a successful save.
     async fn reserve_nonce_for_build(
         &self,
         wallet: Address,
@@ -1556,17 +1578,23 @@ impl<
     /// resolves base gas parameters from the latest L1 fee estimate, and builds
     /// a signed settlement attempt.
     ///
-    /// Nonce handout happens once per call (outside the retry loop). A failed
-    /// or cancelled build releases via [`NonceReservation`] drop; a successful
-    /// build calls [`NonceReservation::commit`] so the nonce stays reserved
-    /// through save and submit. Floor reads and run-loop reconciliation use
-    /// `retry_on_transient_failure`. Transient L1 RPC failures while fetching
-    /// chain id or fees are retried in place using the same policy; a
+    /// Nonce handout happens once per call (outside the retry loop) and returns
+    /// an armed [`NonceReservation`]. A failed or cancelled build drops it
+    /// (releasing the nonce). The caller must call [`NonceReservation::commit`]
+    /// only after the attempt is saved. Floor reads and run-loop reconciliation
+    /// use `retry_on_transient_failure`. Transient L1 RPC failures while
+    /// fetching chain id or fees are retried in place using the same policy; a
     /// build/sign failure is non-recoverable.
     async fn build_next_attempt_with_new_nonce(
         &self,
     ) -> Result<
-        (Address, Nonce, SettlementAttemptNumber, TxEnvelope),
+        (
+            Address,
+            Nonce,
+            SettlementAttemptNumber,
+            TxEnvelope,
+            NonceReservation,
+        ),
         RetryCallbackError<BuildAttemptError>,
     > {
         let wallet = self.provider.default_signer_address();
@@ -1602,9 +1630,8 @@ impl<
         )
         .await
         {
-            Ok(result) => {
-                reservation.commit();
-                Ok(result)
+            Ok((wallet, nonce, attempt_number, tx)) => {
+                Ok((wallet, nonce, attempt_number, tx, reservation))
             }
             Err(error) => Err(error),
         }

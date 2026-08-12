@@ -7,8 +7,8 @@
 //! one lock and returns an armed [`NonceReservation`]. Handout skips nonces
 //! still in the reserved set so releasing a lower hole cannot collide with a
 //! higher in-flight reservation. Dropping an armed reservation releases the
-//! nonce; call [`NonceReservation::commit`] after a successful build so the
-//! nonce stays reserved through save/submit until L1 observation or
+//! nonce; call [`NonceReservation::commit`] after the attempt is saved so the
+//! nonce stays reserved through submit until L1 observation or
 //! [`NonceAllocatorRegistry::mark_consumed`]. Gas bumps must reuse an existing
 //! nonce and must not hand out again.
 //! XREF: https://github.com/agglayer/agglayer/issues/1575
@@ -105,8 +105,8 @@ impl NonceAllocatorRegistry {
     /// receive distinct nonces even when their floor reads raced; releasing a
     /// lower hole cannot re-issue a higher still-reserved nonce.
     ///
-    /// Prefer [`Self::reserve_at_floor`] so failed builds release via
-    /// [`NonceReservation`] drop.
+    /// Prefer [`Self::reserve_at_floor`] so failed builds / unsaved attempts
+    /// release via [`NonceReservation`] drop.
     pub(crate) fn handout_at_floor(&self, wallet: Address, floor: u64) -> u64 {
         let mut guard = self.lock();
         let state = guard.entry(wallet).or_default();
@@ -228,10 +228,11 @@ impl Default for NonceAllocatorRegistry {
 
 /// Exclusive handout that releases on drop unless [`Self::commit`] is called.
 ///
-/// After a successful build, call [`Self::commit`] so the nonce stays in
-/// `reserved` through attempt save/submit until L1 observation or
+/// After the settlement attempt is persisted, call [`Self::commit`] so the
+/// nonce stays in `reserved` through submit until L1 observation or
 /// [`NonceAllocatorRegistry::mark_consumed`]. On build failure, cancellation,
-/// or panic before commit, `Drop` releases the nonce so peers can reuse it.
+/// panic before save, or any drop before commit, `Drop` releases the nonce so
+/// peers can reuse it.
 pub(crate) struct NonceReservation {
     registry: Arc<NonceAllocatorRegistry>,
     wallet: Address,
@@ -245,7 +246,7 @@ impl NonceReservation {
         self.nonce
     }
 
-    /// Keep the reservation after a successful build.
+    /// Keep the reservation after the attempt has been saved to the store.
     ///
     /// The nonce remains reserved until later `mark_consumed` / reconcile.
     pub(crate) fn commit(mut self) {
