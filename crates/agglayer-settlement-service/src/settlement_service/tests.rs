@@ -209,7 +209,81 @@ fn mk_result(seed: u8, outcome: ContractCallOutcome) -> SettlementJobResult {
 }
 
 #[tokio::test]
+async fn watcher_returns_result_that_arrived_before_waiting() {
+    let job_id = mk_job_id(6);
+    let expected_result = mk_result(6, ContractCallOutcome::Success);
+    let (result_sender, result_receiver) = watch::channel(None);
+    result_sender
+        .send(Some(expected_result.clone()))
+        .expect("the watcher should still be open");
+    let mut watcher = SettlementJobWatcher {
+        watcher: result_receiver,
+        job_id,
+    };
+    assert_eq!(
+        watcher.watcher().borrow_and_update().as_ref(),
+        Some(&expected_result),
+        "the already-published value should be marked seen before waiting"
+    );
+
+    let result = tokio::time::timeout(Duration::from_secs(1), watcher.wait_for_result())
+        .await
+        .expect("the current result should be returned without another update")
+        .expect("an already-published result must not be missed");
+
+    assert_eq!(result, expected_result);
+}
+
+#[tokio::test]
+async fn watcher_waits_for_late_result() {
+    let job_id = mk_job_id(7);
+    let expected_result = mk_result(7, ContractCallOutcome::Revert);
+    let expected_result_for_sender = expected_result.clone();
+    let (result_sender, result_receiver) = watch::channel(None);
+    let mut watcher = SettlementJobWatcher {
+        watcher: result_receiver,
+        job_id,
+    };
+
+    let send_result = async move {
+        // Let `wait_for_result` register its interest before publishing.
+        tokio::task::yield_now().await;
+        result_sender
+            .send(Some(expected_result_for_sender))
+            .expect("the watcher should still be open");
+    };
+    let (result, ()) = tokio::join!(watcher.wait_for_result(), send_result);
+
+    assert_eq!(
+        result.expect("the late result should wake the watcher"),
+        expected_result
+    );
+}
+
+#[tokio::test]
+async fn watcher_errors_when_sender_closes_without_result() {
+    let job_id = mk_job_id(8);
+    let (result_sender, result_receiver) = watch::channel(None);
+    let mut watcher = SettlementJobWatcher {
+        watcher: result_receiver,
+        job_id,
+    };
+    drop(result_sender);
+
+    let error = watcher
+        .wait_for_result()
+        .await
+        .expect_err("a closed watcher without a result must fail");
+
+    assert!(error
+        .to_string()
+        .contains("watcher closed before producing a result"));
+}
+
+#[tokio::test]
 async fn start_scans_jobs_and_skips_completed_ones() {
+    // Completed jobs are classified via recover_from_storage (no TaskControl)
+    // and must leave neither controls nor watchers installed.
     let mut store = MockStateStore::new();
     let job_id = mk_job_id(9);
     let job = mk_job(9);
@@ -240,6 +314,59 @@ async fn start_scans_jobs_and_skips_completed_ones() {
         .expect("settlement task_controls lock poisoned")
         .is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn start_resumes_pending_job_with_task_controls_tied_to_service_cancellation() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(10);
+    let job = mk_job(10);
+
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![job_id]));
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+
+    let cancellation_token = CancellationToken::new();
+    let service = mk_service_with_token(Arc::new(store), cancellation_token.clone()).await;
+
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
+    assert!(service.result_watchers.lock().await.contains_key(&job_id));
+
+    cancellation_token.cancel();
+
+    wait_until(|| {
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .is_empty()
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -293,6 +420,39 @@ async fn start_skips_unloadable_jobs_and_keeps_scanning() {
         .expect("settlement task_controls lock poisoned")
         .is_empty());
     assert!(service.result_watchers.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn start_propagates_job_scan_failure_before_spawning_tasks() {
+    let mut store = MockStateStore::new();
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(|| {
+            Err(StorageError::UnprocessedAction(
+                "settlement job scan failed".to_owned(),
+            ))
+        });
+    let (provider, request_count) = mk_parked_provider();
+
+    let result = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await;
+    let Err(error) = result else {
+        panic!("a failed startup scan must fail service startup");
+    };
+
+    assert!(format!("{error:#}").contains("Failed to scan settlement job ids"));
+    assert_eq!(
+        request_count.load(Ordering::SeqCst),
+        0,
+        "a failed scan must not start settlement tasks"
+    );
 }
 
 #[tokio::test]
@@ -492,6 +652,169 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
 }
 
 #[tokio::test]
+async fn reload_and_restart_replaces_live_task_when_reload_finds_pending_job() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(10);
+    let job = mk_job(10);
+    let attempt = mk_resolved_attempt(10, SettlementTxHash::new(Digest::from([11; 32])));
+
+    store
+        .expect_get_settlement_job()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(Some(job.clone())));
+    store
+        .expect_get_settlement_job_result()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(vec![(0, attempt.clone())]));
+
+    let cancellation_token = CancellationToken::new();
+    let (provider, request_count) = mk_parked_provider();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+    let (task_control_handle, task_control) = TaskControlHandle::new(&cancellation_token);
+    let stale_task_control_handle = task_control_handle.clone();
+    task_control_handle
+        .try_send(TaskAdminCommand::ReloadAndRestart)
+        .expect("reload command should fit in admin channel");
+    let task = match service
+        .load_stored_job(job_id, task_control)
+        .await
+        .expect("initial settlement task should load")
+    {
+        StoredSettlementJob::Pending(task) => task,
+        StoredSettlementJob::Completed(_) => panic!("initial load should be pending"),
+    };
+
+    let result_receiver = service
+        .spawn_settlement_task(job_id, task, task_control_handle)
+        .await;
+    wait_until_l1_request_is_parked(&request_count).await;
+
+    assert!(service.has_live_task(job_id));
+    assert_eq!(
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .len(),
+        1
+    );
+    let registered_watcher = service
+        .result_watchers
+        .lock()
+        .await
+        .get(&job_id)
+        .cloned()
+        .expect("the reloaded task must retain a result watcher");
+    assert!(registered_watcher.same_channel(&result_receiver));
+    assert!(registered_watcher.borrow().is_none());
+    assert!(matches!(
+        stale_task_control_handle.try_send(TaskAdminCommand::ReloadAndRestart),
+        Err(mpsc::error::TrySendError::Closed(_))
+    ));
+    let reloaded_task_control_handle = service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .get(&job_id)
+        .cloned()
+        .expect("the reloaded task must replace the stale control handle");
+    reloaded_task_control_handle
+        .try_send(TaskAdminCommand::ReloadAndRestart)
+        .expect("the replacement control handle must reach the reloaded task");
+
+    cancellation_token.cancel();
+    wait_until(|| !service.has_live_task(job_id)).await;
+}
+
+#[tokio::test]
+async fn reload_and_restart_load_failure_cleans_up_live_registrations() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(11);
+    let job = mk_job(11);
+    let job_reads = Arc::new(AtomicUsize::new(0));
+
+    store
+        .expect_get_settlement_job()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning({
+            let job_reads = job_reads.clone();
+            move |_| {
+                if job_reads.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Ok(Some(job.clone()))
+                } else {
+                    Err(StorageError::UnprocessedAction(
+                        "settlement job row became unreadable".to_owned(),
+                    ))
+                }
+            }
+        });
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
+    task_control_handle
+        .try_send(TaskAdminCommand::ReloadAndRestart)
+        .expect("reload command should fit in admin channel");
+    let task = match service
+        .load_stored_job(job_id, task_control)
+        .await
+        .expect("initial settlement task should load")
+    {
+        StoredSettlementJob::Pending(task) => task,
+        StoredSettlementJob::Completed(_) => panic!("initial load should be pending"),
+    };
+
+    let mut result_receiver = service
+        .spawn_settlement_task(job_id, task, task_control_handle)
+        .await;
+    let closed = tokio::time::timeout(Duration::from_secs(10), result_receiver.changed())
+        .await
+        .expect("the failed reload should close its result watcher");
+
+    assert!(closed.is_err(), "the watcher sender should be dropped");
+    wait_until(|| !service.has_live_task(job_id)).await;
+    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
+}
+
+#[tokio::test]
 async fn request_new_settlement_persists_job_with_certificate_link() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
@@ -543,6 +866,50 @@ async fn request_new_settlement_persists_job_with_certificate_link() {
     cancellation_token.cancel();
 
     assert_eq!(*recorded_job_id.lock().unwrap(), Some(watcher.job_id()));
+}
+
+#[tokio::test]
+async fn request_new_settlement_persistence_failure_leaves_no_registrations() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let certificate_id = CertificateId::new(Digest::from([12; 32]));
+    let job = mk_job(12);
+
+    store
+        .expect_insert_settlement_job_with_certificate()
+        .once()
+        .withf(move |_, _, requested_certificate_id| requested_certificate_id == &certificate_id)
+        .return_once(|_, _, _| {
+            Err(StorageError::UnprocessedAction(
+                "settlement job insert failed".to_owned(),
+            ))
+        });
+
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider_with_gas_estimate(200_000)),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    let result = service
+        .request_new_settlement(Some(certificate_id), job)
+        .await;
+    let Err(error) = result else {
+        panic!("a failed persistence write must reject the settlement request");
+    };
+
+    assert!(format!("{error:#}").contains("Failed to persist settlement job"));
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
+    assert!(service.result_watchers.lock().await.is_empty());
 }
 
 #[tokio::test]
@@ -668,14 +1035,7 @@ async fn panicked_task_deregisters_control_and_abort_reports_no_live_task() {
     // `mk_service` uses the dead endpoint at http://127.0.0.1:0. The task's
     // first L1 query fails non-recoverably and deliberately panics.
     let service = mk_service(Arc::new(store)).await;
-    wait_until(|| {
-        !service
-            .task_controls
-            .lock()
-            .expect("settlement task_controls lock poisoned")
-            .contains_key(&job_id)
-    })
-    .await;
+    wait_until(|| !service.has_live_task(job_id)).await;
 
     let error = service
         .admin_abort_task(job_id)
@@ -746,34 +1106,141 @@ async fn admin_reload_completed_job_is_tagged_already_completed() {
 }
 
 #[tokio::test]
-async fn admin_reload_pending_job_without_task_is_tagged_no_live_task() {
+async fn abort_then_reload_respawns_pending_job() {
     let mut store = MockStateStore::new();
-    expect_empty_startup_recovery(&mut store);
     let job_id = mk_job_id(25);
     let job = mk_job(25);
+    let attempt = mk_resolved_attempt(25, SettlementTxHash::new(Digest::from([26; 32])));
 
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![job_id]));
     store
         .expect_get_settlement_job()
-        .once()
+        .times(3)
         .withf(move |requested_job_id| requested_job_id == &job_id)
-        .return_once(move |_| Ok(Some(job)));
+        .returning(move |_| Ok(Some(job.clone())));
     store
         .expect_get_settlement_job_result()
-        .once()
+        .times(3)
         .withf(move |requested_job_id| requested_job_id == &job_id)
-        .return_once(|_| Ok(None));
+        .returning(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(vec![(0, attempt.clone())]));
 
-    let service = mk_service(Arc::new(store)).await;
+    let cancellation_token = CancellationToken::new();
+    let (provider, request_count) = mk_parked_provider();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+    wait_until_l1_request_is_parked(&request_count).await;
 
-    let error = service
+    assert!(service.has_live_task(job_id));
+    let old_watcher = service
+        .result_watchers
+        .lock()
+        .await
+        .get(&job_id)
+        .cloned()
+        .expect("the parked task must have a watcher");
+
+    service
+        .admin_abort_task(job_id)
+        .await
+        .expect("the parked task should accept an abort");
+    wait_until(|| !service.has_live_task(job_id)).await;
+    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
+
+    service
         .admin_reload_and_restart_task(job_id)
         .await
-        .expect_err("reload on pending job without a task should fail");
+        .expect("reload should respawn the pending job");
+    wait_until(|| request_count.load(Ordering::SeqCst) >= 2).await;
 
+    assert!(service.has_live_task(job_id));
+    let fresh_watcher = service
+        .result_watchers
+        .lock()
+        .await
+        .get(&job_id)
+        .cloned()
+        .expect("the respawned task must have a watcher");
+    assert!(!fresh_watcher.same_channel(&old_watcher));
+    assert!(fresh_watcher.borrow().is_none());
+
+    match service
+        .retrieve_settlement_result(job_id)
+        .await
+        .expect("the respawned job should be retrievable")
+    {
+        RetrievedSettlementResult::Pending(mut watcher) => assert!(
+            watcher.watcher().has_changed().is_ok(),
+            "the fresh watcher must still have a live sender"
+        ),
+        RetrievedSettlementResult::Completed(_) => panic!("the respawned job must be pending"),
+    }
+
+    cancellation_token.cancel();
+}
+
+#[tokio::test]
+async fn reload_of_live_task_queues_command() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(29);
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![job_id]));
+    // These strict one-load expectations prove reload queues to the existing
+    // control rather than loading and spawning a second task.
+    expect_pending_job_load(&mut store, job_id, 29);
+
+    let cancellation_token = CancellationToken::new();
+    let (provider, request_count) = mk_parked_provider();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+    wait_until_l1_request_is_parked(&request_count).await;
+
+    service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect("reload should queue to the live task");
+
+    assert!(service.has_live_task(job_id));
     assert_eq!(
-        error.downcast_ref::<RpcErrorCode>(),
-        Some(&RpcErrorCode::NoLiveTask)
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .len(),
+        1
     );
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+    cancellation_token.cancel();
 }
 
 #[tokio::test]
@@ -806,17 +1273,156 @@ async fn admin_reload_with_full_admin_channel_is_tagged_unavailable() {
 }
 
 #[tokio::test]
-async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
+async fn abort_then_immediate_reload_is_tagged_unavailable() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(74);
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, _task_control) = TaskControlHandle::new(&service.cancellation_token);
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .insert(job_id, task_control_handle);
+
+    service
+        .admin_abort_task(job_id)
+        .await
+        .expect("abort should cancel the registered task");
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload should not queue onto a cancelled task");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::Unavailable)
+    );
+    assert!(service.has_live_task(job_id));
+}
+
+#[tokio::test]
+async fn reload_retries_after_closed_handle_teardown() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
     let job_id = mk_job_id(27);
     let job = mk_job(27);
+    let attempt = mk_resolved_attempt(27, SettlementTxHash::new(Digest::from([28; 32])));
 
     store
         .expect_get_settlement_job()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(Some(job.clone())));
+    store
+        .expect_get_settlement_job_result()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
         .once()
         .withf(move |requested_job_id| requested_job_id == &job_id)
-        .return_once(move |_| Ok(Some(job)));
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .return_once(move |_| Ok(vec![(0, attempt)]));
+
+    let cancellation_token = CancellationToken::new();
+    let (provider, request_count) = mk_parked_provider();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+    let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
+    // Drop the receiver side so the admin channel is closed rather than full,
+    // simulating the window before the task's teardown guard deregisters it.
+    drop(task_control);
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .insert(job_id, task_control_handle);
+    let (stale_sender, stale_watcher) = watch::channel(None);
+    drop(stale_sender);
+    service
+        .result_watchers
+        .lock()
+        .await
+        .insert(job_id, stale_watcher.clone());
+
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("reload should wait for closed-handle teardown");
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::Unavailable)
+    );
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
+
+    // Simulate the teardown guard completing. A retry now sees no task and
+    // safely follows the normal respawn path.
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .remove(&job_id);
+    service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect("reload should respawn after teardown completes");
+    wait_until_l1_request_is_parked(&request_count).await;
+
+    assert!(service.has_live_task(job_id));
+    let fresh_watcher = service
+        .result_watchers
+        .lock()
+        .await
+        .get(&job_id)
+        .cloned()
+        .expect("respawn should register a fresh watcher");
+    assert!(!fresh_watcher.same_channel(&stale_watcher));
+    assert!(fresh_watcher.borrow().is_none());
+    cancellation_token.cancel();
+}
+
+#[tokio::test]
+async fn reload_load_failure_leaves_no_registrations() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(30);
+    let job = mk_job(30);
+    let job_reads = Arc::new(AtomicUsize::new(0));
+
+    store
+        .expect_get_settlement_job()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning({
+            let job_reads = job_reads.clone();
+            move |_| {
+                if job_reads.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Ok(Some(job.clone()))
+                } else {
+                    Err(StorageError::UnprocessedAction(
+                        "settlement job row became unreadable".to_owned(),
+                    ))
+                }
+            }
+        });
     store
         .expect_get_settlement_job_result()
         .once()
@@ -824,25 +1430,68 @@ async fn admin_reload_with_closed_admin_channel_is_classified_via_storage() {
         .return_once(|_| Ok(None));
 
     let service = mk_service(Arc::new(store)).await;
-    let (task_control_handle, task_control) = TaskControlHandle::new(&service.cancellation_token);
-    // Drop the receiver side so the admin channel is closed rather than full,
-    // simulating the task completing/dying between the lookup and the send.
-    drop(task_control);
+    let (stale_sender, stale_watcher) = watch::channel(None);
+    drop(stale_sender);
     service
-        .task_controls
+        .result_watchers
         .lock()
-        .expect("settlement task_controls lock poisoned")
-        .insert(job_id, task_control_handle);
+        .await
+        .insert(job_id, stale_watcher);
 
     let error = service
         .admin_reload_and_restart_task(job_id)
         .await
-        .expect_err("reload with a closed admin command channel should fail");
+        .expect_err("an unreadable pending job should fail to reload");
 
     assert_eq!(
         error.downcast_ref::<RpcErrorCode>(),
-        Some(&RpcErrorCode::NoLiveTask)
+        Some(&RpcErrorCode::Unavailable)
     );
+    assert!(!service.has_live_task(job_id));
+    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
+}
+
+#[tokio::test]
+async fn reload_completed_during_load_is_tagged_already_completed() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(31);
+    let job = mk_job(31);
+    let result = mk_result(31, ContractCallOutcome::Success);
+    let result_reads = Arc::new(AtomicUsize::new(0));
+
+    store
+        .expect_get_settlement_job()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(Some(job.clone())));
+    store
+        .expect_get_settlement_job_result()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning({
+            let result_reads = result_reads.clone();
+            move |_| {
+                if result_reads.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Ok(None)
+                } else {
+                    Ok(Some(result.clone()))
+                }
+            }
+        });
+
+    let service = mk_service(Arc::new(store)).await;
+    let error = service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect_err("a job that completed during reload should be refused");
+
+    assert_eq!(
+        error.downcast_ref::<RpcErrorCode>(),
+        Some(&RpcErrorCode::AlreadyCompleted)
+    );
+    assert!(!service.has_live_task(job_id));
+    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
 }
 
 #[tokio::test]
@@ -1745,6 +2394,46 @@ async fn admin_mutation_queues_reload_for_parked_live_task() {
         Some(TaskAdminCommand::ReloadAndRestart)
     ));
     assert!(task_control.try_recv_admin_command().is_none());
+}
+
+#[tokio::test]
+async fn admin_mutation_reports_cancelled_task_notification_failure() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let job_id = mk_job_id(75);
+
+    store
+        .expect_admin_remove_settlement_attempt_result()
+        .once()
+        .withf(
+            move |requested_job_id, attempt_number, edit_even_if_completed| {
+                requested_job_id == &job_id
+                    && *attempt_number == 8
+                    && *edit_even_if_completed == EditEvenIfCompleted::No
+            },
+        )
+        .return_once(|_, _, _| Ok(()));
+
+    let service = mk_service(Arc::new(store)).await;
+    let (task_control_handle, mut task_control) =
+        TaskControlHandle::new(&service.cancellation_token);
+    task_control_handle.cancel();
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .insert(job_id, task_control_handle);
+
+    let live_task = service
+        .admin_remove_attempt_result(job_id, 8, EditEvenIfCompleted::No)
+        .await
+        .expect("the persisted edit should survive task cancellation");
+
+    assert_eq!(live_task, LiveTaskNotification::NotifyFailed);
+    assert!(
+        task_control.try_recv_admin_command().is_none(),
+        "a cancelled task must not receive a reload command"
+    );
 }
 
 #[tokio::test]

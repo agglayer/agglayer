@@ -4,21 +4,21 @@ use agglayer_config::Config;
 use agglayer_settlement_service::SettlementService;
 use agglayer_storage::stores::{
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
-    SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
-    UpdateStatusToCandidate,
+    SettlementWriter, StateReader, StateWriter,
 };
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
-    CertificateStatusError, Digest, Height, NetworkId, SettlementJobId, SettlementTxHash, U256,
+    CertificateStatusError, Digest, Height, NetworkId, RpcErrorCode, SettlementJobId, U256,
 };
 use alloy::providers::{Provider, WalletProvider};
+use eyre::Context as _;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pessimistic_proof::local_balance_tree::BalanceTree;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
-use tracing::{error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use unified_bridge::TokenInfo;
 
 use super::error::RpcResult;
@@ -26,7 +26,9 @@ use crate::{
     error::Error,
     rpc_middleware,
     settlement_admin::{
-        edit_even_if_completed, map_admin_error, Force, InsertAttemptParams, MutationResponse,
+        edit_even_if_completed, map_admin_error, render_last_error, Force, InsertAttemptParams,
+        MutationResponse, SettlementAttemptDetail, SettlementJobDetail, SettlementJobResultDto,
+        SettlementJobStatus, SettlementJobSummary,
     },
     JsonRpcService,
 };
@@ -148,15 +150,12 @@ pub(crate) trait AdminAgglayer {
     /// precondition.  When `to=InError` the error is recorded as
     /// `"Set to InError by administrator"`.
     ///
-    /// ## `set-settlement-tx-hash`
+    /// ## `set-settlement-tx-hash` (retired)
     ///
-    /// ```text
-    /// set-settlement-tx-hash,from=<HASH_OR_null>,to=<HASH_OR_null>
-    /// ```
-    ///
-    /// Sets or clears the settlement transaction hash.  Use the literal
-    /// `null` to represent the absence of a hash.  Any other value must be a
-    /// hex-encoded [`SettlementTxHash`] (a 32-byte keccak digest).
+    /// Always rejected.  Settlement is resolved through the certificate to
+    /// settlement-job link, so editing this header field could neither restart
+    /// nor redirect a settlement; it only looked like it worked.  Recovering a
+    /// stuck settlement is a matter of acting on the job.
     ///
     /// # Guards
     ///
@@ -169,7 +168,7 @@ pub(crate) trait AdminAgglayer {
     ///
     /// | Error | When |
     /// |---|---|
-    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate |
+    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate; the retired `set-settlement-tx-hash` operation |
     /// | `ResourceNotFound` (`-10008`) | No certificate header found for `certificate_id` |
     /// | `INTERNAL_ERROR` | Storage read/write failure; orchestrator channel failure |
     #[method(name = "forceEditCertificate")]
@@ -214,39 +213,74 @@ pub(crate) trait AdminAgglayer {
     /// **JSON-RPC method:** `admin_abortSettlementTask`
     ///
     /// This is runtime-only: the stored job remains pending and is untouched.
-    /// There is no respawn in this stack, so recovery is a node restart;
-    /// startup recovery respawns pending jobs. Aborting a job whose waiter is
-    /// live makes its certificate `InError` while the job can still settle
-    /// after restart. That certificate-status/storage divergence must be
-    /// reconciled manually by the operator.
+    /// Recover it with `admin_reloadSettlementTask`, which reloads the pending
+    /// job from storage and spawns a fresh task without restarting the node.
+    /// Aborting a job whose waiter is live makes its certificate `InError`
+    /// while the respawned job can still settle on L1. That certificate-status
+    /// versus storage-result divergence must be reconciled manually by the
+    /// operator.
     ///
     /// # Errors
     ///
     /// Unknown job IDs return `RpcErrorCode::NotFound`'s code; completed jobs
-    /// return `RpcErrorCode::AlreadyCompleted`'s code; pending jobs without a
-    /// task return `RpcErrorCode::NoLiveTask`'s code; and a full task command
-    /// queue returns `RpcErrorCode::Unavailable`'s code.
+    /// return `RpcErrorCode::AlreadyCompleted`'s code; and pending jobs without
+    /// a task return `RpcErrorCode::NoLiveTask`'s code.
     #[method(name = "abortSettlementTask")]
     async fn abort_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
 
-    /// Make a live settlement task reload its state from storage.
+    /// Reload a settlement task's state from storage, respawning it if needed.
     ///
     /// **JSON-RPC method:** `admin_reloadSettlementTask`
     ///
-    /// The task drops its in-memory state and reloads from storage. It
-    /// requires a live task, and is the escape hatch when a later mutation
-    /// reports `liveTask` other than `queued`. The command is queued, not a
-    /// wake-up: it takes effect at the task's next control check and does
-    /// not interrupt a wait in progress.
+    /// A live task reloads in place. The command is queued, not a wake-up: it
+    /// takes effect at the task's next control check and does not interrupt a
+    /// wait in progress. If the task is gone after an abort, panic, or failed
+    /// in-task reload, the pending job is loaded from storage and a fresh task
+    /// and result watcher are spawned. Together with
+    /// `admin_abortSettlementTask`, this completes the abort, inspect/fix,
+    /// reload recovery cycle without a node restart. A call that overlaps task
+    /// teardown returns `Unavailable`; retry after teardown completes.
     ///
     /// # Errors
     ///
-    /// Unknown job IDs return `RpcErrorCode::NotFound`'s code; completed jobs
-    /// return `RpcErrorCode::AlreadyCompleted`'s code; pending jobs without a
-    /// task return `RpcErrorCode::NoLiveTask`'s code; and a full task command
-    /// queue returns `RpcErrorCode::Unavailable`'s code.
+    /// Unknown job IDs return `RpcErrorCode::NotFound`'s `-10008` code;
+    /// completed jobs return `RpcErrorCode::AlreadyCompleted`'s code; and a
+    /// full task command queue, task teardown in progress, or failed storage
+    /// reload returns `RpcErrorCode::Unavailable`'s code.
     #[method(name = "reloadSettlementTask")]
     async fn reload_settlement_task(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// List every settlement job known to storage.
+    ///
+    /// **JSON-RPC method:** `admin_listSettlementJobs`
+    ///
+    /// Returns each job's certificate link, status, live-task flag, attempt
+    /// count, latest attempt, and latest error. A pending job with
+    /// `hasLiveTask: false` needs `admin_reloadSettlementTask`. If one job's
+    /// storage records cannot be read, its row instead has `unreadable` status
+    /// and the full contextual error; other jobs remain visible.
+    ///
+    /// This performs a full settlement-jobs column-family scan followed by
+    /// per-job lookups; the startup-recovery TODO for bounding that scan also
+    /// applies here. Reads are point-in-time, not transactional, so a job
+    /// completing mid-read can briefly appear pending without a live task.
+    /// They log at `debug`; warning-level logs remain for admin mutations.
+    #[method(name = "listSettlementJobs")]
+    async fn list_settlement_jobs(&self) -> RpcResult<Vec<SettlementJobSummary>>;
+
+    /// Get one settlement job with its parameters and full attempt history.
+    ///
+    /// **JSON-RPC method:** `admin_getSettlementJob`
+    ///
+    /// Returns the certificate link, status, live-task flag, parameters,
+    /// attempts, and terminal result. Reads are point-in-time, not
+    /// transactional, so a job completing mid-read can briefly appear pending
+    /// without a live task. A pending job with `hasLiveTask: false` needs
+    /// `admin_reloadSettlementTask`. Reads log at `debug`; mutations at `warn`.
+    ///
+    /// Unknown job IDs return `RpcErrorCode::NotFound`'s `-10008` code.
+    #[method(name = "getSettlementJob")]
+    async fn get_settlement_job(&self, job_id: SettlementJobId) -> RpcResult<SettlementJobDetail>;
 
     /// Append one new settlement attempt to a settlement job.
     ///
@@ -453,6 +487,98 @@ where
             .route("/", axum::routing::post_service(service.clone()))
             .layer(middleware))
     }
+
+    fn read_settlement_job(
+        &self,
+        job_id: SettlementJobId,
+    ) -> eyre::Result<Option<SettlementJobDetail>> {
+        let Some(job) = self
+            .state
+            .get_settlement_job(&job_id)
+            .wrap_err_with(|| format!("Failed to read settlement job {job_id}"))?
+        else {
+            return Ok(None);
+        };
+        let job_result = self
+            .state
+            .get_settlement_job_result(&job_id)
+            .wrap_err_with(|| {
+                format!("Failed to read terminal result for settlement job {job_id}")
+            })?;
+        let attempts = self
+            .state
+            .list_settlement_attempts(&job_id)
+            .wrap_err_with(|| format!("Failed to list attempts for settlement job {job_id}"))?;
+        let attempt_results = self
+            .state
+            .list_settlement_attempt_results(&job_id)
+            .wrap_err_with(|| {
+                format!("Failed to list attempt results for settlement job {job_id}")
+            })?;
+        let certificate_id = self
+            .state
+            .get_settlement_job_certificate_id(&job_id)
+            .wrap_err_with(|| {
+                format!("Failed to read certificate link for settlement job {job_id}")
+            })?;
+        let attempts = attempts
+            .iter()
+            .map(|(number, attempt)| {
+                let result = attempt_results
+                    .iter()
+                    .find(|(result_number, _)| result_number == number)
+                    .map(|(_, result)| result);
+                SettlementAttemptDetail::new(*number, attempt, result)
+            })
+            .collect();
+
+        Ok(Some(SettlementJobDetail {
+            job_id,
+            certificate_id,
+            has_live_task: self.settlement_service.has_live_task(job_id),
+            status: if job_result.is_some() {
+                SettlementJobStatus::Completed
+            } else {
+                SettlementJobStatus::Pending
+            },
+            contract_address: job.contract_address,
+            eth_value: job.eth_value,
+            gas_limit: job.gas_limit,
+            calldata: job.calldata,
+            attempts,
+            job_result: job_result.as_ref().map(SettlementJobResultDto::from),
+            last_error: render_last_error(&attempt_results),
+        }))
+    }
+
+    fn read_settlement_job_summaries(&self) -> eyre::Result<Vec<SettlementJobSummary>> {
+        let job_ids = self
+            .state
+            .list_settlement_job_ids()
+            .wrap_err("Failed to scan settlement job ids")?;
+
+        Ok(job_ids
+            .into_iter()
+            .map(|job_id| summarize_settlement_job(job_id, self.read_settlement_job(job_id)))
+            .collect())
+    }
+}
+
+fn summarize_settlement_job(
+    job_id: SettlementJobId,
+    job: eyre::Result<Option<SettlementJobDetail>>,
+) -> SettlementJobSummary {
+    let error = match job {
+        Ok(Some(job)) => return SettlementJobSummary::from(&job),
+        Ok(None) => {
+            eyre::eyre!("Settlement job {job_id} disappeared after listing its storage key")
+        }
+        Err(error) => error,
+    };
+
+    let error_details = format!("{error:#}");
+    error!(%job_id, ?error, "Unable to read listed settlement job");
+    SettlementJobSummary::unreadable(job_id, error_details)
 }
 
 impl<PendingStore, StateStore, DebugStore, L1Provider> Drop
@@ -601,10 +727,6 @@ where
                 from: CertificateStatus,
                 to: CertificateStatus,
             },
-            SetSettlementTxHash {
-                from: Option<SettlementTxHash>,
-                to: Option<SettlementTxHash>,
-            },
         }
 
         impl Operation {
@@ -638,34 +760,16 @@ where
                         from: parse_status(from_status)?,
                         to: parse_status(to_status)?,
                     })
-                } else if let Some(operation) =
-                    operation.strip_prefix("set-settlement-tx-hash,from=")
+                } else if operation
+                    .strip_prefix("set-settlement-tx-hash")
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with(','))
                 {
-                    let parts = operation.split(",to=").collect::<Vec<_>>();
-                    let [from_tx_hash, to_tx_hash] = parts[..] else {
-                        return Err(Error::InvalidArgument(
-                            "Invalid set settlement tx hash operation format".to_string(),
-                        ));
-                    };
-                    fn parse_tx_hash(tx_hash_str: &str) -> Result<Option<SettlementTxHash>, Error> {
-                        if tx_hash_str == "null" {
-                            Ok(None)
-                        } else {
-                            SettlementTxHash::deserialize(
-                                serde::de::value::BorrowedStrDeserializer::new(tx_hash_str),
-                            )
-                            .map(Some)
-                            .map_err(|e: serde::de::value::Error| {
-                                Error::InvalidArgument(format!(
-                                    "Invalid settlement tx hash {tx_hash_str}: {e:?}"
-                                ))
-                            })
-                        }
-                    }
-                    Ok(Operation::SetSettlementTxHash {
-                        from: parse_tx_hash(from_tx_hash)?,
-                        to: parse_tx_hash(to_tx_hash)?,
-                    })
+                    Err(Error::InvalidArgument(
+                        "The set-settlement-tx-hash operation is retired: settlement is driven by \
+                         a settlement job, so editing this field cannot recover it. Act on the \
+                         settlement job instead."
+                            .to_string(),
+                    ))
                 } else {
                     Err(Error::InvalidArgument(format!(
                         "Unknown operation: {operation:?}"
@@ -721,15 +825,6 @@ where
                         )));
                     }
                 }
-                Operation::SetSettlementTxHash { from, to: _ } => {
-                    if &header.settlement_tx_hash != from {
-                        return Err(Error::InvalidArgument(format!(
-                            "Current settlement_tx_hash ({:?}) does not match expected 'from' \
-                             settlement_tx_hash ({:?})",
-                            header.settlement_tx_hash, from
-                        )));
-                    }
-                }
             }
         }
 
@@ -742,30 +837,6 @@ where
                         .map_err(|error| {
                             error!(?error, ?to, "Failed to update certificate status");
                             Error::internal("Unable to update certificate status")
-                        })?;
-                }
-                Operation::SetSettlementTxHash {
-                    from: _,
-                    to: Some(to),
-                } => {
-                    self.state
-                        .update_settlement_tx_hash(
-                            &certificate_id,
-                            to,
-                            UpdateEvenIfAlreadyPresent::Yes,
-                            UpdateStatusToCandidate::No,
-                        )
-                        .map_err(|error| {
-                            error!(?error, ?to, "Failed to update settlement_tx_hash");
-                            Error::internal("Unable to update settlement_tx_hash")
-                        })?;
-                }
-                Operation::SetSettlementTxHash { from: _, to: None } => {
-                    self.state
-                        .remove_settlement_tx_hash(&certificate_id)
-                        .map_err(|error| {
-                            error!(?error, "Failed to remove settlement_tx_hash");
-                            Error::internal("Unable to remove settlement_tx_hash")
                         })?;
                 }
             }
@@ -980,6 +1051,26 @@ where
     }
 
     #[instrument(skip(self))]
+    async fn list_settlement_jobs(&self) -> RpcResult<Vec<SettlementJobSummary>> {
+        debug!("Listing settlement jobs");
+        self.read_settlement_job_summaries()
+            .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
+    async fn get_settlement_job(&self, job_id: SettlementJobId) -> RpcResult<SettlementJobDetail> {
+        debug!("Reading settlement job {job_id}");
+        self.read_settlement_job(job_id)
+            .and_then(|job| {
+                job.ok_or_else(|| {
+                    eyre::eyre!("No settlement job found for id {job_id}")
+                        .wrap_err(RpcErrorCode::NotFound)
+                })
+            })
+            .map_err(map_admin_error)
+    }
+
+    #[instrument(skip(self))]
     async fn insert_settlement_attempt(
         &self,
         job_id: SettlementJobId,
@@ -1052,5 +1143,32 @@ where
             .admin_force_remove_settlement_job_result(job_id)
             .await
             .map_err(map_admin_error)
+    }
+}
+
+#[cfg(test)]
+mod settlement_job_summary_tests {
+    use eyre::Context as _;
+
+    use super::*;
+
+    #[test]
+    fn failed_job_read_becomes_unreadable_summary_with_full_error_chain() {
+        let job_id = SettlementJobId::from(1_u128);
+        let error = Err::<(), _>(eyre::eyre!("invalid protobuf"))
+            .wrap_err("Failed to decode settlement job")
+            .expect_err("test error must propagate");
+
+        let summary = summarize_settlement_job(job_id, Err(error));
+
+        assert!(matches!(
+            summary,
+            SettlementJobSummary::Unreadable {
+                job_id: unreadable_job_id,
+                status: SettlementJobStatus::Unreadable,
+                error,
+            } if unreadable_job_id == job_id
+                && error == "Failed to decode settlement job: invalid protobuf"
+        ));
     }
 }
