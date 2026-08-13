@@ -2,7 +2,6 @@ use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc, time::Syste
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
 use agglayer_storage::stores::{EditEvenIfCompleted, SettlementReader, SettlementWriter};
-use agglayer_telemetry::settlement::{SettlementJobState, SettlementJobStateSample};
 use agglayer_types::{
     Address, CertificateId, ClientError, Nonce, RpcErrorCode, SettlementAttempt,
     SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
@@ -178,51 +177,26 @@ pub enum RetrievedSettlementResult {
     Completed(SettlementJobResult),
 }
 
-/// Metrics sampling, carrying only the bound it needs to name the settlement
-/// wallet, so the caller registering the gauge needs no knowledge of the
-/// store or the wider provider surface.
-impl<L1Provider: WalletProvider, SettlementStore> SettlementService<L1Provider, SettlementStore> {
-    /// One sample per state, counting the live settlement tasks reporting
-    /// it. Feeds the settlement jobs gauge; see
-    /// [`agglayer_telemetry::settlement::register_settlement_job_metrics`],
-    /// whose contract this satisfies by always reporting every state.
+/// Metrics sampling, needing no bound beyond the service itself, so the
+/// caller registering the gauge needs no knowledge of the store or the
+/// wider provider surface.
+impl<L1Provider, SettlementStore> SettlementService<L1Provider, SettlementStore> {
+    /// The number of live settlement jobs. Feeds the settlement jobs gauge;
+    /// see [`agglayer_telemetry::settlement::register_settlement_job_metrics`].
     ///
     /// Derived from the live task registry on every call rather than from a
     /// tally kept across transitions, so it cannot drift away from the tasks
     /// that actually exist. `TaskControlRegistrationGuard` keeps that registry
     /// honest on every exit path, including an unwind.
     ///
-    /// Every live job is labeled with the current default signer: that is the
-    /// wallet each of them will use for its next attempt, whatever wallet any
-    /// earlier attempt of theirs went out on.
-    pub fn job_state_samples(&self) -> Vec<SettlementJobStateSample> {
-        let wallet = self.provider.default_signer_address().to_string();
-        let (mut building, mut submitted) = (0, 0);
-        for handle in self
-            .task_controls
+    /// Deliberately unlabeled: a job can attempt through several wallets across
+    /// a signer rotation, so no wallet is truthful for it. Wallet-level
+    /// monitoring belongs on the attempt instruments.
+    pub fn live_job_count(&self) -> u64 {
+        self.task_controls
             .lock()
             .expect("settlement task_controls lock poisoned")
-            .values()
-        {
-            // Exhaustive on purpose: a new state must not silently vanish
-            // from the gauge.
-            match handle.state() {
-                SettlementJobState::Building => building += 1,
-                SettlementJobState::Submitted => submitted += 1,
-            }
-        }
-        vec![
-            SettlementJobStateSample {
-                state: SettlementJobState::Building,
-                wallet: wallet.clone(),
-                count: building,
-            },
-            SettlementJobStateSample {
-                state: SettlementJobState::Submitted,
-                wallet,
-                count: submitted,
-            },
-        ]
+            .len() as u64
     }
 }
 

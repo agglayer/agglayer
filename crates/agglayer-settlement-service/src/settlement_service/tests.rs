@@ -31,16 +31,6 @@ use crate::settlement_task::{
     SettlementTask, StoredSettlementJob, TaskAdminCommand, TaskControl, TaskControlHandle,
 };
 
-/// Counts the sample for `state`, treating an absent sample as zero the way
-/// the telemetry gauge does.
-fn state_count(samples: &[SettlementJobStateSample], state: SettlementJobState) -> u64 {
-    samples
-        .iter()
-        .filter(|sample| sample.state == state)
-        .map(|sample| sample.count)
-        .sum()
-}
-
 fn mk_provider() -> impl Provider + WalletProvider + 'static {
     ProviderBuilder::new()
         .wallet(EthereumWallet::from(
@@ -2504,18 +2494,14 @@ async fn admin_mutation_reports_closed_and_full_notification_channels() {
 }
 
 #[tokio::test]
-async fn job_state_samples_count_live_tasks_per_state() {
+async fn live_job_count_tracks_the_task_registry() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
     let service = mk_service(Arc::new(store)).await;
 
-    // Every state is reported even with no live task, so a drained gauge
-    // reads as zero rather than as missing data.
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 0);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
+    // A drained gauge reads as zero rather than as missing data.
+    assert_eq!(service.live_job_count(), 0);
 
-    // Registering a task reports it as building until it broadcasts.
     let mut controls: Vec<TaskControl> = Vec::new();
     for seed in 0..3u128 {
         let (handle, control) = TaskControlHandle::new(&service.cancellation_token);
@@ -2527,32 +2513,13 @@ async fn job_state_samples_count_live_tasks_per_state() {
             .insert(mk_job_id(seed), handle);
     }
 
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 3);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
+    assert_eq!(service.live_job_count(), 3);
 
-    // Every sample names the signer the next attempt will go out on.
-    let expected_wallet = service.provider.default_signer_address().to_string();
-    assert!(samples
-        .iter()
-        .all(|sample| sample.wallet == expected_wallet));
-
-    // A task that broadcasts moves to submitted; the total is unchanged
-    // because the gauge counts jobs, not transitions.
-    controls[0].mark_submitted();
-    controls[1].mark_submitted();
-
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 1);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 2);
-
-    // Dropping the task side must not lose the state: the handle the service
-    // holds is what the scrape reads, and a task can die without the service
-    // having removed its entry yet.
+    // Dropping the task side must not change the count: the registry the
+    // service holds is what the scrape reads, and a task can die without the
+    // service having removed its entry yet.
     controls.clear();
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 1);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 2);
+    assert_eq!(service.live_job_count(), 3);
 
     // Completing a job removes its entry, so the gauge falls.
     service
@@ -2560,9 +2527,7 @@ async fn job_state_samples_count_live_tasks_per_state() {
         .lock()
         .expect("settlement task controls lock poisoned")
         .clear();
-    let samples = service.job_state_samples();
-    assert_eq!(state_count(&samples, SettlementJobState::Building), 0);
-    assert_eq!(state_count(&samples, SettlementJobState::Submitted), 0);
+    assert_eq!(service.live_job_count(), 0);
 }
 
 mod same_wallet_nonce_race;
