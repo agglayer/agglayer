@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 30
     concurrency:
       group: review-tracker-project-47-pr-${{ needs.resolve.outputs.pr }}
-      queue: max
+      cancel-in-progress: false
     permissions:
       contents: read
       issues: write
