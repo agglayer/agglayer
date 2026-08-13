@@ -49,7 +49,6 @@ jobs:
             actionlint
           "${RUNNER_TEMP}/actionlint" \
             -color \
-            -ignore 'unexpected key "queue" for "concurrency" section' \
             .github/workflows/pr-review-tracker-*.yml
 
       - name: Set up Node.js

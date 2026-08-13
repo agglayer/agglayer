@@ -34,7 +34,8 @@ test("commands and review signals are validated before either secret is exposed"
   assert.doesNotMatch(source, /!== run\.head_repository/);
   assert.match(source, /run\.head_branch/);
   assert.match(workflow, /group: review-tracker-project-47-pr-\$\{\{ needs\.resolve\.outputs\.pr \}\}/);
-  assert.match(workflow, /queue: max/);
+  assert.match(workflow, /cancel-in-progress: false/);
+  assert.doesNotMatch(workflow, /queue:/);
   assert.match(workflow, /ref: \$\{\{ github\.sha \}\}/);
   assert.match(workflow, /secrets\.PROJECTS_TOKEN/);
   assert.match(workflow, /secrets\.CLAUDE_API_KEY/);
