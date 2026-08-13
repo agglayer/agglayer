@@ -54,7 +54,8 @@ new one differs from the old one without the program version moving.
 7. **Stop new certificates and let the queue drain.**
    Note that `admin_disableNetwork` only *reports* a network as disabled — it does not block
    anything — so this has to be agreed with whoever runs the aggsenders.
-8. **Deploy the node.**
+8. **Deploy the node with `proof-wrapping = "groth16"`.**
+   Deploying alone changes nothing — PLONK is the default — so this key is the switch.
 9. **Turn the networks back on** and confirm a certificate settles.
 10. **Leave the PLONK route alone.** Do not freeze it. It is the way back.
 
@@ -71,7 +72,7 @@ new one differs from the old one without the program version moving.
    proof-wrapping = "plonk"
    ```
 
-   That is the whole change, and the only knob there is.
+   Or drop the key entirely — PLONK is the default.
    The selector follows the wrapping, so there is no second value to keep in step.
 3. Restart the node.
 4. Turn the networks back on.
@@ -141,8 +142,8 @@ so that clash would be permanent.
 
 Only two selectors exist for a given program, `PP_SELECTOR_PLONK` and `PP_SELECTOR_GROTH16`,
 and the wrapping picks between them. There is nothing else to configure, so the selector and
-the wrapping cannot disagree. A deployment that sets no `proof-wrapping` at all lands on
-Groth16.
+the wrapping cannot disagree. `proof-wrapping` defaults to PLONK, so a deployment that never
+sets it keeps settling exactly as it does today.
 See [pessimistic-proof-elf.md](pessimistic-proof-elf.md) for how the version drives the ELF
 and the vkey snapshot.
 

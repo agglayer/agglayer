@@ -4,10 +4,13 @@ use serde::{Deserialize, Serialize};
 ///
 /// This also picks the `AgglayerGateway` route the proof is sent to, so the
 /// two can never disagree.
+///
+/// Defaults to Plonk, which is what is registered on L1 today: an existing
+/// deployment keeps settling exactly as before until it opts into Groth16.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProofWrapping {
     #[default]
-    Groth16,
     Plonk,
+    Groth16,
 }

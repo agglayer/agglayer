@@ -24,7 +24,9 @@ FROM --platform=${BUILDPLATFORM} golang:1.22 AS go-builder
 FROM debian:bookworm-slim AS circuits
 
 ARG CIRCUIT_ARTIFACTS_URL_BASE=https://sp1-circuits.s3-us-east-2.amazonaws.com
-# Both wrappings ship: groth16 is the default, plonk is the rollback target.
+# Both wrappings ship: plonk is the default and what runs today, groth16 is
+# opt-in via `proof-wrapping`. Shipping both is what lets that be a config
+# change rather than a redeploy, in either direction.
 ARG CIRCUIT_TYPES="groth16 plonk"
 ARG CIRCUIT_VERSION=v6.1.0
 

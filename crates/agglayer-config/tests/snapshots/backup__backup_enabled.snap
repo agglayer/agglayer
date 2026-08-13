@@ -2,7 +2,7 @@
 source: crates/agglayer-config/tests/backup.rs
 expression: "$crate :: toml_snapshot_string(& config)"
 ---
-proof-wrapping = "groth16"
+proof-wrapping = "plonk"
 prover-buffer-size = 100
 
 [full-node-rpcs]
