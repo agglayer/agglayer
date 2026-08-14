@@ -34,6 +34,8 @@ message NetworkInfo {
   optional CertificateStatusError latest_pending_error = 12;
   // The epoch number of the latest settlement.
   optional uint64 latest_epoch_with_settlement = 13;
+  // The ID of the latest pending certificate.
+  types.v1.CertificateId latest_pending_certificate_id = 14;
 }
 
 /// SettledClaim represents information about the settled claim.

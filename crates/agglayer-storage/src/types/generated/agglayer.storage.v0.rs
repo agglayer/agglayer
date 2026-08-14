@@ -318,7 +318,7 @@ pub struct BlockNumber {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NetworkInfoValue {
     /// The type of value being stored.
-    #[prost(oneof="network_info_value::Value", tags="1, 2, 3, 4")]
+    #[prost(oneof="network_info_value::Value", tags="1, 2, 3, 4, 5")]
     pub value: ::core::option::Option<network_info_value::Value>,
 }
 /// Nested message and enum types in `NetworkInfoValue`.
@@ -340,6 +340,9 @@ pub mod network_info_value {
         /// The latest pending certificate.
         #[prost(message, tag="4")]
         LatestPendingCertificateInfo(super::LatestPendingCertificateInfo),
+        /// The latest proven certificate.
+        #[prost(message, tag="5")]
+        LatestProvenCertificateInfo(super::LatestProvenCertificateInfo),
     }
 }
 /// Represents the current settled certificate for a given network.
@@ -431,6 +434,13 @@ pub struct LatestPendingCertificateHeight {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LatestPendingCertificateId {
     /// The certificate ID in bytes
+    #[prost(bytes="bytes", tag="1")]
+    pub id: ::prost::bytes::Bytes,
+}
+/// The latest proven certificate.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LatestProvenCertificateInfo {
+    /// The certificate ID in bytes.
     #[prost(bytes="bytes", tag="1")]
     pub id: ::prost::bytes::Bytes,
 }
