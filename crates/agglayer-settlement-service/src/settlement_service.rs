@@ -177,6 +177,29 @@ pub enum RetrievedSettlementResult {
     Completed(SettlementJobResult),
 }
 
+/// Metrics sampling, needing no bound beyond the service itself, so the
+/// caller registering the gauge needs no knowledge of the store or the
+/// wider provider surface.
+impl<L1Provider, SettlementStore> SettlementService<L1Provider, SettlementStore> {
+    /// The number of live settlement jobs. Feeds the settlement jobs gauge;
+    /// see [`agglayer_telemetry::settlement::register_settlement_job_metrics`].
+    ///
+    /// Derived from the live task registry on every call rather than from a
+    /// tally kept across transitions, so it cannot drift away from the tasks
+    /// that actually exist. `TaskControlRegistrationGuard` keeps that registry
+    /// honest on every exit path, including an unwind.
+    ///
+    /// Deliberately unlabeled: a job can attempt through several wallets across
+    /// a signer rotation, so no wallet is truthful for it. Wallet-level
+    /// monitoring belongs on the attempt instruments.
+    pub fn live_job_count(&self) -> u64 {
+        self.task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .len() as u64
+    }
+}
+
 impl<
         L1Provider: Provider + WalletProvider + 'static,
         SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,

@@ -1664,31 +1664,6 @@ async fn current_result_once_reports_none_when_nonce_no_longer_maps() {
     assert_eq!(result, None);
 }
 
-#[test]
-fn submission_outcome_reports_success() {
-    assert!(submission_outcome(Ok(())).is_ok());
-}
-
-#[test]
-fn submission_outcome_treats_cancellation_as_cancelled() {
-    // A shutdown mid-retry must surface as cancellation so the caller leaves
-    // the already-saved attempt pending and stops the runner, rather than
-    // recording a client error or silently continuing as success.
-    assert!(matches!(
-        submission_outcome(Err(RetryCallbackError::Cancelled)),
-        Err(SubmitAttemptError::Cancelled)
-    ));
-}
-
-#[test]
-fn submission_outcome_reports_transport_error_as_failed() {
-    let error = RetryCallbackError::Error(TransportErrorKind::custom_str("boom"));
-    assert!(matches!(
-        submission_outcome(Err(error)),
-        Err(SubmitAttemptError::Failed(_))
-    ));
-}
-
 #[tokio::test]
 async fn save_and_submit_records_non_transient_broadcast_failure() {
     let wallet = Address::from([12; 20]);
@@ -1734,7 +1709,14 @@ async fn save_and_submit_records_non_transient_broadcast_failure() {
     let mut task = mk_task_with_provider(provider, Arc::new(store), BTreeMap::new());
 
     let run_result = task
-        .save_attempt_to_db_and_submit_to_l1(None, wallet, nonce, attempt_number, tx)
+        .save_attempt_to_db_and_submit_to_l1(
+            None,
+            wallet,
+            nonce,
+            attempt_number,
+            SettlementAttemptKind::Submission,
+            tx,
+        )
         .await;
 
     assert!(run_result.is_none());
@@ -1835,7 +1817,7 @@ async fn submit_attempt_to_l1_skips_broadcast_when_already_cancelled() {
     task.control.cancellation_token.cancel();
 
     let result = task.submit_attempt_to_l1(envelope).await;
-    assert!(matches!(result, Err(SubmitAttemptError::Cancelled)));
+    assert!(matches!(result, Err(RetryCallbackError::Cancelled)));
 
     // The transaction must never have been broadcast.
     let broadcast_tx = task
@@ -2275,13 +2257,16 @@ async fn build_next_attempt_with_nonce_bumps_fees_over_previous_attempt() {
         attempts,
     };
 
-    let (attempt_number, envelope) = task
+    let (attempt_number, attempt_kind, envelope) = task
         .build_next_attempt_with_nonce(wallet_address, nonce)
         .await
         .expect("build should not fail")
         .expect("bump should produce an attempt below the ceiling");
 
     assert_eq!(attempt_number, SettlementAttemptNumber(1));
+    // Out-bidding a live tx is reported as a gas bump by the same read that
+    // decided to bump.
+    assert_eq!(attempt_kind, SettlementAttemptKind::GasBump);
     assert_eq!(envelope.nonce(), 4);
     assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
     // Strictly bumped by >= 10% over the previous attempt on both fields.
@@ -2399,13 +2384,15 @@ async fn build_next_attempt_with_nonce_rebroadcasts_errored_attempt_at_ceiling()
         attempts,
     };
 
-    let (attempt_number, envelope) = task
+    let (attempt_number, attempt_kind, envelope) = task
         .build_next_attempt_with_nonce(wallet_address, nonce)
         .await
         .expect("build should not fail")
         .expect("an errored attempt has no live tx to replace, so it must re-broadcast");
 
     assert_eq!(attempt_number, SettlementAttemptNumber(1));
+    // Nothing live to out-bid, so this is a replacement rather than a bump.
+    assert_eq!(attempt_kind, SettlementAttemptKind::Replacement);
     assert_eq!(envelope.nonce(), 4);
     assert!(matches!(envelope, TxEnvelope::Eip1559(_)));
     // Re-broadcast at base fees, within the configured ceiling; no strict bump.
@@ -2482,13 +2469,15 @@ async fn build_next_attempt_with_nonce_bumps_over_live_tx_ignoring_errored_ceili
         attempts,
     };
 
-    let (attempt_number, envelope) = task
+    let (attempt_number, attempt_kind, envelope) = task
         .build_next_attempt_with_nonce(wallet_address, nonce)
         .await
         .expect("build should not fail")
         .expect("a valid replacement over the live pending tx is possible below the ceiling");
 
     assert_eq!(attempt_number, SettlementAttemptNumber(2));
+    // A live pending tx exists, so this out-bids it: a gas bump.
+    assert_eq!(attempt_kind, SettlementAttemptKind::GasBump);
     assert_eq!(envelope.nonce(), 4);
     // Bumped >= 10% over the *pending* tx (10 gwei), not the errored 30 gwei one.
     assert!(envelope.max_fee_per_gas() >= 11_000_000_000);
@@ -2550,4 +2539,160 @@ fn latest_pending_attempt_fees_for_nonce_ignores_errored_and_unknown() {
         task.latest_pending_attempt_fees_for_nonce(wallet, Nonce(999)),
         None
     );
+}
+
+fn error_response(message: &str) -> TransportError {
+    TransportError::ErrorResp(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32000,
+        message: message.to_string().into(),
+        data: None,
+    })
+}
+
+#[rstest]
+// Geth and its derivatives phrase nonce rejections this way; the match is
+// case-insensitive because node dialects differ on capitalization.
+#[case("nonce too low", SettlementAttemptErrorKind::NonceTooLow)]
+#[case(
+    "Nonce too low: next nonce 7, tx nonce 5",
+    SettlementAttemptErrorKind::NonceTooLow
+)]
+// Both the plain and the replacement phrasing must land in the fee bucket.
+#[case("transaction underpriced", SettlementAttemptErrorKind::Underpriced)]
+#[case(
+    "replacement transaction underpriced",
+    SettlementAttemptErrorKind::Underpriced
+)]
+// An error response the classifier does not recognize stays generic rather
+// than being mislabeled as a nonce or fee problem.
+#[case("execution reverted", SettlementAttemptErrorKind::Rpc)]
+fn classify_attempt_error_buckets_node_error_responses(
+    #[case] message: &str,
+    #[case] expected: SettlementAttemptErrorKind,
+) {
+    assert_eq!(classify_attempt_error(&error_response(message)), expected);
+}
+
+#[test]
+fn classify_attempt_error_buckets_transport_failures_as_rpc() {
+    // A transport-level failure carries no JSON-RPC payload to inspect, so it
+    // is generic RPC trouble.
+    let error = TransportError::Transport(TransportErrorKind::BackendGone);
+    assert_eq!(
+        classify_attempt_error(&error),
+        SettlementAttemptErrorKind::Rpc
+    );
+}
+
+/// Drives a failed broadcast and a terminal completion through the real
+/// production call sites, then reads the exported series back.
+///
+/// The other metric tests call the recording helpers directly, so deleting a
+/// call site or passing the wrong label would leave them green. This one only
+/// passes if `save_attempt_to_db_and_submit_to_l1` and `write_job_result_to_db`
+/// still emit, with the labels they are supposed to carry.
+#[tokio::test]
+async fn metrics_are_emitted_through_the_production_call_sites() {
+    // This test deliberately owns the process-global meter provider: nextest
+    // runs one process per test, so nothing else can race it.
+    let harness = agglayer_telemetry::testutils::MetricsHarness::install();
+
+    let wallet = Address::from([12; 20]);
+    let nonce = Nonce(2);
+    let attempt_number = SettlementAttemptNumber(3);
+
+    // A non-transient nonce rejection, so the error lands in a specific
+    // bucket rather than the generic one.
+    let asserter = Asserter::new();
+    asserter.push_failure(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32000,
+        message: "nonce too low".into(),
+        data: None,
+    });
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(test_signer()))
+        .connect_mocked_client(asserter);
+
+    let mut store = MockStateStore::new();
+    store
+        .expect_insert_settlement_attempt()
+        .once()
+        .returning(|_, _, _| Ok(()));
+    store
+        .expect_record_settlement_attempt_result()
+        .times(1..)
+        .returning(|_, _, _| Ok(()));
+    store
+        .expect_insert_settlement_job_result()
+        .once()
+        .returning(|_, _| Ok(()));
+
+    let mut task = mk_task_with_provider(provider, Arc::new(store), BTreeMap::new());
+
+    task.save_attempt_to_db_and_submit_to_l1(
+        None,
+        wallet,
+        nonce,
+        attempt_number,
+        SettlementAttemptKind::GasBump,
+        mk_tx(112),
+    )
+    .await;
+
+    task.write_job_result_to_db(
+        wallet,
+        nonce,
+        attempt_number,
+        mk_contract_call_result(7, ContractCallOutcome::Success),
+    )
+    .await;
+
+    let metrics = harness.gather();
+    let wallet_label = wallet.to_string();
+
+    assert_eq!(
+        metric_sample(
+            &metrics,
+            "agglayer_node_settlement_attempts_total",
+            &[("kind", "gas_bump")],
+        ),
+        Some(1.0),
+        "attempt counter should be emitted by the submit path, got:\n{metrics}"
+    );
+    assert_eq!(
+        metric_sample(
+            &metrics,
+            "agglayer_node_settlement_attempt_errors_total",
+            &[("kind", "nonce_too_low"), ("wallet", &wallet_label)],
+        ),
+        Some(1.0),
+        "attempt-error counter should carry the classified kind and the sending wallet, \
+         got:\n{metrics}"
+    );
+    assert_eq!(
+        metric_sample(
+            &metrics,
+            "agglayer_node_settlement_job_duration_seconds_count",
+            &[("outcome", "success"), ("wallet", &wallet_label)],
+        ),
+        Some(1.0),
+        "job duration should be emitted by the terminal-completion path, got:\n{metrics}"
+    );
+}
+
+/// Extracts the value of the sample line for `name` carrying every label pair
+/// in `labels`.
+fn metric_sample(metrics: &str, name: &str, labels: &[(&str, &str)]) -> Option<f64> {
+    let labels: Vec<String> = labels
+        .iter()
+        .map(|(key, value)| format!("{key}=\"{value}\""))
+        .collect();
+    metrics
+        .lines()
+        .find(|line| {
+            line.starts_with(&format!("{name}{{"))
+                && labels.iter().all(|label| line.contains(label))
+        })
+        .and_then(|line| line.rsplit(' ').next())
+        .map(|value| value.parse().unwrap())
 }

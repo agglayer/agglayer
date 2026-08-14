@@ -28,7 +28,7 @@ use alloy::{
 
 use super::*;
 use crate::settlement_task::{
-    SettlementTask, StoredSettlementJob, TaskAdminCommand, TaskControlHandle,
+    SettlementTask, StoredSettlementJob, TaskAdminCommand, TaskControl, TaskControlHandle,
 };
 
 fn mk_provider() -> impl Provider + WalletProvider + 'static {
@@ -2491,6 +2491,43 @@ async fn admin_mutation_reports_closed_and_full_notification_channels() {
             .expect("the persisted edit should survive a full notification channel"),
         LiveTaskNotification::NotifyFailed
     );
+}
+
+#[tokio::test]
+async fn live_job_count_tracks_the_task_registry() {
+    let mut store = MockStateStore::new();
+    expect_empty_startup_recovery(&mut store);
+    let service = mk_service(Arc::new(store)).await;
+
+    // A drained gauge reads as zero rather than as missing data.
+    assert_eq!(service.live_job_count(), 0);
+
+    let mut controls: Vec<TaskControl> = Vec::new();
+    for seed in 0..3u128 {
+        let (handle, control) = TaskControlHandle::new(&service.cancellation_token);
+        controls.push(control);
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task controls lock poisoned")
+            .insert(mk_job_id(seed), handle);
+    }
+
+    assert_eq!(service.live_job_count(), 3);
+
+    // Dropping the task side must not change the count: the registry the
+    // service holds is what the scrape reads, and a task can die without the
+    // service having removed its entry yet.
+    controls.clear();
+    assert_eq!(service.live_job_count(), 3);
+
+    // Completing a job removes its entry, so the gauge falls.
+    service
+        .task_controls
+        .lock()
+        .expect("settlement task controls lock poisoned")
+        .clear();
+    assert_eq!(service.live_job_count(), 0);
 }
 
 mod same_wallet_nonce_race;

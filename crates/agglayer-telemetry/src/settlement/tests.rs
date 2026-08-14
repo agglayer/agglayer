@@ -1,3 +1,8 @@
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+
 use super::*;
 use crate::testutils::MetricsHarness;
 
@@ -32,7 +37,6 @@ fn settlement_metrics_export_the_issue_1676_series() {
     record_settlement_attempt_error(SettlementAttemptErrorKind::NonceTooLow, "wallet-0");
     record_settlement_attempt_error(SettlementAttemptErrorKind::Underpriced, "wallet-0");
     record_settlement_attempt_error(SettlementAttemptErrorKind::Rpc, "wallet-1");
-    record_settlement_attempt_error(SettlementAttemptErrorKind::Other, "wallet-1");
 
     record_settlement_job_duration(SettlementJobOutcome::Success, "wallet-0", 42.0);
     record_settlement_job_duration(SettlementJobOutcome::Revert, "wallet-1", 3.0);
@@ -81,14 +85,6 @@ fn settlement_metrics_export_the_issue_1676_series() {
             &metrics,
             &attempt_errors_series,
             &[("kind", "rpc"), ("wallet", "wallet-1")],
-        ),
-        Some(1.0),
-    );
-    assert_eq!(
-        sample_value(
-            &metrics,
-            &attempt_errors_series,
-            &[("kind", "other"), ("wallet", "wallet-1")],
         ),
         Some(1.0),
     );
@@ -173,5 +169,33 @@ fn recovery_skipped_jobs_counter_exports() {
         skipped_value(&metrics),
         Some(2.0),
         "recovery skipped counter, got:\n{metrics}"
+    );
+}
+
+#[test]
+fn settlement_jobs_gauge_reflects_the_sampler_on_every_scrape() {
+    let harness = MetricsHarness::install();
+
+    let live = Arc::new(AtomicU64::new(3));
+    register_settlement_job_metrics(Box::new({
+        let live = live.clone();
+        move || live.load(Ordering::Relaxed)
+    }));
+
+    let metrics = harness.gather();
+    assert_eq!(
+        sample_value(&metrics, SETTLEMENT_JOBS, &[]),
+        Some(3.0),
+        "jobs gauge, got:\n{metrics}"
+    );
+
+    // The sampler is re-run per scrape, and a drained gauge still exports its
+    // series: zero must not read as missing data.
+    live.store(0, Ordering::Relaxed);
+    let metrics = harness.gather();
+    assert_eq!(
+        sample_value(&metrics, SETTLEMENT_JOBS, &[]),
+        Some(0.0),
+        "drained gauge must still export zero, got:\n{metrics}"
     );
 }

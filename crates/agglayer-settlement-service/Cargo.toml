@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 agglayer-config.workspace = true
 agglayer-storage.workspace = true
+agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
 
 alloy.workspace = true
@@ -27,6 +28,7 @@ ulid.workspace = true
 
 [dev-dependencies]
 agglayer-storage = { workspace = true, features = ["testutils"] }
+agglayer-telemetry = { workspace = true, features = ["testutils"] }
 alloy = { workspace = true, features = ["node-bindings"] }
 rstest.workspace = true
 serde_json.workspace = true
