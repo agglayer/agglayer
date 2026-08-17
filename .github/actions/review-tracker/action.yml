@@ -1,0 +1,17 @@
+name: PR Review Tracker
+description: Track requested PR reviews in issues and Project 47
+inputs:
+  mode: {description: Resolve an event or process an authorized event, required: true}
+  github-token: {description: Repository-scoped GitHub token, required: true}
+  projects-token: {description: Token with organization Project access}
+  claude-api-key: {description: Anthropic key used for source matching}
+  pr-number: {description: Authorized pull request number}
+  review-id: {description: Submitted review ID for relayed review events}
+  event-action: {description: Validated relayed lifecycle action}
+outputs:
+  pr: {description: Authorized pull request number}
+  review: {description: Validated submitted review ID}
+  action: {description: Validated relayed lifecycle action}
+runs:
+  using: node24
+  main: dist/index.cjs
