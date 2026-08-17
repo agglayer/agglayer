@@ -137,12 +137,12 @@ pub(crate) fn is_transient_alloy_error(error: &TransportError) -> bool {
 }
 
 fn is_request_timeout_error(error: &TransportError) -> bool {
-    // HTTP 408 has standardized request-timeout semantics, unlike JSON-RPC
-    // server error codes, so it is sufficient without inspecting the body.
+    // HTTP 408 and 504 have standardized timeout semantics, unlike JSON-RPC
+    // server error codes, so they are sufficient without inspecting the body.
     if error
         .as_transport_err()
         .and_then(|error| error.as_http_error())
-        .is_some_and(|error| error.status == 408)
+        .is_some_and(|error| matches!(error.status, 408 | 504))
     {
         return true;
     }
