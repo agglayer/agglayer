@@ -28,6 +28,7 @@ use crate::{
     tests::TempDBDir,
 };
 
+mod backup;
 mod disabled_networks;
 mod metadata;
 mod settlement;

@@ -133,6 +133,11 @@ mock! {
             settlement_job_id: &SettlementJobId,
         ) -> Result<Option<SettlementJob>, Error>;
 
+        fn get_settlement_job_certificate_id(
+            &self,
+            settlement_job_id: &SettlementJobId,
+        ) -> Result<Option<CertificateId>, Error>;
+
         fn get_settlement_job_result(
             &self,
             settlement_job_id: &SettlementJobId,
@@ -208,6 +213,11 @@ mock! {
             settlement_job_id: &SettlementJobId,
             attempt_number: u64,
             edit_even_if_completed: EditEvenIfCompleted,
+        ) -> Result<(), Error>;
+
+        fn admin_force_remove_settlement_job_result(
+            &self,
+            settlement_job_id: &SettlementJobId,
         ) -> Result<(), Error>;
     }
 }

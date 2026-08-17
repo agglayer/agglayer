@@ -1,9 +1,6 @@
-//! Settlement transaction metrics: attempt counts, attempt errors, and job
-//! durations, labeled by wallet where the wallet dimension matters.
-//!
-//! This module only declares the instruments and their record helpers. The
-//! settlement service is responsible for calling them; that wiring, and the
-//! jobs-by-state gauge it requires, land in follow-ups to issue #1676.
+//! Settlement transaction metrics: live job count, attempt counts, attempt
+//! errors, and job durations, labeled by wallet where the wallet dimension
+//! is unambiguous.
 
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*, KeyValue};
@@ -20,6 +17,9 @@ const WALLET_LABEL_NAME: &str = "wallet";
 
 /// Name of the label carrying the job outcome.
 const OUTCOME_LABEL_NAME: &str = "outcome";
+
+/// Gauge name: number of live settlement jobs.
+pub const SETTLEMENT_JOBS: &str = "agglayer_node_settlement_jobs";
 
 /// Counter instrument name: settlement transaction attempts by `kind`.
 ///
@@ -73,7 +73,6 @@ pub enum SettlementAttemptErrorKind {
     NonceTooLow,
     Underpriced,
     Rpc,
-    Other,
 }
 
 /// A terminal settlement job outcome, rendered as the `outcome` label value
@@ -86,6 +85,33 @@ pub enum SettlementAttemptErrorKind {
 pub enum SettlementJobOutcome {
     Success,
     Revert,
+}
+
+/// Register the observable gauge counting live settlement jobs.
+///
+/// `sampler` runs on every `/metrics` scrape, so the exported count always
+/// reflects the live task set rather than a tally maintained across
+/// transitions, which would drift whenever a task exits on an unexpected
+/// path.
+///
+/// Live occupancy only, with no phase breakdown: a healthy job can cross its
+/// phases between two scrapes, so build and broadcast failures are diagnosed
+/// through [`SETTLEMENT_ATTEMPT_ERRORS`] and the logs instead.
+///
+/// # Runtime contract
+///
+/// The closure runs synchronously inside the `/metrics` HTTP handler: it
+/// must not panic, block, or await. Call this only after the global meter
+/// provider is installed (see [`crate::ServerBuilder`]), and at most once
+/// per provider — repeated registration accumulates duplicate callbacks.
+pub fn register_settlement_job_metrics(sampler: Box<dyn Fn() -> u64 + Send + Sync>) {
+    // The instrument handle is intentionally dropped: the callback
+    // registration lives in the meter provider, not in the handle.
+    let _ = global::meter(AGGLAYER_NODE_SETTLEMENT_OTEL_SCOPE_NAME)
+        .u64_observable_gauge(SETTLEMENT_JOBS)
+        .with_description("Number of live settlement jobs")
+        .with_callback(move |observer| observer.observe(sampler(), &[]))
+        .build();
 }
 
 lazy_static! {

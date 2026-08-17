@@ -1,0 +1,41 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/settlement_admin.rs
+expression: "serde_json::to_string_pretty(&completed_json).unwrap()"
+---
+{
+  "attempts": [
+    {
+      "attemptNumber": 0,
+      "maxFeePerGas": 120,
+      "maxPriorityFeePerGas": 30,
+      "nonce": 20,
+      "result": {
+        "blockHash": "0x5252525252525252525252525252525252525252525252525252525252525252",
+        "blockNumber": 42,
+        "outcome": "success",
+        "txHash": "0x5353535353535353535353535353535353535353535353535353535353535353",
+        "type": "contractCall"
+      },
+      "senderWallet": "0x4141414141414141414141414141414141414141",
+      "submissionTimeUnixSecs": 1700000020,
+      "txHash": "0x4242424242424242424242424242424242424242424242424242424242424242"
+    }
+  ],
+  "calldata": "0x3456",
+  "certificateId": "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+  "contractAddress": "0x1212121212121212121212121212121212121212",
+  "ethValue": "0x0",
+  "gasLimit": 100000,
+  "hasLiveTask": false,
+  "jobId": "00000000000000000000000002",
+  "jobResult": {
+    "attemptNumber": 0,
+    "blockNumber": 42,
+    "nonce": 20,
+    "outcome": "success",
+    "txHash": "0x5353535353535353535353535353535353535353535353535353535353535353",
+    "wallet": "0x4141414141414141414141414141414141414141"
+  },
+  "lastError": null,
+  "status": "completed"
+}

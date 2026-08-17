@@ -135,6 +135,22 @@ fn get_certificate_settlement_job_id_returns_none_when_missing() {
 }
 
 #[test]
+fn get_settlement_job_certificate_id_returns_none_when_missing() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_job_id(2);
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(2))
+        .expect("job insert must succeed");
+
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&job_id)
+            .expect("reverse read must succeed"),
+        None
+    );
+}
+
+#[test]
 fn insert_settlement_job_with_certificate_writes_job_and_both_links() {
     let (_tmp, db, store) = setup_store();
     let certificate_id = mk_certificate_id(5);
@@ -158,6 +174,12 @@ fn insert_settlement_job_with_certificate_writes_job_and_both_links() {
     assert_eq!(
         db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
             .expect("Unable to read stored value"),
+        Some(certificate_id)
+    );
+    assert_eq!(
+        store
+            .get_settlement_job_certificate_id(&job_id)
+            .expect("reverse read must succeed"),
         Some(certificate_id)
     );
     assert_eq!(
@@ -1294,6 +1316,131 @@ fn admin_remove_settlement_attempt_result_on_completed_job_requires_force() {
         .admin_remove_settlement_attempt_result(&job_id, 1, EditEvenIfCompleted::Yes)
         .expect("forced removal must succeed on a completed job");
     assert_eq!(stored_attempt_result(&db, job_id, 1), None);
+}
+
+#[test]
+fn admin_force_remove_settlement_job_result_uncompletes_job() {
+    let (_tmp, db, store) = setup_store();
+    let job_id = mk_job_id(61);
+    let attempt = mk_settlement_attempt(1);
+    let attempt_result: SettlementAttemptResult =
+        v0::SettlementAttemptResult::contract_call_success_for_test(61)
+            .try_into()
+            .expect("test tx result helper should be decodable");
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(61))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &attempt)
+        .expect("attempt insert must succeed");
+    store
+        .record_settlement_attempt_result(&job_id, 1, &attempt_result)
+        .expect("attempt result insert must succeed");
+    store
+        .insert_settlement_job_result(
+            &job_id,
+            &v0::SettlementJobResult::contract_call_success_for_test(61)
+                .try_into()
+                .expect("test tx result helper should be decodable"),
+        )
+        .expect("job result insert must succeed");
+
+    store
+        .admin_force_remove_settlement_job_result(&job_id)
+        .expect("force removal must succeed");
+
+    assert_eq!(
+        store
+            .get_settlement_job_result(&job_id)
+            .expect("job result read must succeed"),
+        None
+    );
+    assert!(store
+        .get_settlement_job(&job_id)
+        .expect("job read must succeed")
+        .is_some());
+    assert_eq!(
+        stored_attempt_result(&db, job_id, 1),
+        Some((&attempt_result).into())
+    );
+
+    store
+        .admin_remove_settlement_attempt_result(&job_id, 1, EditEvenIfCompleted::No)
+        .expect("attempt result removal must succeed after job un-completion");
+}
+
+#[test]
+fn admin_force_remove_settlement_job_result_without_result_fails() {
+    let (_tmp, _db, store) = setup_store();
+    let job_id = mk_job_id(62);
+
+    let res = store.admin_force_remove_settlement_job_result(&job_id);
+    assert!(matches!(
+        res,
+        Err(Error::SettlementJobNotFound(missing_job_id)) if missing_job_id == job_id
+    ));
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(62))
+        .expect("job insert must succeed");
+    let res = store.admin_force_remove_settlement_job_result(&job_id);
+    assert!(matches!(
+        res,
+        Err(Error::SettlementJobNotCompleted(pending_job_id)) if pending_job_id == job_id
+    ));
+}
+
+/// The intended un-completion flow: correct the attempt results with forced
+/// edits while the job still has its terminal result, then remove the result.
+/// The other order would let the respawned task re-derive the job result from
+/// the uncorrected attempts.
+#[test]
+fn forced_attempt_edits_prepare_job_result_removal() {
+    let (_tmp, db, store) = setup_store();
+    let job_id = mk_job_id(63);
+    let contract_call: SettlementAttemptResult =
+        v0::SettlementAttemptResult::contract_call_success_for_test(63)
+            .try_into()
+            .expect("test tx result helper should be decodable");
+    let abandoned = abandoned_by_admin_result();
+
+    store
+        .insert_settlement_job(&job_id, &mk_settlement_job(63))
+        .expect("job insert must succeed");
+    store
+        .insert_settlement_attempt(&job_id, 1, &mk_settlement_attempt(1))
+        .expect("attempt insert must succeed");
+    store
+        .record_settlement_attempt_result(&job_id, 1, &contract_call)
+        .expect("result insert must succeed");
+    store
+        .insert_settlement_job_result(
+            &job_id,
+            &v0::SettlementJobResult::contract_call_success_for_test(63)
+                .try_into()
+                .expect("test tx result helper should be decodable"),
+        )
+        .expect("job result insert must succeed");
+
+    store
+        .admin_override_settlement_attempt_result(&job_id, 1, &abandoned, EditEvenIfCompleted::Yes)
+        .expect("forced override must succeed on the completed job");
+
+    store
+        .admin_force_remove_settlement_job_result(&job_id)
+        .expect("force removal must succeed");
+
+    assert_eq!(
+        store
+            .get_settlement_job_result(&job_id)
+            .expect("job result read must succeed"),
+        None
+    );
+    assert_eq!(
+        stored_attempt_result(&db, job_id, 1),
+        Some((&abandoned).into())
+    );
 }
 
 #[test]

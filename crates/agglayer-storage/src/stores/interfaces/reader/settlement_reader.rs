@@ -1,6 +1,6 @@
 use agglayer_types::{
-    Address, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
-    SettlementJobResult,
+    Address, CertificateId, Nonce, SettlementAttempt, SettlementAttemptResult, SettlementJob,
+    SettlementJobId, SettlementJobResult,
 };
 
 use crate::error::Error;
@@ -18,6 +18,13 @@ pub trait SettlementReader: Send + Sync {
         &self,
         settlement_job_id: &SettlementJobId,
     ) -> Result<Option<SettlementJob>, Error>;
+
+    /// Returns the certificate id linked to `settlement_job_id` in the reverse
+    /// index, if present.
+    fn get_settlement_job_certificate_id(
+        &self,
+        settlement_job_id: &SettlementJobId,
+    ) -> Result<Option<CertificateId>, Error>;
 
     /// Returns the terminal result for `settlement_job_id`, if present.
     fn get_settlement_job_result(

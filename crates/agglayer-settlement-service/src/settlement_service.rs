@@ -19,8 +19,8 @@ use tracing::{error, info, warn};
 
 use crate::{
     settlement_task::{
-        SettlementTask, SettlementTaskRunResult, StoredSettlementJob, TaskAdminCommand,
-        TaskControlHandle,
+        RecoveredSettlementJob, SettlementTask, SettlementTaskRunResult, StoredSettlementJob,
+        TaskAdminCommand, TaskControl, TaskControlHandle,
     },
     wallet_nonce_locks::WalletNonceLocks,
 };
@@ -52,14 +52,16 @@ pub enum LiveTaskNotification {
     /// No live task exists for this job. The edit persists and is picked up
     /// whenever a task is started for the job (e.g. on startup recovery).
     Absent,
-    /// A live task exists but could not be notified, so it keeps acting on
-    /// stale in-memory state until it reloads.
+    /// A task registration exists but could not be notified. A running task
+    /// can keep acting on stale in-memory state until it reloads; a cancelled
+    /// or closed task leaves the edit for its eventual replacement to load.
     ///
-    /// This covers both a full command queue (the task is alive but
-    /// wedged/slow; commands drain only at control checks) and a closed
-    /// channel (the task just died or completed). The warning log records
-    /// which case occurred. Use `admin_reloadSettlementTask` as the escape
-    /// hatch, or abort the task and restart the node.
+    /// This covers cancellation in progress, a full command queue (the task
+    /// is alive but wedged/slow; commands drain only at control checks), and a
+    /// closed channel (the task just died or completed). The warning log
+    /// records which case occurred. Use `admin_reloadSettlementTask` as the
+    /// escape hatch; if the task is wedged, abort it and then reload it from
+    /// storage.
     NotifyFailed,
 }
 
@@ -89,6 +91,7 @@ fn tag_admin_storage_error(error: agglayer_storage::error::Error) -> eyre::Repor
         | E::SettlementAttemptNotFound { .. }
         | E::SettlementAttemptResultNotRecorded { .. } => RpcErrorCode::NotFound,
         E::SettlementJobAlreadyCompleted(_) => RpcErrorCode::AlreadyCompleted,
+        E::SettlementJobNotCompleted(_) => RpcErrorCode::NotCompleted,
         _ => return error.into(),
     };
     eyre::Report::new(error).wrap_err(code)
@@ -109,13 +112,35 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     provider: Arc<L1Provider>,
     store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
-    task_controls: Arc<Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
+    task_controls: Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
     result_watchers:
         Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
+    /// Serializes the spawn-capable force-remove and reload admin operations
+    /// so two concurrent calls cannot both conclude that a job needs a fresh
+    /// task and spawn duplicates. A global lock is deliberate at this stack's
+    /// scope: admin operations are rare and operator-driven, and no
+    /// create/spawn/run-loop/retrieve hot path takes it. Revisit per-job
+    /// keying, like `wallet_nonce_locks` and `settlement_write_locks`, before
+    /// adding more spawn-capable admin operations.
+    admin_operation_lock: Arc<Mutex<()>>,
     /// Per-wallet locks serializing the nonce read-to-save window across
     /// concurrent settlement tasks.
     /// XREF: https://github.com/agglayer/agglayer/issues/1597
     wallet_nonce_locks: Arc<WalletNonceLocks>,
+}
+
+struct TaskControlRegistrationGuard {
+    job_id: SettlementJobId,
+    task_controls: Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
+}
+
+impl Drop for TaskControlRegistrationGuard {
+    fn drop(&mut self) {
+        self.task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .remove(&self.job_id);
+    }
 }
 
 pub struct SettlementJobWatcher {
@@ -152,6 +177,29 @@ pub enum RetrievedSettlementResult {
     Completed(SettlementJobResult),
 }
 
+/// Metrics sampling, needing no bound beyond the service itself, so the
+/// caller registering the gauge needs no knowledge of the store or the
+/// wider provider surface.
+impl<L1Provider, SettlementStore> SettlementService<L1Provider, SettlementStore> {
+    /// The number of live settlement jobs. Feeds the settlement jobs gauge;
+    /// see [`agglayer_telemetry::settlement::register_settlement_job_metrics`].
+    ///
+    /// Derived from the live task registry on every call rather than from a
+    /// tally kept across transitions, so it cannot drift away from the tasks
+    /// that actually exist. `TaskControlRegistrationGuard` keeps that registry
+    /// honest on every exit path, including an unwind.
+    ///
+    /// Deliberately unlabeled: a job can attempt through several wallets across
+    /// a signer rotation, so no wallet is truthful for it. Wallet-level
+    /// monitoring belongs on the attempt instruments.
+    pub fn live_job_count(&self) -> u64 {
+        self.task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .len() as u64
+    }
+}
+
 impl<
         L1Provider: Provider + WalletProvider + 'static,
         SettlementStore: SettlementReader + SettlementWriter + Send + Sync + 'static,
@@ -169,12 +217,29 @@ impl<
             provider,
             store,
             cancellation_token,
-            task_controls: Arc::new(Mutex::new(HashMap::new())),
+            task_controls: Arc::new(std::sync::Mutex::new(HashMap::new())),
             result_watchers: Arc::new(Mutex::new(HashMap::new())),
+            admin_operation_lock: Arc::new(Mutex::new(())),
             wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
         };
         let recovery_skipped_jobs = this.resume_pending_settlement_jobs().await?;
         Ok((this, recovery_skipped_jobs))
+    }
+
+    async fn load_stored_job(
+        &self,
+        job_id: SettlementJobId,
+        task_control: TaskControl,
+    ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
+        SettlementTask::load(
+            job_id,
+            self.tx_config.clone(),
+            self.provider.clone(),
+            self.store.clone(),
+            self.wallet_nonce_locks.clone(),
+            task_control,
+        )
+        .await
     }
 
     #[tracing::instrument(skip_all)]
@@ -192,22 +257,22 @@ impl<
         let mut resumed_jobs = 0usize;
         let mut skipped_jobs = 0u64;
         for job_id in job_ids {
-            let (task_control_handle, task_control) =
-                TaskControlHandle::new(&self.cancellation_token);
-            match SettlementTask::load(
+            match SettlementTask::recover_from_storage(
                 job_id,
                 self.tx_config.clone(),
                 self.provider.clone(),
                 self.store.clone(),
                 self.wallet_nonce_locks.clone(),
-                task_control,
             )
             .await
             {
-                Ok(StoredSettlementJob::Completed(_)) => {
+                Ok(RecoveredSettlementJob::Completed(_)) => {
                     completed_jobs += 1;
                 }
-                Ok(StoredSettlementJob::Pending(task)) => {
+                Ok(RecoveredSettlementJob::Pending(pending)) => {
+                    let (task_control_handle, task_control) =
+                        TaskControlHandle::new(&self.cancellation_token);
+                    let task = pending.into_task(task_control);
                     self.spawn_settlement_task(job_id, task, task_control_handle)
                         .await;
                     resumed_jobs += 1;
@@ -242,14 +307,16 @@ impl<
         task_control_handle: TaskControlHandle,
     ) -> watch::Receiver<Option<SettlementJobResult>> {
         let (result_sender, result_receiver) = watch::channel(None);
-        self.task_controls
-            .lock()
-            .await
-            .insert(job_id, task_control_handle);
+        // Register the watcher first so a concurrent retrieval observes a
+        // harmless pending watcher, never a task without a watcher.
         self.result_watchers
             .lock()
             .await
             .insert(job_id, result_receiver.clone());
+        self.task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .insert(job_id, task_control_handle);
         let task_controls = self.task_controls.clone();
         let result_watchers = self.result_watchers.clone();
         let tx_config = self.tx_config.clone();
@@ -258,6 +325,10 @@ impl<
         let wallet_nonce_locks = self.wallet_nonce_locks.clone();
         let cancellation_token = self.cancellation_token.clone();
         tokio::task::spawn(async move {
+            let _task_control_registration = TaskControlRegistrationGuard {
+                job_id,
+                task_controls: task_controls.clone(),
+            };
             loop {
                 match task.run().await {
                     SettlementTaskRunResult::Completed(result) => {
@@ -268,13 +339,11 @@ impl<
                                 "Failed to send settlement job result to watchers"
                             );
                         }
-                        task_controls.lock().await.remove(&job_id);
                         break;
                     }
                     SettlementTaskRunResult::Cancelled => {
                         info!(?job_id, "Settlement task cancelled");
                         result_watchers.lock().await.remove(&job_id);
-                        task_controls.lock().await.remove(&job_id);
                         break;
                     }
                     SettlementTaskRunResult::ReloadAndRestart => {
@@ -283,7 +352,7 @@ impl<
                             TaskControlHandle::new(&cancellation_token);
                         task_controls
                             .lock()
-                            .await
+                            .expect("settlement task_controls lock poisoned")
                             .insert(job_id, task_control_handle);
                         match SettlementTask::load(
                             job_id,
@@ -306,7 +375,6 @@ impl<
                                         "Failed to send settlement job result to watchers"
                                     );
                                 }
-                                task_controls.lock().await.remove(&job_id);
                                 break;
                             }
                             Err(error) => {
@@ -317,7 +385,6 @@ impl<
                                      state"
                                 );
                                 result_watchers.lock().await.remove(&job_id);
-                                task_controls.lock().await.remove(&job_id);
                                 break;
                             }
                         }
@@ -360,33 +427,15 @@ impl<
 
     #[tracing::instrument(skip_all)]
     async fn task_control(&self, job_id: SettlementJobId) -> eyre::Result<TaskControlHandle> {
-        let task_control = self.task_controls.lock().await.get(&job_id).cloned();
+        let task_control = self
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .get(&job_id)
+            .cloned();
         match task_control {
             Some(task_control) => Ok(task_control),
             None => Err(self.classify_missing_task(job_id).await),
-        }
-    }
-
-    #[tracing::instrument(skip_all)]
-    async fn admin_task(
-        &self,
-        job_id: SettlementJobId,
-        command: TaskAdminCommand,
-    ) -> eyre::Result<()> {
-        let task_control = self.task_control(job_id).await?;
-        match task_control.try_send(command) {
-            Ok(()) => Ok(()),
-            Err(error @ mpsc::error::TrySendError::Full(_)) => Err(eyre::Report::new(error)
-                .wrap_err(format!(
-                    "Failed to forward admin command to settlement task {job_id}: admin command \
-                     queue full"
-                ))
-                .wrap_err(RpcErrorCode::Unavailable)),
-            // The task completed or died between the `task_control` lookup above and this
-            // `try_send` call; classify the same way as a missing task control entry.
-            Err(mpsc::error::TrySendError::Closed(_)) => {
-                Err(self.classify_missing_task(job_id).await)
-            }
         }
     }
 
@@ -396,10 +445,106 @@ impl<
         Ok(())
     }
 
+    /// Whether an in-memory task is currently registered for `job_id`.
+    ///
+    /// Advisory: the answer can be stale by the time the caller acts on it.
+    /// Task teardown removes the registration even when a task panics, so
+    /// `false` reliably means that no task is registered.
+    pub fn has_live_task(&self, job_id: SettlementJobId) -> bool {
+        self.task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .contains_key(&job_id)
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn admin_reload_and_restart_task(&self, job_id: SettlementJobId) -> eyre::Result<()> {
-        self.admin_task(job_id, TaskAdminCommand::ReloadAndRestart)
+        let _admin_op = self.admin_operation_lock.lock().await;
+
+        // The run loop can replace its own control handle without taking the
+        // admin-operation lock. Examine and act on the map's current handle
+        // while holding the map lock so this liveness decision cannot race
+        // with that replacement.
+        {
+            let task_controls = self
+                .task_controls
+                .lock()
+                .expect("settlement task_controls lock poisoned");
+            if let Some(task_control) = task_controls.get(&job_id) {
+                // Abort cancels the task before its teardown guard removes the
+                // registration. Queueing during that window would report
+                // success even though the task prioritizes cancellation and
+                // will never drain the command.
+                if task_control.is_cancelled() {
+                    return Err(eyre::eyre!(
+                        "Settlement task {job_id} teardown after cancellation is in progress; \
+                         retry"
+                    )
+                    .wrap_err(RpcErrorCode::Unavailable));
+                }
+
+                match task_control.try_send(TaskAdminCommand::ReloadAndRestart) {
+                    Ok(()) => return Ok(()),
+                    Err(error @ mpsc::error::TrySendError::Full(_)) => {
+                        return Err(eyre::Report::new(error)
+                            .wrap_err(format!(
+                                "Failed to forward admin command to settlement task {job_id}: \
+                                 admin command queue full"
+                            ))
+                            .wrap_err(RpcErrorCode::Unavailable));
+                    }
+                    Err(error @ mpsc::error::TrySendError::Closed(_)) => {
+                        // The receiver can close just before the task's teardown
+                        // guard deregisters this handle. Respawning in that window
+                        // would let the old teardown remove the fresh task's
+                        // registrations, so leave cleanup to the guard and ask the
+                        // operator to retry.
+                        return Err(eyre::Report::new(error)
+                            .wrap_err(format!(
+                                "Failed to forward admin command to settlement task {job_id}: \
+                                 task teardown in progress; retry"
+                            ))
+                            .wrap_err(RpcErrorCode::Unavailable));
+                    }
+                }
+            }
+        }
+
+        let classification = self.classify_missing_task(job_id).await;
+        if classification.downcast_ref::<RpcErrorCode>() != Some(&RpcErrorCode::NoLiveTask) {
+            return Err(classification);
+        }
+
+        // A panicked task can leave its closed receiver in the watcher map.
+        // No replacement registration is created until loading succeeds, so
+        // clearing it here also leaves a load failure with no stale control or
+        // watcher for this job.
+        self.result_watchers.lock().await.remove(&job_id);
+
+        let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
+        let stored_job = self
+            .load_stored_job(job_id, task_control)
             .await
+            .wrap_err(RpcErrorCode::Unavailable)
+            .wrap_err_with(|| format!("Failed to reload pending settlement job {job_id}"))?;
+
+        match stored_job {
+            StoredSettlementJob::Pending(task) => {
+                // Keep the admin lock until both fresh registrations are
+                // installed. `spawn_settlement_task` creates a fresh watcher.
+                self.spawn_settlement_task(job_id, task, task_control_handle)
+                    .await;
+                Ok(())
+            }
+            // The job completed between the classification read and the load.
+            // Keep completed-job behavior consistent regardless of which read
+            // observes the terminal result: reload refuses it and the result
+            // remains authoritative in storage.
+            StoredSettlementJob::Completed(_) => Err(eyre::eyre!(
+                "settlement job {job_id} completed while it was being reloaded"
+            )
+            .wrap_err(RpcErrorCode::AlreadyCompleted)),
+        }
     }
 
     /// Queues a command telling the live task for `job_id`, if any, to drop
@@ -415,10 +560,22 @@ impl<
         &self,
         job_id: SettlementJobId,
     ) -> LiveTaskNotification {
-        let task_controls = self.task_controls.lock().await;
+        let task_controls = self
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned");
         let Some(task_control) = task_controls.get(&job_id) else {
             return LiveTaskNotification::Absent;
         };
+
+        if task_control.is_cancelled() {
+            warn!(
+                ?job_id,
+                "Failed to notify settlement task of an admin edit: task cancellation is in \
+                 progress; a replacement task must load the persisted edit"
+            );
+            return LiveTaskNotification::NotifyFailed;
+        }
 
         match task_control.try_send(TaskAdminCommand::ReloadAndRestart) {
             Ok(()) => LiveTaskNotification::Queued,
@@ -603,6 +760,78 @@ impl<
                 )
             })?;
         Ok(self.notify_live_task_of_admin_edit(job_id).await)
+    }
+
+    /// Removes the terminal result of a completed job and spawns a fresh task
+    /// for it, so the job is re-driven from its stored state.
+    ///
+    /// Force operation: if the removed result was real, only the settlement
+    /// contract's replay protection stands between the re-driven job and a
+    /// double settlement.
+    #[tracing::instrument(skip(self))]
+    pub async fn admin_force_remove_settlement_job_result(
+        &self,
+        job_id: SettlementJobId,
+    ) -> eyre::Result<()> {
+        let _admin_op = self.admin_operation_lock.lock().await;
+
+        // A completed job has no live task. Refusing while one is still
+        // registered (e.g. mid-completion, or the job is simply not done)
+        // keeps the old task and the fresh one below from racing.
+        if self
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .contains_key(&job_id)
+        {
+            return Err(eyre::eyre!(
+                "a settlement task is still live for job {job_id}; its terminal result can only \
+                 be removed once it has completed"
+            )
+            .wrap_err(RpcErrorCode::TaskStillLive));
+        }
+
+        self.store
+            .admin_force_remove_settlement_job_result(&job_id)
+            .map_err(tag_admin_storage_error)
+            .wrap_err_with(|| {
+                format!("Failed to remove terminal result of settlement job {job_id}")
+            })?;
+
+        // Drop the in-memory watcher that still broadcasts the removed
+        // result, then bring the job back to life.
+        self.result_watchers.lock().await.remove(&job_id);
+
+        let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
+        // Nothing stale is registered at this point: the watcher was removed,
+        // and the new control handle is not inserted until spawning succeeds.
+        // A load failure therefore leaves the job explicitly aborted: pending
+        // in storage, with no task, and recoverable by fixing the stored state
+        // and calling `admin_reloadSettlementTask`.
+        let stored_job = self
+            .load_stored_job(job_id, task_control)
+            .await
+            .wrap_err(RpcErrorCode::Unavailable)
+            .wrap_err_with(|| {
+                format!(
+                    "Removed the terminal result of settlement job {job_id} but failed to reload \
+                     the job; repair its stored state and call admin_reloadSettlementTask"
+                )
+            })?;
+
+        match stored_job {
+            StoredSettlementJob::Pending(task) => {
+                // Keep the admin lock until both registrations are complete,
+                // so a competing force-remove observes the live task.
+                self.spawn_settlement_task(job_id, task, task_control_handle)
+                    .await;
+                Ok(())
+            }
+            StoredSettlementJob::Completed(_) => Err(eyre::eyre!(
+                "Settlement job {job_id} still has a terminal result right after its removal; was \
+                 one re-recorded concurrently?"
+            )),
+        }
     }
 
     #[tracing::instrument(skip(self))]

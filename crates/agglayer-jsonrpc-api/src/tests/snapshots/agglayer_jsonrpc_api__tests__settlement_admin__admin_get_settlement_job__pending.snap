@@ -1,0 +1,42 @@
+---
+source: crates/agglayer-jsonrpc-api/src/tests/settlement_admin.rs
+expression: "serde_json::to_string_pretty(&pending_json).unwrap()"
+---
+{
+  "attempts": [
+    {
+      "attemptNumber": 0,
+      "maxFeePerGas": 110,
+      "maxPriorityFeePerGas": 20,
+      "nonce": 10,
+      "result": {
+        "kind": "unknown",
+        "message": "temporary RPC failure",
+        "type": "clientError"
+      },
+      "senderWallet": "0x3131313131313131313131313131313131313131",
+      "submissionTimeUnixSecs": 1700000010,
+      "txHash": "0x3232323232323232323232323232323232323232323232323232323232323232"
+    },
+    {
+      "attemptNumber": 1,
+      "maxFeePerGas": 111,
+      "maxPriorityFeePerGas": 21,
+      "nonce": 11,
+      "result": null,
+      "senderWallet": "0x3232323232323232323232323232323232323232",
+      "submissionTimeUnixSecs": 1700000011,
+      "txHash": "0x3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ],
+  "calldata": "0x3456",
+  "certificateId": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "contractAddress": "0x1212121212121212121212121212121212121212",
+  "ethValue": "0x0",
+  "gasLimit": 100000,
+  "hasLiveTask": false,
+  "jobId": "00000000000000000000000001",
+  "jobResult": null,
+  "lastError": "unknown: temporary RPC failure",
+  "status": "pending"
+}

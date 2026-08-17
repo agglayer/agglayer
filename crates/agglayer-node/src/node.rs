@@ -242,6 +242,7 @@ impl Node {
         agglayer_telemetry::settlement::record_settlement_recovery_skipped_jobs(
             recovery_skipped_jobs,
         );
+        crate::metrics::register_settlement_job_metrics(&settlement_service);
 
         let settlement_service_for_admin = (*settlement_service).clone();
 

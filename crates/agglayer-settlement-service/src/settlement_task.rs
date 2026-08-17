@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     future::IntoFuture as _,
     sync::{Arc, OnceLock},
-    time::{Duration, SystemTime},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use agglayer_config::{
@@ -10,6 +10,10 @@ use agglayer_config::{
     Multiplier,
 };
 use agglayer_storage::stores::{SettlementReader, SettlementWriter};
+use agglayer_telemetry::settlement::{
+    record_settlement_attempt, record_settlement_attempt_error, record_settlement_job_duration,
+    SettlementAttemptErrorKind, SettlementAttemptKind, SettlementJobOutcome,
+};
 use agglayer_types::{
     CertificateId, ClientError, ClientErrorType, ContractCallOutcome, ContractCallResult, Digest,
     Nonce, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
@@ -148,38 +152,32 @@ fn required_settlement_head_number(receipt_block_number: u64, confirmations: usi
     receipt_block_number.saturating_add(confirmation_offset)
 }
 
-/// Why submitting a settlement attempt to L1 did not complete normally.
-#[derive(Debug)]
-enum SubmitAttemptError {
-    /// The task was cancelled mid-submission. The already-saved attempt is left
-    /// pending so it resumes on reload, and the runner is told to stop.
-    Cancelled,
-    /// Submission failed for a non-transient reason and should be recorded.
-    Failed(eyre::Error),
-}
+/// Buckets a failed broadcast for the attempt-error counter.
+///
+/// Only non-transient failures reach here: transient ones are retried inside
+/// [`SettlementTask::submit_attempt_to_l1`] and never surface as a failed
+/// attempt. Nonce and fee rejections are split out from the generic `rpc`
+/// bucket so nonce contention is legible on its own, which is the failure
+/// mode concurrent same-wallet jobs are most exposed to.
+///
+/// Best-effort and metrics-only: error strings are matched case-insensitively
+/// on the substrings geth and its derivatives use (`nonce too low`, `...
+/// underpriced`), so another dialect, another language or a reworded message
+/// falls into `rpc`, as does a transport failure carrying no response. Never
+/// drive retry, settlement or persistence decisions off this guess; wait for
+/// structured error codes.
+fn classify_attempt_error(error: &TransportError) -> SettlementAttemptErrorKind {
+    let TransportError::ErrorResp(response) = error else {
+        return SettlementAttemptErrorKind::Rpc;
+    };
 
-/// Maps the result of broadcasting a settlement attempt to a submit outcome.
-///
-/// Cancellation becomes [`SubmitAttemptError::Cancelled`] so the caller can
-/// leave the already-saved attempt pending and propagate a stop signal to the
-/// runner, instead of recording a spurious `ClientError` or silently continuing
-/// into the post-submit wait after shutdown.
-///
-/// A non-transient error becomes [`SubmitAttemptError::Failed`]. Note that a
-/// re-broadcast whose first response was lost can return an "already
-/// known"/nonce-used error reported here as failure even though the transaction
-/// was accepted; recognizing those responses as success depends on the RPC
-/// error classification deferred to `SettlementServiceConfig`.
-/// XREF: https://github.com/agglayer/agglayer/issues/1321
-fn submission_outcome(
-    result: Result<(), RetryCallbackError<TransportError>>,
-) -> Result<(), SubmitAttemptError> {
-    match result {
-        Ok(()) => Ok(()),
-        Err(RetryCallbackError::Cancelled) => Err(SubmitAttemptError::Cancelled),
-        Err(RetryCallbackError::Error(error)) => {
-            Err(SubmitAttemptError::Failed(eyre::Error::new(error)))
-        }
+    let message = response.message.to_ascii_lowercase();
+    if message.contains("nonce too low") {
+        SettlementAttemptErrorKind::NonceTooLow
+    } else if message.contains("underpriced") {
+        SettlementAttemptErrorKind::Underpriced
+    } else {
+        SettlementAttemptErrorKind::Rpc
     }
 }
 
@@ -235,6 +233,42 @@ pub enum StoredSettlementJob<L1Provider, SettlementStore> {
     Completed(SettlementJobResult),
 }
 
+/// Hydrated pending settlement job that has not yet been bound to runtime
+/// task controls. Used by startup recovery so completed jobs never allocate
+/// admin channels or cancellation tokens.
+pub(crate) struct PendingSettlementJob<L1Provider, SettlementStore> {
+    id: SettlementJobId,
+    job: SettlementJob,
+    tx_config: Arc<SettlementTransactionConfig>,
+    provider: Arc<L1Provider>,
+    store: Arc<SettlementStore>,
+    wallet_nonce_locks: Arc<WalletNonceLocks>,
+    attempts: ActiveSettlementAttempts,
+}
+
+impl<L1Provider, SettlementStore> PendingSettlementJob<L1Provider, SettlementStore> {
+    pub(crate) fn into_task(
+        self,
+        control: TaskControl,
+    ) -> SettlementTask<L1Provider, SettlementStore> {
+        SettlementTask {
+            id: self.id,
+            job: self.job,
+            tx_config: self.tx_config,
+            provider: self.provider,
+            store: self.store,
+            wallet_nonce_locks: self.wallet_nonce_locks,
+            control,
+            attempts: self.attempts,
+        }
+    }
+}
+
+pub(crate) enum RecoveredSettlementJob<L1Provider, SettlementStore> {
+    Pending(PendingSettlementJob<L1Provider, SettlementStore>),
+    Completed(SettlementJobResult),
+}
+
 #[derive(Debug)]
 pub enum TaskAdminCommand {
     ReloadAndRestart,
@@ -271,6 +305,11 @@ impl TaskControlHandle {
 
     pub fn cancel(&self) {
         self.cancellation_token.cancel();
+    }
+
+    /// Whether cancellation has been requested for this task.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancellation_token.is_cancelled()
     }
 
     /// Queues an admin command for the task. This does not interrupt a wait
@@ -475,22 +514,39 @@ impl<
         wallet_nonce_locks: Arc<WalletNonceLocks>,
         control: TaskControl,
     ) -> eyre::Result<StoredSettlementJob<L1Provider, SettlementStore>> {
-        let (job, result) = Self::load_settlement_job_from_db(store.as_ref(), id).await?;
-        if let Some(result) = result {
-            Ok(StoredSettlementJob::Completed(result))
-        } else {
-            let mut this = SettlementTask {
-                id,
-                job,
-                tx_config,
-                provider,
-                store,
-                wallet_nonce_locks,
-                control,
-                attempts: BTreeMap::new(),
-            };
-            this.load_settlement_attempts_from_db()?;
-            Ok(StoredSettlementJob::Pending(this))
+        match Self::recover_from_storage(id, tx_config, provider, store, wallet_nonce_locks).await?
+        {
+            RecoveredSettlementJob::Pending(pending) => {
+                Ok(StoredSettlementJob::Pending(pending.into_task(control)))
+            }
+            RecoveredSettlementJob::Completed(result) => Ok(StoredSettlementJob::Completed(result)),
+        }
+    }
+
+    /// Classify and hydrate a settlement job from storage without allocating
+    /// runtime task controls. Startup recovery attaches controls only for
+    /// [`RecoveredSettlementJob::Pending`].
+    pub(crate) async fn recover_from_storage(
+        id: SettlementJobId,
+        tx_config: Arc<SettlementTransactionConfig>,
+        provider: Arc<L1Provider>,
+        store: Arc<SettlementStore>,
+        wallet_nonce_locks: Arc<WalletNonceLocks>,
+    ) -> eyre::Result<RecoveredSettlementJob<L1Provider, SettlementStore>> {
+        match Self::load_settlement_job_from_db(store.as_ref(), id).await? {
+            (_job, Some(result)) => Ok(RecoveredSettlementJob::Completed(result)),
+            (job, None) => {
+                let attempts = Self::load_settlement_attempts_from_store(store.as_ref(), id)?;
+                Ok(RecoveredSettlementJob::Pending(PendingSettlementJob {
+                    id,
+                    job,
+                    tx_config,
+                    provider,
+                    store,
+                    wallet_nonce_locks,
+                    attempts,
+                }))
+            }
         }
     }
 
@@ -611,7 +667,7 @@ impl<
                     if deadline > SystemTime::now() {
                         continue 'nonces; // wait for deadline to be reached
                     }
-                    let Some((attempt_number, tx)) = retry!(
+                    let Some((attempt_number, attempt_kind, tx)) = retry!(
                         self.build_next_attempt_with_nonce(wallet, nonce).await,
                         "building next settlement attempt for wallet {wallet} / nonce {nonce}",
                     ) else {
@@ -624,6 +680,7 @@ impl<
                             wallet,
                             nonce,
                             attempt_number,
+                            attempt_kind,
                             tx,
                         )
                         .await
@@ -736,6 +793,7 @@ impl<
                         wallet,
                         nonce,
                         attempt_number,
+                        SettlementAttemptKind::Submission,
                         tx,
                     )
                     .await
@@ -807,16 +865,22 @@ impl<
         wallet: Address,
         nonce: Nonce,
         attempt_number: SettlementAttemptNumber,
+        attempt_kind: SettlementAttemptKind,
         tx: TxEnvelope,
     ) -> Option<SettlementTaskRunResult> {
         self.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
         // The nonce is recorded; other same-wallet tasks may now read it.
         drop(nonce_guard);
+        record_settlement_attempt(attempt_kind);
         match self.submit_attempt_to_l1(tx).await {
             Ok(()) => None,
-            Err(SubmitAttemptError::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
-            Err(SubmitAttemptError::Failed(error)) => {
+            Err(RetryCallbackError::Cancelled) => Some(SettlementTaskRunResult::Cancelled),
+            Err(RetryCallbackError::Error(error)) => {
                 warn!(?error, "Failed to submit settlement attempt to L1");
+                record_settlement_attempt_error(
+                    classify_attempt_error(&error),
+                    &wallet.to_string(),
+                );
                 self.write_client_error_to_db(
                     attempt_number,
                     ClientError {
@@ -1399,8 +1463,10 @@ impl<
         &self,
         wallet: Address,
         nonce: Nonce,
-    ) -> Result<Option<(SettlementAttemptNumber, TxEnvelope)>, RetryCallbackError<BuildAttemptError>>
-    {
+    ) -> Result<
+        Option<(SettlementAttemptNumber, SettlementAttemptKind, TxEnvelope)>,
+        RetryCallbackError<BuildAttemptError>,
+    > {
         let attempt_number = self.next_attempt_number();
         // The fees of the live tx a replacement must out-bid. Attempts that
         // errored on broadcast never reached the mempool, so they are ignored;
@@ -1408,6 +1474,12 @@ impl<
         // freshly-resolved fees rather than bumping over a prior attempt (which
         // could otherwise stall forever once those fees reach the ceiling).
         let live_tx_fees = self.latest_pending_attempt_fees_for_nonce(wallet, nonce);
+        // Reported alongside the attempt so the metric cannot disagree with the
+        // transaction actually built: both follow from this one read.
+        let attempt_kind = match live_tx_fees {
+            Some(_) => SettlementAttemptKind::GasBump,
+            None => SettlementAttemptKind::Replacement,
+        };
         let mut retry_policy = BuildRetryPolicy::new();
 
         crate::utils::retry_callback_until_success(
@@ -1439,7 +1511,7 @@ impl<
                     }
                 };
                 let tx = self.build_attempt(wallet, nonce, chain_id, gas).await?;
-                Ok(Some((attempt_number, tx)))
+                Ok(Some((attempt_number, attempt_kind, tx)))
             },
             |error| retry_policy.should_retry(error),
             |_| true,
@@ -1493,7 +1565,23 @@ impl<
         .await
     }
 
-    async fn submit_attempt_to_l1(&self, tx: TxEnvelope) -> Result<(), SubmitAttemptError> {
+    /// Broadcasts a settlement attempt, retrying transient network failures.
+    ///
+    /// The error is returned structured: [`RetryCallbackError::Cancelled`] lets
+    /// the caller leave the already-saved attempt pending so it resumes on
+    /// reload, rather than recording a spurious `ClientError` or continuing
+    /// into the post-submit wait after shutdown.
+    ///
+    /// Note that a re-broadcast whose first response was lost can return an
+    /// "already known"/nonce-used error reported here as failure even though
+    /// the transaction was accepted; recognizing those responses as success
+    /// depends on the RPC error classification deferred to
+    /// `SettlementServiceConfig`.
+    /// XREF: https://github.com/agglayer/agglayer/issues/1321
+    async fn submit_attempt_to_l1(
+        &self,
+        tx: TxEnvelope,
+    ) -> Result<(), RetryCallbackError<TransportError>> {
         // Encode the signed transaction once, consuming the envelope. This is the
         // only thing `send_tx_envelope` does with it before calling
         // `eth_sendRawTransaction`, so each retry can re-broadcast the same bytes
@@ -1514,7 +1602,7 @@ impl<
         .await
         .map(drop);
 
-        submission_outcome(submission)
+        submission
     }
 
     async fn load_settlement_job_from_db(
@@ -1535,12 +1623,19 @@ impl<
         Ok((job, result))
     }
 
+    #[cfg(test)]
     fn load_settlement_attempts_from_db(&mut self) -> eyre::Result<()> {
-        let results = self.store.list_settlement_attempt_results(&self.id)?;
-        let attempts = self.store.list_settlement_attempts(&self.id)?;
-
-        self.attempts = hydrate_settlement_attempts(attempts, results, self.id)?;
+        self.attempts = Self::load_settlement_attempts_from_store(self.store.as_ref(), self.id)?;
         Ok(())
+    }
+
+    fn load_settlement_attempts_from_store(
+        store: &SettlementStore,
+        id: SettlementJobId,
+    ) -> eyre::Result<ActiveSettlementAttempts> {
+        let results = store.list_settlement_attempt_results(&id)?;
+        let attempts = store.list_settlement_attempts(&id)?;
+        hydrate_settlement_attempts(attempts, results, id)
     }
 
     fn save_attempt_to_db(
@@ -1729,7 +1824,26 @@ impl<
                 )
             });
 
+        record_settlement_job_duration(
+            match job_result.contract_call_result.outcome {
+                ContractCallOutcome::Success => SettlementJobOutcome::Success,
+                ContractCallOutcome::Revert => SettlementJobOutcome::Revert,
+            },
+            &wallet.to_string(),
+            self.age().as_secs_f64(),
+        );
+
         job_result
+    }
+
+    /// Time since the job was created, taken from the timestamp embedded in
+    /// its ULID job id so the measurement survives a node restart, unlike an
+    /// in-memory start instant that a reload would reset.
+    fn age(&self) -> Duration {
+        let created = UNIX_EPOCH + Duration::from_millis(self.id.as_ulid().timestamp_ms());
+        SystemTime::now()
+            .duration_since(created)
+            .unwrap_or_default()
     }
 
     fn record_attempt_result_to_db(

@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     panic::{catch_unwind, AssertUnwindSafe},
     sync::{Arc, Mutex},
+    task::{Context, Poll},
 };
 
 use agglayer_config::Multiplier;
@@ -15,9 +16,9 @@ use alloy::{
     node_bindings::Anvil,
     primitives::{Signature, TxKind, U64},
     providers::{mock::Asserter, ProviderBuilder},
-    rpc::types::TransactionRequest,
+    rpc::{client::RpcClient, json_rpc::RequestPacket, types::TransactionRequest},
     signers::local::PrivateKeySigner,
-    transports::TransportErrorKind,
+    transports::{mock::MockTransport, TransportError, TransportErrorKind, TransportFut},
 };
 use rstest::rstest;
 
@@ -45,6 +46,74 @@ fn mk_provider() -> impl Provider + WalletProvider + 'static {
         )
 }
 
+#[derive(Clone, Debug)]
+struct RecordingAsserterTransport {
+    inner: MockTransport,
+    requests: Arc<Mutex<Vec<String>>>,
+}
+
+impl tower::Service<RequestPacket> for RecordingAsserterTransport {
+    type Response = alloy::rpc::json_rpc::ResponsePacket;
+    type Error = TransportError;
+    type Future = TransportFut<'static>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        tower::Service::poll_ready(&mut self.inner, cx)
+    }
+
+    fn call(&mut self, request: RequestPacket) -> Self::Future {
+        let serialized_requests = match &request {
+            RequestPacket::Single(request) => vec![request.serialized().get().to_owned()],
+            RequestPacket::Batch(requests) => requests
+                .iter()
+                .map(|request| request.serialized().get().to_owned())
+                .collect(),
+        };
+        self.requests
+            .lock()
+            .expect("recorded request lock poisoned")
+            .extend(serialized_requests);
+        tower::Service::call(&mut self.inner, request)
+    }
+}
+
+fn mk_recording_provider(
+    asserter: Asserter,
+) -> (
+    impl Provider + WalletProvider + 'static,
+    Arc<Mutex<Vec<String>>>,
+) {
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let client = RpcClient::new(
+        RecordingAsserterTransport {
+            inner: MockTransport::new(asserter),
+            requests: requests.clone(),
+        },
+        true,
+    );
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(test_signer()))
+        .connect_client(client);
+    (provider, requests)
+}
+
+fn assert_recorded_rpc_request(
+    requests: &Mutex<Vec<String>>,
+    index: usize,
+    expected_method: &str,
+    expected_params: serde_json::Value,
+) {
+    let requests = requests.lock().expect("recorded request lock poisoned");
+    let request: serde_json::Value = serde_json::from_str(
+        requests
+            .get(index)
+            .unwrap_or_else(|| panic!("missing recorded request at index {index}")),
+    )
+    .expect("recorded request should be valid JSON");
+    assert_eq!(request["method"], expected_method);
+    assert_eq!(request["params"], expected_params);
+}
+
 fn mk_job_id(seed: u128) -> SettlementJobId {
     SettlementJobId::from(ulid::Ulid::from(seed))
 }
@@ -68,10 +137,14 @@ fn mk_tx_hash(seed: u8) -> SettlementTxHash {
 }
 
 fn mk_tx(hash_seed: u8) -> TxEnvelope {
+    mk_tx_with_nonce(hash_seed, 2)
+}
+
+fn mk_tx_with_nonce(hash_seed: u8, nonce: u64) -> TxEnvelope {
     TxEnvelope::Eip1559(Signed::new_unchecked(
         TxEip1559 {
             chain_id: 1,
-            nonce: 2,
+            nonce,
             gas_limit: 100_000,
             max_fee_per_gas: 100,
             max_priority_fee_per_gas: 10,
@@ -256,9 +329,10 @@ async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
 async fn create_generates_settlement_job_id() {
     let mut store = MockStateStore::new();
     let job = mk_job();
-    // `create` resolves the gas limit via estimateGas (mock returns 200_000).
+    // `create` applies the default 1.3x headroom to estimateGas (mock returns
+    // 200_000).
     let mut expected_job = job.clone();
-    expected_job.gas_limit = 200_000;
+    expected_job.gas_limit = 260_000;
     let recorded_job_id = Arc::new(Mutex::new(None));
     let recorded_job_id_for_store = recorded_job_id.clone();
 
@@ -357,6 +431,97 @@ async fn load_settlement_job_from_db_reports_missing_job() {
         .expect_err("missing settlement job should be reported");
 
     assert!(error.to_string().contains("No settlement job found for id"));
+}
+
+#[tokio::test]
+async fn recover_from_storage_returns_completed_without_loading_attempts() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(50);
+    let job = mk_job();
+    let job_result = mk_job_result(6, ContractCallOutcome::Success);
+    let expected_job_result = job_result.clone();
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job_result)));
+    store.expect_list_settlement_attempts().never();
+    store.expect_list_settlement_attempt_results().never();
+
+    let loaded = SettlementTask::recover_from_storage(
+        job_id,
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider()),
+        Arc::new(store),
+        Arc::new(WalletNonceLocks::default()),
+    )
+    .await
+    .expect("completed settlement job should recover");
+
+    match loaded {
+        RecoveredSettlementJob::Completed(loaded_result) => {
+            assert_eq!(loaded_result, expected_job_result);
+        }
+        RecoveredSettlementJob::Pending(_) => {
+            panic!("completed settlement job should not recover as pending")
+        }
+    }
+}
+
+#[tokio::test]
+async fn recover_from_storage_returns_pending_with_hydrated_attempts() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(51);
+    let job = mk_job();
+    let expected_job = job.clone();
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(move |_| Ok(Some(job)));
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .once()
+        .withf(move |recorded_job_id| recorded_job_id == &job_id)
+        .return_once(|_| Ok(Vec::new()));
+
+    let loaded = SettlementTask::recover_from_storage(
+        job_id,
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider()),
+        Arc::new(store),
+        Arc::new(WalletNonceLocks::default()),
+    )
+    .await
+    .expect("pending settlement job should recover");
+
+    match loaded {
+        RecoveredSettlementJob::Pending(pending) => {
+            assert_eq!(pending.id, job_id);
+            assert_eq!(pending.job, expected_job);
+            assert!(pending.attempts.is_empty());
+        }
+        RecoveredSettlementJob::Completed(_) => {
+            panic!("pending settlement job should not recover as completed")
+        }
+    }
 }
 
 #[tokio::test]
@@ -781,10 +946,19 @@ fn mk_rpc_receipt(
     block_hash: B256,
     block_number: u64,
 ) -> alloy::rpc::types::TransactionReceipt {
+    mk_rpc_receipt_with_status(tx_hash, block_hash, block_number, true)
+}
+
+fn mk_rpc_receipt_with_status(
+    tx_hash: SettlementTxHash,
+    block_hash: B256,
+    block_number: u64,
+    succeeded: bool,
+) -> alloy::rpc::types::TransactionReceipt {
     alloy::rpc::types::TransactionReceipt {
         inner: alloy::consensus::ReceiptEnvelope::Eip1559(alloy::consensus::ReceiptWithBloom {
             receipt: alloy::consensus::Receipt {
-                status: true.into(),
+                status: succeeded.into(),
                 cumulative_gas_used: 0,
                 logs: vec![],
             },
@@ -951,6 +1125,189 @@ async fn run_finishes_interrupted_completion_before_other_nonces() {
     assert_eq!(job_result.contract_call_result, stored_result);
 }
 
+#[tokio::test]
+async fn run_records_external_nonce_use_before_completing_with_revert() {
+    let external_wallet = Address::from([2; 20]);
+    let revert_wallet = Address::from([4; 20]);
+    let external_nonce = Nonce(7);
+    let revert_nonce = Nonce(11);
+    let external_attempt_number = SettlementAttemptNumber(0);
+    let revert_attempt_number = SettlementAttemptNumber(1);
+
+    let external_tx = mk_tx_with_nonce(90, external_nonce.0);
+    let external_tx_hash = SettlementTxHash::from(Digest::from(*external_tx.tx_hash()));
+    let revert_tx = mk_tx_with_nonce(91, revert_nonce.0);
+    let revert_tx_hash = SettlementTxHash::from(Digest::from(*revert_tx.tx_hash()));
+    let external_block_hash = B256::from([92; 32]);
+    let revert_block_hash = B256::from([93; 32]);
+    let external_block_number = 10;
+    let revert_block_number = 20;
+
+    let attempts = BTreeMap::from([
+        (
+            (external_wallet, external_nonce),
+            BTreeMap::from([(
+                external_attempt_number,
+                mk_active_attempt(external_wallet, external_nonce, mk_tx_hash(89), None),
+            )]),
+        ),
+        (
+            (revert_wallet, revert_nonce),
+            BTreeMap::from([(
+                revert_attempt_number,
+                mk_active_attempt(revert_wallet, revert_nonce, revert_tx_hash, None),
+            )]),
+        ),
+    ]);
+
+    let asserter = Asserter::new();
+    // Scan the externally consumed nonce, then the owned reverting nonce.
+    asserter.push_success(&mk_rpc_transaction(
+        external_tx,
+        external_wallet,
+        external_block_number,
+    ));
+    asserter.push_success(&mk_rpc_transaction(
+        revert_tx,
+        revert_wallet,
+        revert_block_number,
+    ));
+    asserter.push_success(&mk_rpc_receipt_with_status(
+        revert_tx_hash,
+        revert_block_hash,
+        revert_block_number,
+        false,
+    ));
+    // Finalize the external transaction first.
+    asserter.push_success(&mk_rpc_block(1_000, B256::from([94; 32])));
+    asserter.push_success(&mk_rpc_receipt(
+        external_tx_hash,
+        external_block_hash,
+        external_block_number,
+    ));
+    asserter.push_success(&mk_rpc_block(external_block_number, external_block_hash));
+    // Then finalize the owned revert which supplies the terminal job result.
+    asserter.push_success(&mk_rpc_block(1_000, B256::from([95; 32])));
+    asserter.push_success(&mk_rpc_receipt_with_status(
+        revert_tx_hash,
+        revert_block_hash,
+        revert_block_number,
+        false,
+    ));
+    asserter.push_success(&mk_rpc_block(revert_block_number, revert_block_hash));
+    let (provider, requests) = mk_recording_provider(asserter);
+
+    let mut store = MockStateStore::new();
+    let expected_external_result = SettlementAttemptResult::ClientError(
+        ClientError::nonce_already_used(external_wallet.into(), external_nonce, external_tx_hash),
+    );
+    let expected_external_result_for_store = expected_external_result.clone();
+    let persistence_events = Arc::new(Mutex::new(Vec::new()));
+    let attempt_result_events = persistence_events.clone();
+    store
+        .expect_record_settlement_attempt_result()
+        .times(2)
+        .returning(move |_, attempt_number, result| {
+            match attempt_number {
+                0 => {
+                    assert_eq!(result, &expected_external_result_for_store);
+                    attempt_result_events
+                        .lock()
+                        .expect("persistence event lock poisoned")
+                        .push("external nonce result");
+                }
+                1 => {
+                    assert!(matches!(
+                        result,
+                        SettlementAttemptResult::ContractCall(ContractCallResult {
+                            outcome: ContractCallOutcome::Revert,
+                            tx_hash,
+                            ..
+                        }) if *tx_hash == revert_tx_hash
+                    ));
+                    attempt_result_events
+                        .lock()
+                        .expect("persistence event lock poisoned")
+                        .push("revert result");
+                }
+                other => panic!("unexpected persisted attempt result {other}"),
+            }
+            Ok(())
+        });
+    let job_result_events = persistence_events.clone();
+    store
+        .expect_insert_settlement_job_result()
+        .once()
+        .withf(move |_, result| {
+            result.wallet == revert_wallet.into()
+                && result.nonce == revert_nonce
+                && result.attempt_number == revert_attempt_number
+                && result.contract_call_result.outcome == ContractCallOutcome::Revert
+                && result.contract_call_result.tx_hash == revert_tx_hash
+        })
+        .returning(move |_, _| {
+            job_result_events
+                .lock()
+                .expect("persistence event lock poisoned")
+                .push("terminal job result");
+            Ok(())
+        });
+
+    let cancellation_token = CancellationToken::new();
+    let (_control_handle, control) = TaskControlHandle::new(&cancellation_token);
+    let mut task = SettlementTask {
+        id: mk_job_id(1),
+        job: mk_job(),
+        tx_config: Arc::new(SettlementTransactionConfig::default()),
+        provider: Arc::new(provider),
+        store: Arc::new(store),
+        wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
+        control,
+        attempts,
+    };
+
+    let run_result = tokio::time::timeout(Duration::from_secs(5), task.run())
+        .await
+        .expect("external nonce recovery should finish without further L1 events");
+
+    let SettlementTaskRunResult::Completed(job_result) = run_result else {
+        panic!("expected the owned revert to complete the job");
+    };
+    assert_eq!(job_result.wallet, revert_wallet.into());
+    assert_eq!(job_result.nonce, revert_nonce);
+    assert_eq!(job_result.attempt_number, revert_attempt_number);
+    assert_eq!(
+        task.attempts[&(external_wallet, external_nonce)][&external_attempt_number]
+            .result
+            .as_ref(),
+        Some(&expected_external_result)
+    );
+    assert_eq!(
+        *persistence_events
+            .lock()
+            .expect("persistence event lock poisoned"),
+        [
+            "external nonce result",
+            "revert result",
+            "terminal job result"
+        ]
+    );
+    assert_recorded_rpc_request(
+        &requests,
+        0,
+        "eth_getTransactionBySenderAndNonce",
+        serde_json::to_value((external_wallet, U64::from(external_nonce.0)))
+            .expect("external nonce request parameters should serialize"),
+    );
+    assert_recorded_rpc_request(
+        &requests,
+        1,
+        "eth_getTransactionBySenderAndNonce",
+        serde_json::to_value((revert_wallet, U64::from(revert_nonce.0)))
+            .expect("revert nonce request parameters should serialize"),
+    );
+}
+
 #[test]
 fn required_settlement_head_number_is_inclusive_of_receipt_block() {
     // Confirmations count the receipt block itself, and saturate rather than
@@ -966,6 +1323,135 @@ fn required_settlement_head_number_is_inclusive_of_receipt_block() {
             required_head
         );
     }
+}
+
+#[tokio::test]
+async fn check_settlement_once_waits_below_latest_confirmation_threshold() {
+    let tx_hash = mk_tx_hash(100);
+    let block_hash = B256::from([101; 32]);
+    let block_number = 10;
+    let asserter = Asserter::new();
+    asserter.push_success(&U64::from(20));
+    asserter.push_success(&mk_rpc_receipt(tx_hash, block_hash, block_number));
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(test_signer()))
+        .connect_mocked_client(asserter);
+    let config = SettlementTransactionConfig {
+        settlement_policy: SettlementPolicy::LatestBlock,
+        confirmations: 12,
+        ..Default::default()
+    };
+    let task = mk_task_with_tx_config(provider, config);
+
+    let result = task.check_settlement_once(tx_hash).await;
+
+    assert!(matches!(result, Err(WaitForSettlementError::NotSettledYet)));
+}
+
+#[tokio::test]
+async fn check_settlement_once_accepts_exact_safe_confirmation_threshold() {
+    let tx_hash = mk_tx_hash(102);
+    let block_hash = B256::from([103; 32]);
+    let block_number = 10;
+    let asserter = Asserter::new();
+    asserter.push_success(&mk_rpc_block(21, B256::from([104; 32])));
+    asserter.push_success(&mk_rpc_receipt(tx_hash, block_hash, block_number));
+    asserter.push_success(&mk_rpc_block(block_number, block_hash));
+    let (provider, requests) = mk_recording_provider(asserter);
+    let config = SettlementTransactionConfig {
+        settlement_policy: SettlementPolicy::SafeBlock,
+        confirmations: 12,
+        ..Default::default()
+    };
+    let task = mk_task_with_tx_config(provider, config);
+
+    let result = task
+        .check_settlement_once(tx_hash)
+        .await
+        .expect("safe-head query should succeed")
+        .expect("the transaction should settle at the exact confirmation threshold");
+
+    assert_eq!(result.tx_hash, tx_hash);
+    assert_eq!(result.block_hash, block_hash);
+    assert_eq!(result.block_number, block_number);
+    assert_recorded_rpc_request(
+        &requests,
+        0,
+        "eth_getBlockByNumber",
+        serde_json::to_value((BlockNumberOrTag::Safe, false))
+            .expect("safe block request parameters should serialize"),
+    );
+}
+
+#[tokio::test]
+async fn check_settlement_once_waits_for_unavailable_finalized_head() {
+    let tx_hash = mk_tx_hash(105);
+    let asserter = Asserter::new();
+    asserter.push_success(&Option::<alloy::rpc::types::Block>::None);
+    let (provider, requests) = mk_recording_provider(asserter);
+    let config = SettlementTransactionConfig {
+        settlement_policy: SettlementPolicy::FinalizedBlock,
+        ..Default::default()
+    };
+    let task = mk_task_with_tx_config(provider, config);
+
+    let result = task.check_settlement_once(tx_hash).await;
+
+    assert!(matches!(result, Err(WaitForSettlementError::NotSettledYet)));
+    assert_recorded_rpc_request(
+        &requests,
+        0,
+        "eth_getBlockByNumber",
+        serde_json::to_value((BlockNumberOrTag::Finalized, false))
+            .expect("finalized block request parameters should serialize"),
+    );
+}
+
+#[tokio::test]
+async fn check_settlement_once_reports_missing_receipt_as_reorg() {
+    let tx_hash = mk_tx_hash(106);
+    let asserter = Asserter::new();
+    asserter.push_success(&mk_rpc_block(1_000, B256::from([107; 32])));
+    asserter.push_success(&Option::<alloy::rpc::types::TransactionReceipt>::None);
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(test_signer()))
+        .connect_mocked_client(asserter);
+    let task = mk_task_with_tx_config(provider, SettlementTransactionConfig::default());
+
+    let result = task
+        .check_settlement_once(tx_hash)
+        .await
+        .expect("settlement check should classify a missing receipt");
+
+    assert_eq!(result, None);
+}
+
+#[tokio::test]
+async fn check_settlement_once_reports_noncanonical_receipt_as_reorg() {
+    let tx_hash = mk_tx_hash(108);
+    let receipt_block_hash = B256::from([109; 32]);
+    let canonical_block_hash = B256::from([110; 32]);
+    let block_number = 10;
+    let asserter = Asserter::new();
+    asserter.push_success(&mk_rpc_block(1_000, B256::from([111; 32])));
+    asserter.push_success(&mk_rpc_receipt(tx_hash, receipt_block_hash, block_number));
+    asserter.push_success(&mk_rpc_block(block_number, canonical_block_hash));
+    let (provider, requests) = mk_recording_provider(asserter);
+    let task = mk_task_with_tx_config(provider, SettlementTransactionConfig::default());
+
+    let result = task
+        .check_settlement_once(tx_hash)
+        .await
+        .expect("settlement check should classify a noncanonical receipt");
+
+    assert_eq!(result, None);
+    assert_recorded_rpc_request(
+        &requests,
+        2,
+        "eth_getBlockByNumber",
+        serde_json::to_value((BlockNumberOrTag::Number(block_number), false))
+            .expect("canonical block request parameters should serialize"),
+    );
 }
 
 #[test]
@@ -1178,28 +1664,70 @@ async fn current_result_once_reports_none_when_nonce_no_longer_maps() {
     assert_eq!(result, None);
 }
 
-#[test]
-fn submission_outcome_reports_success() {
-    assert!(submission_outcome(Ok(())).is_ok());
-}
+#[tokio::test]
+async fn save_and_submit_records_non_transient_broadcast_failure() {
+    let wallet = Address::from([12; 20]);
+    let nonce = Nonce(2);
+    let attempt_number = SettlementAttemptNumber(3);
+    let tx = mk_tx(112);
 
-#[test]
-fn submission_outcome_treats_cancellation_as_cancelled() {
-    // A shutdown mid-retry must surface as cancellation so the caller leaves
-    // the already-saved attempt pending and stops the runner, rather than
-    // recording a client error or silently continuing as success.
-    assert!(matches!(
-        submission_outcome(Err(RetryCallbackError::Cancelled)),
-        Err(SubmitAttemptError::Cancelled)
-    ));
-}
+    let asserter = Asserter::new();
+    asserter.push_failure(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32000,
+        message: "deterministic transaction rejection".into(),
+        data: None,
+    });
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(test_signer()))
+        .connect_mocked_client(asserter);
 
-#[test]
-fn submission_outcome_reports_transport_error_as_failed() {
-    let error = RetryCallbackError::Error(TransportErrorKind::custom_str("boom"));
+    let mut store = MockStateStore::new();
+    store
+        .expect_insert_settlement_attempt()
+        .once()
+        .withf(move |_, stored_attempt_number, attempt| {
+            *stored_attempt_number == attempt_number.0
+                && attempt.sender_wallet == wallet.into()
+                && attempt.nonce == nonce
+        })
+        .returning(|_, _, _| Ok(()));
+    store
+        .expect_record_settlement_attempt_result()
+        .once()
+        .withf(move |_, stored_attempt_number, result| {
+            *stored_attempt_number == attempt_number.0
+                && matches!(
+                    result,
+                    SettlementAttemptResult::ClientError(ClientError {
+                        kind: ClientErrorType::Unknown,
+                        message,
+                    }) if message.contains("deterministic transaction rejection")
+                )
+        })
+        .returning(|_, _, _| Ok(()));
+
+    let mut task = mk_task_with_provider(provider, Arc::new(store), BTreeMap::new());
+
+    let run_result = task
+        .save_attempt_to_db_and_submit_to_l1(
+            None,
+            wallet,
+            nonce,
+            attempt_number,
+            SettlementAttemptKind::Submission,
+            tx,
+        )
+        .await;
+
+    assert!(run_result.is_none());
     assert!(matches!(
-        submission_outcome(Err(error)),
-        Err(SubmitAttemptError::Failed(_))
+        task.attempts[&(wallet, nonce)][&attempt_number]
+            .result
+            .as_ref(),
+        Some(SettlementAttemptResult::ClientError(ClientError {
+            kind: ClientErrorType::Unknown,
+            message,
+        })) if message.contains("deterministic transaction rejection")
     ));
 }
 
@@ -1289,7 +1817,7 @@ async fn submit_attempt_to_l1_skips_broadcast_when_already_cancelled() {
     task.control.cancellation_token.cancel();
 
     let result = task.submit_attempt_to_l1(envelope).await;
-    assert!(matches!(result, Err(SubmitAttemptError::Cancelled)));
+    assert!(matches!(result, Err(RetryCallbackError::Cancelled)));
 
     // The transaction must never have been broadcast.
     let broadcast_tx = task
@@ -1729,13 +2257,16 @@ async fn build_next_attempt_with_nonce_bumps_fees_over_previous_attempt() {
         attempts,
     };
 
-    let (attempt_number, envelope) = task
+    let (attempt_number, attempt_kind, envelope) = task
         .build_next_attempt_with_nonce(wallet_address, nonce)
         .await
         .expect("build should not fail")
         .expect("bump should produce an attempt below the ceiling");
 
     assert_eq!(attempt_number, SettlementAttemptNumber(1));
+    // Out-bidding a live tx is reported as a gas bump by the same read that
+    // decided to bump.
+    assert_eq!(attempt_kind, SettlementAttemptKind::GasBump);
     assert_eq!(envelope.nonce(), 4);
     assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
     // Strictly bumped by >= 10% over the previous attempt on both fields.
@@ -1853,13 +2384,15 @@ async fn build_next_attempt_with_nonce_rebroadcasts_errored_attempt_at_ceiling()
         attempts,
     };
 
-    let (attempt_number, envelope) = task
+    let (attempt_number, attempt_kind, envelope) = task
         .build_next_attempt_with_nonce(wallet_address, nonce)
         .await
         .expect("build should not fail")
         .expect("an errored attempt has no live tx to replace, so it must re-broadcast");
 
     assert_eq!(attempt_number, SettlementAttemptNumber(1));
+    // Nothing live to out-bid, so this is a replacement rather than a bump.
+    assert_eq!(attempt_kind, SettlementAttemptKind::Replacement);
     assert_eq!(envelope.nonce(), 4);
     assert!(matches!(envelope, TxEnvelope::Eip1559(_)));
     // Re-broadcast at base fees, within the configured ceiling; no strict bump.
@@ -1936,13 +2469,15 @@ async fn build_next_attempt_with_nonce_bumps_over_live_tx_ignoring_errored_ceili
         attempts,
     };
 
-    let (attempt_number, envelope) = task
+    let (attempt_number, attempt_kind, envelope) = task
         .build_next_attempt_with_nonce(wallet_address, nonce)
         .await
         .expect("build should not fail")
         .expect("a valid replacement over the live pending tx is possible below the ceiling");
 
     assert_eq!(attempt_number, SettlementAttemptNumber(2));
+    // A live pending tx exists, so this out-bids it: a gas bump.
+    assert_eq!(attempt_kind, SettlementAttemptKind::GasBump);
     assert_eq!(envelope.nonce(), 4);
     // Bumped >= 10% over the *pending* tx (10 gwei), not the errored 30 gwei one.
     assert!(envelope.max_fee_per_gas() >= 11_000_000_000);
@@ -2004,4 +2539,160 @@ fn latest_pending_attempt_fees_for_nonce_ignores_errored_and_unknown() {
         task.latest_pending_attempt_fees_for_nonce(wallet, Nonce(999)),
         None
     );
+}
+
+fn error_response(message: &str) -> TransportError {
+    TransportError::ErrorResp(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32000,
+        message: message.to_string().into(),
+        data: None,
+    })
+}
+
+#[rstest]
+// Geth and its derivatives phrase nonce rejections this way; the match is
+// case-insensitive because node dialects differ on capitalization.
+#[case("nonce too low", SettlementAttemptErrorKind::NonceTooLow)]
+#[case(
+    "Nonce too low: next nonce 7, tx nonce 5",
+    SettlementAttemptErrorKind::NonceTooLow
+)]
+// Both the plain and the replacement phrasing must land in the fee bucket.
+#[case("transaction underpriced", SettlementAttemptErrorKind::Underpriced)]
+#[case(
+    "replacement transaction underpriced",
+    SettlementAttemptErrorKind::Underpriced
+)]
+// An error response the classifier does not recognize stays generic rather
+// than being mislabeled as a nonce or fee problem.
+#[case("execution reverted", SettlementAttemptErrorKind::Rpc)]
+fn classify_attempt_error_buckets_node_error_responses(
+    #[case] message: &str,
+    #[case] expected: SettlementAttemptErrorKind,
+) {
+    assert_eq!(classify_attempt_error(&error_response(message)), expected);
+}
+
+#[test]
+fn classify_attempt_error_buckets_transport_failures_as_rpc() {
+    // A transport-level failure carries no JSON-RPC payload to inspect, so it
+    // is generic RPC trouble.
+    let error = TransportError::Transport(TransportErrorKind::BackendGone);
+    assert_eq!(
+        classify_attempt_error(&error),
+        SettlementAttemptErrorKind::Rpc
+    );
+}
+
+/// Drives a failed broadcast and a terminal completion through the real
+/// production call sites, then reads the exported series back.
+///
+/// The other metric tests call the recording helpers directly, so deleting a
+/// call site or passing the wrong label would leave them green. This one only
+/// passes if `save_attempt_to_db_and_submit_to_l1` and `write_job_result_to_db`
+/// still emit, with the labels they are supposed to carry.
+#[tokio::test]
+async fn metrics_are_emitted_through_the_production_call_sites() {
+    // This test deliberately owns the process-global meter provider: nextest
+    // runs one process per test, so nothing else can race it.
+    let harness = agglayer_telemetry::testutils::MetricsHarness::install();
+
+    let wallet = Address::from([12; 20]);
+    let nonce = Nonce(2);
+    let attempt_number = SettlementAttemptNumber(3);
+
+    // A non-transient nonce rejection, so the error lands in a specific
+    // bucket rather than the generic one.
+    let asserter = Asserter::new();
+    asserter.push_failure(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32000,
+        message: "nonce too low".into(),
+        data: None,
+    });
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(test_signer()))
+        .connect_mocked_client(asserter);
+
+    let mut store = MockStateStore::new();
+    store
+        .expect_insert_settlement_attempt()
+        .once()
+        .returning(|_, _, _| Ok(()));
+    store
+        .expect_record_settlement_attempt_result()
+        .times(1..)
+        .returning(|_, _, _| Ok(()));
+    store
+        .expect_insert_settlement_job_result()
+        .once()
+        .returning(|_, _| Ok(()));
+
+    let mut task = mk_task_with_provider(provider, Arc::new(store), BTreeMap::new());
+
+    task.save_attempt_to_db_and_submit_to_l1(
+        None,
+        wallet,
+        nonce,
+        attempt_number,
+        SettlementAttemptKind::GasBump,
+        mk_tx(112),
+    )
+    .await;
+
+    task.write_job_result_to_db(
+        wallet,
+        nonce,
+        attempt_number,
+        mk_contract_call_result(7, ContractCallOutcome::Success),
+    )
+    .await;
+
+    let metrics = harness.gather();
+    let wallet_label = wallet.to_string();
+
+    assert_eq!(
+        metric_sample(
+            &metrics,
+            "agglayer_node_settlement_attempts_total",
+            &[("kind", "gas_bump")],
+        ),
+        Some(1.0),
+        "attempt counter should be emitted by the submit path, got:\n{metrics}"
+    );
+    assert_eq!(
+        metric_sample(
+            &metrics,
+            "agglayer_node_settlement_attempt_errors_total",
+            &[("kind", "nonce_too_low"), ("wallet", &wallet_label)],
+        ),
+        Some(1.0),
+        "attempt-error counter should carry the classified kind and the sending wallet, \
+         got:\n{metrics}"
+    );
+    assert_eq!(
+        metric_sample(
+            &metrics,
+            "agglayer_node_settlement_job_duration_seconds_count",
+            &[("outcome", "success"), ("wallet", &wallet_label)],
+        ),
+        Some(1.0),
+        "job duration should be emitted by the terminal-completion path, got:\n{metrics}"
+    );
+}
+
+/// Extracts the value of the sample line for `name` carrying every label pair
+/// in `labels`.
+fn metric_sample(metrics: &str, name: &str, labels: &[(&str, &str)]) -> Option<f64> {
+    let labels: Vec<String> = labels
+        .iter()
+        .map(|(key, value)| format!("{key}=\"{value}\""))
+        .collect();
+    metrics
+        .lines()
+        .find(|line| {
+            line.starts_with(&format!("{name}{{"))
+                && labels.iter().all(|label| line.contains(label))
+        })
+        .and_then(|line| line.rsplit(' ').next())
+        .map(|value| value.parse().unwrap())
 }
