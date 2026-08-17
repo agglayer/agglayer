@@ -209,11 +209,26 @@ async fn insert_active_job_tracking(
         .lock()
         .expect("settlement task_controls lock poisoned")
         .insert(job_id, handle);
-    service.result_watchers.lock().await.insert(job_id, watcher);
+    service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .insert(job_id, watcher);
+}
+
+fn drop_job_registrations(
+    service: &SettlementService<impl Provider + WalletProvider + 'static, MockStateStore>,
+    job_id: SettlementJobId,
+) {
+    drop(TaskRegistrationGuard {
+        job_id,
+        result_watchers: service.result_watchers.clone(),
+        task_controls: service.task_controls.clone(),
+    });
 }
 
 #[tokio::test]
-async fn remove_job_from_active_tracking_clears_both_maps() {
+async fn task_registration_guard_clears_watcher_then_control_on_drop() {
     let mut store = MockStateStore::new();
     expect_empty_startup_recovery(&mut store);
     let service = mk_service(Arc::new(store)).await;
@@ -221,18 +236,18 @@ async fn remove_job_from_active_tracking_clears_both_maps() {
     let (_sender, watcher) = watch::channel(None);
 
     insert_active_job_tracking(&service, job_id, watcher).await;
+    drop_job_registrations(&service, job_id);
 
-    remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
-        .await;
-
-    assert!(service.result_watchers.lock().await.is_empty());
-    assert!(
-        service
-            .task_controls
-            .lock()
-            .expect("settlement task_controls lock poisoned")
-            .is_empty()
-    );
+    assert!(service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .is_empty());
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
 }
 
 #[tokio::test]
@@ -252,9 +267,7 @@ async fn retrieve_uses_storage_after_active_tracking_cleanup() {
     let service = mk_service(Arc::new(store)).await;
     let (_sender, watcher) = watch::channel(Some(stored_result.clone()));
     insert_active_job_tracking(&service, job_id, watcher).await;
-
-    remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
-        .await;
+    drop_job_registrations(&service, job_id);
 
     let retrieved = service
         .retrieve_settlement_result(job_id)
@@ -282,42 +295,12 @@ async fn caller_watcher_retains_result_after_active_tracking_cleanup() {
         .send(Some(result.clone()))
         .expect("result should be sent to watcher");
     insert_active_job_tracking(&service, job_id, caller_watcher.clone()).await;
-
-    remove_job_from_active_tracking(job_id, &service.result_watchers, &service.task_controls)
-        .await;
+    drop_job_registrations(&service, job_id);
 
     assert_eq!(
         caller_watcher.borrow().as_ref(),
         Some(&result),
         "caller watcher should retain the result after service map cleanup"
-    );
-}
-
-#[tokio::test]
-async fn job_tracking_guard_cleans_up_on_drop_without_disarm() {
-    let mut store = MockStateStore::new();
-    expect_empty_startup_recovery(&mut store);
-    let service = mk_service(Arc::new(store)).await;
-    let job_id = mk_job_id(13);
-    let (_sender, watcher) = watch::channel(None);
-    insert_active_job_tracking(&service, job_id, watcher).await;
-
-    let guard = JobTrackingGuard::new(
-        job_id,
-        service.result_watchers.clone(),
-        service.task_controls.clone(),
-    );
-    drop(guard);
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-
-    assert!(service.result_watchers.lock().await.is_empty());
-    assert!(
-        service
-            .task_controls
-            .lock()
-            .expect("settlement task_controls lock poisoned")
-            .is_empty()
     );
 }
 
@@ -426,7 +409,11 @@ async fn start_scans_jobs_and_skips_completed_ones() {
         .lock()
         .expect("settlement task_controls lock poisoned")
         .is_empty());
-    assert!(service.result_watchers.lock().await.is_empty());
+    assert!(service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .is_empty());
 }
 
 #[tokio::test]
@@ -468,7 +455,11 @@ async fn start_resumes_pending_job_with_task_controls_tied_to_service_cancellati
         .lock()
         .expect("settlement task_controls lock poisoned")
         .contains_key(&job_id));
-    assert!(service.result_watchers.lock().await.contains_key(&job_id));
+    assert!(service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
 
     cancellation_token.cancel();
 
@@ -532,7 +523,11 @@ async fn start_skips_unloadable_jobs_and_keeps_scanning() {
         .lock()
         .expect("settlement task_controls lock poisoned")
         .is_empty());
-    assert!(service.result_watchers.lock().await.is_empty());
+    assert!(service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .is_empty());
 }
 
 #[tokio::test]
@@ -577,7 +572,11 @@ async fn retrieve_uses_in_memory_watcher_before_storage() {
     let in_memory_result = mk_result(2, ContractCallOutcome::Revert);
 
     let (_sender, watcher) = watch::channel(Some(in_memory_result.clone()));
-    service.result_watchers.lock().await.insert(job_id, watcher);
+    service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .insert(job_id, watcher);
 
     let retrieved = service
         .retrieve_settlement_result(job_id)
@@ -681,7 +680,7 @@ async fn retrieve_fails_when_pending_job_has_no_running_task() {
 }
 
 #[tokio::test]
-async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() {
+async fn reload_and_restart_clears_registrations_when_reload_finds_completed_job() {
     let mut store = MockStateStore::new();
     let job_id = mk_job_id(6);
     let job = mk_job(6);
@@ -756,12 +755,24 @@ async fn reload_and_restart_preserves_watcher_when_reload_finds_completed_job() 
         .expect("reload should publish the stored terminal result");
 
     assert_eq!(result_receiver.borrow().as_ref(), Some(&completed_result));
-    assert!(service
-        .task_controls
-        .lock()
-        .expect("settlement task_controls lock poisoned")
-        .is_empty());
-    assert!(service.result_watchers.lock().await.contains_key(&job_id));
+    wait_until(|| {
+        service
+            .task_controls
+            .lock()
+            .expect("settlement task_controls lock poisoned")
+            .is_empty()
+            && service
+                .result_watchers
+                .lock()
+                .expect("settlement result_watchers lock poisoned")
+                .is_empty()
+    })
+    .await;
+    assert_eq!(
+        result_receiver.borrow().as_ref(),
+        Some(&completed_result),
+        "caller watcher should retain the result after service map cleanup"
+    );
 }
 
 #[tokio::test]
@@ -836,7 +847,7 @@ async fn reload_and_restart_replaces_live_task_when_reload_finds_pending_job() {
     let registered_watcher = service
         .result_watchers
         .lock()
-        .await
+        .expect("settlement result_watchers lock poisoned")
         .get(&job_id)
         .cloned()
         .expect("the reloaded task must retain a result watcher");
@@ -924,7 +935,11 @@ async fn reload_and_restart_load_failure_cleans_up_live_registrations() {
 
     assert!(closed.is_err(), "the watcher sender should be dropped");
     wait_until(|| !service.has_live_task(job_id)).await;
-    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
+    assert!(!service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
 }
 
 #[tokio::test]
@@ -1022,7 +1037,11 @@ async fn request_new_settlement_persistence_failure_leaves_no_registrations() {
         .lock()
         .expect("settlement task_controls lock poisoned")
         .is_empty());
-    assert!(service.result_watchers.lock().await.is_empty());
+    assert!(service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .is_empty());
 }
 
 #[tokio::test]
@@ -1149,6 +1168,14 @@ async fn panicked_task_deregisters_control_and_abort_reports_no_live_task() {
     // first L1 query fails non-recoverably and deliberately panics.
     let service = mk_service(Arc::new(store)).await;
     wait_until(|| !service.has_live_task(job_id)).await;
+    assert!(
+        service
+            .result_watchers
+            .lock()
+            .expect("settlement result_watchers lock poisoned")
+            .is_empty(),
+        "panic teardown must clear in-memory registrations"
+    );
 
     let error = service
         .admin_abort_task(job_id)
@@ -1159,6 +1186,136 @@ async fn panicked_task_deregisters_control_and_abort_reports_no_live_task() {
         error.downcast_ref::<RpcErrorCode>(),
         Some(&RpcErrorCode::NoLiveTask)
     );
+}
+
+#[tokio::test]
+async fn panicked_task_reload_respawns_task_without_stale_teardown() {
+    use alloy::providers::mock::MockTransport;
+
+    #[derive(Clone, Debug)]
+    struct PanicOnceThenParkTransport {
+        mock: MockTransport,
+        // Counts at least one RPC call from each task spawn.
+        request_count: Arc<AtomicUsize>,
+    }
+
+    impl tower::Service<RequestPacket> for PanicOnceThenParkTransport {
+        type Response = alloy::rpc::json_rpc::ResponsePacket;
+        type Error = TransportError;
+        type Future = TransportFut<'static>;
+
+        fn poll_ready(
+            &mut self,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, req: RequestPacket) -> Self::Future {
+            self.request_count.fetch_add(1, Ordering::SeqCst);
+            if self.mock.read_q().is_empty() {
+                return Box::pin(pending());
+            }
+            self.mock.call(req)
+        }
+    }
+
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(29);
+    let job = mk_job(29);
+    let attempt = mk_resolved_attempt(29, SettlementTxHash::new(Digest::from([30; 32])));
+
+    store
+        .expect_list_settlement_job_ids()
+        .once()
+        .return_once(move || Ok(vec![job_id]));
+    store
+        .expect_get_settlement_job()
+        .times(3)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(Some(job.clone())));
+    store
+        .expect_get_settlement_job_result()
+        .times(3)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(|_| Ok(None));
+    store
+        .expect_list_settlement_attempt_results()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(|_| Ok(Vec::new()));
+    store
+        .expect_list_settlement_attempts()
+        .times(2)
+        .withf(move |requested_job_id| requested_job_id == &job_id)
+        .returning(move |_| Ok(vec![(0, attempt.clone())]));
+
+    // First L1 RPC call returns a "Method not found" error (non-recoverable),
+    // subsequent calls park to avoid a second panic.
+    let asserter = Asserter::new();
+    asserter.push_failure(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32601,
+        message: "Method not found".into(),
+        data: None,
+    });
+    let mock = MockTransport::new(asserter);
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let transport = PanicOnceThenParkTransport {
+        mock,
+        request_count: request_count.clone(),
+    };
+    let client = RpcClient::new(transport, true);
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(
+            PrivateKeySigner::from_slice(&[0x11; 32]).expect("valid test signing key"),
+        ))
+        .connect_client(client);
+
+    let cancellation_token = CancellationToken::new();
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        cancellation_token.clone(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
+
+    // Panic should tear down the stale registrations.
+    wait_until(|| !service.has_live_task(job_id)).await;
+    assert!(!service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
+    assert!(!service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
+
+    // Reload should respawn a task that stays registered (no stale teardown).
+    service
+        .admin_reload_and_restart_task(job_id)
+        .await
+        .expect("reload should respawn after panic");
+    wait_until(|| service.has_live_task(job_id)).await;
+
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .contains_key(&job_id));
+    assert!(service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
+
+    cancellation_token.cancel();
+    let _ = request_count;
 }
 
 #[tokio::test]
@@ -1268,7 +1425,7 @@ async fn abort_then_reload_respawns_pending_job() {
     let old_watcher = service
         .result_watchers
         .lock()
-        .await
+        .expect("settlement result_watchers lock poisoned")
         .get(&job_id)
         .cloned()
         .expect("the parked task must have a watcher");
@@ -1278,7 +1435,11 @@ async fn abort_then_reload_respawns_pending_job() {
         .await
         .expect("the parked task should accept an abort");
     wait_until(|| !service.has_live_task(job_id)).await;
-    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
+    assert!(!service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
 
     service
         .admin_reload_and_restart_task(job_id)
@@ -1290,7 +1451,7 @@ async fn abort_then_reload_respawns_pending_job() {
     let fresh_watcher = service
         .result_watchers
         .lock()
-        .await
+        .expect("settlement result_watchers lock poisoned")
         .get(&job_id)
         .cloned()
         .expect("the respawned task must have a watcher");
@@ -1469,7 +1630,7 @@ async fn reload_retries_after_closed_handle_teardown() {
     service
         .result_watchers
         .lock()
-        .await
+        .expect("settlement result_watchers lock poisoned")
         .insert(job_id, stale_watcher.clone());
 
     let error = service
@@ -1503,7 +1664,7 @@ async fn reload_retries_after_closed_handle_teardown() {
     let fresh_watcher = service
         .result_watchers
         .lock()
-        .await
+        .expect("settlement result_watchers lock poisoned")
         .get(&job_id)
         .cloned()
         .expect("respawn should register a fresh watcher");
@@ -1548,7 +1709,7 @@ async fn reload_load_failure_leaves_no_registrations() {
     service
         .result_watchers
         .lock()
-        .await
+        .expect("settlement result_watchers lock poisoned")
         .insert(job_id, stale_watcher);
 
     let error = service
@@ -1561,7 +1722,11 @@ async fn reload_load_failure_leaves_no_registrations() {
         Some(&RpcErrorCode::Unavailable)
     );
     assert!(!service.has_live_task(job_id));
-    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
+    assert!(!service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
 }
 
 #[tokio::test]
@@ -1604,7 +1769,11 @@ async fn reload_completed_during_load_is_tagged_already_completed() {
         Some(&RpcErrorCode::AlreadyCompleted)
     );
     assert!(!service.has_live_task(job_id));
-    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
+    assert!(!service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
 }
 
 #[tokio::test]
@@ -1687,7 +1856,7 @@ async fn admin_force_remove_job_result_respawns_task() {
     service
         .result_watchers
         .lock()
-        .await
+        .expect("settlement result_watchers lock poisoned")
         .insert(job_id, old_watcher.clone());
 
     service
@@ -1701,7 +1870,10 @@ async fn admin_force_remove_job_result_respawns_task() {
         .lock()
         .expect("settlement task_controls lock poisoned")
         .contains_key(&job_id));
-    let result_watchers = service.result_watchers.lock().await;
+    let result_watchers = service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned");
     let fresh_watcher = result_watchers
         .get(&job_id)
         .expect("the respawned task must have a watcher");
@@ -1790,7 +1962,7 @@ async fn force_remove_load_failure_leaves_clean_aborted_state() {
     service
         .result_watchers
         .lock()
-        .await
+        .expect("settlement result_watchers lock poisoned")
         .insert(job_id, old_watcher);
 
     let error = service
@@ -1807,7 +1979,11 @@ async fn force_remove_load_failure_leaves_clean_aborted_state() {
         .lock()
         .expect("settlement task_controls lock poisoned")
         .contains_key(&job_id));
-    assert!(!service.result_watchers.lock().await.contains_key(&job_id));
+    assert!(!service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
 }
 
 /// A fully specified admin attempt.

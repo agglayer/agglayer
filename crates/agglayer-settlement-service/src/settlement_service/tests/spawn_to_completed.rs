@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::{Duration, SystemTime}};
+use std::{sync::Arc, time::SystemTime};
 
 use agglayer_types::{
     ContractCallOutcome, ContractCallResult, Digest, Nonce, SettlementAttempt,
@@ -122,8 +122,8 @@ fn mk_completion_provider(
         .connect_mocked_client(asserter)
 }
 
-/// End-to-end guard for #1480: a spawned task that reaches `Completed` must
-/// drop its service-level watcher registration once the run loop exits.
+/// Regression test for issue 1480: a spawned task that reaches `Completed`
+/// must drop both in-memory registrations once the run loop exits.
 #[tokio::test]
 async fn spawn_clears_result_watchers_after_task_completes() {
     let job_id = mk_job_id(14);
@@ -236,31 +236,38 @@ async fn spawn_clears_result_watchers_after_task_completes() {
         StoredSettlementJob::Completed(_) => panic!("initial load should be pending"),
     };
 
-    assert!(service.result_watchers.lock().await.is_empty());
+    assert!(service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .is_empty());
     let mut result_receiver = service
         .spawn_settlement_task(job_id, task, task_control_handle)
         .await;
-    assert!(service.result_watchers.lock().await.contains_key(&job_id));
+    assert!(service
+        .result_watchers
+        .lock()
+        .expect("settlement result_watchers lock poisoned")
+        .contains_key(&job_id));
 
     result_receiver
         .changed()
         .await
         .expect("spawned task should publish a terminal result");
 
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while !service.result_watchers.lock().await.is_empty() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("result_watchers should be cleared after task completion");
-    assert!(
+    wait_until(|| {
         service
-            .task_controls
+            .result_watchers
             .lock()
-            .expect("settlement task_controls lock poisoned")
+            .expect("settlement result_watchers lock poisoned")
             .is_empty()
-    );
+    })
+    .await;
+    assert!(service
+        .task_controls
+        .lock()
+        .expect("settlement task_controls lock poisoned")
+        .is_empty());
     assert_eq!(
         result_receiver.borrow().as_ref(),
         Some(&SettlementJobResult {
