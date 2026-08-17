@@ -1,0 +1,7 @@
+{
+  "name": "agglayer-pr-review-tracker",
+  "private": true,
+  "scripts": { "build": "esbuild src/index.mjs --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.cjs --legal-comments=linked", "notices": "node test/generate-notices.cjs", "test": "node --test test/*.test.cjs" },
+  "dependencies": { "@actions/core": "3.0.1", "@actions/github": "9.1.1", "@anthropic-ai/sdk": "0.115.0" },
+  "devDependencies": { "esbuild": "0.28.1" }
+}

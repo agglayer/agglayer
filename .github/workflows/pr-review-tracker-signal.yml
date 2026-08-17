@@ -1,0 +1,20 @@
+name: PR Review Tracker Signal
+run-name: "Review tracker signal #${{ github.event.pull_request.number }} action ${{ github.event.action }} review ${{ github.event.review.id || 0 }}"
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, closed, review_requested, review_request_removed]
+  pull_request_review:
+    types: [submitted]
+permissions: {}
+jobs:
+  signal:
+    if: github.event.pull_request.base.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Emit powerless review signal
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+          REVIEW_ID: ${{ github.event.review.id || 0 }}
+        run: echo "Action ${EVENT_ACTION} review ${REVIEW_ID} for PR ${PR_NUMBER}"
