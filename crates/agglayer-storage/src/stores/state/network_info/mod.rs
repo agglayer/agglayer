@@ -125,6 +125,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                              another type"
                         )?
                     }
+                    network_info_value::ValueDiscriminants::LatestProvenCertificateInfo => {}
                 }
 
                 Ok::<(), Error>(())
