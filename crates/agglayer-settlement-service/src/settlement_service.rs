@@ -113,8 +113,9 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     store: Arc<SettlementStore>,
     cancellation_token: CancellationToken,
     task_controls: Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
-    result_watchers:
-        Arc<Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>>,
+    result_watchers: Arc<
+        std::sync::Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>,
+    >,
     /// Serializes the spawn-capable force-remove and reload admin operations
     /// so two concurrent calls cannot both conclude that a job needs a fresh
     /// task and spawn duplicates. A global lock is deliberate at this stack's
@@ -129,13 +130,26 @@ pub struct SettlementService<L1Provider, SettlementStore> {
     wallet_nonce_locks: Arc<WalletNonceLocks>,
 }
 
-struct TaskControlRegistrationGuard {
+/// Tears down both in-memory registrations when the spawned task exits,
+/// including panic unwind.
+///
+/// Drop removes the watcher first, then the control entry. Admin reload
+/// refuses to respawn while a control is still registered; reversing this
+/// order would let reload install a fresh task that this Drop then deletes.
+struct TaskRegistrationGuard {
     job_id: SettlementJobId,
+    result_watchers: Arc<
+        std::sync::Mutex<HashMap<SettlementJobId, watch::Receiver<Option<SettlementJobResult>>>>,
+    >,
     task_controls: Arc<std::sync::Mutex<HashMap<SettlementJobId, TaskControlHandle>>>,
 }
 
-impl Drop for TaskControlRegistrationGuard {
+impl Drop for TaskRegistrationGuard {
     fn drop(&mut self) {
+        self.result_watchers
+            .lock()
+            .expect("settlement result_watchers lock poisoned")
+            .remove(&self.job_id);
         self.task_controls
             .lock()
             .expect("settlement task_controls lock poisoned")
@@ -218,7 +232,7 @@ impl<
             store,
             cancellation_token,
             task_controls: Arc::new(std::sync::Mutex::new(HashMap::new())),
-            result_watchers: Arc::new(Mutex::new(HashMap::new())),
+            result_watchers: Arc::new(std::sync::Mutex::new(HashMap::new())),
             admin_operation_lock: Arc::new(Mutex::new(())),
             wallet_nonce_locks: Arc::new(WalletNonceLocks::default()),
         };
@@ -311,7 +325,7 @@ impl<
         // harmless pending watcher, never a task without a watcher.
         self.result_watchers
             .lock()
-            .await
+            .expect("settlement result_watchers lock poisoned")
             .insert(job_id, result_receiver.clone());
         self.task_controls
             .lock()
@@ -325,8 +339,12 @@ impl<
         let wallet_nonce_locks = self.wallet_nonce_locks.clone();
         let cancellation_token = self.cancellation_token.clone();
         tokio::task::spawn(async move {
-            let _task_control_registration = TaskControlRegistrationGuard {
+            // Lives outside the run loop so ReloadAndRestart → Pending keeps
+            // both registrations; Drop runs on Completed, Cancelled, reload
+            // error, reload-to-completed, and panic unwind.
+            let _task_registration = TaskRegistrationGuard {
                 job_id,
+                result_watchers,
                 task_controls: task_controls.clone(),
             };
             loop {
@@ -343,7 +361,6 @@ impl<
                     }
                     SettlementTaskRunResult::Cancelled => {
                         info!(?job_id, "Settlement task cancelled");
-                        result_watchers.lock().await.remove(&job_id);
                         break;
                     }
                     SettlementTaskRunResult::ReloadAndRestart => {
@@ -384,7 +401,6 @@ impl<
                                     "Failed to reload settlement task; dropping in-memory task \
                                      state"
                                 );
-                                result_watchers.lock().await.remove(&job_id);
                                 break;
                             }
                         }
@@ -519,7 +535,10 @@ impl<
         // No replacement registration is created until loading succeeds, so
         // clearing it here also leaves a load failure with no stale control or
         // watcher for this job.
-        self.result_watchers.lock().await.remove(&job_id);
+        self.result_watchers
+            .lock()
+            .expect("settlement result_watchers lock poisoned")
+            .remove(&job_id);
 
         let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
         let stored_job = self
@@ -800,7 +819,10 @@ impl<
 
         // Drop the in-memory watcher that still broadcasts the removed
         // result, then bring the job back to life.
-        self.result_watchers.lock().await.remove(&job_id);
+        self.result_watchers
+            .lock()
+            .expect("settlement result_watchers lock poisoned")
+            .remove(&job_id);
 
         let (task_control_handle, task_control) = TaskControlHandle::new(&self.cancellation_token);
         // Nothing stale is registered at this point: the watcher was removed,
@@ -865,13 +887,20 @@ impl<
         &self,
         job_id: SettlementJobId,
     ) -> eyre::Result<RetrievedSettlementResult> {
-        if let Some(watcher) = self.result_watchers.lock().await.get(&job_id) {
-            return match watcher.borrow().as_ref() {
+        let watcher = self
+            .result_watchers
+            .lock()
+            .expect("settlement result_watchers lock poisoned")
+            .get(&job_id)
+            .cloned();
+        if let Some(watcher) = watcher {
+            let current = watcher.borrow().clone();
+            return match current {
                 None => Ok(RetrievedSettlementResult::Pending(SettlementJobWatcher {
                     job_id,
-                    watcher: watcher.clone(),
+                    watcher,
                 })),
-                Some(result) => Ok(RetrievedSettlementResult::Completed(result.clone())),
+                Some(result) => Ok(RetrievedSettlementResult::Completed(result)),
             };
         }
 
