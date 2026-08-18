@@ -60,15 +60,26 @@ unless it has already been bumped since the last release.
 
 ## How the selector is derived
 
-The selector is `PESSIMISTIC_PROOF_PROGRAM_SELECTOR`
-in `pessimistic-proof-core`. It is the **major version**
-of `crates/pessimistic-proof-program/Cargo.toml` encoded
-as a big-endian `[u8; 4]`.
+The selector is four bytes: the **high byte is the proof wrapping**,
+the low three bytes are the **major version** of
+`crates/pessimistic-proof-program/Cargo.toml`.
+
+| High byte | Wrapping |
+|-----------|----------|
+| `0x00`    | PLONK (every selector up to `0x0000000e`) |
+| `0x01`    | Groth16 |
 
 The build script `crates/pessimistic-proof-core/build.rs`
 reads the program's `Cargo.toml`, extracts the major version,
 and generates a `PESSIMISTIC_PROOF_PROGRAM_VERSION: u32`
-constant. The selector is that value in big-endian bytes.
+constant. `PP_SELECTOR_PLONK` and `PP_SELECTOR_GROTH16`
+combine it with each wrapping byte; the node picks between
+them from its configured wrapping.
+
+The two ranges are kept disjoint so a route registered for one
+wrapping can never collide with a future version of the other.
+Routes on L1 are immutable, so a collision is unrecoverable.
+See [pp-groth16-migration.md](pp-groth16-migration.md).
 
 ## How to bump the selector
 

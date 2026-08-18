@@ -31,5 +31,7 @@ mock! {
         ) -> Result<agglayer_contracts::rollup::VerifierType, CertificationError>;
 
         fn default_l1_info_tree_leaf_count(&self) -> u32;
+
+        fn pp_selector(&self) -> [u8; 4];
     }
 }

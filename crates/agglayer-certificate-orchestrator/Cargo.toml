@@ -41,6 +41,7 @@ agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
 agglayer-test-suite = { workspace = true, optional = true }
 agglayer-types.workspace = true
+hex.workspace = true
 agglayer-settlement-service.workspace = true
 pessimistic-proof.workspace = true
 
