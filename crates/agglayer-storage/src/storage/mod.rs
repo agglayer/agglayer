@@ -59,14 +59,15 @@ impl DB {
         options.create_if_missing(false); // Don't create if missing in readonly mode
         options.create_missing_column_families(false); // Don't create missing column families
 
-        let descriptors: Vec<_> = match rocksdb::DB::list_cf(&options, path) {
-            Ok(names) => names
-                .into_iter()
-                .filter(|name| name != rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
-                .map(|name| Self::descriptor_for_existing(&name, cfs))
-                .collect(),
-            Err(_) => cfs.iter().map(Self::descriptor).collect(),
-        };
+        // A failed column-family listing means there is no readable database
+        // at this path. Propagate that error before calling `open`: despite the
+        // read-only options, RocksDB's open path may create filesystem state
+        // while handling a missing database directory.
+        let descriptors: Vec<_> = rocksdb::DB::list_cf(&options, path)?
+            .into_iter()
+            .filter(|name| name != rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
+            .map(|name| Self::descriptor_for_existing(&name, cfs))
+            .collect();
 
         Ok(DB {
             rocksdb: rocksdb::DB::open_cf_descriptors_read_only(
