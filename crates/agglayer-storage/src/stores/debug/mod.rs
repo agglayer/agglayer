@@ -46,6 +46,27 @@ impl DebugStore {
     }
 }
 
+pub(crate) fn open_db_readonly(path: &Path) -> Result<DB, crate::storage::DBError> {
+    DB::open_cf_readonly(path, cf_definitions::DEBUG_DB)
+}
+
+/// Reads a debug certificate without modifying a legacy database to perform
+/// the proto migration.
+pub(crate) fn read_certificate_from_db(
+    db: &DB,
+    certificate_id: &CertificateId,
+) -> Result<Option<Certificate>, Error> {
+    match db.get::<DebugCertificatesProtoColumn>(certificate_id) {
+        // Debug DBs created before the proto migration and only reopened
+        // read-only since were never migrated. In that case the proto CF is
+        // absent, so decode the still-present legacy row directly.
+        Err(crate::storage::DBError::ColumnFamilyNotFound) => Ok(db
+            .get::<DebugCertificatesColumn>(certificate_id)?
+            .map(Certificate::from)),
+        result => Ok(result?),
+    }
+}
+
 /// Migration step for the certificate serialization switch from the legacy
 /// debug CF to the proto-backed CF.
 ///

@@ -70,6 +70,15 @@ impl StateStore {
             .finalize(cf_definitions::STATE_DB)
     }
 
+    /// Opens an existing state database without permitting writes or schema
+    /// migrations.
+    ///
+    /// This is intended for offline inspection of a copied database. Unlike
+    /// [`Self::init_db`], it never creates or updates column families.
+    pub(crate) fn init_db_readonly(path: &Path) -> Result<DB, crate::storage::DBError> {
+        DB::open_cf_readonly(path, cf_definitions::STATE_DB)
+    }
+
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
         Self {
             db,
@@ -88,6 +97,21 @@ impl StateStore {
             backup_client,
             settlement_write_locks: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Opens an existing state database in read-only mode.
+    pub(crate) fn new_readonly_with_path(path: &Path) -> Result<Self, crate::storage::DBError> {
+        let db = Arc::new(Self::init_db_readonly(path)?);
+
+        Ok(Self {
+            db,
+            backup_client: BackupClient::noop(),
+            settlement_write_locks: Mutex::new(HashMap::new()),
+        })
+    }
+
+    pub(crate) fn database(&self) -> &DB {
+        &self.db
     }
 }
 
@@ -458,7 +482,10 @@ impl StateStore {
         Ok(())
     }
 
-    fn read_local_exit_tree(&self, network_id: NetworkId) -> Result<Option<LocalExitTree>, Error> {
+    pub(super) fn read_local_exit_tree(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<LocalExitTree>, Error> {
         let leaf_count = if let Some(leaf_count_value) =
             self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
                 network_id: network_id.into(),

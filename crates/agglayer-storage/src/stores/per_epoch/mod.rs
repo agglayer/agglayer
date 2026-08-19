@@ -62,7 +62,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     }
 
     pub fn init_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
-        DB::open_cf_readonly(path, cf_definitions::EPOCHS_DB)
+        open_db_readonly(path)
     }
 
     #[tracing::instrument(skip_all, fields(store = "epoch", %epoch_number))]
@@ -524,24 +524,7 @@ where
         &self,
         index: CertificateIndex,
     ) -> Result<Option<Certificate>, Error> {
-        match self.db.get::<CertificatePerIndexProtoColumn>(&index) {
-            // Epoch DBs created before the proto migration and only reopened
-            // read-only since were never migrated: read-only opens never create
-            // column families, so the proto CF is absent here. Fall back to the
-            // still-present legacy CF, decoding through the same `Certificate::from`
-            // conversion the migration backfill uses.
-            Err(crate::storage::DBError::ColumnFamilyNotFound) => {
-                warn!(
-                    "Proto certificate CF missing for epoch {}: reading from the legacy CF",
-                    self.epoch_number
-                );
-                Ok(self
-                    .db
-                    .get::<CertificatePerIndexColumn>(&index)?
-                    .map(Certificate::from))
-            }
-            result => Ok(result?),
-        }
+        read_certificate_from_db(&self.db, *self.epoch_number, index)
     }
 
     fn get_proof_at_index(&self, index: CertificateIndex) -> Result<Option<Proof>, Error> {
@@ -561,5 +544,35 @@ where
         network_id: NetworkId,
     ) -> Result<Option<Height>, Error> {
         Ok(self.end_checkpoint.read().get(&network_id).copied())
+    }
+}
+
+pub(crate) fn open_db_readonly(path: &std::path::Path) -> Result<DB, crate::storage::DBError> {
+    DB::open_cf_readonly(path, cf_definitions::EPOCHS_DB)
+}
+
+/// Reads an epoch certificate without modifying a legacy database to perform
+/// the proto migration.
+pub(crate) fn read_certificate_from_db(
+    db: &DB,
+    epoch_number: EpochNumber,
+    index: CertificateIndex,
+) -> Result<Option<Certificate>, Error> {
+    match db.get::<CertificatePerIndexProtoColumn>(&index) {
+        // Epoch DBs created before the proto migration and only reopened
+        // read-only since were never migrated: read-only opens never create
+        // column families, so the proto CF is absent here. Fall back to the
+        // still-present legacy CF, decoding through the same `Certificate::from`
+        // conversion the migration backfill uses.
+        Err(crate::storage::DBError::ColumnFamilyNotFound) => {
+            warn!(
+                %epoch_number,
+                "Proto certificate CF missing: reading from the legacy CF"
+            );
+            Ok(db
+                .get::<CertificatePerIndexColumn>(&index)?
+                .map(Certificate::from))
+        }
+        result => Ok(result?),
     }
 }
