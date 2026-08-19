@@ -3,8 +3,11 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 let Tracker;
+let emptyState;
 let parseCommand;
-test.before(async () => ({ Tracker, parseCommand } = await import("../src/tracker.mjs")));
+let renderComment;
+let taskMarker;
+test.before(async () => ({ Tracker, emptyState, parseCommand, renderComment, taskMarker } = await import("../src/tracker.mjs")));
 
 const config = {
   owner: "agglayer",
@@ -18,6 +21,7 @@ const config = {
   inReviewOptionId: "in-review",
   statusFieldId: 1,
   projectsToken: "projects-secret",
+  legacyTaskIssueNumbers: [101],
 };
 
 test("opening creates one assigned issue per requested person", async () => {
@@ -27,7 +31,7 @@ test("opening creates one assigned issue per requested person", async () => {
   assert.equal(result.errors.length, 0);
   assert.equal(result.state.source.via, "closing");
   assert.deepEqual(
-    [...fixture.github.issues.values()].map((issue) => issue.assignees),
+    [...fixture.github.issues.values()].map((issue) => issue.assignees.map(({ login }) => login)),
     [["alice"], ["bob"]],
   );
   assert.deepEqual([...fixture.project.status.values()], ["ready", "ready"]);
@@ -244,10 +248,33 @@ test("set and reconcile refresh every task without replaying lifecycle events", 
 
 test("the review cap is checked before fetching or mutating a review", async () => {
   const fixture = createFixture([]);
-  const tracker = new Tracker({ github: fixture.github, project: fixture.project, config, core: fixture.core });
+  const tracker = new Tracker({
+    github: fixture.github, project: fixture.project, config, core: fixture.core,
+    context: { repo: { owner: config.owner, repo: config.repo } },
+  });
   tracker.state = { reviews: Array.from({ length: 2_000 }, (_, index) => String(index)) };
   await assert.rejects(tracker.processReview("new"), /processed-review list is too large/);
   assert.equal(fixture.github.reviewReads.size, 0);
+});
+
+test("recovery can replay an existing review at the review cap", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([]);
+  await fixture.github.rest.issues.create({ title: "Review PR #9", body: "task", assignees: [alice.login] });
+  fixture.github.reviews.set("501", submitted("501", alice, "2026-01-01T01:00:00Z"));
+  const tracker = new Tracker({
+    github: fixture.github, project: fixture.project, config, core: fixture.core,
+    context: { repo: { owner: config.owner, repo: config.repo } },
+  });
+  tracker.pull = fixture.github.pull;
+  tracker.state = {
+    source: { none: true, via: "manual-none" },
+    tasks: { U_alice: { login: "alice", issue: 101, item: 201, replayAfter: "2026-01-01T00:00:00Z" } },
+    reviews: ["501", ...Array.from({ length: 1_999 }, (_, index) => `old-${index}`)],
+  };
+
+  await tracker.processReview("501");
+  assert.equal(fixture.project.status.get(201), "in-review");
+  assert.equal(fixture.github.reviewReads.get("501"), 1);
 });
 
 test("source errors remain visible while review tasks still get created", async () => {
@@ -261,6 +288,206 @@ test("source errors remain visible while review tasks still get created", async 
   assert.match(fixture.github.comments[0].body, /Project source lookup failed/);
   assert.match(fixture.github.comments[0].body, /HTTP 503/);
   assert.deepEqual(fixture.project.syncs[0], { item: 201, source: null, status: "ready" });
+});
+
+test("a failed Project add preserves and retries the created review issue", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  const calls = [];
+  const createIssue = fixture.github.rest.issues.create;
+  fixture.github.rest.issues.create = async (params) => { calls.push("issue"); return createIssue(params); };
+  const createComment = fixture.github.rest.issues.createComment;
+  fixture.github.rest.issues.createComment = async (params) => { calls.push("state"); return createComment(params); };
+  const ensureIssue = fixture.project.ensureIssue.bind(fixture.project);
+  fixture.project.ensureIssue = async (issue) => { calls.push("project"); return ensureIssue(issue); };
+  fixture.project.ensureIssueFailures = 2;
+
+  let result = await run(fixture, direct("opened"));
+  assert.equal(result.errors.length, 2);
+  assert.deepEqual(calls.slice(0, 3), ["issue", "state", "project"]);
+  assert.equal(fixture.github.issues.size, 1);
+  assert.deepEqual(result.state.tasks.U_alice, {
+    login: "alice", issue: 101, pending: true, closedByPr: false, fulfilled: false,
+  });
+  assert.match(fixture.github.comments[0].body, /@alice: \[#101\].*Project sync pending/);
+
+  result = await run(fixture, direct("edited"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.github.issues.size, 1);
+  assert.equal(result.state.tasks.U_alice.item, 201);
+  assert.equal(result.state.tasks.U_alice.pending, undefined);
+  assert.equal(fixture.project.status.get(201), "ready");
+});
+
+test("PR close and reopen converge while Project attachment is pending", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  fixture.project.ensureIssueFailures = 2;
+  let result = await run(fixture, direct("opened"));
+  assert.equal(result.state.tasks.U_alice.item, undefined);
+
+  result = await run(fixture, direct("closed"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.github.issues.get(101).state, "closed");
+  assert.equal(result.state.tasks.U_alice.closedByPr, true);
+
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.state.tasks.U_alice.item, 201);
+  assert.equal(result.state.tasks.U_alice.pending, undefined);
+  assert.equal(fixture.project.status.get(201), undefined);
+
+  result = await run(fixture, direct("reopened"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.github.issues.get(101).state, "open");
+  assert.equal(result.state.tasks.U_alice.item, 201);
+  assert.equal(result.state.tasks.U_alice.pending, undefined);
+  assert.equal(fixture.project.status.get(201), "ready");
+});
+
+test("PR close retries a failed Project status snapshot before closing", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  await run(fixture, direct("opened"));
+  fixture.project.getItemFailures = 1;
+
+  let result = await run(fixture, direct("closed"));
+  assert.equal(result.errors.length, 1);
+  assert.equal(fixture.github.issues.get(101).state, "open");
+  assert.equal(result.state.tasks.U_alice.closedByPr, false);
+
+  result = await run(fixture, direct("closed"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.github.issues.get(101).state, "closed");
+  assert.equal(result.state.tasks.U_alice.closedByPr, true);
+});
+
+test("PR close persists reopen intent before closing the review issue", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([alice]);
+  await run(fixture, direct("opened"));
+  fixture.github.reviews.set("501", submitted("501", alice, "2026-01-01T01:00:00Z"));
+  await run(fixture, reviewEvent(), "501");
+  fixture.github.pull.requested_reviewers = [];
+  fixture.github.pull.state = "closed";
+  fixture.github.pull.closed_at = "2026-01-02T00:00:00Z";
+
+  const updateComment = fixture.github.rest.issues.updateComment;
+  let saves = 0;
+  fixture.github.rest.issues.updateComment = async (params) => {
+    if (++saves === 2) throw new Error("final state save failed");
+    return updateComment(params);
+  };
+  await assert.rejects(run(fixture, direct("closed")), /final state save failed/);
+  assert.equal(fixture.github.issues.get(101).state, "closed");
+
+  fixture.github.rest.issues.updateComment = updateComment;
+  fixture.github.pull.state = "open";
+  fixture.github.pull.closed_at = null;
+  const result = await run(fixture, direct("reopened"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.github.issues.get(101).state, "open");
+  assert.equal(fixture.project.status.get(201), "in-review");
+});
+
+test("a failed Project sync keeps its review live through reviewer removal", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([alice]);
+  fixture.project.syncFailures = 5;
+  let result = await run(fixture, direct("opened"));
+  assert.equal(result.state.tasks.U_alice.pending, true);
+  fixture.github.reviews.set("501", submitted("501", alice, "2026-01-01T01:00:00Z"));
+
+  result = await run(fixture, reviewEvent(), "501");
+  assert.deepEqual(result.state.reviews, []);
+  assert.equal(result.state.tasks.U_alice.pending, true);
+  assert.equal(result.state.tasks.U_alice.fulfilled, true);
+
+  result = await run(fixture, direct("edited"));
+  assert.deepEqual(result.state.reviews, []);
+  assert.equal(fixture.github.issues.get(101).state, "open");
+  assert.equal(result.state.tasks.U_alice.fulfilled, true);
+
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.deepEqual(result.state.reviews, ["501"]);
+  assert.equal(result.state.tasks.U_alice.fulfilled, true);
+  assert.equal(result.state.tasks.U_alice.pending, undefined);
+  assert.equal(fixture.project.status.get(201), "in-review");
+  assert.equal(fixture.github.issues.get(101).state, "open");
+  assert.equal(fixture.github.issues.size, 1);
+});
+
+test("legacy empty state recovers an unsigned orphan and replays its review", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([]);
+  await fixture.github.rest.issues.create({
+    title: "Review PR #9", body: legacyTaskMarker(9, alice.node_id), assignees: [alice.login],
+  });
+  fixture.github.reviews.set("501", submitted("501", alice, "2026-01-01T01:00:00Z"));
+  const state = emptyState(config, 9);
+  state.source = { none: true, via: "manual-none" };
+  state.reviews = ["501"];
+  delete state.taskRecovery;
+  fixture.github.comments.push({ id: 1, user: { login: config.botLogin }, body: renderComment(config, state) });
+
+  fixture.github.pull.state = "closed";
+  fixture.github.pull.closed_at = "2026-01-02T00:00:00Z";
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.deepEqual(result.warnings, []);
+  assert.equal(fixture.github.issues.size, 1);
+  assert.equal(result.state.tasks.U_alice.issue, 101);
+  assert.equal(result.state.tasks.U_alice.fulfilled, true);
+  assert.equal(result.state.tasks.U_alice.replayAfter, undefined);
+  assert.deepEqual(result.state.reviews, ["501"]);
+  assert.equal(fixture.project.status.get(201), "in-review");
+  assert.equal(fixture.github.issues.get(101).state, "closed");
+  assert.equal(result.state.tasks.U_alice.closedByPr, true);
+  assert.match(fixture.github.issues.get(101).body, new RegExp(taskMarker(config, 9, alice.node_id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("legacy recovery rejects unsigned task issues outside its allowlist", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([]);
+  await fixture.github.rest.issues.create({ title: "Unrelated bot issue", body: "No task marker." });
+  await fixture.github.rest.issues.create({
+    title: "Review PR #9", body: legacyTaskMarker(9, alice.node_id), assignees: [alice.login],
+  });
+  const state = emptyState(config, 9);
+  delete state.taskRecovery;
+  fixture.github.comments.push({ id: 1, user: { login: config.botLogin }, body: renderComment(config, state) });
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.state.tasks.U_alice, undefined);
+});
+
+test("legacy recovery replays every consumed review for one task", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([]);
+  await fixture.github.rest.issues.create({
+    title: "Review PR #9", body: legacyTaskMarker(9, alice.node_id), assignees: [alice.login],
+  });
+  fixture.github.reviews.set("501", submitted("501", alice, "2026-01-01T01:00:00Z"));
+  fixture.github.reviews.set("502", submitted("502", alice, "2026-01-01T02:00:00Z"));
+  const state = emptyState(config, 9);
+  state.source = sourceItem();
+  state.reviews = ["501", "502"];
+  delete state.taskRecovery;
+  fixture.github.comments.push({ id: 1, user: { login: config.botLogin }, body: renderComment(config, state) });
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.deepEqual(fixture.project.sourceReviews, ["2026-01-01T01:00:00Z", "2026-01-01T02:00:00Z"]);
+  assert.equal(result.state.tasks.U_alice.replayAfter, undefined);
+});
+
+test("current state recovers signed task markers but rejects unsigned ones", async () => {
+  const alice = reviewer("alice");
+  for (const [body, recovered] of [
+    [taskMarker(config, 9, alice.node_id), true],
+    [legacyTaskMarker(9, alice.node_id), false],
+  ]) {
+    const fixture = createFixture([]);
+    await fixture.github.rest.issues.create({ title: "Review PR #9", body, assignees: [alice.login] });
+    const state = emptyState(config, 9);
+    state.source = { none: true, via: "manual-none" };
+    fixture.github.comments.push({ id: 1, user: { login: config.botLogin }, body: renderComment(config, state) });
+
+    const result = await run(fixture, command("/review-tracker reconcile"));
+    assert.equal(Boolean(result.state.tasks.U_alice), recovered);
+  }
 });
 
 test("failed inference preserves the current source and copied fields", async () => {
@@ -422,14 +649,18 @@ class FakeGithub {
       },
       issues: {
         listComments: "listComments",
+        listForRepo: "listForRepo",
         create: async (params) => {
           const number = 101 + this.issues.size;
-          const issue = { id: 1001 + number, number, state: "open", ...params };
+          const issue = { id: 1001 + number, node_id: `I_${number}`, number, state: "open", ...params,
+            assignees: (params.assignees ?? []).map(reviewer), user: { login: config.botLogin },
+            created_at: "2026-01-01T00:00:00Z" };
           this.issues.set(number, issue);
           return { data: issue };
         },
         get: async ({ issue_number }) => ({ data: this.issues.get(issue_number) }),
         update: async ({ issue_number, ...changes }) => {
+          if (changes.assignees) changes.assignees = changes.assignees.map(reviewer);
           Object.assign(this.issues.get(issue_number), changes);
           return { data: this.issues.get(issue_number) };
         },
@@ -448,6 +679,7 @@ class FakeGithub {
 
   async paginate(method) {
     if (method === "listComments") return this.comments;
+    if (method === "listForRepo") return [...this.issues.values()];
     if (method === "listReviews") return [...this.reviews.values()];
     throw new Error(`Unexpected pagination method ${method}`);
   }
@@ -466,19 +698,27 @@ class FakeGithub {
 class FakeProject {
   constructor() {
     this.status = new Map();
+    this.issueItems = new Map();
     this.syncs = [];
     this.sourceReviews = [];
+    this.ensureIssueFailures = 0;
+    this.syncFailures = 0;
+    this.getItemFailures = 0;
   }
 
   async items() {
     return [sourceItem()];
   }
 
-  async addIssue() {
-    return { id: 201 + this.status.size, nodeId: `PVTI_${201 + this.status.size}` };
+  async ensureIssue(issue) {
+    if (this.ensureIssueFailures-- > 0) throw Object.assign(new Error("Project add failed"), { status: 503 });
+    if (!this.issueItems.has(issue.node_id)) this.issueItems.set(issue.node_id, 201 + this.issueItems.size);
+    const id = this.issueItems.get(issue.node_id);
+    return { id, nodeId: `PVTI_${id}` };
   }
 
   async sync(item, source, status = null) {
+    if (this.syncFailures-- > 0) throw Object.assign(new Error("Project sync failed"), { status: 503 });
     this.syncs.push({ item, source, status });
     if (status) this.status.set(item, status);
   }
@@ -487,7 +727,10 @@ class FakeProject {
     this.status.set(item, status);
   }
 
-  async getItem(item) { return { fields: [{ id: config.statusFieldId, value: { id: this.status.get(item) } }] }; }
+  async getItem(item) {
+    if (this.getItemFailures-- > 0) throw Object.assign(new Error("Project read failed"), { status: 503 });
+    return { fields: [{ id: config.statusFieldId, value: { id: this.status.get(item) } }] };
+  }
 
   async moveSourceToReady(_source, reviewedAt) {
     this.sourceReviews.push(reviewedAt);
@@ -520,6 +763,11 @@ function reviewer(login) {
 
 function submitted(id, user, submittedAt) {
   return { id: Number(id), state: "APPROVED", submitted_at: submittedAt, user };
+}
+
+function legacyTaskMarker(pr, reviewerId) {
+  const payload = Buffer.from(JSON.stringify({ v: 1, repositoryId: config.repositoryId, pr, reviewerId })).toString("base64url");
+  return `<!-- review-tracker-task:${payload} -->`;
 }
 
 function direct(action, requestedReviewer = null, applyCurrent = true) {

@@ -76,6 +76,7 @@ test("signed state rejects payload tampering", () => {
 test("task markers contain only routing identifiers", () => {
   const marker = taskMarker(config, 42, "U_alice");
   assert.match(marker, /review-tracker-task/);
+  assert.match(marker, /review-tracker-task:[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
   assert.doesNotMatch(marker, /title|Notes|alice/);
 });
 

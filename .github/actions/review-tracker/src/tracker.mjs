@@ -6,7 +6,8 @@ const DEPLOYMENT = {
   statusFieldId: 369829350, statusFieldNodeId: "PVTSSF_lADOCeYRi84BdrR0zhYLJeY",
   readyOptionId: "61e4505c", inReviewOptionId: "df73e18b", blockedOptionId: "13f63909",
   copyFieldIds: [369832156, 369833082, 369835321, 369832813, 369832890],
-  estimateFieldId: 369829594, notesFieldId: 374176592, maxPromptBytes: 3_500_000 };
+  estimateFieldId: 369829594, notesFieldId: 374176592, legacyTaskIssueNumbers: [1747],
+  maxPromptBytes: 3_500_000 };
 export const COMMANDS = ["/review-tracker set OWNER/REPOSITORY#123", "/review-tracker none", "/review-tracker infer", "/review-tracker reconcile"];
 const STATE_MARKER = "review-tracker-state";
 const LIFECYCLE_ACTIONS = new Set([
@@ -113,6 +114,8 @@ export class Tracker {
     }
     let sourceChanged = false;
     if (command) sourceChanged = await this.capture("command", () => this.applyCommand(command)) === true;
+    if (this.state.taskRecovery !== 1 || command?.kind === "reconcile")
+      await this.capture("review task recovery", () => this.recoverTasks());
     const infer = command?.kind === "infer";
     const authorCanInfer = event.kind === "lifecycle" && event.action === "opened" && await this.capture("PR author permission",
       () => hasWriteAccess(this.github, this.context.repo, this.pull.user?.login)) === true;
@@ -131,6 +134,11 @@ export class Tracker {
       await this.reconcileLifecycle();
     } else if (event.kind === "reviewed")
       await this.capture("review reconciliation", () => this.reconcileReviews(event.reviewId));
+    else if (command?.kind === "reconcile") {
+      const current = await this.capture("lifecycle state", () => this.refreshLifecycleState()) === true;
+      await this.capture("review reconciliation", () => this.reconcileReviews());
+      if (current) await this.reconcileLifecycle();
+    }
     if (sourceChanged || command?.kind === "reconcile") await this.syncTasks();
     await this.save();
     return { state: this.state, errors: this.errors, warnings: this.warnings };
@@ -150,15 +158,80 @@ export class Tracker {
     const issueData = { ...this.context.repo,
       title: `Review PR #${this.pull.number}: ${this.pull.title}`.slice(0, 256),
       body: reviewIssueBody(this.config, this.pull, reviewer), assignees: [reviewer.login] };
-    if (task) {
-      await this.github.rest.issues.update({ ...issueData, issue_number: task.issue, state: "open" });
-      Object.assign(task, { login: reviewer.login, closedByPr: false, fulfilled: false });
-    } else {
-      const { data: issue } = await this.github.rest.issues.create(issueData), item = await this.project.addIssue(issue.id);
-      task = { login: reviewer.login, issue: issue.number, item: item.id, closedByPr: false, fulfilled: false };
+    let issue;
+    if (!task) {
+      issue = (await this.taskIssues()).get(reviewer.node_id)?.issue;
+      if (issue) task = recoveredTask(issue, reviewer.login);
+      else {
+        ({ data: issue } = await this.github.rest.issues.create(issueData));
+        task = { login: reviewer.login, issue: issue.number, pending: true, closedByPr: false, fulfilled: false };
+        this.cachedTaskIssues?.set(reviewer.node_id, { issue, legacy: false });
+      }
       this.state.tasks[reviewer.node_id] = task;
+      await this.save();
     }
-    await this.project.sync(task.item, this.state.source, this.config.readyOptionId);
+    ({ data: issue } = await this.github.rest.issues.update({ ...issueData, issue_number: task.issue, state: "open" }));
+    Object.assign(task, { login: reviewer.login, closedByPr: false, fulfilled: false });
+    await this.syncTask(task, issue, this.config.readyOptionId);
+  }
+  async taskIssues(allowLegacy = false) {
+    if (this.cachedTaskIssues) return this.cachedTaskIssues;
+    const issues = await this.github.paginate(this.github.rest.issues.listForRepo, {
+      ...this.context.repo, state: "all", creator: this.config.botLogin, per_page: 100 });
+    this.cachedTaskIssues = new Map();
+    for (const issue of issues) {
+      if (issue.pull_request || issue.user?.login !== this.config.botLogin ||
+        !String(issue.body ?? "").includes("<!-- review-tracker-task:")) continue;
+      let marker, legacy = false;
+      try { marker = decodeMarker(issue.body, "review-tracker-task", this.config.projectsToken); }
+      catch {
+        if (!allowLegacy || !(this.config.legacyTaskIssueNumbers ?? []).includes(issue.number)) continue;
+        try { marker = decodeMarker(issue.body, "review-tracker-task", null); legacy = true; } catch { continue; }
+      }
+      if (marker?.v !== 1 || marker.repositoryId !== this.config.repositoryId || marker.pr !== this.pull.number ||
+        typeof marker.reviewerId !== "string" || !marker.reviewerId) continue;
+      const current = this.cachedTaskIssues.get(marker.reviewerId);
+      if (!current || (current.legacy && !legacy) || current.legacy === legacy && issue.number < current.issue.number)
+        this.cachedTaskIssues.set(marker.reviewerId, { issue, legacy });
+      if (current) this.warnings.push(`Multiple review task issues exist for reviewer ${marker.reviewerId}; the authenticated or oldest issue was used.`);
+    }
+    return this.cachedTaskIssues;
+  }
+  async recoverTasks() {
+    let changed = false;
+    for (const [reviewerId, entry] of await this.taskIssues(this.state.taskRecovery !== 1)) {
+      let { issue } = entry;
+      const assignee = issue.assignees?.find(({ node_id }) => node_id === reviewerId);
+      if (!assignee?.login) { this.warnings.push(`Could not recover review task #${issue.number}: its reviewer is no longer assigned.`); continue; }
+      if (!this.state.tasks[reviewerId]) {
+        this.state.tasks[reviewerId] = recoveredTask(issue, assignee.login); changed = true; await this.save();
+      }
+      if (entry.legacy) {
+        ({ data: issue } = await this.github.rest.issues.update({
+          ...this.context.repo, issue_number: issue.number, body: reviewIssueBody(this.config, this.pull, assignee),
+        }));
+        Object.assign(entry, { issue, legacy: false });
+      }
+    }
+    this.state.taskRecovery = 1;
+    if (changed) await this.save();
+  }
+  async recoverTask(reviewer) {
+    const issue = (await this.taskIssues()).get(reviewer.node_id)?.issue;
+    if (!issue) return null;
+    const task = recoveredTask(issue, reviewer.login);
+    this.state.tasks[reviewer.node_id] = task; await this.save();
+    return task;
+  }
+  async syncTask(task, issue = null, status = null) {
+    task.pending = true; issue ??= await this.getIssue(task.issue);
+    if (!task.item) task.item = (await this.project.ensureIssue(issue)).id;
+    await this.mutateTask(task, () => this.project.sync(task.item, this.state.source, status));
+    delete task.pending;
+  }
+  async mutateTask(task, operation) {
+    try { return await operation(); }
+    catch (error) { task.pending = true; if (error.status === 404) delete task.item; throw error; }
   }
   async refreshLifecycleState() {
     const [{ data: pull }, { data: requested }] = await Promise.all([
@@ -181,7 +254,9 @@ export class Tracker {
       if (task.fulfilled) return this.ensureTask(reviewer);
       const issue = await this.getIssue(task.issue);
       if (issue.state === "open") {
-        task.closedByPr = false; delete task.reopenStatus; return;
+        task.closedByPr = false; delete task.reopenStatus;
+        if (task.pending || !task.item) await this.ensureTask(reviewer);
+        return;
       }
       if (task.closedByPr) return this.reopenTask(task);
       await this.ensureTask(reviewer);
@@ -203,47 +278,58 @@ export class Tracker {
     });
     const ids = new Set(reviews.filter((review) => review.submitted_at && review.state !== "PENDING")
       .map((review) => String(review.id)));
-    if (exactReviewId) ids.add(String(exactReviewId));
-    for (const id of ids) await this.capture(`process review ${id}`, () => this.processReview(id));
+    if (exactReviewId) ids.add(String(exactReviewId)); let complete = true;
+    for (const id of ids) complete = await this.capture(`process review ${id}`, () => this.processReview(id)) === true && complete;
+    if (complete) for (const task of Object.values(this.state.tasks)) delete task.replayAfter;
   }
   async processReview(reviewId) {
     const id = String(reviewId);
-    if (this.state.reviews.includes(id)) return;
-    if (this.state.reviews.length >= 2_000) throw new Error("The processed-review list is too large.");
+    const processed = this.state.reviews.includes(id);
+    if (processed && !Object.values(this.state.tasks).some((task) => task.replayAfter)) return true;
+    if (!processed && this.state.reviews.length >= 2_000) throw new Error("The processed-review list is too large.");
     const { data: review } = await this.github.rest.pulls.getReview({
       ...this.context.repo, pull_number: this.pull.number, review_id: Number(id),
     });
     if (String(review.id) !== id || !review.user?.node_id || !review.submitted_at || review.state === "PENDING") {
       throw new Error("GitHub returned an invalid submitted review.");
     }
-    const task = this.state.tasks[review.user.node_id], issue = task && await this.getIssue(task.issue);
+    const task = this.state.tasks[review.user.node_id] ?? await this.recoverTask(review.user);
+    const replay = task?.replayAfter && Date.parse(review.submitted_at) >= Date.parse(task.replayAfter);
+    if (processed && !replay) return true;
+    const issue = task && await this.getIssue(task.issue);
     const closedLaterByPr = task?.closedByPr && this.pull.closed_at &&
       Date.parse(review.submitted_at) <= Date.parse(this.pull.closed_at);
     if (task && (issue.state === "open" || closedLaterByPr)) {
-      await this.project.setStatus(task.item, this.config.inReviewOptionId);
-      task.fulfilled = true; if (closedLaterByPr) task.reopenStatus = this.config.inReviewOptionId;
+      task.fulfilled = true; await this.save(); if (task.pending || !task.item) await this.syncTask(task, issue, this.config.readyOptionId);
+      await this.mutateTask(task, () => this.project.setStatus(task.item, this.config.inReviewOptionId));
+      if (closedLaterByPr) task.reopenStatus = this.config.inReviewOptionId;
       if (this.state.source?.item) await this.project.moveSourceToReady(this.state.source, review.submitted_at);
       else if (!this.state.source?.none) throw new Error("The source issue is unresolved; correct it and rerun this review workflow.");
     } else this.warnings.push(task
       ? `Review ${id} was submitted by @${review.user.login}, but task #${task.issue} is closed.`
       : `Review ${id} was submitted by @${review.user.login} without a recorded review task.`);
-    this.state.reviews.push(id);
+    if (!this.state.reviews.includes(id)) this.state.reviews.push(id);
+    return true;
   }
   async closeTasks() {
     for (const task of Object.values(this.state.tasks)) await this.capture(`close review task #${task.issue}`, async () => {
       if ((await this.getIssue(task.issue)).state === "open") {
-        task.reopenStatus = (await this.project.getItem(task.item)).fields.find((field) => field.id === this.config.statusFieldId)?.value?.id ?? null;
-        await this.setIssue(task.issue, "closed"); task.closedByPr = true; }
+        delete task.reopenStatus;
+        const item = task.item && await this.mutateTask(task, () => this.project.getItem(task.item));
+        if (item) task.reopenStatus = item.fields.find((field) => field.id === this.config.statusFieldId)?.value?.id ?? null;
+        task.closedByPr = true; await this.save(); await this.setIssue(task.issue, "closed"); }
     });
   }
   async reopenTask(task) {
-    await this.setIssue(task.issue, "open");
-    if (task.reopenStatus) await this.project.setStatus(task.item, task.reopenStatus);
+    const { data: issue } = await this.setIssue(task.issue, "open");
+    const status = task.reopenStatus ?? (task.fulfilled ? this.config.inReviewOptionId : this.config.readyOptionId);
+    if (task.pending || !task.item) await this.syncTask(task, issue, status);
+    else await this.mutateTask(task, () => this.project.setStatus(task.item, status));
     delete task.reopenStatus; task.closedByPr = false;
   }
   async syncTasks() {
     for (const task of Object.values(this.state.tasks)) await this.capture(`sync review task #${task.issue}`,
-      () => this.project.sync(task.item, this.state.source));
+      () => this.syncTask(task));
   }
   async getIssue(number) { return (await this.github.rest.issues.get({ ...this.context.repo, issue_number: number })).data; }
   setIssue(number, state) { return this.github.rest.issues.update({ ...this.context.repo, issue_number: number, state }); }
@@ -273,7 +359,7 @@ function makeConfig(context, projectsToken) {
   };
 }
 export function emptyState(config, pr) {
-  return { v: 1, repositoryId: config.repositoryId, pr, source: null, tasks: {}, reviews: [], lastCommand: "0" };
+  return { v: 1, repositoryId: config.repositoryId, pr, source: null, tasks: {}, reviews: [], lastCommand: "0", taskRecovery: 1 };
 }
 export function loadState(comments, config, pr) {
   const matches = comments.filter((comment) => comment.user?.login === config.botLogin &&
@@ -283,7 +369,8 @@ export function loadState(comments, config, pr) {
   try {
     const state = decodeMarker(matches[0].body, STATE_MARKER, config.projectsToken);
     if (state?.v !== 1 || state.repositoryId !== config.repositoryId || state.pr !== pr || !state.tasks ||
-      !Array.isArray(state.reviews) || (state.lastCommand !== undefined && !/^(?:0|[1-9]\d*)$/.test(state.lastCommand)))
+      !Array.isArray(state.reviews) || (state.lastCommand !== undefined && !/^(?:0|[1-9]\d*)$/.test(state.lastCommand)) ||
+      (state.taskRecovery !== undefined && state.taskRecovery !== 1))
       throw new Error("The hidden tracker state has an invalid binding or shape.");
     state.lastCommand ??= "0";
     return { commentId: matches[0].id, state, warnings };
@@ -298,7 +385,7 @@ export function renderComment(config, state, errors = [], warnings = []) {
     ? `[${escapeMarkdown(state.source.repository)}#${state.source.number}](${config.serverUrl}/${state.source.repository}/issues/${state.source.number}) via ${escapeMarkdown(state.source.via)}`
     : state.source?.none ? `None (${escapeMarkdown(state.source.via)})` : "Unresolved";
   const tasks = Object.values(state.tasks).sort((a, b) => a.login.localeCompare(b.login)).map((task) =>
-    `- @${escapeMarkdown(task.login)}: [#${task.issue}](${config.serverUrl}/${config.repository}/issues/${task.issue})`);
+    `- @${escapeMarkdown(task.login)}: [#${task.issue}](${config.serverUrl}/${config.repository}/issues/${task.issue})${task.pending || !task.item ? " (Project sync pending)" : ""}`);
   const lines = [
     "## PR review tracker", "", errors.length
       ? `Tracking completed with errors: [workflow run](${config.runUrl}).`
@@ -322,12 +409,22 @@ function encodeMarker(name, value, key = "") {
 function decodeMarker(body, name, key) {
   const match = String(body ?? "").match(new RegExp(`<!-- ${name}:([A-Za-z0-9_-]+)(?:\\.([A-Za-z0-9_-]+))? -->`));
   if (!match) throw new Error(`The ${name} marker is missing.`);
-  const expected = Buffer.from(createHmac("sha256", key).update(match[1]).digest("base64url"));
-  const actual = Buffer.from(match[2] ?? "");
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new Error(`The ${name} signature is invalid.`);
+  if (key === null && match[2]) throw new Error(`The ${name} marker is not legacy.`);
+  if (key !== null) {
+    const expected = Buffer.from(createHmac("sha256", key).update(match[1]).digest("base64url"));
+    const actual = Buffer.from(match[2] ?? "");
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new Error(`The ${name} signature is invalid.`);
+  }
   return JSON.parse(Buffer.from(match[1], "base64url").toString("utf8"));
 }
-export function taskMarker(config, pr, reviewerId) { return encodeMarker("review-tracker-task", { v: 1, repositoryId: config.repositoryId, pr, reviewerId }); }
+export function taskMarker(config, pr, reviewerId) {
+  return encodeMarker("review-tracker-task", { v: 1, repositoryId: config.repositoryId, pr, reviewerId }, config.projectsToken);
+}
+function recoveredTask(issue, login) {
+  const task = { login, issue: issue.number, pending: true, closedByPr: false, fulfilled: false };
+  if (issue.created_at) task.replayAfter = issue.created_at;
+  return task;
+}
 function reviewIssueBody(config, pull, reviewer) {
   return [`Review [${config.repository}#${pull.number}](${pull.html_url}).`, "", `Assigned reviewer: @${reviewer.login}.`, "",
     "This issue is managed by the PR review tracker.", taskMarker(config, pull.number, reviewer.node_id)].join("\n");

@@ -10,13 +10,25 @@ export class Project {
   params(extra = {}) {
     return { org: this.config.projectOwner, project_number: this.config.projectNumber, headers: this.headers, ...extra };
   }
-  async items() {
-    if (this.cachedItems) return this.cachedItems;
+  async items(refresh = false) {
+    if (!refresh && this.cachedItems) return this.cachedItems;
     const data = await this.client.paginate("GET /orgs/{org}/projectsV2/{project_number}/items", this.params({
       fields: this.config.contextFieldIds.join(","), per_page: 100,
     }));
     this.cachedItems = data.filter((item) => item.content_type === "Issue" && item.content).map(normalizeItem);
     return this.cachedItems;
+  }
+  async ensureIssue(issue) {
+    const existing = (await this.items(true)).find((item) => item.issueId === issue.node_id);
+    if (existing) return { id: existing.item, nodeId: existing.itemNode };
+    try { return await this.addIssue(issue.id); }
+    catch (error) {
+      try {
+        const raced = (await this.items(true)).find((item) => item.issueId === issue.node_id);
+        if (raced) return { id: raced.item, nodeId: raced.itemNode };
+      } catch { /* Preserve the original add failure. */ }
+      throw error;
+    }
   }
   async getItem(id) {
     const { data } = await this.client.request("GET /orgs/{org}/projectsV2/{project_number}/items/{item_id}", this.params({
@@ -30,6 +42,7 @@ export class Project {
     );
     const item = data?.value ?? data;
     if (!Number.isSafeInteger(item?.id) || !item.node_id) throw new Error("GitHub did not return the new Project item IDs.");
+    delete this.cachedItems;
     return { id: item.id, nodeId: item.node_id };
   }
   async sync(itemId, source, status = null) {

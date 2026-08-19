@@ -3,7 +3,7 @@
 This local action creates one same-repository issue for each person requested to review a PR.
 It assigns the issue to that reviewer and updates Project 47 as review events arrive.
 
-The maintained production implementation is capped at 675 physical lines.
+The maintained production implementation is capped at 775 physical lines.
 That count includes `src/`, `action.yml`, `package.json`, and both runtime workflows.
 It excludes tests, documentation, `package-lock.json`, and the generated `dist/` bundle.
 
@@ -120,8 +120,8 @@ sanitized warnings and errors, and repeats these exact commands:
 Only users with effective repository write permission reach the privileged command processor.
 The workflow author-association filter is an optimization, not the authorization boundary;
 the processor requires GitHub's effective `write`, `maintain`, or `admin` permission.
-`set` and `reconcile` reapply the current source fields to every recorded review issue,
-including closed issues, without replaying reviews or changing lifecycle Status.
+`set` reapplies the current source fields to every recorded review issue, including closed
+issues, without replaying reviews or changing lifecycle Status.
 The hidden versioned state contains routing IDs, issue numbers, reviewer logins, lifecycle and
 review-fulfillment flags, pre-close Status IDs, processed review IDs, and the greatest processed
 command-comment ID.
@@ -132,22 +132,29 @@ Repository workflows share the `github-actions[bot]` identity, so authorship alo
 that another workflow did not edit the comment and forge Project mutation targets.
 The HMAC lets the tracker reject state that was not written by a holder of the Project secret.
 
-## Deliberate recovery boundary
+## Recovery boundary
 
 Normal operations are idempotent, lifecycle runs converge from current GitHub state, and review
 IDs are caught up from the PR's submitted-review history.
 Commands are applied in increasing comment-ID order, so a delayed older command cannot replace a
 newer choice.
-GitHub and Project mutations are not transactional, however.
-Interruption during task creation can leave an orphan or cause a duplicate on retry, and an issue
-mutation followed by a failed state-comment save can lose close provenance.
+The tracker saves a new issue's routing identity in the canonical comment before attempting a
+Project mutation.
+Failed Project attachment or field synchronization leaves the issue visible as pending, and a
+submitted review remains retryable until its recorded task is synchronized.
+Signed task markers recover missing mappings and reuse items added by Project automation instead
+of creating duplicate issues.
+The first run after this recovery behavior was deployed also accepts the explicitly allowlisted
+original orphan issue and rewrites its unsigned task marker into authenticated state.
 
 The tracker does not reconstruct deleted state comments or corrupted markers.
-`/review-tracker reconcile` reapplies the current mapping and copied fields; it deliberately does
-not change lifecycle-owned Status.
+`/review-tracker reconcile` recovers signed task markers, retries incomplete Project mutations,
+replays reviews that were consumed while a legacy task was missing, reapplies copied fields, and
+converges task lifecycle from the PR's current state.
 Changing a source after reviews have been processed likewise does not replay those reviews.
 There is no dedicated watcher for later source-field changes.
-Rotating `PROJECTS_TOKEN` invalidates existing state signatures and requires manual repair.
+Rotating `PROJECTS_TOKEN` invalidates existing state and task signatures and requires manual repair;
+change the existing token's permissions in place whenever possible.
 
 ## Porting
 

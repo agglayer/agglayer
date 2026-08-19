@@ -62,6 +62,42 @@ test("addIssue accepts the current direct REST response", async () => {
   assert.deepEqual(client.requests.at(-1)[1].id, 1234);
 });
 
+test("ensureIssue reuses an item added by Project automation", async () => {
+  const client = fakeClient();
+  client.items = [{
+    id: 22, node_id: "PVTI_22", content_type: "Issue", archived_at: null, fields: [],
+    content: { id: 1234, node_id: "I_1234", number: 99, repository: { full_name: "agglayer/agglayer" },
+      user: { login: "github-actions[bot]" }, body: "<!-- review-tracker-task:signed -->", assignees: [] },
+  }];
+  const project = new Project(client, config);
+
+  assert.deepEqual(await project.ensureIssue({ id: 1234, node_id: "I_1234" }), { id: 22, nodeId: "PVTI_22" });
+  assert.equal(client.requests.some(([route]) => route.startsWith("POST")), false);
+});
+
+test("ensureIssue recovers when Project automation wins the add race", async () => {
+  const client = fakeClient(), item = {
+    id: 22, node_id: "PVTI_22", content_type: "Issue", archived_at: null, fields: [],
+    content: { id: 1234, node_id: "I_1234", number: 99, repository: { full_name: "agglayer/agglayer" },
+      user: { login: "github-actions[bot]" }, body: "<!-- review-tracker-task:signed -->", assignees: [] },
+  };
+  let listings = 0;
+  client.paginate = async () => listings++ ? [item] : [];
+  const request = client.request.bind(client);
+  client.request = async (route, params) => {
+    if (route.startsWith("POST")) {
+      client.requests.push([route, params]);
+      throw Object.assign(new Error("already added"), { status: 422 });
+    }
+    return request(route, params);
+  };
+  const project = new Project(client, config);
+
+  assert.deepEqual(await project.ensureIssue({ id: 1234, node_id: "I_1234" }), { id: 22, nodeId: "PVTI_22" });
+  assert.equal(client.requests.some(([route]) => route.startsWith("POST")), true);
+  assert.equal(listings, 2);
+});
+
 test("a review moves only an older In Review or Blocked source status", async () => {
   for (const [optionId, updatedAt, expected] of [
     ["in-review", "2026-01-01T00:00:00Z", true],
@@ -128,9 +164,10 @@ function fakeClient() {
       },
     },
     status: null,
+    items: [],
     postResult: {},
     async paginate() {
-      return [];
+      return this.items;
     },
     async request(route, params) {
       this.requests.push([route, params]);
