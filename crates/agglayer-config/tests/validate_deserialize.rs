@@ -4,15 +4,6 @@ use agglayer_config::{assert_toml_snapshot, Config};
 use pretty_assertions::assert_eq;
 
 #[test]
-fn empty_rpcs() {
-    let input = "./tests/fixtures/valide_config/empty_rpcs.toml";
-
-    let config = Config::try_load(Path::new(input)).unwrap();
-
-    assert_toml_snapshot!(config);
-}
-
-#[test]
 fn max_rpc_request_size() {
     let input = "./tests/fixtures/valide_config/max_rpc_request_size.toml";
 

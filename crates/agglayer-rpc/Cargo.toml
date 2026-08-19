@@ -8,7 +8,6 @@ license.workspace = true
 agglayer-contracts.workspace = true
 agglayer-config.workspace = true
 agglayer-primitives.workspace = true
-agglayer-rate-limiting.workspace = true
 agglayer-storage.workspace = true
 agglayer-tries.workspace = true
 agglayer-types.workspace = true

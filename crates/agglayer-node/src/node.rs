@@ -5,10 +5,8 @@ use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
-use agglayer_jsonrpc_api::{
-    admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
-};
-use agglayer_signer::{ConfiguredSigner, ConfiguredSigners};
+use agglayer_jsonrpc_api::{admin::AdminAgglayerImpl, AgglayerImpl};
+use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
     backup::{BackupClient, BackupEngine},
     stores::{
@@ -177,58 +175,29 @@ impl Node {
             current_epoch_store.get_epoch_number()
         );
 
-        // Create RPC clients, note that they can be the same signer
-        // or not depending on the configuration. If is the same signer
-        // we share the nonce management too.
-
-        let (rpc_pp_settlement, rpc_tx_settlement) = {
-            // We will use the same parameterization to create both providers.
-            let fn_build_provider = |signer: ConfiguredSigner| {
-                Arc::new(
-                    ProviderBuilder::new()
-                        .with_simple_nonce_management()
-                        .wallet(EthereumWallet::from(signer))
-                        .connect_client(
-                            alloy::rpc::client::RpcClient::builder()
-                                .layer(crate::L1TraceLayer)
-                                .layer(crate::UrlRedactLayer)
-                                .http(config.l1.node_url.clone()),
-                        ),
-                )
-            };
-
-            let signers = ConfiguredSigners::new(&config).await?;
-            let provider_cert = fn_build_provider(signers.pp_settlement);
-
-            let tx_settlement_configured = signers.tx_settlement.is_some();
-            let provider_tx = if let Some(tx_settlement) = signers.tx_settlement {
-                fn_build_provider(tx_settlement)
-            } else {
-                warn!("Using the same provider for certificate and tx settlement");
-                provider_cert.clone()
-            };
+        // Create the L1 RPC client used for PP certificate settlement.
+        let rpc_pp_settlement = {
+            let signer = ConfiguredSigner::from_config(&config).await?;
+            let provider_cert = Arc::new(
+                ProviderBuilder::new()
+                    .with_simple_nonce_management()
+                    .wallet(EthereumWallet::from(signer))
+                    .connect_client(
+                        alloy::rpc::client::RpcClient::builder()
+                            .layer(crate::L1TraceLayer)
+                            .layer(crate::UrlRedactLayer)
+                            .http(config.l1.node_url.clone()),
+                    ),
+            );
 
             // The signer always has at least one address, so `next()` is always `Some`.
             let cert_signer = provider_cert.signer_addresses().next().unwrap();
-            let tx_signer = provider_tx.signer_addresses().next().unwrap();
             tracing::info!("Cert signer address: {cert_signer:?}");
-            tracing::info!("Tx signer address: {tx_signer:?}");
-            if tx_settlement_configured && cert_signer == tx_signer {
-                warn!(
-                    "Configured pp- and tx-settlement signers share address {cert_signer:?}; \
-                     settlement service and kernel will use one wallet with two nonce allocators"
-                );
-            }
 
-            (provider_cert, provider_tx)
+            provider_cert
         };
 
         tracing::debug!("RPC provider created");
-        let settle_cert_config = config
-            .outbound
-            .as_ref()
-            .map(|outbound| outbound.rpc.settle_cert.clone())
-            .unwrap_or_default();
         let rollup_manager = Arc::new(
             L1RpcClient::try_new(
                 rpc_pp_settlement.clone(),
@@ -237,15 +206,6 @@ impl Node {
                     (*rpc_pp_settlement).clone(),
                 ),
                 config.l1.polygon_zkevm_global_exit_root_v2_contract.into(),
-                settle_cert_config.gas_multiplier_factor,
-                {
-                    let gas_config = &settle_cert_config.gas_price;
-                    agglayer_contracts::GasPriceParams::new(
-                        gas_config.multiplier.as_u64_per_1000(),
-                        gas_config.floor..=gas_config.ceiling,
-                    )?
-                },
-                config.l1.event_filter_block_range.get(),
             )
             .await?,
         );
@@ -265,9 +225,6 @@ impl Node {
         )
         .await?;
         info!("Certifier client created.");
-
-        // Construct the core.
-        let core = Kernel::new(rpc_tx_settlement.clone(), config.clone()).unwrap();
 
         let current_epoch_store = Arc::new(arc_swap::ArcSwap::new(Arc::new(current_epoch_store)));
 
@@ -312,7 +269,6 @@ impl Node {
         info!("Certificate orchestrator started.");
 
         // Set up the core service object.
-        let service = Arc::new(AgglayerService::new(core));
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             data_sender.clone(),
             pending_store.clone(),
@@ -336,7 +292,7 @@ impl Node {
         .context("Failed starting admin router")?;
 
         // Bind the core to the RPC server.
-        let json_rpc_router = AgglayerImpl::new(service, rpc_service.clone())
+        let json_rpc_router = AgglayerImpl::new(rpc_service.clone())
             .start()
             .await
             .context("Failed starting JSON-RPC router")?;

@@ -53,8 +53,6 @@ pub trait RollupContract {
     fn default_l1_info_tree_entry(&self) -> (u32, [u8; 32]);
 
     fn get_rollup_manager_address(&self) -> Address;
-
-    fn get_event_filter_block_range(&self) -> u64;
 }
 
 #[async_trait::async_trait]
@@ -294,9 +292,5 @@ where
 
     fn get_rollup_manager_address(&self) -> Address {
         (*self.inner.address()).into()
-    }
-
-    fn get_event_filter_block_range(&self) -> u64 {
-        self.event_filter_block_range
     }
 }

@@ -8,9 +8,8 @@ use serde_json::json;
 
 use crate::testutils::TestContext;
 
-/// A wire-valid `SignedTx` JSON payload (zero proof, zero signature with
-/// `v = 27`). It must deserialize successfully so the request reaches the
-/// handler instead of being rejected with an invalid params error.
+/// A payload shaped like the legacy `SignedTx` type (zero proof, zero
+/// signature with `v = 27`), as sent by old clients.
 fn signed_tx_json() -> serde_json::Value {
     json!({
         "tx": {
@@ -45,6 +44,26 @@ async fn send_tx_returns_method_disabled_error() {
     };
 
     // Wire contract: `interop_sendTx` is disabled (issue #1632).
+    assert_eq!(err.code(), -10009);
+    assert_eq!(err.message(), "The interop_sendTx method is disabled");
+}
+
+#[test_log::test(tokio::test)]
+async fn send_tx_rejects_arbitrary_payloads_with_method_disabled() {
+    let config = TestContext::get_default_config();
+    let context = TestContext::new_with_config(config).await;
+
+    // The payload is not parsed anymore: any JSON value gets the same error.
+    let result: Result<alloy::primitives::B256, ClientError> = context
+        .api_client
+        .request("interop_sendTx", rpc_params![json!({"garbage": true})])
+        .await;
+
+    let error = result.unwrap_err();
+    let ClientError::Call(err) = error else {
+        panic!("expected a call error, got: {error}");
+    };
+
     assert_eq!(err.code(), -10009);
     assert_eq!(err.message(), "The interop_sendTx method is disabled");
 }

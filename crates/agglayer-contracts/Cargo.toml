@@ -22,5 +22,4 @@ agglayer-types.workspace = true
 prover-alloy.workspace = true
 
 [dev-dependencies]
-rstest.workspace = true
 test-log.workspace = true

@@ -13,7 +13,7 @@ use agglayer_storage::stores::{
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, EpochConfiguration, NetworkId, NetworkInfo,
 };
-use alloy::{primitives::B256, providers::Provider};
+use alloy::primitives::B256;
 use error::{Error, RpcResult};
 use futures::FutureExt;
 use hyper::StatusCode;
@@ -25,15 +25,9 @@ use jsonrpsee::{
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use tracing::{info, warn};
 
-use crate::{service::AgglayerService, signed_tx::SignedTx};
-
 mod error;
-pub mod kernel;
 mod rpc_middleware;
-pub mod service;
 mod settlement_admin;
-mod signed_tx;
-mod zkevm_node_client;
 
 #[cfg(test)]
 pub mod tests;
@@ -46,7 +40,7 @@ pub mod admin;
 #[rpc(server, namespace = "interop")]
 trait Agglayer {
     #[method(name = "sendTx")]
-    async fn send_tx(&self, tx: SignedTx) -> RpcResult<B256>;
+    async fn send_tx(&self, tx: serde_json::Value) -> RpcResult<B256>;
 
     #[method(name = "getTxStatus")]
     async fn get_tx_status(&self, hash: B256) -> RpcResult<TxStatus>;
@@ -86,41 +80,35 @@ trait Agglayer {
 }
 
 /// The RPC agglayer service implementation.
-pub struct AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
-    service: Arc<AgglayerService<V0Rpc>>,
+pub struct AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
     pub(crate) rpc_service:
         Arc<agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>>,
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
-    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+impl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 {
     /// Create an instance of the RPC agglayer service.
     pub fn new(
-        service: Arc<AgglayerService<V0Rpc>>,
         rpc_service: Arc<
             agglayer_rpc::AgglayerService<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>,
         >,
     ) -> Self {
-        Self {
-            service,
-            rpc_service,
-        }
+        Self { rpc_service }
     }
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore> Drop
-    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+impl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore> Drop
+    for AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 {
     fn drop(&mut self) {
         info!("Shutting down the agglayer JsonRPC server");
     }
 }
 
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
-    AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+impl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+    AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
-    V0Rpc: Provider + Clone + 'static,
     Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: NetworkInfoReader + SettlementReader + StateReader + StateWriter + 'static,
@@ -193,31 +181,26 @@ where
 }
 
 #[async_trait]
-impl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore> AgglayerServer
-    for AgglayerImpl<V0Rpc, Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+impl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore> AgglayerServer
+    for AgglayerImpl<Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
-    V0Rpc: Provider + Clone + 'static,
     Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static + Send + Sync,
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
     StateStore: NetworkInfoReader + SettlementReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
-    async fn send_tx(&self, tx: SignedTx) -> RpcResult<B256> {
+    async fn send_tx(&self, tx: serde_json::Value) -> RpcResult<B256> {
         // The legacy `interop_sendTx` proof-settlement flow is disabled
         // (https://github.com/agglayer/agglayer/issues/1632). The method stays
         // registered so callers receive an explicit error instead of a generic
-        // "method not found".
-        let rollup_id = tx.tx.rollup_id;
-        agglayer_telemetry::SEND_TX.add(
-            1,
-            &[agglayer_telemetry::KeyValue::new(
-                "rollup_id",
-                rollup_id.to_string(),
-            )],
-        );
+        // "method not found". The rollup id is extracted best-effort from the
+        // legacy wire shape to identify residual callers; the metric stays
+        // unlabeled to keep its cardinality bounded.
+        let rollup_id = tx.pointer("/tx/RollupID").and_then(|v| v.as_u64());
+        agglayer_telemetry::SEND_TX.add(1, &[]);
         warn!(
-            rollup_id,
+            ?rollup_id,
             "Rejected interop_sendTx call: method is disabled"
         );
         Err(Error::MethodDisabled {
@@ -226,7 +209,13 @@ where
     }
 
     async fn get_tx_status(&self, hash: B256) -> RpcResult<TxStatus> {
-        Ok(self.service.get_tx_status(hash).await?.to_string())
+        // Disabled together with `interop_sendTx`: with no new settlement
+        // transactions there is no status to track
+        // (https://github.com/agglayer/agglayer/issues/1632).
+        warn!(%hash, "Rejected interop_getTxStatus call: method is disabled");
+        Err(Error::MethodDisabled {
+            method: "interop_getTxStatus",
+        })
     }
 
     async fn send_certificate(&self, certificate: Certificate) -> RpcResult<CertificateId> {

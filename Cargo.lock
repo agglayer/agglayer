@@ -219,7 +219,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "prover-alloy",
- "rstest",
  "test-log",
  "thiserror 2.0.18",
  "tokio",
@@ -410,7 +409,6 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-rate-limiting",
  "agglayer-rpc",
  "agglayer-settlement-service",
  "agglayer-storage",
@@ -429,7 +427,6 @@ dependencies = [
  "hyper-util",
  "insta",
  "jsonrpsee",
- "jsonrpsee-test-utils",
  "lazy_static",
  "mockall",
  "pessimistic-proof",
@@ -466,7 +463,6 @@ dependencies = [
  "agglayer-grpc-api",
  "agglayer-grpc-types",
  "agglayer-jsonrpc-api",
- "agglayer-rate-limiting",
  "agglayer-rpc",
  "agglayer-settlement-service",
  "agglayer-signer",
@@ -545,26 +541,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "agglayer-rate-limiting"
-version = "0.1.0"
-dependencies = [
- "agglayer-config",
- "agglayer-utils",
- "parking_lot",
- "serde",
- "serde_with",
- "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
 name = "agglayer-rpc"
 version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
  "agglayer-primitives 0.18.0",
- "agglayer-rate-limiting",
  "agglayer-storage",
  "agglayer-tries 0.18.0",
  "agglayer-types",
@@ -6108,24 +6090,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tower 0.4.13",
- "tracing",
-]
-
-[[package]]
-name = "jsonrpsee-test-utils"
-version = "0.24.9"
-source = "git+https://github.com/paritytech/jsonrpsee.git?tag=v0.24.9#274a8f025daadb6a6b592ade55ea990bda2f440b"
-dependencies = [
- "futures-channel",
- "futures-util",
- "http-body-util",
- "hyper 1.8.1",
- "hyper-util",
- "serde",
- "serde_json",
- "soketto",
- "tokio",
- "tokio-util",
  "tracing",
 ]
 

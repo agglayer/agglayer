@@ -40,7 +40,6 @@ pub type MockProvider = FillProvider<
 >;
 
 pub type RawRpcClient = crate::AgglayerImpl<
-    MockProvider,
     L1RpcClient<MockProvider>,
     PendingStore,
     StateStore,
@@ -154,11 +153,6 @@ impl TestContext {
         // Create certificate sender channel
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-        // Create AgglayerService (V0Rpc service) with the provider
-        let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(real_provider.clone(), config.clone()).unwrap(),
-        ));
-
         // Create a real epoch store for testing
         let epochs_store = Arc::new(
             EpochsStore::new(
@@ -182,7 +176,7 @@ impl TestContext {
         ));
 
         // Create AgglayerImpl
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
+        let agglayer_impl = crate::AgglayerImpl::new(rpc_service);
 
         let settlement_service = SettlementService::start(
             SettlementServiceConfig::default(),
@@ -260,9 +254,6 @@ impl TestContext {
             inner,
             Address::ZERO.into(), // Use real L1 info tree address in non-test environments
             (0u32, [0u8; 32]),    // Use real default L1 info tree entry in non-test environments
-            100,                  // Default gas multiplier factor
-            agglayer_contracts::GasPriceParams::default(), // Default gas price parameters
-            10000,
         )
     }
 
@@ -309,11 +300,6 @@ impl TestContext {
         // Create certificate sender channel
         let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-        // Create AgglayerService (V0Rpc service)
-        let v0_service = Arc::new(crate::service::AgglayerService::new(
-            crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()).unwrap(),
-        ));
-
         // Create a real epoch store for testing
         let epochs_store = Arc::new(
             EpochsStore::new(
@@ -337,7 +323,7 @@ impl TestContext {
         ));
 
         // Create AgglayerImpl
-        let agglayer_impl = crate::AgglayerImpl::new(v0_service, rpc_service);
+        let agglayer_impl = crate::AgglayerImpl::new(rpc_service);
 
         RawRpcContext {
             rpc: agglayer_impl,

@@ -10,7 +10,6 @@ use outbound::OutboundConfig;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
 use serde_with::DisplayFromStr;
 use shutdown::ShutdownConfig;
-use url::Url;
 
 pub use self::telemetry::TelemetryConfig;
 
@@ -21,12 +20,10 @@ pub mod certificate_orchestrator;
 pub mod epoch;
 pub mod grpc;
 pub(crate) mod l1;
-pub(crate) mod l2;
 pub mod log;
 mod multiplier;
 pub mod outbound;
 mod port;
-pub mod rate_limiting;
 pub(crate) mod rpc;
 pub mod settlement_service;
 pub mod shutdown;
@@ -37,11 +34,9 @@ mod with;
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
 pub use epoch::Epoch;
 pub use l1::L1;
-pub use l2::L2;
 pub use log::Log;
 pub use multiplier::Multiplier;
 use port::{Port, PortDefaults};
-pub use rate_limiting::RateLimitingConfig;
 pub use rpc::RpcConfig;
 
 /// The Agglayer configuration.
@@ -51,16 +46,6 @@ pub use rpc::RpcConfig;
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct Config {
-    /// A map of Zkevm node RPC endpoints for each rollup.
-    ///
-    /// The key is the rollup ID, and the value is the URL of the associated RPC
-    /// endpoint.
-    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
-    pub full_node_rpcs: HashMap<u32, Url>,
-
-    #[serde(default)]
-    pub l2: L2,
-
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     #[serde(default)]
     pub proof_signers: HashMap<u32, Address>,
@@ -72,10 +57,6 @@ pub struct Config {
     /// The local RPC server configuration.
     #[serde(default)]
     pub rpc: RpcConfig,
-
-    /// Rate limiting configuration.
-    #[serde(default)]
-    pub rate_limiting: RateLimitingConfig,
 
     /// The configuration for every outbound network component.
     /// No longer used, parsed only so stale config can be reported.
@@ -162,14 +143,11 @@ impl Config {
     pub fn new(base_path: &Path) -> Self {
         Self {
             storage: storage::StorageConfig::new_from_path(base_path),
-            full_node_rpcs: Default::default(),
             proof_signers: Default::default(),
             log: Default::default(),
             rpc: Default::default(),
-            rate_limiting: Default::default(),
             outbound: Default::default(),
             l1: Default::default(),
-            l2: Default::default(),
             auth: Default::default(),
             telemetry: Default::default(),
             epoch: Default::default(),

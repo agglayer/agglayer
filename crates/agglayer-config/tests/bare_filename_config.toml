@@ -1,1 +1,2 @@
-[full-node-rpcs]
+# Minimal valid configuration used to exercise bare-filename loading.
+[log]

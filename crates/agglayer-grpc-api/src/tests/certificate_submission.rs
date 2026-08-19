@@ -75,10 +75,6 @@ impl RollupContract for L1Rpc {
     fn get_rollup_manager_address(&self) -> agglayer_types::Address {
         unreachable!("invalid certificates are rejected before L1 access")
     }
-
-    fn get_event_filter_block_range(&self) -> u64 {
-        unreachable!("invalid certificates are rejected before L1 access")
-    }
 }
 
 #[async_trait::async_trait]

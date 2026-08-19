@@ -9,7 +9,7 @@ use agglayer_errors::ResultExt as _;
 use agglayer_primitives::U256;
 use agglayer_types::SettlementTxHash;
 use alloy::{
-    eips::{eip1559::Eip1559Estimation, BlockNumberOrTag},
+    eips::BlockNumberOrTag,
     primitives::{Address, FixedBytes, TxHash},
     providers::Provider,
     rpc::types::{Filter, TransactionReceipt},
@@ -25,50 +25,6 @@ pub mod settler;
 
 pub use aggchain::AggchainContract;
 pub use rollup::RollupContract;
-pub use settler::Settler;
-
-/// Gas price parameters for L1 transactions.
-#[derive(Debug, Clone)]
-pub struct GasPriceParams {
-    /// Gas price multiplier for transactions (scaled by 1000).
-    multiplier_per_1000: u64,
-    /// Minimum gas price floor (in wei) for transactions.
-    floor: u128,
-    /// Maximum gas price ceiling (in wei) for transactions.
-    ceiling: u128,
-}
-
-impl GasPriceParams {
-    /// Create new gas price parameters.
-    ///
-    /// Returns an error if ceiling < floor.
-    pub fn new(
-        multiplier_per_1000: u64,
-        range: std::ops::RangeInclusive<u128>,
-    ) -> eyre::Result<Self> {
-        let (floor, ceiling) = (*range.start(), *range.end());
-        if ceiling < floor {
-            return Err(eyre!(
-                "Gas price floor ({floor}) must be <= to ceiling ({ceiling})"
-            ));
-        }
-        Ok(Self {
-            multiplier_per_1000,
-            floor,
-            ceiling,
-        })
-    }
-}
-
-impl Default for GasPriceParams {
-    fn default() -> Self {
-        Self {
-            multiplier_per_1000: 1000, // 1.0 scaled by 1000
-            floor: 0,
-            ceiling: u128::MAX,
-        }
-    }
-}
 
 #[async_trait::async_trait]
 pub trait L1TransactionFetcher {
@@ -93,17 +49,9 @@ pub struct L1RpcClient<RpcProvider> {
     global_exit_root_manager_contract: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
-    /// Gas multiplier factor for transactions.
-    gas_multiplier_factor: u32,
-    /// Gas price parameters for transactions.
-    gas_price_params: GasPriceParams,
     /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
     /// Map<leaf_count, l1_info_root>
     l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
-    /// Number of blocks to query when filtering for events.
-    /// This is to avoid hitting provider limits when querying large block
-    /// ranges or errors like "query returned more than 10000 results".
-    event_filter_block_range: u64,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -145,16 +93,6 @@ pub enum L1RpcError {
     #[error("Failed to retrieve rollup data")]
     RollupDataRetrievalFailed,
 
-    #[error("Unable to get transaction {tx_hash}")]
-    UnableToGetTransaction {
-        tx_hash: SettlementTxHash,
-        #[source]
-        source: eyre::Error,
-    },
-
-    #[error("Unable to parse aggchain vkey")]
-    UnableToParseAggchainVkey,
-
     #[error("Unable to retrieve verifier type")]
     VerifierTypeRetrievalFailed,
 
@@ -176,9 +114,6 @@ pub enum L1RpcError {
     #[error("Transaction receipt for tx {0} failed on L1")]
     TransactionReceiptFailedOnL1(TxHash),
 
-    #[error("Failed to get the events")]
-    FailedToQueryEvents(#[source] eyre::Error),
-
     #[error("L1 info roots cache lock poisoned")]
     CacheLockPoisoned,
 }
@@ -187,25 +122,18 @@ impl<RpcProvider> L1RpcClient<RpcProvider>
 where
     RpcProvider: alloy::providers::Provider + Clone + 'static,
 {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         global_exit_root_manager_contract: Address,
         default_l1_info_tree_entry: (u32, [u8; 32]),
-        gas_multiplier_factor: u32,
-        gas_price_params: GasPriceParams,
-        event_filter_block_range: u64,
     ) -> Self {
         Self {
             rpc,
             inner,
             global_exit_root_manager_contract,
             default_l1_info_tree_entry,
-            gas_multiplier_factor,
-            gas_price_params,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
-            event_filter_block_range,
         }
     }
 
@@ -213,9 +141,6 @@ where
         rpc: Arc<RpcProvider>,
         inner: contracts::PolygonRollupManagerRpcClient<RpcProvider>,
         global_exit_root_manager_contract: Address,
-        gas_multiplier_factor: u32,
-        gas_price_params: GasPriceParams,
-        event_filter_block_range: u64,
     ) -> eyre::Result<Self>
     where
         RpcProvider: alloy::providers::Provider + Clone + 'static,
@@ -289,9 +214,6 @@ where
             inner,
             global_exit_root_manager_contract,
             default_l1_info_tree_entry,
-            gas_multiplier_factor,
-            gas_price_params,
-            event_filter_block_range,
         ))
     }
 }
@@ -321,56 +243,10 @@ where
     }
 }
 
-pub fn adjust_gas_estimate(
-    estimate: &Eip1559Estimation,
-    params: &GasPriceParams,
-) -> Eip1559Estimation {
-    let GasPriceParams {
-        floor,
-        ceiling,
-        multiplier_per_1000,
-    } = params;
-
-    // Apply gas price multiplier and floor/ceiling constraints
-    let adjust = |fee: u128| -> u128 {
-        // Multiply by multiplier_per_1000 and divide by 1000
-        fee.saturating_mul(*multiplier_per_1000 as u128) / 1000
-    };
-
-    let mut max_fee_per_gas = adjust(estimate.max_fee_per_gas).max(*floor);
-    if max_fee_per_gas > *ceiling {
-        tracing::warn!(
-            max_fee_per_gas_estimated = estimate.max_fee_per_gas,
-            max_fee_per_gas_adjusted = max_fee_per_gas,
-            max_fee_per_gas_ceiling = ceiling,
-            "Exceeded configured gas ceiling, clamping",
-        );
-        max_fee_per_gas = *ceiling;
-    }
-
-    let max_priority_fee_per_gas = adjust(estimate.max_priority_fee_per_gas).min(*ceiling);
-
-    let adjusted = Eip1559Estimation {
-        max_fee_per_gas,
-        max_priority_fee_per_gas,
-    };
-
-    if &adjusted != estimate {
-        debug!(
-            estimate=?estimate,
-            adjusted=?adjusted,
-            "Applied gas price adjustment."
-        );
-    }
-
-    adjusted
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use alloy::eips::eip1559::Eip1559Estimation;
     use prover_alloy::build_alloy_fill_provider;
     use url::Url;
 
@@ -422,9 +298,6 @@ mod tests {
             Arc::new(rpc.clone()),
             contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
             contracts.ger_contract,
-            100, // default gas_multiplier_factor
-            GasPriceParams::default(),
-            10000, // default event_filter_block_range
         )
         .await
         .expect("Failed to create L1RpcClient");
@@ -490,9 +363,6 @@ mod tests {
                 Arc::new(rpc.clone()),
                 contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
                 contracts.ger_contract,
-                100,
-                GasPriceParams::default(),
-                10000,
             )
             .await
             .unwrap(),
@@ -545,55 +415,8 @@ mod tests {
             Arc::new(rpc.clone()),
             contracts::PolygonRollupManager::new(contracts.rollup_manager, rpc),
             contracts.ger_contract,
-            100, // default gas_multiplier_factor
-            GasPriceParams::default(),
-            10000, // default event_filter_block_range
         )
         .await
         .expect("Failed to create L1RpcClient");
-    }
-
-    #[rstest::rstest]
-    fn test_adjust_gas_estimate_respects_floor_and_ceiling(
-        #[values(500, 1000, 1500, 2000)] multiplier_per_1000: u64,
-        #[values(10_000_000, 50_000_000)] floor: u128,
-        #[values(100_000_000, 200_000_000)] ceiling: u128,
-        #[values(10_000_000, 100_000_000, 200_000_000)] max_fee_per_gas: u128,
-        #[values(5_000_000, 50_000_000, 100_000_000)] max_priority_fee_per_gas: u128,
-    ) {
-        let estimate = Eip1559Estimation {
-            max_fee_per_gas,
-            max_priority_fee_per_gas,
-        };
-        let params = GasPriceParams {
-            multiplier_per_1000,
-            floor,
-            ceiling,
-        };
-
-        let adjusted = adjust_gas_estimate(&estimate, &params);
-
-        let acceptable_fee = floor..=ceiling;
-        assert!(
-            acceptable_fee.contains(&adjusted.max_fee_per_gas),
-            "max_fee_per_gas {} is out of range {acceptable_fee:?}",
-            adjusted.max_fee_per_gas,
-        );
-
-        let acceptable_priority_fee = 0..=ceiling;
-        assert!(
-            acceptable_priority_fee.contains(&adjusted.max_priority_fee_per_gas),
-            "max_priority_fee_per_gas {} out of range {acceptable_priority_fee:?}",
-            adjusted.max_priority_fee_per_gas,
-        );
-
-        // Some extra tests for scaling factor = 1.0
-        if multiplier_per_1000 == 1000 {
-            let acceptable_fee = [floor, max_fee_per_gas, ceiling];
-            assert!(acceptable_fee.contains(&adjusted.max_fee_per_gas));
-
-            let acceptable_priority_fee = [max_priority_fee_per_gas, ceiling];
-            assert!(acceptable_priority_fee.contains(&adjusted.max_priority_fee_per_gas));
-        }
     }
 }
