@@ -42,7 +42,7 @@ fn transient_network_info() {
         .expect_get_latest_settled_certificate_per_network()
         .with(eq(NETWORK_1))
         .once()
-        .return_once(|_| Ok(None));
+        .returning(|_| Ok(None));
 
     let pending_certificate = Certificate::new_for_test(NETWORK_1, 0.into());
     let pending_certificate_id = pending_certificate.hash();
@@ -59,6 +59,11 @@ fn transient_network_info() {
         settlement_tx_hash: None,
     };
 
+    // get_network_info calls get_latest_settled_certificate_per_network twice:
+    // 1. From get_latest_settled_certificate_header (when settled_certificate_id is
+    //    None)
+    // 2. From get_latest_available_certificate_for_network (when network_type is
+    //    Unspecified)
     state_store
         .expect_get_latest_settled_certificate_per_network()
         .with(eq(NETWORK_1))
