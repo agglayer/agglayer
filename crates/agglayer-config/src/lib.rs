@@ -36,7 +36,7 @@ mod with;
 
 pub use auth::{AuthConfig, GcpKmsConfig, LocalConfig, PrivateKey};
 pub use epoch::Epoch;
-pub use l1::L1;
+pub use l1::{L1RpcUrl, L1};
 pub use l2::L2;
 pub use log::Log;
 pub use multiplier::Multiplier;

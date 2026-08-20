@@ -509,6 +509,7 @@ dependencies = [
  "tower 0.4.13",
  "tower-http",
  "tracing",
+ "tracing-log",
  "tracing-subscriber",
 ]
 
@@ -5794,7 +5795,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "test-log",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",

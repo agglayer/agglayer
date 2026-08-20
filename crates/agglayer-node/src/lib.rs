@@ -23,6 +23,16 @@ use url_redact::UrlRedactLayer;
 /// Starting by a Tokio runtime which can be used by the different components.
 /// The configuration file is parsed and used to configure the node.
 ///
+/// Logging initialization is process-wide: the first successful logging
+/// initialization owns the configuration, later starts reuse it, and startup
+/// fails if Agglayer cannot install its endpoint-redaction policy.
+/// Embedding callers must not race this initialization with another
+/// process-global tracing subscriber or `log` logger; those one-shot globals
+/// are independent, and pre-existing ownership is rejected. Agglayer claims
+/// the tracing dispatcher before installing its `log` bridge; if the bridge is
+/// already owned, startup still fails closed and Agglayer's tracing policy
+/// remains installed for the process.
+///
 /// This function returns on fatal error or after graceful shutdown has
 /// completed.
 pub fn main(
@@ -53,24 +63,18 @@ pub fn main(
         bail!("Received cancellation signal before starting the node.");
     }
 
-    // Initialize the logger
-    match logging::tracing(&config.log) {
-        Ok(()) => {
-            info!("Tracing initialized successfully.");
-        }
-        Err(e)
-            if e.to_string()
-                .contains("trace dispatcher has already been set") =>
-        {
-            // This is a common case in integration tests where the logger is initialized
-            // multiple times. We can safely ignore this error.
-            debug!("Logger already initialized, ignoring error: {e}");
-        }
-        Err(e) => {
-            eprintln!("Failed to initialize logger: {e:?}");
-            return Err(e);
-        }
-    }
+    // Initialize the logger. The logging module permits repeated starts only
+    // after Agglayer has installed its endpoint-redaction policy itself.
+    let dispatch = logging::tracing(&config.log).map_err(|error| {
+        eprintln!("Failed to initialize logger: {error:?}");
+        error
+    })?;
+
+    // The global subscriber is only a fallback. Keep Agglayer's dispatcher active
+    // while this thread polls the startup and shutdown futures so an embedding
+    // caller's thread-local subscriber cannot bypass endpoint redaction.
+    let _dispatch_guard = tracing::dispatcher::set_default(&dispatch);
+    info!("Tracing initialized successfully.");
 
     if let Some(outbound) = &config.outbound {
         warn!("{}", outbound.ignored_config_warning());

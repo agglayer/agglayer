@@ -126,13 +126,10 @@ impl Node {
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
             Epoch::BlockClock(cfg) => {
-                info!(
-                    "Starting BlockClock with provider: {}",
-                    config.l1.ws_node_url
-                );
+                info!("Starting BlockClock");
 
                 let clock = BlockClock::new_with_ws(
-                    WsConnect::new(config.l1.ws_node_url.as_str()),
+                    WsConnect::new(config.l1.ws_node_url.expose_url().as_str()),
                     cfg.genesis_block,
                     cfg.epoch_duration,
                     config.l1.connect_attempt_timeout,
@@ -192,7 +189,7 @@ impl Node {
                             alloy::rpc::client::RpcClient::builder()
                                 .layer(crate::L1TraceLayer)
                                 .layer(crate::UrlRedactLayer)
-                                .http(config.l1.node_url.clone()),
+                                .http(config.l1.node_url.expose_url().clone()),
                         ),
                 )
             };
