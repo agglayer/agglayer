@@ -8,8 +8,8 @@ use agglayer_storage::{
 };
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, Certificate, CertificateHeader, CertificateIndex,
-    Digest, EpochNumber, Height, L1WitnessCtx, Metadata, NetworkId, NetworkInfo,
-    PessimisticRootInput,
+    CertificateStatusError, Digest, EpochNumber, Height, L1WitnessCtx, Metadata, NetworkId,
+    NetworkInfo, PessimisticRootInput,
 };
 use alloy::providers::{
     mock::{Asserter, MockTransport},
@@ -118,6 +118,10 @@ fn transient_network_info() {
     assert_eq!(
         info.latest_pending_status,
         Some(agglayer_types::CertificateStatus::Pending)
+    );
+    assert_eq!(
+        info.latest_pending_certificate_id,
+        Some(pending_certificate_id)
     );
     assert_eq!(info.latest_pending_height, Some(0.into()));
 }
@@ -286,6 +290,10 @@ fn pending_certificate_defined() {
         info.latest_pending_status,
         Some(agglayer_types::CertificateStatus::Pending)
     );
+    assert_eq!(
+        info.latest_pending_certificate_id,
+        Some(pending_certificate_id)
+    );
     assert_eq!(info.latest_pending_height, Some(1.into()));
 }
 
@@ -298,6 +306,21 @@ fn pending_certificate_defined_with_network_info() {
     let debug_store = MockDebugStore::new();
     let epochs_store = MockEpochsStore::new();
     let config = Arc::new(Config::default());
+    let pending_certificate = Certificate::new_for_test(NETWORK_1, 11.into());
+    let pending_certificate_id = pending_certificate.hash();
+    let pending_error = CertificateStatusError::InternalError("cached header error".to_string());
+    let pending_certificate_header = CertificateHeader {
+        network_id: NETWORK_1,
+        height: 11.into(),
+        epoch_number: None,
+        certificate_index: None,
+        certificate_id: pending_certificate_id,
+        prev_local_exit_root: pending_certificate.prev_local_exit_root,
+        new_local_exit_root: pending_certificate.new_local_exit_root,
+        metadata: Metadata::DEFAULT,
+        status: agglayer_types::CertificateStatus::error(pending_error.clone()),
+        settlement_tx_hash: None,
+    };
 
     let network_info = NetworkInfo {
         settled_certificate_id: Some(Digest::from([1u8; 32]).into()),
@@ -308,6 +331,7 @@ fn pending_certificate_defined_with_network_info() {
         settled_let_leaf_count: Some(2),
         latest_pending_status: Some(agglayer_types::CertificateStatus::Pending),
         latest_pending_height: Some(11.into()),
+        latest_pending_certificate_id: Some(pending_certificate_id),
         latest_pending_error: None,
         network_status: agglayer_types::NetworkStatus::Active,
         network_type: agglayer_types::NetworkType::Generic,
@@ -319,6 +343,11 @@ fn pending_certificate_defined_with_network_info() {
         .expect_get_network_info()
         .with(eq(NETWORK_1))
         .return_once(move |_| Ok(get_network_info.clone()));
+
+    state_store
+        .expect_get_certificate_header()
+        .with(eq(pending_certificate_id))
+        .return_once(move |_| Ok(Some(pending_certificate_header)));
 
     state_store
         .expect_is_network_disabled()
@@ -352,12 +381,86 @@ fn pending_certificate_defined_with_network_info() {
     assert_eq!(info.settled_pp_root, None);
     assert_eq!(info.settled_let_leaf_count, Some(2));
 
-    assert_eq!(info.latest_pending_error, None);
+    assert_eq!(info.latest_pending_error, Some(pending_error.clone()));
     assert_eq!(
         info.latest_pending_status,
-        Some(agglayer_types::CertificateStatus::Pending)
+        Some(agglayer_types::CertificateStatus::error(pending_error))
+    );
+    assert_eq!(
+        info.latest_pending_certificate_id,
+        Some(pending_certificate_id)
     );
     assert_eq!(info.latest_pending_height, Some(11.into()));
+    assert_eq!(info.latest_epoch_with_settlement, Some(0));
+}
+
+#[test]
+fn settled_cached_pending_header_is_omitted() {
+    let certificate_sender = tokio::sync::mpsc::channel(1).0;
+
+    let pending_store = MockPendingStore::new();
+    let mut state_store = MockStateStore::new();
+    let debug_store = MockDebugStore::new();
+    let epochs_store = MockEpochsStore::new();
+    let config = Arc::new(Config::default());
+
+    let certificate = Certificate::new_for_test(NETWORK_1, 11.into());
+    let certificate_id = certificate.hash();
+    let header = CertificateHeader {
+        network_id: NETWORK_1,
+        height: certificate.height,
+        epoch_number: Some(0.into()),
+        certificate_index: Some(CertificateIndex::new(0)),
+        certificate_id,
+        prev_local_exit_root: certificate.prev_local_exit_root,
+        new_local_exit_root: certificate.new_local_exit_root,
+        metadata: Metadata::DEFAULT,
+        status: agglayer_types::CertificateStatus::Settled,
+        settlement_tx_hash: Some(Digest::ZERO.into()),
+    };
+    let network_info = NetworkInfo {
+        network_type: agglayer_types::NetworkType::Generic,
+        latest_pending_certificate_id: Some(certificate_id),
+        latest_pending_height: Some(certificate.height),
+        latest_pending_status: Some(agglayer_types::CertificateStatus::Pending),
+        ..NetworkInfo::from_network_id(NETWORK_1)
+    };
+
+    state_store
+        .expect_get_network_info()
+        .with(eq(NETWORK_1))
+        .return_once(move |_| Ok(network_info));
+    state_store
+        .expect_get_latest_settled_certificate_per_network()
+        .with(eq(NETWORK_1))
+        .return_once(|_| Ok(None));
+    state_store
+        .expect_get_certificate_header()
+        .with(eq(certificate_id))
+        .return_once(move |_| Ok(Some(header)));
+    state_store
+        .expect_is_network_disabled()
+        .with(eq(NETWORK_1))
+        .return_once(|_| Ok(false));
+
+    let asserter = Asserter::new();
+    let _transport = MockTransport::new(asserter.clone());
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
+    let service = crate::AgglayerService::new(
+        certificate_sender,
+        Arc::new(pending_store),
+        Arc::new(state_store),
+        Arc::new(debug_store),
+        Arc::new(epochs_store),
+        config,
+        l1_rpc_provider,
+    );
+
+    let info = service.get_network_info(NETWORK_1).unwrap();
+    assert_eq!(info.latest_pending_certificate_id, None);
+    assert_eq!(info.latest_pending_height, None);
+    assert_eq!(info.latest_pending_status, None);
+    assert_eq!(info.latest_pending_error, None);
 }
 
 #[test]
