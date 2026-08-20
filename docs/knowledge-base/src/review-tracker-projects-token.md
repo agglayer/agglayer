@@ -3,6 +3,12 @@
 This is an administrator handoff for the `agglayer/agglayer` PR review tracker.
 It explains the required GitHub organization and token changes without exposing any secret value.
 
+> [!IMPORTANT]
+> The repository-access guidance in this incident handoff has been superseded by
+> [Grant cross-repository Issues access to the PR review tracker](review-tracker-org-issues-write.md).
+> **Issues: Read-only** and selected-repository access are no longer sufficient for the current
+> tracker design.
+
 ## Incident summary
 
 The tracker can create repository issues, but its `PROJECTS_TOKEN` currently receives `HTTP 404`
@@ -31,12 +37,13 @@ conditions:
 - Its organization permission **Projects** is **Read and write**.
 - Its owner has at least **Write** access to organization Project 47.
 - It is active, unexpired, and approved by the `agglayer` organization if approval is required.
-- It can access `agglayer/agglayer` and any private repositories whose issues can be source items.
-  **Issues: Read-only** is sufficient for those candidate repositories.
+- Its repository access and Issues permission match the superseding
+  [cross-repository access handoff](review-tracker-org-issues-write.md):
+  **All repositories** and **Issues: Read and write**.
 
-The workflow uses its repository `GITHUB_TOKEN`, not `PROJECTS_TOKEN`, to create and update
-same-repository review issues.
-Do not grant the personal access token broad repository write permissions.
+The workflow still uses its repository `GITHUB_TOKEN`,
+not `PROJECTS_TOKEN`, to create and update same-repository review issues and comments.
+The broader PAT permission is reserved for sub-issue parent operations in source repositories.
 
 ## Preferred repair: edit the current token in place
 
@@ -65,9 +72,9 @@ The token owner should then:
 4. Open the existing tracker token.
 5. Confirm that **Resource owner** is `agglayer`.
 6. Under **Organization permissions**, set **Projects** to **Read and write**.
-7. Under **Repository access**, include `agglayer/agglayer` and any private candidate-issue
-   repositories.
-8. For those repositories, grant **Issues: Read-only** and leave unrelated permissions unset.
+7. Under **Repository access**, select **All repositories**.
+8. Under **Repository permissions**, grant **Issues: Read and write** and leave unrelated
+   permissions unset.
 9. Save the token changes without regenerating the token value.
 
 The organization or Project owner must also confirm the token owner's Project role:
@@ -90,7 +97,8 @@ If the `agglayer` organization requires approval, an organization owner must:
 2. Select **Settings**.
 3. Under **Personal access tokens**, select **Pending requests**.
 4. Open the request from the tracker token owner.
-5. Confirm that it requests **Projects: Read and write** and only the expected repository access.
+5. Confirm that it requests **Projects: Read and write**, **All repositories**, and
+   **Issues: Read and write**, with unrelated permissions unset.
 6. Select **Approve**.
 
 GitHub documents this workflow under

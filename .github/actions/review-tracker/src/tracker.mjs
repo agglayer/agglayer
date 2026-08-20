@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { AttachPreflightError, Hierarchy, ParentReadError, repositoryUrl, sameIssue } from "./hierarchy.mjs";
 import { Project } from "./project.mjs";
 import { selectSource, sourceFrom } from "./source.mjs";
 const DEPLOYMENT = {
@@ -6,9 +7,11 @@ const DEPLOYMENT = {
   statusFieldId: 369829350, statusFieldNodeId: "PVTSSF_lADOCeYRi84BdrR0zhYLJeY",
   readyOptionId: "61e4505c", inReviewOptionId: "df73e18b", blockedOptionId: "13f63909",
   copyFieldIds: [369832156, 369833082, 369835321, 369832813, 369832890],
-  estimateFieldId: 369829594, notesFieldId: 374176592, legacyTaskIssueNumbers: [1747],
+  estimateFieldId: 369829594, notesFieldId: 374176592,
+  legacyTasks: [{ issue: 1747, issueDatabaseId: 5169690048, issueNodeId: "I_kwDOLj_DwM8AAAABNCM1wA",
+    pr: 1746, reviewerId: "MDQ6VXNlcjc1ODM3MTQ=" }],
   maxPromptBytes: 3_500_000 };
-export const COMMANDS = ["/review-tracker set OWNER/REPOSITORY#123", "/review-tracker none", "/review-tracker infer", "/review-tracker reconcile"];
+export const COMMANDS = ["/review-tracker set #123", "/review-tracker set REPOSITORY#123", "/review-tracker set OWNER/REPOSITORY#123", "/review-tracker none", "/review-tracker infer", "/review-tracker reconcile"];
 const STATE_MARKER = "review-tracker-state";
 const LIFECYCLE_ACTIONS = new Set([
   "opened", "edited", "synchronize", "review_requested", "review_request_removed", "closed", "reopened",
@@ -37,7 +40,7 @@ export async function runAction({ core, context, getOctokit, Anthropic, inputs =
       apiKey, baseURL: "https://api.anthropic.com", timeout: 180_000, maxRetries: 2, fetchOptions: { redirect: "error" },
     }) : null;
     tracker = new Tracker({
-      github, project: new Project(projectClient, config), anthropic, apiKey, config, context, core,
+      github, project: new Project(projectClient, config), hierarchy: new Hierarchy(projectClient, config), anthropic, apiKey, config, context, core,
       reviewId: input("review-id") || null, eventAction: input("event-action") || null,
     });
     const result = await tracker.run(pr);
@@ -109,7 +112,7 @@ export class Tracker {
         this.warnings.push(`Ignored out-of-order command comment ${commandId}.`);
       else {
         this.state.lastCommand = commandId;
-        command = await this.capture("command", () => parseCommand(this.context.payload.comment?.body));
+        command = await this.capture("command", () => parseCommand(this.context.payload.comment?.body, this.context.repo));
       }
     }
     let sourceChanged = false;
@@ -129,6 +132,7 @@ export class Tracker {
       }));
       if (selected) { this.state.source = selected; sourceChanged = true; }
     }
+    await this.prepareHierarchy(sourceChanged, command?.kind === "reconcile");
     if (event.kind === "lifecycle" && lifecycleReady) {
       await this.capture("review reconciliation", () => this.reconcileReviews());
       await this.reconcileLifecycle();
@@ -140,6 +144,7 @@ export class Tracker {
       if (current) await this.reconcileLifecycle();
     }
     if (sourceChanged || command?.kind === "reconcile") await this.syncTasks();
+    await this.syncHierarchies();
     await this.save();
     return { state: this.state, errors: this.errors, warnings: this.warnings };
   }
@@ -157,20 +162,30 @@ export class Tracker {
     let task = this.state.tasks[reviewer.node_id];
     const issueData = { ...this.context.repo,
       title: `Review PR #${this.pull.number}: ${this.pull.title}`.slice(0, 256),
-      body: reviewIssueBody(this.config, this.pull, reviewer), assignees: [reviewer.login] };
-    let issue;
+      assignees: [reviewer.login] };
+    const updateIssue = async (issue) => (await this.github.rest.issues.update({ ...issueData,
+      body: reviewIssueBody(this.config, this.pull, reviewer, issue), issue_number: issue.number, state: "open" })).data;
+    let issue, created = false;
     if (!task) {
       issue = (await this.taskIssues()).get(reviewer.node_id)?.issue;
       if (issue) task = recoveredTask(issue, reviewer.login);
       else {
-        ({ data: issue } = await this.github.rest.issues.create(issueData));
-        task = { login: reviewer.login, issue: issue.number, pending: true, closedByPr: false, fulfilled: false };
-        this.cachedTaskIssues?.set(reviewer.node_id, { issue, legacy: false });
+        ({ data: issue } = await this.github.rest.issues.create({ ...issueData,
+          body: reviewIssueBody(this.config, this.pull, reviewer) }));
+        task = { login: reviewer.login, issue: issue.number, pending: true, hierarchyPending: true,
+          closedByPr: false, fulfilled: false };
+        created = true;
       }
       this.state.tasks[reviewer.node_id] = task;
-      await this.save();
+      if (created) {
+        try {
+          issue = await updateIssue(issue);
+          this.cachedTaskIssues?.set(reviewer.node_id, { issue, legacy: false });
+        } finally { await this.save(); }
+      }
+      else await this.save();
     }
-    ({ data: issue } = await this.github.rest.issues.update({ ...issueData, issue_number: task.issue, state: "open" }));
+    if (!created) issue = await updateIssue(issue ?? await this.getIssue(task.issue));
     Object.assign(task, { login: reviewer.login, closedByPr: false, fulfilled: false });
     await this.syncTask(task, issue, this.config.readyOptionId);
   }
@@ -185,11 +200,11 @@ export class Tracker {
       let marker, legacy = false;
       try { marker = decodeMarker(issue.body, "review-tracker-task", this.config.projectsToken); }
       catch {
-        if (!allowLegacy || !(this.config.legacyTaskIssueNumbers ?? []).includes(issue.number)) continue;
+        if (!allowLegacy) continue;
         try { marker = decodeMarker(issue.body, "review-tracker-task", null); legacy = true; } catch { continue; }
       }
-      if (marker?.v !== 1 || marker.repositoryId !== this.config.repositoryId || marker.pr !== this.pull.number ||
-        typeof marker.reviewerId !== "string" || !marker.reviewerId) continue;
+      const legacyMarker = legacy && matchesLegacyTask(this.config, this.pull.number, marker, issue);
+      if (!legacyMarker && !boundTaskMarker(marker, this.config, this.pull.number, marker?.reviewerId, issue)) continue;
       const current = this.cachedTaskIssues.get(marker.reviewerId);
       if (!current || (current.legacy && !legacy) || current.legacy === legacy && issue.number < current.issue.number)
         this.cachedTaskIssues.set(marker.reviewerId, { issue, legacy });
@@ -208,7 +223,7 @@ export class Tracker {
       }
       if (entry.legacy) {
         ({ data: issue } = await this.github.rest.issues.update({
-          ...this.context.repo, issue_number: issue.number, body: reviewIssueBody(this.config, this.pull, assignee),
+          ...this.context.repo, issue_number: issue.number, body: reviewIssueBody(this.config, this.pull, assignee, issue),
         }));
         Object.assign(entry, { issue, legacy: false });
       }
@@ -331,6 +346,126 @@ export class Tracker {
     for (const task of Object.values(this.state.tasks)) await this.capture(`sync review task #${task.issue}`,
       () => this.syncTask(task));
   }
+  async prepareHierarchy(sourceChanged, reconcile) {
+    let changed = sourceChanged;
+    for (const task of Object.values(this.state.tasks)) if (sourceChanged || reconcile ||
+      typeof task.hierarchyPending !== "boolean") { task.hierarchyPending = true; changed = true; }
+    if (changed) await this.save();
+  }
+  async syncHierarchies() {
+    for (const [reviewerId, task] of Object.entries(this.state.tasks)) if (task.hierarchyPending)
+      await this.capture(`sync parent for review task #${task.issue}`, () => this.syncHierarchy(reviewerId, task));
+  }
+  async syncHierarchy(reviewerId, task) {
+    if (!this.state.source?.item && !this.state.source?.none) return;
+    let child = await this.authenticatedChild(reviewerId, task);
+    const target = this.state.source.item ? parentFrom(this.state.source, this.config) : null;
+    let managed = task.managedParent ? parentFrom(task.managedParent, this.config) : null;
+    let attempted = task.attemptedParent ? parentFrom(task.attemptedParent, this.config) : null;
+    if (sameIssue(target, child)) throw new Error(`Review task #${task.issue} cannot be its own parent.`);
+    const recovering = task.hierarchyInFlight === true || Boolean(attempted);
+    if (!recovering) {
+      task.hierarchyInFlight = true;
+      try { await this.save(); } catch (error) { delete task.hierarchyInFlight; throw error; }
+    }
+    let current;
+    try { current = await this.hierarchy.parent(child, [managed, attempted].filter(Boolean)); }
+    catch (error) {
+      if (!recovering && error instanceof ParentReadError) {
+        delete task.hierarchyInFlight;
+        try { await this.save(); } catch { /* A persisted fence remains the fail-closed fallback. */ }
+      }
+      throw error;
+    }
+    if (recovering) {
+      delete task.managedParent; delete task.attemptedParent; delete task.hierarchyInFlight;
+      if (current) {
+        if (sameIssue(current, target)) {
+          task.hierarchyPending = false;
+          this.warnings.push(`Review task #${task.issue} has the desired parent after an interrupted sync; the relationship was left unmanaged.`);
+          await this.save(); return;
+        }
+        await this.save();
+        throw new Error(`Review task #${task.issue} has a parent after an interrupted sync; it was preserved and left unmanaged.`);
+      }
+      await this.save();
+      return this.syncHierarchy(reviewerId, task);
+    }
+    if (sameIssue(current, target)) {
+      if (sameIssue(current, managed) || sameIssue(current, attempted)) task.managedParent = target;
+      else {
+        delete task.managedParent;
+        this.warnings.push(`Review task #${task.issue} already has the desired parent; the existing relationship was left unmanaged.`);
+      }
+      delete task.attemptedParent;
+      task.hierarchyPending = false;
+      delete task.hierarchyInFlight;
+      await this.save();
+      return;
+    }
+    if (current && !sameIssue(current, managed) && !sameIssue(current, attempted)) {
+      delete task.managedParent; delete task.attemptedParent; delete task.hierarchyInFlight; await this.save();
+      throw new Error(`Review task #${task.issue} has an unrelated parent; it was preserved.`);
+    }
+    if (current && sameIssue(current, attempted)) {
+      task.managedParent = attempted; managed = attempted;
+      delete task.attemptedParent; attempted = null;
+      await this.save();
+    }
+    if (current) {
+      try { await this.hierarchy.detach(current, child, () => this.authenticatedChild(reviewerId, task)); }
+      catch (error) {
+        if (error instanceof ParentReadError) {
+          delete task.hierarchyInFlight;
+          try { await this.save(); } catch { /* A persisted fence remains the fail-closed fallback. */ }
+        }
+        throw error;
+      }
+      current = await this.hierarchy.parent(child);
+      if (current) {
+        if (sameIssue(current, target)) {
+          delete task.managedParent;
+          this.warnings.push(`Review task #${task.issue} acquired the desired parent concurrently; the relationship was left unmanaged.`);
+          delete task.attemptedParent;
+          task.hierarchyPending = false;
+          delete task.hierarchyInFlight;
+          await this.save();
+          return;
+        }
+        delete task.managedParent; delete task.attemptedParent; delete task.hierarchyInFlight; await this.save();
+        throw new Error(`Review task #${task.issue} acquired an unrelated parent; it was preserved.`);
+      }
+    }
+    if (target && !current) {
+      if (!sameIssue(attempted, target)) { task.attemptedParent = target; await this.save(); }
+      try { await this.hierarchy.attach(target, child, false, () => this.authenticatedChild(reviewerId, task)); }
+      catch (error) {
+        if (error instanceof AttachPreflightError) {
+          delete task.managedParent; delete task.attemptedParent; delete task.hierarchyInFlight; await this.save();
+        }
+        throw error;
+      }
+    }
+    if (target) task.managedParent = target; else delete task.managedParent;
+    delete task.attemptedParent;
+    task.hierarchyPending = false;
+    delete task.hierarchyInFlight;
+    await this.save();
+  }
+  async authenticatedChild(reviewerId, task) {
+    let issue, marker;
+    try { issue = await this.getIssue(task.issue); }
+    catch (error) { throw new ParentReadError(error); }
+    try { marker = decodeMarker(issue?.body, "review-tracker-task", this.config.projectsToken); } catch { /* Validate below. */ }
+    if ([0, 1].includes(marker?.v) && baseTaskMarker(marker, this.config, this.pull.number, reviewerId) &&
+      issue?.number === task.issue && issue?.user?.login === this.config.botLogin && !issue.pull_request) {
+      try {
+        ({ data: issue } = await this.github.rest.issues.update({ ...this.context.repo, issue_number: task.issue,
+          body: reviewIssueBody(this.config, this.pull, { login: task.login, node_id: reviewerId }, issue) }));
+      } catch (error) { throw new ParentReadError(error); }
+    }
+    return authenticatedChild(this.config, this.pull, reviewerId, task, issue);
+  }
   async getIssue(number) { return (await this.github.rest.issues.get({ ...this.context.repo, issue_number: number })).data; }
   setIssue(number, state) { return this.github.rest.issues.update({ ...this.context.repo, issue_number: number, state }); }
   async save() {
@@ -385,7 +520,7 @@ export function renderComment(config, state, errors = [], warnings = []) {
     ? `[${escapeMarkdown(state.source.repository)}#${state.source.number}](${config.serverUrl}/${state.source.repository}/issues/${state.source.number}) via ${escapeMarkdown(state.source.via)}`
     : state.source?.none ? `None (${escapeMarkdown(state.source.via)})` : "Unresolved";
   const tasks = Object.values(state.tasks).sort((a, b) => a.login.localeCompare(b.login)).map((task) =>
-    `- @${escapeMarkdown(task.login)}: [#${task.issue}](${config.serverUrl}/${config.repository}/issues/${task.issue})${task.pending || !task.item ? " (Project sync pending)" : ""}`);
+    `- @${escapeMarkdown(task.login)}: [#${task.issue}](${config.serverUrl}/${config.repository}/issues/${task.issue})${task.pending || !task.item ? " (Project sync pending)" : ""}${task.hierarchyPending ? " (parent sync pending)" : ""}`);
   const lines = [
     "## PR review tracker", "", errors.length
       ? `Tracking completed with errors: [workflow run](${config.runUrl}).`
@@ -417,24 +552,67 @@ function decodeMarker(body, name, key) {
   }
   return JSON.parse(Buffer.from(match[1], "base64url").toString("utf8"));
 }
-export function taskMarker(config, pr, reviewerId) {
-  return encodeMarker("review-tracker-task", { v: 1, repositoryId: config.repositoryId, pr, reviewerId }, config.projectsToken);
+export function taskMarker(config, pr, reviewerId, issue) {
+  if (!Number.isSafeInteger(issue?.id) || issue.id <= 0 || !Number.isSafeInteger(issue?.number) || issue.number <= 0 ||
+    typeof issue?.node_id !== "string" || !issue.node_id) throw new Error("The review task identity is invalid.");
+  return encodeMarker("review-tracker-task", { v: 2, repositoryId: config.repositoryId, pr, reviewerId,
+    issueDatabaseId: issue.id, issueNodeId: issue.node_id, issue: issue.number }, config.projectsToken);
 }
 function recoveredTask(issue, login) {
-  const task = { login, issue: issue.number, pending: true, closedByPr: false, fulfilled: false };
+  const task = { login, issue: issue.number, pending: true, hierarchyPending: true, closedByPr: false, fulfilled: false };
   if (issue.created_at) task.replayAfter = issue.created_at;
   return task;
 }
-function reviewIssueBody(config, pull, reviewer) {
-  return [`Review [${config.repository}#${pull.number}](${pull.html_url}).`, "", `Assigned reviewer: @${reviewer.login}.`, "",
-    "This issue is managed by the PR review tracker.", taskMarker(config, pull.number, reviewer.node_id)].join("\n");
+function authenticatedChild(config, pull, reviewerId, task, issue) {
+  let marker, repository;
+  try { marker = decodeMarker(issue?.body, "review-tracker-task", config.projectsToken); } catch { /* Report one stable error. */ }
+  try { repository = repositoryUrl(issue?.repository_url); } catch { /* Report one stable error. */ }
+  if (issue?.pull_request || issue?.user?.login !== config.botLogin || issue?.number !== task.issue ||
+    repository?.toLowerCase() !== config.repository.toLowerCase() ||
+    !boundTaskMarker(marker, config, pull.number, reviewerId, issue) || !Number.isSafeInteger(issue.id) || issue.id <= 0 ||
+    typeof issue.node_id !== "string" || !issue.node_id || issue.node_id.length > 200)
+    throw new Error(`Review task #${task.issue} is not an authenticated tracker-owned issue.`);
+  return { id: issue.id, issueId: issue.node_id, repository: config.repository, number: issue.number };
 }
-export function parseCommand(body) {
+function parentFrom(source, config) {
+  const [owner, repo, extra] = String(source?.repository ?? "").split("/");
+  if (extra || owner?.toLowerCase() !== config.projectOwner.toLowerCase() || !validSegment(repo) ||
+    typeof source?.issueId !== "string" || !source.issueId || source.issueId.length > 200 ||
+    !Number.isSafeInteger(source.number) || source.number <= 0)
+    throw new Error("The review-task parent routing state is invalid.");
+  return { issueId: source.issueId, repository: `${owner}/${repo}`, number: source.number };
+}
+function reviewIssueBody(config, pull, reviewer, issue = null) {
+  const marker = issue ? taskMarker(config, pull.number, reviewer.node_id, issue) :
+    encodeMarker("review-tracker-task", { v: 0, repositoryId: config.repositoryId,
+      pr: pull.number, reviewerId: reviewer.node_id }, config.projectsToken);
+  return [`Review [${config.repository}#${pull.number}](${pull.html_url}).`, "", `Assigned reviewer: @${reviewer.login}.`, "",
+    "This issue is managed by the PR review tracker.", marker].join("\n");
+}
+function baseTaskMarker(marker, config, pr, reviewerId) {
+  return [0, 1, 2].includes(marker?.v) && marker.repositoryId === config.repositoryId && marker.pr === pr &&
+    typeof reviewerId === "string" && reviewerId && marker.reviewerId === reviewerId;
+}
+function boundTaskMarker(marker, config, pr, reviewerId, issue) {
+  return marker?.v === 2 && baseTaskMarker(marker, config, pr, reviewerId) &&
+    marker.issueDatabaseId === issue?.id && marker.issueNodeId === issue?.node_id && marker.issue === issue?.number;
+}
+function matchesLegacyTask(config, pr, marker, issue) {
+  const expected = (config.legacyTasks ?? []).find((task) => task.issue === issue?.number);
+  return marker?.v === 1 && expected?.pr === pr && expected.reviewerId === marker.reviewerId &&
+    expected.issueDatabaseId === issue?.id && expected.issueNodeId === issue?.node_id &&
+    baseTaskMarker(marker, config, pr, expected.reviewerId);
+}
+export function parseCommand(body, current = {}) {
   const text = String(body ?? "");
   for (const kind of ["none", "infer", "reconcile"]) if (text === `/review-tracker ${kind}`) return { kind };
-  const match = /^\/review-tracker set (?:https:\/\/github\.com\/)?([\w.-]+\/[\w.-]+)(?:\/issues\/|#)([1-9]\d*)$/.exec(text);
-  if (!match) throw new Error("The review-tracker command is invalid.");
-  return { kind: "set", repository: match[1], number: Number(match[2]) };
+  const match = /^\/review-tracker set (?:(?:https:\/\/github\.com\/)?([\w.-]+\/[\w.-]+)(?:\/issues\/|#)|([\w.-]+)?#)([1-9]\d*)$/.exec(text);
+  const explicit = match?.[1]?.split("/");
+  const repository = explicit ? (explicit.every(validSegment) ? match[1] : null) :
+    (match && validSegment(current.owner) && validSegment(match[2] ?? current.repo)
+      ? `${current.owner}/${match[2] ?? current.repo}` : null), number = Number(match?.[3]);
+  if (!repository || !Number.isSafeInteger(number)) throw new Error("The review-tracker command is invalid.");
+  return { kind: "set", repository, number };
 }
 function eventFrom(context, reviewId, eventAction) {
   if (context.eventName === "workflow_run") return reviewId
@@ -466,6 +644,8 @@ function positiveDecimal(value, name) {
   if (!/^[1-9]\d*$/.test(text)) throw new Error(`${name} must be a positive integer.`);
   return text;
 }
+function validSegment(value) { return typeof value === "string" && value.length <= 100 &&
+  /^[\w.-]+$/.test(value) && value !== "." && value !== ".."; }
 function fail(core, message) { core.setFailed(message); return null; }
 async function reportFatal(github, repo, pr, message, core) {
   try {

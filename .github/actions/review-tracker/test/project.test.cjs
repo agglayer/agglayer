@@ -147,6 +147,14 @@ test("a user-authored marker cannot hide a source issue", () => {
   assert.equal(item.generated, false);
 });
 
+test("manual lookup rejects repositories outside the Project owner before listing items", async () => {
+  const project = new Project(fakeClient(), config);
+  let listings = 0;
+  project.items = async () => { listings += 1; return []; };
+  assert.equal(await project.find("outside/private", 7), null);
+  assert.equal(listings, 0);
+});
+
 function fakeClient() {
   return {
     requests: [],

@@ -68,6 +68,7 @@ export class Project {
       this.params({ item_id: itemId, fields }));
   }
   async find(repository, number) {
+    if (repository.split("/")[0]?.toLowerCase() !== this.config.projectOwner.toLowerCase()) return null;
     return (await this.items()).find((item) => !item.archived && !item.generated &&
       item.repository?.toLowerCase() === repository.toLowerCase() && item.number === number);
   }

@@ -1,9 +1,10 @@
 # PR review tracker
 
 This local action creates one same-repository issue for each person requested to review a PR.
-It assigns the issue to that reviewer and updates Project 47 as review events arrive.
+It assigns the issue to that reviewer, updates Project 47 as review events arrive,
+and links it as a sub-issue of the PR's selected source issue.
 
-The maintained production implementation is capped at 775 physical lines.
+The maintained production implementation is capped at 1,150 physical lines.
 That count includes `src/`, `action.yml`, `package.json`, and both runtime workflows.
 It excludes tests, documentation, `package-lock.json`, and the generated `dist/` bundle.
 
@@ -48,6 +49,10 @@ Events are serialized per PR, so one noisy PR cannot block tracking for unrelate
 - Closing or merging the PR closes every open review issue.
 - Reopening the PR reopens only issues that the PR closure closed and reapplies each task's
   recorded pre-close Project Status, preserving `Ready` versus `In Review`.
+- Selecting a source links every authenticated review issue beneath it.
+  Changing the source reparents only relationships previously managed by the tracker;
+  selecting `none` removes only those relationships.
+  An unrelated parent is preserved and reported as an error.
 
 Every lifecycle run converges the recorded review issues from the PR's current open or closed
 state and current individual reviewer requests, rather than trusting event-delivery order.
@@ -60,12 +65,14 @@ not the reviewer ID.
 
 ## Source matching
 
+Only Project issues owned by the configured Project owner are eligible sources.
+External-owner items are excluded before the Project token makes any repository request.
 Exactly one eligible `closingIssuesReferences` result is accepted without AI.
 A plain issue mention is not an explicit closing relationship.
-Closing relationships added later are rechecked on PR edits and synchronizations unless a
-maintainer has set the mapping explicitly.
-Removing a closing relationship, or making it ambiguous, preserves the previous mapping and does
-not resynchronize review issues; a trusted command can correct it.
+Closing relationships added later are rechecked on PR edits
+and synchronizations unless a maintainer has set the mapping explicitly.
+Removing a closing relationship, or making it ambiguous, preserves the previous mapping
+and does not resynchronize review issues; a trusted command can correct it.
 
 Otherwise, automatic Claude inference runs on the opening lifecycle signal only when the PR
 author has effective repository write permission. A trusted user can explicitly request it on
@@ -111,11 +118,16 @@ One bot-authored PR comment shows the selected source, links every review issue,
 sanitized warnings and errors, and repeats these exact commands:
 
 ```text
+/review-tracker set #123
+/review-tracker set REPOSITORY#123
 /review-tracker set OWNER/REPOSITORY#123
 /review-tracker none
 /review-tracker infer
 /review-tracker reconcile
 ```
+
+`#123` uses the current PR repository.
+`REPOSITORY#123` uses the current PR owner, and the fully qualified form remains available.
 
 Only users with effective repository write permission reach the privileged command processor.
 The workflow author-association filter is an optimization, not the authorization boundary;
@@ -132,29 +144,65 @@ Repository workflows share the `github-actions[bot]` identity, so authorship alo
 that another workflow did not edit the comment and forge Project mutation targets.
 The HMAC lets the tracker reject state that was not written by a holder of the Project secret.
 
+The same fine-grained token needs Issues read/write access across the `agglayer` organization.
+That access lets a source issue add or remove its review sub-issues.
+Before every parent mutation, the tracker fetches the live child
+and verifies its authenticated task marker and bot authorship.
+The marker is bound to the repository, PR, reviewer, database ID, node ID, and issue number.
+Confirmed and in-flight parent provenance is stored in signed state.
+The tracker never replaces or removes an unrelated parent.
+If another actor establishes the exact intended relationship while a tracker request is in flight,
+that relationship can satisfy the signed intent and become tracker-managed.
+Before any parent read that could lead to a mutation, the tracker persists an interruption fence.
+After an interrupted synchronization, it preserves any observed parent
+and relinquishes ownership instead of retrying a destructive write from stale provenance.
+The broader token is not used to edit issue content, comments, assignees, labels,
+or lifecycle state; the current repository's `GITHUB_TOKEN` continues to own those operations.
+
 ## Recovery boundary
 
-Normal operations are idempotent, lifecycle runs converge from current GitHub state, and review
-IDs are caught up from the PR's submitted-review history.
-Commands are applied in increasing comment-ID order, so a delayed older command cannot replace a
-newer choice.
-The tracker saves a new issue's routing identity in the canonical comment before attempting a
-Project mutation.
-Failed Project attachment or field synchronization leaves the issue visible as pending, and a
-submitted review remains retryable until its recorded task is synchronized.
-Signed task markers recover missing mappings and reuse items added by Project automation instead
-of creating duplicate issues.
-The first run after this recovery behavior was deployed also accepts the explicitly allowlisted
-original orphan issue and rewrites its unsigned task marker into authenticated state.
+Lifecycle runs converge from current GitHub state,
+retryable operations are idempotent after GitHub returns an issue identity,
+and review IDs are caught up from the PR's submitted-review history.
+Commands are applied in increasing comment-ID order.
+A delayed older command therefore cannot replace a newer choice.
+The tracker saves a new issue's routing identity in the canonical comment before attempting a Project mutation.
+Failed Project attachment or field synchronization leaves the issue visible as pending,
+and a submitted review remains retryable until its recorded task is synchronized.
+Parent synchronization has separate signed intent and retry state,
+so its failure does not block Project or review processing.
+Source changes are saved before Project or parent mutations,
+and each new task identity is saved before either integration runs.
+Every parent write re-fetches and verifies the live task marker.
+The tracker may remove only a parent matching signed confirmed or in-flight provenance;
+an unrelated manually assigned parent causes a visible conflict instead.
+An interrupted synchronization is fail-closed: if a parent is present on the next run,
+the tracker preserves it, clears its ownership claim, and reports the relationship as unmanaged.
+If no parent is present, it can safely begin a new fenced attempt.
+If an add response or its final state save is lost, the resulting target can be left unmanaged.
+A maintainer must remove that relationship before reconciliation can attach a different target.
+Current issue-bound task markers recover missing mappings
+and reuse items added by Project automation instead of creating duplicate issues.
+The first run after this recovery behavior was deployed also accepts the explicitly allowlisted original orphan issue.
+It rewrites that issue's unsigned task marker into authenticated state.
+
+A task created before issue-bound markers were deployed is upgraded only
+when its exact issue number is still present in authenticated PR state.
+Older unbound markers are deliberately not rediscovered after state loss
+because another bot-authored issue could replay them.
+Likewise, if GitHub creates an issue but loses the create response before returning its immutable identity,
+the safe retry can leave that provisional issue orphaned and create another task.
+The workflow reports the failed run;
+a maintainer can close the provisional orphan after verifying that it is absent from the authenticated PR state.
 
 The tracker does not reconstruct deleted state comments or corrupted markers.
-`/review-tracker reconcile` recovers signed task markers, retries incomplete Project mutations,
-replays reviews that were consumed while a legacy task was missing, reapplies copied fields, and
-converges task lifecycle from the PR's current state.
+`/review-tracker reconcile` recovers current issue-bound task markers and retries incomplete Project mutations.
+It also replays reviews consumed while the explicitly allowlisted legacy task was missing,
+reapplies copied fields, and converges task lifecycle from the PR's current state.
 Changing a source after reviews have been processed likewise does not replay those reviews.
 There is no dedicated watcher for later source-field changes.
-Rotating `PROJECTS_TOKEN` invalidates existing state and task signatures and requires manual repair;
-change the existing token's permissions in place whenever possible.
+Rotating `PROJECTS_TOKEN` invalidates existing state and task signatures
+and requires manual repair; change the existing token's permissions in place whenever possible.
 
 ## Porting
 
@@ -166,13 +214,16 @@ To install the tracker elsewhere:
 3. Update the Project-specific action description and concurrency-group label.
 4. Preserve the signal workflow's name, path, and run-name grammar as one coupled interface,
    or update the processor and relay tests together.
-5. Add a stable fine-grained PAT as `PROJECTS_TOKEN`, with organization Projects write access
-   and Issues read access only for repositories that can contain candidate issues.
+5. Add a stable fine-grained PAT as `PROJECTS_TOKEN`, with organization Projects write access,
+   access to every repository under the Project owner, and Issues read/write access.
+   GitHub requires write access on a source repository to manage its sub-issues.
    The token also authenticates durable state, so short-lived GitHub App installation tokens
    are not supported without adding a separate stable state-signing secret.
 6. Make `CLAUDE_API_KEY` available to the repository.
 
 The repository `GITHUB_TOKEN` manages same-repository issues and comments.
+`PROJECTS_TOKEN` manages Project fields
+and authenticated sub-issue relationships whose parent is under the configured Project owner.
 Only the privileged job receives the Project and Claude credentials.
 Avoid a classic PAT with broad `repo` scope.
 

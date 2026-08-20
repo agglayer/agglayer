@@ -1,17 +1,24 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { createHmac } = require("node:crypto");
 const test = require("node:test");
 let Tracker;
 let emptyState;
 let parseCommand;
 let renderComment;
 let taskMarker;
-test.before(async () => ({ Tracker, emptyState, parseCommand, renderComment, taskMarker } = await import("../src/tracker.mjs")));
+let AttachPreflightError;
+let ParentReadError;
+test.before(async () => {
+  ({ Tracker, emptyState, parseCommand, renderComment, taskMarker } = await import("../src/tracker.mjs"));
+  ({ AttachPreflightError, ParentReadError } = await import("../src/hierarchy.mjs"));
+});
 
 const config = {
   owner: "agglayer",
   repo: "agglayer",
+  projectOwner: "agglayer",
   repository: "agglayer/agglayer",
   repositoryId: "775930816",
   botLogin: "github-actions[bot]",
@@ -21,7 +28,7 @@ const config = {
   inReviewOptionId: "in-review",
   statusFieldId: 1,
   projectsToken: "projects-secret",
-  legacyTaskIssueNumbers: [101],
+  legacyTasks: [{ issue: 101, issueDatabaseId: 1102, issueNodeId: "I_101", pr: 9, reviewerId: "U_alice" }],
 };
 
 test("opening creates one assigned issue per requested person", async () => {
@@ -35,6 +42,7 @@ test("opening creates one assigned issue per requested person", async () => {
     [["alice"], ["bob"]],
   );
   assert.deepEqual([...fixture.project.status.values()], ["ready", "ready"]);
+  assert.deepEqual([...fixture.hierarchy.parents.values()].map(({ issueId }) => issueId), ["I_source", "I_source"]);
   assert.match(fixture.github.comments[0].body, /@alice: \[#101\]/);
   assert.match(fixture.github.comments[0].body, /\/review-tracker infer/);
 });
@@ -216,6 +224,10 @@ test("source corrections sync closed tasks without changing their review status"
   await run(fixture, command("/review-tracker none"));
   assert.deepEqual(fixture.project.syncs, [{ item: 201, source: { none: true, via: "manual-none" }, status: null }]);
   assert.equal(fixture.project.status.get(201), "in-review");
+  assert.equal(fixture.hierarchy.parents.has(101), false);
+  await run(fixture, command("/review-tracker set #7"));
+  assert.equal(fixture.github.issues.get(101).state, "closed");
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
   await run(fixture, direct("reopened"));
   assert.equal(fixture.github.issues.get(101).state, "open");
   assert.equal(fixture.project.status.get(201), "in-review");
@@ -288,6 +300,445 @@ test("source errors remain visible while review tasks still get created", async 
   assert.match(fixture.github.comments[0].body, /Project source lookup failed/);
   assert.match(fixture.github.comments[0].body, /HTTP 503/);
   assert.deepEqual(fixture.project.syncs[0], { item: 201, source: null, status: "ready" });
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, true);
+});
+
+test("an issue-bound marker recovers a task after its first state saves fail", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([alice]);
+  fixture.github.graphql = async () => { throw new Error("source unavailable"); };
+  const createComment = fixture.github.rest.issues.createComment;
+  fixture.github.rest.issues.createComment = async () => { throw new Error("state save unavailable"); };
+
+  await assert.rejects(run(fixture, direct("opened")), /state save unavailable/);
+  assert.equal(fixture.github.issues.size, 1);
+  const issue = fixture.github.issues.get(101);
+  assert.match(issue.body, new RegExp(taskMarker(config, 9, alice.node_id, issue).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+  fixture.github.rest.issues.createComment = createComment;
+  const result = await run(fixture, direct("edited"));
+  assert.equal(fixture.github.issues.size, 1);
+  assert.equal(result.state.tasks.U_alice.issue, 101);
+});
+
+test("parent failures remain retryable without blocking Project synchronization", async () => {
+  const fixture = createFixture([reviewer("alice"), reviewer("bob")]);
+  fixture.hierarchy.attachFailures = 1;
+
+  let result = await run(fixture, direct("opened"));
+  assert.equal(result.errors.length, 1);
+  assert.equal(fixture.project.status.get(201), "ready");
+  assert.equal(fixture.project.status.get(202), "ready");
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, true);
+  assert.equal(result.state.tasks.U_bob.hierarchyPending, false);
+  assert.equal(fixture.hierarchy.parents.get(102).issueId, "I_source");
+  assert.match(fixture.github.comments[0].body, /parent sync pending/);
+
+  result = await run(fixture, direct("edited"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, false);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+});
+
+test("a failed attach preflight does not block a later source correction", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  fixture.hierarchy.attachPreflightFailures = 1;
+
+  let result = await run(fixture, direct("opened"));
+  assert.match(result.errors[0], /selected source was replaced/);
+  assert.equal(fixture.hierarchy.attaches.length, 0);
+  assert.equal(result.state.tasks.U_alice.attemptedParent, undefined);
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, undefined);
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, true);
+
+  fixture.project.find = async () => alternate;
+  result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, alternate.issueId);
+});
+
+test("a transient parent-read failure preserves ownership and retries", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  fixture.hierarchy.parentFailures = 1;
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /Parent read failed/);
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, undefined);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, "I_source");
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, alternate.issueId);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, alternate.issueId);
+  assert.equal(fixture.hierarchy.detaches.length, 1);
+});
+
+test("a parent validation failure retains the interruption fence", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  fixture.hierarchy.parentValidationFailures = 1;
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /invalid live parent/);
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, true);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, "I_source");
+
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.match(result.errors[0], /after an interrupted sync/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+});
+
+test("a transient live-parent read before detach preserves ownership and retries", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  fixture.hierarchy.detachPreparationFailures = 1;
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /Live parent read failed/);
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, undefined);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, "I_source");
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, alternate.issueId);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, alternate.issueId);
+});
+
+test("a transient child reauthentication failure before detach preserves ownership and retries", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  fixture.github.issueGetFailures.add(fixture.github.issueGets + 2);
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /Child read failed/);
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, undefined);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, "I_source");
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, alternate.issueId);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, alternate.issueId);
+});
+
+test("source commands reparent and unlink only the tracker-managed relationship", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async (repository, number) =>
+    repository === alternate.repository && number === alternate.number ? alternate : null;
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, alternate.issueId);
+  assert.equal(fixture.hierarchy.attaches.at(-1).replaceParent, false);
+  assert.equal(fixture.hierarchy.detaches[0].parent.issueId, "I_source");
+  assert.deepEqual(result.state.tasks.U_alice.managedParent, {
+    issueId: alternate.issueId, repository: alternate.repository, number: alternate.number,
+  });
+
+  result = await run(fixture, command("/review-tracker none"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.parents.has(101), false);
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+});
+
+test("an unrelated parent is preserved instead of being replaced or removed", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.hierarchy.parents.set(101, { issueId: "I_manual", repository: "agglayer/manual", number: 99 });
+  fixture.project.find = async () => alternate;
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /unrelated parent/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_manual");
+  assert.equal(fixture.hierarchy.attaches.length, 1);
+
+  result = await run(fixture, command("/review-tracker none"));
+  assert.match(result.errors[0], /unrelated parent/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_manual");
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+});
+
+test("observing an unrelated parent permanently relinquishes stale provenance", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.hierarchy.parents.set(101, { issueId: "I_manual", repository: "agglayer/manual", number: 99 });
+  fixture.project.find = async () => alternate;
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /unrelated parent/);
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+  assert.equal(result.state.tasks.U_alice.attemptedParent, undefined);
+
+  fixture.hierarchy.parents.set(101, { issueId: "I_source", repository: "agglayer/agglayer", number: 7 });
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.match(result.errors[0], /unrelated parent/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+});
+
+test("a matching relationship without signed provenance is never later reparented", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  const opened = await run(fixture, direct("opened"));
+  delete opened.state.tasks.U_alice.managedParent;
+  opened.state.tasks.U_alice.hierarchyPending = true;
+  fixture.github.comments[0].body = renderComment(config, opened.state);
+
+  let result = await run(fixture, command("/review-tracker reconcile"));
+  assert.match(result.warnings.at(-1), /existing relationship was left unmanaged/);
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, false);
+  fixture.project.find = async () => alternate;
+
+  result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /unrelated parent/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+});
+
+test("parent mutation rejects a task whose live authenticated marker was changed", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.github.issues.get(101).body = "manually replaced body";
+  fixture.project.find = async () => alternate;
+
+  const result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /not an authenticated tracker-owned issue/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+  assert.equal(fixture.hierarchy.attaches.length, 1);
+});
+
+test("the live task marker is rechecked immediately before detach and attach", async () => {
+  for (const mutationRead of [2, 3]) {
+    const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+    await run(fixture, direct("opened"));
+    fixture.project.find = async () => alternate;
+    fixture.hierarchy.onParentRead = (read) => {
+      if (read === mutationRead) fixture.github.issues.get(101).body = "marker removed during synchronization";
+    };
+
+    const result = await run(fixture, command("/review-tracker set bridge#8"));
+    assert.match(result.errors[0], /not an authenticated tracker-owned issue/);
+    assert.equal(fixture.hierarchy.attaches.length, 1);
+    assert.equal(fixture.hierarchy.detaches.length, mutationRead === 2 ? 0 : 1);
+  }
+});
+
+test("reconcile observes an existing desired parent without posting it again", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  await run(fixture, direct("opened"));
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.attaches.length, 1);
+});
+
+test("an ordinary lifecycle run does not resync a completed parent", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([alice]);
+  await run(fixture, direct("opened"));
+  const reads = fixture.hierarchy.parentReads;
+  await run(fixture, direct("review_requested", alice));
+  assert.equal(fixture.hierarchy.parentReads, reads);
+  assert.equal(fixture.hierarchy.attaches.length, 1);
+});
+
+test("a response-lost parent add is preserved but left unmanaged after a source change", async () => {
+  const fixture = createFixture([reviewer("alice")]), second = alternateSource();
+  const third = { ...alternateSource(), item: 12, itemNode: "PVTI_third", issueId: "I_third",
+    repository: "agglayer/pm", number: 9 };
+  await run(fixture, direct("opened"));
+  fixture.project.find = async (repository, number) => [second, third]
+    .find((source) => source.repository === repository && source.number === number) ?? null;
+  fixture.hierarchy.attachResponseLosses = 1;
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /Parent add response was lost/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, second.issueId);
+  assert.equal(result.state.tasks.U_alice.attemptedParent.issueId, second.issueId);
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, true);
+
+  result = await run(fixture, command("/review-tracker set pm#9"));
+  assert.match(result.errors[0], /after an interrupted sync/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, second.issueId);
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+  assert.equal(result.state.tasks.U_alice.attemptedParent, undefined);
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, undefined);
+  assert.equal(fixture.hierarchy.detaches.length, 1);
+
+  fixture.hierarchy.parents.delete(101);
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, third.issueId);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, third.issueId);
+});
+
+test("orphaned in-flight provenance never authorizes a later detach", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  const opened = await run(fixture, direct("opened"));
+  opened.state.tasks.U_alice.attemptedParent = alternate;
+  delete opened.state.tasks.U_alice.hierarchyInFlight;
+  opened.state.tasks.U_alice.hierarchyPending = true;
+  fixture.github.comments[0].body = renderComment(config, opened.state);
+  fixture.hierarchy.parents.set(101, alternate);
+  fixture.project.find = async () => ({ ...alternateSource(), issueId: "I_third", repository: "agglayer/pm", number: 9 });
+
+  const result = await run(fixture, command("/review-tracker set pm#9"));
+  assert.match(result.errors[0], /after an interrupted sync/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, alternate.issueId);
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+  assert.equal(result.state.tasks.U_alice.attemptedParent, undefined);
+});
+
+test("a concurrent manual reparent after detach is preserved", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  fixture.hierarchy.parentAfterDetach = { issueId: "I_manual", repository: "agglayer/manual", number: 99 };
+
+  const result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /acquired an unrelated parent/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_manual");
+  assert.equal(fixture.hierarchy.attaches.length, 1);
+});
+
+test("a cross-owner source is rejected before any hierarchy request", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => ({ ...alternateSource(), repository: "outside/bridge" });
+  const reads = fixture.hierarchy.parentReads;
+
+  const result = await run(fixture, command("/review-tracker set outside/bridge#8"));
+  assert.match(result.errors[0], /parent routing state is invalid/);
+  assert.equal(fixture.hierarchy.parentReads, reads);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+});
+
+test("cross-owner signed parent provenance is rejected before any hierarchy request", async () => {
+  for (const field of ["managedParent", "attemptedParent"]) {
+    const fixture = createFixture([reviewer("alice")]), opened = await run(fixture, direct("opened"));
+    opened.state.tasks.U_alice[field] = { issueId: "I_outside", repository: "outside/private", number: 9 };
+    opened.state.tasks.U_alice.hierarchyPending = true;
+    fixture.github.comments[0].body = renderComment(config, opened.state);
+    const reads = fixture.hierarchy.parentReads;
+
+    const result = await run(fixture, command("/review-tracker reconcile"));
+    assert.match(result.errors[0], /parent routing state is invalid/);
+    assert.equal(fixture.hierarchy.parentReads, reads);
+  }
+});
+
+test("a lost final state save leaves the observed parent unmanaged", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  const updateComment = fixture.github.rest.issues.updateComment;
+  let updates = 0;
+  fixture.github.rest.issues.updateComment = async (params) => {
+    if (++updates >= 4) throw new Error("final state save failed");
+    return updateComment(params);
+  };
+
+  await assert.rejects(run(fixture, command("/review-tracker set bridge#8")), /final state save failed/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, alternate.issueId);
+  fixture.github.rest.issues.updateComment = updateComment;
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+  assert.equal(result.state.tasks.U_alice.attemptedParent, undefined);
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, false);
+  assert.match(result.warnings.at(-1), /interrupted sync.*left unmanaged/);
+});
+
+test("a hierarchy preflight save failure performs no parent I/O", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  const updateComment = fixture.github.rest.issues.updateComment;
+  let updates = 0;
+  fixture.github.rest.issues.updateComment = async (params) => {
+    if (++updates === 2) throw new Error("hierarchy preflight save failed");
+    return updateComment(params);
+  };
+  const reads = fixture.hierarchy.parentReads, detaches = fixture.hierarchy.detaches.length;
+
+  let result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /hierarchy preflight save failed/);
+  assert.equal(fixture.hierarchy.parentReads, reads);
+  assert.equal(fixture.hierarchy.detaches.length, detaches);
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, undefined);
+
+  fixture.github.rest.issues.updateComment = updateComment;
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, alternate.issueId);
+});
+
+test("an interrupted conflict cannot revive stale parent ownership", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  fixture.hierarchy.parents.set(101, { issueId: "I_manual", repository: "agglayer/manual", number: 99 });
+  const updateComment = fixture.github.rest.issues.updateComment;
+  let updates = 0;
+  fixture.github.rest.issues.updateComment = async (params) => {
+    if (++updates >= 3) throw new Error("conflict state save failed");
+    return updateComment(params);
+  };
+
+  await assert.rejects(run(fixture, command("/review-tracker set bridge#8")), /conflict state save failed/);
+  fixture.github.rest.issues.updateComment = updateComment;
+  fixture.hierarchy.parents.set(101, { issueId: "I_source", repository: "agglayer/agglayer", number: 7 });
+  const detaches = fixture.hierarchy.detaches.length;
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.match(result.errors[0], /after an interrupted sync/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+  assert.equal(fixture.hierarchy.detaches.length, detaches);
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+});
+
+test("a transferred review issue cannot be reparented with the organization token", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.github.issues.get(101).repository_url = "https://api.github.com/repos/agglayer/transferred";
+  fixture.project.find = async () => alternate;
+  const parentReads = fixture.hierarchy.parentReads;
+  const detaches = fixture.hierarchy.detaches.length;
+
+  const result = await run(fixture, command("/review-tracker set bridge#8"));
+  assert.match(result.errors[0], /not an authenticated tracker-owned issue/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+  assert.equal(fixture.hierarchy.parentReads, parentReads);
+  assert.equal(fixture.hierarchy.detaches.length, detaches);
+});
+
+test("an interrupted detach never removes a manually restored parent twice", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  await run(fixture, direct("opened"));
+  const updateComment = fixture.github.rest.issues.updateComment;
+  let updates = 0;
+  fixture.github.rest.issues.updateComment = async (params) => {
+    if (++updates >= 3) throw new Error("detach state save failed");
+    return updateComment(params);
+  };
+
+  await assert.rejects(run(fixture, command("/review-tracker none")), /detach state save failed/);
+  assert.equal(fixture.hierarchy.parents.has(101), false);
+  fixture.github.rest.issues.updateComment = updateComment;
+  fixture.hierarchy.parents.set(101, { issueId: "I_source", repository: "agglayer/agglayer", number: 7 });
+  const detaches = fixture.hierarchy.detaches.length;
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.match(result.errors[0], /after an interrupted sync/);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+  assert.equal(fixture.hierarchy.detaches.length, detaches);
 });
 
 test("a failed Project add preserves and retries the created review issue", async () => {
@@ -297,16 +748,20 @@ test("a failed Project add preserves and retries the created review issue", asyn
   fixture.github.rest.issues.create = async (params) => { calls.push("issue"); return createIssue(params); };
   const createComment = fixture.github.rest.issues.createComment;
   fixture.github.rest.issues.createComment = async (params) => { calls.push("state"); return createComment(params); };
+  const updateComment = fixture.github.rest.issues.updateComment;
+  fixture.github.rest.issues.updateComment = async (params) => { calls.push("state"); return updateComment(params); };
   const ensureIssue = fixture.project.ensureIssue.bind(fixture.project);
   fixture.project.ensureIssue = async (issue) => { calls.push("project"); return ensureIssue(issue); };
   fixture.project.ensureIssueFailures = 2;
 
   let result = await run(fixture, direct("opened"));
   assert.equal(result.errors.length, 2);
-  assert.deepEqual(calls.slice(0, 3), ["issue", "state", "project"]);
+  assert.deepEqual(calls.slice(0, 4), ["state", "issue", "state", "project"]);
   assert.equal(fixture.github.issues.size, 1);
   assert.deepEqual(result.state.tasks.U_alice, {
     login: "alice", issue: 101, pending: true, closedByPr: false, fulfilled: false,
+    hierarchyPending: false,
+    managedParent: { issueId: "I_source", repository: "agglayer/agglayer", number: 7 },
   });
   assert.match(fixture.github.comments[0].body, /@alice: \[#101\].*Project sync pending/);
 
@@ -437,7 +892,8 @@ test("legacy empty state recovers an unsigned orphan and replays its review", as
   assert.equal(fixture.project.status.get(201), "in-review");
   assert.equal(fixture.github.issues.get(101).state, "closed");
   assert.equal(result.state.tasks.U_alice.closedByPr, true);
-  assert.match(fixture.github.issues.get(101).body, new RegExp(taskMarker(config, 9, alice.node_id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  const issue = fixture.github.issues.get(101);
+  assert.match(issue.body, new RegExp(taskMarker(config, 9, alice.node_id, issue).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 test("legacy recovery rejects unsigned task issues outside its allowlist", async () => {
@@ -476,7 +932,8 @@ test("legacy recovery replays every consumed review for one task", async () => {
 test("current state recovers signed task markers but rejects unsigned ones", async () => {
   const alice = reviewer("alice");
   for (const [body, recovered] of [
-    [taskMarker(config, 9, alice.node_id), true],
+    [taskMarker(config, 9, alice.node_id, { id: 1102, node_id: "I_101", number: 101 }), true],
+    [signedTaskMarkerV1(9, alice.node_id), false],
     [legacyTaskMarker(9, alice.node_id), false],
   ]) {
     const fixture = createFixture([]);
@@ -488,6 +945,39 @@ test("current state recovers signed task markers but rejects unsigned ones", asy
     const result = await run(fixture, command("/review-tracker reconcile"));
     assert.equal(Boolean(result.state.tasks.U_alice), recovered);
   }
+});
+
+test("a mapped signed v1 task is upgraded to its issue-bound marker", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([]);
+  const { data: issue } = await fixture.github.rest.issues.create({
+    title: "Review PR #9", body: signedTaskMarkerV1(9, alice.node_id), assignees: [alice.login],
+  });
+  const state = emptyState(config, 9);
+  state.source = { none: true, via: "manual-none" };
+  state.tasks.U_alice = {
+    login: alice.login, issue: issue.number, item: 201, fulfilled: true,
+    closedByPr: false, hierarchyPending: true,
+  };
+  fixture.github.comments.push({ id: 1, user: { login: config.botLogin }, body: renderComment(config, state) });
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.match(issue.body, new RegExp(taskMarker(config, 9, alice.node_id, issue).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("recovery rejects a valid task marker copied onto another bot issue", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([alice]);
+  await fixture.github.rest.issues.create({ title: "Other bot issue", body: "Unrelated.", assignees: [alice.login] });
+  await run(fixture, direct("opened"));
+  fixture.github.issues.get(101).body = fixture.github.issues.get(102).body;
+  fixture.hierarchy.parents.clear();
+  const state = emptyState(config, 9);
+  state.source = { none: true, via: "manual-none" };
+  fixture.github.comments[0].body = renderComment(config, state);
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.tasks.U_alice.issue, 102);
 });
 
 test("failed inference preserves the current source and copied fields", async () => {
@@ -545,13 +1035,37 @@ test("a newly resolved source is copied to every existing review task", async ()
 });
 
 test("trusted commands use exact syntax", () => {
+  const current = { owner: "agglayer", repo: "agglayer" };
   assert.deepEqual(parseCommand("/review-tracker none"), { kind: "none" });
+  assert.deepEqual(parseCommand("/review-tracker set #7", current), {
+    kind: "set", repository: "agglayer/agglayer", number: 7,
+  });
+  assert.deepEqual(parseCommand("/review-tracker set bridge#7", current), {
+    kind: "set", repository: "agglayer/bridge", number: 7,
+  });
   assert.deepEqual(parseCommand("/review-tracker set agglayer/agglayer#7"), {
     kind: "set",
     repository: "agglayer/agglayer",
     number: 7,
   });
+  assert.deepEqual(parseCommand("/review-tracker set https://github.com/agglayer/agglayer/issues/7"), {
+    kind: "set", repository: "agglayer/agglayer", number: 7,
+  });
+  assert.throws(() => parseCommand("/review-tracker set #7"), /invalid/);
+  assert.throws(() => parseCommand(`/review-tracker set #${Number.MAX_SAFE_INTEGER + 1}`, current), /invalid/);
+  for (const body of ["/review-tracker set #0", "/review-tracker set #01", "/review-tracker set bridge/issues/7",
+    "/review-tracker set https://github.com/bridge#7", "/review-tracker set .#7",
+    "/review-tracker set agglayer/..#7", "/review-tracker set #7\n"])
+    assert.throws(() => parseCommand(body, current), /invalid/);
   assert.throws(() => parseCommand("please /review-tracker none"), /invalid/);
+});
+
+test("the set shorthand is resolved against the current PR repository", async () => {
+  const fixture = createFixture([]);
+  const result = await run(fixture, command("/review-tracker set #7"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.source.repository, "agglayer/agglayer");
+  assert.equal(result.state.source.number, 7);
 });
 
 test("invalid trusted commands are reported in the canonical comment", async () => {
@@ -597,6 +1111,7 @@ async function run(fixture, context, reviewId = null, eventAction = null) {
   const tracker = new Tracker({
     github: fixture.github,
     project: fixture.project,
+    hierarchy: fixture.hierarchy,
     config,
     context,
     core: fixture.core,
@@ -609,7 +1124,7 @@ async function run(fixture, context, reviewId = null, eventAction = null) {
 
 function createFixture(requested) {
   const github = new FakeGithub(requested);
-  return { github, project: new FakeProject(), core: { error() {} } };
+  return { github, project: new FakeProject(), hierarchy: new FakeHierarchy(), core: { error() {} } };
 }
 
 class FakeGithub {
@@ -620,6 +1135,8 @@ class FakeGithub {
     this.reviewReads = new Map();
     this.permission = "write";
     this.permissionReads = [];
+    this.issueGets = 0;
+    this.issueGetFailures = new Set();
     this.closing = [{ id: "I_source" }];
     this.pull = {
       number: 9,
@@ -654,11 +1171,16 @@ class FakeGithub {
           const number = 101 + this.issues.size;
           const issue = { id: 1001 + number, node_id: `I_${number}`, number, state: "open", ...params,
             assignees: (params.assignees ?? []).map(reviewer), user: { login: config.botLogin },
+            repository_url: `https://api.github.com/repos/${config.repository}`,
             created_at: "2026-01-01T00:00:00Z" };
           this.issues.set(number, issue);
           return { data: issue };
         },
-        get: async ({ issue_number }) => ({ data: this.issues.get(issue_number) }),
+        get: async ({ issue_number }) => {
+          if (this.issueGetFailures.has(++this.issueGets))
+            throw Object.assign(new Error("Child read failed"), { status: 503 });
+          return { data: this.issues.get(issue_number) };
+        },
         update: async ({ issue_number, ...changes }) => {
           if (changes.assignees) changes.assignees = changes.assignees.map(reviewer);
           Object.assign(this.issues.get(issue_number), changes);
@@ -742,6 +1264,58 @@ class FakeProject {
   }
 }
 
+class FakeHierarchy {
+  constructor() {
+    this.parents = new Map();
+    this.attaches = [];
+    this.detaches = [];
+    this.parentFailures = 0;
+    this.parentValidationFailures = 0;
+    this.attachFailures = 0;
+    this.attachPreflightFailures = 0;
+    this.detachFailures = 0;
+    this.detachPreparationFailures = 0;
+    this.attachResponseLosses = 0;
+    this.parentAfterDetach = null;
+    this.parentReads = 0;
+    this.onParentRead = null;
+  }
+
+  async parent(child) {
+    this.parentReads += 1;
+    if (this.parentFailures-- > 0)
+      throw new ParentReadError(Object.assign(new Error("Parent read failed"), { status: 503 }));
+    if (this.parentValidationFailures-- > 0) throw new Error("invalid live parent");
+    this.onParentRead?.(this.parentReads);
+    return this.parents.get(child.number) ?? null;
+  }
+
+  async attach(parent, child, replaceParent, authenticate) {
+    if (this.attachPreflightFailures-- > 0)
+      throw new AttachPreflightError(Object.assign(new Error("selected source was replaced"), { status: 404 }));
+    child = await authenticate();
+    if (this.attachFailures-- > 0) throw Object.assign(new Error("Parent add failed"), { status: 503 });
+    if (this.parents.has(child.number) && !replaceParent) throw new Error("replace_parent was required");
+    this.attaches.push({ parent, child, replaceParent });
+    this.parents.set(child.number, parent);
+    if (this.attachResponseLosses-- > 0) throw Object.assign(new Error("Parent add response was lost"), { status: 503 });
+  }
+
+  async detach(parent, child, authenticate) {
+    if (this.detachPreparationFailures-- > 0)
+      throw new ParentReadError(Object.assign(new Error("Live parent read failed"), { status: 503 }));
+    child = await authenticate();
+    if (this.detachFailures-- > 0) throw Object.assign(new Error("Parent removal failed"), { status: 503 });
+    assert.equal(this.parents.get(child.number)?.issueId, parent.issueId);
+    this.detaches.push({ parent, child });
+    this.parents.delete(child.number);
+    if (this.parentAfterDetach) {
+      this.parents.set(child.number, this.parentAfterDetach);
+      this.parentAfterDetach = null;
+    }
+  }
+}
+
 function sourceItem() {
   return {
     item: 10,
@@ -757,6 +1331,11 @@ function sourceItem() {
   };
 }
 
+function alternateSource() {
+  return { ...sourceItem(), item: 11, itemNode: "PVTI_alternate", issueId: "I_alternate",
+    repository: "agglayer/bridge", number: 8 };
+}
+
 function reviewer(login) {
   return { login, node_id: `U_${login}` };
 }
@@ -768,6 +1347,12 @@ function submitted(id, user, submittedAt) {
 function legacyTaskMarker(pr, reviewerId) {
   const payload = Buffer.from(JSON.stringify({ v: 1, repositoryId: config.repositoryId, pr, reviewerId })).toString("base64url");
   return `<!-- review-tracker-task:${payload} -->`;
+}
+
+function signedTaskMarkerV1(pr, reviewerId) {
+  const payload = Buffer.from(JSON.stringify({ v: 1, repositoryId: config.repositoryId, pr, reviewerId })).toString("base64url");
+  const signature = createHmac("sha256", config.projectsToken).update(payload).digest("base64url");
+  return `<!-- review-tracker-task:${payload}.${signature} -->`;
 }
 
 function direct(action, requestedReviewer = null, applyCurrent = true) {
