@@ -74,9 +74,15 @@ and synchronizations unless a maintainer has set the mapping explicitly.
 Removing a closing relationship, or making it ambiguous, preserves the previous mapping
 and does not resynchronize review issues; a trusted command can correct it.
 
-Otherwise, automatic Claude inference runs on the opening lifecycle signal only when the PR
-author has effective repository write permission. A trusted user can explicitly request it on
-any PR with an exact
+Otherwise, automatic Claude inference may run on any surviving lifecycle or review signal
+while the source is still unresolved, and only when the PR author has effective repository
+write permission.
+Gating on state instead of the exact opening signal matters because GitHub retains only one
+pending run per concurrency group, so the opening processor itself can be canceled.
+The persisted result, including an explicit `model-none` or `no-candidates` outcome,
+stops later events from spending further model calls.
+A skipped attempt is reported in the tracker comment, and a failed one is reported as an error.
+A trusted user can explicitly request inference on any PR with an exact
 `/review-tracker infer` comment. Claude Sonnet 5 at medium effort then receives every active
 Project issue assigned to the PR author, regardless of issue state or Status.
 For each candidate it receives the issue response, all issue comments, and configured Project
@@ -124,10 +130,14 @@ sanitized warnings and errors, and repeats these exact commands:
 /review-tracker none
 /review-tracker infer
 /review-tracker reconcile
+/review-tracker unmanage
 ```
 
 `#123` uses the current PR repository.
 `REPOSITORY#123` uses the current PR owner, and the fully qualified form remains available.
+`unmanage` relinquishes recorded parent provenance for every review task without touching any
+GitHub relationship; existing relationships become unmanaged.
+Use it when a recorded parent can no longer be read or verified.
 
 Only users with effective repository write permission reach the privileged command processor.
 The workflow author-association filter is an optimization, not the authorization boundary;
@@ -166,6 +176,10 @@ retryable operations are idempotent after GitHub returns an issue identity,
 and review IDs are caught up from the PR's submitted-review history.
 Commands are applied in increasing comment-ID order.
 A delayed older command therefore cannot replace a newer choice.
+Every run also scans the PR's comments for unprocessed commands newer than the recorded
+watermark and verifies each scanned author's effective write permission in-process,
+so a command whose own workflow run was canceled by GitHub's concurrency retention
+is applied by the next surviving event.
 The tracker saves a new issue's routing identity in the canonical comment before attempting a Project mutation.
 Failed Project attachment or field synchronization leaves the issue visible as pending,
 and a submitted review remains retryable until its recorded task is synchronized.
@@ -199,6 +213,15 @@ The tracker does not reconstruct deleted state comments or corrupted markers.
 `/review-tracker reconcile` recovers current issue-bound task markers and retries incomplete Project mutations.
 It also replays reviews consumed while the explicitly allowlisted legacy task was missing,
 reapplies copied fields, and converges task lifecycle from the PR's current state.
+A recovered task whose issue closed at or after the PR closure is treated as closed by the PR,
+so a replayed review restores its fulfillment and Project Status without reopening the issue.
+A replay against a task issue closed while its PR is open records the review with a warning
+instead of restoring fulfillment.
+A missing source Project item is reported against the source, not the task,
+and never discards the task's own Project routing.
+If a recorded parent can no longer be read or verified, parent synchronization reports the
+unverifiable provenance and keeps retrying without mutating anything;
+a trusted `/review-tracker unmanage` relinquishes that provenance.
 Changing a source after reviews have been processed likewise does not replay those reviews.
 There is no dedicated watcher for later source-field changes.
 Rotating `PROJECTS_TOKEN` invalidates existing state and task signatures

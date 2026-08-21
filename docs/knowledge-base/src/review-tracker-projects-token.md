@@ -146,6 +146,10 @@ After that command succeeds, run:
 
 Reconciliation should reuse issue 1747, attach or locate its existing Project item, synchronize
 its fields, and replay the already-submitted review.
+Because PR 1746 and issue 1747 are both already closed,
+the replay restores the review's recorded effects,
+including the task's fulfillment and Project Status,
+without reopening the closed issue.
 The tracker comment should report success, list issue 1747, and no longer show
 `Project sync pending`.
 

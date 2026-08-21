@@ -76,11 +76,41 @@ The deployed tracker limits use of that repository write permission as follows:
   neither confirmed nor in-flight signed provenance.
   Such an unexpected parent produces a visible error instead of being overwritten.
 - Parent and child repository owners must both be `agglayer`.
+- The choice of parent can originate from untrusted PR text:
+  a unique closing reference in the PR body or commits selects the source without a maintainer
+  command.
+  The reachable targets are bounded to active, non-generated Project 47 items owned by
+  `agglayer` that the PR author can already see,
+  a review task only exists after a maintainer requested a reviewer,
+  and an unrelated existing parent is never replaced or removed.
 - Creating and updating review-task issues and tracker comments in `agglayer/agglayer` continues to
   use the repository-scoped `GITHUB_TOKEN`, not `PROJECTS_TOKEN`.
 
 The incoming event is authorized before the trusted processing job receives the privileged PAT or Claude credential.
 Pull-request code never receives either secret.
+
+## Non-public parent visibility
+
+Review tasks are public `agglayer/agglayer` issues,
+while a selected source can live in an internal or private `agglayer` repository,
+so a sub-issue link routinely points from a public child to a non-public parent.
+
+Whether GitHub hides such a parent from unauthorized viewers was tested empirically on
+2026-08-21 with a public child issue linked under a private parent
+(`Ekleog-Polygon/tracker-visibility-test-child#1` under
+`Ekleog-Polygon/tracker-visibility-test-parent#1`):
+
+- Anonymous `GET /repos/OWNER/CHILD-REPOSITORY/issues/N/parent` returns
+  `404 No parent issue found`.
+- The anonymous issue timeline and event lists omit the `parent_issue_added` event entirely,
+  while an authorized viewer sees it.
+- The anonymous issue web page contains no reference to the parent repository or title.
+
+An authenticated owner request confirmed the relationship exists,
+so the redaction is GitHub-side filtering, not a missing link.
+GraphQL cannot be queried anonymously;
+the post-deploy validation below therefore asks a GitHub user outside the `agglayer`
+organization to confirm the same redaction for authenticated non-members.
 
 ## Edit the existing token
 
@@ -281,10 +311,30 @@ do not create a fake issue in a production repository.
 9. Repeat steps 6 and 7.
    The same task must still appear exactly once, with the same parent, and the tracker comment must
    contain no permission or parent-conflict error.
+10. When the source repository is internal or private, confirm from a terminal with no GitHub
+    credentials that the parent stays hidden:
+
+    ```bash
+    curl -s 'https://api.github.com/repos/agglayer/agglayer/issues/TASK-ISSUE/parent'
+    curl -s 'https://api.github.com/repos/agglayer/agglayer/issues/TASK-ISSUE/timeline?per_page=100'
+    ```
+
+    The first command must return `404` with `No parent issue found`,
+    and the second must omit every `parent_issue_added` event.
+    Ask a GitHub user outside the `agglayer` organization to repeat both reads with their own
+    credentials and to query the GraphQL `parent` field on the task issue;
+    all three must hide the parent.
+    If any surface exposes the parent's repository, number, or title,
+    remove the relationship with a trusted `/review-tracker none`,
+    restrict sources for non-public repositories to manual commands,
+    and notify repository maintainers before further hierarchy use.
 
 Stop validation and notify repository maintainers
 if the workflow returns `HTTP 403`, `HTTP 404`, or an unexpected-parent error.
 Do not broaden permissions further and do not manually replace the task's parent.
+If a recorded parent later becomes unreadable, for example after its repository is deleted or
+access is lost, the tracker reports the unverifiable provenance on every run;
+a trusted `/review-tracker unmanage` comment relinquishes it without touching the relationship.
 
 ## If the existing token cannot be edited
 
