@@ -1127,6 +1127,20 @@ where
                 CertificateSubmissionError::SignatureError(error)
             })?;
 
+        // Reserve the orchestrator notification slot before writing anything:
+        // the blocking task below owns the permit, so once persistence starts,
+        // dropping this future can no longer separate the RocksDB writes from
+        // the orchestrator notification.
+        let notification_permit = self
+            .certificate_sender
+            .clone()
+            .reserve_owned()
+            .await
+            .map_err(|error| {
+                error!("Failed to send certificate: {error}");
+                CertificateSubmissionError::OrchestratorNotResponsive
+            })?;
+
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
         let debug_store = self.debug_store.clone();
@@ -1149,18 +1163,12 @@ where
                 .add_certificate(&certificate)
                 .inspect_err(|e| error!("Failed to insert certificate into debug store: {e}"))?;
 
+            notification_permit.send(notification);
+
             Ok::<_, CertificateSubmissionError>(())
         })
         .await
         .expect("certificate persistence task panicked")?;
-
-        self.certificate_sender
-            .send(notification)
-            .await
-            .map_err(|error| {
-                error!("Failed to send certificate: {error}");
-                CertificateSubmissionError::OrchestratorNotResponsive
-            })?;
 
         Ok(hash)
     }
