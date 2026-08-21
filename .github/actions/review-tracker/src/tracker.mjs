@@ -120,7 +120,7 @@ export class Tracker {
     if (this.state.taskRecovery !== 1 || command?.kind === "reconcile")
       await this.capture("review task recovery", () => this.recoverTasks());
     const infer = command?.kind === "infer";
-    const authorCanInfer = event.kind === "lifecycle" && event.action === "opened" && await this.capture("PR author permission",
+    const authorCanInfer = !this.state.source && event.kind !== "command" && await this.capture("PR author permission",
       () => hasWriteAccess(this.github, this.context.repo, this.pull.user?.login)) === true;
     const refresh = event.kind === "lifecycle" && ["edited", "synchronize"].includes(event.action) &&
       !String(this.state.source?.via ?? "").startsWith("manual");
@@ -131,6 +131,8 @@ export class Tracker {
         pull: this.pull, pullComments: this.comments, allowModel: authorCanInfer || infer,
       }));
       if (selected) { this.state.source = selected; sourceChanged = true; }
+      else if (selected === null && !this.state.source) this.warnings.push(
+        "Automatic source inference is reserved for PR authors with write access; use /review-tracker set, none, or infer.");
     }
     await this.prepareHierarchy(sourceChanged, command?.kind === "reconcile");
     if (event.kind === "lifecycle" && lifecycleReady) {

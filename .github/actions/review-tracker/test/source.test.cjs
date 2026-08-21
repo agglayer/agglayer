@@ -103,7 +103,7 @@ test("no assigned candidates locks a null result without needing a key", async (
     github: fakeGithub([]), project: { items: async () => [item] }, config,
     pull: pull(), pullComments: [], anthropic: null, allowModel: true,
   });
-  assert.deepEqual(source, { none: true, via: "model-none" });
+  assert.deepEqual(source, { none: true, via: "no-candidates" });
 });
 
 test("Project items outside the configured owner never cause repository requests", async () => {
@@ -116,7 +116,7 @@ test("Project items outside the configured owner never cause repository requests
     },
     config, pull: pull(), pullComments: [], anthropic: null, allowModel: true,
   });
-  assert.deepEqual(source, { none: true, via: "model-none" });
+  assert.deepEqual(source, { none: true, via: "no-candidates" });
   assert.equal(conversations, 0);
 });
 

@@ -38889,7 +38889,7 @@ async function selectSource({ github, project, anthropic, config, pull, pullComm
   if (!allowModel) return null;
   const login = pull.user?.login?.toLowerCase();
   const candidates = items.filter((item) => item.assignees.some((user) => user.node_id === pull.user?.node_id || user.login?.toLowerCase() === login));
-  if (!candidates.length) return { none: true, via: "model-none" };
+  if (!candidates.length) return { none: true, via: "no-candidates" };
   const issueContexts = [];
   for (let offset = 0; offset < candidates.length; offset += 5) issueContexts.push(...await Promise.all(
     candidates.slice(offset, offset + 5).map((item) => issueContext(project.client, item))
@@ -39134,7 +39134,7 @@ var Tracker = class {
     if (this.state.taskRecovery !== 1 || command?.kind === "reconcile")
       await this.capture("review task recovery", () => this.recoverTasks());
     const infer = command?.kind === "infer";
-    const authorCanInfer = event.kind === "lifecycle" && event.action === "opened" && await this.capture(
+    const authorCanInfer = !this.state.source && event.kind !== "command" && await this.capture(
       "PR author permission",
       () => hasWriteAccess(this.github, this.context.repo, this.pull.user?.login)
     ) === true;
@@ -39152,7 +39152,9 @@ var Tracker = class {
       if (selected) {
         this.state.source = selected;
         sourceChanged = true;
-      }
+      } else if (selected === null && !this.state.source) this.warnings.push(
+        "Automatic source inference is reserved for PR authors with write access; use /review-tracker set, none, or infer."
+      );
     }
     await this.prepareHierarchy(sourceChanged, command?.kind === "reconcile");
     if (event.kind === "lifecycle" && lifecycleReady) {

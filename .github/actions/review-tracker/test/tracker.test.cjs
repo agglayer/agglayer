@@ -55,11 +55,45 @@ test("automatic inference requires author write access but trusted infer remains
 
   let result = await run(fixture, direct("opened"));
   assert.equal(result.state.source, null);
+  assert.match(result.warnings.at(-1), /reserved for PR authors/);
   assert.deepEqual(fixture.github.permissionReads, ["author"]);
 
   result = await run(fixture, command("/review-tracker infer"));
-  assert.deepEqual(result.state.source, { none: true, via: "model-none" });
+  assert.deepEqual(result.state.source, { none: true, via: "no-candidates" });
   assert.deepEqual(fixture.github.permissionReads, ["author"]);
+});
+
+test("a surviving lifecycle event runs one-shot inference when the opening signal was lost", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([alice]);
+  fixture.github.closing = [];
+  let modelCalls = 0;
+  fixture.anthropic = { messages: { create: async () => {
+    modelCalls += 1;
+    return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ issueId: "I_source" }) }] };
+  } } };
+
+  const result = await run(fixture, direct("review_requested", alice));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.source.via, "model");
+  assert.equal(modelCalls, 1);
+  assert.deepEqual(fixture.github.permissionReads, ["author"]);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+});
+
+test("a persisted model-none result is not re-spent on later events", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  fixture.github.closing = [];
+  let modelCalls = 0;
+  fixture.anthropic = { messages: { create: async () => {
+    modelCalls += 1;
+    return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ issueId: null }) }] };
+  } } };
+
+  let result = await run(fixture, direct("edited"));
+  assert.deepEqual(result.state.source, { none: true, via: "model-none" });
+  result = await run(fixture, direct("edited"));
+  assert.deepEqual(result.state.source, { none: true, via: "model-none" });
+  assert.equal(modelCalls, 1);
 });
 
 test("removal closes and re-request reopens the same issue at Ready", async () => {
@@ -1099,7 +1133,7 @@ test("failed inference preserves the current source and copied fields", async ()
   assert.match(result.errors[0], /inference unavailable/);
 });
 
-test("a later closing reference replaces a model-none mapping", async () => {
+test("a later closing reference replaces an inferred none mapping", async () => {
   const fixture = createFixture([reviewer("alice")]);
   fixture.github.closing = [];
   fixture.project.items = async () => {
@@ -1108,7 +1142,7 @@ test("a later closing reference replaces a model-none mapping", async () => {
     return [item];
   };
   let result = await run(fixture, direct("opened"));
-  assert.equal(result.state.source.via, "model-none");
+  assert.equal(result.state.source.via, "no-candidates");
   fixture.github.closing = [{ id: "I_source" }];
   fixture.project.items = async () => [sourceItem()];
   result = await run(fixture, direct("edited"));
@@ -1218,6 +1252,7 @@ async function run(fixture, context, reviewId = null, eventAction = null) {
     github: fixture.github,
     project: fixture.project,
     hierarchy: fixture.hierarchy,
+    anthropic: fixture.anthropic,
     config,
     context,
     core: fixture.core,
@@ -1244,6 +1279,7 @@ class FakeGithub {
     this.issueGets = 0;
     this.issueGetFailures = new Set();
     this.closing = [{ id: "I_source" }];
+    this.request = async () => ({ data: "diff --git a/old b/new" });
     this.pull = {
       number: 9,
       title: "Implement settlement safety",
@@ -1325,6 +1361,7 @@ class FakeGithub {
 
 class FakeProject {
   constructor() {
+    this.client = { rest: { issues: { listComments: "listComments" } }, paginate: async () => [] };
     this.status = new Map();
     this.issueItems = new Map();
     this.syncs = [];
