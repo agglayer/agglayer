@@ -39209,7 +39209,7 @@ var Tracker = class {
     let issue2, created = false;
     if (!task) {
       issue2 = (await this.taskIssues()).get(reviewer.node_id)?.issue;
-      if (issue2) task = recoveredTask(issue2, reviewer.login);
+      if (issue2) task = recoveredTask(issue2, reviewer.login, this.pull);
       else {
         ({ data: issue2 } = await this.github.rest.issues.create({
           ...issueData,
@@ -39280,7 +39280,7 @@ var Tracker = class {
         continue;
       }
       if (!this.state.tasks[reviewerId]) {
-        this.state.tasks[reviewerId] = recoveredTask(issue2, assignee.login);
+        this.state.tasks[reviewerId] = recoveredTask(issue2, assignee.login, this.pull);
         changed = true;
         await this.save();
       }
@@ -39299,7 +39299,7 @@ var Tracker = class {
   async recoverTask(reviewer) {
     const issue2 = (await this.taskIssues()).get(reviewer.node_id)?.issue;
     if (!issue2) return null;
-    const task = recoveredTask(issue2, reviewer.login);
+    const task = recoveredTask(issue2, reviewer.login, this.pull);
     this.state.tasks[reviewer.node_id] = task;
     await this.save();
     return task;
@@ -39721,9 +39721,10 @@ function taskMarker(config, pr, reviewerId, issue2) {
     issue: issue2.number
   }, config.projectsToken);
 }
-function recoveredTask(issue2, login) {
+function recoveredTask(issue2, login, pull) {
   const task = { login, issue: issue2.number, pending: true, hierarchyPending: true, closedByPr: false, fulfilled: false };
   if (issue2.created_at) task.replayAfter = issue2.created_at;
+  if (issue2.state === "closed" && pull?.closed_at && issue2.closed_at && Date.parse(issue2.closed_at) >= Date.parse(pull.closed_at)) task.closedByPr = true;
   return task;
 }
 function authenticatedChild2(config, pull, reviewerId, task, issue2) {

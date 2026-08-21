@@ -988,6 +988,33 @@ test("legacy recovery replays every consumed review for one task", async () => {
   assert.equal(result.state.tasks.U_alice.replayAfter, undefined);
 });
 
+test("legacy recovery replays a review for a closed orphan without reopening it", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([]);
+  const { data: issue } = await fixture.github.rest.issues.create({
+    title: "Review PR #9", body: legacyTaskMarker(9, alice.node_id), assignees: [alice.login],
+  });
+  issue.state = "closed";
+  issue.closed_at = "2026-01-02T01:00:00Z";
+  fixture.github.reviews.set("501", submitted("501", alice, "2026-01-01T01:00:00Z"));
+  const state = emptyState(config, 9);
+  state.source = sourceItem();
+  state.reviews = ["501"];
+  delete state.taskRecovery;
+  fixture.github.comments.push({ id: 1, user: { login: config.botLogin }, body: renderComment(config, state) });
+  fixture.github.pull.state = "closed";
+  fixture.github.pull.closed_at = "2026-01-02T00:00:00Z";
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.tasks.U_alice.fulfilled, true);
+  assert.equal(result.state.tasks.U_alice.closedByPr, true);
+  assert.equal(result.state.tasks.U_alice.reopenStatus, "in-review");
+  assert.equal(result.state.tasks.U_alice.replayAfter, undefined);
+  assert.equal(fixture.github.issues.get(101).state, "closed");
+  assert.equal(fixture.project.status.get(201), "in-review");
+  assert.deepEqual(fixture.project.sourceReviews, ["2026-01-01T01:00:00Z"]);
+});
+
 test("current state recovers signed task markers but rejects unsigned ones", async () => {
   const alice = reviewer("alice");
   for (const [body, recovered] of [

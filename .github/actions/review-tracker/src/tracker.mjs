@@ -175,7 +175,7 @@ export class Tracker {
     let issue, created = false;
     if (!task) {
       issue = (await this.taskIssues()).get(reviewer.node_id)?.issue;
-      if (issue) task = recoveredTask(issue, reviewer.login);
+      if (issue) task = recoveredTask(issue, reviewer.login, this.pull);
       else {
         ({ data: issue } = await this.github.rest.issues.create({ ...issueData,
           body: reviewIssueBody(this.config, this.pull, reviewer) }));
@@ -226,7 +226,7 @@ export class Tracker {
       const assignee = issue.assignees?.find(({ node_id }) => node_id === reviewerId);
       if (!assignee?.login) { this.warnings.push(`Could not recover review task #${issue.number}: its reviewer is no longer assigned.`); continue; }
       if (!this.state.tasks[reviewerId]) {
-        this.state.tasks[reviewerId] = recoveredTask(issue, assignee.login); changed = true; await this.save();
+        this.state.tasks[reviewerId] = recoveredTask(issue, assignee.login, this.pull); changed = true; await this.save();
       }
       if (entry.legacy) {
         ({ data: issue } = await this.github.rest.issues.update({
@@ -241,7 +241,7 @@ export class Tracker {
   async recoverTask(reviewer) {
     const issue = (await this.taskIssues()).get(reviewer.node_id)?.issue;
     if (!issue) return null;
-    const task = recoveredTask(issue, reviewer.login);
+    const task = recoveredTask(issue, reviewer.login, this.pull);
     this.state.tasks[reviewer.node_id] = task; await this.save();
     return task;
   }
@@ -570,9 +570,11 @@ export function taskMarker(config, pr, reviewerId, issue) {
   return encodeMarker("review-tracker-task", { v: 2, repositoryId: config.repositoryId, pr, reviewerId,
     issueDatabaseId: issue.id, issueNodeId: issue.node_id, issue: issue.number }, config.projectsToken);
 }
-function recoveredTask(issue, login) {
+function recoveredTask(issue, login, pull) {
   const task = { login, issue: issue.number, pending: true, hierarchyPending: true, closedByPr: false, fulfilled: false };
   if (issue.created_at) task.replayAfter = issue.created_at;
+  if (issue.state === "closed" && pull?.closed_at && issue.closed_at &&
+    Date.parse(issue.closed_at) >= Date.parse(pull.closed_at)) task.closedByPr = true;
   return task;
 }
 function authenticatedChild(config, pull, reviewerId, task, issue) {
