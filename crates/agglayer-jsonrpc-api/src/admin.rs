@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agglayer_config::Config;
 use agglayer_settlement_service::SettlementService;
 use agglayer_storage::stores::{
+    async_api::{AsyncPendingCertificateWriterExt, AsyncStateReaderExt, AsyncStateWriterExt},
     DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
     SettlementWriter, StateReader, StateWriter,
 };
@@ -488,35 +489,29 @@ where
             .layer(middleware))
     }
 
-    fn read_settlement_job(
-        &self,
+    fn read_settlement_job_blocking(
+        state: &StateStore,
+        settlement_service: &SettlementService<L1Provider, StateStore>,
         job_id: SettlementJobId,
     ) -> eyre::Result<Option<SettlementJobDetail>> {
-        let Some(job) = self
-            .state
+        let Some(job) = state
             .get_settlement_job(&job_id)
             .wrap_err_with(|| format!("Failed to read settlement job {job_id}"))?
         else {
             return Ok(None);
         };
-        let job_result = self
-            .state
-            .get_settlement_job_result(&job_id)
-            .wrap_err_with(|| {
-                format!("Failed to read terminal result for settlement job {job_id}")
-            })?;
-        let attempts = self
-            .state
+        let job_result = state.get_settlement_job_result(&job_id).wrap_err_with(|| {
+            format!("Failed to read terminal result for settlement job {job_id}")
+        })?;
+        let attempts = state
             .list_settlement_attempts(&job_id)
             .wrap_err_with(|| format!("Failed to list attempts for settlement job {job_id}"))?;
-        let attempt_results = self
-            .state
+        let attempt_results = state
             .list_settlement_attempt_results(&job_id)
             .wrap_err_with(|| {
                 format!("Failed to list attempt results for settlement job {job_id}")
             })?;
-        let certificate_id = self
-            .state
+        let certificate_id = state
             .get_settlement_job_certificate_id(&job_id)
             .wrap_err_with(|| {
                 format!("Failed to read certificate link for settlement job {job_id}")
@@ -535,7 +530,7 @@ where
         Ok(Some(SettlementJobDetail {
             job_id,
             certificate_id,
-            has_live_task: self.settlement_service.has_live_task(job_id),
+            has_live_task: settlement_service.has_live_task(job_id),
             status: if job_result.is_some() {
                 SettlementJobStatus::Completed
             } else {
@@ -549,18 +544,6 @@ where
             job_result: job_result.as_ref().map(SettlementJobResultDto::from),
             last_error: render_last_error(&attempt_results),
         }))
-    }
-
-    fn read_settlement_job_summaries(&self) -> eyre::Result<Vec<SettlementJobSummary>> {
-        let job_ids = self
-            .state
-            .list_settlement_job_ids()
-            .wrap_err("Failed to scan settlement job ids")?;
-
-        Ok(job_ids
-            .into_iter()
-            .map(|job_id| summarize_settlement_job(job_id, self.read_settlement_job(job_id)))
-            .collect())
     }
 }
 
@@ -604,38 +587,41 @@ where
         network_id: NetworkId,
         token_info: Option<TokenInfo>,
     ) -> RpcResult<GetTokenBalanceResponse> {
-        let Some(balance_tree) = self
-            .state
-            .read_local_network_state(network_id)
-            .map_err(|error| {
-                error!(?error, "Failed to read the balance tree");
-                Error::internal("Unable to read the balance tree")
-            })?
-            .map(|s| BalanceTree(s.balance_tree))
-        else {
-            return Ok(GetTokenBalanceResponse { balances: vec![] }); // empty balances, not an error
-        };
-
-        // get the balance of a given token, or return all of them
-        let balances: Vec<TokenBalanceEntry> = if let Some(token_info) = token_info {
-            let amount = balance_tree.get_balance(token_info);
-            vec![TokenBalanceEntry {
-                origin_network: token_info.origin_network,
-                origin_token_address: token_info.origin_token_address,
-                amount,
-            }]
-        } else {
-            balance_tree
-                .get_all_balances()
+        let state = self.state.clone();
+        tokio::task::spawn_blocking(move || {
+            let Some(balance_tree) = state
+                .read_local_network_state(network_id)
                 .map_err(|error| {
-                    error!(?error, "Failed to get all balances");
-                    Error::internal("Unable to get all balances")
+                    error!(?error, "Failed to read the balance tree");
+                    Error::internal("Unable to read the balance tree")
                 })?
-                .map(TokenBalanceEntry::from)
-                .collect()
-        };
+                .map(|s| BalanceTree(s.balance_tree))
+            else {
+                return Ok(GetTokenBalanceResponse { balances: vec![] });
+            };
 
-        Ok(GetTokenBalanceResponse { balances })
+            let balances: Vec<TokenBalanceEntry> = if let Some(token_info) = token_info {
+                let amount = balance_tree.get_balance(token_info);
+                vec![TokenBalanceEntry {
+                    origin_network: token_info.origin_network,
+                    origin_token_address: token_info.origin_token_address,
+                    amount,
+                }]
+            } else {
+                balance_tree
+                    .get_all_balances()
+                    .map_err(|error| {
+                        error!(?error, "Failed to get all balances");
+                        Error::internal("Unable to get all balances")
+                    })?
+                    .map(TokenBalanceEntry::from)
+                    .collect()
+            };
+
+            Ok(GetTokenBalanceResponse { balances })
+        })
+        .await
+        .expect("admin token-balance query task panicked")
     }
 
     #[instrument(skip(self))]
@@ -643,9 +629,10 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<(Certificate, Option<CertificateHeader>)> {
-        match self.debug_store.get_certificate(&certificate_id) {
-            Ok(Some(cert)) => match self
-                .state
+        let debug_store = self.debug_store.clone();
+        let state = self.state.clone();
+        tokio::task::spawn_blocking(move || match debug_store.get_certificate(&certificate_id) {
+            Ok(Some(cert)) => match state
                 .get_certificate_header(&certificate_id)
                 .map(|header| (cert, header))
             {
@@ -663,7 +650,9 @@ where
 
                 Err(Error::internal("Unable to get certificate"))
             }
-        }
+        })
+        .await
+        .expect("admin certificate query task panicked")
     }
 
     #[instrument(skip(self), fields(certificate_id = %certificate.hash()))]
@@ -676,40 +665,43 @@ where
             "(ADMIN) Forcing push of pending certificate: {}",
             certificate.hash()
         );
-        let header = self
-            .state
-            .get_certificate_header(&certificate.hash())
-            .map_err(|error| {
-                error!(?error, "Failed to get certificate header");
-                Error::internal("Unable to get certificate header")
-            })?;
-        if let Some(header) = header {
-            if header.status == CertificateStatus::Settled {
-                return Err(Error::InvalidArgument(
-                    "Cannot change status of a settled certificate".to_string(),
-                ));
-            }
-        }
-        match self.pending_store.insert_pending_certificate(
-            certificate.network_id,
-            certificate.height,
-            &certificate,
-        ) {
-            Ok(_) => match self
-                .state
-                .update_certificate_header_status(&certificate.hash(), &status)
-            {
-                Ok(_) => Ok(()),
-                Err(error) => {
-                    error!("Failed to insert certificate header: {}", error);
-                    Err(Error::internal("Unable to insert certificate header"))
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+        tokio::task::spawn_blocking(move || {
+            let header = state
+                .get_certificate_header(&certificate.hash())
+                .map_err(|error| {
+                    error!(?error, "Failed to get certificate header");
+                    Error::internal("Unable to get certificate header")
+                })?;
+            if let Some(header) = header {
+                if header.status == CertificateStatus::Settled {
+                    return Err(Error::InvalidArgument(
+                        "Cannot change status of a settled certificate".to_string(),
+                    ));
                 }
-            },
-            Err(error) => {
-                error!("Failed to insert pending certificate: {}", error);
-                Err(Error::internal("Unable to insert pending certificate"))
             }
-        }
+            match pending_store.insert_pending_certificate(
+                certificate.network_id,
+                certificate.height,
+                &certificate,
+            ) {
+                Ok(_) => match state.update_certificate_header_status(&certificate.hash(), &status)
+                {
+                    Ok(_) => Ok(()),
+                    Err(error) => {
+                        error!("Failed to insert certificate header: {}", error);
+                        Err(Error::internal("Unable to insert certificate header"))
+                    }
+                },
+                Err(error) => {
+                    error!("Failed to insert pending certificate: {}", error);
+                    Err(Error::internal("Unable to insert pending certificate"))
+                }
+            }
+        })
+        .await
+        .expect("admin force-push task panicked")
     }
 
     #[instrument(skip(self))]
@@ -784,63 +776,70 @@ where
             .map(|op_str| Operation::parse(&op_str))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let header = self
-            .state
-            .get_certificate_header(&certificate_id)
-            .map_err(|error| {
-                error!(?error, "Failed to get certificate header");
-                Error::internal("Unable to get certificate header")
-            })?
-            .ok_or_else(|| {
-                error!("Certificate header not found");
-                Error::ResourceNotFound(format!("CertificateHeader({certificate_id})"))
-            })?;
+        let state = self.state.clone();
+        let header = tokio::task::spawn_blocking(move || {
+            let header = state
+                .get_certificate_header(&certificate_id)
+                .map_err(|error| {
+                    error!(?error, "Failed to get certificate header");
+                    Error::internal("Unable to get certificate header")
+                })?
+                .ok_or_else(|| {
+                    error!("Certificate header not found");
+                    Error::ResourceNotFound(format!("CertificateHeader({certificate_id})"))
+                })?;
 
-        if header.status == CertificateStatus::Settled {
-            return Err(Error::InvalidArgument(
-                "Cannot edit a settled certificate".to_string(),
-            ));
-        }
+            if header.status == CertificateStatus::Settled {
+                return Err(Error::InvalidArgument(
+                    "Cannot edit a settled certificate".to_string(),
+                ));
+            }
 
-        // Check that the current values match the "from" value
-        for operation in operations.iter() {
-            match operation {
-                Operation::SetStatus { from, to: _ } => {
-                    // Ensure that the original status is the one described in `from=`.
-                    // However, for InError status, the `from=` does not contain the error message.
-                    // So, we match it separately, and we do not verify the current error message if
-                    // we had `set-status,from=InError,to=*`
-                    if &header.status != from
-                        && !matches!(
-                            (&header.status, &from),
-                            (
-                                &CertificateStatus::InError { .. },
-                                &CertificateStatus::InError { .. }
+            // Check that the current values match the "from" value
+            for operation in operations.iter() {
+                match operation {
+                    Operation::SetStatus { from, to: _ } => {
+                        // Ensure that the original status is the one described in `from=`.
+                        // However, for InError status, the `from=` does not contain the error
+                        // message. So, we match it separately, and we do not verify the current
+                        // error message if we had `set-status,from=InError,to=*`.
+                        if &header.status != from
+                            && !matches!(
+                                (&header.status, &from),
+                                (
+                                    &CertificateStatus::InError { .. },
+                                    &CertificateStatus::InError { .. }
+                                )
                             )
-                        )
-                    {
-                        return Err(Error::InvalidArgument(format!(
-                            "Current status ({:?}) does not match expected 'from' status ({:?})",
-                            header.status, from
-                        )));
+                        {
+                            return Err(Error::InvalidArgument(format!(
+                                "Current status ({:?}) does not match expected 'from' status \
+                                 ({:?})",
+                                header.status, from
+                            )));
+                        }
                     }
                 }
             }
-        }
 
-        // Now, actually apply the operations
-        for operation in operations {
-            match operation {
-                Operation::SetStatus { from: _, to } => {
-                    self.state
-                        .update_certificate_header_status(&certificate_id, &to)
-                        .map_err(|error| {
-                            error!(?error, ?to, "Failed to update certificate status");
-                            Error::internal("Unable to update certificate status")
-                        })?;
+            // Now, actually apply the operations
+            for operation in operations {
+                match operation {
+                    Operation::SetStatus { from: _, to } => {
+                        state
+                            .update_certificate_header_status(&certificate_id, &to)
+                            .map_err(|error| {
+                                error!(?error, ?to, "Failed to update certificate status");
+                                Error::internal("Unable to update certificate status")
+                            })?;
+                    }
                 }
             }
-        }
+
+            Ok::<_, Error>(header)
+        })
+        .await
+        .expect("admin certificate-edit task panicked")?;
 
         // Finally, if requested, reprocess the certificate
         if process_now == ProcessNow::True {
@@ -862,35 +861,35 @@ where
             "(ADMIN) Setting latest pending certificate: {}",
             certificate_id
         );
-        let certificate = if let Some(certificate) = self
-            .state
-            .get_certificate_header(&certificate_id)
-            .map_err(|error| {
-                error!("Failed to get certificate header: {}", error);
-                Error::internal("Unable to get certificate header")
-            })? {
-            certificate
-        } else {
-            return Err(Error::ResourceNotFound(format!(
-                "CertificateHeader({certificate_id})"
-            )));
-        };
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+        tokio::task::spawn_blocking(move || {
+            let certificate = if let Some(certificate) = state
+                .get_certificate_header(&certificate_id)
+                .map_err(|error| {
+                    error!("Failed to get certificate header: {}", error);
+                    Error::internal("Unable to get certificate header")
+                })? {
+                certificate
+            } else {
+                return Err(Error::ResourceNotFound(format!(
+                    "CertificateHeader({certificate_id})"
+                )));
+            };
 
-        match self
-            .pending_store
-            .set_latest_pending_certificate_per_network(
-                &certificate.network_id,
-                &certificate.height,
-                &certificate.certificate_id,
-            ) {
-            Ok(_) => Ok(()),
-            Err(error) => {
-                error!("Failed to update latest pending certificate: {}", error);
-                Err(Error::internal(
-                    "Unable to update latest pending certificate",
-                ))
-            }
-        }
+            pending_store
+                .set_latest_pending_certificate_per_network(
+                    &certificate.network_id,
+                    &certificate.height,
+                    &certificate.certificate_id,
+                )
+                .map_err(|error| {
+                    error!("Failed to update latest pending certificate: {}", error);
+                    Error::internal("Unable to update latest pending certificate")
+                })
+        })
+        .await
+        .expect("admin latest-pending update task panicked")
     }
 
     #[instrument(skip(self))]
@@ -899,35 +898,35 @@ where
             "(ADMIN) Setting latest proven certificate: {}",
             certificate_id
         );
-        let certificate = if let Some(certificate) = self
-            .state
-            .get_certificate_header(&certificate_id)
-            .map_err(|error| {
-                error!("Failed to get certificate header: {}", error);
-                Error::internal("Unable to get certificate header")
-            })? {
-            certificate
-        } else {
-            return Err(Error::ResourceNotFound(format!(
-                "CertificateHeader({certificate_id})"
-            )));
-        };
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+        tokio::task::spawn_blocking(move || {
+            let certificate = if let Some(certificate) = state
+                .get_certificate_header(&certificate_id)
+                .map_err(|error| {
+                    error!("Failed to get certificate header: {}", error);
+                    Error::internal("Unable to get certificate header")
+                })? {
+                certificate
+            } else {
+                return Err(Error::ResourceNotFound(format!(
+                    "CertificateHeader({certificate_id})"
+                )));
+            };
 
-        match self
-            .pending_store
-            .set_latest_proven_certificate_per_network(
-                &certificate.network_id,
-                &certificate.height,
-                &certificate.certificate_id,
-            ) {
-            Ok(_) => Ok(()),
-            Err(error) => {
-                error!("Failed to update latest proven certificate: {}", error);
-                Err(Error::internal(
-                    "Unable to update latest proven certificate",
-                ))
-            }
-        }
+            pending_store
+                .set_latest_proven_certificate_per_network(
+                    &certificate.network_id,
+                    &certificate.height,
+                    &certificate.certificate_id,
+                )
+                .map_err(|error| {
+                    error!("Failed to update latest proven certificate: {}", error);
+                    Error::internal("Unable to update latest proven certificate")
+                })
+        })
+        .await
+        .expect("admin latest-proven update task panicked")
     }
 
     #[instrument(skip(self))]
@@ -935,7 +934,8 @@ where
         warn!("(ADMIN) Removing pending proof: {}", certificate_id);
 
         self.pending_store
-            .remove_generated_proof(&certificate_id)
+            .remove_generated_proof_async(certificate_id)
+            .await
             .map_err(|error| {
                 error!("Failed to remove generated proof: {}", error);
                 Error::internal("Unable to remove generated proof")
@@ -953,71 +953,82 @@ where
             "(ADMIN) Removing pending certificate for network {} at height {}",
             network_id, height
         );
-        let certificate_id = if let Some(certificate) = self
-            .pending_store
-            .get_certificate(network_id, height)
-            .map_err(|error| {
-                error!("Failed to get pending certificate: {}", error);
-                Error::internal("Unable to get pending certificate")
-            })? {
-            certificate.hash()
-        } else {
-            return Err(Error::ResourceNotFound(format!(
-                "PendingCertificate({network_id:?}, {height:?})",
-            )));
-        };
-        tracing::Span::current().record("certificate_id", certificate_id.to_string());
-
-        self.pending_store
-            .remove_pending_certificate(network_id, height)
-            .map_err(|error| {
-                error!("Failed to remove pending certificate: {error}");
-                Error::internal("Unable to remove pending certificate")
-            })?;
-
-        // Update certificate status to InError in the state store
-        let error_status = CertificateStatus::error(CertificateStatusError::InternalError(
-            "Certificate removed from pending store by administrator".to_string(),
-        ));
-        self.state
-            .update_certificate_header_status(&certificate_id, &error_status)
-            .map_err(|error| {
-                error!(
-                    ?error,
-                    "Failed to update certificate status in the state store on pending removal"
-                );
-                Error::internal(format!(
-                    "Unable to update certificate_id: {certificate_id} status in the state store \
-                     on pending removal"
-                ))
-            })?;
-
-        if remove_proof {
-            self.pending_store
-                .remove_generated_proof(&certificate_id)
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+        let certificate_id = tokio::task::spawn_blocking(move || {
+            let certificate_id = if let Some(certificate) = pending_store
+                .get_certificate(network_id, height)
                 .map_err(|error| {
-                    error!(?error, "Failed to remove generated proof");
+                    error!("Failed to get pending certificate: {}", error);
+                    Error::internal("Unable to get pending certificate")
+                })? {
+                certificate.hash()
+            } else {
+                return Err(Error::ResourceNotFound(format!(
+                    "PendingCertificate({network_id:?}, {height:?})",
+                )));
+            };
+
+            pending_store
+                .remove_pending_certificate(network_id, height)
+                .map_err(|error| {
+                    error!("Failed to remove pending certificate: {error}");
+                    Error::internal("Unable to remove pending certificate")
+                })?;
+
+            let error_status = CertificateStatus::error(CertificateStatusError::InternalError(
+                "Certificate removed from pending store by administrator".to_string(),
+            ));
+            state
+                .update_certificate_header_status(&certificate_id, &error_status)
+                .map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to update certificate status in the state store on pending removal"
+                    );
                     Error::internal(format!(
-                        "Failed to remove generated proof for certificate_id: {certificate_id}"
+                        "Unable to update certificate_id: {certificate_id} status in the state \
+                         store on pending removal"
                     ))
                 })?;
-        }
+
+            if remove_proof {
+                pending_store
+                    .remove_generated_proof(&certificate_id)
+                    .map_err(|error| {
+                        error!(?error, "Failed to remove generated proof");
+                        Error::internal(format!(
+                            "Failed to remove generated proof for certificate_id: {certificate_id}"
+                        ))
+                    })?;
+            }
+
+            Ok::<_, Error>(certificate_id)
+        })
+        .await
+        .expect("admin pending-certificate removal task panicked")?;
+
+        tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
         Ok(())
     }
 
     #[instrument(skip(self))]
     async fn get_disabled_networks(&self) -> RpcResult<Vec<NetworkId>> {
-        self.state.get_disabled_networks().map_err(|error| {
-            error!(?error, "Failed to get disabled networks");
-            Error::internal("Unable to get disabled networks")
-        })
+        self.state
+            .get_disabled_networks_async()
+            .await
+            .map_err(|error| {
+                error!(?error, "Failed to get disabled networks");
+                Error::internal("Unable to get disabled networks")
+            })
     }
 
     #[instrument(skip(self))]
     async fn disable_network(&self, network_id: NetworkId) -> RpcResult<()> {
         self.state
-            .disable_network(&network_id, agglayer_types::network_info::DisabledBy::Admin)
+            .disable_network_async(network_id, agglayer_types::network_info::DisabledBy::Admin)
+            .await
             .map_err(|error| {
                 error!(?error, "Failed to disable network {network_id}");
                 Error::internal(format!("Unable to disable network {network_id}"))
@@ -1026,10 +1037,13 @@ where
 
     #[instrument(skip(self))]
     async fn enable_network(&self, network_id: NetworkId) -> RpcResult<()> {
-        self.state.enable_network(&network_id).map_err(|error| {
-            error!(?error, "Failed to enable network {network_id}");
-            Error::internal(format!("Unable to enable network {network_id}"))
-        })
+        self.state
+            .enable_network_async(network_id)
+            .await
+            .map_err(|error| {
+                error!(?error, "Failed to enable network {network_id}");
+                Error::internal(format!("Unable to enable network {network_id}"))
+            })
     }
 
     #[instrument(skip(self))]
@@ -1053,21 +1067,49 @@ where
     #[instrument(skip(self))]
     async fn list_settlement_jobs(&self) -> RpcResult<Vec<SettlementJobSummary>> {
         debug!("Listing settlement jobs");
-        self.read_settlement_job_summaries()
-            .map_err(map_admin_error)
+        let state = self.state.clone();
+        let settlement_service = self.settlement_service.clone();
+        tokio::task::spawn_blocking(move || -> eyre::Result<_> {
+            let job_ids = state
+                .list_settlement_job_ids()
+                .wrap_err("Failed to scan settlement job ids")?;
+
+            Ok(job_ids
+                .into_iter()
+                .map(|job_id| {
+                    summarize_settlement_job(
+                        job_id,
+                        Self::read_settlement_job_blocking(
+                            state.as_ref(),
+                            &settlement_service,
+                            job_id,
+                        ),
+                    )
+                })
+                .collect())
+        })
+        .await
+        .expect("admin settlement-job list task panicked")
+        .map_err(map_admin_error)
     }
 
     #[instrument(skip(self))]
     async fn get_settlement_job(&self, job_id: SettlementJobId) -> RpcResult<SettlementJobDetail> {
         debug!("Reading settlement job {job_id}");
-        self.read_settlement_job(job_id)
-            .and_then(|job| {
-                job.ok_or_else(|| {
-                    eyre::eyre!("No settlement job found for id {job_id}")
-                        .wrap_err(RpcErrorCode::NotFound)
-                })
+        let state = self.state.clone();
+        let settlement_service = self.settlement_service.clone();
+        tokio::task::spawn_blocking(move || {
+            Self::read_settlement_job_blocking(state.as_ref(), &settlement_service, job_id)
+        })
+        .await
+        .expect("admin settlement-job query task panicked")
+        .and_then(|job| {
+            job.ok_or_else(|| {
+                eyre::eyre!("No settlement job found for id {job_id}")
+                    .wrap_err(RpcErrorCode::NotFound)
             })
-            .map_err(map_admin_error)
+        })
+        .map_err(map_admin_error)
     }
 
     #[instrument(skip(self))]

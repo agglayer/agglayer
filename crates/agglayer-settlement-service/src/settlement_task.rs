@@ -9,7 +9,10 @@ use agglayer_config::{
     settlement_service::{SettlementPolicy, SettlementTransactionConfig},
     Multiplier,
 };
-use agglayer_storage::stores::{SettlementReader, SettlementWriter};
+use agglayer_storage::stores::{
+    async_api::{AsyncSettlementReaderExt as _, AsyncSettlementWriterExt as _},
+    SettlementReader, SettlementWriter,
+};
 use agglayer_telemetry::settlement::{
     record_settlement_attempt, record_settlement_attempt_error, record_settlement_job_duration,
     SettlementAttemptErrorKind, SettlementAttemptKind, SettlementJobOutcome,
@@ -449,7 +452,7 @@ async fn resolve_settlement_gas_limit<P: Provider + WalletProvider>(
 
 impl<
         L1Provider: Provider + WalletProvider + 'static,
-        SettlementStore: SettlementReader + SettlementWriter,
+        SettlementStore: SettlementReader + SettlementWriter + 'static,
     > SettlementTask<L1Provider, SettlementStore>
 {
     pub async fn create(
@@ -472,13 +475,10 @@ impl<
         // Persist the job and its certificate links in a single atomic write so a
         // crash can never leave a certificate pointing at a job that was never
         // saved.
-        match certificate_id {
-            Some(certificate_id) => {
-                store.insert_settlement_job_with_certificate(&id, &job, &certificate_id)
-            }
-            None => store.insert_settlement_job(&id, &job),
-        }
-        .wrap_err_with(|| format!("Failed to persist settlement job {id}"))?;
+        let job = store
+            .insert_settlement_job_async(id, job, certificate_id)
+            .await
+            .wrap_err_with(|| format!("Failed to persist settlement job {id}"))?;
         let this = Self {
             id,
             job,
@@ -533,21 +533,25 @@ impl<
         store: Arc<SettlementStore>,
         wallet_nonce_locks: Arc<WalletNonceLocks>,
     ) -> eyre::Result<RecoveredSettlementJob<L1Provider, SettlementStore>> {
-        match Self::load_settlement_job_from_db(store.as_ref(), id).await? {
-            (_job, Some(result)) => Ok(RecoveredSettlementJob::Completed(result)),
-            (job, None) => {
-                let attempts = Self::load_settlement_attempts_from_store(store.as_ref(), id)?;
-                Ok(RecoveredSettlementJob::Pending(PendingSettlementJob {
-                    id,
-                    job,
-                    tx_config,
-                    provider,
-                    store,
-                    wallet_nonce_locks,
-                    attempts,
-                }))
+        tokio::task::spawn_blocking(move || -> eyre::Result<_> {
+            match Self::load_settlement_job_from_db(store.as_ref(), id)? {
+                (_job, Some(result)) => Ok(RecoveredSettlementJob::Completed(result)),
+                (job, None) => {
+                    let attempts = Self::load_settlement_attempts_from_store(store.as_ref(), id)?;
+                    Ok(RecoveredSettlementJob::Pending(PendingSettlementJob {
+                        id,
+                        job,
+                        tx_config,
+                        provider,
+                        store,
+                        wallet_nonce_locks,
+                        attempts,
+                    }))
+                }
             }
-        }
+        })
+        .await
+        .expect("settlement-job hydration task panicked")
     }
 
     pub async fn run(&mut self) -> SettlementTaskRunResult {
@@ -868,7 +872,8 @@ impl<
         attempt_kind: SettlementAttemptKind,
         tx: TxEnvelope,
     ) -> Option<SettlementTaskRunResult> {
-        self.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
+        self.save_attempt_to_db(wallet, nonce, attempt_number, &tx)
+            .await;
         // The nonce is recorded; other same-wallet tasks may now read it.
         drop(nonce_guard);
         record_settlement_attempt(attempt_kind);
@@ -1075,14 +1080,16 @@ impl<
                 .await?,
         );
 
-        let Some(max_local_nonce) = self
+        let max_local_nonce = self
             .store
-            .max_settlement_nonce_for_wallet(wallet.into())
+            .max_settlement_nonce_for_wallet_async(wallet.into())
+            .await
             .wrap_err_with(|| {
                 format!("Failed to inspect recorded settlement attempts for wallet {wallet}")
             })
-            .map_err(BuildAttemptError::NonceAssignment)?
-        else {
+            .map_err(BuildAttemptError::NonceAssignment)?;
+
+        let Some(max_local_nonce) = max_local_nonce else {
             return Ok(l1_nonce);
         };
 
@@ -1605,7 +1612,7 @@ impl<
         submission
     }
 
-    async fn load_settlement_job_from_db(
+    fn load_settlement_job_from_db(
         store: &SettlementStore,
         id: SettlementJobId,
     ) -> eyre::Result<(SettlementJob, Option<SettlementJobResult>)> {
@@ -1638,7 +1645,7 @@ impl<
         hydrate_settlement_attempts(attempts, results, id)
     }
 
-    fn save_attempt_to_db(
+    async fn save_attempt_to_db(
         &mut self,
         wallet: Address,
         nonce: Nonce,
@@ -1664,8 +1671,10 @@ impl<
             max_priority_fee_per_gas: tx.max_priority_fee_per_gas().unwrap_or(0),
         };
 
-        self.store
-            .insert_settlement_attempt(&self.id, attempt_number.0, &settlement_attempt)
+        let settlement_attempt = self
+            .store
+            .insert_settlement_attempt_async(self.id, attempt_number.0, settlement_attempt)
+            .await
             .unwrap_or_else(|error| {
                 panic!(
                     "Failed to write settlement attempt for job {} attempt {}: {error:?}",
@@ -1697,7 +1706,8 @@ impl<
         self.record_attempt_result_to_db(
             attempt_number,
             SettlementAttemptResult::ClientError(result),
-        );
+        )
+        .await;
     }
 
     async fn write_nonce_revert_to_db(
@@ -1718,14 +1728,16 @@ impl<
         self.record_attempt_result_to_db(
             attempt_number,
             SettlementAttemptResult::ContractCall(result),
-        );
+        )
+        .await;
 
         self.record_nonce_already_used_attempts_to_db(
             wallet,
             nonce,
             included_tx_hash,
             Some(attempt_number),
-        );
+        )
+        .await;
     }
 
     async fn write_nonce_used_externally_to_db(
@@ -1734,7 +1746,11 @@ impl<
         nonce: Nonce,
         tx_hash: SettlementTxHash,
     ) {
-        if self.record_nonce_already_used_attempts_to_db(wallet, nonce, tx_hash, None) == 0 {
+        if self
+            .record_nonce_already_used_attempts_to_db(wallet, nonce, tx_hash, None)
+            .await
+            == 0
+        {
             panic!(
                 "Settlement task {} tried to record external nonce use for unknown nonce \
                  {wallet}/{nonce}",
@@ -1743,7 +1759,7 @@ impl<
         }
     }
 
-    fn record_nonce_already_used_attempts_to_db(
+    async fn record_nonce_already_used_attempts_to_db(
         &mut self,
         wallet: Address,
         nonce: Nonce,
@@ -1764,7 +1780,8 @@ impl<
                     nonce,
                     tx_hash,
                 )),
-            );
+            )
+            .await;
             recorded_attempt_count += 1;
         }
 
@@ -1784,7 +1801,8 @@ impl<
         self.record_attempt_result_to_db(
             attempt_number,
             SettlementAttemptResult::ContractCall(tx_result.clone()),
-        );
+        )
+        .await;
 
         if tx_result.outcome == ContractCallOutcome::Success {
             self.record_nonce_already_used_attempts_to_db(
@@ -1792,7 +1810,8 @@ impl<
                 nonce,
                 tx_result.tx_hash,
                 Some(attempt_number),
-            );
+            )
+            .await;
 
             for (attempt_wallet, attempt_nonce, other_attempt_number) in self.all_attempt_keys() {
                 if attempt_wallet == wallet && attempt_nonce == nonce {
@@ -1804,7 +1823,8 @@ impl<
                     SettlementAttemptResult::ClientError(
                         ClientError::settlement_succeeded_elsewhere(tx_result.tx_hash),
                     ),
-                );
+                )
+                .await;
             }
         }
 
@@ -1815,8 +1835,10 @@ impl<
             contract_call_result: tx_result,
         };
 
-        self.store
-            .insert_settlement_job_result(&self.id, &job_result)
+        let job_result = self
+            .store
+            .insert_settlement_job_result_async(self.id, job_result)
+            .await
             .unwrap_or_else(|error| {
                 panic!(
                     "Failed to write settlement job result for job {}: {error:?}",
@@ -1846,7 +1868,7 @@ impl<
             .unwrap_or_default()
     }
 
-    fn record_attempt_result_to_db(
+    async fn record_attempt_result_to_db(
         &mut self,
         attempt_number: SettlementAttemptNumber,
         result: SettlementAttemptResult,
@@ -1890,8 +1912,10 @@ impl<
             }
         }
 
-        self.store
-            .record_settlement_attempt_result(&self.id, attempt_number.0, &result)
+        let result = self
+            .store
+            .record_settlement_attempt_result_async(self.id, attempt_number.0, result)
+            .await
             .unwrap_or_else(|error| {
                 panic!(
                     "Failed to write settlement attempt result for job {} attempt {}: {error:?}",

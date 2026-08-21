@@ -14,13 +14,14 @@ use agglayer_storage::{
         latest_settled_certificate_per_network::SettledCertificate,
     },
     stores::{
-        EpochStoreReader, EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter,
-        PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+        async_api::AsyncPendingCertificateReaderExt, EpochStoreReader, EpochStoreWriter,
+        PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
+        StateReader, StateWriter,
     },
 };
 use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
 use arc_swap::ArcSwap;
-use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt, TryFutureExt};
+use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use network_task::{NetworkTask, NewCertificate};
 use tokio::{
     sync::mpsc::{self, Receiver},
@@ -77,8 +78,8 @@ pub struct CertificateOrchestrator<
     StateStore,
     SettlementService,
 > {
-    /// Epoch packing task resolver.
-    epoch_packing_tasks: EpochPackingTasks,
+    /// The active epoch rollover, if packing or opening is still in progress.
+    epoch_rollover: Option<JoinHandle<Result<PerEpochStore, Error>>>,
     /// Certifier task builder.
     certifier_task_builder: Arc<CertifierClient>,
     /// Clock stream to receive EpochEnded events.
@@ -141,7 +142,7 @@ where
         settlement_service: Arc<SettlementService>,
     ) -> Result<Self, Error> {
         Ok(Self {
-            epoch_packing_tasks: FuturesUnordered::new(),
+            epoch_rollover: None,
             clock: Box::pin(tokio_stream::StreamExt::filter_map(
                 tokio_stream::wrappers::BroadcastStream::new(clock.subscribe()?),
                 |v| v.ok(),
@@ -189,14 +190,12 @@ where
     /// - `data_receiver`: Sets the receiver for certificates coming from CDKs.
     /// - `cancellation_token`: Sets the cancellation token for graceful
     ///   shutdown.
-    /// - `epoch_packing_builder`: Sets the task builder for epoch packing.
     /// - `start`: Starts the CertificateOrchestrator.
     ///
     /// # Errors
     ///
-    /// This function can't fail but returns a Result for convenience and future
-    ///
-    /// evolution.
+    /// Returns an error when orchestrator setup fails, storage cannot be read,
+    /// or a startup network task cannot be initialized.
     #[allow(clippy::too_many_arguments)]
     #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
@@ -222,11 +221,12 @@ where
             settlement_service,
         )?;
 
-        // Try to spawn the certifier tasks for the next height of each network
-        for ProvenCertificate(_, network_id, _height) in
-            pending_store.get_current_proven_height()?
-        {
-            orchestrator.spawn_network_task(network_id)?;
+        // Try to spawn the certifier tasks for the next height of each network.
+        let proven_certificates = pending_store.get_current_proven_height_async().await?;
+        for ProvenCertificate(_, network_id, _height) in proven_certificates {
+            orchestrator
+                .spawn_initialized_network_task(network_id)
+                .await?;
         }
 
         let handle = tokio::spawn(orchestrator);
@@ -252,7 +252,7 @@ where
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     SettlementService: SettlementServiceTrait + 'static,
 {
-    fn spawn_network_task(&mut self, network_id: NetworkId) -> Result<(), Error> {
+    async fn spawn_initialized_network_task(&mut self, network_id: NetworkId) -> Result<(), Error> {
         if self.spawned_network_tasks.contains_key(&network_id) {
             debug!("Network task already spawned for network {}", network_id);
 
@@ -270,17 +270,53 @@ where
             receiver,
             self.settlement_service.clone(),
             self.current_epoch.clone(),
-        )?;
-
-        let task_future = task
-            .run(self.cancellation_token.clone())
-            .map_err(move |err| (network_id, err))
-            .boxed();
-        self.network_tasks.push(task_future);
-
+        )
+        .await?;
+        let cancellation_token = self.cancellation_token.clone();
+        self.network_tasks.push(
+            async move {
+                task.run(cancellation_token)
+                    .await
+                    .map_err(|error| (network_id, error))
+            }
+            .boxed(),
+        );
         self.spawned_network_tasks.insert(network_id, sender);
 
         Ok(())
+    }
+
+    fn spawn_network_task(&mut self, network_id: NetworkId) {
+        if self.spawned_network_tasks.contains_key(&network_id) {
+            debug!("Network task already spawned for network {}", network_id);
+
+            return;
+        }
+
+        let (sender, receiver) =
+            mpsc::channel(Self::DEFAULT_CERTIFICATION_NOTIFICATION_CHANNEL_SIZE);
+        let task = NetworkTask::new(
+            self.pending_store.clone(),
+            self.state_store.clone(),
+            self.certifier_task_builder.clone(),
+            self.clock_ref.clone(),
+            network_id,
+            receiver,
+            self.settlement_service.clone(),
+            self.current_epoch.clone(),
+        );
+        let cancellation_token = self.cancellation_token.clone();
+        let task_future = async move {
+            let task = task.await.map_err(|error| (network_id, error))?;
+
+            task.run(cancellation_token)
+                .await
+                .map_err(|error| (network_id, error))
+        }
+        .boxed();
+        self.network_tasks.push(task_future);
+
+        self.spawned_network_tasks.insert(network_id, sender);
     }
 
     /// Function that receives the certificates cursor pushed by the RPC module.
@@ -290,9 +326,9 @@ where
     fn receive_certificates(
         &mut self,
         cursors: impl IntoIterator<Item = (NetworkId, Height, CertificateId)>,
-    ) -> Result<(), Error> {
+    ) {
         for (network_id, height, certificate_id) in cursors {
-            self.spawn_network_task(network_id)?;
+            self.spawn_network_task(network_id);
 
             if let Some(sender) = self.spawned_network_tasks.get(&network_id) {
                 if let Ok(sender) = sender.try_reserve() {
@@ -311,64 +347,64 @@ where
                 continue;
             };
         }
-
-        Ok(())
     }
 
     /// Function that handles the end of an epoch.
     /// This function is called when the orchestrator receives an EpochEnded
     /// event. The function is responsible for:
+    /// - Packing the closing epoch.
     /// - Opening the next epoch.
-    /// - Spawning the epoch packing task.
-    fn handle_epoch_end(&mut self, epoch: EpochNumber) -> Result<(), Error> {
+    fn start_epoch_rollover(&mut self, epoch: EpochNumber) {
         debug!("Start the settlement of the epoch {}", epoch);
 
-        let closing_epoch = self.current_epoch.load_full();
-        if let Err(error) = closing_epoch.start_packing() {
-            error!("Failed to pack the epoch {}: {:?}", epoch, error);
-
-            match error {
-                agglayer_storage::error::Error::AlreadyPacked(_) => {}
-                agglayer_storage::error::Error::DBError(error) => {
-                    let msg = format!("CRITICAL error during packing of epoch {epoch}: {error}",);
-                    error!(msg);
-                    self.cancellation_token.cancel();
-                    return Err(Error::InternalError(msg));
-                }
-
-                // Other errors shouldn't happen
-                error => {
-                    let msg =
-                        format!("CRITICAL error: Failed to pack the epoch {epoch}: {error:?}");
-                    error!(msg);
-                    return Err(Error::InternalError(msg));
-                }
-            }
-        }
-
-        // TODO: Check for overflow
-        let next_epoch = epoch.next();
-
-        match self
-            .epochs_store
-            .open_with_start_checkpoint(next_epoch, closing_epoch.get_end_checkpoint())
-        {
-            Ok(new_epoch) => self.current_epoch.store(Arc::new(new_epoch)),
-            Err(error) => {
-                let msg = format!(
-                    "CRITICAL error: Failed to open the next epoch {next_epoch}: {error:?}",
-                );
-
-                error!(msg);
-
-                return Err(Error::InternalError(msg));
-            }
-        }
-
-        Ok(())
+        self.epoch_rollover = Some(self.spawn_epoch_rollover_task(epoch));
     }
 
-    fn handle_epoch_packing_result(&mut self) {}
+    fn spawn_epoch_rollover_task(
+        &self,
+        epoch: EpochNumber,
+    ) -> JoinHandle<Result<PerEpochStore, Error>> {
+        let closing_epoch = self.current_epoch.load_full();
+        let epochs_store = self.epochs_store.clone();
+        let cancellation_token = self.cancellation_token.clone();
+        tokio::task::spawn_blocking(move || {
+            if let Err(error) = closing_epoch.start_packing() {
+                error!("Failed to pack the epoch {}: {:?}", epoch, error);
+
+                match error {
+                    agglayer_storage::error::Error::AlreadyPacked(_) => {}
+                    agglayer_storage::error::Error::DBError(error) => {
+                        let msg =
+                            format!("CRITICAL error during packing of epoch {epoch}: {error}",);
+                        error!(msg);
+                        cancellation_token.cancel();
+                        return Err(Error::InternalError(msg));
+                    }
+
+                    // Other errors shouldn't happen
+                    error => {
+                        let msg =
+                            format!("CRITICAL error: Failed to pack the epoch {epoch}: {error:?}");
+                        error!(msg);
+                        return Err(Error::InternalError(msg));
+                    }
+                }
+            }
+
+            // TODO: Check for overflow
+            let next_epoch = epoch.next();
+
+            epochs_store
+                .open_with_start_checkpoint(next_epoch, closing_epoch.get_end_checkpoint())
+                .map_err(|error| {
+                    let msg = format!(
+                        "CRITICAL error: Failed to open the next epoch {next_epoch}: {error:?}",
+                    );
+                    error!(msg);
+                    Error::InternalError(msg)
+                })
+        })
+    }
 }
 
 impl<A, PendingStore, EpochsStore, PerEpochStore, StateStore, SettlementService> Future
@@ -398,6 +434,24 @@ where
             return Poll::Ready(());
         }
 
+        // An epoch rollover is exclusive: finish and publish it before polling
+        // network tasks, certificate input, or another clock event.
+        if let Some(rollover) = self.epoch_rollover.as_mut() {
+            match Pin::new(rollover).poll(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(result) => {
+                    self.epoch_rollover = None;
+                    match result.expect("epoch rollover task panicked") {
+                        Ok(new_epoch) => {
+                            debug!("Successfully rolled over the epoch");
+                            self.current_epoch.store(Arc::new(new_epoch));
+                        }
+                        Err(error) => error!("Error during epoch rollover: {error:?}"),
+                    }
+                }
+            }
+        }
+
         // Poll the notification tasks to check for
         match self.network_tasks.poll_next_unpin(cx) {
             Poll::Ready(Some(Ok(network_id))) => {
@@ -413,27 +467,12 @@ where
             Poll::Pending => {}
         }
 
-        // Poll the notification tasks to check if any have errored.
-        match self.epoch_packing_tasks.poll_next_unpin(cx) {
-            Poll::Ready(Some(Err(error))) => {
-                error!("Error during epoch packing: {:?}", error)
-            }
-            Poll::Ready(Some(Ok(()))) => {
-                debug!("Successfully settled the epoch");
-
-                self.handle_epoch_packing_result();
-            }
-            _ => {}
-        }
-
         let mut received = vec![];
         if let Poll::Ready(1usize..) =
             self.data_receiver
                 .poll_recv_many(cx, &mut received, MAX_POLL_READS)
         {
-            if let Err(e) = self.receive_certificates(received) {
-                error!("Failed to handle a group of certificates: {e:?}");
-            }
+            self.receive_certificates(received);
 
             return self.poll(cx);
         }
@@ -441,9 +480,7 @@ where
         if let Poll::Ready(Some(Event::EpochEnded(epoch))) = self.clock.poll_next_unpin(cx) {
             debug!("Epoch change event received: {}", epoch);
 
-            if let Err(error) = self.handle_epoch_end(epoch) {
-                error!("Failed to handle the EpochEnded event: {:?}", error);
-            }
+            self.start_epoch_rollover(epoch);
 
             return self.poll(cx);
         }

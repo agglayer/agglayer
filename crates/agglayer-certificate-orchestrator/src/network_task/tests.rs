@@ -278,6 +278,7 @@ async fn start_from_zero() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -412,6 +413,7 @@ async fn repeated_unreadable_proof_errors_certificate() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -676,6 +678,7 @@ async fn retries() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -811,6 +814,7 @@ async fn timeout_certifier() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -937,6 +941,7 @@ async fn process_next_certificate() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -1083,6 +1088,7 @@ async fn settles_pending_backlog_on_startup() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -1186,6 +1192,7 @@ async fn wrong_height_event_still_drains_pending() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;

@@ -5,6 +5,7 @@ use std::{
     result::Result,
     sync::{atomic::AtomicU64, Arc, RwLock},
     task::Poll,
+    time::Duration,
 };
 
 use agglayer_clock::ClockRef;
@@ -23,7 +24,10 @@ use agglayer_storage::{
         PerEpochWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
         UpdateStatusToCandidate,
     },
-    tests::TempDBDir,
+    tests::{
+        mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
+        TempDBDir,
+    },
 };
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, CertificateStatus, Digest,
@@ -32,6 +36,7 @@ use agglayer_types::{
 };
 use arc_swap::ArcSwap;
 use futures_util::poll;
+use mockall::predicate::eq;
 use pessimistic_proof::{
     multi_batch_header::MultiBatchHeader, LocalNetworkState, PessimisticProofOutput,
 };
@@ -554,9 +559,59 @@ async fn test_certificate_orchestrator_can_stop() {
     assert!(check_receiver.try_recv().is_err());
 }
 
-// Can collect certificates and pack them at the end of an epoch
+#[tokio::test]
+async fn startup_propagates_proven_network_initialization_storage_failure() {
+    let network_id = NetworkId::new(1);
+    let certificate_id = CertificateId::new([1; 32].into());
+
+    let mut pending_store = MockPendingStore::new();
+    pending_store
+        .expect_get_current_proven_height()
+        .once()
+        .return_once(move || {
+            Ok(vec![ProvenCertificate(
+                certificate_id,
+                network_id,
+                Height::ZERO,
+            )])
+        });
+
+    let mut state_store = MockStateStore::new();
+    state_store
+        .expect_read_local_network_state()
+        .with(eq(network_id))
+        .once()
+        .return_once(|_| {
+            Err(agglayer_storage::error::Error::Unexpected(
+                "startup state read failed".to_string(),
+            ))
+        });
+
+    let (_data_sender, data_receiver) = mpsc::channel(1);
+    let result = CertificateOrchestrator::builder()
+        .clock(clock())
+        .data_receiver(data_receiver)
+        .cancellation_token(CancellationToken::new())
+        .pending_store(Arc::new(pending_store))
+        .epochs_store(Arc::new(MockEpochsStore::new()))
+        .current_epoch(Arc::new(ArcSwap::new(Arc::new(MockPerEpochStore::new()))))
+        .state_store(Arc::new(state_store))
+        .certifier_task_builder(mocks::MockCertifier::new())
+        .settlement_service(Arc::new(MockSettlementServiceTrait::new()))
+        .start()
+        .await;
+
+    let error = result.expect_err("startup should fail when proven-network state cannot be read");
+    assert!(matches!(
+        error.downcast_ref::<crate::Error>(),
+        Some(crate::Error::Storage(agglayer_storage::error::Error::Unexpected(message)))
+            if message == "startup state read failed"
+    ));
+}
+
+// Queued epoch-end events are processed one rollover at a time.
 #[test_log::test(tokio::test)]
-async fn test_collect_certificates() {
+async fn test_epoch_rollovers_are_ordered() {
     let path = TempDBDir::new();
     let config = Config::new(&path.path);
     let pending_store = Arc::new(
@@ -583,13 +638,13 @@ async fn test_collect_certificates() {
             .open(EpochNumber::new(1))
             .expect("Unable to open epoch"),
     ));
-    let (clock_sender, _receiver) = broadcast::channel(1);
+    let (clock_sender, _receiver) = broadcast::channel(2);
     let clock = ClockRef::new(
         clock_sender.clone(),
         Arc::new(AtomicU64::new(0)),
         Arc::new(NonZeroU64::new(1).unwrap()),
     );
-    let (data_sender, data_receiver) = mpsc::channel(10);
+    let (_data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, _check_receiver) = mpsc::channel(1);
@@ -605,22 +660,42 @@ async fn test_collect_certificates() {
         cancellation_token,
         check.clone(),
         pending_store.clone(),
-        epochs_store,
+        epochs_store.clone(),
         Arc::new(current_epoch),
         state_store.clone(),
         Arc::new(MockSettlementServiceTrait::new()),
     )
     .expect("Unable to create orchestrator");
 
-    _ = data_sender
-        .send((1.into(), Height::new(1), CertificateId::new([0; 32].into())))
-        .await;
-    let current_epoch = orchestrator.current_epoch.load().clone();
+    let epoch_1 = orchestrator.current_epoch.load_full();
     _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)));
+    _ = clock_sender.send(agglayer_clock::Event::EpochEnded(EpochNumber::new(2)));
 
-    let _poll = poll!(&mut orchestrator);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let _ = poll!(&mut orchestrator);
+            let published_epoch = orchestrator.current_epoch.load_full();
+            if orchestrator.epoch_rollover.is_none()
+                && published_epoch.get_epoch_number() == EpochNumber::new(3)
+            {
+                break;
+            }
 
-    assert!(current_epoch.is_epoch_packed());
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("epoch rollovers did not complete");
+
+    assert!(epoch_1.is_epoch_packed());
+    assert!(epochs_store
+        .open(EpochNumber::new(2))
+        .expect("Unable to reopen epoch 2")
+        .is_epoch_packed());
+    assert_eq!(
+        orchestrator.current_epoch.load().get_epoch_number(),
+        EpochNumber::new(3)
+    );
 }
 
 // A certificate received after an EpochEnded is stored for next epoch

@@ -86,38 +86,59 @@ impl Node {
             );
         }
 
-        // Initializing storage
-        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path)?);
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path)?);
+        let storage_config = config.clone();
+        let storage_cancellation_token = cancellation_token.clone();
+        let (pending_store, state_store, debug_store, backup_engine, backup_client) =
+            tokio::task::spawn_blocking(move || -> eyre::Result<_> {
+                let pending_db = Arc::new(PendingStore::init_db(
+                    &storage_config.storage.pending_db_path,
+                )?);
+                let state_db =
+                    Arc::new(StateStore::init_db(&storage_config.storage.state_db_path)?);
 
-        // Initialize backup engine
-        let backup_client = if let BackupConfig::Enabled {
-            path,
-            state_max_backup_count,
-            pending_max_backup_count,
-        } = &config.storage.backup
-        {
-            let (backup_engine, client) = BackupEngine::new(
-                path,
-                state_db.clone(),
-                pending_db.clone(),
-                *state_max_backup_count,
-                *pending_max_backup_count,
-                cancellation_token.clone(),
-            )?;
+                let (backup_engine, backup_client) = if let BackupConfig::Enabled {
+                    path,
+                    state_max_backup_count,
+                    pending_max_backup_count,
+                } = &storage_config.storage.backup
+                {
+                    let (engine, client) = BackupEngine::new(
+                        path,
+                        state_db.clone(),
+                        pending_db.clone(),
+                        *state_max_backup_count,
+                        *pending_max_backup_count,
+                        storage_cancellation_token,
+                    )?;
+                    (Some(engine), client)
+                } else {
+                    (None, BackupClient::noop())
+                };
+
+                let state_store = Arc::new(StateStore::new(state_db, backup_client.clone()));
+                let pending_store = Arc::new(PendingStore::new(pending_db));
+                let debug_store = if storage_config.debug_mode {
+                    Arc::new(DebugStore::new_with_path(
+                        &storage_config.storage.debug_db_path,
+                    )?)
+                } else {
+                    Arc::new(DebugStore::Disabled)
+                };
+
+                Ok((
+                    pending_store,
+                    state_store,
+                    debug_store,
+                    backup_engine,
+                    backup_client,
+                ))
+            })
+            .await
+            .expect("storage initialization task panicked")?;
+
+        if let Some(backup_engine) = backup_engine {
             tokio::spawn(backup_engine.run());
-
-            client
-        } else {
-            BackupClient::noop()
-        };
-        let state_store = Arc::new(StateStore::new(state_db, backup_client.clone()));
-        let pending_store = Arc::new(PendingStore::new(pending_db));
-        let debug_store = if config.debug_mode {
-            Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
-        } else {
-            Arc::new(DebugStore::Disabled)
-        };
+        }
 
         info!("Storage initialized.");
 
