@@ -11,5 +11,10 @@ ignore = [
     # https://rustsec.org/advisories/RUSTSEC-2026-0098.html
     "RUSTSEC-2026-0098",
     # https://rustsec.org/advisories/RUSTSEC-2026-0099.html
-    "RUSTSEC-2026-0099"
+    "RUSTSEC-2026-0099",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0258.html
+    # Remaining hit is h2 0.3 via sp1-sdk -> alloy-signer-aws -> aws-config;
+    # the 0.3 line has no patched release (fix is only in h2 >= 0.4.16, to
+    # which our direct 0.4 dependency is updated).
+    "RUSTSEC-2026-0258"
 ]
