@@ -6,6 +6,7 @@ use agglayer_contracts::{
 use agglayer_errors::ResultExt as _;
 use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::stores::{
+    async_api::{AsyncPendingCertificateReaderExt, AsyncStateReaderExt, AsyncStateWriterExt},
     PendingCertificateReader, PendingCertificateWriter, StateReader, StateWriter,
     UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
@@ -13,8 +14,8 @@ use agglayer_telemetry::certificate::{self, CertificateStage};
 #[cfg(feature = "testutils")]
 use agglayer_types::SettlementTxHash;
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, ContractCallOutcome,
-    Digest, Proof, SettlementJob, SettlementJobResult, U256,
+    Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
+    ContractCallOutcome, Digest, Proof, SettlementJob, SettlementJobId, SettlementJobResult, U256,
 };
 use pessimistic_proof::{core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR, PessimisticProofOutput};
 use tokio::sync::{mpsc, oneshot};
@@ -49,8 +50,8 @@ pub struct CertificateTask<StateStore, PendingStore, CertifierClient, Settlement
 impl<StateStore, PendingStore, CertifierClient, SettlementService>
     CertificateTask<StateStore, PendingStore, CertifierClient, SettlementService>
 where
-    StateStore: StateReader + StateWriter,
-    PendingStore: PendingCertificateReader + PendingCertificateWriter,
+    StateStore: StateReader + StateWriter + 'static,
+    PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     CertifierClient: Certifier,
     SettlementService: SettlementServiceTrait,
 {
@@ -117,10 +118,10 @@ where
             }
 
             // Then record it to the database
-            if let Err(error) = self.state_store.update_certificate_header_status(
-                &self.header.certificate_id,
-                &CertificateStatus::error(error.clone()),
-            ) {
+            if let Err(error) = self
+                .set_status(CertificateStatus::error(error.clone()))
+                .await
+            {
                 error!(?error, "Failed to update certificate status in database");
             };
 
@@ -165,12 +166,10 @@ where
             // run crashed after submitting it but before recording `Candidate`.
             // Resume that job rather than re-proving and re-submitting (which the
             // at-most-once guard rejects), so it recovers instead of erroring.
-            if let Some(job_id) = self
-                .state_store
-                .get_certificate_settlement_job_id(&certificate_id)?
-            {
+            let job_id = self.resume_settlement_job(certificate_id).await?;
+            if let Some(job_id) = job_id {
                 info!(%job_id, "Proven certificate already has a settlement job; resuming");
-                self.set_status(CertificateStatus::Candidate)?;
+                self.header.status = CertificateStatus::Candidate;
                 return self.process_from_candidate(true).await;
             }
 
@@ -179,10 +178,8 @@ where
                  reproving"
             );
 
-            self.state_store
-                .update_certificate_header_status(&certificate_id, &CertificateStatus::Pending)?;
+            self.reset_for_reproving(certificate_id).await?;
             self.header.status = CertificateStatus::Pending;
-            self.pending_store.remove_generated_proof(&certificate_id)?;
         }
 
         match &self.header.status {
@@ -294,7 +291,7 @@ where
         // Certification succeeded: close out the `pending` (proving) stage, then
         // record the new status.
         self.record_stage();
-        self.set_status(CertificateStatus::Proven)?;
+        self.set_status(CertificateStatus::Proven).await?;
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -347,7 +344,7 @@ where
 
         // Close out the `proven` (submission) stage, then record the new status.
         self.record_stage();
-        self.set_status(CertificateStatus::Candidate)?;
+        self.set_status(CertificateStatus::Candidate).await?;
 
         #[cfg(feature = "testutils")]
         testutils::inject_fail_points_after_proving(
@@ -364,7 +361,7 @@ where
     async fn build_settlement_job(&self) -> Result<SettlementJob, CertificateStatusError> {
         let certificate_id = self.header.certificate_id;
 
-        let proof = match self.pending_store.get_proof(certificate_id)? {
+        let proof = match self.pending_store.get_proof_async(certificate_id).await? {
             Some(Proof::SP1(proof)) => proof,
             _ => {
                 return Err(CertificateStatusError::SettlementError(format!(
@@ -446,7 +443,8 @@ where
         // in-flight settlement, and it survives reboots.
         let job_id = self
             .state_store
-            .get_certificate_settlement_job_id(&certificate_id)?
+            .get_certificate_settlement_job_id_async(certificate_id)
+            .await?
             .ok_or_else(|| {
                 CertificateStatusError::SettlementError(
                     "Candidate certificate has no settlement job id".into(),
@@ -484,21 +482,66 @@ where
         // Record the settlement tx hash before marking Settled: the storage
         // layer rejects tx-hash updates on already-settled certificates.
         self.header.settlement_tx_hash = Some(tx_hash);
-        self.state_store.update_settlement_tx_hash(
-            &certificate_id,
-            tx_hash,
-            UpdateEvenIfAlreadyPresent::Yes,
-            UpdateStatusToCandidate::No,
-        )?;
+        self.state_store
+            .update_settlement_tx_hash_async(
+                certificate_id,
+                tx_hash,
+                UpdateEvenIfAlreadyPresent::Yes,
+                UpdateStatusToCandidate::No,
+            )
+            .await?;
 
         self.finalize_settlement().await
     }
 
-    fn set_status(&mut self, status: CertificateStatus) -> Result<(), CertificateStatusError> {
+    async fn set_status(
+        &mut self,
+        status: CertificateStatus,
+    ) -> Result<(), CertificateStatusError> {
+        let certificate_id = self.header.certificate_id;
         self.state_store
-            .update_certificate_header_status(&self.header.certificate_id, &status)?;
+            .update_certificate_header_status_async(certificate_id, status.clone())
+            .await?;
         self.header.status = status;
         Ok(())
+    }
+
+    /// Read the persisted settlement job and promote the certificate in the
+    /// same blocking job when it is ready to resume.
+    async fn resume_settlement_job(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<Option<SettlementJobId>, agglayer_storage::error::Error> {
+        let state_store = self.state_store.clone();
+        tokio::task::spawn_blocking(move || {
+            let job_id = state_store.get_certificate_settlement_job_id(&certificate_id)?;
+            if job_id.is_some() {
+                state_store.update_certificate_header_status(
+                    &certificate_id,
+                    &CertificateStatus::Candidate,
+                )?;
+            }
+
+            Ok(job_id)
+        })
+        .await
+        .expect("certificate resume read task panicked")
+    }
+
+    /// Reset both stores in one blocking job before re-proving a certificate.
+    async fn reset_for_reproving(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        let state_store = self.state_store.clone();
+        let pending_store = self.pending_store.clone();
+        tokio::task::spawn_blocking(move || {
+            state_store
+                .update_certificate_header_status(&certificate_id, &CertificateStatus::Pending)?;
+            pending_store.remove_generated_proof(&certificate_id)
+        })
+        .await
+        .expect("certificate reproving reset task panicked")
     }
 
     /// Records the current stage's duration. Call just before the status

@@ -1,4 +1,8 @@
-use std::{collections::VecDeque, sync::Mutex, time::Duration};
+use std::{
+    collections::VecDeque,
+    sync::{Condvar, Mutex},
+    time::Duration,
+};
 
 use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
@@ -278,6 +282,7 @@ async fn start_from_zero() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -412,6 +417,7 @@ async fn repeated_unreadable_proof_errors_certificate() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -676,6 +682,7 @@ async fn retries() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -811,6 +818,7 @@ async fn timeout_certifier() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -937,6 +945,7 @@ async fn process_next_certificate() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -1083,6 +1092,7 @@ async fn settles_pending_backlog_on_startup() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -1186,6 +1196,7 @@ async fn wrong_height_event_still_drains_pending() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -1210,4 +1221,131 @@ async fn wrong_height_event_still_drains_pending() {
     .unwrap();
 
     assert_eq!(next_expected_height, Height::new(1));
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(30))]
+async fn dropped_settlement_still_persists_settled_state() {
+    let network_id: NetworkId = 1.into();
+    let certificate_id = Certificate::new_for_test(network_id, Height::ZERO).hash();
+
+    let mut state = MockStateStore::new();
+    state
+        .expect_read_local_network_state()
+        .returning(|_| Ok(Default::default()));
+    state
+        .expect_get_latest_settled_certificate_per_network()
+        .returning(|_| Ok(None));
+
+    // Hold the epoch assignment until the settlement future has been
+    // cancelled mid-transition.
+    let (assignment_started, assignment_started_rx) = oneshot::channel();
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    let release_for_epoch = release.clone();
+    let mut mock_epoch = MockPerEpochStore::new();
+    mock_epoch
+        .expect_add_certificate()
+        .once()
+        .return_once(move |_, _| {
+            assignment_started
+                .send(())
+                .expect("test task should wait for the epoch assignment");
+
+            let (released, wake) = &*release_for_epoch;
+            let (_released, timeout) = wake
+                .wait_timeout_while(
+                    released
+                        .lock()
+                        .expect("release lock should not be poisoned"),
+                    Duration::from_secs(10),
+                    |released| !*released,
+                )
+                .expect("release lock should not be poisoned");
+            assert!(
+                !timeout.timed_out(),
+                "the test task never released the epoch assignment"
+            );
+            Ok((EpochNumber::ZERO, CertificateIndex::ZERO))
+        });
+
+    // Record the settled-state writes as they land.
+    let (writes_sender, mut writes) = mpsc::unbounded_channel();
+    let sender = writes_sender.clone();
+    state
+        .expect_write_local_network_state()
+        .once()
+        .return_once(move |_, _, _| {
+            sender.send("local_state").expect("test channel closed");
+            Ok(())
+        });
+    let sender = writes_sender.clone();
+    state
+        .expect_update_certificate_header_status()
+        .once()
+        .with(eq(certificate_id), eq(CertificateStatus::Settled))
+        .return_once(move |_, _| {
+            sender.send("header_status").expect("test channel closed");
+            Ok(())
+        });
+    let sender = writes_sender;
+    state
+        .expect_set_latest_settled_certificate_for_network()
+        .once()
+        .return_once(move |_, _, _, _, _| {
+            sender.send("settled_cursor").expect("test channel closed");
+            Ok(())
+        });
+
+    let (_sender, certificate_stream) = mpsc::channel(1);
+    let task = NetworkTask::new(
+        Arc::new(MockPendingStore::new()),
+        Arc::new(state),
+        Arc::new(MockCertifier::new()),
+        clock(),
+        network_id,
+        certificate_stream,
+        Arc::new(MockSettlementServiceTrait::new()),
+        Arc::new(ArcSwap::new(Arc::new(mock_epoch))),
+    )
+    .await
+    .expect("Failed to create a new network task");
+
+    let settlement = tokio::spawn(async move {
+        task.assign_and_persist_settled_certificate(
+            Box::new(LocalNetworkStateData::default()),
+            Vec::new(),
+            Height::ZERO,
+            certificate_id,
+        )
+        .await
+    });
+
+    assignment_started_rx
+        .await
+        .expect("blocking settlement task should start");
+
+    // Cancel the settlement future while the durable transition is underway,
+    // and wait for the cancellation to complete.
+    settlement.abort();
+    assert!(settlement
+        .await
+        .expect_err("the settlement future should be cancelled")
+        .is_cancelled());
+
+    // Release the epoch assignment: the detached blocking task must still
+    // complete every settled-state write.
+    let (released, wake) = &*release;
+    *released
+        .lock()
+        .expect("release lock should not be poisoned") = true;
+    wake.notify_one();
+
+    for expected in ["local_state", "header_status", "settled_cursor"] {
+        let write = tokio::time::timeout(Duration::from_secs(10), writes.recv())
+            .await
+            .expect("the settled-state write should land despite the cancellation")
+            .expect("the mock write channel should stay open");
+        assert_eq!(write, expected);
+    }
 }

@@ -27,8 +27,6 @@ pub(crate) struct Proof([[u8; HASH_LENGTH]; PROOF_LENGTH]);
 pub(crate) enum ProofEncodingError {
     #[error("invalid proof length: expected {expected}, got {got}")]
     InvalidLength { expected: usize, got: usize },
-    #[error("invalid hash at index {index}")]
-    InvalidHash { index: usize },
 }
 
 impl Proof {
@@ -56,10 +54,8 @@ impl Proof {
         }
 
         let mut proof = [[0; HASH_LENGTH]; PROOF_LENGTH];
-        for (i, hash) in slice.chunks_exact(HASH_LENGTH).enumerate() {
-            proof[i] = hash
-                .try_into()
-                .map_err(|_| ProofEncodingError::InvalidHash { index: i })?;
+        for (i, hash) in slice.as_chunks::<HASH_LENGTH>().0.iter().enumerate() {
+            proof[i] = *hash;
         }
 
         Ok(Self(proof))

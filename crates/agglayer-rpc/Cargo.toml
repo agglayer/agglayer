@@ -25,6 +25,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 agglayer-storage = { workspace = true, features = ["testutils"] }
+async-trait.workspace = true
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 mockall.workspace = true
 

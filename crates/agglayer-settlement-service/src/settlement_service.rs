@@ -1,7 +1,10 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc, time::SystemTime};
 
 use agglayer_config::settlement_service::{SettlementServiceConfig, SettlementTransactionConfig};
-use agglayer_storage::stores::{EditEvenIfCompleted, SettlementReader, SettlementWriter};
+use agglayer_storage::stores::{
+    async_api::{AsyncSettlementReaderExt as _, AsyncSettlementWriterExt as _},
+    EditEvenIfCompleted, SettlementReader, SettlementWriter,
+};
 use agglayer_types::{
     Address, CertificateId, ClientError, Nonce, RpcErrorCode, SettlementAttempt,
     SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
@@ -250,7 +253,8 @@ impl<
         // that point.
         let job_ids = self
             .store
-            .list_settlement_job_ids()
+            .list_settlement_job_ids_async()
+            .await
             .wrap_err("Failed to scan settlement job ids during startup recovery")?;
 
         let mut completed_jobs = 0usize;
@@ -400,29 +404,59 @@ impl<
     /// a TOCTOU race against a just-finished task), so the extra storage
     /// reads are irrelevant for cost.
     async fn classify_missing_task(&self, job_id: SettlementJobId) -> eyre::Report {
-        let job = match self.store.get_settlement_job(&job_id) {
-            Ok(job) => job,
-            Err(error) => {
-                return eyre::Report::new(error).wrap_err(format!(
-                    "Failed to check settlement job existence for id {job_id}"
-                ));
+        let store = self.store.clone();
+        tokio::task::spawn_blocking(move || {
+            let job = match store.get_settlement_job(&job_id) {
+                Ok(job) => job,
+                Err(error) => {
+                    return eyre::Report::new(error).wrap_err(format!(
+                        "Failed to check settlement job existence for id {job_id}"
+                    ));
+                }
+            };
+
+            if job.is_none() {
+                return eyre::eyre!("no settlement job found for id {job_id}")
+                    .wrap_err(RpcErrorCode::NotFound);
             }
-        };
 
-        if job.is_none() {
-            return eyre::eyre!("no settlement job found for id {job_id}")
-                .wrap_err(RpcErrorCode::NotFound);
-        }
+            match store.get_settlement_job_result(&job_id) {
+                Ok(Some(_)) => eyre::eyre!("settlement job {job_id} already completed")
+                    .wrap_err(RpcErrorCode::AlreadyCompleted),
+                Ok(None) => eyre::eyre!("no live settlement task for pending job {job_id}")
+                    .wrap_err(RpcErrorCode::NoLiveTask),
+                Err(error) => eyre::Report::new(error).wrap_err(format!(
+                    "Failed to read settlement job terminal result for id {job_id}"
+                )),
+            }
+        })
+        .await
+        .expect("settlement task classification task panicked")
+    }
 
-        match self.store.get_settlement_job_result(&job_id) {
-            Ok(Some(_)) => eyre::eyre!("settlement job {job_id} already completed")
-                .wrap_err(RpcErrorCode::AlreadyCompleted),
-            Ok(None) => eyre::eyre!("no live settlement task for pending job {job_id}")
-                .wrap_err(RpcErrorCode::NoLiveTask),
-            Err(error) => eyre::Report::new(error).wrap_err(format!(
-                "Failed to read settlement job terminal result for id {job_id}"
-            )),
-        }
+    async fn read_stored_result(
+        &self,
+        job_id: SettlementJobId,
+    ) -> eyre::Result<(Option<SettlementJobResult>, bool)> {
+        let store = self.store.clone();
+        tokio::task::spawn_blocking(move || {
+            let result = store.get_settlement_job_result(&job_id).wrap_err_with(|| {
+                format!("Failed to read settlement job terminal result for id {job_id}")
+            })?;
+            if result.is_some() {
+                return Ok((result, true));
+            }
+
+            let job_exists = store
+                .get_settlement_job(&job_id)
+                .wrap_err_with(|| {
+                    format!("Failed to check settlement job existence for id {job_id}")
+                })?
+                .is_some();
+            Ok::<_, eyre::Report>((result, job_exists))
+        })
+        .await
+        .expect("settlement-result lookup task panicked")
     }
 
     #[tracing::instrument(skip_all)]
@@ -703,7 +737,8 @@ impl<
         let attempt = self.resolve_new_settlement_attempt(attempt).await?;
         let attempt_number = self
             .store
-            .admin_insert_settlement_attempt(&job_id, &attempt, edit_even_if_completed)
+            .admin_insert_settlement_attempt_async(job_id, attempt, edit_even_if_completed)
+            .await
             .map_err(tag_admin_storage_error)
             .wrap_err_with(|| format!("Failed to insert settlement attempt for job {job_id}"))?;
         let live_task = self.notify_live_task_of_admin_edit(job_id).await;
@@ -725,12 +760,13 @@ impl<
     ) -> eyre::Result<LiveTaskNotification> {
         let result = SettlementAttemptResult::ClientError(ClientError::abandoned_by_admin(reason));
         self.store
-            .admin_override_settlement_attempt_result(
-                &job_id,
+            .admin_override_settlement_attempt_result_async(
+                job_id,
                 attempt_number,
-                &result,
+                result,
                 edit_even_if_completed,
             )
+            .await
             .map_err(tag_admin_storage_error)
             .wrap_err_with(|| {
                 format!(
@@ -751,7 +787,12 @@ impl<
         edit_even_if_completed: EditEvenIfCompleted,
     ) -> eyre::Result<LiveTaskNotification> {
         self.store
-            .admin_remove_settlement_attempt_result(&job_id, attempt_number, edit_even_if_completed)
+            .admin_remove_settlement_attempt_result_async(
+                job_id,
+                attempt_number,
+                edit_even_if_completed,
+            )
+            .await
             .map_err(tag_admin_storage_error)
             .wrap_err_with(|| {
                 format!(
@@ -792,7 +833,8 @@ impl<
         }
 
         self.store
-            .admin_force_remove_settlement_job_result(&job_id)
+            .admin_force_remove_settlement_job_result_async(job_id)
+            .await
             .map_err(tag_admin_storage_error)
             .wrap_err_with(|| {
                 format!("Failed to remove terminal result of settlement job {job_id}")
@@ -875,22 +917,13 @@ impl<
             };
         }
 
-        if let Some(result) = self
-            .store
-            .get_settlement_job_result(&job_id)
-            .wrap_err_with(|| {
-                format!("Failed to read settlement job terminal result for id {job_id}")
-            })?
-        {
+        let (result, job_exists) = self.read_stored_result(job_id).await?;
+
+        if let Some(result) = result {
             return Ok(RetrievedSettlementResult::Completed(result));
         }
 
-        if self
-            .store
-            .get_settlement_job(&job_id)
-            .wrap_err_with(|| format!("Failed to check settlement job existence for id {job_id}"))?
-            .is_none()
-        {
+        if !job_exists {
             eyre::bail!("No settlement job found for id {job_id}");
         }
 
