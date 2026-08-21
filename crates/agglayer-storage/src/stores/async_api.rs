@@ -8,14 +8,13 @@ use std::{future::Future, sync::Arc};
 
 use agglayer_types::{
     network_info::DisabledBy, Address, Certificate, CertificateHeader, CertificateId,
-    CertificateIndex, CertificateStatus, EpochNumber, ExecutionMode, Height, NetworkId, Nonce,
-    Proof, SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
-    SettlementJobResult, SettlementTxHash,
+    CertificateStatus, Height, NetworkId, Nonce, Proof, SettlementAttempt, SettlementAttemptResult,
+    SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
 
 use super::{
-    EditEvenIfCompleted, PendingCertificateReader, PendingCertificateWriter, PerEpochWriter,
-    SettlementReader, SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+    EditEvenIfCompleted, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
+    SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
     UpdateStatusToCandidate,
 };
 use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
@@ -248,26 +247,6 @@ pub trait AsyncStateWriterExt: StateWriter + 'static {
 }
 
 impl<S> AsyncStateWriterExt for S where S: StateWriter + ?Sized + 'static {}
-
-/// Async access to complete per-epoch write operations.
-pub trait AsyncPerEpochWriterExt: PerEpochWriter + 'static {
-    fn add_certificate_async(
-        self: &Arc<Self>,
-        certificate_id: CertificateId,
-        mode: ExecutionMode,
-    ) -> impl Future<Output = Result<(EpochNumber, CertificateIndex), Error>> + Send + 'static {
-        let store = Arc::clone(self);
-        async move {
-            tokio::task::spawn_blocking(move || {
-                PerEpochWriter::add_certificate(store.as_ref(), certificate_id, mode)
-            })
-            .await
-            .expect("epoch certificate write task panicked")
-        }
-    }
-}
-
-impl<S> AsyncPerEpochWriterExt for S where S: PerEpochWriter + ?Sized + 'static {}
 
 /// Async access to complete settlement-store read operations.
 pub trait AsyncSettlementReaderExt: SettlementReader + 'static {
