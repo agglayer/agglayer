@@ -38568,25 +38568,36 @@ var Hierarchy = class {
     try {
       response = await this.client.request(GET_PARENT, params(issue2));
     } catch (error2) {
-      if (error2?.status === 404) {
-        try {
-          const { data } = await this.client.request(GET_ISSUE, params(issue2));
-          if (!sameChild(normalizeIssue(data), issue2)) throw new Error("The visible child issue does not match.");
-          for (const expected of known) {
-            const response2 = await this.client.request(GET_ISSUE, params(expected));
-            const visible = normalizeIssue(response2.data);
-            ownedParent(visible, this.config);
-            if (!sameIssue(visible, expected)) throw new Error("The visible parent issue does not match.");
-          }
-          return null;
-        } catch {
-        }
-      }
-      throw error2?.status === 404 ? error2 : new ParentReadError(error2);
+      if (error2?.status !== 404) throw new ParentReadError(error2);
+      return this.confirmMissingParent(issue2, known);
     }
     const current = normalizeIssue(response.data);
     ownedParent(current, this.config);
     return current;
+  }
+  async confirmMissingParent(issue2, known) {
+    let visible;
+    try {
+      const { data } = await this.client.request(GET_ISSUE, params(issue2));
+      visible = normalizeIssue(data);
+    } catch (error2) {
+      throw new ParentReadError(error2);
+    }
+    if (!sameChild(visible, issue2)) throw new ParentReadError(new Error("The visible child issue does not match."));
+    for (const expected of known) {
+      try {
+        const { data } = await this.client.request(GET_ISSUE, params(expected));
+        const current = normalizeIssue(data);
+        ownedParent(current, this.config);
+        if (!sameIssue(current, expected)) throw new Error("The visible parent issue does not match.");
+      } catch (error2) {
+        throw new ParentReadError(Object.assign(
+          new Error("The child has no visible parent, but a recorded parent could not be verified; a trusted /review-tracker unmanage command relinquishes it."),
+          { cause: error2, status: error2?.status }
+        ));
+      }
+    }
+    return null;
   }
   async attach(parent, child2, replaceParent, authenticate) {
     const target = ownedParent(parent, this.config), subIssue = currentChild(child2, this.config);
@@ -38987,7 +38998,7 @@ var DEPLOYMENT = {
   }],
   maxPromptBytes: 35e5
 };
-var COMMANDS = ["/review-tracker set #123", "/review-tracker set REPOSITORY#123", "/review-tracker set OWNER/REPOSITORY#123", "/review-tracker none", "/review-tracker infer", "/review-tracker reconcile"];
+var COMMANDS = ["/review-tracker set #123", "/review-tracker set REPOSITORY#123", "/review-tracker set OWNER/REPOSITORY#123", "/review-tracker none", "/review-tracker infer", "/review-tracker reconcile", "/review-tracker unmanage"];
 var STATE_MARKER = "review-tracker-state";
 var LIFECYCLE_ACTIONS = /* @__PURE__ */ new Set([
   "opened",
@@ -39169,6 +39180,15 @@ var Tracker = class {
     if (command.kind === "none") {
       this.state.source = { none: true, via: "manual-none" };
       return true;
+    }
+    if (command.kind === "unmanage") {
+      for (const task of Object.values(this.state.tasks)) {
+        delete task.managedParent;
+        delete task.attemptedParent;
+        delete task.hierarchyInFlight;
+        task.hierarchyPending = false;
+      }
+      this.warnings.push("Parent provenance was relinquished; existing relationships are now unmanaged.");
     }
     return false;
   }
@@ -39754,7 +39774,7 @@ function matchesLegacyTask(config, pr, marker, issue2) {
 }
 function parseCommand(body, current = {}) {
   const text = String(body ?? "");
-  for (const kind of ["none", "infer", "reconcile"]) if (text === `/review-tracker ${kind}`) return { kind };
+  for (const kind of ["none", "infer", "reconcile", "unmanage"]) if (text === `/review-tracker ${kind}`) return { kind };
   const match = /^\/review-tracker set (?:(?:https:\/\/github\.com\/)?([\w.-]+\/[\w.-]+)(?:\/issues\/|#)|([\w.-]+)?#)([1-9]\d*)$/.exec(text);
   const explicit = match?.[1]?.split("/");
   const repository = explicit ? explicit.every(validSegment) ? match[1] : null : match && validSegment(current.owner) && validSegment(match[2] ?? current.repo) ? `${current.owner}/${match[2] ?? current.repo}` : null, number = Number(match?.[3]);

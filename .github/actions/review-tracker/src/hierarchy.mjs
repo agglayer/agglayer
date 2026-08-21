@@ -17,24 +17,33 @@ export class Hierarchy {
     try {
       response = await this.client.request(GET_PARENT, params(issue));
     } catch (error) {
-      if (error?.status === 404) {
-        try {
-          const { data } = await this.client.request(GET_ISSUE, params(issue));
-          if (!sameChild(normalizeIssue(data), issue)) throw new Error("The visible child issue does not match.");
-          for (const expected of known) {
-            const response = await this.client.request(GET_ISSUE, params(expected));
-            const visible = normalizeIssue(response.data);
-            ownedParent(visible, this.config);
-            if (!sameIssue(visible, expected)) throw new Error("The visible parent issue does not match.");
-          }
-          return null;
-        } catch { /* Preserve the ambiguous parent failure. */ }
-      }
-      throw error?.status === 404 ? error : new ParentReadError(error);
+      if (error?.status !== 404) throw new ParentReadError(error);
+      return this.confirmMissingParent(issue, known);
     }
     const current = normalizeIssue(response.data);
     ownedParent(current, this.config);
     return current;
+  }
+  async confirmMissingParent(issue, known) {
+    let visible;
+    try {
+      const { data } = await this.client.request(GET_ISSUE, params(issue));
+      visible = normalizeIssue(data);
+    } catch (error) { throw new ParentReadError(error); }
+    if (!sameChild(visible, issue)) throw new ParentReadError(new Error("The visible child issue does not match."));
+    for (const expected of known) {
+      try {
+        const { data } = await this.client.request(GET_ISSUE, params(expected));
+        const current = normalizeIssue(data);
+        ownedParent(current, this.config);
+        if (!sameIssue(current, expected)) throw new Error("The visible parent issue does not match.");
+      } catch (error) {
+        throw new ParentReadError(Object.assign(new Error("The child has no visible parent, but a recorded " +
+          "parent could not be verified; a trusted /review-tracker unmanage command relinquishes it."),
+        { cause: error, status: error?.status }));
+      }
+    }
+    return null;
   }
   async attach(parent, child, replaceParent, authenticate) {
     const target = ownedParent(parent, this.config), subIssue = currentChild(child, this.config);

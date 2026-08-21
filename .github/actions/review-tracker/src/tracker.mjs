@@ -11,7 +11,7 @@ const DEPLOYMENT = {
   legacyTasks: [{ issue: 1747, issueDatabaseId: 5169690048, issueNodeId: "I_kwDOLj_DwM8AAAABNCM1wA",
     pr: 1746, reviewerId: "MDQ6VXNlcjc1ODM3MTQ=" }],
   maxPromptBytes: 3_500_000 };
-export const COMMANDS = ["/review-tracker set #123", "/review-tracker set REPOSITORY#123", "/review-tracker set OWNER/REPOSITORY#123", "/review-tracker none", "/review-tracker infer", "/review-tracker reconcile"];
+export const COMMANDS = ["/review-tracker set #123", "/review-tracker set REPOSITORY#123", "/review-tracker set OWNER/REPOSITORY#123", "/review-tracker none", "/review-tracker infer", "/review-tracker reconcile", "/review-tracker unmanage"];
 const STATE_MARKER = "review-tracker-state";
 const LIFECYCLE_ACTIONS = new Set([
   "opened", "edited", "synchronize", "review_requested", "review_request_removed", "closed", "reopened",
@@ -155,6 +155,13 @@ export class Tracker {
       this.state.source = sourceFrom(item, "manual"); return true;
     }
     if (command.kind === "none") { this.state.source = { none: true, via: "manual-none" }; return true; }
+    if (command.kind === "unmanage") {
+      for (const task of Object.values(this.state.tasks)) {
+        delete task.managedParent; delete task.attemptedParent; delete task.hierarchyInFlight;
+        task.hierarchyPending = false;
+      }
+      this.warnings.push("Parent provenance was relinquished; existing relationships are now unmanaged.");
+    }
     return false;
   }
   async ensureTask(reviewer) {
@@ -610,7 +617,7 @@ function matchesLegacyTask(config, pr, marker, issue) {
 }
 export function parseCommand(body, current = {}) {
   const text = String(body ?? "");
-  for (const kind of ["none", "infer", "reconcile"]) if (text === `/review-tracker ${kind}`) return { kind };
+  for (const kind of ["none", "infer", "reconcile", "unmanage"]) if (text === `/review-tracker ${kind}`) return { kind };
   const match = /^\/review-tracker set (?:(?:https:\/\/github\.com\/)?([\w.-]+\/[\w.-]+)(?:\/issues\/|#)|([\w.-]+)?#)([1-9]\d*)$/.exec(text);
   const explicit = match?.[1]?.split("/");
   const repository = explicit ? (explicit.every(validSegment) ? match[1] : null) :

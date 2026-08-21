@@ -122,16 +122,19 @@ test("parent confirms the exact child before treating HTTP 404 as no parent", as
     (error) => error instanceof ParentReadError && error.cause === gone);
 });
 
-test("an unconfirmed parent 404 rethrows the original failure", async () => {
-  const confirmations = [
+test("an unconfirmed parent 404 is classified as an ambiguous read", async () => {
+  for (const confirmation of [
     childIssue({ id: 999 }), childIssue({ node_id: "I_other" }), childIssue({ number: 999 }),
     childIssue({ repository_url: "https://api.github.com/repos/agglayer/other" }),
-    childIssue({ node_id: "" }), httpError(404, "child unavailable"), httpError(403, "forbidden"),
-  ];
-  for (const confirmation of confirmations) {
+  ]) {
     const missing = httpError(404, "ambiguous parent lookup");
     await assert.rejects(new Hierarchy(fakeClient(missing, confirmation), config).parent(child),
-      (error) => error === missing);
+      (error) => error instanceof ParentReadError && /child issue does not match/.test(error.message));
+  }
+  for (const confirmation of [childIssue({ node_id: "" }), httpError(404, "child unavailable"), httpError(403, "forbidden")]) {
+    const missing = httpError(404, "ambiguous parent lookup");
+    await assert.rejects(new Hierarchy(fakeClient(missing, confirmation), config).parent(child),
+      (error) => error instanceof ParentReadError && !/no visible parent/.test(error.message));
   }
 });
 
@@ -152,21 +155,22 @@ test("parent confirms every known parent is visible before accepting a 404", asy
   ]);
 });
 
-test("an invisible or mismatched known parent preserves the original 404", async () => {
+test("an invisible or mismatched known parent is reported as unverifiable", async () => {
   const confirmations = [
     parentIssue({ node_id: "I_other" }),
     parentIssue({ repository_url: "https://api.github.com/repos/outside/other" }),
     httpError(404, "parent unavailable"), httpError(403, "forbidden"),
   ];
   for (const confirmation of confirmations) {
-    const missing = httpError(404, "ambiguous parent lookup");
+    const missing = httpError(404, "no parent");
     await assert.rejects(new Hierarchy(fakeClient(missing, childIssue(), confirmation), config)
-      .parent(child, [parent]), (error) => error === missing);
+      .parent(child, [parent]), (error) => error instanceof ParentReadError &&
+        /recorded parent could not be verified/.test(error.message) && /unmanage/.test(error.message));
   }
   const alternate = { issueId: "I_alternate", repository: "agglayer/bridge", number: 84 };
-  const missing = httpError(404, "ambiguous parent lookup");
+  const missing = httpError(404, "no parent");
   await assert.rejects(new Hierarchy(fakeClient(missing, childIssue(), parentIssue(), httpError(403, "forbidden")), config)
-    .parent(child, [parent, alternate]), (error) => error === missing);
+    .parent(child, [parent, alternate]), (error) => error instanceof ParentReadError && error.status === 403);
 });
 
 test("known-parent visibility follows the stable node ID across an agglayer move", async () => {

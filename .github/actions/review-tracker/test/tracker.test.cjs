@@ -741,6 +741,28 @@ test("an interrupted detach never removes a manually restored parent twice", asy
   assert.equal(fixture.hierarchy.detaches.length, detaches);
 });
 
+test("unmanage relinquishes unverifiable parent provenance without touching relationships", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  await run(fixture, direct("opened"));
+  fixture.hierarchy.parent = async () => {
+    throw new ParentReadError(Object.assign(
+      new Error("The child has no visible parent, but a recorded parent could not be verified."), { status: 404 }));
+  };
+  let result = await run(fixture, command("/review-tracker reconcile"));
+  assert.match(result.errors[0], /could not be verified/);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, "I_source");
+  assert.equal(result.state.tasks.U_alice.hierarchyInFlight, undefined);
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, true);
+
+  result = await run(fixture, command("/review-tracker unmanage"));
+  assert.equal(result.errors.length, 0);
+  assert.match(result.warnings.at(-1), /relinquished/);
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, false);
+  assert.equal(fixture.hierarchy.parents.get(101).issueId, "I_source");
+  assert.equal(fixture.hierarchy.detaches.length, 0);
+});
+
 test("a failed Project add preserves and retries the created review issue", async () => {
   const fixture = createFixture([reviewer("alice")]);
   const calls = [];
@@ -1093,6 +1115,7 @@ test("a newly resolved source is copied to every existing review task", async ()
 test("trusted commands use exact syntax", () => {
   const current = { owner: "agglayer", repo: "agglayer" };
   assert.deepEqual(parseCommand("/review-tracker none"), { kind: "none" });
+  assert.deepEqual(parseCommand("/review-tracker unmanage"), { kind: "unmanage" });
   assert.deepEqual(parseCommand("/review-tracker set #7", current), {
     kind: "set", repository: "agglayer/agglayer", number: 7,
   });
