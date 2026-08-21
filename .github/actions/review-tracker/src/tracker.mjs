@@ -270,8 +270,8 @@ export class Tracker {
     return task;
   }
   async syncTask(task, issue = null, status = null) {
-    task.pending = true; issue ??= await this.getIssue(task.issue);
-    if (!task.item) task.item = (await this.project.ensureIssue(issue)).id;
+    task.pending = true;
+    if (!task.item) task.item = (await this.project.ensureIssue(issue ?? await this.getIssue(task.issue))).id;
     await this.mutateTask(task, () => this.project.sync(task.item, this.state.source, status));
     delete task.pending;
   }
@@ -322,20 +322,23 @@ export class Tracker {
     const reviews = await this.github.paginate(this.github.rest.pulls.listReviews, {
       ...this.context.repo, pull_number: this.pull.number, per_page: 100,
     });
-    const ids = new Set(reviews.filter((review) => review.submitted_at && review.state !== "PENDING")
-      .map((review) => String(review.id)));
-    if (exactReviewId) ids.add(String(exactReviewId)); let complete = true;
-    for (const id of ids) complete = await this.capture(`process review ${id}`, () => this.processReview(id)) === true && complete;
+    const submitted = new Map(reviews.filter((review) => review.submitted_at && review.state !== "PENDING")
+      .map((review) => [String(review.id), review]));
+    if (exactReviewId && !submitted.has(String(exactReviewId))) submitted.set(String(exactReviewId), null);
+    let complete = true;
+    for (const [id, review] of submitted)
+      complete = await this.capture(`process review ${id}`, () => this.processReview(id, review)) === true && complete;
     if (complete) for (const task of Object.values(this.state.tasks)) delete task.replayAfter;
   }
-  async processReview(reviewId) {
+  async processReview(reviewId, known = null) {
     const id = String(reviewId);
     const processed = this.state.reviews.includes(id);
     if (processed && !Object.values(this.state.tasks).some((task) => task.replayAfter)) return true;
     if (!processed && this.state.reviews.length >= 2_000) throw new Error("The processed-review list is too large.");
-    const { data: review } = await this.github.rest.pulls.getReview({
+    let review = known;
+    if (!review) ({ data: review } = await this.github.rest.pulls.getReview({
       ...this.context.repo, pull_number: this.pull.number, review_id: Number(id),
-    });
+    }));
     if (String(review.id) !== id || !review.user?.node_id || !review.submitted_at || review.state === "PENDING") {
       throw new Error("GitHub returned an invalid submitted review.");
     }

@@ -154,7 +154,7 @@ test("each distinct review ID transitions the source once, even for one reviewer
   assert.deepEqual(fixture.project.sourceReviews, ["2026-01-01T01:00:00Z"]);
 
   await run(fixture, reviewEvent(), "501");
-  assert.equal(fixture.github.reviewReads.get("501"), 1);
+  assert.equal(fixture.github.reviewReads.size, 0);
   fixture.github.reviews.set("502", submitted("502", alice, "2026-01-01T02:00:00Z"));
   result = await run(fixture, reviewEvent(), "502");
   assert.deepEqual(result.state.reviews, ["501", "502"]);
@@ -288,7 +288,7 @@ test("set and reconcile refresh every task without replaying lifecycle events", 
     assert.equal(fixture.project.status.get(202), "ready");
     assert.equal(fixture.github.issues.get(102).state, "closed");
     assert.deepEqual(fixture.project.sourceReviews, ["2026-01-01T01:00:00Z"]);
-    assert.equal(fixture.github.reviewReads.get("501"), 1);
+    assert.equal(fixture.github.reviewReads.size, 0);
   }
 });
 

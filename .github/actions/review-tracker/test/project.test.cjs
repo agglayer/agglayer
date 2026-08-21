@@ -92,6 +92,22 @@ test("ensureIssue reuses an item added by Project automation", async () => {
   assert.equal(client.requests.some(([route]) => route.startsWith("POST")), false);
 });
 
+test("ensureIssue refreshes the Project listing once per instance", async () => {
+  const client = fakeClient();
+  const entry = (id, nodeId, databaseId, issueId, number) => ({
+    id, node_id: nodeId, content_type: "Issue", archived_at: null, fields: [],
+    content: { id: databaseId, node_id: issueId, number, repository: { full_name: "agglayer/agglayer" },
+      user: { login: "github-actions[bot]" }, body: "<!-- review-tracker-task:signed -->", assignees: [] },
+  });
+  let listings = 0;
+  client.paginate = async () => { listings += 1; return [entry(22, "PVTI_22", 1234, "I_1234", 99), entry(23, "PVTI_23", 2345, "I_2345", 100)]; };
+  const project = new Project(client, config);
+
+  assert.deepEqual(await project.ensureIssue({ id: 1234, node_id: "I_1234" }), { id: 22, nodeId: "PVTI_22" });
+  assert.deepEqual(await project.ensureIssue({ id: 2345, node_id: "I_2345" }), { id: 23, nodeId: "PVTI_23" });
+  assert.equal(listings, 1);
+});
+
 test("ensureIssue recovers when Project automation wins the add race", async () => {
   const client = fakeClient(), item = {
     id: 22, node_id: "PVTI_22", content_type: "Issue", archived_at: null, fields: [],

@@ -19,7 +19,8 @@ export class Project {
     return this.cachedItems;
   }
   async ensureIssue(issue) {
-    const existing = (await this.items(true)).find((item) => item.issueId === issue.node_id);
+    const existing = (await this.items(!this.verifiedItems)).find((item) => item.issueId === issue.node_id);
+    this.verifiedItems = true;
     if (existing) return { id: existing.item, nodeId: existing.itemNode };
     try { return await this.addIssue(issue.id); }
     catch (error) {
