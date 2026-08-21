@@ -5,9 +5,8 @@ use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
-        async_api::{AsyncPendingCertificateWriterExt, AsyncPerEpochWriterExt},
-        PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
-        StateReader, StateWriter,
+        async_api::AsyncPendingCertificateWriterExt, PendingCertificateReader,
+        PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
@@ -345,54 +344,15 @@ where
                             new_state = new.get_roots().display_to_hex(),
                             "Updated the state following certificate settlement",
                         );
-                        // Assign the epoch BEFORE advancing local state: a failed
-                        // assignment then leaves the cert `Candidate` with the
-                        // pre-settlement state intact (recoverable). Retry to ride
-                        // out a transient epoch rollover.
-                        const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
-                        let (epoch_number, certificate_index) = 'assign: {
-                            for attempt in 1..=MAX_EPOCH_ASSIGNMENT_RETRIES {
-                                let related_epoch = self.current_epoch.load_full();
-                                let assignment = related_epoch
-                                    .add_certificate_async(certificate_id, ExecutionMode::Default)
-                                    .await;
-                                drop(related_epoch);
-                                match assignment {
-                                    Ok((epoch_number, certificate_index)) => {
-                                        info!("Certificate added to epoch {epoch_number} with index {certificate_index}");
-                                        break 'assign (epoch_number, certificate_index);
-                                    }
-                                    Err(agglayer_storage::error::Error::AlreadyPacked(epoch)) => {
-                                        warn!(attempt, %epoch, "Epoch already packed, delay and retry assignment");
-                                        tokio::time::sleep(Duration::from_secs(1)).await;
-                                    }
-                                    Err(error) => {
-                                        warn!(%error, attempt, "Failed to add certificate to epoch (retrying)");
-                                    }
-                                }
-                            }
-                            error!("CRITICAL: Failed to add certificate to epoch after {MAX_EPOCH_ASSIGNMENT_RETRIES} retries");
-                            return Err(Error::PersistenceError {
-                                certificate_id,
-                                error: "Failed to add certificate to epoch after retries".to_string(),
-                            });
-                        };
-
-                        // Assigned: persist the new local state before publishing it in memory.
-                        self.local_state = self
-                            .persist_settled_certificate(
+                        let (new_state, epoch_number, certificate_index) = self
+                            .assign_and_persist_settled_certificate(
                                 new,
                                 bridge_exit_hashes,
                                 height,
                                 certificate_id,
-                                epoch_number,
-                                certificate_index,
                             )
-                            .await
-                            .map_err(|e| Error::PersistenceError {
-                                certificate_id,
-                                error: e.to_string(),
-                            })?;
+                            .await?;
+                        self.local_state = new_state;
 
                         self.latest_settled = Some(SettledCertificate(
                             certificate_id, height, epoch_number, certificate_index,
@@ -466,39 +426,89 @@ where
         .expect("certificate task initialization panicked")
     }
 
-    async fn persist_settled_certificate(
+    /// Assign the certificate to the current epoch and persist the settled
+    /// state as one uninterruptible durable transition.
+    ///
+    /// The whole sequence runs in a single blocking task: once it starts,
+    /// dropping the network task future can no longer stop the transition
+    /// between the epoch assignment (which marks the header `Settled`) and
+    /// the local network state, RPC cursor, and settled-cursor writes.
+    async fn assign_and_persist_settled_certificate(
         &self,
         new: Box<LocalNetworkStateData>,
         bridge_exit_hashes: Vec<Digest>,
         height: Height,
         certificate_id: CertificateId,
-        epoch_number: EpochNumber,
-        certificate_index: CertificateIndex,
-    ) -> Result<Box<LocalNetworkStateData>, agglayer_storage::error::Error> {
+    ) -> Result<(Box<LocalNetworkStateData>, EpochNumber, CertificateIndex), Error> {
+        let current_epoch = self.current_epoch.clone();
         let state_store = self.state_store.clone();
         let network_id = self.network_id;
+        let span = tracing::Span::current();
         tokio::task::spawn_blocking(move || {
-            state_store.write_local_network_state(
-                &network_id,
-                &new,
-                bridge_exit_hashes.as_slice(),
-            )?;
+            let _entered = span.enter();
 
-            // Kept as the sole writer of `CertificatePerNetworkColumn`
-            // (the RPC cursor index): `assign_certificate_to_epoch` set
-            // the status but not that index.
-            state_store
-                .update_certificate_header_status(&certificate_id, &CertificateStatus::Settled)?;
+            // Assign the epoch BEFORE advancing local state: a failed
+            // assignment then leaves the cert `Candidate` with the
+            // pre-settlement state intact (recoverable). Retry to ride
+            // out a transient epoch rollover.
+            const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
+            let (epoch_number, certificate_index) = 'assign: {
+                for attempt in 1..=MAX_EPOCH_ASSIGNMENT_RETRIES {
+                    let related_epoch = current_epoch.load_full();
+                    let assignment =
+                        related_epoch.add_certificate(certificate_id, ExecutionMode::Default);
+                    drop(related_epoch);
+                    match assignment {
+                        Ok((epoch_number, certificate_index)) => {
+                            info!("Certificate added to epoch {epoch_number} with index {certificate_index}");
+                            break 'assign (epoch_number, certificate_index);
+                        }
+                        Err(agglayer_storage::error::Error::AlreadyPacked(epoch)) => {
+                            warn!(attempt, %epoch, "Epoch already packed, delay and retry assignment");
+                            std::thread::sleep(Duration::from_secs(1));
+                        }
+                        Err(error) => {
+                            warn!(%error, attempt, "Failed to add certificate to epoch (retrying)");
+                        }
+                    }
+                }
+                error!("CRITICAL: Failed to add certificate to epoch after {MAX_EPOCH_ASSIGNMENT_RETRIES} retries");
+                return Err(Error::PersistenceError {
+                    certificate_id,
+                    error: "Failed to add certificate to epoch after retries".to_string(),
+                });
+            };
 
-            state_store.set_latest_settled_certificate_for_network(
-                &network_id,
-                &height,
-                &certificate_id,
-                &epoch_number,
-                &certificate_index,
-            )?;
+            // Assigned: persist the new local state before publishing it in memory.
+            let persistence = (|| {
+                state_store.write_local_network_state(
+                    &network_id,
+                    &new,
+                    bridge_exit_hashes.as_slice(),
+                )?;
 
-            Ok(new)
+                // Kept as the sole writer of `CertificatePerNetworkColumn`
+                // (the RPC cursor index): `assign_certificate_to_epoch` set
+                // the status but not that index.
+                state_store.update_certificate_header_status(
+                    &certificate_id,
+                    &CertificateStatus::Settled,
+                )?;
+
+                state_store.set_latest_settled_certificate_for_network(
+                    &network_id,
+                    &height,
+                    &certificate_id,
+                    &epoch_number,
+                    &certificate_index,
+                )
+            })();
+            persistence.map_err(|e| Error::PersistenceError {
+                certificate_id,
+                error: e.to_string(),
+            })?;
+
+            Ok((new, epoch_number, certificate_index))
         })
         .await
         .expect("settled certificate persistence task panicked")
