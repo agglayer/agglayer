@@ -39480,7 +39480,6 @@ var Tracker = class {
     }
     if (current && sameIssue(current, attempted)) {
       task.managedParent = attempted;
-      managed = attempted;
       delete task.attemptedParent;
       attempted = null;
       await this.save();

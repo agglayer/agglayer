@@ -408,7 +408,7 @@ export class Tracker {
       throw new Error(`Review task #${task.issue} has an unrelated parent; it was preserved.`);
     }
     if (current && sameIssue(current, attempted)) {
-      task.managedParent = attempted; managed = attempted;
+      task.managedParent = attempted;
       delete task.attemptedParent; attempted = null;
       await this.save();
     }
