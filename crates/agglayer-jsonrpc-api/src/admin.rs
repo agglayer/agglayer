@@ -2,10 +2,13 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_settlement_service::SettlementService;
-use agglayer_storage::stores::{
-    async_api::{AsyncPendingCertificateWriterExt, AsyncStateReaderExt, AsyncStateWriterExt},
-    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
-    SettlementWriter, StateReader, StateWriter,
+use agglayer_storage::{
+    stores::{
+        async_api::{AsyncPendingCertificateWriterExt, AsyncStateReaderExt, AsyncStateWriterExt},
+        DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter,
+        SettlementReader, SettlementWriter, StateReader, StateWriter,
+    },
+    NetworkMetrics,
 };
 use agglayer_tries::smt::SmtPath;
 use agglayer_types::{
@@ -396,6 +399,7 @@ pub struct AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider> {
     debug_store: Arc<DebugStore>,
     config: Arc<Config>,
     settlement_service: SettlementService<L1Provider, StateStore>,
+    network_metrics: NetworkMetrics,
 }
 
 impl<PendingStore, StateStore, DebugStore, L1Provider>
@@ -409,6 +413,7 @@ impl<PendingStore, StateStore, DebugStore, L1Provider>
         debug_store: Arc<DebugStore>,
         config: Arc<Config>,
         settlement_service: SettlementService<L1Provider, StateStore>,
+        network_metrics: NetworkMetrics,
     ) -> Self {
         Self {
             certificate_sender,
@@ -417,6 +422,7 @@ impl<PendingStore, StateStore, DebugStore, L1Provider>
             debug_store,
             config,
             settlement_service,
+            network_metrics,
         }
     }
 }
@@ -863,6 +869,7 @@ where
         );
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
+        let network_metrics = self.network_metrics.clone();
         tokio::task::spawn_blocking(move || {
             let certificate = if let Some(certificate) = state
                 .get_certificate_header(&certificate_id)
@@ -886,6 +893,23 @@ where
                 .map_err(|error| {
                     error!("Failed to update latest pending certificate: {}", error);
                     Error::internal("Unable to update latest pending certificate")
+                })?;
+
+            network_metrics
+                .reconcile_pending_error(
+                    pending_store.as_ref(),
+                    state.as_ref(),
+                    certificate.network_id,
+                    certificate.certificate_id,
+                )
+                .map_err(|error| {
+                    error!(
+                        ?error,
+                        "Failed to reconcile the latest pending certificate error metric"
+                    );
+                    Error::internal(
+                        "Unable to reconcile the latest pending certificate error metric",
+                    )
                 })
         })
         .await

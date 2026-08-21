@@ -3,6 +3,7 @@ use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 use agglayer_config::Config;
 use eyre::bail;
 use node::Node;
+use prometheus::Registry;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 mod logging;
@@ -93,10 +94,13 @@ pub fn main(
         .enable_all()
         .build()?;
 
+    let registry = Registry::new();
+
     // Create the metrics server.
     let metric_server = metrics_runtime.block_on(
         MetricsBuilder::builder()
             .addr(config.telemetry.addr)
+            .registry(registry.clone())
             .cancellation_token(global_cancellation_token.clone())
             .build(),
     )?;
@@ -117,6 +121,7 @@ pub fn main(
         Node::builder()
             .config(config.clone())
             .cancellation_token(global_cancellation_token.clone())
+            .registry(registry)
             .version(version.to_string())
             .start(),
     )?;

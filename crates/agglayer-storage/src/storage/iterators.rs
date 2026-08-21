@@ -1,5 +1,3 @@
-use tracing::debug;
-
 use super::DBError;
 use crate::schema::{Codec as _, ColumnSchema};
 
@@ -112,14 +110,16 @@ impl<C: ColumnSchema> Iterator for ColumnIterator<'_, C> {
             },
         }
 
-        // If the iterator is invalid, return None
+        // An invalid iterator is either exhausted (Ok status) or hit a
+        // RocksDB error; surface the error once instead of truncating the
+        // scan silently, since callers seed startup state from these scans.
         if !self.iter.valid() {
             self.status = IteratorStatus::Done;
-            if let Err(error) = self.iter.status() {
-                debug!("Invalid iterator {}", error);
-            }
 
-            return None;
+            return match self.iter.status() {
+                Ok(()) => None,
+                Err(error) => Some(Err(error.into())),
+            };
         }
 
         self.parse_key_value().transpose()

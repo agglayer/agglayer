@@ -127,6 +127,30 @@ async fn settlement_path_metrics_are_exposed(#[case] state: Forest) {
         "metrics body:\n{body}"
     );
 
+    for declaration in [
+        "# HELP agglayer_node_network_height Height of the latest certificate per network and \
+         lifecycle stage",
+        "# TYPE agglayer_node_network_height gauge",
+        "# HELP agglayer_node_network_latest_certificate_in_error Whether the latest known \
+         certificate of the network is in error (1) or not (0)",
+        "# TYPE agglayer_node_network_latest_certificate_in_error gauge",
+    ] {
+        assert!(
+            body.lines().any(|line| line == declaration),
+            "missing metric declaration {declaration:?}, metrics body:\n{body}"
+        );
+    }
+
+    for line in body
+        .lines()
+        .filter(|line| line.starts_with("agglayer_node_network_"))
+    {
+        assert!(
+            line.contains("otel_scope_name=\"agglayer_node_network\""),
+            "network metric lost its OpenTelemetry scope label: {line}"
+        );
+    }
+
     // The bridging histograms only emit while a certificate moves through
     // the settlement path. If a refactor orphans that instrumentation, the
     // series disappear instead of reading zero, so assert each one exists

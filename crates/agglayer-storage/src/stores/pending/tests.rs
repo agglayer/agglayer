@@ -253,3 +253,41 @@ fn get_current_pending_heights_returns_all_networks() {
         PendingCertificate(certificate_15.hash(), Height::new(3))
     );
 }
+
+/// The pointer scans seed the native network metrics at startup: an entry
+/// that fails to decode must fail the scan instead of being skipped, or the
+/// gauges would silently stay incomplete until the next restart.
+#[test]
+fn current_pointer_scans_fail_on_undecodable_entries() {
+    use crate::columns::{
+        latest_pending_certificate_per_network::LatestPendingCertificatePerNetworkColumn,
+        latest_proven_certificate_per_network::LatestProvenCertificatePerNetworkColumn,
+    };
+
+    let (_tmp, store) = store();
+    let key = NetworkId::new(2).encode().unwrap();
+
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(LatestPendingCertificatePerNetworkColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+    store
+        .db
+        .raw_rocksdb()
+        .put_cf(&cf, &key, b"garbage")
+        .unwrap();
+    assert!(store.get_current_pending_heights().is_err());
+
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(LatestProvenCertificatePerNetworkColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+    store
+        .db
+        .raw_rocksdb()
+        .put_cf(&cf, &key, b"garbage")
+        .unwrap();
+    assert!(store.get_current_proven_height().is_err());
+}

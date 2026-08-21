@@ -13,18 +13,14 @@ pub(crate) const STAGE_LABEL_NAME: &str = "stage";
 
 /// A certificate lifecycle stage, rendered as the `stage` label value.
 ///
-/// The metric families each use a subset: the duration histograms time the
-/// non-terminal stages (`Pending`, `Proven`, `Candidate`), while the
-/// per-network height gauge reports pointer positions (`Pending`, `Proven`,
-/// `Settled`). Sharing one enum keeps the label values consistent across
-/// families.
+/// The duration histograms time the non-terminal stages (`Pending`, `Proven`,
+/// `Candidate`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum_macros::Display)]
 #[strum(serialize_all = "snake_case")]
 pub enum CertificateStage {
     Pending,
     Proven,
     Candidate,
-    Settled,
 }
 
 /// Histogram buckets in seconds, from the sub-second submission stage to
