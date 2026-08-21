@@ -105,27 +105,25 @@ export class Tracker {
     const event = eventFrom(this.context, this.reviewId, this.eventAction);
     const lifecycleReady = event.kind !== "lifecycle" ||
       await this.capture("lifecycle state", () => this.refreshLifecycleState()) === true;
-    let command = null;
-    if (event.kind === "command") {
-      const commandId = positiveDecimal(this.context.payload.comment?.id, "comment ID");
-      if (BigInt(commandId) <= BigInt(this.state.lastCommand))
-        this.warnings.push(`Ignored out-of-order command comment ${commandId}.`);
-      else {
-        this.state.lastCommand = commandId;
-        command = await this.capture("command", () => parseCommand(this.context.payload.comment?.body, this.context.repo));
-      }
+    let sourceChanged = false, infer = false, reconcile = false, applied = 0;
+    for (const pending of await this.pendingCommands(event)) {
+      this.state.lastCommand = pending.id;
+      if (pending.skip) { this.warnings.push(`Ignoring review-tracker command from @${pending.login ?? "unknown"}.`); continue; }
+      const command = await this.capture("command", () => parseCommand(pending.body, this.context.repo));
+      if (!command) continue;
+      applied += 1;
+      if (command.kind === "infer") infer = true;
+      if (command.kind === "reconcile") reconcile = true;
+      sourceChanged = await this.capture("command", () => this.applyCommand(command)) === true || sourceChanged;
     }
-    let sourceChanged = false;
-    if (command) sourceChanged = await this.capture("command", () => this.applyCommand(command)) === true;
-    if (this.state.taskRecovery !== 1 || command?.kind === "reconcile")
+    if (this.state.taskRecovery !== 1 || reconcile)
       await this.capture("review task recovery", () => this.recoverTasks());
-    const infer = command?.kind === "infer";
     const authorCanInfer = !this.state.source && event.kind !== "command" && await this.capture("PR author permission",
       () => hasWriteAccess(this.github, this.context.repo, this.pull.user?.login)) === true;
     const refresh = event.kind === "lifecycle" && ["edited", "synchronize"].includes(event.action) &&
       !String(this.state.source?.via ?? "").startsWith("manual");
     if (lifecycleReady && (!this.state.source || infer || refresh) && this.pull.state !== "closed" &&
-      (event.kind !== "command" || command)) {
+      (event.kind !== "command" || applied)) {
       const selected = await this.capture("source selection", () => selectSource({
         github: this.github, project: this.project, anthropic: this.anthropic, config: this.config,
         pull: this.pull, pullComments: this.comments, allowModel: authorCanInfer || infer,
@@ -134,21 +132,45 @@ export class Tracker {
       else if (selected === null && !this.state.source) this.warnings.push(
         "Automatic source inference is reserved for PR authors with write access; use /review-tracker set, none, or infer.");
     }
-    await this.prepareHierarchy(sourceChanged, command?.kind === "reconcile");
+    await this.prepareHierarchy(sourceChanged, reconcile);
     if (event.kind === "lifecycle" && lifecycleReady) {
       await this.capture("review reconciliation", () => this.reconcileReviews());
       await this.reconcileLifecycle();
+    } else if (reconcile) {
+      const current = await this.capture("lifecycle state", () => this.refreshLifecycleState()) === true;
+      await this.capture("review reconciliation", () => this.reconcileReviews(event.kind === "reviewed" ? event.reviewId : null));
+      if (current) await this.reconcileLifecycle();
     } else if (event.kind === "reviewed")
       await this.capture("review reconciliation", () => this.reconcileReviews(event.reviewId));
-    else if (command?.kind === "reconcile") {
-      const current = await this.capture("lifecycle state", () => this.refreshLifecycleState()) === true;
-      await this.capture("review reconciliation", () => this.reconcileReviews());
-      if (current) await this.reconcileLifecycle();
-    }
-    if (sourceChanged || command?.kind === "reconcile") await this.syncTasks();
+    if (sourceChanged || reconcile) await this.syncTasks();
     await this.syncHierarchies();
     await this.save();
     return { state: this.state, errors: this.errors, warnings: this.warnings };
+  }
+  async pendingCommands(event) {
+    const commands = new Map();
+    for (const comment of this.comments) {
+      const id = String(comment.id ?? "");
+      if (!/^\/review-tracker(?:\s|$)/.test(String(comment.body ?? "")) || !/^[1-9]\d*$/.test(id) ||
+        BigInt(id) <= BigInt(this.state.lastCommand)) continue;
+      commands.set(id, { id, body: comment.body, login: comment.user?.login });
+    }
+    if (event.kind === "command") {
+      const id = positiveDecimal(this.context.payload.comment?.id, "comment ID");
+      if (BigInt(id) <= BigInt(this.state.lastCommand)) this.warnings.push(`Ignored out-of-order command comment ${id}.`);
+      else commands.set(id, { id, body: this.context.payload.comment?.body, trusted: true });
+    }
+    const pending = [], writable = new Map();
+    for (const command of [...commands.values()].sort((left, right) => (BigInt(left.id) < BigInt(right.id) ? -1 : 1))) {
+      if (!command.trusted) {
+        if (!writable.has(command.login)) writable.set(command.login, await this.capture("command scan",
+          () => hasWriteAccess(this.github, this.context.repo, command.login)));
+        if (writable.get(command.login) === undefined) continue;
+        command.skip = writable.get(command.login) !== true;
+      }
+      pending.push(command);
+    }
+    return pending;
   }
   async applyCommand(command) {
     if (command.kind === "set") {

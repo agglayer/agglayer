@@ -1216,6 +1216,47 @@ test("invalid trusted commands are reported in the canonical comment", async () 
   assert.match(fixture.github.comments[0].body, /Tracking completed with errors/);
 });
 
+test("a command comment lost to concurrency is applied on the next event", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  await run(fixture, direct("opened"));
+  fixture.github.comments.push({ id: 5000, user: { login: "maintainer" }, body: "/review-tracker none" });
+
+  const result = await run(fixture, direct("edited"));
+  assert.equal(result.errors.length, 0);
+  assert.deepEqual(result.state.source, { none: true, via: "manual-none" });
+  assert.equal(result.state.lastCommand, "5000");
+  assert.deepEqual(fixture.github.permissionReads, ["author", "maintainer"]);
+  assert.equal(fixture.hierarchy.parents.has(101), false);
+});
+
+test("a recovered older command applies before the triggering newer command", async () => {
+  const fixture = createFixture([]);
+  fixture.github.comments.push({ id: 30, user: { login: "maintainer" }, body: "/review-tracker none" });
+
+  const result = await run(fixture, command("/review-tracker set agglayer/agglayer#7", 40));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.source.via, "manual");
+  assert.equal(result.state.source.number, 7);
+  assert.equal(result.state.lastCommand, "40");
+});
+
+test("scanned commands without write access are ignored once with a warning", async () => {
+  const fixture = createFixture([]);
+  await run(fixture, direct("opened"));
+  fixture.github.permission = "read";
+  fixture.github.comments.push({ id: 6000, user: { login: "drive-by" }, body: "/review-tracker none" });
+
+  let result = await run(fixture, direct("edited"));
+  assert.equal(result.warnings.some((warning) => /Ignoring review-tracker command from @drive-by/.test(warning)), true);
+  assert.equal(result.state.source.via, "closing");
+  assert.equal(result.state.lastCommand, "6000");
+
+  const reads = fixture.github.permissionReads.length;
+  result = await run(fixture, direct("edited"));
+  assert.equal(fixture.github.permissionReads.length, reads);
+  assert.equal(result.warnings.some((warning) => /drive-by/.test(warning)), false);
+});
+
 test("newer command comments cannot be overwritten by delayed older commands", async () => {
   const fixture = createFixture([]);
   let result = await run(fixture, command("/review-tracker none", 20));

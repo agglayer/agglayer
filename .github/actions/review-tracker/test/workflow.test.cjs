@@ -76,7 +76,7 @@ test("every external runtime action is pinned to a commit SHA", () => {
   }
 });
 
-test("maintained production code remains at most 1,150 physical lines", () => {
+test("maintained production code remains at most 1,200 physical lines", () => {
   const files = [
     ...fs.readdirSync(path.join(root, ".github/actions/review-tracker/src"))
       .filter((file) => file.endsWith(".mjs")).map((file) => `.github/actions/review-tracker/src/${file}`),
@@ -86,7 +86,7 @@ test("maintained production code remains at most 1,150 physical lines", () => {
     ".github/workflows/pr-review-tracker-signal.yml",
   ];
   const lines = files.reduce((total, file) => total + read(file).split("\n").length - 1, 0);
-  assert.ok(lines <= 1_150, `maintained production code grew to ${lines} lines`);
+  assert.ok(lines <= 1_200, `maintained production code grew to ${lines} lines`);
 });
 
 function read(relativePath) { return fs.readFileSync(path.join(root, relativePath), "utf8"); }

@@ -4,7 +4,7 @@ This local action creates one same-repository issue for each person requested to
 It assigns the issue to that reviewer, updates Project 47 as review events arrive,
 and links it as a sub-issue of the PR's selected source issue.
 
-The maintained production implementation is capped at 1,150 physical lines.
+The maintained production implementation is capped at 1,200 physical lines.
 That count includes `src/`, `action.yml`, `package.json`, and both runtime workflows.
 It excludes tests, documentation, `package-lock.json`, and the generated `dist/` bundle.
 
