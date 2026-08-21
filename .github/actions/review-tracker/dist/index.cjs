@@ -39232,8 +39232,7 @@ var Tracker = class {
           continue;
         }
       }
-      const legacyMarker = legacy && matchesLegacyTask(this.config, this.pull.number, marker, issue2);
-      if (!legacyMarker && !boundTaskMarker(marker, this.config, this.pull.number, marker?.reviewerId, issue2)) continue;
+      if (legacy ? !matchesLegacyTask(this.config, this.pull.number, marker, issue2) : !boundTaskMarker(marker, this.config, this.pull.number, marker?.reviewerId, issue2)) continue;
       const current = this.cachedTaskIssues.get(marker.reviewerId);
       if (!current || current.legacy && !legacy || current.legacy === legacy && issue2.number < current.issue.number)
         this.cachedTaskIssues.set(marker.reviewerId, { issue: issue2, legacy });

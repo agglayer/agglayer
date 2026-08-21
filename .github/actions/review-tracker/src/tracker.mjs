@@ -203,8 +203,8 @@ export class Tracker {
         if (!allowLegacy) continue;
         try { marker = decodeMarker(issue.body, "review-tracker-task", null); legacy = true; } catch { continue; }
       }
-      const legacyMarker = legacy && matchesLegacyTask(this.config, this.pull.number, marker, issue);
-      if (!legacyMarker && !boundTaskMarker(marker, this.config, this.pull.number, marker?.reviewerId, issue)) continue;
+      if (legacy ? !matchesLegacyTask(this.config, this.pull.number, marker, issue)
+        : !boundTaskMarker(marker, this.config, this.pull.number, marker?.reviewerId, issue)) continue;
       const current = this.cachedTaskIssues.get(marker.reviewerId);
       if (!current || (current.legacy && !legacy) || current.legacy === legacy && issue.number < current.issue.number)
         this.cachedTaskIssues.set(marker.reviewerId, { issue, legacy });

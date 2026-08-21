@@ -910,6 +910,25 @@ test("legacy recovery rejects unsigned task issues outside its allowlist", async
   assert.equal(result.state.tasks.U_alice, undefined);
 });
 
+test("legacy recovery rejects an unsigned issue-bound v2 marker", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([]);
+  await fixture.github.rest.issues.create({ title: "Unrelated bot issue", body: "No task marker." });
+  const { data: issue } = await fixture.github.rest.issues.create({
+    title: "Review PR #9", body: "placeholder", assignees: [alice.login],
+  });
+  const payload = Buffer.from(JSON.stringify({
+    v: 2, repositoryId: config.repositoryId, pr: 9, reviewerId: alice.node_id,
+    issueDatabaseId: issue.id, issueNodeId: issue.node_id, issue: issue.number,
+  })).toString("base64url");
+  issue.body = `<!-- review-tracker-task:${payload} -->`;
+  const state = emptyState(config, 9);
+  delete state.taskRecovery;
+  fixture.github.comments.push({ id: 1, user: { login: config.botLogin }, body: renderComment(config, state) });
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.state.tasks.U_alice, undefined);
+});
+
 test("legacy recovery replays every consumed review for one task", async () => {
   const alice = reviewer("alice"), fixture = createFixture([]);
   await fixture.github.rest.issues.create({
