@@ -456,7 +456,12 @@ export class Tracker {
     let issue, marker;
     try { issue = await this.getIssue(task.issue); }
     catch (error) { throw new ParentReadError(error); }
-    try { marker = decodeMarker(issue?.body, "review-tracker-task", this.config.projectsToken); } catch { /* Validate below. */ }
+    try { marker = decodeMarker(issue?.body, "review-tracker-task", this.config.projectsToken); }
+    catch {
+      // The signed PR state already binds this exact issue and reviewer, so an unsigned
+      // production v0/v1 marker can be upgraded without trusting the marker itself.
+      try { marker = decodeMarker(issue?.body, "review-tracker-task", null); } catch { /* Validate below. */ }
+    }
     if ([0, 1].includes(marker?.v) && baseTaskMarker(marker, this.config, this.pull.number, reviewerId) &&
       issue?.number === task.issue && issue?.user?.login === this.config.botLogin && !issue.pull_request) {
       try {

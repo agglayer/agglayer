@@ -39548,6 +39548,10 @@ var Tracker = class {
     try {
       marker = decodeMarker(issue2?.body, "review-tracker-task", this.config.projectsToken);
     } catch {
+      try {
+        marker = decodeMarker(issue2?.body, "review-tracker-task", null);
+      } catch {
+      }
     }
     if ([0, 1].includes(marker?.v) && baseTaskMarker(marker, this.config, this.pull.number, reviewerId) && issue2?.number === task.issue && issue2?.user?.login === this.config.botLogin && !issue2.pull_request) {
       try {

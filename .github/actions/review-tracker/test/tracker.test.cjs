@@ -984,6 +984,25 @@ test("a mapped signed v1 task is upgraded to its issue-bound marker", async () =
   assert.match(issue.body, new RegExp(taskMarker(config, 9, alice.node_id, issue).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
+test("a mapped unsigned v1 production task is upgraded via its signed state binding", async () => {
+  const alice = reviewer("alice"), fixture = createFixture([]);
+  await fixture.github.rest.issues.create({ title: "Unrelated bot issue", body: "No task marker." });
+  const { data: issue } = await fixture.github.rest.issues.create({
+    title: "Review PR #9", body: legacyTaskMarker(9, alice.node_id), assignees: [alice.login],
+  });
+  const state = emptyState(config, 9);
+  state.source = { none: true, via: "manual-none" };
+  state.tasks.U_alice = {
+    login: alice.login, issue: issue.number, item: 201, fulfilled: true,
+    closedByPr: false, hierarchyPending: true,
+  };
+  fixture.github.comments.push({ id: 1, user: { login: config.botLogin }, body: renderComment(config, state) });
+
+  const result = await run(fixture, command("/review-tracker reconcile"));
+  assert.equal(result.errors.length, 0);
+  assert.match(issue.body, new RegExp(taskMarker(config, 9, alice.node_id, issue).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
 test("recovery rejects a valid task marker copied onto another bot issue", async () => {
   const alice = reviewer("alice"), fixture = createFixture([alice]);
   await fixture.github.rest.issues.create({ title: "Other bot issue", body: "Unrelated.", assignees: [alice.login] });
