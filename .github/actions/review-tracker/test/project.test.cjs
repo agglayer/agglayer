@@ -54,6 +54,23 @@ test("no source clears copy fields while preserving the Notes omission", async (
   assert.deepEqual(fields.at(-1), { id: config.estimateFieldId, value: 0 });
 });
 
+test("a missing source item is reported as a source failure without writing", async () => {
+  const client = fakeClient();
+  const request = client.request.bind(client);
+  client.request = async (route, params) => {
+    if (route.startsWith("GET")) throw Object.assign(new Error("Not Found"), { status: 404 });
+    return request(route, params);
+  };
+  const project = new Project(client, config);
+  let captured;
+  await assert.rejects(project.sync(22, { item: 11 }), (error) => {
+    captured = error;
+    return error.status === 404 && error.sourceMissing === true;
+  });
+  assert.match(captured.message, /no longer a Project item/);
+  assert.equal(client.requests.some(([route]) => route.startsWith("PATCH")), false);
+});
+
 test("addIssue accepts the current direct REST response", async () => {
   const client = fakeClient();
   client.postResult = { id: 22, node_id: "PVTI_22" };

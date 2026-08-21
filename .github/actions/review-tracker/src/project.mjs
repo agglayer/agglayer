@@ -46,7 +46,15 @@ export class Project {
     return { id: item.id, nodeId: item.node_id };
   }
   async sync(itemId, source, status = null) {
-    const sourceItem = source?.item ? await this.getItem(source.item) : null;
+    let sourceItem = null;
+    if (source?.item) {
+      try { sourceItem = await this.getItem(source.item); }
+      catch (error) {
+        throw error?.status !== 404 ? error : Object.assign(
+          new Error("The selected source is no longer a Project item; correct it with /review-tracker set or none."),
+          { status: 404, sourceMissing: true, cause: error });
+      }
+    }
     const sourceFields = new Map((sourceItem?.fields ?? []).map((field) => [field.id, field]));
     const fields = this.config.copyFieldIds.map((id) => ({ id, value: sourceFields.get(id)?.value?.id ?? null }));
     fields.push({ id: this.config.estimateFieldId, value: 0 });

@@ -840,6 +840,24 @@ test("PR close persists reopen intent before closing the review issue", async ()
   assert.equal(fixture.project.status.get(201), "in-review");
 });
 
+test("a task-item 404 clears routing while a missing source preserves it", async () => {
+  const fixture = createFixture([reviewer("alice")]);
+  await run(fixture, direct("opened"));
+
+  fixture.project.sync = async () => {
+    throw Object.assign(new Error("source item gone"), { status: 404, sourceMissing: true });
+  };
+  let result = await run(fixture, command("/review-tracker reconcile"));
+  assert.match(result.errors[0], /source item gone/);
+  assert.equal(result.state.tasks.U_alice.item, 201);
+  assert.equal(result.state.tasks.U_alice.pending, true);
+
+  fixture.project.sync = async () => { throw Object.assign(new Error("task item gone"), { status: 404 }); };
+  result = await run(fixture, command("/review-tracker reconcile"));
+  assert.match(result.errors[0], /task item gone/);
+  assert.equal(result.state.tasks.U_alice.item, undefined);
+});
+
 test("a failed Project sync keeps its review live through reviewer removal", async () => {
   const alice = reviewer("alice"), fixture = createFixture([alice]);
   fixture.project.syncFailures = 5;

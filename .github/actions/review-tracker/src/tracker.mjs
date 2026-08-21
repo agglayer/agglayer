@@ -246,7 +246,7 @@ export class Tracker {
   }
   async mutateTask(task, operation) {
     try { return await operation(); }
-    catch (error) { task.pending = true; if (error.status === 404) delete task.item; throw error; }
+    catch (error) { task.pending = true; if (error.status === 404 && !error.sourceMissing) delete task.item; throw error; }
   }
   async refreshLifecycleState() {
     const [{ data: pull }, { data: requested }] = await Promise.all([
