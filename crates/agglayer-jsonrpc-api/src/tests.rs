@@ -1,3 +1,4 @@
+mod admin;
 mod errors;
 mod get_certificate_header;
 mod get_epoch_configuration;

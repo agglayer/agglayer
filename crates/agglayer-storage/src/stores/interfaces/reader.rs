@@ -46,7 +46,9 @@ pub trait PendingCertificateReader: Send + Sync {
 
     /// Scan the latest pending certificate pointer of every network.
     ///
-    /// Entries that fail to decode are skipped.
+    /// Fails on the first entry that cannot be decoded: this scan seeds the
+    /// native network metrics at startup, where silently skipping an entry
+    /// would leave a gauge permanently incomplete.
     fn get_current_pending_heights(&self) -> Result<Vec<(NetworkId, PendingCertificate)>, Error>;
 
     fn get_certificate(
