@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
-use agglayer_primitives::Hashable;
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
@@ -14,7 +13,7 @@ use agglayer_storage::{
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
     CertificateId, CertificateStatus, ContractCallOutcome, EpochConfiguration, Height, NetworkId,
-    NetworkInfo, NetworkStatus, NetworkType, SettledClaim, U256,
+    NetworkInfo, NetworkStatus, NetworkType, SettledClaim,
 };
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
@@ -97,7 +96,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
     AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
     PendingStore: PendingCertificateReader + 'static,
-    StateStore: NetworkInfoReader + StateReader + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
@@ -359,6 +358,13 @@ where
         network_id: NetworkId,
         settled_height: Height,
     ) -> Result<Option<SettledClaim>, GetLatestSettledClaimError> {
+        // Settling an imported bridge exit always inserts a nullifier, so an empty
+        // nullifier tree means there is no claim to find and the scan below would
+        // walk the whole height range only to return `None`.
+        if self.state.nullifier_tree_is_empty(network_id)? {
+            return Ok(None);
+        }
+
         // Iterate from the given height down to 0
         for current_height in (0..=settled_height.as_u64()).rev().map(Height::from) {
             // Fetch certificate header for the current height
@@ -422,13 +428,19 @@ where
 
             // Check for imported bridge exits
             if let Some(last_imported_exit) = certificate.imported_bridge_exits.last() {
-                let global_index: U256 = last_imported_exit.global_index.into();
-                let bridge_exit_hash = last_imported_exit.bridge_exit.hash();
+                let settled_claim = SettledClaim::from(last_imported_exit);
 
-                return Ok(Some(SettledClaim {
-                    global_index: global_index.to_be_bytes().into(),
-                    bridge_exit_hash,
-                }));
+                // Store what the scan cost, so a network whose last claim settled
+                // before this cache existed pays for it once instead of on every
+                // call. Failing to store it only costs another scan.
+                if let Err(error) = self
+                    .state
+                    .set_settled_claim_if_absent(&network_id, &settled_claim)
+                {
+                    warn!(?error, "Failed to store the settled claim");
+                }
+
+                return Ok(Some(settled_claim));
             }
             // Keep iterating downwards if no imported bridge exits found and no
             // error happened

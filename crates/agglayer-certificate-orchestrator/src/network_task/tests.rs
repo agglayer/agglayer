@@ -243,8 +243,9 @@ async fn start_from_zero() {
             eq(certificate_id),
             eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
+            eq(None),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     state
         .expect_get_certificate_settlement_job_id()
@@ -644,8 +645,9 @@ async fn retries() {
             eq(certificate_id2),
             eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
+            eq(None),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     let mut settlement_service = MockSettlementServiceTrait::new();
     settlement_service

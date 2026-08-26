@@ -84,7 +84,14 @@ mock! {
             height: &Height,
             certificate_id: &CertificateId,
             epoch_number: &EpochNumber,
-            certificate_index: &agglayer_types::CertificateIndex
+            certificate_index: &agglayer_types::CertificateIndex,
+            settled_claim: Option<agglayer_types::SettledClaim>
+        ) -> Result<(), Error>;
+
+        fn set_settled_claim_if_absent(
+            &self,
+            network_id: &NetworkId,
+            settled_claim: &agglayer_types::SettledClaim,
         ) -> Result<(), Error>;
 
         fn write_local_network_state(
@@ -133,6 +140,8 @@ mock! {
             &self,
             network_id: NetworkId,
         ) -> Result<Option<LocalNetworkStateData>, Error>;
+
+        fn nullifier_tree_is_empty(&self, network_id: NetworkId) -> Result<bool, Error>;
     }
 
     impl SettlementReader for StateStore {

@@ -12,7 +12,7 @@ use agglayer_storage::{
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
     CertificateId, CertificateStatus, CertificateStatusError, ExecutionMode, Height,
-    LocalNetworkStateData, NetworkId,
+    LocalNetworkStateData, NetworkId, SettledClaim,
 };
 use arc_swap::ArcSwap;
 use tokio::sync::{mpsc, oneshot};
@@ -304,6 +304,10 @@ where
             .iter()
             .map(|exit| exit.hash())
             .collect::<Vec<Digest>>();
+        let settled_claim = certificate
+            .imported_bridge_exits
+            .last()
+            .map(SettledClaim::from);
         let task = tokio::spawn(
             CertificateTask::new(
                 certificate,
@@ -430,6 +434,7 @@ where
                                 &certificate_id,
                                 &epoch_number,
                                 &certificate_index,
+                                settled_claim.clone(),
                             )
                             .map_err(|e| Error::PersistenceError { certificate_id, error: e.to_string() })?;
 

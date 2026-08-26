@@ -441,3 +441,47 @@ fn certificate_serialization(#[case] cert_name: &str) {
     let hash = pessimistic_proof::keccak::keccak256(&encoded);
     insta::assert_debug_snapshot!(cert_name, hash);
 }
+
+#[rstest]
+fn nullifier_tree_emptiness_survives_being_written(network_id: NetworkId, store: StateStore) {
+    // Nothing settled yet, so no row at all.
+    assert!(store.nullifier_tree_is_empty(network_id).unwrap());
+
+    // A network that settles claim-free certificates still gets a root row
+    // written, holding the canonical empty root.
+    store
+        .write_local_network_state(&network_id, &LocalNetworkStateData::default(), &[])
+        .unwrap();
+    assert!(
+        store
+            .db
+            .get::<crate::columns::nullifier_tree_per_network::NullifierTreePerNetworkColumn>(
+                &crate::types::SmtKey {
+                    network_id: network_id.into(),
+                    key_type: crate::types::SmtKeyType::Root,
+                }
+            )
+            .unwrap()
+            .is_some(),
+        "an empty tree still writes a root row, so emptiness cannot be read off its absence"
+    );
+    assert!(store.nullifier_tree_is_empty(network_id).unwrap());
+
+    // One settled claim is enough to make it non-empty.
+    let mut state = LocalNetworkStateData::default();
+    state
+        .nullifier_tree
+        .insert(
+            pessimistic_proof::nullifier_tree::NullifierKey {
+                network_id,
+                let_index: 0,
+            },
+            agglayer_types::primitives::FromBool::from_bool(true),
+        )
+        .unwrap();
+
+    store
+        .write_local_network_state(&network_id, &state, &[])
+        .unwrap();
+    assert!(!store.nullifier_tree_is_empty(network_id).unwrap());
+}

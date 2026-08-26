@@ -287,6 +287,7 @@ mod tests {
                 &certificate.hash(),
                 &EpochNumber::ZERO,
                 &CertificateIndex::ZERO,
+                None,
             )
             .unwrap();
 

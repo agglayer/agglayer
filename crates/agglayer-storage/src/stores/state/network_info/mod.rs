@@ -4,6 +4,7 @@
 //! providing functionality to read and retrieve network-related information
 //! from the database.
 use agglayer_types::{CertificateId, Height, NetworkId, NetworkInfo, NetworkType};
+use rocksdb::WriteBatch;
 
 use crate::{
     columns::network_info::NetworkInfoColumn,
@@ -12,12 +13,71 @@ use crate::{
     types::network_info::{
         self,
         v0::{
-            network_info_value, LatestPendingCertificateHeight, LatestPendingCertificateId,
-            LatestPendingCertificateInfo, LatestProvenCertificateInfo, SettledClaim,
-            SettledLocalExitTreeLeafCount, SettledPessimisticProofRoot,
+            network_info_value, BridgeExitHash, GlobalIndex, LatestPendingCertificateHeight,
+            LatestPendingCertificateId, LatestPendingCertificateInfo, LatestProvenCertificateInfo,
+            SettledClaim, SettledLocalExitTreeLeafCount, SettledPessimisticProofRoot,
         },
     },
 };
+
+impl StateStore {
+    /// Stage the network's settled claim, encoded to mirror how
+    /// `NetworkInfoReader::get_network_info` decodes it.
+    ///
+    /// Both fields are always written: a partially populated value does not
+    /// decode as absent, it fails the read of every other key for this network.
+    pub(super) fn stage_settled_claim(
+        &self,
+        network_id: NetworkId,
+        claim: &agglayer_types::SettledClaim,
+        batch: &mut WriteBatch,
+    ) -> Result<(), Error> {
+        let key = Self::stored_settled_claim_key(network_id);
+
+        let value = network_info::Value {
+            value: Some(network_info_value::Value::SettledClaim(SettledClaim {
+                global_index: Some(GlobalIndex {
+                    value: claim.global_index.as_slice().to_vec().into(),
+                }),
+                bridge_exit_hash: Some(BridgeExitHash {
+                    bridge_exit_hash: claim.bridge_exit_hash.as_slice().to_vec().into(),
+                }),
+            })),
+        };
+
+        self.db
+            .multi_insert_batch::<NetworkInfoColumn>([(&key, &value)], batch)?;
+
+        Ok(())
+    }
+
+    pub(super) fn stored_settled_claim_key(network_id: NetworkId) -> network_info::Key {
+        network_info::Key {
+            network_id: network_id.to_u32(),
+            kind: network_info_value::ValueDiscriminants::SettledClaim,
+        }
+    }
+
+    /// Store the settled claim only when the key has never been written.
+    pub(super) fn put_settled_claim_if_absent(
+        &self,
+        network_id: NetworkId,
+        claim: &agglayer_types::SettledClaim,
+    ) -> Result<(), Error> {
+        if self
+            .db
+            .get::<NetworkInfoColumn>(&Self::stored_settled_claim_key(network_id))?
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        let mut batch = WriteBatch::default();
+        self.stage_settled_claim(network_id, claim, &mut batch)?;
+
+        Ok(self.db.write_batch(batch)?)
+    }
+}
 
 impl crate::stores::NetworkInfoReader for StateStore {
     fn get_network_info(&self, network_id: NetworkId) -> Result<NetworkInfo, Error> {

@@ -13,6 +13,7 @@ use agglayer_grpc_types::{
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{
     DebugReader, EpochStoreReader, NetworkInfoReader, PendingCertificateReader, StateReader,
+    StateWriter,
 };
 use tonic_types::{ErrorDetails, StatusExt as _};
 use tracing::error;
@@ -34,7 +35,7 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> NodeStateService
     for NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
 where
     PendingStore: PendingCertificateReader + 'static,
-    StateStore: NetworkInfoReader + StateReader + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
