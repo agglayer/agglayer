@@ -11,5 +11,13 @@ ignore = [
     # https://rustsec.org/advisories/RUSTSEC-2026-0098.html
     "RUSTSEC-2026-0098",
     # https://rustsec.org/advisories/RUSTSEC-2026-0099.html
-    "RUSTSEC-2026-0099"
+    "RUSTSEC-2026-0099",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0258.html
+    # h2 0.3.27 (pulled only via sp1-sdk's unused AWS KMS signer path, through
+    # the legacy hyper 0.14 backend of aws-smithy-http-client) has no patched
+    # release on the 0.3.x branch (fix is only available as h2 >=0.4.16). The
+    # h2 0.4.13 instance used by our own gRPC/JSON-RPC stack (hyper 1.x,
+    # reqwest, tonic) is fixed by bumping to 0.4.19. Agglayer's signer stack
+    # only talks to GCP KMS, so this AWS-only code path is never invoked.
+    "RUSTSEC-2026-0258"
 ]
