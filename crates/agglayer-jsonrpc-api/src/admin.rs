@@ -1148,8 +1148,6 @@ where
 
 #[cfg(test)]
 mod settlement_job_summary_tests {
-    use eyre::Context as _;
-
     use super::*;
 
     #[test]
