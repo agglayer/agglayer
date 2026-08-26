@@ -274,7 +274,14 @@ where
             None => return Ok(None),
         };
 
-        self.fetch_certificate_header(id)
+        self.get_pending_certificate_header(id)
+    }
+
+    fn get_pending_certificate_header(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
+        self.fetch_certificate_header(certificate_id)
             .map(|header| match header.status {
                 CertificateStatus::Pending
                 | CertificateStatus::Proven
@@ -556,34 +563,45 @@ where
             }
         }
 
-        if network_info.latest_pending_height.is_none() {
-            let latest_pending_certificate =
-                match self.get_latest_pending_certificate_header(network_id) {
-                    Ok(cert) => cert,
-                    Err(CertificateRetrievalError::NotFound { .. }) => {
-                        info!("No latest pending certificate found for network {network_id}");
-                        None
-                    }
-                    Err(error) => {
-                        error!(
-                            ?error,
-                            "Failed to get latest pending certificate for network {network_id}"
-                        );
-                        return Err(GetNetworkInfoError::InternalError {
-                            network_id,
-                            source: error.into(),
-                        });
-                    }
-                };
+        let latest_pending_certificate = match network_info.latest_pending_certificate_id {
+            Some(certificate_id) => self.get_pending_certificate_header(certificate_id),
+            None => self.get_latest_pending_certificate_header(network_id),
+        };
 
-            if let Some(cert) = latest_pending_certificate {
-                network_info.latest_pending_height = Some(cert.height);
-                if let CertificateStatus::InError { ref error } = &cert.status {
-                    network_info.latest_pending_error = Some(*error.clone());
-                }
-
-                network_info.latest_pending_status = Some(cert.status);
+        let latest_pending_certificate = match latest_pending_certificate {
+            Ok(cert) => cert,
+            Err(CertificateRetrievalError::NotFound { .. }) => {
+                info!("No latest pending certificate found for network {network_id}");
+                None
             }
+            Err(error) => {
+                error!(
+                    ?error,
+                    "Failed to get latest pending certificate for network {network_id}"
+                );
+                return Err(GetNetworkInfoError::InternalError {
+                    network_id,
+                    source: error.into(),
+                });
+            }
+        };
+
+        // Certificate-owned pending data always comes from the header, including on
+        // cache hits. A cached pointer whose header is already settled is omitted by
+        // `get_pending_certificate_header` and must not leak stale response fields.
+        network_info.latest_pending_certificate_id = None;
+        network_info.latest_pending_height = None;
+        network_info.latest_pending_status = None;
+        network_info.latest_pending_error = None;
+
+        if let Some(cert) = latest_pending_certificate {
+            network_info.latest_pending_certificate_id = Some(cert.certificate_id);
+            network_info.latest_pending_height = Some(cert.height);
+            if let CertificateStatus::InError { ref error } = &cert.status {
+                network_info.latest_pending_error = Some(*error.clone());
+            }
+
+            network_info.latest_pending_status = Some(cert.status);
         }
 
         if network_info.network_type == NetworkType::Unspecified {
@@ -818,7 +836,7 @@ where
                                     network_id: certificate.network_id,
                                     stored_certificate_id: pre_existing_certificate_id,
                                     replacement_certificate_id: new_certificate_id,
-                                    source: Some(error),
+                                    source: Some(Box::new(error)),
                                 }
                             })?
                             .ok_or_else(|| {
@@ -834,7 +852,7 @@ where
                                     network_id: certificate.network_id,
                                     stored_certificate_id: pre_existing_certificate_id,
                                     replacement_certificate_id: new_certificate_id,
-                                    source: Some(error),
+                                    source: Some(Box::new(error)),
                                 }
                             })?;
 

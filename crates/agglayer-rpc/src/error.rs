@@ -35,7 +35,7 @@ pub enum CertificateSubmissionError {
         stored_certificate_id: CertificateId,
         replacement_certificate_id: CertificateId,
         #[source]
-        source: Option<L1RpcError>,
+        source: Option<Box<L1RpcError>>,
     },
 }
 
