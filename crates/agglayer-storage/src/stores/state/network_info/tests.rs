@@ -164,3 +164,101 @@ fn settled_pointer_allows_absent_optional_aggregates(network_id: NetworkId, stor
         Some(epoch.as_u64())
     );
 }
+
+#[test_log::test(rstest)]
+fn settled_claim_round_trips_through_the_settled_cursor(network_id: NetworkId, store: StateStore) {
+    let claim = agglayer_types::SettledClaim {
+        global_index: Digest([7u8; 32]),
+        bridge_exit_hash: Digest([9u8; 32]),
+    };
+
+    store
+        .set_latest_settled_certificate_for_network(
+            &network_id,
+            &Height::ZERO,
+            &Digest([1u8; 32]).into(),
+            &EpochNumber::ZERO,
+            &CertificateIndex::ZERO,
+            Some(claim.clone()),
+        )
+        .unwrap();
+
+    assert_eq!(
+        store.get_network_info(network_id).unwrap().settled_claim,
+        Some(claim)
+    );
+}
+
+#[test_log::test(rstest)]
+fn a_certificate_without_a_claim_leaves_the_stored_one_in_place(
+    network_id: NetworkId,
+    store: StateStore,
+) {
+    let claim = agglayer_types::SettledClaim {
+        global_index: Digest([7u8; 32]),
+        bridge_exit_hash: Digest([9u8; 32]),
+    };
+
+    for (height, settled_claim) in [(Height::ZERO, Some(claim.clone())), (Height::new(1), None)] {
+        store
+            .set_latest_settled_certificate_for_network(
+                &network_id,
+                &height,
+                &Digest([1u8; 32]).into(),
+                &EpochNumber::ZERO,
+                &CertificateIndex::ZERO,
+                settled_claim,
+            )
+            .unwrap();
+    }
+
+    assert_eq!(
+        store.get_network_info(network_id).unwrap().settled_claim,
+        Some(claim)
+    );
+}
+
+#[test_log::test(rstest)]
+fn a_recovered_claim_is_stored_once_and_never_overwritten(
+    network_id: NetworkId,
+    store: StateStore,
+) {
+    let settled = agglayer_types::SettledClaim {
+        global_index: Digest([1u8; 32]),
+        bridge_exit_hash: Digest([2u8; 32]),
+    };
+    let scanned = agglayer_types::SettledClaim {
+        global_index: Digest([3u8; 32]),
+        bridge_exit_hash: Digest([4u8; 32]),
+    };
+
+    // Nothing stored yet: the scanned claim fills the gap.
+    store
+        .set_settled_claim_if_absent(&network_id, &scanned)
+        .unwrap();
+    assert_eq!(
+        store.get_network_info(network_id).unwrap().settled_claim,
+        Some(scanned.clone())
+    );
+
+    // Settlement always wins over a scan.
+    store
+        .set_latest_settled_certificate_for_network(
+            &network_id,
+            &Height::ZERO,
+            &Digest([5u8; 32]).into(),
+            &EpochNumber::ZERO,
+            &CertificateIndex::ZERO,
+            Some(settled.clone()),
+        )
+        .unwrap();
+
+    // A scan racing that settlement must not put the older claim back.
+    store
+        .set_settled_claim_if_absent(&network_id, &scanned)
+        .unwrap();
+    assert_eq!(
+        store.get_network_info(network_id).unwrap().settled_claim,
+        Some(settled)
+    );
+}

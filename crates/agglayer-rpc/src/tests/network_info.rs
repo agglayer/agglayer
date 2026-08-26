@@ -197,6 +197,11 @@ fn pending_certificate_defined() {
         .expect_read_local_network_state()
         .returning(move |_| Ok(Some(network_state.state_b.clone())));
 
+    state_store
+        .expect_nullifier_tree_is_empty()
+        .with(eq(NETWORK_1))
+        .returning(|_| Ok(false));
+
     pending_store
         .expect_get_latest_pending_certificate_for_network()
         .with(eq(NETWORK_1))
@@ -613,6 +618,11 @@ fn get_network_info_propagates_error_from_get_latest_settled_claim() {
         .with(eq(NETWORK_1))
         .return_once(|_| Ok(None));
 
+    state_store
+        .expect_nullifier_tree_is_empty()
+        .with(eq(NETWORK_1))
+        .return_once(|_| Ok(false));
+
     // Header by cursor for settled height
     let cursor_header = settled_certificate_header.clone();
     state_store
@@ -646,4 +656,39 @@ fn get_network_info_propagates_error_from_get_latest_settled_claim() {
         res,
         Err(crate::error::GetNetworkInfoError::InternalError { .. })
     ));
+}
+
+/// A network that never settled an imported bridge exit must not be scanned:
+/// the mocks below deliberately expect no header or epoch read, so reaching the
+/// descent fails the test rather than silently costing one epoch DB open per
+/// height.
+#[test]
+fn an_empty_nullifier_tree_skips_the_settled_claim_scan() {
+    let certificate_sender = tokio::sync::mpsc::channel(1).0;
+
+    let mut state_store = MockStateStore::new();
+    state_store
+        .expect_nullifier_tree_is_empty()
+        .with(eq(NETWORK_1))
+        .return_once(|_| Ok(true));
+
+    let asserter = Asserter::new();
+    let l1_rpc_provider = Arc::new(ProviderBuilder::new().connect_mocked_client(asserter));
+
+    let service = crate::AgglayerService::new(
+        certificate_sender,
+        Arc::new(MockPendingStore::new()),
+        Arc::new(state_store),
+        Arc::new(MockDebugStore::new()),
+        Arc::new(MockEpochsStore::new()),
+        Arc::new(Config::default()),
+        l1_rpc_provider,
+    );
+
+    assert_eq!(
+        service
+            .get_latest_settled_claim(NETWORK_1, Height::new(10_000))
+            .unwrap(),
+        None
+    );
 }

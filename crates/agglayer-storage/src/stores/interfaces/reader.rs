@@ -117,6 +117,9 @@ pub trait StateReader: Send + Sync {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error>;
+
+    /// Whether the network's nullifier tree holds no nullifier.
+    fn nullifier_tree_is_empty(&self, network_id: NetworkId) -> Result<bool, Error>;
 }
 
 pub trait PerEpochReader: Send + Sync {

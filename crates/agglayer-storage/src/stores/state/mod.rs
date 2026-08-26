@@ -5,11 +5,11 @@ use std::{
     time::SystemTime,
 };
 
-use agglayer_tries::{node::Node, smt::Smt};
+use agglayer_tries::{node::Node, smt::Smt, utils::empty_hash_at_height};
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementJobId,
-    SettlementTxHash,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettledClaim,
+    SettlementJobId, SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -307,11 +307,33 @@ impl StateWriter for StateStore {
         certificate_id: &CertificateId,
         epoch_number: &EpochNumber,
         certificate_index: &CertificateIndex,
+        settled_claim: Option<SettledClaim>,
     ) -> Result<(), Error> {
-        Ok(self.db.put::<LatestSettledCertificatePerNetworkColumn>(
-            network_id,
-            &SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index),
-        )?)
+        let mut batch = WriteBatch::default();
+
+        let cursor =
+            SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index);
+        self.db
+            .multi_insert_batch::<LatestSettledCertificatePerNetworkColumn>(
+                [(network_id, &cursor)],
+                &mut batch,
+            )?;
+
+        // A certificate without an imported bridge exit leaves the previous claim in
+        // place: it is still the latest one settled.
+        if let Some(settled_claim) = settled_claim {
+            self.stage_settled_claim(*network_id, &settled_claim, &mut batch)?;
+        }
+
+        Ok(self.db.write_batch(batch)?)
+    }
+
+    fn set_settled_claim_if_absent(
+        &self,
+        network_id: &NetworkId,
+        settled_claim: &SettledClaim,
+    ) -> Result<(), Error> {
+        self.put_settled_claim_if_absent(*network_id, settled_claim)
     }
 
     fn write_local_network_state(
@@ -673,6 +695,26 @@ impl StateReader for StateStore {
                 }))
             }
             _ => Err(Error::InconsistentState { network_id }),
+        }
+    }
+
+    fn nullifier_tree_is_empty(&self, network_id: NetworkId) -> Result<bool, Error> {
+        let root = self.db.get::<NullifierTreePerNetworkColumn>(&SmtKey {
+            network_id: network_id.into(),
+            key_type: SmtKeyType::Root,
+        })?;
+
+        match root {
+            // Never written: the network has not settled anything yet.
+            None => Ok(true),
+            // A tree is written even when empty, so compare against the empty root's
+            // children rather than relying on the row being absent.
+            Some(SmtValue::Node(left, right)) => {
+                let empty = empty_hash_at_height::<NULLIFIER_TREE_DEPTH>();
+
+                Ok(Digest(*left.as_bytes()) == empty && Digest(*right.as_bytes()) == empty)
+            }
+            Some(_) => Err(Error::WrongValueType),
         }
     }
 

@@ -185,6 +185,13 @@ impl StateReader for DummyPendingStore {
     ) -> Result<Option<LocalNetworkStateData>, agglayer_storage::error::Error> {
         todo!()
     }
+
+    fn nullifier_tree_is_empty(
+        &self,
+        _network_id: NetworkId,
+    ) -> Result<bool, agglayer_storage::error::Error> {
+        todo!()
+    }
 }
 impl EpochStoreReader for DummyPendingStore {
     fn get_certificate(
@@ -392,6 +399,15 @@ impl StateWriter for DummyPendingStore {
         _certificate_id: &CertificateId,
         _epoch_number: &EpochNumber,
         _certificate_index: &CertificateIndex,
+        _settled_claim: Option<agglayer_types::SettledClaim>,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn set_settled_claim_if_absent(
+        &self,
+        _network_id: &NetworkId,
+        _settled_claim: &agglayer_types::SettledClaim,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }

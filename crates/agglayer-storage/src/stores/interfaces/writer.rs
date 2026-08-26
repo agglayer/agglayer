@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettledClaim,
+    SettlementTxHash,
 };
 
 use crate::{error::Error, stores::PerEpochReader};
@@ -94,6 +95,12 @@ pub trait StateWriter: Send + Sync {
         certificate_index: &CertificateIndex,
     ) -> Result<(), Error>;
 
+    /// Record the network's settled cursor, together with the claim carried by
+    /// the certificate that just settled, if it carried one.
+    ///
+    /// Both are written in one batch: the reader trusts a cached claim without
+    /// revalidating it, so a claim that outlived or lagged behind the cursor
+    /// would never be corrected.
     fn set_latest_settled_certificate_for_network(
         &self,
         network_id: &NetworkId,
@@ -101,6 +108,18 @@ pub trait StateWriter: Send + Sync {
         certificate_id: &CertificateId,
         epoch_number: &EpochNumber,
         certificate_index: &CertificateIndex,
+        settled_claim: Option<SettledClaim>,
+    ) -> Result<(), Error>;
+
+    /// Record a settled claim only when none is stored yet.
+    ///
+    /// Backfills networks that settled their last claim before this cache
+    /// existed. Settlement owns this key, so an already-stored claim is left
+    /// alone: it cannot be older than one recovered by scanning.
+    fn set_settled_claim_if_absent(
+        &self,
+        network_id: &NetworkId,
+        settled_claim: &SettledClaim,
     ) -> Result<(), Error>;
 
     fn write_local_network_state(
