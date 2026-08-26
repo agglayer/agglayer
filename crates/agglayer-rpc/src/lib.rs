@@ -836,7 +836,7 @@ where
                                     network_id: certificate.network_id,
                                     stored_certificate_id: pre_existing_certificate_id,
                                     replacement_certificate_id: new_certificate_id,
-                                    source: Some(error),
+                                    source: Some(Box::new(error)),
                                 }
                             })?
                             .ok_or_else(|| {
@@ -852,7 +852,7 @@ where
                                     network_id: certificate.network_id,
                                     stored_certificate_id: pre_existing_certificate_id,
                                     replacement_certificate_id: new_certificate_id,
-                                    source: Some(error),
+                                    source: Some(Box::new(error)),
                                 }
                             })?;
 
