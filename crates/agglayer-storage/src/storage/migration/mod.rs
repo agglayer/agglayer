@@ -126,7 +126,7 @@ impl Builder {
     fn open_rocksdb_fresh(path: &Path, cfs: Vec<ColumnFamilyDescriptor>) -> Result<DB, DBError> {
         debug!("Opening fresh database");
 
-        let mut options = rocksdb::Options::default();
+        let mut options = crate::storage::base_db_options();
         options.create_if_missing(true);
         options.create_missing_column_families(true);
 
@@ -139,7 +139,7 @@ impl Builder {
     fn open_rocksdb_existing(path: &Path, cfs: &BTreeSet<impl AsRef<str>>) -> Result<DB, DBError> {
         debug!("Opening existing database");
 
-        let mut options = rocksdb::Options::default();
+        let mut options = crate::storage::base_db_options();
         options.create_missing_column_families(true);
 
         Ok(DB {

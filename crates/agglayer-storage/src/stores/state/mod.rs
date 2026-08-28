@@ -21,7 +21,7 @@ use tracing::{info, instrument, warn};
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
-    backup::{BackupClient, BackupRequest},
+    backup::BackupClient,
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
@@ -288,13 +288,6 @@ impl StateWriter for StateStore {
                     &certificate_header.certificate_id,
                 )?;
             }
-
-            // A `Proven` certificate is submitted to L1 from a spawned task shortly
-            // after, so this is the last status write still ordered ahead of the
-            // settlement tx. Its proof is already persisted by now.
-            if let CertificateStatus::Proven = status {
-                self.request_backup();
-            }
         }
 
         Ok(())
@@ -409,9 +402,7 @@ impl StateWriter for StateStore {
 impl StateStore {
     /// Requests a best-effort backup of the state and pending databases.
     fn request_backup(&self) {
-        if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
-            warn!("Unable to trigger backup for the state database: {}", error);
-        }
+        self.backup_client.backup_state();
     }
 
     fn write_smt<C, const DEPTH: usize>(
