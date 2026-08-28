@@ -4,7 +4,7 @@ use agglayer_types::{
     Certificate, CertificateStatus, CertificateStatusError, Digest, Height, NetworkId,
     SettlementTxHash,
 };
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
     backup::{BackupClient, BackupRequest},
@@ -16,7 +16,12 @@ use crate::{
 
 fn setup_store(
     status: CertificateStatus,
-) -> (TempDBDir, StateStore, Certificate, Receiver<BackupRequest>) {
+) -> (
+    TempDBDir,
+    StateStore,
+    Certificate,
+    UnboundedReceiver<BackupRequest>,
+) {
     let tmp = TempDBDir::new();
     let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
     let (backup_client, backups) = BackupClient::observable();
@@ -30,32 +35,16 @@ fn setup_store(
     (tmp, store, certificate, backups)
 }
 
+/// No certificate status change should request a backup on its own.
+///
+/// The backup that has to precede an L1 settlement is taken by the settlement
+/// service, which waits for it; a status write here cannot make that promise
+/// and used only to duplicate it moments beforehand.
 #[test]
-fn proven_status_triggers_a_state_backup() {
-    let (_tmp, store, certificate, mut backups) = setup_store(CertificateStatus::Pending);
-
-    store
-        .update_certificate_header_status(&certificate.hash(), &CertificateStatus::Proven)
-        .expect("Unable to update certificate header status");
-
-    let request = backups
-        .try_recv()
-        .expect("Moving a certificate to Proven should request a backup");
-
-    assert!(
-        request.epoch_db.is_none(),
-        "Proven should back up the state and pending DBs, not an epoch DB"
-    );
-    assert!(
-        backups.try_recv().is_err(),
-        "A single status update should request a single backup"
-    );
-}
-
-#[test]
-fn non_proven_statuses_do_not_trigger_a_state_backup() {
+fn certificate_status_changes_do_not_trigger_a_state_backup() {
     for status in [
         CertificateStatus::Pending,
+        CertificateStatus::Proven,
         CertificateStatus::Candidate,
         CertificateStatus::Settled,
         CertificateStatus::error(CertificateStatusError::InternalError("failed".to_string())),

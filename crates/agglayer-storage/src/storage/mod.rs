@@ -39,6 +39,24 @@ pub struct DB {
     default_write_options: Option<WriteOptions>,
 }
 
+/// Cap on the combined size of the live write-ahead logs of one database.
+///
+/// Backups no longer force a memtable flush, so the write-ahead log is what
+/// carries the most recent writes into a backup, and it is copied in full on
+/// every backup. Left at the RocksDB default this cap is derived from the
+/// per-column-family write buffers, which works out to several gigabytes for
+/// the state schema. Capping it bounds both the bytes each backup copies and
+/// the replay a restore has to perform, at the cost of an occasional flush.
+pub(crate) const MAX_TOTAL_WAL_SIZE: u64 = 64 * 1024 * 1024;
+
+/// Database-wide options shared by every way we open a database.
+pub(crate) fn base_db_options() -> Options {
+    let mut options = Options::default();
+    options.set_max_total_wal_size(MAX_TOTAL_WAL_SIZE);
+
+    options
+}
+
 impl DB {
     /// Open a new RocksDB instance at the given path with initial column
     /// families and a possibility to migrate the database.
@@ -55,7 +73,7 @@ impl DB {
     /// column families. This prevents concurrency issues when multiple
     /// processes need to read from the database.
     pub fn open_cf_readonly(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBError> {
-        let mut options = Options::default();
+        let mut options = base_db_options();
         options.create_if_missing(false); // Don't create if missing in readonly mode
         options.create_missing_column_families(false); // Don't create missing column families
 
