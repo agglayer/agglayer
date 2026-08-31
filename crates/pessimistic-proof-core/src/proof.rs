@@ -207,9 +207,8 @@ impl ConstrainedValues {
     ) -> Result<Self, ProofError> {
         let settled_prev_pp_root = batch_header.prev_pessimistic_root;
 
-        // Infer the version of the settled prev pp root based on the
-        // constrained values. Return error if unable to re-compute a
-        // matching prev pp root.
+        // Infer the version of the settled prev pp root based on the constrained
+        // values. Return error if unable to re-compute a matching prev pp root.
         let prev_pessimistic_root_version = PessimisticRootCommitmentValues {
             balance_root: initial_state_commitment.balance_root,
             nullifier_root: initial_state_commitment.nullifier_root,

@@ -73,8 +73,8 @@ impl NetworkState {
                 // We don't allow a chain to exit to itself
                 return Err(ProofError::CannotExitToSameNetwork);
             }
-            // Check that the destination network of the bridge exit matches the
-            // current network
+            // Check that the destination network of the bridge exit matches the current
+            // network
             if imported_bridge_exit.bridge_exit.dest_network != multi_batch_header.origin_network {
                 return Err(ProofError::InvalidImportedBridgeExit {
                     source: Error::InvalidExitNetwork,
@@ -90,8 +90,7 @@ impl NetworkState {
                     global_index: imported_bridge_exit.global_index,
                 })?;
 
-            // Check the nullifier non-inclusion path and update the nullifier
-            // tree
+            // Check the nullifier non-inclusion path and update the nullifier tree
             let nullifier_key: NullifierKey = imported_bridge_exit.global_index.into();
             self.nullifier_tree
                 .verify_and_update(nullifier_key, nullifier_path)?;
@@ -100,8 +99,7 @@ impl NetworkState {
             let token_info = imported_bridge_exit.bridge_exit.amount_token_info();
 
             if multi_batch_header.origin_network == token_info.origin_network {
-                // When the token is native to the chain, we don't care about
-                // the local balance
+                // When the token is native to the chain, we don't care about the local balance
                 continue;
             }
 
@@ -127,16 +125,15 @@ impl NetworkState {
             }
             self.exit_tree.add_leaf(bridge_exit.hash())?;
 
-            // For message exits, the origin network in token info should be the
-            // origin network of the batch header.
+            // For message exits, the origin network in token info should be the origin
+            // network of the batch header.
             if bridge_exit.is_message()
                 && bridge_exit.token_info.origin_network != multi_batch_header.origin_network
             {
                 return Err(ProofError::InvalidMessageOriginNetwork);
             }
 
-            // For ETH transfers, we need to check that the origin network is
-            // the L1 network
+            // For ETH transfers, we need to check that the origin network is the L1 network
             if bridge_exit.token_info.origin_token_address == L1_ETH.origin_token_address
                 && bridge_exit.token_info.origin_network != NetworkId::ETH_L1
             {
@@ -147,8 +144,7 @@ impl NetworkState {
             let token_info = bridge_exit.amount_token_info();
 
             if multi_batch_header.origin_network == token_info.origin_network {
-                // When the token is native to the chain, we don't care about
-                // the local balance
+                // When the token is native to the chain, we don't care about the local balance
                 continue;
             }
 
@@ -166,8 +162,8 @@ impl NetworkState {
             }
         }
 
-        // Verify that the original balances were correct and update the local
-        // balance tree with the new balances.
+        // Verify that the original balances were correct and update the local balance
+        // tree with the new balances.
         for (token, (old_balance, balance_path)) in &multi_batch_header.balances_proofs {
             let new_balance = new_balances[token];
             let new_balance = U256::uint_try_from(new_balance)
