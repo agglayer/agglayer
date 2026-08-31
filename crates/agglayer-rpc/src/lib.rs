@@ -775,6 +775,7 @@ where
         Ok(certificate_id)
     }
 
+    #[allow(clippy::result_large_err)]
     #[instrument(skip(self, certificate), level = "info")]
     async fn validate_pre_existing_certificate(
         &self,
@@ -964,6 +965,7 @@ where
         .map_err(SignatureVerificationError::from_signer_error)
     }
 
+    #[allow(clippy::result_large_err)]
     #[instrument(skip(self, certificate), fields(hash, rollup_id = certificate.network_id.to_u32()), level = "info")]
     pub async fn send_certificate(
         &self,
