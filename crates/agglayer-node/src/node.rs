@@ -208,7 +208,8 @@ impl Node {
                 provider_cert.clone()
             };
 
-            // The signer always has at least one address, so `next()` is always `Some`.
+            // The signer always has at least one address, so `next()` is always
+            // `Some`.
             let cert_signer = provider_cert.signer_addresses().next().unwrap();
             let tx_signer = provider_tx.signer_addresses().next().unwrap();
             tracing::info!("Cert signer address: {cert_signer:?}");

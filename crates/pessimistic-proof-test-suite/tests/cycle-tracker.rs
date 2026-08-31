@@ -58,7 +58,8 @@ fn cycles_on_sample_inputs(
         .execute(&old_state.into(), &multi_batch_header)
         .expect("execution failed");
 
-    // Double check the roots match what is calculated by the proof-external state.
+    // Double check the roots match what is calculated by the proof-external
+    // state.
     state.assert_output_matches(&new_roots);
 
     insta::assert_snapshot!(name, stats);

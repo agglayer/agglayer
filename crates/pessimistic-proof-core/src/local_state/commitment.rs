@@ -163,7 +163,8 @@ impl SignatureCommitmentValues {
                 ])
             }
             SignatureCommitmentVersion::V5 => {
-                // Added the certificate id to cover edge cases coming with the multisig
+                // Added the certificate id to cover edge cases coming with the
+                // multisig
                 keccak256_combine([
                     self.new_local_exit_root.as_ref(),
                     self.commit_imported_bridge_exits

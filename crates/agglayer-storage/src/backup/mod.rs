@@ -300,8 +300,8 @@ impl BackupEngine {
             })
             .collect::<Vec<_>>();
 
-        // We need to resort the epochs since the directory listing is not correctly
-        // ordered.
+        // We need to resort the epochs since the directory listing is not
+        // correctly ordered.
         epochs.sort();
 
         let epochs = epochs

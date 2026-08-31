@@ -128,15 +128,16 @@ async fn recover_with_backup(#[case] state: Forest) {
     handle.cancel();
     _ = agglayer_shutdowned.await;
 
-    // The invariant the `Proven` trigger exists for: backup 1 is requested before
-    // the settlement tx is submitted, and must carry the certificate header and
-    // its generated proof together — they live in two different databases, and
-    // the later backups no longer hold the proof.
+    // The invariant the `Proven` trigger exists for: backup 1 is requested
+    // before the settlement tx is submitted, and must carry the certificate
+    // header and its generated proof together — they live in two different
+    // databases, and the later backups no longer hold the proof.
     //
-    // The status is asserted as a range rather than exactly `Proven`: the backup
-    // engine flushes on a blocking task, so under load it can run after the
-    // certificate task has advanced to `Candidate`. Both are pre-settlement and
-    // both recover; pinning `Proven` would only buy a flaky test.
+    // The status is asserted as a range rather than exactly `Proven`: the
+    // backup engine flushes on a blocking task, so under load it can run
+    // after the certificate task has advanced to `Candidate`. Both are
+    // pre-settlement and both recover; pinning `Proven` would only buy a
+    // flaky test.
     {
         let (_restored, state, pending) = restore_snapshot(&backup_dir.path, 1);
 

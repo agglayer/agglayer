@@ -202,7 +202,8 @@ where
                 if let Ok(Some(certificate)) =
                     self.pending_store.get_certificate(network_id, height)
                 {
-                    // Verify that this is indeed the certificate we're looking for
+                    // Verify that this is indeed the certificate we're looking
+                    // for
                     if certificate.hash() == certificate_id {
                         return Ok(Some(certificate));
                     } else {
@@ -314,13 +315,15 @@ where
             Some(proof) => Ok(Some(proof)),
             None => {
                 // If not found in pending store, check the epoch store
-                // First get the certificate header to obtain epoch_number and certificate_index
+                // First get the certificate header to obtain epoch_number and
+                // certificate_index
                 match self.fetch_certificate_header(certificate_id) {
                     Ok(header) => {
                         if let (Some(epoch_number), Some(certificate_index)) =
                             (header.epoch_number, header.certificate_index)
                         {
-                            // Call the epoch store's get_proof method with epoch_number and
+                            // Call the epoch store's get_proof method with
+                            // epoch_number and
                             // certificate_index
                             self.epochs_store
                                 .get_proof(epoch_number, certificate_index)
@@ -333,13 +336,14 @@ where
                                     ProofRetrievalError::NotFound { certificate_id }
                                 })
                         } else {
-                            // Certificate doesn't have epoch information, so no proof in epoch
-                            // store
+                            // Certificate doesn't have epoch information, so no
+                            // proof in epoch store
                             Ok(None)
                         }
                     }
                     Err(_) => {
-                        // Certificate header not found, so no proof in epoch store
+                        // Certificate header not found, so no proof in epoch
+                        // store
                         Ok(None)
                     }
                 }
@@ -363,7 +367,8 @@ where
                 Some(h) => h,
 
                 None => {
-                    // No certificate at this height, return an error indicating inconsistent state
+                    // No certificate at this height, return an error indicating
+                    // inconsistent state
                     error!(
                         "No certificate header found for network {network_id} at height \
                          {current_height}, inconsistent state"
@@ -375,12 +380,14 @@ where
                 }
             };
 
-            // Only proceed if both epoch_number and certificate_index are present
+            // Only proceed if both epoch_number and certificate_index are
+            // present
             let (epoch_number, certificate_index) =
                 match (header.epoch_number, header.certificate_index) {
                     (Some(epoch), Some(idx)) => (epoch, idx),
                     _ => {
-                        // Missing epoch information, return an error indicating inconsistent state
+                        // Missing epoch information, return an error indicating
+                        // inconsistent state
                         error!(
                             "Missing epoch information in certificate header for network \
                              {network_id} at height {current_height}, inconsistent state"
@@ -401,7 +408,8 @@ where
             let certificate = match certificate_opt {
                 Some(cert) => cert,
                 None => {
-                    // Settled certificate not found, return an error indicating inconsistent state
+                    // Settled certificate not found, return an error indicating
+                    // inconsistent state
                     error!(
                         "Settled certificate not found in epoch store for network {network_id} at \
                          height {current_height}, inconsistent state"
@@ -427,8 +435,8 @@ where
             // error happened
         }
 
-        // No imported bridge exits found in any certificate from `settled_height` down
-        // to 0
+        // No imported bridge exits found in any certificate from
+        // `settled_height` down to 0
         Ok(None)
     }
 
@@ -481,7 +489,8 @@ where
                     cert.epoch_number.map(|num| num.as_u64());
 
                 if network_info.settled_pp_root.is_none() {
-                    // Extract settled_pp_root from the settled certificate's proof public values
+                    // Extract settled_pp_root from the settled certificate's
+                    // proof public values
                     network_info.settled_pp_root = match self.get_proof(cert.certificate_id) {
                         Ok(Some(agglayer_types::Proof::SP1(sp1_proof))) => {
                             match pessimistic_proof::PessimisticProofOutput::bincode_codec()
@@ -540,7 +549,8 @@ where
 
                     if network_info.settled_claim.is_none() {
                         if let Some(height) = network_info.settled_height {
-                            // Get the last settled claim if we have a settled height
+                            // Get the last settled claim if we have a settled
+                            // height
                             network_info.settled_claim = self
                                 .get_latest_settled_claim(network_id, height)
                                 .map_err(|error| {
@@ -592,8 +602,8 @@ where
             {
                 Ok(Some(certificate)) => Ok(Some(certificate.aggchain_data)),
                 Ok(None) if network_info.latest_pending_height.is_some() => {
-                    // If there's no latest available certificate but we have a pending height,
-                    // We can unwrap
+                    // If there's no latest available certificate but we have a
+                    // pending height, We can unwrap
                     let height = network_info.latest_pending_height.unwrap();
                     self.pending_store
                         .get_certificate(network_id, height)
@@ -656,7 +666,8 @@ where
                 network_info.network_status = NetworkStatus::Unknown;
             }
             Some(CertificateStatus::InError { .. }) => {
-                // Network is in error if the latest pending certificate is in error
+                // Network is in error if the latest pending certificate is in
+                // error
                 network_info.network_status = NetworkStatus::Error;
             }
             _ => {

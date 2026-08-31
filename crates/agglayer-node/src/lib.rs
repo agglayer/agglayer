@@ -62,8 +62,9 @@ pub fn main(
             if e.to_string()
                 .contains("trace dispatcher has already been set") =>
         {
-            // This is a common case in integration tests where the logger is initialized
-            // multiple times. We can safely ignore this error.
+            // This is a common case in integration tests where the logger is
+            // initialized multiple times. We can safely ignore this
+            // error.
             debug!("Logger already initialized, ignoring error: {e}");
         }
         Err(e) => {
@@ -104,9 +105,9 @@ pub fn main(
     // Spawn the metrics server into the metrics runtime.
     let metrics_handle = {
         // This guard is used to ensure that the metrics runtime is entered
-        // before the server is spawned. This is necessary because the `into_future`
-        // of `WithGracefulShutdown` is spawning various tasks before returning the
-        // actual server instance to spawn.
+        // before the server is spawned. This is necessary because the
+        // `into_future` of `WithGracefulShutdown` is spawning various
+        // tasks before returning the actual server instance to spawn.
         let _guard = metrics_runtime.enter();
         // Spawn the metrics server
         metrics_runtime.spawn(metric_server.into_future())

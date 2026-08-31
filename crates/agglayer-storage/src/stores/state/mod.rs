@@ -252,7 +252,8 @@ impl StateWriter for StateStore {
         )?;
 
         if let CertificateStatus::Settled = status {
-            // TODO: Check certificate conflict during insert (if conflict it's too late)
+            // TODO: Check certificate conflict during insert (if conflict it's
+            // too late)
             self.db.put::<CertificatePerNetworkColumn>(
                 &certificate_per_network::Key {
                     network_id: certificate.network_id.to_u32(),
@@ -289,9 +290,10 @@ impl StateWriter for StateStore {
                 )?;
             }
 
-            // A `Proven` certificate is submitted to L1 from a spawned task shortly
-            // after, so this is the last status write still ordered ahead of the
-            // settlement tx. Its proof is already persisted by now.
+            // A `Proven` certificate is submitted to L1 from a spawned task
+            // shortly after, so this is the last status write still
+            // ordered ahead of the settlement tx. Its proof is
+            // already persisted by now.
             if let CertificateStatus::Proven = status {
                 self.request_backup();
             }

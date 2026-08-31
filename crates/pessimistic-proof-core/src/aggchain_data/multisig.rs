@@ -39,7 +39,8 @@ pub enum MultisigError {
 impl MultiSignature {
     /// Commitment on the signers and threshold.
     pub fn multisig_hash(&self) -> Digest {
-        const ADDRESS_BYTES: usize = 32; // 32-bytes because padded 20bytes address
+        const ADDRESS_BYTES: usize = 32; // 32-bytes because padded 20bytes
+                                         // address
         const THRESHOLD_BYTES: usize = 32; // 32-bytes
 
         let mut buf =
