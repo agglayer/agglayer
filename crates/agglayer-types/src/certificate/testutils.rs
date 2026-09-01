@@ -16,7 +16,8 @@ impl Default for Certificate {
         let network_id = NetworkId::ETH_L1;
         let wallet = Self::wallet_for_test(network_id);
         // The LET depth can't be inferred to be the default of 32 due to the
-        // limitations of the Rust compiler's type inference, so we specify it here.
+        // limitations of the Rust compiler's type inference, so we specify it
+        // here.
         let local_exit_root = LocalExitTree::<32>::default().get_root().into();
         let height = Height::ZERO;
         let (_new_local_exit_root, signature, _signer) = compute_signature_info(
@@ -92,7 +93,8 @@ impl Certificate {
         version: SignatureCommitmentVersion,
     ) -> Self {
         // The LET depth can't be inferred to be the default of 32 due to the
-        // limitations of the Rust compiler's type inference, so we specify it here.
+        // limitations of the Rust compiler's type inference, so we specify it
+        // here.
         let local_exit_root = LocalExitTree::<32>::default().get_root().into();
 
         Self::new_for_test_custom(
@@ -116,8 +118,8 @@ impl Certificate {
     ) -> Self {
         use rand::{Rng, SeedableRng};
         // Use a constant seed for deterministic, repeatable tests
-        // Seed is derived from network_id and height for variety while maintaining
-        // determinism
+        // Seed is derived from network_id and height for variety while
+        // maintaining determinism
         let mut seed = [0u8; 32];
         seed[0..4].copy_from_slice(&network_id.to_u32().to_le_bytes());
         seed[4..12].copy_from_slice(&height.as_u64().to_le_bytes());

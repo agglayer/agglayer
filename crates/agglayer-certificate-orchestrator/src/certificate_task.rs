@@ -99,8 +99,8 @@ where
     )]
     pub async fn process(mut self) {
         if let Err(error) = self.process_impl().await {
-            // If requested to cancel, don't do anything — the error could have arisen from
-            // a partially-shutdown process.
+            // If requested to cancel, don't do anything — the error could have
+            // arisen from a partially-shutdown process.
             if self.cancellation_token.is_cancelled() {
                 return;
             }
@@ -141,9 +141,9 @@ where
     async fn process_impl(&mut self) -> Result<(), CertificateStatusError> {
         let certificate_id = self.header.certificate_id;
 
-        // TODO: when all the storage related to this cert is only ever handled from the
-        // certificate task, the certificate task should be the one to start
-        // with storing the certificate if needed.
+        // TODO: when all the storage related to this cert is only ever handled
+        // from the certificate task, the certificate task should be the
+        // one to start with storing the certificate if needed.
 
         debug!(initial_status = ?self.header.status, "Processing certificate");
 
@@ -157,14 +157,15 @@ where
 
         // TODO: Hack to deal with Proven certificates in case the PP changed.
         // See https://github.com/agglayer/agglayer/pull/819#discussion_r2152193517 for the details
-        // Note that we still have the problem, this is here only to mitigate a bit the
-        // issue. When we finally do the storage refactoring, we should remove
-        // this.
+        // Note that we still have the problem, this is here only to mitigate a
+        // bit the issue. When we finally do the storage refactoring, we
+        // should remove this.
         if self.header.status == CertificateStatus::Proven {
-            // A settlement job may already exist for this certificate if a previous
-            // run crashed after submitting it but before recording `Candidate`.
-            // Resume that job rather than re-proving and re-submitting (which the
-            // at-most-once guard rejects), so it recovers instead of erroring.
+            // A settlement job may already exist for this certificate if a
+            // previous run crashed after submitting it but before
+            // recording `Candidate`. Resume that job rather than
+            // re-proving and re-submitting (which the at-most-once
+            // guard rejects), so it recovers instead of erroring.
             if let Some(job_id) = self
                 .state_store
                 .get_certificate_settlement_job_id(&certificate_id)?
@@ -208,9 +209,9 @@ where
         &mut self,
         before_tx: Option<Digest>,
     ) -> Result<(), CertificateStatusError> {
-        // TODO: once we store network_id -> height -> state and not just network_id ->
-        // state, we should not need this any longer, because the state will
-        // already be recorded.
+        // TODO: once we store network_id -> height -> state and not just
+        // network_id -> state, we should not need this any longer,
+        // because the state will already be recorded.
 
         let height = self.header.height;
         let certificate_id = self.header.certificate_id;
@@ -227,7 +228,8 @@ where
 
         debug!("Recomputing new state for already-proven certificate");
 
-        // Recompute the local network state in place; the proof output is unused here.
+        // Recompute the local network state in place; the proof output is
+        // unused here.
         self.certifier_client
             .witness_generation(&self.certificate, &mut state, before_tx)
             .await
@@ -241,10 +243,11 @@ where
         debug!("Recomputing new state completed");
 
         // Send the new state to the network task
-        // TODO: Once we update the storage we'll have to remove this! It wouldn't be
-        // valid if we had multiple certificates inflight. Thankfully, until
-        // we update the storage we cannot have multiple certificates
-        // inflight, so we should be fine until then.
+        // TODO: Once we update the storage we'll have to remove this! It
+        // wouldn't be valid if we had multiple certificates inflight.
+        // Thankfully, until we update the storage we cannot have
+        // multiple certificates inflight, so we should be fine until
+        // then.
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -291,8 +294,8 @@ where
             .await?;
         debug!("Proof certification completed");
 
-        // Certification succeeded: close out the `pending` (proving) stage, then
-        // record the new status.
+        // Certification succeeded: close out the `pending` (proving) stage,
+        // then record the new status.
         self.record_stage();
         self.set_status(CertificateStatus::Proven)?;
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
@@ -328,7 +331,8 @@ where
             .await
             .log_err("Failed to build the settlement job")?;
         // Not logged here: submission fails with an expected cancellation error
-        // during graceful shutdown, and `process` suppresses that before logging.
+        // during graceful shutdown, and `process` suppresses that before
+        // logging.
         let job_id = self
             .settlement_service
             .submit_settlement_job(certificate_id, job)
@@ -340,12 +344,14 @@ where
             })?;
         info!(%job_id, "Settlement job submitted");
 
-        // Test hook: crash after the job + cert->job link are persisted but before
-        // `Candidate` is recorded -- the recovery window the resume path above handles.
+        // Test hook: crash after the job + cert->job link are persisted but
+        // before `Candidate` is recorded -- the recovery window the
+        // resume path above handles.
         #[cfg(feature = "testutils")]
         fail::fail_point!("certificate_task::process_impl::about_to_record_candidate");
 
-        // Close out the `proven` (submission) stage, then record the new status.
+        // Close out the `proven` (submission) stage, then record the new
+        // status.
         self.record_stage();
         self.set_status(CertificateStatus::Candidate)?;
 
@@ -454,7 +460,8 @@ where
             })?;
 
         // Wait for the settlement to reach a terminal result. The service owns
-        // its own timeouts and reorg handling; here we only react to the outcome.
+        // its own timeouts and reorg handling; here we only react to the
+        // outcome.
         let result: SettlementJobResult = self
             .settlement_service
             .wait_for_settlement(job_id)
@@ -474,9 +481,10 @@ where
         let tx_hash = contract_call.tx_hash;
         info!(%tx_hash, "Settlement successful");
 
-        // On reboot the executed state is lost (only persisted on settlement), so
-        // re-derive it from the hash the service actually settled -- not the header's
-        // recorded hash, which can be stale after a reboot. Skipped on the live path.
+        // On reboot the executed state is lost (only persisted on settlement),
+        // so re-derive it from the hash the service actually settled --
+        // not the header's recorded hash, which can be stale after a
+        // reboot. Skipped on the live path.
         if recompute_local_state {
             self.recompute_state(Some(Digest::from(tx_hash))).await?;
         }
@@ -529,8 +537,9 @@ where
         self.record_stage();
 
         // The network task persists `Settled` once the epoch is assigned, so a
-        // failed assignment leaves the certificate `Candidate` (recoverable) rather
-        // than durably `Settled` with no epoch. Reflect the status in memory only.
+        // failed assignment leaves the certificate `Candidate` (recoverable)
+        // rather than durably `Settled` with no epoch. Reflect the
+        // status in memory only.
         self.header.status = CertificateStatus::Settled;
 
         // For fresh certificates, record the end-to-end bridging duration.
@@ -579,8 +588,8 @@ mod testutils {
         fail::eval(
             "certificate_task::process_impl::invalid_settlement_tx_hash",
             |_| {
-                // Write an unexistent tx hash to simulate the settlement tx not being found on
-                // L1
+                // Write an unexistent tx hash to simulate the settlement tx not
+                // being found on L1
                 warn!("FAIL POINT ACTIVE: Injecting invalid settlement tx hash");
                 let unexistent_tx_hash = SettlementTxHash::new(Digest::from([21u8; 32]));
                 header.settlement_tx_hash = Some(unexistent_tx_hash);

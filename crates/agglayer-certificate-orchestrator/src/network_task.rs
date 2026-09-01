@@ -172,7 +172,8 @@ where
 
         let current_epoch = self.clock_ref.current_epoch();
 
-        // Start from the latest settled certificate to define the next expected height
+        // Start from the latest settled certificate to define the next expected
+        // height
         let latest_settled = self
             .state_store
             .get_latest_settled_certificate_per_network(&self.network_id)?
@@ -274,7 +275,8 @@ where
     ) -> Result<bool, Error> {
         let height_before = *next_expected_height;
 
-        // Get the certificate the pending certificate for the network at the height
+        // Get the certificate the pending certificate for the network at the
+        // height
         let certificate = if let Some(certificate) = self
             .pending_store
             .get_certificate(self.network_id, *next_expected_height)

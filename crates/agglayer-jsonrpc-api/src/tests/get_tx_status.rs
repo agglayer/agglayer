@@ -52,7 +52,8 @@ async fn check_tx_status() {
             debug!("Transaction status: {}", status);
         }
         Err(error) => {
-            // We may be transient error if the transaction is still being processed.
+            // We may be transient error if the transaction is still being
+            // processed.
             tracing::warn!("Error getting transaction status: {}", error);
         }
     }
