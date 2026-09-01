@@ -49,7 +49,8 @@ fn partial_migration(
         }
     }
 
-    // Phase 3: Disable failpoint and retry migration - should complete successfully
+    // Phase 3: Disable failpoint and retry migration - should complete
+    // successfully
     {
         fail::cfg("sample_migrate", "off").expect("Failed to disable failpoint");
 

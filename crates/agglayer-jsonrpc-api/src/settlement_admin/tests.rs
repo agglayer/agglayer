@@ -62,7 +62,8 @@ fn last_error_is_none_without_results() {
 
 #[test]
 fn last_error_renders_the_latest_client_error() {
-    // Descending on purpose: latest follows the attempt number, not slice order.
+    // Descending on purpose: latest follows the attempt number, not slice
+    // order.
     let results = vec![
         (1, unknown_client_error_result("newer error")),
         (0, unknown_client_error_result("older error")),
