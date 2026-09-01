@@ -96,10 +96,20 @@ The state and pending DBs are backed up together when:
 - A settlement tx hash is recorded on or removed from a certificate header.
 - A local network state is written, which happens on settlement.
 
-An epoch DB is backed up separately when that epoch is edited.
-Every request is best-effort:
-it is dropped with a warning if the backup engine is busy,
-and it never blocks the write that triggered it.
+An epoch DB is backed up separately when that epoch is packed.
+Requests never block the write that triggered them,
+and travel on two separate queues so state requests cannot crowd out epoch requests:
+
+- State+pending requests coalesce into a single queue slot.
+  Extra requests are dropped, which is safe because a backup snapshots
+  the databases when it runs, not when it is requested,
+  so the queued backup also covers the write that got its request dropped.
+- Epoch requests are queued unbounded and never dropped:
+  an epoch is packed exactly once,
+  so a dropped request would mean that epoch is never backed up.
+
+On shutdown, the backup engine drains both queues before exiting,
+so requests that were already queued still produce backups.
 
 When changing storage schemas or keys:
 
