@@ -2,14 +2,29 @@
 
 [advisories]
 ignore = [
-    # https://rustsec.org/advisories/RUSTSEC-2024-0437.html
-    "RUSTSEC-2024-0437",
-    # https://rustsec.org/advisories/RUSTSEC-2025-0009.html
-    "RUSTSEC-2025-0009",
     # https://rustsec.org/advisories/RUSTSEC-2026-0104.html
     "RUSTSEC-2026-0104",
     # https://rustsec.org/advisories/RUSTSEC-2026-0098.html
     "RUSTSEC-2026-0098",
     # https://rustsec.org/advisories/RUSTSEC-2026-0099.html
-    "RUSTSEC-2026-0099"
+    "RUSTSEC-2026-0099",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0253.html
+    # `lru` unsoundness (panic-unsafe `pop()`), fixed only in lru >= 0.18.2.
+    # Unreachable upstream: sp1-prover (all releases) requires lru ^0.12 and
+    # alloy-provider 1.x caps at ^0.16; only alloy 2.x moves to ^0.18.2.
+    # Not exploitable here: all cache key types in our tree (u64, B256,
+    # SP1 shape/artifact structs) have no Drop impl, so the required
+    # panic-in-Drop cannot occur.
+    "RUSTSEC-2026-0253",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0258.html
+    # h2 unbounded empty DATA frames (low-severity DoS), patched only in the
+    # 0.4 line (>= 0.4.16, which we use). The remaining hit is h2 0.3, which
+    # has no patched release and is pulled solely by sp1-sdk 5.x (required by
+    # agglayer-interop-types) enabling aws-sdk-kms's default `rustls` feature,
+    # i.e. the legacy hyper 0.14 AWS connector. That code path is an HTTP/2
+    # *client* talking to AWS KMS endpoints only, so the attack (a malicious
+    # peer flooding empty DATA frames) is not reachable in practice.
+    # Drop this entry once agglayer-interop-types moves to sp1-sdk >= 6,
+    # whose aws-sdk-kms dependency already avoids the legacy connector.
+    "RUSTSEC-2026-0258"
 ]

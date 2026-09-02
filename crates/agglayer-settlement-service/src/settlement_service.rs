@@ -494,11 +494,12 @@ impl<
                             .wrap_err(RpcErrorCode::Unavailable));
                     }
                     Err(error @ mpsc::error::TrySendError::Closed(_)) => {
-                        // The receiver can close just before the task's teardown
-                        // guard deregisters this handle. Respawning in that window
+                        // The receiver can close just before the task's
+                        // teardown guard deregisters
+                        // this handle. Respawning in that window
                         // would let the old teardown remove the fresh task's
-                        // registrations, so leave cleanup to the guard and ask the
-                        // operator to retry.
+                        // registrations, so leave cleanup to the guard and ask
+                        // the operator to retry.
                         return Err(eyre::Report::new(error)
                             .wrap_err(format!(
                                 "Failed to forward admin command to settlement task {job_id}: \

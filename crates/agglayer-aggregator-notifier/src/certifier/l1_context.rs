@@ -61,8 +61,8 @@ where
             .await
             .map_err(CertificationError::RollupContractAddressNotFound)?;
 
-        // Fetch context based on the aggchain data type that we received from the
-        // chain.
+        // Fetch context based on the aggchain data type that we received from
+        // the chain.
         let aggchain_data_ctx: CertificateAggchainDataCtx = match aggchain_data_payload {
             CertificateAggchainData::LegacyEcdsa { .. } => {
                 let signer = self
@@ -194,7 +194,8 @@ where
                     .into();
 
                 if let Some(declared_root) = declared_root {
-                    // Check that the retrieved l1 info root is equal to the declared one
+                    // Check that the retrieved l1 info root is equal to the
+                    // declared one
                     if declared_root != retrieved_root {
                         return Err(CertificationError::Types {
                             source: agglayer_types::Error::L1InfoRootIncorrect {

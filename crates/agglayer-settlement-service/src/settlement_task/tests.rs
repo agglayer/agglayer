@@ -746,8 +746,9 @@ async fn save_attempt_to_db_rejects_attempt_number_already_tracked_for_other_non
 
 #[tokio::test]
 async fn record_attempt_result_keeps_revert_over_conflicting_write() {
-    // Regression (#1607): a stored revert must survive a later "settled elsewhere"
-    // write instead of panicking (which used to repeat on every restart).
+    // Regression (#1607): a stored revert must survive a later "settled
+    // elsewhere" write instead of panicking (which used to repeat on every
+    // restart).
     let wallet = Address::from([2; 20]);
     let nonce = Nonce(7);
     let attempt_number = SettlementAttemptNumber(3);
@@ -1924,8 +1925,8 @@ fn resolve_base_gas_params_applies_multiplier_floor_and_ceiling() {
 
 #[test]
 fn resolve_base_gas_params_scales_fees_by_multiplier() {
-    // Multipliers scale an estimate that lands strictly inside [floor, ceiling],
-    // so this exercises the multiply path (not just clamping).
+    // Multipliers scale an estimate that lands strictly inside [floor,
+    // ceiling], so this exercises the multiply path (not just clamping).
     let config = SettlementTransactionConfig {
         max_fee_per_gas_multiplier_factor: Multiplier::from_u64_per_1000(1500), // 1.5x
         max_fee_per_gas_floor: 1_000_000_000,                                   // 1 gwei
@@ -2168,7 +2169,8 @@ async fn build_next_attempt_with_new_nonce_uses_assigned_nonce_and_default_walle
     assert_eq!(envelope.nonce(), 7);
     assert_eq!(envelope.to(), Some(mk_job().contract_address.into_alloy()));
     assert_eq!(envelope.chain_id(), Some(anvil.chain_id()));
-    // Fees are within the configured bounds (defaults: floor 0, ceiling 100 gwei).
+    // Fees are within the configured bounds (defaults: floor 0, ceiling 100
+    // gwei).
     assert!(envelope.max_fee_per_gas() <= 100_000_000_000);
 }
 
@@ -2479,7 +2481,8 @@ async fn build_next_attempt_with_nonce_bumps_over_live_tx_ignoring_errored_ceili
     // A live pending tx exists, so this out-bids it: a gas bump.
     assert_eq!(attempt_kind, SettlementAttemptKind::GasBump);
     assert_eq!(envelope.nonce(), 4);
-    // Bumped >= 10% over the *pending* tx (10 gwei), not the errored 30 gwei one.
+    // Bumped >= 10% over the *pending* tx (10 gwei), not the errored 30 gwei
+    // one.
     assert!(envelope.max_fee_per_gas() >= 11_000_000_000);
     assert!(envelope.max_fee_per_gas() <= 30_000_000_000);
     assert!(envelope.max_priority_fee_per_gas().unwrap() <= envelope.max_fee_per_gas());

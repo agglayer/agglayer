@@ -121,7 +121,8 @@ impl LocalNetworkStateData {
         }
 
         let balances_proofs: BTreeMap<TokenInfo, (U256, LocalBalancePath)> = {
-            // Consider all the imported bridge exits except for the native token
+            // Consider all the imported bridge exits except for the native
+            // token
             let imported_bridge_exits = certificate.imported_bridge_exits.iter().filter(|b| {
                 b.bridge_exit.amount_token_info().origin_network != certificate.network_id
             });
