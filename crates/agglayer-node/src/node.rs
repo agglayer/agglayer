@@ -5,6 +5,7 @@ use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
+use agglayer_errors::ResultExt as _;
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
@@ -105,7 +106,12 @@ impl Node {
                 *pending_max_backup_count,
                 cancellation_token.clone(),
             )?;
-            tokio::spawn(backup_engine.run());
+            tokio::spawn(async move {
+                backup_engine
+                    .run()
+                    .await
+                    .log_err("Backup engine failed, no further backups will be taken")
+            });
 
             client
         } else {
