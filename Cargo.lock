@@ -142,6 +142,7 @@ dependencies = [
  "eyre",
  "fail",
  "futures-util",
+ "hex",
  "lazy_static",
  "mockall",
  "parking_lot",
@@ -671,6 +672,7 @@ dependencies = [
  "serde-reflection",
  "serde_json",
  "serde_with",
+ "sp1-prover 6.2.2",
  "sp1-sdk 5.2.2",
  "sp1-sdk 6.2.2",
  "strum 0.28.0",
@@ -8257,7 +8259,7 @@ dependencies = [
 [[package]]
 name = "prover-alloy"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.6#5c51190e0c0edd1ee9ba8bc4383bd74f361760e7"
+source = "git+https://github.com/agglayer/provers.git?branch=feat%2Fproof-type-groth16#c016d1acb126a1475e4ce5a65acbe5598a2b87ed"
 dependencies = [
  "agglayer-evm-client",
  "alloy",
@@ -8273,7 +8275,7 @@ dependencies = [
 [[package]]
 name = "prover-config"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.6#5c51190e0c0edd1ee9ba8bc4383bd74f361760e7"
+source = "git+https://github.com/agglayer/provers.git?branch=feat%2Fproof-type-groth16#c016d1acb126a1475e4ce5a65acbe5598a2b87ed"
 dependencies = [
  "prover-utils",
  "serde",
@@ -8284,7 +8286,7 @@ dependencies = [
 [[package]]
 name = "prover-engine"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.6#5c51190e0c0edd1ee9ba8bc4383bd74f361760e7"
+source = "git+https://github.com/agglayer/provers.git?branch=feat%2Fproof-type-groth16#c016d1acb126a1475e4ce5a65acbe5598a2b87ed"
 dependencies = [
  "agglayer-telemetry 0.1.0 (git+https://github.com/agglayer/agglayer.git?tag=v0.4.4)",
  "anyhow",
@@ -8305,7 +8307,7 @@ dependencies = [
 [[package]]
 name = "prover-executor"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.6#5c51190e0c0edd1ee9ba8bc4383bd74f361760e7"
+source = "git+https://github.com/agglayer/provers.git?branch=feat%2Fproof-type-groth16#c016d1acb126a1475e4ce5a65acbe5598a2b87ed"
 dependencies = [
  "anyhow",
  "buildstructor 0.5.4",
@@ -8331,7 +8333,7 @@ dependencies = [
 [[package]]
 name = "prover-logger"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.6#5c51190e0c0edd1ee9ba8bc4383bd74f361760e7"
+source = "git+https://github.com/agglayer/provers.git?branch=feat%2Fproof-type-groth16#c016d1acb126a1475e4ce5a65acbe5598a2b87ed"
 dependencies = [
  "serde",
  "tracing",
@@ -8342,7 +8344,7 @@ dependencies = [
 [[package]]
 name = "prover-utils"
 version = "0.1.0"
-source = "git+https://github.com/agglayer/provers.git?tag=v2.0.0-rc.6#5c51190e0c0edd1ee9ba8bc4383bd74f361760e7"
+source = "git+https://github.com/agglayer/provers.git?branch=feat%2Fproof-type-groth16#c016d1acb126a1475e4ce5a65acbe5598a2b87ed"
 dependencies = [
  "humantime-serde",
  "serde",

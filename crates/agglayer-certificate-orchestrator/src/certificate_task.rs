@@ -16,7 +16,7 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateStatus, CertificateStatusError, ContractCallOutcome,
     Digest, Proof, SettlementJob, SettlementJobResult, U256,
 };
-use pessimistic_proof::{core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR, PessimisticProofOutput};
+use pessimistic_proof::PessimisticProofOutput;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -371,15 +371,16 @@ where
         let certificate_id = self.header.certificate_id;
 
         let proof = match self.pending_store.get_proof(certificate_id)? {
-            Some(Proof::SP1(proof)) => proof,
-            _ => {
+            Some(proof) => proof,
+            None => {
                 return Err(CertificateStatusError::SettlementError(format!(
                     "No SP1 proof found for certificate {certificate_id}"
                 )))
             }
         };
+        let Proof::SP1(sp1_proof) = &proof;
         let output = PessimisticProofOutput::bincode_codec()
-            .deserialize::<PessimisticProofOutput>(proof.public_values.as_slice())
+            .deserialize::<PessimisticProofOutput>(sp1_proof.public_values.as_slice())
             .map_err(|error| {
                 CertificateStatusError::SettlementError(format!(
                     "Failed to deserialize proof output: {error}"
@@ -397,11 +398,24 @@ where
                 ))
             })?;
 
-        let proof_bytes = proof.bytes();
+        let proof_bytes = proof
+            .onchain_bytes()
+            .map_err(|error| CertificateStatusError::SettlementError(error.to_string()))?;
         let proof_with_selector: Vec<u8> = match verifier_type {
             VerifierType::Pessimistic => proof_bytes,
             VerifierType::ALGateway => {
-                let mut prefixed = PESSIMISTIC_PROOF_PROGRAM_SELECTOR.to_vec();
+                let selector = self.certifier_client.pp_selector();
+
+                // The wrapping comes from the stored proof, the selector from
+                // the running config. Seeing both is what tells a settlement
+                // revert apart from every other kind.
+                info!(
+                    wrapping = %sp1_proof.proof,
+                    selector = %format!("0x{}", hex::encode(selector)),
+                    "Settling through the AgglayerGateway route"
+                );
+
+                let mut prefixed = selector.to_vec();
                 prefixed.extend(&proof_bytes);
                 prefixed
             }
