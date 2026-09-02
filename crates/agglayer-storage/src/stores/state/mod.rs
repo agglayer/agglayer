@@ -21,7 +21,7 @@ use tracing::{info, instrument, warn};
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
-    backup::{BackupClient, BackupRequest},
+    backup::BackupClient,
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
@@ -411,7 +411,7 @@ impl StateWriter for StateStore {
 impl StateStore {
     /// Requests a best-effort backup of the state and pending databases.
     fn request_backup(&self) {
-        if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+        if let Err(error) = self.backup_client.backup_state() {
             warn!("Unable to trigger backup for the state database: {}", error);
         }
     }

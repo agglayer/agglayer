@@ -4,10 +4,9 @@ use agglayer_types::{
     Certificate, CertificateStatus, CertificateStatusError, Digest, Height, NetworkId,
     SettlementTxHash,
 };
-use tokio::sync::mpsc::Receiver;
 
 use crate::{
-    backup::{BackupClient, BackupRequest},
+    backup::{BackupClient, ObservedBackupRequests},
     stores::{
         state::StateStore, StateWriter as _, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
@@ -16,7 +15,7 @@ use crate::{
 
 fn setup_store(
     status: CertificateStatus,
-) -> (TempDBDir, StateStore, Certificate, Receiver<BackupRequest>) {
+) -> (TempDBDir, StateStore, Certificate, ObservedBackupRequests) {
     let tmp = TempDBDir::new();
     let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
     let (backup_client, backups) = BackupClient::observable();
@@ -38,17 +37,18 @@ fn proven_status_triggers_a_state_backup() {
         .update_certificate_header_status(&certificate.hash(), &CertificateStatus::Proven)
         .expect("Unable to update certificate header status");
 
-    let request = backups
+    backups
+        .state
         .try_recv()
-        .expect("Moving a certificate to Proven should request a backup");
+        .expect("Moving a certificate to Proven should request a state backup");
 
     assert!(
-        request.epoch_db.is_none(),
-        "Proven should back up the state and pending DBs, not an epoch DB"
+        backups.state.try_recv().is_err(),
+        "A single status update should request a single backup"
     );
     assert!(
-        backups.try_recv().is_err(),
-        "A single status update should request a single backup"
+        backups.epoch.try_recv().is_err(),
+        "Proven should back up the state and pending DBs, not an epoch DB"
     );
 }
 
@@ -67,7 +67,7 @@ fn non_proven_statuses_do_not_trigger_a_state_backup() {
             .expect("Unable to update certificate header status");
 
         assert!(
-            backups.try_recv().is_err(),
+            backups.state.try_recv().is_err(),
             "Moving a certificate to {status} should not request a backup"
         );
     }
@@ -87,7 +87,7 @@ fn recording_a_settlement_tx_hash_triggers_a_state_backup() {
         .expect("Unable to update settlement tx hash");
 
     assert!(
-        backups.try_recv().is_ok(),
+        backups.state.try_recv().is_ok(),
         "Recording a settlement tx hash should request a backup"
     );
 }
