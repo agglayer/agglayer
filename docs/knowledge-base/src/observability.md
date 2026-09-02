@@ -5,10 +5,11 @@ the `agglayer-telemetry` crate (OpenTelemetry → `opentelemetry-prometheus`). T
 listen address is configured under `[telemetry]` (`prometheus-addr`, default
 `0.0.0.0:3000`).
 
-This page documents Agglayer's certificate bridging-time metrics: the end-to-end
-duration histogram and a per-stage breakdown (the project's first histograms).
+This page documents two metric families:
+certificate bridging times, and the backup subsystem.
 Per-rollup pending/proven/settled height gauges and certificate status/error
-counters are tracked separately (issues #1352 and #1655).
+counters are tracked separately (issues #1352 and #1655),
+as are the settlement metrics.
 
 ## Certificate bridging-time metrics
 
@@ -86,6 +87,79 @@ histogram_quantile(
 )
 ```
 
+## Backup metrics
+
+The backup subsystem copies three RocksDB databases off-box.
+All series use the OpenTelemetry meter scope `agglayer_node_backup`.
+
+| Metric | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `agglayer_node_backup_requests_total` | counter | `queue`, `disposition` | Requests raised. |
+| `agglayer_node_backup_queue_wait_seconds` | histogram | `queue` | Wait before a request was picked up. |
+| `agglayer_node_backup_duration_seconds` | histogram | `queue`, `outcome` | Time the backup itself took. |
+| `agglayer_node_backup_outstanding_age_seconds` | gauge | `queue` | Age of the request being served; `0` when idle. |
+| `agglayer_node_backup_last_success_timestamp_seconds` | gauge | `queue` | Unix time of the last successful backup. |
+| `agglayer_node_backup_files` | gauge | `db` | Files in the last successful backup. |
+
+| Label | Values |
+| --- | --- |
+| `queue` | `state`, `epoch` |
+| `db` | `state`, `pending`, `epoch` |
+| `disposition` | `queued`, `coalesced`, `rejected` |
+| `outcome` | `success`, `failure` |
+
+A `queue` is a unit of work, a `db` is a database.
+One `queue="state"` request backs up two databases,
+`db="state"` and `db="pending"`. Each epoch has its own.
+
+Both histograms use these buckets, in seconds.
+They are finer at the bottom than the certificate ones
+because an idle engine serves a request almost immediately:
+
+```text
+0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600, 1800
+```
+
+### Reading them
+
+- `coalesced` is normal, not a loss.
+  The queued backup also covers the write whose request was coalesced.
+  A high rate means the engine is not keeping up.
+- `rejected` means the queue is closed.
+  It fires for the whole shutdown drain, which can last minutes,
+  so alert only when it persists outside a restart.
+- No backup series at all means backups are disabled.
+  An engine that runs and fails still exports, with `outcome="failure"` rising.
+- A backup that starts and never finishes shows only on
+  `outstanding_age_seconds`, which climbs while `duration_seconds` goes quiet.
+  Alert on the gauge, not on missing durations.
+- That gauge covers the request being *served*, not queued ones.
+  Epoch backlog is `requests_total{queue="epoch"}` minus
+  `duration_seconds_count{queue="epoch"}`.
+- `files` is why a backup is slow: the engine checks every file it references
+  against the backup filesystem before copying anything.
+- A failed `purge_old_backups` has no series.
+  It leaves the new backup valid, so watch the
+  `Failed to purge old backup` log line for backups piling up.
+- Nothing here survives a restart.
+
+### Queries
+
+```promql
+# p95 backup time and p95 queue wait, per queue
+histogram_quantile(0.95, sum by (le, queue) (
+  rate(agglayer_node_backup_duration_seconds_bucket[$__rate_interval])))
+histogram_quantile(0.95, sum by (le, queue) (
+  rate(agglayer_node_backup_queue_wait_seconds_bucket[$__rate_interval])))
+
+# how stale the newest backup is
+time() - agglayer_node_backup_last_success_timestamp_seconds
+
+# epoch requests queued or running, since that queue is unbounded
+sum(agglayer_node_backup_requests_total{queue="epoch", disposition="queued"})
+- sum(agglayer_node_backup_duration_seconds_count{queue="epoch"})
+```
+
 ## Configuration
 
 The metrics endpoint address is configured under `[telemetry]`
@@ -102,3 +176,7 @@ one helper there and its call site in `agglayer-certificate-orchestrator`; addin
 or splitting a stage is a new `stage` constant plus a record call at the transition.
 Bucket boundaries and stage names are constants at the top of that module and can
 be tuned once real distributions are observed.
+
+Backup metrics live entirely in `crates/agglayer-telemetry/src/backup.rs`;
+`agglayer-storage` holds an `Arc<BackupMetrics>` and reports lifecycle events
+through it.

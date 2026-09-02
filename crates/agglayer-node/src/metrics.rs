@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
+    backup::BackupClient,
     columns::{
         latest_pending_certificate_per_network::PendingCertificate,
         latest_proven_certificate_per_network::ProvenCertificate,
@@ -201,6 +202,18 @@ fn collect_error_flags(
             }
         })
         .collect()
+}
+
+/// Register the gauge reporting the age of the backup request currently
+/// being served.
+///
+/// A client with backups disabled has no handle, so nothing is registered.
+/// The weak-reference contract lives in the telemetry crate, which owns the
+/// handle.
+pub(crate) fn register_backup_metrics(backup_client: &BackupClient) {
+    if let Some(metrics) = backup_client.metrics() {
+        agglayer_telemetry::backup::register_backup_metrics(&metrics);
+    }
 }
 
 #[cfg(test)]

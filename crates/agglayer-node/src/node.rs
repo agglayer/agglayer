@@ -98,6 +98,11 @@ impl Node {
             pending_max_backup_count,
         } = &config.storage.backup
         {
+            info!(
+                ?path,
+                state_max_backup_count, pending_max_backup_count, "Backups enabled"
+            );
+
             let (backup_engine, client) = BackupEngine::new(
                 path,
                 state_db.clone(),
@@ -115,6 +120,8 @@ impl Node {
 
             client
         } else {
+            warn!("Backups are disabled");
+
             BackupClient::noop()
         };
         let state_store = Arc::new(StateStore::new(state_db, backup_client.clone()));
@@ -128,6 +135,7 @@ impl Node {
         info!("Storage initialized.");
 
         crate::metrics::register_network_state_metrics(&pending_store, &state_store);
+        crate::metrics::register_backup_metrics(&backup_client);
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {

@@ -111,6 +111,9 @@ and travel on two separate queues so state requests cannot crowd out epoch reque
 On shutdown, the backup engine drains both queues before exiting,
 so requests that were already queued still produce backups.
 
+Request volume, queue wait and backup duration are exported as metrics;
+see [Observability](./observability.md).
+
 When changing storage schemas or keys:
 
 1. Define the migration path up front.

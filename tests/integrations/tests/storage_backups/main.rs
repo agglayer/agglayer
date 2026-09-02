@@ -8,10 +8,16 @@ use agglayer_storage::{
     },
     tests::TempDBDir,
 };
+use agglayer_telemetry::{
+    backup::{BACKUP_FILES, BACKUP_OUTSTANDING_AGE_SECONDS},
+    testutils::sample,
+};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
 use integrations::{
-    agglayer_setup::{setup_network, start_agglayer, wait_for_condition},
+    agglayer_setup::{
+        setup_network, setup_network_with_config, start_agglayer, wait_for_condition,
+    },
     wait_for_settlement_or_error,
 };
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
@@ -103,8 +109,8 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) =
-        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
+    let (agglayer_shutdowned, l1, client, config) =
+        setup_network_with_config(&tmp_dir.path, Some(config), Some(handle.clone())).await;
 
     let withdrawals = vec![];
 
@@ -124,6 +130,25 @@ async fn recover_with_backup(#[case] state: Forest) {
     // state rather than an earlier snapshot, which would leave the certificate
     // non-Settled after restart.
     wait_for_backup_counts(&backup_dir.path, 3, 3).await;
+
+    // Two things only a real node can show: that it registered the
+    // observable gauge, and that a backup of live data references files at
+    // all -- a zero count is the signature of backing up a read-only handle.
+    // The rest of the series are asserted in the storage unit tests.
+    let body = reqwest::get(format!("http://{}/metrics", config.telemetry.addr))
+        .await
+        .expect("the metrics endpoint should respond")
+        .text()
+        .await
+        .expect("the metrics body should be readable");
+    assert!(
+        sample(&body, BACKUP_OUTSTANDING_AGE_SECONDS, &[("queue", "state")]).is_some(),
+        "the node should have registered the outstanding-age gauge, got:\n{body}"
+    );
+    assert!(
+        sample(&body, BACKUP_FILES, &[("db", "state")]).is_some_and(|files| files > 0.0),
+        "the state backup should reference files, got:\n{body}"
+    );
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
