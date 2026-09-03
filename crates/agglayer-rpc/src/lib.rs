@@ -998,7 +998,11 @@ where
             .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
             .inspect_err(|e| error!("Failed to insert certificate into pending store: {e}"))?;
 
-        // Insert the certificate header into the state store.
+        // Insert the certificate header into the state store. Inserting a
+        // `Pending` header also requests the backup of the newly accepted
+        // certificate, so this write must stay ordered after the
+        // pending-store insert above: the backup has to capture the
+        // certificate body together with the header.
         self.state
             .insert_certificate_header(&certificate, CertificateStatus::Pending)
             .inspect_err(|e| error!("Failed to insert certificate into state store: {e}"))?;

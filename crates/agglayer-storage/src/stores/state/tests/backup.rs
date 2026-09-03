@@ -14,20 +14,75 @@ use crate::{
     tests::TempDBDir,
 };
 
-fn setup_store(
-    status: CertificateStatus,
-) -> (TempDBDir, StateStore, Certificate, Receiver<BackupRequest>) {
+fn raw_store() -> (TempDBDir, StateStore, Receiver<BackupRequest>) {
     let tmp = TempDBDir::new();
     let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
     let (backup_client, backups) = BackupClient::observable();
     let store = StateStore::new(db, backup_client);
+
+    (tmp, store, backups)
+}
+
+fn setup_store(
+    status: CertificateStatus,
+) -> (TempDBDir, StateStore, Certificate, Receiver<BackupRequest>) {
+    let (tmp, store, mut backups) = raw_store();
 
     let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
     store
         .insert_certificate_header(&certificate, status)
         .expect("Unable to insert certificate header");
 
+    // Drain the requests triggered by the setup insert so each test only
+    // observes the requests of the operation under test.
+    while backups.try_recv().is_ok() {}
+
     (tmp, store, certificate, backups)
+}
+
+#[test]
+fn accepting_a_pending_certificate_triggers_a_state_backup() {
+    let (_tmp, store, mut backups) = raw_store();
+
+    let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+    store
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .expect("Unable to insert certificate header");
+
+    let request = backups
+        .try_recv()
+        .expect("Accepting a Pending certificate should request a backup");
+
+    assert!(
+        request.epoch_db.is_none(),
+        "Pending acceptance should back up the state and pending DBs, not an epoch DB"
+    );
+    assert!(
+        backups.try_recv().is_err(),
+        "A single certificate acceptance should request a single backup"
+    );
+}
+
+#[test]
+fn non_pending_header_inserts_do_not_trigger_a_state_backup() {
+    for status in [
+        CertificateStatus::Proven,
+        CertificateStatus::Candidate,
+        CertificateStatus::Settled,
+        CertificateStatus::error(CertificateStatusError::InternalError("failed".to_string())),
+    ] {
+        let (_tmp, store, mut backups) = raw_store();
+
+        let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+        store
+            .insert_certificate_header(&certificate, status.clone())
+            .expect("Unable to insert certificate header");
+
+        assert!(
+            backups.try_recv().is_err(),
+            "Inserting a certificate header as {status} should not request a backup"
+        );
+    }
 }
 
 #[test]

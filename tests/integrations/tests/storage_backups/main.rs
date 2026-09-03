@@ -69,9 +69,10 @@ fn restore_snapshot(
 ///
 /// Unlike [`wait_for_backup_counts`], this works under aggressive purging
 /// (where the retained backup count stays at 1) because RocksDB backup ids are
-/// monotonic. Each settled certificate produces three backups (one when it is
-/// proven, one when the L1 tx hash is known, one when it is settled), so the
-/// Nth settled certificate's durable state has backup id `3 * N`.
+/// monotonic. Each settled certificate produces four backups (one when it is
+/// accepted as pending, one when it is proven, one when the L1 tx hash is
+/// known, one when it is settled), so the Nth settled certificate's durable
+/// state has backup id `4 * N`.
 async fn wait_for_backup_ids(
     backup_dir: &std::path::Path,
     minimum_state_backup_id: u32,
@@ -109,6 +110,8 @@ async fn recover_with_backup(#[case] state: Forest) {
     let withdrawals = vec![];
 
     let certificate = state.clone().apply_events(&[], &withdrawals);
+    let network_id = certificate.network_id;
+    let height = certificate.height;
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -119,24 +122,24 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // Each settled certificate produces three backups (proven, tx-hash known,
-    // then settled). Wait for all of them so the restore captures the settled
-    // state rather than an earlier snapshot, which would leave the certificate
-    // non-Settled after restart.
-    wait_for_backup_counts(&backup_dir.path, 3, 3).await;
+    // Each settled certificate produces four backups (pending, proven,
+    // tx-hash known, then settled). Wait for all of them so the restore
+    // captures the settled state rather than an earlier snapshot, which would
+    // leave the certificate non-Settled after restart.
+    wait_for_backup_counts(&backup_dir.path, 4, 4).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
 
-    // The invariant the `Proven` trigger exists for: backup 1 is requested
-    // before the settlement tx is submitted, and must carry the certificate
-    // header and its generated proof together — they live in two different
-    // databases, and the later backups no longer hold the proof.
+    // The invariant the `Pending` trigger exists for: backup 1 is requested
+    // as soon as the certificate is accepted, before the orchestrator picks
+    // it up, and must carry the certificate body — it only lives in the
+    // pending database until the certificate is processed.
     //
-    // The status is asserted as a range rather than exactly `Proven`: the
+    // The status is asserted as a range rather than exactly `Pending`: the
     // backup engine flushes on a blocking task, so under load it can run
-    // after the certificate task has advanced to `Candidate`. Both are
-    // pre-settlement and both recover; pinning `Proven` would only buy a
+    // after the certificate task has advanced. All allowed statuses are
+    // pre-settlement and all recover; pinning `Pending` would only buy a
     // flaky test.
     {
         let (_restored, state, pending) = restore_snapshot(&backup_dir.path, 1);
@@ -148,15 +151,52 @@ async fn recover_with_backup(#[case] state: Forest) {
         assert!(
             matches!(
                 header.status,
-                CertificateStatus::Proven | CertificateStatus::Candidate
+                CertificateStatus::Pending
+                    | CertificateStatus::Proven
+                    | CertificateStatus::Candidate
             ),
             "backup 1 should predate settlement, got {:?}",
             header.status
         );
 
         assert!(
+            pending
+                .get_certificate(network_id, height)
+                .unwrap()
+                .is_some(),
+            "backup 1 should contain the submitted certificate body"
+        );
+    }
+
+    // The invariant the `Proven` trigger exists for: backup 2 is requested
+    // before the settlement tx is submitted, and must carry the certificate
+    // header and its generated proof together — they live in two different
+    // databases, and the later backups no longer hold the proof.
+    //
+    // The status is asserted as a range rather than exactly `Proven`: the
+    // backup engine flushes on a blocking task, so under load it can run
+    // after the certificate task has advanced to `Candidate`. Both are
+    // pre-settlement and both recover; pinning `Proven` would only buy a
+    // flaky test.
+    {
+        let (_restored, state, pending) = restore_snapshot(&backup_dir.path, 2);
+
+        let header = state
+            .get_certificate_header(&certificate_id)
+            .unwrap()
+            .expect("backup 2 should contain the certificate header");
+        assert!(
+            matches!(
+                header.status,
+                CertificateStatus::Proven | CertificateStatus::Candidate
+            ),
+            "backup 2 should predate settlement, got {:?}",
+            header.status
+        );
+
+        assert!(
             pending.get_proof(certificate_id).unwrap().is_some(),
-            "backup 1 should contain the generated proof"
+            "backup 2 should contain the generated proof"
         );
     }
 
@@ -228,10 +268,10 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    // Each settled certificate produces three backups (proven, tx-hash known,
-    // then settled). Wait for certificate1 to be fully backed up (state/pending
-    // backup id >= 3) before sending certificate2.
-    wait_for_backup_ids(&backup_dir.path, 3, 3).await;
+    // Each settled certificate produces four backups (pending, proven,
+    // tx-hash known, then settled). Wait for certificate1 to be fully backed
+    // up (state/pending backup id >= 4) before sending certificate2.
+    wait_for_backup_ids(&backup_dir.path, 4, 4).await;
 
     let certificate_id2: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2])
@@ -244,11 +284,11 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     // This configuration purges state and pending backups eagerly, so the
     // retained backup count stays at 1 after both settlements. Backup ids are
-    // monotonic, so wait for certificate2's settled backup (id >= 6) to be
+    // monotonic, so wait for certificate2's settled backup (id >= 8) to be
     // durable before shutting the node down; otherwise the restore can capture
     // one of certificate2's pre-settlement snapshots and the post-restart
     // status assertion flakes.
-    wait_for_backup_ids(&backup_dir.path, 6, 6).await;
+    wait_for_backup_ids(&backup_dir.path, 8, 8).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -338,7 +378,7 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    wait_for_backup_counts(&backup_dir.path, 6, 6).await;
+    wait_for_backup_counts(&backup_dir.path, 8, 8).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -350,12 +390,13 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 
     let backup_report = BackupEngine::list_backups(&backup_dir.path).unwrap();
 
-    // There are 6 backups because 3 actions trigger a backup per cert:
+    // There are 8 backups because 4 actions trigger a backup per cert:
+    // - One when the `Certificate` is accepted as pending
     // - One when the `Certificate` is proven
     // - One when the L1 `tx_hash` is known
     // - One when the `Certificate` is settled and the network state is updated
-    assert_eq!(backup_report.get_state().len(), 6);
-    assert_eq!(backup_report.get_pending().len(), 6);
+    assert_eq!(backup_report.get_state().len(), 8);
+    assert_eq!(backup_report.get_pending().len(), 8);
 
     BackupEngine::restore(
         &backup_dir.path.join("state"),
@@ -423,7 +464,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    wait_for_backup_counts(&backup_dir.path, 3, 3).await;
+    wait_for_backup_counts(&backup_dir.path, 4, 4).await;
 
     let certificate_id2: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate2])
@@ -434,7 +475,7 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     assert_eq!(result.status, CertificateStatus::Settled);
 
-    wait_for_backup_counts(&backup_dir.path, 6, 6).await;
+    wait_for_backup_counts(&backup_dir.path, 8, 8).await;
 
     handle.cancel();
     _ = agglayer_shutdowned.await;
@@ -446,15 +487,15 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     let backup_report = BackupEngine::list_backups(&backup_dir.path).unwrap();
 
-    assert_eq!(backup_report.get_state().len(), 6);
-    assert_eq!(backup_report.get_pending().len(), 6);
+    assert_eq!(backup_report.get_state().len(), 8);
+    assert_eq!(backup_report.get_pending().len(), 8);
 
-    // Backup 3 is certificate1's settled snapshot, taken before certificate2
+    // Backup 4 is certificate1's settled snapshot, taken before certificate2
     // was ever submitted.
     BackupEngine::restore_at(
         &backup_dir.path.join("state"),
         &config.storage.state_db_path,
-        3,
+        4,
     )
     .unwrap();
 
