@@ -9,7 +9,7 @@ use agglayer_storage::{
     tests::TempDBDir,
 };
 use agglayer_telemetry::{
-    backup::{BACKUP_FILES, BACKUP_OUTSTANDING_AGE_SECONDS},
+    backup::{BACKUP_FILES, BACKUP_SERVING_SINCE_TIMESTAMP_SECONDS},
     testutils::sample,
 };
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
@@ -131,10 +131,9 @@ async fn recover_with_backup(#[case] state: Forest) {
     // non-Settled after restart.
     wait_for_backup_counts(&backup_dir.path, 3, 3).await;
 
-    // Two things only a real node can show: that it registered the
-    // observable gauge, and that a backup of live data references files at
-    // all -- a zero count is the signature of backing up a read-only handle.
-    // The rest of the series are asserted in the storage unit tests.
+    // Only a real node shows that the gauges reach the endpoint and that a
+    // backup of live data references files at all. The rest of the series
+    // are asserted in the storage unit tests.
     let body = reqwest::get(format!("http://{}/metrics", config.telemetry.addr))
         .await
         .expect("the metrics endpoint should respond")
@@ -142,8 +141,13 @@ async fn recover_with_backup(#[case] state: Forest) {
         .await
         .expect("the metrics body should be readable");
     assert!(
-        sample(&body, BACKUP_OUTSTANDING_AGE_SECONDS, &[("queue", "state")]).is_some(),
-        "the node should have registered the outstanding-age gauge, got:\n{body}"
+        sample(
+            &body,
+            BACKUP_SERVING_SINCE_TIMESTAMP_SECONDS,
+            &[("queue", "state")]
+        )
+        .is_some(),
+        "the serving-since gauge should reach the endpoint, got:\n{body}"
     );
     assert!(
         sample(&body, BACKUP_FILES, &[("db", "state")]).is_some_and(|files| files > 0.0),

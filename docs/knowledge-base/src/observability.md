@@ -97,7 +97,7 @@ All series use the OpenTelemetry meter scope `agglayer_node_backup`.
 | `agglayer_node_backup_requests_total` | counter | `queue`, `disposition` | Requests raised. |
 | `agglayer_node_backup_queue_wait_seconds` | histogram | `queue` | Wait before a request was picked up. |
 | `agglayer_node_backup_duration_seconds` | histogram | `queue`, `outcome` | Time the backup itself took. |
-| `agglayer_node_backup_outstanding_age_seconds` | gauge | `queue` | Age of the request being served; `0` when idle. |
+| `agglayer_node_backup_serving_since_timestamp_seconds` | gauge | `queue` | Unix time the request being served was raised; `0` when idle. |
 | `agglayer_node_backup_last_success_timestamp_seconds` | gauge | `queue` | Unix time of the last successful backup. |
 | `agglayer_node_backup_files` | gauge | `db` | Files in the last successful backup. |
 
@@ -113,11 +113,12 @@ One `queue="state"` request backs up two databases,
 `db="state"` and `db="pending"`. Each epoch has its own.
 
 Both histograms use these buckets, in seconds.
-They are finer at the bottom than the certificate ones
-because an idle engine serves a request almost immediately:
+Backups take seconds when healthy and minutes when not,
+so the bottom is coarse and every minute through 15 min is its own bucket:
 
 ```text
-0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600, 1800
+1, 10, 30, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660, 720, 780,
+840, 900, 1200, 1500, 1800
 ```
 
 ### Reading them
@@ -128,11 +129,14 @@ because an idle engine serves a request almost immediately:
 - `rejected` means the queue is closed.
   It fires for the whole shutdown drain, which can last minutes,
   so alert only when it persists outside a restart.
-- No backup series at all means backups are disabled.
-  An engine that runs and fails still exports, with `outcome="failure"` rising.
+- No backup series at all means no backup has run in this process.
+  Backups being disabled looks the same, since these are process-global
+  instruments that no shutdown clears.
+  An engine that runs and fails does export, with `outcome="failure"` rising.
 - A backup that starts and never finishes shows only on
-  `outstanding_age_seconds`, which climbs while `duration_seconds` goes quiet.
-  Alert on the gauge, not on missing durations.
+  `serving_since_timestamp_seconds`: its age keeps growing while
+  `duration_seconds` goes quiet. Alert on that age, not on missing durations.
+  Filter on `> 0`, since zero means nothing is being served.
 - That gauge covers the request being *served*, not queued ones.
   Epoch backlog is `requests_total{queue="epoch"}` minus
   `duration_seconds_count{queue="epoch"}`.
@@ -154,6 +158,9 @@ histogram_quantile(0.95, sum by (le, queue) (
 
 # how stale the newest backup is
 time() - agglayer_node_backup_last_success_timestamp_seconds
+
+# age of the backup being served right now, if any
+time() - (agglayer_node_backup_serving_since_timestamp_seconds > 0)
 
 # epoch requests queued or running, since that queue is unbounded
 sum(agglayer_node_backup_requests_total{queue="epoch", disposition="queued"})
@@ -177,6 +184,6 @@ or splitting a stage is a new `stage` constant plus a record call at the transit
 Bucket boundaries and stage names are constants at the top of that module and can
 be tuned once real distributions are observed.
 
-Backup metrics live entirely in `crates/agglayer-telemetry/src/backup.rs`;
-`agglayer-storage` holds an `Arc<BackupMetrics>` and reports lifecycle events
-through it.
+Backup metrics live entirely in `crates/agglayer-telemetry/src/backup.rs`.
+`agglayer-storage` reports lifecycle events through its functions and the
+`BackupRun` they return; every instrument, label and timer stays there.

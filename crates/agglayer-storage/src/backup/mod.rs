@@ -7,7 +7,7 @@ use std::{
 };
 
 use agglayer_errors::ResultExt as _;
-use agglayer_telemetry::backup::{BackupDb, BackupMetrics, RequestDisposition};
+use agglayer_telemetry::backup::{self, BackupDb, RequestDisposition};
 use agglayer_types::EpochNumber;
 use eyre::eyre;
 use rocksdb::backup::{
@@ -81,7 +81,7 @@ impl From<&Path> for BackupEngineConfig {
     }
 }
 
-/// Sending halves of the backup queues, plus the engine's metrics handle.
+/// Sending halves of the backup queues.
 ///
 /// State and epoch requests travel on separate queues so that a burst of
 /// state requests can never push an epoch request out of the queue.
@@ -97,8 +97,6 @@ struct BackupSenders {
     /// Unbounded queue for epoch backups. Each epoch is packed exactly once,
     /// so a dropped request would mean that epoch is never backed up.
     epoch: sync::mpsc::UnboundedSender<EpochBackupRequest>,
-    /// The engine's metrics handle, for the node to register gauges on.
-    metrics: Arc<BackupMetrics>,
 }
 
 /// Client used to request a backup.
@@ -129,7 +127,6 @@ impl BackupClient {
                 senders: Some(BackupSenders {
                     state: state_sender,
                     epoch: epoch_sender,
-                    metrics: BackupMetrics::new(),
                 }),
             },
             ObservedBackupRequests { state, epoch },
@@ -155,7 +152,7 @@ impl BackupClient {
                 Err(mpsc::error::TrySendError::Closed(_)) => RequestDisposition::Rejected,
             };
 
-            senders.metrics.state_requested(disposition);
+            backup::state_requested(disposition);
 
             if disposition == RequestDisposition::Rejected {
                 return Err(eyre!("Unable to send state backup request"));
@@ -177,7 +174,7 @@ impl BackupClient {
                 enqueued_at: Instant::now(),
             });
 
-            senders.metrics.epoch_requested(if sent.is_ok() {
+            backup::epoch_requested(if sent.is_ok() {
                 RequestDisposition::Queued
             } else {
                 RequestDisposition::Rejected
@@ -188,13 +185,6 @@ impl BackupClient {
         }
 
         Ok(())
-    }
-
-    /// The metrics handle of the engine this client talks to, or `None`
-    /// when backups are disabled, which is what keeps a node with backups
-    /// off from exporting any backup series.
-    pub fn metrics(&self) -> Option<Arc<BackupMetrics>> {
-        self.senders.as_ref().map(|senders| senders.metrics.clone())
     }
 }
 
@@ -251,7 +241,6 @@ pub struct BackupEngine {
     config: BackupEngineConfig,
     state_backup_request: sync::mpsc::Receiver<Instant>,
     epoch_backup_request: sync::mpsc::UnboundedReceiver<EpochBackupRequest>,
-    metrics: Arc<BackupMetrics>,
     state_max_backup_number: usize,
     pending_max_backup_number: usize,
     cancellation_token: CancellationToken,
@@ -282,8 +271,6 @@ impl BackupEngine {
 
         let state_engine = open_engine(&state_opts, &env, "state")?;
         let pending_engine = open_engine(&pending_opts, &env, "pending")?;
-        let metrics = BackupMetrics::new();
-
         Ok((
             Self {
                 state_engine,
@@ -297,13 +284,11 @@ impl BackupEngine {
                 state_max_backup_number,
                 pending_max_backup_number,
                 cancellation_token,
-                metrics: metrics.clone(),
             },
             BackupClient {
                 senders: Some(BackupSenders {
                     state: state_sender,
                     epoch: epoch_sender,
-                    metrics,
                 }),
             },
         ))
@@ -322,7 +307,7 @@ impl BackupEngine {
         #[cfg(test)]
         test_hooks::backup_started();
 
-        let run = self.metrics.state_backup(enqueued_at);
+        let run = backup::state_backup(enqueued_at);
         info!("State backup started");
 
         let state_created = self
@@ -345,16 +330,15 @@ impl BackupEngine {
             .purge_old_backups(self.pending_max_backup_number)
             .log_err("Failed to purge old backup for pending db");
 
-        let elapsed_ms = run.elapsed_ms();
-
         if state_created.is_ok() && pending_created.is_ok() {
-            info!(elapsed_ms, "State backup completed");
             run.files(BackupDb::State, latest_backup_files(&self.state_engine));
             run.files(BackupDb::Pending, latest_backup_files(&self.pending_engine));
-            run.succeeded();
+
+            let elapsed_ms = run.succeeded();
+            info!(elapsed_ms, "State backup completed");
         } else {
+            let elapsed_ms = run.failed();
             error!(elapsed_ms, "State backup failed");
-            run.failed();
         }
     }
 
@@ -374,7 +358,7 @@ impl BackupEngine {
             enqueued_at,
         } = request;
 
-        let run = self.metrics.epoch_backup(*enqueued_at);
+        let run = backup::epoch_backup(*enqueued_at);
         info!("Backup of epoch {epoch_number} started");
 
         let backup = BackupEngineOptions::new(
@@ -394,19 +378,19 @@ impl BackupEngine {
                 .map(|()| engine)
         });
 
-        let elapsed_ms = run.elapsed_ms();
         match &backup {
             Ok(engine) => {
-                info!(elapsed_ms, "Backup of epoch {epoch_number} completed");
                 run.files(BackupDb::Epoch, latest_backup_files(engine));
-                run.succeeded();
+
+                let elapsed_ms = run.succeeded();
+                info!(elapsed_ms, "Backup of epoch {epoch_number} completed");
             }
             Err(_) => {
+                let elapsed_ms = run.failed();
                 error!(
                     elapsed_ms,
                     "Backup of epoch {epoch_number} failed; this epoch has no backup"
                 );
-                run.failed();
             }
         }
     }

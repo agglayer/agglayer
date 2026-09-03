@@ -3,11 +3,11 @@
 //!
 //! Two queues, state and epoch. A write path raises a request, it waits,
 //! then it runs against the RocksDB backup engines.
+//!
+//! Every instrument is pushed at the event, so nothing here reads node state
+//! on a scrape.
 
-use std::{
-    sync::{Arc, Mutex},
-    time::{Instant, SystemTime, UNIX_EPOCH},
-};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use lazy_static::lazy_static;
 use opentelemetry::{global, metrics::*, KeyValue};
@@ -40,9 +40,13 @@ pub const BACKUP_QUEUE_WAIT_SECONDS: &str = "agglayer_node_backup_queue_wait_sec
 /// by `queue` and `outcome`.
 pub const BACKUP_DURATION_SECONDS: &str = "agglayer_node_backup_duration_seconds";
 
-/// Gauge name: age of the backup request currently being served, in
-/// seconds, by `queue`. Zero when nothing is outstanding.
-pub const BACKUP_OUTSTANDING_AGE_SECONDS: &str = "agglayer_node_backup_outstanding_age_seconds";
+/// Gauge name: unix time at which the request currently being served was
+/// raised, by `queue`. Zero when nothing is being served.
+///
+/// A dashboard subtracts this from `time()` to get the age, so a backup that
+/// started and never finished shows as an age that keeps growing.
+pub const BACKUP_SERVING_SINCE_TIMESTAMP_SECONDS: &str =
+    "agglayer_node_backup_serving_since_timestamp_seconds";
 
 /// Gauge name: unix time at which the last backup on this `queue` succeeded.
 pub const BACKUP_LAST_SUCCESS_TIMESTAMP_SECONDS: &str =
@@ -60,11 +64,6 @@ pub const BACKUP_FILES: &str = "agglayer_node_backup_files";
 enum BackupQueue {
     State,
     Epoch,
-}
-
-impl BackupQueue {
-    /// Every queue, so the outstanding-age gauge always exports both series.
-    const ALL: &'static [BackupQueue] = &[BackupQueue::State, BackupQueue::Epoch];
 }
 
 /// What happened to a request when it was raised, rendered as the
@@ -105,13 +104,17 @@ enum BackupOutcome {
     Failure,
 }
 
-/// Histogram buckets in seconds.
+/// Histogram buckets in seconds, shared by the queue-wait and duration
+/// histograms.
 ///
-/// Not [`crate::certificate::DURATION_BUCKETS_SECONDS`], which starts at
-/// 0.5 s: an idle engine serves a request almost immediately, so that set
-/// would report every healthy queue wait in one bucket.
+/// Sub-second resolution is pointless here: the fast case is a backup of
+/// seconds and the case worth watching is one of minutes. So the bottom is
+/// coarse, with 10 s and 30 s only to keep a healthy backup distinguishable
+/// from a slow one, and every minute is its own bucket through 15 min so a
+/// backup creeping towards the multi-minute range is visible as it happens.
 const BACKUP_DURATION_BUCKETS_SECONDS: &[f64] = &[
-    0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0,
+    1.0, 10.0, 30.0, 60.0, 120.0, 180.0, 240.0, 300.0, 360.0, 420.0, 480.0, 540.0, 600.0, 660.0,
+    720.0, 780.0, 840.0, 900.0, 1200.0, 1500.0, 1800.0,
 ];
 
 lazy_static! {
@@ -143,154 +146,84 @@ lazy_static! {
         .u64_gauge(BACKUP_FILES)
         .with_description("Number of files in the last successful backup of this database")
         .build();
+    static ref BACKUP_SERVING_SINCE: Gauge<u64> =
+        global::meter(AGGLAYER_NODE_BACKUP_OTEL_SCOPE_NAME)
+            .u64_gauge(BACKUP_SERVING_SINCE_TIMESTAMP_SECONDS)
+            .with_description("Unix time at which the request being served was raised, 0 when idle")
+            .build();
 }
 
-/// Register the observable gauge reporting the age of the request being
-/// served, read from `metrics`.
-///
-/// One series per queue, zero when idle: a missing series would make "idle"
-/// indistinguishable from "no data". Only a [`Weak`](std::sync::Weak) is
-/// held, so the series disappear when `metrics` drops instead of freezing.
-///
-/// # Runtime contract
-///
-/// The callback runs inside the `/metrics` handler. Call this after the
-/// global meter provider is installed (see [`crate::ServerBuilder`]), and at
-/// most once per provider.
-pub fn register_backup_metrics(metrics: &Arc<BackupMetrics>) {
-    let metrics = Arc::downgrade(metrics);
-
-    // The instrument handle is intentionally dropped: the callback
-    // registration lives in the meter provider, not in the handle.
-    let _ = global::meter(AGGLAYER_NODE_BACKUP_OTEL_SCOPE_NAME)
-        .f64_observable_gauge(BACKUP_OUTSTANDING_AGE_SECONDS)
-        .with_description("Age of the backup request currently being served, in seconds")
-        .with_callback(move |observer| {
-            let Some(metrics) = metrics.upgrade() else {
-                return;
-            };
-
-            for &queue in BackupQueue::ALL {
-                observer.observe(
-                    metrics.age_seconds(queue),
-                    &[KeyValue::new(QUEUE_LABEL_NAME, queue.to_string())],
-                );
-            }
-        })
-        .build();
+/// Record a state and pending backup request, and what happened to it.
+pub fn state_requested(disposition: RequestDisposition) {
+    requested(BackupQueue::State, disposition);
 }
 
-/// Metrics for the backup subsystem: one handle per backup engine.
-///
-/// This is the whole interface the observed subsystem talks to; every
-/// instrument, label and timer stays behind it.
-///
-/// It also holds the one thing a scrape cannot derive from the event-driven
-/// instruments: what each queue is serving. A backup that starts and never
-/// finishes is invisible to those, and shows only as a climbing
-/// [`BACKUP_OUTSTANDING_AGE_SECONDS`].
-#[derive(Debug, Default)]
-pub struct BackupMetrics {
-    state: Mutex<Option<Instant>>,
-    epoch: Mutex<Option<Instant>>,
+/// Record an epoch backup request, and what happened to it.
+pub fn epoch_requested(disposition: RequestDisposition) {
+    requested(BackupQueue::Epoch, disposition);
 }
 
-impl BackupMetrics {
-    #[must_use]
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
+fn requested(queue: BackupQueue, disposition: RequestDisposition) {
+    BACKUP_REQUESTS_COUNTER.add(
+        1,
+        &[
+            KeyValue::new(QUEUE_LABEL_NAME, queue.to_string()),
+            KeyValue::new(DISPOSITION_LABEL_NAME, disposition.to_string()),
+        ],
+    );
+}
 
-    /// Record a state and pending backup request, and what happened to it.
-    pub fn state_requested(&self, disposition: RequestDisposition) {
-        Self::requested(BackupQueue::State, disposition);
-    }
+/// Start serving the state and pending backup raised at `enqueued_at`.
+pub fn state_backup(enqueued_at: Instant) -> BackupRun {
+    BackupRun::start(BackupQueue::State, enqueued_at)
+}
 
-    /// Record an epoch backup request, and what happened to it.
-    pub fn epoch_requested(&self, disposition: RequestDisposition) {
-        Self::requested(BackupQueue::Epoch, disposition);
-    }
+/// Start serving an epoch backup raised at `enqueued_at`.
+pub fn epoch_backup(enqueued_at: Instant) -> BackupRun {
+    BackupRun::start(BackupQueue::Epoch, enqueued_at)
+}
 
-    fn requested(queue: BackupQueue, disposition: RequestDisposition) {
-        BACKUP_REQUESTS_COUNTER.add(
-            1,
-            &[
-                KeyValue::new(QUEUE_LABEL_NAME, queue.to_string()),
-                KeyValue::new(DISPOSITION_LABEL_NAME, disposition.to_string()),
-            ],
-        );
-    }
+/// Publish the unix time a request was raised, or `0` once it is served.
+fn set_serving_since(queue: BackupQueue, unix_seconds: u64) {
+    BACKUP_SERVING_SINCE.record(
+        unix_seconds,
+        &[KeyValue::new(QUEUE_LABEL_NAME, queue.to_string())],
+    );
+}
 
-    /// Start serving the state and pending backup raised at `enqueued_at`.
-    pub fn state_backup(self: &Arc<Self>, enqueued_at: Instant) -> BackupRun {
-        BackupRun::start(self.clone(), BackupQueue::State, enqueued_at)
-    }
-
-    /// Start serving an epoch backup raised at `enqueued_at`.
-    pub fn epoch_backup(self: &Arc<Self>, enqueued_at: Instant) -> BackupRun {
-        BackupRun::start(self.clone(), BackupQueue::Epoch, enqueued_at)
-    }
-
-    fn cell(&self, queue: BackupQueue) -> &Mutex<Option<Instant>> {
-        match queue {
-            BackupQueue::State => &self.state,
-            BackupQueue::Epoch => &self.epoch,
-        }
-    }
-
-    /// Age of the request being served on `queue`, or zero when idle.
-    ///
-    /// A poisoned lock reports zero rather than panicking: this runs inside
-    /// the metrics endpoint.
-    fn age_seconds(&self, queue: BackupQueue) -> f64 {
-        self.cell(queue)
-            .lock()
-            .ok()
-            .and_then(|cell| *cell)
-            .map_or(0.0, |enqueued_at| enqueued_at.elapsed().as_secs_f64())
-    }
-
-    fn set_serving(&self, queue: BackupQueue, enqueued_at: Option<Instant>) {
-        if let Ok(mut cell) = self.cell(queue).lock() {
-            *cell = enqueued_at;
-        }
-    }
+/// Unix time `elapsed` ago, or `0` if the clock is before the epoch.
+fn unix_seconds_ago(elapsed: Duration) -> u64 {
+    SystemTime::now()
+        .checked_sub(elapsed)
+        .and_then(|at| at.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |since_epoch| since_epoch.as_secs())
 }
 
 /// One backup being served.
 ///
-/// Created by [`BackupMetrics::state_backup`] or
-/// [`BackupMetrics::epoch_backup`], which record its queue wait. Finish with
-/// [`BackupRun::succeeded`] or [`BackupRun::failed`]; both consume the run.
+/// Created by [`state_backup`] or [`epoch_backup`], which record its queue
+/// wait. Finish with [`BackupRun::succeeded`] or [`BackupRun::failed`]; both
+/// consume the run and hand back how long it took, for the caller's log.
 #[must_use = "a started backup must be finished with `succeeded` or `failed`"]
 pub struct BackupRun {
-    metrics: Arc<BackupMetrics>,
     queue: BackupQueue,
     started_at: Instant,
 }
 
 impl BackupRun {
-    fn start(metrics: Arc<BackupMetrics>, queue: BackupQueue, enqueued_at: Instant) -> Self {
-        metrics.set_serving(queue, Some(enqueued_at));
+    fn start(queue: BackupQueue, enqueued_at: Instant) -> Self {
+        let waited = enqueued_at.elapsed();
+
+        set_serving_since(queue, unix_seconds_ago(waited));
         BACKUP_QUEUE_WAIT.record(
-            enqueued_at.elapsed().as_secs_f64(),
+            waited.as_secs_f64(),
             &[KeyValue::new(QUEUE_LABEL_NAME, queue.to_string())],
         );
 
         Self {
-            metrics,
             queue,
             started_at: Instant::now(),
         }
-    }
-
-    /// How long this backup has been running, for the caller's own logging.
-    ///
-    /// Exposed so the log line and the duration histogram share one timer
-    /// instead of drifting apart.
-    #[must_use]
-    pub fn elapsed_ms(&self) -> u128 {
-        self.started_at.elapsed().as_millis()
     }
 
     /// Report the file count of the backup just taken of `db`.
@@ -304,33 +237,39 @@ impl BackupRun {
         }
     }
 
-    /// The backup was taken.
-    pub fn succeeded(self) {
-        self.finish(BackupOutcome::Success);
-
+    /// The backup was taken. Returns how long it took, in milliseconds.
+    #[must_use]
+    pub fn succeeded(self) -> u128 {
         if let Ok(since_epoch) = SystemTime::now().duration_since(UNIX_EPOCH) {
             BACKUP_LAST_SUCCESS.record(
                 since_epoch.as_secs(),
                 &[KeyValue::new(QUEUE_LABEL_NAME, self.queue.to_string())],
             );
         }
+
+        self.finish(BackupOutcome::Success)
     }
 
-    /// The backup was not taken.
-    pub fn failed(self) {
-        self.finish(BackupOutcome::Failure);
+    /// The backup was not taken. Returns how long it took, in milliseconds.
+    #[must_use]
+    pub fn failed(self) -> u128 {
+        self.finish(BackupOutcome::Failure)
     }
 
-    fn finish(&self, outcome: BackupOutcome) {
+    fn finish(&self, outcome: BackupOutcome) -> u128 {
+        let elapsed = self.started_at.elapsed();
+
         BACKUP_DURATION.record(
-            self.started_at.elapsed().as_secs_f64(),
+            elapsed.as_secs_f64(),
             &[
                 KeyValue::new(QUEUE_LABEL_NAME, self.queue.to_string()),
                 KeyValue::new(OUTCOME_LABEL_NAME, outcome.to_string()),
             ],
         );
 
-        self.metrics.set_serving(self.queue, None);
+        set_serving_since(self.queue, 0);
+
+        elapsed.as_millis()
     }
 }
 

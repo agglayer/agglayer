@@ -1,5 +1,3 @@
-use std::{thread, time::Duration};
-
 use super::*;
 use crate::testutils::{sample, MetricsHarness};
 
@@ -12,25 +10,23 @@ fn instrument_shapes_are_what_the_docs_promise() {
     // nextest runs one process per test, so nothing else can race it.
     let harness = MetricsHarness::install();
 
-    let metrics = BackupMetrics::new();
-
-    let run = metrics.state_backup(Instant::now());
+    let run = state_backup(Instant::now());
     run.files(BackupDb::State, Some(23_798));
     run.files(BackupDb::Pending, None);
-    run.succeeded();
+    let _ = run.succeeded();
 
-    metrics.epoch_backup(Instant::now()).failed();
+    let _ = epoch_backup(Instant::now()).failed();
 
     let body = harness.gather();
 
-    // 0.25 is not an OTel default, so this bucket exists only with the
-    // backup-specific boundaries. The shared ones start at 0.5, which would
-    // report every healthy queue wait in one bucket.
+    // 540 s is the 9 minute backup the incident measured, and is not an OTel
+    // default boundary, so this bucket exists only with the backup-specific
+    // set applied.
     assert_eq!(
         sample(
             &body,
             &format!("{BACKUP_QUEUE_WAIT_SECONDS}_bucket"),
-            &[("queue", "state"), ("le", "0.25")],
+            &[("queue", "state"), ("le", "540")],
         ),
         Some(1.0),
         "backup-specific buckets were not applied, got:\n{body}"
@@ -74,55 +70,36 @@ fn instrument_shapes_are_what_the_docs_promise() {
 }
 
 #[test]
-fn outstanding_age_gauge_tracks_progress_and_disappears_with_it() {
+fn serving_since_gauge_publishes_the_enqueue_time_and_clears_when_done() {
     let harness = MetricsHarness::install();
 
-    let metrics = BackupMetrics::new();
-    register_backup_metrics(&metrics);
+    let run = state_backup(Instant::now());
 
-    // An idle subsystem must still export zero, or alerting cannot tell
-    // "nothing outstanding" from "no data".
+    // While a request is being served the gauge carries the unix time it was
+    // raised, so a dashboard gets its age from `time() - metric`.
     let body = harness.gather();
-    for kind in ["state", "epoch"] {
-        assert_eq!(
-            sample(&body, BACKUP_OUTSTANDING_AGE_SECONDS, &[("queue", kind)]),
-            Some(0.0),
-            "an idle {kind} queue must export zero, got:\n{body}"
-        );
-    }
-
-    let run = metrics.state_backup(Instant::now());
-    thread::sleep(Duration::from_millis(20));
-
-    let body = harness.gather();
-    let state_age = sample(&body, BACKUP_OUTSTANDING_AGE_SECONDS, &[("queue", "state")])
-        .unwrap_or_else(|| panic!("state age should export, got:\n{body}"));
+    let serving_since = sample(
+        &body,
+        BACKUP_SERVING_SINCE_TIMESTAMP_SECONDS,
+        &[("queue", "state")],
+    )
+    .unwrap_or_else(|| panic!("serving-since should export, got:\n{body}"));
     assert!(
-        state_age > 0.0,
-        "a request being served should report a non-zero age, got {state_age}"
-    );
-    assert_eq!(
-        sample(&body, BACKUP_OUTSTANDING_AGE_SECONDS, &[("queue", "epoch")]),
-        Some(0.0),
-        "the untouched epoch queue must stay at zero, got:\n{body}"
+        serving_since > 1_577_836_800.0,
+        "expected seconds since the unix epoch, got {serving_since}"
     );
 
-    // The callback re-reads the handle, so no re-registration is needed.
-    run.succeeded();
+    // Finishing clears it to zero, which is how a dashboard tells "nothing
+    // is being served" from a request that has been outstanding for ages.
+    let _ = run.succeeded();
     let body = harness.gather();
     assert_eq!(
-        sample(&body, BACKUP_OUTSTANDING_AGE_SECONDS, &[("queue", "state")]),
+        sample(
+            &body,
+            BACKUP_SERVING_SINCE_TIMESTAMP_SECONDS,
+            &[("queue", "state")]
+        ),
         Some(0.0),
-        "going idle should be reflected on the next scrape, got:\n{body}"
-    );
-
-    // Only a weak reference is held, so the series must not freeze on a
-    // stale age.
-    drop(metrics);
-    let body = harness.gather();
-    assert!(
-        body.lines()
-            .all(|line| !line.starts_with(BACKUP_OUTSTANDING_AGE_SECONDS)),
-        "the gauge must not outlive the handle it reads, got:\n{body}"
+        "an idle queue must report zero, got:\n{body}"
     );
 }

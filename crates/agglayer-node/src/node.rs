@@ -135,7 +135,6 @@ impl Node {
         info!("Storage initialized.");
 
         crate::metrics::register_network_state_metrics(&pending_store, &state_store);
-        crate::metrics::register_backup_metrics(&backup_client);
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
