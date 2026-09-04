@@ -570,6 +570,7 @@ dependencies = [
  "agglayer-tries 0.18.0",
  "agglayer-types",
  "alloy",
+ "async-trait",
  "eyre",
  "futures",
  "mockall",

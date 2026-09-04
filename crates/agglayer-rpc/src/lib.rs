@@ -7,8 +7,9 @@ use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
-        DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
-        PendingCertificateWriter, SettlementReader, StateReader, StateWriter,
+        async_api::AsyncStateReaderExt, DebugReader, DebugWriter, EpochStoreReader,
+        NetworkInfoReader, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
+        StateReader, StateWriter,
     },
 };
 use agglayer_types::{
@@ -102,41 +103,59 @@ where
     L1Rpc: Send + Sync + 'static,
     EpochsStore: EpochStoreReader + 'static,
 {
-    fn latest_settled_id_and_height(
-        &self,
+    fn latest_settled_id_and_height_blocking(
+        state: &StateStore,
         network_id: &NetworkId,
     ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
-        Ok(self
-            .state
+        Ok(state
             .get_latest_settled_certificate_per_network(network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
             .map(|(_, SettledCertificate(id, height, _, _))| (id, height)))
     }
 
-    fn latest_proven_id_and_height(
-        &self,
+    fn latest_proven_id_and_height_blocking(
+        pending_store: &PendingStore,
         network_id: &NetworkId,
     ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
-        Ok(self
-            .pending_store
+        Ok(pending_store
             .get_latest_proven_certificate_per_network(network_id)
             .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
             .map(|(_, height, id)| (id, height)))
     }
 
-    pub fn get_latest_known_certificate_header(
+    pub async fn get_latest_known_certificate_header(
         &self,
+        network_id: NetworkId,
+    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+
+        tokio::task::spawn_blocking(move || {
+            Self::get_latest_known_certificate_header_blocking(
+                pending_store.as_ref(),
+                state.as_ref(),
+                network_id,
+            )
+        })
+        .await
+        .expect("latest-known-certificate query task panicked")
+    }
+
+    fn get_latest_known_certificate_header_blocking(
+        pending_store: &PendingStore,
+        state: &StateStore,
         network_id: NetworkId,
     ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
         debug!(
             "Received request to get the latest known certificate header for rollup {network_id}",
         );
 
-        let settled_certificate_id_and_height = self.latest_settled_id_and_height(&network_id)?;
-        let proven_certificate_id_and_height = self.latest_proven_id_and_height(&network_id)?;
+        let settled_certificate_id_and_height =
+            Self::latest_settled_id_and_height_blocking(state, &network_id)?;
+        let proven_certificate_id_and_height =
+            Self::latest_proven_id_and_height_blocking(pending_store, &network_id)?;
 
-        let pending_certificate_id_and_height = self
-            .pending_store
+        let pending_certificate_id_and_height = pending_store
             .get_latest_pending_certificate_for_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
 
@@ -152,21 +171,27 @@ where
 
         match certificate_id {
             None => Ok(None),
-            Some(certificate_id) => self.fetch_certificate_header(certificate_id).map(Some),
+            Some(certificate_id) => {
+                Self::fetch_certificate_header_blocking(state, certificate_id).map(Some)
+            }
         }
     }
 
     /// Get latest available certificate data for a network.
     /// Note: This includes proven certificates
     /// and settled certificates. If no certificate is found, return None.
-    pub fn get_latest_available_certificate_for_network(
-        &self,
+    fn get_latest_available_certificate_for_network_blocking(
+        pending_store: &PendingStore,
+        state: &StateStore,
+        epochs_store: &EpochsStore,
         network_id: NetworkId,
     ) -> Result<Option<Certificate>, GetLatestCertificateError> {
         debug!("Received request to get the latest available certificate for rollup {network_id}");
 
-        let proven_certificate_id_and_height = self.latest_proven_id_and_height(&network_id)?;
-        let settled_certificate_id_and_height = self.latest_settled_id_and_height(&network_id)?;
+        let proven_certificate_id_and_height =
+            Self::latest_proven_id_and_height_blocking(pending_store, &network_id)?;
+        let settled_certificate_id_and_height =
+            Self::latest_settled_id_and_height_blocking(state, &network_id)?;
 
         let certificate_id = std::cmp::max_by_key(
             proven_certificate_id_and_height,
@@ -177,8 +202,7 @@ where
 
         let latest_certificate_header = match certificate_id {
             None => Ok(None),
-            Some(certificate_id) => self
-                .fetch_certificate_header(certificate_id)
+            Some(certificate_id) => Self::fetch_certificate_header_blocking(state, certificate_id)
                 .map(Some)
                 .map_err(|error| {
                     error!(?error, "Failed to get latest known certificate header");
@@ -199,9 +223,7 @@ where
                 ..
             }) => {
                 // First try to get the full certificate from pending store
-                if let Ok(Some(certificate)) =
-                    self.pending_store.get_certificate(network_id, height)
-                {
+                if let Ok(Some(certificate)) = pending_store.get_certificate(network_id, height) {
                     // Verify that this is indeed the certificate we're looking
                     // for
                     if certificate.hash() == certificate_id {
@@ -223,10 +245,7 @@ where
                 if let (Some(epoch_number), Some(certificate_index)) =
                     (epoch_number, certificate_index)
                 {
-                    match self
-                        .epochs_store
-                        .get_certificate(epoch_number, certificate_index)
-                    {
+                    match epochs_store.get_certificate(epoch_number, certificate_index) {
                         Ok(Some(certificate)) => {
                             debug!("Found certificate {certificate_id} in epoch store");
                             return Ok(Some(certificate));
@@ -246,12 +265,24 @@ where
         }
     }
 
-    pub fn get_latest_settled_certificate_header(
+    pub async fn get_latest_settled_certificate_header(
         &self,
         network_id: NetworkId,
     ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let id = match self
-            .state
+        let state = self.state.clone();
+
+        tokio::task::spawn_blocking(move || {
+            Self::get_latest_settled_certificate_header_blocking(state.as_ref(), network_id)
+        })
+        .await
+        .expect("latest-settled-certificate query task panicked")
+    }
+
+    fn get_latest_settled_certificate_header_blocking(
+        state: &StateStore,
+        network_id: NetworkId,
+    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
+        let id = match state
             .get_latest_settled_certificate_per_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest settled certificate id: {e}"))?
         {
@@ -259,15 +290,33 @@ where
             None => return Ok(None),
         };
 
-        self.fetch_certificate_header(id).map(Some)
+        Self::fetch_certificate_header_blocking(state, id).map(Some)
     }
 
-    pub fn get_latest_pending_certificate_header(
+    pub async fn get_latest_pending_certificate_header(
         &self,
         network_id: NetworkId,
     ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let id = match self
-            .pending_store
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+
+        tokio::task::spawn_blocking(move || {
+            Self::get_latest_pending_certificate_header_blocking(
+                pending_store.as_ref(),
+                state.as_ref(),
+                network_id,
+            )
+        })
+        .await
+        .expect("latest-pending-certificate query task panicked")
+    }
+
+    fn get_latest_pending_certificate_header_blocking(
+        pending_store: &PendingStore,
+        state: &StateStore,
+        network_id: NetworkId,
+    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
+        let id = match pending_store
             .get_latest_pending_certificate_for_network(&network_id)
             .inspect_err(|e| error!("Failed to get latest pending certificate id: {e}"))?
         {
@@ -275,49 +324,58 @@ where
             None => return Ok(None),
         };
 
-        self.fetch_certificate_header(id)
-            .map(|header| match header.status {
-                CertificateStatus::Pending
-                | CertificateStatus::Proven
-                | CertificateStatus::Candidate
-                | CertificateStatus::InError { .. } => Some(header),
-                CertificateStatus::Settled => None,
-            })
+        Self::fetch_certificate_header_blocking(state, id).map(|header| match header.status {
+            CertificateStatus::Pending
+            | CertificateStatus::Proven
+            | CertificateStatus::Candidate
+            | CertificateStatus::InError { .. } => Some(header),
+            CertificateStatus::Settled => None,
+        })
     }
 
     /// Get the certificate header, raising an error if not found.
-    pub fn fetch_certificate_header(
+    pub async fn fetch_certificate_header(
         &self,
         certificate_id: CertificateId,
     ) -> Result<CertificateHeader, CertificateRetrievalError> {
         self.state
+            .get_certificate_header_async(certificate_id)
+            .await
+            .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
+            .ok_or(CertificateRetrievalError::NotFound { certificate_id })
+    }
+
+    fn fetch_certificate_header_blocking(
+        state: &StateStore,
+        certificate_id: CertificateId,
+    ) -> Result<CertificateHeader, CertificateRetrievalError> {
+        state
             .get_certificate_header(&certificate_id)
             .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
             .ok_or(CertificateRetrievalError::NotFound { certificate_id })
     }
 
-    /// Get the proof for a certificate by certificate ID
-    pub fn get_proof(
-        &self,
+    /// Get the proof for a certificate by certificate ID.
+    fn get_proof_blocking(
+        pending_store: &PendingStore,
+        state: &StateStore,
+        epochs_store: &EpochsStore,
         certificate_id: CertificateId,
     ) -> Result<Option<agglayer_types::Proof>, ProofRetrievalError> {
         // First try to get the proof from the pending store
-        match self
-            .pending_store
-            .get_proof(certificate_id)
-            .map_err(|error| {
-                error!(
-                    ?error,
-                    "Failed to get proof for certificate {certificate_id} from pending store",
-                );
-                ProofRetrievalError::Storage(error)
-            })? {
+        match pending_store.get_proof(certificate_id).map_err(|error| {
+            error!(
+                ?error,
+                "Failed to get proof for certificate {certificate_id} from pending store",
+            );
+            ProofRetrievalError::Storage(error)
+        })? {
             Some(proof) => Ok(Some(proof)),
             None => {
                 // If not found in pending store, check the epoch store
                 // First get the certificate header to obtain epoch_number and
                 // certificate_index
-                match self.fetch_certificate_header(certificate_id) {
+                match Self::fetch_certificate_header_blocking(state, certificate_id) {
                     Ok(header) => {
                         if let (Some(epoch_number), Some(certificate_index)) =
                             (header.epoch_number, header.certificate_index)
@@ -325,7 +383,7 @@ where
                             // Call the epoch store's get_proof method with
                             // epoch_number and
                             // certificate_index
-                            self.epochs_store
+                            epochs_store
                                 .get_proof(epoch_number, certificate_index)
                                 .map_err(|error| {
                                     error!(
@@ -351,17 +409,16 @@ where
         }
     }
 
-    pub fn get_latest_settled_claim(
-        &self,
+    fn get_latest_settled_claim_blocking(
+        state: &StateStore,
+        epochs_store: &EpochsStore,
         network_id: NetworkId,
         settled_height: Height,
     ) -> Result<Option<SettledClaim>, GetLatestSettledClaimError> {
         // Iterate from the given height down to 0
         for current_height in (0..=settled_height.as_u64()).rev().map(Height::from) {
             // Fetch certificate header for the current height
-            let header_opt = self
-                .state
-                .get_certificate_header_by_cursor(network_id, current_height)?;
+            let header_opt = state.get_certificate_header_by_cursor(network_id, current_height)?;
 
             let header = match header_opt {
                 Some(h) => h,
@@ -400,8 +457,7 @@ where
                 };
 
             // Fetch the certificate from the epoch store
-            let certificate_opt = self
-                .epochs_store
+            let certificate_opt = epochs_store
                 .get_certificate(epoch_number, certificate_index)
                 .map_err(GetLatestSettledClaimError::from)?;
 
@@ -443,14 +499,35 @@ where
     /// Assemble the current information of the specified network from
     /// the data in various sources.
     #[instrument(skip(self))]
-    pub fn get_network_info(
+    pub async fn get_network_info(
         &self,
+        network_id: NetworkId,
+    ) -> Result<NetworkInfo, GetNetworkInfoError> {
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+        let epochs_store = self.epochs_store.clone();
+
+        tokio::task::spawn_blocking(move || {
+            Self::get_network_info_blocking(
+                pending_store.as_ref(),
+                state.as_ref(),
+                epochs_store.as_ref(),
+                network_id,
+            )
+        })
+        .await
+        .expect("network-info query task panicked")
+    }
+
+    fn get_network_info_blocking(
+        pending_store: &PendingStore,
+        state: &StateStore,
+        epochs_store: &EpochsStore,
         network_id: NetworkId,
     ) -> Result<NetworkInfo, GetNetworkInfoError> {
         debug!("Received request to get the network state for rollup {network_id}");
 
-        let mut network_info = self
-            .state
+        let mut network_info = state
             .get_network_info(network_id)
             .inspect_err(|error| {
                 warn!(
@@ -463,7 +540,7 @@ where
         if network_info.settled_certificate_id.is_none() {
             // Get the latest settled certificate for the network
             let latest_settled_certificate =
-                match self.get_latest_settled_certificate_header(network_id) {
+                match Self::get_latest_settled_certificate_header_blocking(state, network_id) {
                     Ok(cert) => cert,
                     Err(CertificateRetrievalError::NotFound { .. }) => {
                         warn!("No settled certificate found for network {network_id}");
@@ -491,7 +568,12 @@ where
                 if network_info.settled_pp_root.is_none() {
                     // Extract settled_pp_root from the settled certificate's
                     // proof public values
-                    network_info.settled_pp_root = match self.get_proof(cert.certificate_id) {
+                    network_info.settled_pp_root = match Self::get_proof_blocking(
+                        pending_store,
+                        state,
+                        epochs_store,
+                        cert.certificate_id,
+                    ) {
                         Ok(Some(agglayer_types::Proof::SP1(sp1_proof))) => {
                             match pessimistic_proof::PessimisticProofOutput::bincode_codec()
                                 .deserialize::<pessimistic_proof::PessimisticProofOutput>(
@@ -529,7 +611,7 @@ where
 
                     if network_info.settled_let_leaf_count.is_none() {
                         network_info.settled_let_leaf_count =
-                            match self.state.read_local_network_state(network_id) {
+                            match state.read_local_network_state(network_id) {
                                 Ok(local_network_state) => {
                                     local_network_state.map(|v| v.exit_tree.leaf_count as u64)
                                 }
@@ -551,15 +633,19 @@ where
                         if let Some(height) = network_info.settled_height {
                             // Get the last settled claim if we have a settled
                             // height
-                            network_info.settled_claim = self
-                                .get_latest_settled_claim(network_id, height)
-                                .map_err(|error| {
-                                    error!(?error, "Failed to get last settled claim");
-                                    GetNetworkInfoError::InternalError {
-                                        network_id,
-                                        source: error.into(),
-                                    }
-                                })?;
+                            network_info.settled_claim = Self::get_latest_settled_claim_blocking(
+                                state,
+                                epochs_store,
+                                network_id,
+                                height,
+                            )
+                            .map_err(|error| {
+                                error!(?error, "Failed to get last settled claim");
+                                GetNetworkInfoError::InternalError {
+                                    network_id,
+                                    source: error.into(),
+                                }
+                            })?;
                         }
                     }
                 }
@@ -568,7 +654,11 @@ where
 
         if network_info.latest_pending_height.is_none() {
             let latest_pending_certificate =
-                match self.get_latest_pending_certificate_header(network_id) {
+                match Self::get_latest_pending_certificate_header_blocking(
+                    pending_store,
+                    state,
+                    network_id,
+                ) {
                     Ok(cert) => cert,
                     Err(CertificateRetrievalError::NotFound { .. }) => {
                         info!("No latest pending certificate found for network {network_id}");
@@ -598,14 +688,18 @@ where
 
         if network_info.network_type == NetworkType::Unspecified {
             // Determine network type from the latest available certificate
-            let aggchain_data = match self.get_latest_available_certificate_for_network(network_id)
-            {
+            let aggchain_data = match Self::get_latest_available_certificate_for_network_blocking(
+                pending_store,
+                state,
+                epochs_store,
+                network_id,
+            ) {
                 Ok(Some(certificate)) => Ok(Some(certificate.aggchain_data)),
                 Ok(None) if network_info.latest_pending_height.is_some() => {
                     // If there's no latest available certificate but we have a
                     // pending height, We can unwrap
                     let height = network_info.latest_pending_height.unwrap();
-                    self.pending_store
+                    pending_store
                         .get_certificate(network_id, height)
                         .map_err(|error| {
                             error!(
@@ -642,19 +736,16 @@ where
             }
         }
 
-        let network_is_disabled = self
-            .state
-            .is_network_disabled(&network_id)
-            .map_err(|error| {
-                error!(
-                    ?error,
-                    "Failed to check if network {network_id} is disabled in storage"
-                );
-                GetNetworkInfoError::InternalError {
-                    network_id,
-                    source: error.into(),
-                }
-            })?;
+        let network_is_disabled = state.is_network_disabled(&network_id).map_err(|error| {
+            error!(
+                ?error,
+                "Failed to check if network {network_id} is disabled in storage"
+            );
+            GetNetworkInfoError::InternalError {
+                network_id,
+                source: error.into(),
+            }
+        })?;
 
         match network_info.latest_pending_status {
             _ if network_is_disabled => {
@@ -696,18 +787,17 @@ where
     /// replacement's: the old one settles first (lower nonce, same wallet) and
     /// L1 diverges from the certificate we track at this height. Only a
     /// terminally reverted settlement job makes replacement safe.
-    // The error type is the submission pipeline's; boxing it here just to
-    // shrink this one sync fn's Result would leak the lint into the caller.
+    // TODO: `CertificateSubmissionError` should become `eyre::Error` soon anyway.
     #[allow(clippy::result_large_err)]
-    fn ensure_no_live_settlement_job(
-        &self,
-        certificate: &Certificate,
+    fn ensure_no_live_settlement_job_blocking(
+        state: &StateStore,
+        network_id: NetworkId,
+        height: Height,
         pre_existing_certificate_id: CertificateId,
         replacement_certificate_id: CertificateId,
     ) -> Result<(), CertificateSubmissionError> {
-        let Some(settlement_job_id) = self
-            .state
-            .get_certificate_settlement_job_id(&pre_existing_certificate_id)?
+        let Some(settlement_job_id) =
+            state.get_certificate_settlement_job_id(&pre_existing_certificate_id)?
         else {
             return Ok(());
         };
@@ -716,7 +806,7 @@ where
         // strict one: only an explicit terminal revert lets it through. Any
         // outcome added to `ContractCallOutcome` in the future must take an
         // explicit stance on replacement to make this match exhaustive again.
-        let result = self.state.get_settlement_job_result(&settlement_job_id)?;
+        let result = state.get_settlement_job_result(&settlement_job_id)?;
         let message = match result.as_ref().map(|r| &r.contract_call_result.outcome) {
             Some(ContractCallOutcome::Revert) => {
                 info!(
@@ -740,12 +830,31 @@ where
         Err(
             CertificateSubmissionError::UnableToReplacePendingCertificate {
                 reason: message.to_string(),
-                height: certificate.height,
-                network_id: certificate.network_id,
+                height,
+                network_id,
                 stored_certificate_id: pre_existing_certificate_id,
                 replacement_certificate_id,
                 source: None,
             },
+        )
+    }
+
+    // TODO: `CertificateSubmissionError` should become `eyre::Error` soon
+    // anyway.
+    #[cfg(test)]
+    #[allow(clippy::result_large_err)]
+    fn ensure_no_live_settlement_job(
+        &self,
+        certificate: &Certificate,
+        pre_existing_certificate_id: CertificateId,
+        replacement_certificate_id: CertificateId,
+    ) -> Result<(), CertificateSubmissionError> {
+        Self::ensure_no_live_settlement_job_blocking(
+            self.state.as_ref(),
+            certificate.network_id,
+            certificate.height,
+            pre_existing_certificate_id,
+            replacement_certificate_id,
         )
     }
 }
@@ -758,23 +867,84 @@ where
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + 'static,
 {
-    fn get_known_certificate_id_at_height(
-        &self,
+    fn get_known_certificate_id_at_height_blocking(
+        pending_store: &PendingStore,
+        state: &StateStore,
         network_id: NetworkId,
         height: Height,
     ) -> Result<Option<CertificateId>, agglayer_storage::error::Error> {
         // TODO This should be in a database transaction to get a consistent
         // view of the storage.
-        if let Some(cert) = self.pending_store.get_certificate(network_id, height)? {
+        if let Some(cert) = pending_store.get_certificate(network_id, height)? {
             return Ok(Some(cert.hash()));
         }
-        let certificate_id = self
-            .state
+        let certificate_id = state
             .get_certificate_header_by_cursor(network_id, height)?
             .map(|header| header.certificate_id);
         Ok(certificate_id)
     }
 
+    // TODO: `CertificateSubmissionError` should become `eyre::Error` soon
+    // anyway.
+    #[allow(clippy::result_large_err)]
+    fn check_replacement_storage_blocking(
+        pending_store: &PendingStore,
+        state: &StateStore,
+        network_id: NetworkId,
+        height: Height,
+        new_certificate_id: CertificateId,
+    ) -> Result<
+        Option<(CertificateId, Option<agglayer_types::SettlementTxHash>)>,
+        CertificateSubmissionError,
+    > {
+        let Some(pre_existing_certificate_id) = Self::get_known_certificate_id_at_height_blocking(
+            pending_store,
+            state,
+            network_id,
+            height,
+        )?
+        else {
+            return Ok(None);
+        };
+
+        warn!(
+            pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
+            "Certificate already exists in store for network {} at height {}", network_id, height
+        );
+
+        if let Some(CertificateHeader {
+            status: CertificateStatus::InError { .. },
+            settlement_tx_hash,
+            ..
+        }) = state.get_certificate_header(&pre_existing_certificate_id)?
+        {
+            Self::ensure_no_live_settlement_job_blocking(
+                state,
+                network_id,
+                height,
+                pre_existing_certificate_id,
+                new_certificate_id,
+            )?;
+            Ok(Some((pre_existing_certificate_id, settlement_tx_hash)))
+        } else {
+            let message = "Unable to replace a certificate that is not in error";
+            info!(%pre_existing_certificate_id, message);
+
+            Err(
+                CertificateSubmissionError::UnableToReplacePendingCertificate {
+                    reason: message.to_string(),
+                    height,
+                    network_id,
+                    stored_certificate_id: pre_existing_certificate_id,
+                    replacement_certificate_id: new_certificate_id,
+                    source: None,
+                },
+            )
+        }
+    }
+
+    // TODO: `CertificateSubmissionError` should become `eyre::Error` soon
+    // anyway.
     #[allow(clippy::result_large_err)]
     #[instrument(skip(self, certificate), level = "info")]
     async fn validate_pre_existing_certificate(
@@ -782,113 +952,91 @@ where
         certificate: &Certificate,
     ) -> Result<(), CertificateSubmissionError> {
         let new_certificate_id = certificate.hash();
-        // Get pre-existing certificate in pending
-        if let Some(pre_existing_certificate_id) =
-            self.get_known_certificate_id_at_height(certificate.network_id, certificate.height)?
-        {
-            warn!(
-                pre_existing_certificate_id = pre_existing_certificate_id.to_string(),
-                "Certificate already exists in store for network {} at height {}",
-                certificate.network_id,
-                certificate.height
-            );
-            if let Some(CertificateHeader {
-                status: CertificateStatus::InError { .. },
-                settlement_tx_hash,
-                ..
-            }) = self
-                .state
-                .get_certificate_header(&pre_existing_certificate_id)?
-            {
-                self.ensure_no_live_settlement_job(
-                    certificate,
-                    pre_existing_certificate_id,
-                    new_certificate_id,
-                )?;
+        let network_id = certificate.network_id;
+        let height = certificate.height;
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+        let pre_existing = tokio::task::spawn_blocking(move || {
+            Self::check_replacement_storage_blocking(
+                pending_store.as_ref(),
+                state.as_ref(),
+                network_id,
+                height,
+                new_certificate_id,
+            )
+        })
+        .await
+        .expect("certificate replacement validation task panicked")?;
 
-                match settlement_tx_hash {
-                    None => {
+        if let Some((pre_existing_certificate_id, settlement_tx_hash)) = pre_existing {
+            match settlement_tx_hash {
+                None => {
+                    info!(
+                        "Replacing certificate {} that is in error",
+                        pre_existing_certificate_id
+                    );
+                }
+                Some(tx_hash) => {
+                    let l1_transaction = self
+                        .l1_rpc_provider
+                        .fetch_transaction_receipt(tx_hash)
+                        .await
+                        .map_err(|error| {
+                            warn!(
+                                "Failed to fetch transaction receipt for certificate {}: {}",
+                                pre_existing_certificate_id, error
+                            );
+
+                            CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                reason: error.to_string(),
+                                height: certificate.height,
+                                network_id: certificate.network_id,
+                                stored_certificate_id: pre_existing_certificate_id,
+                                replacement_certificate_id: new_certificate_id,
+                                source: Some(error),
+                            }
+                        })?
+                        .ok_or_else(|| {
+                            let error =
+                                agglayer_contracts::L1RpcError::TransactionNotYetMined(tx_hash);
+                            warn!(
+                                "Failed to fetch transaction receipt for certificate \
+                                 {pre_existing_certificate_id}: {error}"
+                            );
+                            CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                reason: error.to_string(),
+                                height: certificate.height,
+                                network_id: certificate.network_id,
+                                stored_certificate_id: pre_existing_certificate_id,
+                                replacement_certificate_id: new_certificate_id,
+                                source: Some(error),
+                            }
+                        })?;
+
+                    if !l1_transaction.status() {
                         info!(
-                            "Replacing certificate {} that is in error",
-                            pre_existing_certificate_id
+                            %pre_existing_certificate_id,
+                            %tx_hash,
+                            ?l1_transaction,
+                            "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
+                        );
+                    } else {
+                        let message = "Unable to replace a certificate in error that has already \
+                                       been settled";
+                        warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
+
+                        return Err(
+                            CertificateSubmissionError::UnableToReplacePendingCertificate {
+                                reason: message.to_string(),
+                                height: certificate.height,
+                                network_id: certificate.network_id,
+                                stored_certificate_id: pre_existing_certificate_id,
+                                replacement_certificate_id: new_certificate_id,
+                                source: None,
+                            },
                         );
                     }
-                    Some(tx_hash) => {
-                        let l1_transaction = self
-                            .l1_rpc_provider
-                            .fetch_transaction_receipt(tx_hash)
-                            .await
-                            .map_err(|error| {
-                                warn!(
-                                    "Failed to fetch transaction receipt for certificate {}: {}",
-                                    pre_existing_certificate_id, error
-                                );
-
-                                CertificateSubmissionError::UnableToReplacePendingCertificate {
-                                    reason: error.to_string(),
-                                    height: certificate.height,
-                                    network_id: certificate.network_id,
-                                    stored_certificate_id: pre_existing_certificate_id,
-                                    replacement_certificate_id: new_certificate_id,
-                                    source: Some(error),
-                                }
-                            })?
-                            .ok_or_else(|| {
-                                let error =
-                                    agglayer_contracts::L1RpcError::TransactionNotYetMined(tx_hash);
-                                warn!(
-                                    "Failed to fetch transaction receipt for certificate \
-                                     {pre_existing_certificate_id}: {error}"
-                                );
-                                CertificateSubmissionError::UnableToReplacePendingCertificate {
-                                    reason: error.to_string(),
-                                    height: certificate.height,
-                                    network_id: certificate.network_id,
-                                    stored_certificate_id: pre_existing_certificate_id,
-                                    replacement_certificate_id: new_certificate_id,
-                                    source: Some(error),
-                                }
-                            })?;
-
-                        if !l1_transaction.status() {
-                            info!(
-                                %pre_existing_certificate_id,
-                                %tx_hash,
-                                ?l1_transaction,
-                                "Replacing pending certificate in error that has already been settled, but transaction receipt status is in failure"
-                            );
-                        } else {
-                            let message = "Unable to replace a certificate in error that has \
-                                           already been settled";
-                            warn!(%pre_existing_certificate_id, %tx_hash, ?l1_transaction, message);
-
-                            return Err(
-                                CertificateSubmissionError::UnableToReplacePendingCertificate {
-                                    reason: message.to_string(),
-                                    height: certificate.height,
-                                    network_id: certificate.network_id,
-                                    stored_certificate_id: pre_existing_certificate_id,
-                                    replacement_certificate_id: new_certificate_id,
-                                    source: None,
-                                },
-                            );
-                        }
-                    }
                 }
-            } else {
-                let message = "Unable to replace a certificate that is not in error";
-                info!(%pre_existing_certificate_id, message);
-
-                return Err(
-                    CertificateSubmissionError::UnableToReplacePendingCertificate {
-                        reason: message.to_string(),
-                        height: certificate.height,
-                        network_id: certificate.network_id,
-                        stored_certificate_id: pre_existing_certificate_id,
-                        replacement_certificate_id: new_certificate_id,
-                        source: None,
-                    },
-                );
             }
         }
 
@@ -965,6 +1113,8 @@ where
         .map_err(SignatureVerificationError::from_signer_error)
     }
 
+    // TODO: `CertificateSubmissionError` should become `eyre::Error` soon
+    // anyway.
     #[allow(clippy::result_large_err)]
     #[instrument(skip(self, certificate), fields(hash, rollup_id = certificate.network_id.to_u32()), level = "info")]
     pub async fn send_certificate(
@@ -992,36 +1142,52 @@ where
                 CertificateSubmissionError::SignatureError(error)
             })?;
 
-        // TODO: Batch the different queries.
-        // Insert the certificate into the pending store.
-        self.pending_store
-            .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
-            .inspect_err(|e| error!("Failed to insert certificate into pending store: {e}"))?;
-
-        // Insert the certificate header into the state store. Inserting a
-        // `Pending` header also requests the backup of the newly accepted
-        // certificate, so this write must stay ordered after the
-        // pending-store insert above: the backup has to capture the
-        // certificate body together with the header.
-        self.state
-            .insert_certificate_header(&certificate, CertificateStatus::Pending)
-            .inspect_err(|e| error!("Failed to insert certificate into state store: {e}"))?;
-
-        self.debug_store
-            .add_certificate(&certificate)
-            .inspect_err(|e| error!("Failed to insert certificate into debug store: {e}"))?;
-
-        self.certificate_sender
-            .send((
-                certificate.network_id,
-                certificate.height,
-                certificate.hash(),
-            ))
+        // Reserve the orchestrator notification slot before writing anything:
+        // the blocking task below owns the permit, so once persistence starts,
+        // dropping this future can no longer separate the RocksDB writes from
+        // the orchestrator notification.
+        let notification_permit = self
+            .certificate_sender
+            .clone()
+            .reserve_owned()
             .await
             .map_err(|error| {
                 error!("Failed to send certificate: {error}");
                 CertificateSubmissionError::OrchestratorNotResponsive
             })?;
+
+        let pending_store = self.pending_store.clone();
+        let state = self.state.clone();
+        let debug_store = self.debug_store.clone();
+        let notification = (certificate.network_id, certificate.height, hash);
+        tokio::task::spawn_blocking(move || {
+            // TODO: Batch the different queries.
+            pending_store
+                .insert_pending_certificate(
+                    certificate.network_id,
+                    certificate.height,
+                    &certificate,
+                )
+                .inspect_err(|e| error!("Failed to insert certificate into pending store: {e}"))?;
+
+            // Inserting a `Pending` header also requests the backup of the
+            // newly accepted certificate, so this write must stay ordered
+            // after the pending-store insert above: the backup has to capture
+            // the certificate body together with the header.
+            state
+                .insert_certificate_header(&certificate, CertificateStatus::Pending)
+                .inspect_err(|e| error!("Failed to insert certificate into state store: {e}"))?;
+
+            debug_store
+                .add_certificate(&certificate)
+                .inspect_err(|e| error!("Failed to insert certificate into debug store: {e}"))?;
+
+            notification_permit.send(notification);
+
+            Ok::<_, CertificateSubmissionError>(())
+        })
+        .await
+        .expect("certificate persistence task panicked")?;
 
         Ok(hash)
     }

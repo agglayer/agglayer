@@ -78,54 +78,58 @@ impl EpochSynchronizer {
         clock_ref: ClockRef,
     ) -> eyre::Result<EpochsStore::PerEpochStore>
     where
-        StateStore: StateReader + MetadataReader + MetadataWriter,
-        EpochsStore: EpochStoreWriter,
-        EpochsStore::PerEpochStore: PerEpochReader + PerEpochWriter,
+        StateStore: StateReader + MetadataReader + MetadataWriter + 'static,
+        EpochsStore: EpochStoreWriter + 'static,
+        EpochsStore::PerEpochStore: PerEpochReader + PerEpochWriter + 'static,
     {
         // Get current epoch
         let current_epoch_number = clock_ref.current_epoch();
         let epoch_stream = clock_ref.subscribe()?;
 
-        // Get the latest settled epoch
-        let lse_number = state_store.get_latest_settled_epoch()?;
+        tokio::task::spawn_blocking(move || {
+            // Get the latest settled epoch
+            let lse_number = state_store.get_latest_settled_epoch()?;
 
-        debug!("synchronizer: Current epoch: {}", current_epoch_number);
-        let opened_epoch = match lse_number {
-            // No LSE, we start from epoch 0
-            None => {
-                debug!("synchronizer: No LSE, starting from epoch 0");
-                epochs_store.open(EpochNumber::ZERO)?
-            }
-
-            Some(lse_number) => {
-                debug!("synchronizer: Latest settled epoch: {}", lse_number);
-                if current_epoch_number < lse_number {
-                    eyre::bail!(
-                        "Unable to synchronize: Current epoch is less than the latest settled \
-                         epoch"
-                    );
+            debug!("synchronizer: Current epoch: {}", current_epoch_number);
+            let opened_epoch = match lse_number {
+                // No LSE, we start from epoch 0
+                None => {
+                    debug!("synchronizer: No LSE, starting from epoch 0");
+                    epochs_store.open(EpochNumber::ZERO)?
                 }
 
-                let lse = epochs_store.open(lse_number)?;
-                epochs_store.open_with_start_checkpoint(
-                    lse.get_epoch_number().next(),
-                    lse.get_end_checkpoint(),
-                )?
-            }
-        };
+                Some(lse_number) => {
+                    debug!("synchronizer: Latest settled epoch: {}", lse_number);
+                    if current_epoch_number < lse_number {
+                        eyre::bail!(
+                            "Unable to synchronize: Current epoch is less than the latest settled \
+                             epoch"
+                        );
+                    }
 
-        Self::walk_epochs(
-            epochs_store,
-            opened_epoch,
-            current_epoch_number,
-            epoch_stream,
-        )
+                    let lse = epochs_store.open(lse_number)?;
+                    epochs_store.open_with_start_checkpoint(
+                        lse.get_epoch_number().next(),
+                        lse.get_end_checkpoint(),
+                    )?
+                }
+            };
+
+            Self::walk_epochs(
+                epochs_store,
+                opened_epoch,
+                current_epoch_number,
+                epoch_stream,
+            )
+        })
+        .await
+        .expect("epoch synchronization task panicked")
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, num::NonZeroU64, sync::atomic::AtomicU64};
+    use std::{collections::BTreeMap, num::NonZeroU64, sync::atomic::AtomicU64, time::Duration};
 
     use agglayer_config::Config;
     use agglayer_storage::{
@@ -149,6 +153,59 @@ mod tests {
 
     type PerEpochStore =
         agglayer_storage::stores::per_epoch::PerEpochStore<MockPendingStore, MockStateStore>;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn synchronization_does_not_block_the_runtime_worker() {
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+
+        let mut state_store = MockStateStore::new();
+        state_store
+            .expect_get_latest_settled_epoch()
+            .once()
+            .return_once(move || {
+                entered_tx.send(()).expect("test receiver dropped");
+                release_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("blocking operation was not released");
+                Ok(None)
+            });
+
+        let mut epochs_store = MockEpochsStore::new();
+        epochs_store
+            .expect_open()
+            .once()
+            .with(eq(EpochNumber::ZERO))
+            .return_once(|epoch| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().once().return_const(epoch);
+                Ok(mock)
+            });
+
+        let (sender, _receiver) = tokio::sync::broadcast::channel(1);
+        let clock_ref = ClockRef::new(
+            sender,
+            Arc::new(AtomicU64::new(0)),
+            Arc::new(NonZeroU64::new(1).unwrap()),
+        );
+
+        let synchronization = tokio::spawn(EpochSynchronizer::start(
+            Arc::new(state_store),
+            Arc::new(epochs_store),
+            clock_ref,
+        ));
+
+        entered_rx.await.expect("blocking operation did not start");
+        tokio::time::timeout(Duration::from_secs(1), tokio::task::yield_now())
+            .await
+            .expect("runtime heartbeat stalled");
+
+        release_tx.send(()).expect("blocking task dropped");
+        synchronization
+            .await
+            .expect("synchronization task panicked")
+            .expect("synchronization failed");
+    }
 
     #[tokio::test]
     async fn no_lse_no_previous_start_from_genesis() {

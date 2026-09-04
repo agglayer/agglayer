@@ -5,14 +5,14 @@ use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
-        PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
-        StateReader, StateWriter,
+        async_api::AsyncPendingCertificateWriterExt, PendingCertificateReader,
+        PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
-    CertificateId, CertificateStatus, CertificateStatusError, ExecutionMode, Height,
-    LocalNetworkStateData, NetworkId,
+    CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError, EpochNumber,
+    ExecutionMode, Height, LocalNetworkStateData, NetworkId,
 };
 use arc_swap::ArcSwap;
 use tokio::sync::{mpsc, oneshot};
@@ -115,7 +115,7 @@ where
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         pending_store: Arc<PendingStore>,
         state_store: Arc<StateStore>,
         certifier_client: Arc<CertifierClient>,
@@ -125,36 +125,40 @@ where
         settlement_service: Arc<SettlementService>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
     ) -> Result<Self, Error> {
-        info!("Creating a new network task for network {}", network_id);
+        tokio::task::spawn_blocking(move || {
+            info!("Creating a new network task for network {}", network_id);
 
-        let local_state = Box::new(
-            state_store
-                .read_local_network_state(network_id)?
-                .unwrap_or_default(),
-        );
+            let local_state = Box::new(
+                state_store
+                    .read_local_network_state(network_id)?
+                    .unwrap_or_default(),
+            );
 
-        let latest_settled = state_store
-            .get_latest_settled_certificate_per_network(&network_id)?
-            .map(|(_v, settled)| settled);
+            let latest_settled = state_store
+                .get_latest_settled_certificate_per_network(&network_id)?
+                .map(|(_v, settled)| settled);
 
-        debug!(
-            "Local state for network {}: {}",
-            network_id,
-            local_state.get_roots().display_to_hex()
-        );
+            debug!(
+                "Local state for network {}: {}",
+                network_id,
+                local_state.get_roots().display_to_hex()
+            );
 
-        Ok(Self {
-            network_id,
-            pending_store,
-            state_store,
-            certifier_client,
-            local_state,
-            clock_ref,
-            certificate_stream,
-            latest_settled,
-            settlement_service,
-            current_epoch,
+            Ok(Self {
+                network_id,
+                pending_store,
+                state_store,
+                certifier_client,
+                local_state,
+                clock_ref,
+                certificate_stream,
+                latest_settled,
+                settlement_service,
+                current_epoch,
+            })
         })
+        .await
+        .expect("network task initialization panicked")
     }
 
     #[tracing::instrument(
@@ -172,17 +176,12 @@ where
 
         let current_epoch = self.clock_ref.current_epoch();
 
-        // Start from the latest settled certificate to define the next expected
-        // height
-        let latest_settled = self
-            .state_store
-            .get_latest_settled_certificate_per_network(&self.network_id)?
-            .map(|(_network_id, settled)| settled);
-
         let mut next_expected_height =
-            if let Some(SettledCertificate(_, current_height, epoch, _)) = latest_settled {
+            if let Some(SettledCertificate(_, current_height, epoch, _)) =
+                self.latest_settled.as_ref()
+            {
                 debug!("Current network height is {}", current_height);
-                if epoch == current_epoch {
+                if *epoch == current_epoch {
                     debug!("Already settled for the epoch {current_epoch}");
                 }
 
@@ -273,21 +272,15 @@ where
         next_expected_height: &mut Height,
         cancellation_token: &CancellationToken,
     ) -> Result<bool, Error> {
-        let height_before = *next_expected_height;
+        let height = *next_expected_height;
+        let (sender, mut receiver) = mpsc::channel(1);
 
-        // Get the certificate the pending certificate for the network at the
-        // height
-        let certificate = if let Some(certificate) = self
-            .pending_store
-            .get_certificate(self.network_id, *next_expected_height)
-            .inspect_err(|err| {
-                error!(
-                    "Cannot fetch pending certificate for {} at height {}: {}",
-                    self.network_id, *next_expected_height, err
-                )
-            })? {
-            certificate
-        } else {
+        // Load the pending certificate and its state header together off the
+        // runtime.
+        let task = self
+            .initialize_certificate_task(height, sender, cancellation_token.clone())
+            .await?;
+        let Some((task, bridge_exit_hashes, certificate_id)) = task else {
             debug!(
                 "No certificate found for network {} at height {}",
                 self.network_id, *next_expected_height
@@ -296,28 +289,8 @@ where
             return Ok(false);
         };
 
-        let certificate_id = certificate.hash();
         tracing::Span::current().record("certificate_id", certificate_id.to_string());
-
-        let (sender, mut receiver) = mpsc::channel(1);
-
-        let bridge_exit_hashes = certificate
-            .bridge_exits
-            .iter()
-            .map(|exit| exit.hash())
-            .collect::<Vec<Digest>>();
-        let task = tokio::spawn(
-            CertificateTask::new(
-                certificate,
-                sender,
-                self.state_store.clone(),
-                self.pending_store.clone(),
-                self.certifier_client.clone(),
-                self.settlement_service.clone(),
-                cancellation_token.clone(),
-            )?
-            .process(),
-        );
+        let task = tokio::spawn(task.process());
 
         // The pending local network state that should be applied on receiving
         // settlement response.
@@ -343,7 +316,12 @@ where
                     Some(NetworkTaskMessage::CertificateProven { height, certificate_id }) => {
                         if let Err(error) = self
                             .pending_store
-                            .set_latest_proven_certificate_per_network(&self.network_id, &height, &certificate_id)
+                            .set_latest_proven_certificate_per_network_async(
+                                self.network_id,
+                                height,
+                                certificate_id,
+                            )
+                            .await
                         {
                             error!(
                                 hash = certificate_id.to_string(),
@@ -367,73 +345,15 @@ where
                             new_state = new.get_roots().display_to_hex(),
                             "Updated the state following certificate settlement",
                         );
-                        // Assign the epoch BEFORE advancing local state: a failed
-                        // assignment then leaves the cert `Candidate` with the
-                        // pre-settlement state intact (recoverable). Retry to ride
-                        // out a transient epoch rollover.
-                        const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
-                        let (epoch_number, certificate_index) = 'assign: {
-                            for attempt in 1..=MAX_EPOCH_ASSIGNMENT_RETRIES {
-                                let related_epoch = self.current_epoch.load_full();
-                                match related_epoch
-                                    .add_certificate(certificate_id, ExecutionMode::Default)
-                                {
-                                    Ok((epoch_number, certificate_index)) => {
-                                        info!("Certificate added to epoch {epoch_number} with index {certificate_index}");
-                                        break 'assign (epoch_number, certificate_index);
-                                    }
-                                    Err(agglayer_storage::error::Error::AlreadyPacked(epoch)) => {
-                                        drop(related_epoch);
-                                        warn!(attempt, %epoch, "Epoch already packed, delay and retry assignment");
-                                        tokio::time::sleep(Duration::from_secs(1)).await;
-                                    }
-                                    Err(error) => {
-                                        warn!(%error, attempt, "Failed to add certificate to epoch (retrying)");
-                                    }
-                                }
-                            }
-                            error!("CRITICAL: Failed to add certificate to epoch after {MAX_EPOCH_ASSIGNMENT_RETRIES} retries");
-                            return Err(Error::PersistenceError {
+                        let (new_state, epoch_number, certificate_index) = self
+                            .assign_and_persist_settled_certificate(
+                                new,
+                                bridge_exit_hashes,
+                                height,
                                 certificate_id,
-                                error: "Failed to add certificate to epoch after retries".to_string(),
-                            });
-                        };
-
-                        // Assigned: advance and persist local state.
-                        self.local_state = new;
-                        self.state_store
-                            .write_local_network_state(
-                                &self.network_id,
-                                &self.local_state,
-                                bridge_exit_hashes.as_slice(),
                             )
-                            .map_err(|e| Error::PersistenceError {
-                                certificate_id,
-                                error: e.to_string(),
-                            })?;
-
-                        // Kept as the sole writer of `CertificatePerNetworkColumn`
-                        // (the RPC cursor index): `assign_certificate_to_epoch` set
-                        // the status but not that index.
-                        self.state_store
-                            .update_certificate_header_status(
-                                &certificate_id,
-                                &CertificateStatus::Settled,
-                            )
-                            .map_err(|e| Error::PersistenceError {
-                                certificate_id,
-                                error: e.to_string(),
-                            })?;
-
-                        self.state_store
-                            .set_latest_settled_certificate_for_network(
-                                &self.network_id,
-                                &height,
-                                &certificate_id,
-                                &epoch_number,
-                                &certificate_index,
-                            )
-                            .map_err(|e| Error::PersistenceError { certificate_id, error: e.to_string() })?;
+                            .await?;
+                        self.local_state = new_state;
 
                         self.latest_settled = Some(SettledCertificate(
                             certificate_id, height, epoch_number, certificate_index,
@@ -451,6 +371,147 @@ where
         task.await
             .map_err(|e| Error::InternalError(format!("Certificate task panicked: {e}")))?;
 
-        Ok(*next_expected_height != height_before)
+        Ok(*next_expected_height != height)
+    }
+
+    async fn initialize_certificate_task(
+        &self,
+        height: Height,
+        sender: mpsc::Sender<NetworkTaskMessage>,
+        cancellation_token: CancellationToken,
+    ) -> Result<
+        Option<(
+            CertificateTask<StateStore, PendingStore, CertifierClient, SettlementService>,
+            Vec<Digest>,
+            CertificateId,
+        )>,
+        Error,
+    > {
+        let network_id = self.network_id;
+        let pending_store = self.pending_store.clone();
+        let state_store = self.state_store.clone();
+        let certifier_client = self.certifier_client.clone();
+        let settlement_service = self.settlement_service.clone();
+        tokio::task::spawn_blocking(move || {
+            let certificate = pending_store
+                .get_certificate(network_id, height)
+                .inspect_err(|err| {
+                    error!(
+                        "Cannot fetch pending certificate for {network_id} at height {height}: \
+                         {err}"
+                    )
+                })?;
+            let Some(certificate) = certificate else {
+                return Ok(None);
+            };
+
+            let certificate_id = certificate.hash();
+            let bridge_exit_hashes = certificate
+                .bridge_exits
+                .iter()
+                .map(|exit| exit.hash())
+                .collect::<Vec<Digest>>();
+            let task = CertificateTask::new(
+                certificate,
+                sender,
+                state_store,
+                pending_store,
+                certifier_client,
+                settlement_service,
+                cancellation_token,
+            )?;
+
+            Ok(Some((task, bridge_exit_hashes, certificate_id)))
+        })
+        .await
+        .expect("certificate task initialization panicked")
+    }
+
+    /// Assign the certificate to the current epoch and persist the settled
+    /// state as one uninterruptible durable transition.
+    ///
+    /// The whole sequence runs in a single blocking task: once it starts,
+    /// dropping the network task future can no longer stop the transition
+    /// between the epoch assignment (which marks the header `Settled`) and
+    /// the local network state, RPC cursor, and settled-cursor writes.
+    async fn assign_and_persist_settled_certificate(
+        &self,
+        new: Box<LocalNetworkStateData>,
+        bridge_exit_hashes: Vec<Digest>,
+        height: Height,
+        certificate_id: CertificateId,
+    ) -> Result<(Box<LocalNetworkStateData>, EpochNumber, CertificateIndex), Error> {
+        let current_epoch = self.current_epoch.clone();
+        let state_store = self.state_store.clone();
+        let network_id = self.network_id;
+        let span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || {
+            let _entered = span.enter();
+
+            // Assign the epoch BEFORE advancing local state: a failed
+            // assignment then leaves the cert `Candidate` with the
+            // pre-settlement state intact (recoverable). Retry to ride
+            // out a transient epoch rollover.
+            const MAX_EPOCH_ASSIGNMENT_RETRIES: usize = 5;
+            let (epoch_number, certificate_index) = 'assign: {
+                for attempt in 1..=MAX_EPOCH_ASSIGNMENT_RETRIES {
+                    let related_epoch = current_epoch.load_full();
+                    let assignment =
+                        related_epoch.add_certificate(certificate_id, ExecutionMode::Default);
+                    drop(related_epoch);
+                    match assignment {
+                        Ok((epoch_number, certificate_index)) => {
+                            info!("Certificate added to epoch {epoch_number} with index {certificate_index}");
+                            break 'assign (epoch_number, certificate_index);
+                        }
+                        Err(agglayer_storage::error::Error::AlreadyPacked(epoch)) => {
+                            warn!(attempt, %epoch, "Epoch already packed, delay and retry assignment");
+                            std::thread::sleep(Duration::from_secs(1));
+                        }
+                        Err(error) => {
+                            warn!(%error, attempt, "Failed to add certificate to epoch (retrying)");
+                        }
+                    }
+                }
+                error!("CRITICAL: Failed to add certificate to epoch after {MAX_EPOCH_ASSIGNMENT_RETRIES} retries");
+                return Err(Error::PersistenceError {
+                    certificate_id,
+                    error: "Failed to add certificate to epoch after retries".to_string(),
+                });
+            };
+
+            // Assigned: persist the new local state before publishing it in memory.
+            let persistence = (|| {
+                state_store.write_local_network_state(
+                    &network_id,
+                    &new,
+                    bridge_exit_hashes.as_slice(),
+                )?;
+
+                // Kept as the sole writer of `CertificatePerNetworkColumn`
+                // (the RPC cursor index): `assign_certificate_to_epoch` set
+                // the status but not that index.
+                state_store.update_certificate_header_status(
+                    &certificate_id,
+                    &CertificateStatus::Settled,
+                )?;
+
+                state_store.set_latest_settled_certificate_for_network(
+                    &network_id,
+                    &height,
+                    &certificate_id,
+                    &epoch_number,
+                    &certificate_index,
+                )
+            })();
+            persistence.map_err(|e| Error::PersistenceError {
+                certificate_id,
+                error: e.to_string(),
+            })?;
+
+            Ok((new, epoch_number, certificate_index))
+        })
+        .await
+        .expect("settled certificate persistence task panicked")
     }
 }

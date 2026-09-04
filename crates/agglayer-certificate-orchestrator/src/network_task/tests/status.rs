@@ -130,6 +130,7 @@ async fn from_pending_to_settled() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -263,6 +264,7 @@ async fn from_proven_to_settled() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -375,6 +377,7 @@ async fn from_candidate_to_settled() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -485,6 +488,7 @@ async fn from_candidate_to_settle_via_pending() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
@@ -546,6 +550,7 @@ async fn from_settled_to_settled() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::new(1);
@@ -679,6 +684,7 @@ async fn from_proven_settlement_revert_goes_to_error() {
         Arc::new(settlement_service),
         mock_current_epoch(),
     )
+    .await
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;

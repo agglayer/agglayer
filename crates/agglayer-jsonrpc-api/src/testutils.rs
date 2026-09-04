@@ -54,6 +54,9 @@ pub struct RawRpcContext {
     pub state_store: Arc<StateStore>,
     pub pending_store: Arc<PendingStore>,
     pub debug_store: Arc<DebugStore>,
+    /// Kept alive so `send_certificate` can reserve its orchestrator
+    /// notification slot before persisting.
+    pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
 
 impl RawRpcContext {
@@ -307,7 +310,7 @@ impl TestContext {
         let l1_rpc_client = Self::create_l1_rpc_client(Arc::new(mock_provider.clone()));
 
         // Create certificate sender channel
-        let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
+        let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
         // Create AgglayerService (V0Rpc service)
         let v0_service = Arc::new(crate::service::AgglayerService::new(
@@ -345,6 +348,7 @@ impl TestContext {
             state_store,
             pending_store,
             debug_store,
+            certificate_receiver,
         }
     }
 }
