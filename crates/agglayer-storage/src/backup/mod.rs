@@ -7,6 +7,7 @@ use std::{
 };
 
 use agglayer_errors::ResultExt as _;
+use agglayer_telemetry::backup::{self, BackupDb, RequestDisposition};
 use agglayer_types::EpochNumber;
 use eyre::eyre;
 use rocksdb::backup::{
@@ -54,6 +55,8 @@ pub struct EpochBackupRequest {
     pub db: Arc<DB>,
     /// Number of the epoch stored in `db`.
     pub epoch_number: EpochNumber,
+    /// When the request was raised, for the queue-wait metric.
+    enqueued_at: Instant,
 }
 
 struct BackupEngineConfig {
@@ -87,8 +90,10 @@ struct BackupSenders {
     /// Single-slot queue for state+pending backups. A backup snapshots the
     /// databases when it runs, not when it is requested, so one queued
     /// request covers every write made until it is dequeued and extra
-    /// requests can be dropped safely.
-    state: sync::mpsc::Sender<()>,
+    /// requests can be dropped safely. The payload is the instant the
+    /// request was raised, so a coalescing `try_send` naturally leaves the
+    /// older one queued — the age of the oldest write not yet covered.
+    state: sync::mpsc::Sender<Instant>,
     /// Unbounded queue for epoch backups. Each epoch is packed exactly once,
     /// so a dropped request would mean that epoch is never backed up.
     epoch: sync::mpsc::UnboundedSender<EpochBackupRequest>,
@@ -135,14 +140,22 @@ impl BackupClient {
     /// so it covers this write too.
     pub fn backup_state(&self) -> eyre::Result<()> {
         if let Some(senders) = &self.senders {
-            match senders.state.try_send(()) {
-                Ok(()) => debug!("State backup request enqueued"),
-                Err(mpsc::error::TrySendError::Full(())) => {
-                    debug!("State backup request coalesced into the one already queued")
+            let disposition = match senders.state.try_send(Instant::now()) {
+                Ok(()) => {
+                    debug!("State backup request enqueued");
+                    RequestDisposition::Queued
                 }
-                Err(mpsc::error::TrySendError::Closed(())) => {
-                    Err(eyre!("Unable to send state backup request"))?
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    debug!("State backup request coalesced into the one already queued");
+                    RequestDisposition::Coalesced
                 }
+                Err(mpsc::error::TrySendError::Closed(_)) => RequestDisposition::Rejected,
+            };
+
+            backup::state_requested(disposition);
+
+            if disposition == RequestDisposition::Rejected {
+                return Err(eyre!("Unable to send state backup request"));
             }
         }
 
@@ -155,10 +168,19 @@ impl BackupClient {
     /// packed exactly once, so this is its only chance to get backed up.
     pub fn backup_epoch(&self, db: Arc<DB>, epoch_number: EpochNumber) -> eyre::Result<()> {
         if let Some(senders) = &self.senders {
-            senders
-                .epoch
-                .send(EpochBackupRequest { db, epoch_number })
-                .map_err(|_| eyre!("Unable to send epoch backup request"))?;
+            let sent = senders.epoch.send(EpochBackupRequest {
+                db,
+                epoch_number,
+                enqueued_at: Instant::now(),
+            });
+
+            backup::epoch_requested(if sent.is_ok() {
+                RequestDisposition::Queued
+            } else {
+                RequestDisposition::Rejected
+            });
+
+            sent.map_err(|_| eyre!("Unable to send epoch backup request"))?;
             info!("Backup request for epoch {epoch_number} enqueued");
         }
 
@@ -170,7 +192,7 @@ impl BackupClient {
 /// on the requested backups.
 #[cfg(test)]
 pub(crate) struct ObservedBackupRequests {
-    pub(crate) state: sync::mpsc::Receiver<()>,
+    pub(crate) state: sync::mpsc::Receiver<Instant>,
     pub(crate) epoch: sync::mpsc::UnboundedReceiver<EpochBackupRequest>,
 }
 
@@ -193,6 +215,15 @@ fn open_engine(
     Ok(engine)
 }
 
+/// Number of files in the newest backup `engine` holds.
+fn latest_backup_files(engine: &RocksBackupEngine) -> Option<u64> {
+    engine
+        .get_backup_info()
+        .iter()
+        .max_by_key(|info| info.backup_id)
+        .map(|info| u64::from(info.num_files))
+}
+
 /// Backup engine that creates backups for the state, pending and epochs
 /// databases.
 ///
@@ -208,7 +239,7 @@ pub struct BackupEngine {
     state_db: Arc<DB>,
     pending_db: Arc<DB>,
     config: BackupEngineConfig,
-    state_backup_request: sync::mpsc::Receiver<()>,
+    state_backup_request: sync::mpsc::Receiver<Instant>,
     epoch_backup_request: sync::mpsc::UnboundedReceiver<EpochBackupRequest>,
     state_max_backup_number: usize,
     pending_max_backup_number: usize,
@@ -240,7 +271,6 @@ impl BackupEngine {
 
         let state_engine = open_engine(&state_opts, &env, "state")?;
         let pending_engine = open_engine(&pending_opts, &env, "pending")?;
-
         Ok((
             Self {
                 state_engine,
@@ -267,38 +297,48 @@ impl BackupEngine {
     /// Create a new backup for the state and pending databases.
     /// This function will also purge old backups as configured.
     ///
-    /// Every step runs even when an earlier one fails, but the backup is
-    /// only reported as completed when all of them succeeded: reporting
-    /// success unconditionally, as this used to, made the logs unable to
-    /// tell an existing backup from a failed attempt.
-    pub fn backup_state(&mut self) {
+    /// Every step runs even when an earlier one fails, and none of them
+    /// propagates: a failure here must not take the engine down.
+    ///
+    /// Only the two creates decide whether a backup was taken. Failing to
+    /// purge leaves the new backup intact, so it is logged by the step that
+    /// failed rather than counted as a failed backup.
+    pub fn backup_state(&mut self, enqueued_at: Instant) {
         #[cfg(test)]
         test_hooks::backup_started();
 
+        let run = backup::state_backup(enqueued_at);
         info!("State backup started");
-        let started_at = Instant::now();
 
-        let steps = [
-            self.state_engine
-                .create_new_backup_flush(self.state_db.raw_rocksdb(), true)
-                .log_err("Failed to create backup for state db"),
-            self.state_engine
-                .purge_old_backups(self.state_max_backup_number)
-                .log_err("Failed to purge old backup for state db"),
-            self.pending_engine
-                .create_new_backup_flush(self.pending_db.raw_rocksdb(), true)
-                .log_err("Failed to create backup for pending db"),
-            self.pending_engine
-                .purge_old_backups(self.pending_max_backup_number)
-                .log_err("Failed to purge old backup for pending db"),
-        ];
+        let state_created = self
+            .state_engine
+            .create_new_backup_flush(self.state_db.raw_rocksdb(), true)
+            .log_err("Failed to create backup for state db");
 
-        let elapsed_ms = started_at.elapsed().as_millis();
-        let failures = steps.iter().filter(|step| step.is_err()).count();
-        if failures == 0 {
+        let _ = self
+            .state_engine
+            .purge_old_backups(self.state_max_backup_number)
+            .log_err("Failed to purge old backup for state db");
+
+        let pending_created = self
+            .pending_engine
+            .create_new_backup_flush(self.pending_db.raw_rocksdb(), true)
+            .log_err("Failed to create backup for pending db");
+
+        let _ = self
+            .pending_engine
+            .purge_old_backups(self.pending_max_backup_number)
+            .log_err("Failed to purge old backup for pending db");
+
+        if state_created.is_ok() && pending_created.is_ok() {
+            run.files(BackupDb::State, latest_backup_files(&self.state_engine));
+            run.files(BackupDb::Pending, latest_backup_files(&self.pending_engine));
+
+            let elapsed_ms = run.succeeded();
             info!(elapsed_ms, "State backup completed");
         } else {
-            error!(elapsed_ms, failures, "State backup completed with failures");
+            let elapsed_ms = run.failed();
+            error!(elapsed_ms, "State backup failed");
         }
     }
 
@@ -312,10 +352,14 @@ impl BackupEngine {
         #[cfg(test)]
         test_hooks::backup_started();
 
-        let EpochBackupRequest { db, epoch_number } = request;
+        let EpochBackupRequest {
+            db,
+            epoch_number,
+            enqueued_at,
+        } = request;
 
+        let run = backup::epoch_backup(*enqueued_at);
         info!("Backup of epoch {epoch_number} started");
-        let started_at = Instant::now();
 
         let backup = BackupEngineOptions::new(
             self.config
@@ -331,15 +375,23 @@ impl BackupEngine {
             engine
                 .create_new_backup_flush(db.raw_rocksdb(), true)
                 .log_err("Failed to create backup for epoch db")
+                .map(|()| engine)
         });
 
-        let elapsed_ms = started_at.elapsed().as_millis();
-        match backup {
-            Ok(()) => info!(elapsed_ms, "Backup of epoch {epoch_number} completed"),
-            Err(_) => error!(
-                elapsed_ms,
-                "Backup of epoch {epoch_number} failed; this epoch has no backup"
-            ),
+        match &backup {
+            Ok(engine) => {
+                run.files(BackupDb::Epoch, latest_backup_files(engine));
+
+                let elapsed_ms = run.succeeded();
+                info!(elapsed_ms, "Backup of epoch {epoch_number} completed");
+            }
+            Err(_) => {
+                let elapsed_ms = run.failed();
+                error!(
+                    elapsed_ms,
+                    "Backup of epoch {epoch_number} failed; this epoch has no backup"
+                );
+            }
         }
     }
 
@@ -354,8 +406,8 @@ impl BackupEngine {
                     info!("Backup engine cancelled");
                     break;
                 }
-                Some(()) = self.state_backup_request.recv() => {
-                    self = self.run_blocking(|engine| engine.backup_state()).await?;
+                Some(enqueued_at) = self.state_backup_request.recv() => {
+                    self = self.run_blocking(move |engine| engine.backup_state(enqueued_at)).await?;
                 }
                 Some(request) = self.epoch_backup_request.recv() => {
                     self = self.run_blocking(move |engine| engine.backup_epoch(&request)).await?;
@@ -397,8 +449,8 @@ impl BackupEngine {
         info!("Draining the queued backup requests");
 
         tokio::task::spawn_blocking(move || {
-            if self.state_backup_request.try_recv().is_ok() {
-                self.backup_state();
+            if let Ok(enqueued_at) = self.state_backup_request.try_recv() {
+                self.backup_state(enqueued_at);
             }
 
             while let Ok(request) = self.epoch_backup_request.try_recv() {

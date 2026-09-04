@@ -8,10 +8,16 @@ use agglayer_storage::{
     },
     tests::TempDBDir,
 };
+use agglayer_telemetry::{
+    backup::{BACKUP_FILES, BACKUP_SERVING_SINCE_TIMESTAMP_SECONDS},
+    testutils::sample,
+};
 use agglayer_types::{CertificateHeader, CertificateId, CertificateStatus};
 use fail::FailScenario;
 use integrations::{
-    agglayer_setup::{setup_network, start_agglayer, wait_for_condition},
+    agglayer_setup::{
+        setup_network, setup_network_with_config, start_agglayer, wait_for_condition,
+    },
     wait_for_settlement_or_error,
 };
 use jsonrpsee::{core::client::ClientT as _, rpc_params};
@@ -112,8 +118,8 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     let handle = CancellationToken::new();
     // L1 is a RAII guard
-    let (agglayer_shutdowned, l1, client) =
-        setup_network(&tmp_dir.path, Some(config), Some(handle.clone())).await;
+    let (agglayer_shutdowned, l1, client, config) =
+        setup_network_with_config(&tmp_dir.path, Some(config), Some(handle.clone())).await;
 
     let withdrawals = vec![];
 
@@ -134,6 +140,29 @@ async fn recover_with_backup(#[case] state: Forest) {
     // node down, so the final restore-from-latest captures a Settled
     // certificate rather than an earlier snapshot.
     wait_for_settled_snapshot(&backup_dir.path, certificate_id).await;
+
+    // Only a real node shows that the gauges reach the endpoint and that a
+    // backup of live data references files at all. The rest of the series
+    // are asserted in the storage unit tests.
+    let body = reqwest::get(format!("http://{}/metrics", config.telemetry.addr))
+        .await
+        .expect("the metrics endpoint should respond")
+        .text()
+        .await
+        .expect("the metrics body should be readable");
+    assert!(
+        sample(
+            &body,
+            BACKUP_SERVING_SINCE_TIMESTAMP_SECONDS,
+            &[("queue", "state")]
+        )
+        .is_some(),
+        "the serving-since gauge should reach the endpoint, got:\n{body}"
+    );
+    assert!(
+        sample(&body, BACKUP_FILES, &[("db", "state")]).is_some_and(|files| files > 0.0),
+        "the state backup should reference files, got:\n{body}"
+    );
 
     handle.cancel();
     _ = agglayer_shutdowned.await;

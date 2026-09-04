@@ -421,6 +421,8 @@ impl StateStore {
     /// Requests a best-effort backup of the state and pending databases.
     fn request_backup(&self) {
         if let Err(error) = self.backup_client.backup_state() {
+            // A full queue coalesces silently, so the queue is closed:
+            // the shutdown drain, or a dead engine.
             warn!("Unable to trigger backup for the state database: {}", error);
         }
     }
