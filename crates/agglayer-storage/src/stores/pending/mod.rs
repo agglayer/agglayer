@@ -16,8 +16,10 @@ use crate::{
         proof_per_certificate::ProofPerCertificateColumn,
     },
     error::Error,
+    network_metrics::{NetworkMetricsGuard, NetworkStage},
     schema::{Codec as _, ColumnDescriptor, ColumnSchema as _},
     storage::{DBError, DB},
+    NetworkMetrics,
 };
 
 pub(crate) mod cf_definitions;
@@ -29,6 +31,7 @@ mod tests;
 #[derive(Clone)]
 pub struct PendingStore {
     db: Arc<DB>,
+    network_metrics: NetworkMetrics,
 }
 
 impl PendingStore {
@@ -42,11 +45,44 @@ impl PendingStore {
     }
 
     pub fn new(db: Arc<DB>) -> Self {
-        Self { db }
+        Self::new_with_metrics(db, NetworkMetrics::unregistered())
+    }
+
+    pub fn new_with_metrics(db: Arc<DB>, network_metrics: NetworkMetrics) -> Self {
+        Self {
+            db,
+            network_metrics,
+        }
     }
 
     pub fn new_with_path(path: &Path) -> Result<Self, crate::storage::DBOpenError> {
         Ok(Self::new(Arc::new(Self::init_db(path)?)))
+    }
+
+    pub fn new_with_path_and_metrics(
+        path: &Path,
+        network_metrics: NetworkMetrics,
+    ) -> Result<Self, crate::storage::DBOpenError> {
+        Ok(Self::new_with_metrics(
+            Arc::new(Self::init_db(path)?),
+            network_metrics,
+        ))
+    }
+
+    fn set_latest_pending_certificate_per_network_ungated(
+        &self,
+        metrics: &mut NetworkMetricsGuard<'_>,
+        network_id: &NetworkId,
+        height: &Height,
+        certificate_id: &CertificateId,
+        prometheus_height: i64,
+    ) -> Result<(), Error> {
+        self.db.put::<LatestPendingCertificatePerNetworkColumn>(
+            network_id,
+            &PendingCertificate(*certificate_id, *height),
+        )?;
+        metrics.pending_written(*network_id, *certificate_id, prometheus_height);
+        Ok(())
     }
 
     fn decode_readable_proof(certificate_id: CertificateId, bytes: &[u8]) -> Result<Proof, Error> {
@@ -110,10 +146,15 @@ impl PendingCertificateWriter for PendingStore {
         height: &Height,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        Ok(self.db.put::<LatestPendingCertificatePerNetworkColumn>(
+        let prometheus_height = NetworkMetrics::prometheus_height(*height)?;
+        let mut metrics = self.network_metrics.mutation();
+        self.set_latest_pending_certificate_per_network_ungated(
+            &mut metrics,
             network_id,
-            &PendingCertificate(*certificate_id, *height),
-        )?)
+            height,
+            certificate_id,
+            prometheus_height,
+        )
     }
 
     fn insert_pending_certificate(
@@ -122,6 +163,8 @@ impl PendingCertificateWriter for PendingStore {
         height: Height,
         certificate: &Certificate,
     ) -> Result<(), Error> {
+        let prometheus_height = NetworkMetrics::prometheus_height(height)?;
+        let mut metrics = self.network_metrics.mutation();
         if let Some((_id, latest_height)) =
             self.get_latest_pending_certificate_for_network(&network_id)?
         {
@@ -135,7 +178,13 @@ impl PendingCertificateWriter for PendingStore {
         }
 
         // TODO: make it batch
-        self.set_latest_pending_certificate_per_network(&network_id, &height, &certificate.hash())?;
+        self.set_latest_pending_certificate_per_network_ungated(
+            &mut metrics,
+            &network_id,
+            &height,
+            &certificate.hash(),
+            prometheus_height,
+        )?;
         Ok(self
             .db
             .put::<PendingQueueProtoColumn>(&PendingQueueKey(network_id, height), certificate)?)
@@ -166,10 +215,14 @@ impl PendingCertificateWriter for PendingStore {
         height: &Height,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        Ok(self.db.put::<LatestProvenCertificatePerNetworkColumn>(
+        let prometheus_height = NetworkMetrics::prometheus_height(*height)?;
+        let mut metrics = self.network_metrics.mutation();
+        self.db.put::<LatestProvenCertificatePerNetworkColumn>(
             network_id,
             &ProvenCertificate(*certificate_id, *network_id, *height),
-        )?)
+        )?;
+        metrics.height_written(*network_id, NetworkStage::Proven, prometheus_height);
+        Ok(())
     }
 }
 
@@ -185,14 +238,13 @@ impl PendingCertificateReader for PendingStore {
     }
 
     fn get_current_pending_heights(&self) -> Result<Vec<(NetworkId, PendingCertificate)>, Error> {
-        Ok(self
-            .db
+        self.db
             .iter_with_direction::<LatestPendingCertificatePerNetworkColumn>(
                 ReadOptions::default(),
                 Direction::Forward,
             )?
-            .filter_map(|entry| entry.ok())
-            .collect())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     fn get_certificate(
@@ -210,14 +262,14 @@ impl PendingCertificateReader for PendingStore {
     }
 
     fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error> {
-        Ok(self
-            .db
+        self.db
             .iter_with_direction::<LatestProvenCertificatePerNetworkColumn>(
                 ReadOptions::default(),
                 Direction::Forward,
             )?
-            .filter_map(|v| v.map(|(_, certificate)| certificate).ok())
-            .collect())
+            .map(|entry| entry.map(|(_, certificate)| certificate))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     fn get_current_proven_height_for_network(

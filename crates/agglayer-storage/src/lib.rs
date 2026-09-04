@@ -10,8 +10,11 @@ pub mod backup;
 pub mod columns;
 pub mod diagnostics;
 pub mod error;
+mod network_metrics;
 pub mod stores;
 pub mod types;
+
+pub use network_metrics::NetworkMetrics;
 
 // Testing.
 #[cfg(feature = "testutils")]
