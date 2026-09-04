@@ -11,6 +11,10 @@ path = "src/bin/ppgen.rs"
 name = "convertor"
 path = "src/bin/convertor.rs"
 
+[[bin]]
+name = "sp1bench"
+path = "src/bin/sp1bench.rs"
+
 [dependencies]
 agglayer-tries.workspace = true
 agglayer-types = { workspace = true, features = ["testutils"] }
