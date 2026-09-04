@@ -89,6 +89,13 @@ Backups are requested by the write paths themselves,
 so a restored database stays usable without operator action.
 The state and pending DBs are backed up together when:
 
+- A certificate is accepted as pending,
+  which is when its header is inserted with the `Pending` status.
+  The acceptance path writes the certificate body to the pending DB
+  before inserting the header, so the snapshot contains both.
+  This backup is what keeps a submitted but unprocessed certificate
+  recoverable, since nothing outside the live databases references it
+  until the orchestrator picks it up.
 - A certificate is proven.
   Settlement is submitted from a spawned task shortly after,
   so this is the last write still ordered ahead of the certificate reaching L1.

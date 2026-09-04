@@ -263,6 +263,15 @@ impl StateWriter for StateStore {
             )?;
         }
 
+        // A `Pending` header is written when a certificate is accepted from
+        // the RPC, after its body reached the pending db and before the
+        // orchestrator picks it up. The certificate body only exists in the
+        // pending db until then, so this backup is what lets a submitted but
+        // not yet processed certificate survive a loss of the live databases.
+        if let CertificateStatus::Pending = status {
+            self.request_backup();
+        }
+
         Ok(())
     }
 
