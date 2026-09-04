@@ -49,7 +49,7 @@ agglayer-node.workspace = true
 agglayer-settlement-service = { workspace = true, features = ["testutils"] }
 agglayer-signer.workspace = true
 agglayer-storage = { workspace = true, features = ["testutils"] }
-agglayer-telemetry.workspace = true
+agglayer-telemetry = { workspace = true, features = ["testutils"] }
 agglayer-types.workspace = true
 pessimistic-proof-test-suite.workspace = true
 pessimistic-proof.workspace = true

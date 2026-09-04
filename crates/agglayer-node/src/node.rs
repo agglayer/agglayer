@@ -103,6 +103,11 @@ impl Node {
                     pending_max_backup_count,
                 } = &storage_config.storage.backup
                 {
+                    info!(
+                        ?path,
+                        state_max_backup_count, pending_max_backup_count, "Backups enabled"
+                    );
+
                     let (engine, client) = BackupEngine::new(
                         path,
                         state_db.clone(),
@@ -113,6 +118,8 @@ impl Node {
                     )?;
                     (Some(engine), client)
                 } else {
+                    warn!("Backups are disabled");
+
                     (None, BackupClient::noop())
                 };
 

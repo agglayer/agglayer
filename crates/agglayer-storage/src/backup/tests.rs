@@ -3,6 +3,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use agglayer_telemetry::{
+    backup::{BACKUP_DURATION_SECONDS, BACKUP_FILES, BACKUP_REQUESTS},
+    testutils::{sample, MetricsHarness},
+};
 use tokio_util::sync::CancellationToken;
 
 use super::*;
@@ -83,6 +87,10 @@ async fn state_backup_requests_coalesce_when_the_queue_is_full() {
 
 #[tokio::test]
 async fn queued_backup_requests_are_drained_on_shutdown() {
+    // This test deliberately owns the process-global meter provider:
+    // nextest runs one process per test, so nothing else can race it.
+    let harness = MetricsHarness::install();
+
     let tmp = TempDBDir::new();
     let state_db =
         Arc::new(StateStore::init_db(&tmp.path.join("state")).expect("state db should initialize"));
@@ -110,6 +118,9 @@ async fn queued_backup_requests_are_drained_on_shutdown() {
     backup_client
         .backup_state()
         .expect("state backup request should be queued");
+    backup_client
+        .backup_state()
+        .expect("a second request should coalesce into the queued one");
     for epoch in 0..EPOCHS {
         backup_client
             .backup_epoch(epoch_db.clone(), EpochNumber::new(epoch))
@@ -137,10 +148,59 @@ async fn queued_backup_requests_are_drained_on_shutdown() {
     for (epoch, backups) in report.get_epochs() {
         assert_eq!(backups.len(), 1, "epoch {epoch} should have one backup");
     }
+
+    // The same run proves the metrics come from the production call sites,
+    // and that a coalesced request produces no second backup.
+    let body = harness.gather();
+    let requests = format!("{BACKUP_REQUESTS}_total");
+    let durations = format!("{BACKUP_DURATION_SECONDS}_count");
+    for (name, labels, expected) in [
+        (
+            &requests,
+            [("queue", "state"), ("disposition", "queued")],
+            1.0,
+        ),
+        (
+            &requests,
+            [("queue", "state"), ("disposition", "coalesced")],
+            1.0,
+        ),
+        (
+            &requests,
+            [("queue", "epoch"), ("disposition", "queued")],
+            EPOCHS as f64,
+        ),
+        (
+            &durations,
+            [("queue", "state"), ("outcome", "success")],
+            1.0,
+        ),
+        (
+            &durations,
+            [("queue", "epoch"), ("outcome", "success")],
+            EPOCHS as f64,
+        ),
+    ] {
+        assert_eq!(
+            sample(&body, name, &labels),
+            Some(expected),
+            "{name} {labels:?}, got:\n{body}"
+        );
+    }
+
+    // A non-zero count does not prove the backup restores: a read-only
+    // handle yields a plausible count and zero rows.
+    for db in ["state", "pending", "epoch"] {
+        let files = sample(&body, BACKUP_FILES, &[("db", db)])
+            .unwrap_or_else(|| panic!("{db} file count should export, got:\n{body}"));
+        assert!(files > 0.0, "{db} backup referenced no files");
+    }
 }
 
 #[tokio::test]
 async fn a_failed_backup_does_not_stop_the_engine() {
+    let harness = MetricsHarness::install();
+
     let tmp = TempDBDir::new();
     let state_db =
         Arc::new(StateStore::init_db(&tmp.path.join("state")).expect("state db should initialize"));
@@ -187,4 +247,20 @@ async fn a_failed_backup_does_not_stop_the_engine() {
         epoch_8_backups, 1,
         "the epoch backup queued behind the failed one should still be taken"
     );
+
+    // Epoch 7 failed and epoch 8 succeeded, and the outcome label has to
+    // say so rather than counting two backups.
+    let body = harness.gather();
+    let durations = format!("{BACKUP_DURATION_SECONDS}_count");
+    for (outcome, expected) in [("success", 1.0), ("failure", 1.0)] {
+        assert_eq!(
+            sample(
+                &body,
+                &durations,
+                &[("queue", "epoch"), ("outcome", outcome)]
+            ),
+            Some(expected),
+            "epoch backups should be counted one {outcome} each, got:\n{body}"
+        );
+    }
 }
