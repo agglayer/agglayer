@@ -465,8 +465,8 @@ where
             .allow_origin(tower_http::cors::Any)
             .allow_headers([hyper::header::CONTENT_TYPE]);
 
-        // Create a middleware stack with the CORS middleware and a proxy layer for
-        // health checks.
+        // Create a middleware stack with the CORS middleware and a proxy layer
+        // for health checks.
         let middleware = tower::ServiceBuilder::new()
             .layer(CompressionLayer::new())
             .layer(cors);
@@ -799,10 +799,13 @@ where
             for operation in operations.iter() {
                 match operation {
                     Operation::SetStatus { from, to: _ } => {
-                        // Ensure that the original status is the one described in `from=`.
-                        // However, for InError status, the `from=` does not contain the error
-                        // message. So, we match it separately, and we do not verify the current
-                        // error message if we had `set-status,from=InError,to=*`.
+                        // Ensure that the original status is the one described
+                        // in `from=`. However, for
+                        // InError status, the `from=` does not contain the
+                        // error message. So, we match
+                        // it separately, and we do not verify the current
+                        // error message if we had
+                        // `set-status,from=InError,to=*`.
                         if &header.status != from
                             && !matches!(
                                 (&header.status, &from),

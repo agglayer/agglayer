@@ -5,6 +5,7 @@ use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
+use agglayer_errors::ResultExt as _;
 use agglayer_jsonrpc_api::{
     admin::AdminAgglayerImpl, kernel::Kernel, service::AgglayerService, AgglayerImpl,
 };
@@ -137,7 +138,12 @@ impl Node {
             .expect("storage initialization task panicked")?;
 
         if let Some(backup_engine) = backup_engine {
-            tokio::spawn(backup_engine.run());
+            tokio::spawn(async move {
+                backup_engine
+                    .run()
+                    .await
+                    .log_err("Backup engine failed, no further backups will be taken")
+            });
         }
 
         info!("Storage initialized.");
@@ -229,7 +235,8 @@ impl Node {
                 provider_cert.clone()
             };
 
-            // The signer always has at least one address, so `next()` is always `Some`.
+            // The signer always has at least one address, so `next()` is always
+            // `Some`.
             let cert_signer = provider_cert.signer_addresses().next().unwrap();
             let tx_signer = provider_tx.signer_addresses().next().unwrap();
             tracing::info!("Cert signer address: {cert_signer:?}");

@@ -101,8 +101,9 @@ fn mock_settlement_persisting<S>(
         .expect_submit_settlement_job()
         .returning(move |certificate_id, job| {
             let id = job_id(next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u128);
-            // The real service writes the job and the certificate <-> job-id links
-            // in one atomic call; mirror it so process_from_candidate can resume.
+            // The real service writes the job and the certificate <-> job-id
+            // links in one atomic call; mirror it so
+            // process_from_candidate can resume.
             store
                 .insert_settlement_job_with_certificate(&id, &job, &certificate_id)
                 .map_err(|error| eyre::eyre!("{error}"))?;
@@ -949,7 +950,8 @@ async fn process_next_certificate() {
     .expect("Failed to create a new network task");
 
     let mut next_expected_height = Height::ZERO;
-    let mut first_run = false; // Set to false since we're testing certificate processing, not initialization
+    let mut first_run = false; // Set to false since we're testing certificate
+                               // processing, not initialization
 
     // Send both certificate events
     sender

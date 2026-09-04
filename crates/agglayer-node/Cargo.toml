@@ -41,6 +41,7 @@ agglayer-certificate-orchestrator.workspace = true
 agglayer-clock.workspace = true
 agglayer-config.workspace = true
 agglayer-contracts.workspace = true
+agglayer-errors.workspace = true
 agglayer-grpc-api.workspace = true
 agglayer-grpc-types.workspace = true
 agglayer-jsonrpc-api.workspace = true

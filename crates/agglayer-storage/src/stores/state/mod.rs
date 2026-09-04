@@ -21,7 +21,7 @@ use tracing::{info, instrument, warn};
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
-    backup::{BackupClient, BackupRequest},
+    backup::BackupClient,
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
@@ -252,7 +252,8 @@ impl StateWriter for StateStore {
         )?;
 
         if let CertificateStatus::Settled = status {
-            // TODO: Check certificate conflict during insert (if conflict it's too late)
+            // TODO: Check certificate conflict during insert (if conflict it's
+            // too late)
             self.db.put::<CertificatePerNetworkColumn>(
                 &certificate_per_network::Key {
                     network_id: certificate.network_id.to_u32(),
@@ -260,6 +261,15 @@ impl StateWriter for StateStore {
                 },
                 &certificate.hash(),
             )?;
+        }
+
+        // A `Pending` header is written when a certificate is accepted from
+        // the RPC, after its body reached the pending db and before the
+        // orchestrator picks it up. The certificate body only exists in the
+        // pending db until then, so this backup is what lets a submitted but
+        // not yet processed certificate survive a loss of the live databases.
+        if let CertificateStatus::Pending = status {
+            self.request_backup();
         }
 
         Ok(())
@@ -289,9 +299,10 @@ impl StateWriter for StateStore {
                 )?;
             }
 
-            // A `Proven` certificate is submitted to L1 from a spawned task shortly
-            // after, so this is the last status write still ordered ahead of the
-            // settlement tx. Its proof is already persisted by now.
+            // A `Proven` certificate is submitted to L1 from a spawned task
+            // shortly after, so this is the last status write still
+            // ordered ahead of the settlement tx. Its proof is
+            // already persisted by now.
             if let CertificateStatus::Proven = status {
                 self.request_backup();
             }
@@ -409,7 +420,7 @@ impl StateWriter for StateStore {
 impl StateStore {
     /// Requests a best-effort backup of the state and pending databases.
     fn request_backup(&self) {
-        if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+        if let Err(error) = self.backup_client.backup_state() {
             warn!("Unable to trigger backup for the state database: {}", error);
         }
     }

@@ -42,8 +42,8 @@ fn structure_snapshot() {
     // be considered. As a rule of thumb:
     // * It is OK to add an enum arm at the end
     // * It is NOT OK to remove, reorder or change existing enum arms.
-    // * It is NOT OK to alter structs in any way, even just by adding a field at
-    //   the end.
+    // * It is NOT OK to alter structs in any way, even just by adding a field
+    //   at the end.
     match trace() {
         Ok(registry) => {
             insta::assert_json_snapshot!(&registry);

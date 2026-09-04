@@ -125,8 +125,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         backup_client: BackupClient,
         readonly: bool,
     ) -> Result<Self, Error> {
-        // Check if the epoch is already packed, if no value is found, the epoch is not
-        // packed
+        // Check if the epoch is already packed, if no value is found, the epoch
+        // is not packed
         let packed = db
             .get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::Packed)?
             .map(|value| match value {
@@ -181,10 +181,12 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             // For readonly access, we don't need to track the next index
             AtomicU64::new(0)
         } else {
-            // For read-write access, calculate the next index from existing certificates.
-            // The proto-backed CF is the single source of truth at runtime: legacy rows
-            // are backfilled into it during `init_db`, so consulting the legacy CF here
-            // would only re-read data that has already been migrated.
+            // For read-write access, calculate the next index from existing
+            // certificates. The proto-backed CF is the single
+            // source of truth at runtime: legacy rows
+            // are backfilled into it during `init_db`, so consulting the legacy
+            // CF here would only re-read data that has already been
+            // migrated.
             if let Some(Ok((index, _))) = db
                 .iter_with_direction::<CertificatePerIndexProtoColumn>(
                     ReadOptions::default(),
@@ -192,7 +194,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 )?
                 .next()
             {
-                // We're starting from the next index after the last one found in the database.
+                // We're starting from the next index after the last one found
+                // in the database.
                 AtomicU64::new(index.as_u64() + 1)
             } else {
                 AtomicU64::new(0)
@@ -412,8 +415,8 @@ where
         }
 
         if mode == ExecutionMode::DryRun {
-            // If this is a dry run, we don't want to add the certificate to the DB
-            // The certificate index is informal
+            // If this is a dry run, we don't want to add the certificate to the
+            // DB The certificate index is informal
             return Ok((
                 *self.epoch_number,
                 CertificateIndex::new(self.next_certificate_index.load(Ordering::Relaxed)),
@@ -486,9 +489,10 @@ where
             &PerEpochMetadataValue::Packed(true),
         )?;
 
-        if let Err(error) = self.backup_client.backup(crate::backup::BackupRequest {
-            epoch_db: Some((self.db.clone(), *self.epoch_number)),
-        }) {
+        if let Err(error) = self
+            .backup_client
+            .backup_epoch(self.db.clone(), *self.epoch_number)
+        {
             error!("Couldn't trigger the backup of the epoch DB: {}", error);
         }
 

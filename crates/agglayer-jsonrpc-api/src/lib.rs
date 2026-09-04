@@ -162,8 +162,8 @@ where
             .allow_origin(tower_http::cors::Any)
             .allow_headers([hyper::header::CONTENT_TYPE]);
 
-        // Create a middleware stack with the CORS middleware and a proxy layer for
-        // health checks.
+        // Create a middleware stack with the CORS middleware and a proxy layer
+        // for health checks.
         let middleware = tower::ServiceBuilder::new()
             .layer(CompressionLayer::new())
             .layer(cors);
@@ -172,8 +172,8 @@ where
             server_builder.set_rpc_middleware(rpc_middleware::from_config(config));
 
         let (stop_handle, server_handle) = jsonrpsee::server::stop_channel();
-        // Server handle isn't used as we're relying on axum to manage the server
-        // lifecycle.
+        // Server handle isn't used as we're relying on axum to manage the
+        // server lifecycle.
         std::mem::forget(server_handle);
 
         let service = self.into_rpc();

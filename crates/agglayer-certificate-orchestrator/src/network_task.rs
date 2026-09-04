@@ -275,7 +275,8 @@ where
         let height = *next_expected_height;
         let (sender, mut receiver) = mpsc::channel(1);
 
-        // Load the pending certificate and its state header together off the runtime.
+        // Load the pending certificate and its state header together off the
+        // runtime.
         let task = self
             .initialize_certificate_task(height, sender, cancellation_token.clone())
             .await?;

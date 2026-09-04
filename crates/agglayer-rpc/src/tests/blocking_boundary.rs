@@ -37,9 +37,9 @@ async fn certificate_header_query_keeps_the_runtime_responsive() {
                 .expect("test task should wait for the storage call");
 
             let (released, wake) = &*release_for_storage;
-            // The timeout only prevents a regressed synchronous call from hanging the
-            // suite; the test task releases this immediately when the runtime
-            // remains responsive.
+            // The timeout only prevents a regressed synchronous call from
+            // hanging the suite; the test task releases this
+            // immediately when the runtime remains responsive.
             let (_released, timeout) = wake
                 .wait_timeout_while(
                     released

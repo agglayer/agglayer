@@ -472,9 +472,9 @@ impl<
         )
         .await?;
         let id = Self::generate_settlement_job_id().await;
-        // Persist the job and its certificate links in a single atomic write so a
-        // crash can never leave a certificate pointing at a job that was never
-        // saved.
+        // Persist the job and its certificate links in a single atomic write so
+        // a crash can never leave a certificate pointing at a job that
+        // was never saved.
         let job = store
             .insert_settlement_job_async(id, job, certificate_id)
             .await
@@ -584,12 +584,14 @@ impl<
                 return run_result;
             }
 
-            // Process in a big loop. We'll come back here whenever a reorg is detected, and
-            // after waiting when we're done with one cycle.
+            // Process in a big loop. We'll come back here whenever a reorg is
+            // detected, and after waiting when we're done with one
+            // cycle.
 
-            // First, for each nonce we know of, identify whether it is done or whether we
-            // need to submit more txes for it. For this, we'll keep a list of
-            // nonces used externally and reverts (that are not finalized yet), as well as
+            // First, for each nonce we know of, identify whether it is done or
+            // whether we need to submit more txes for it. For this,
+            // we'll keep a list of nonces used externally and
+            // reverts (that are not finalized yet), as well as
             // helper markers.
             let mut nonces_used_externally = BTreeMap::new();
             let mut reverts = BTreeMap::new();
@@ -606,7 +608,8 @@ impl<
                     "querying nonce inclusion on L1 for wallet {wallet} / nonce {nonce}",
                 );
                 if let Some(tx_hash) = tx_hash_on_l1 {
-                    // If the nonce is used on L1, we won't need to submit any new tx related to it.
+                    // If the nonce is used on L1, we won't need to submit any
+                    // new tx related to it.
                     let Some(attempt_number) =
                         self.settlement_attempt_number_for(wallet, nonce, tx_hash)
                     else {
@@ -639,8 +642,9 @@ impl<
                         .await;
                     return SettlementTaskRunResult::Completed(job_result);
                 } else {
-                    // If the nonce is not used on L1, we'll need to either wait more or submit a
-                    // new attempt with the same nonce.
+                    // If the nonce is not used on L1, we'll need to either wait
+                    // more or submit a new attempt with the
+                    // same nonce.
                     all_nonces_seen_on_l1 = false;
                     not_included_on_l1.insert((wallet, nonce));
                     if !self.is_wallet_privkey_known(wallet) {
@@ -648,13 +652,15 @@ impl<
                                           // any longer, so it makes no sense to
                                           // check if we need to resubmit.
                     }
-                    // This nonce is not included yet and we still know the privkey, so we won't
-                    // need to submit an attempt with a new nonce, regardless of whether we
+                    // This nonce is not included yet and we still know the
+                    // privkey, so we won't need to submit
+                    // an attempt with a new nonce, regardless of whether we
                     // resubmit.
                     need_to_submit_attempt_with_new_nonce = false;
                     if self.is_any_attempt_pending_for_nonce(wallet, nonce) {
-                        // At least one attempt is not in-error yet, so we'll need to wait for the
-                        // previous nonce to be included before processing it further.
+                        // At least one attempt is not in-error yet, so we'll
+                        // need to wait for the previous
+                        // nonce to be included before processing it further.
                         if let Some(previous_nonce) = nonce.previous() {
                             let previous_nonce_on_l1 = retry!(
                                 self.tx_hash_on_l1_for_nonce(wallet, previous_nonce).await,
@@ -694,9 +700,10 @@ impl<
                 }
             }
             if all_nonces_seen_on_l1 && !reverts.is_empty() {
-                // All nonces were seen on L1, but we didn't get a successful settlement result
-                // for any of them. Also, there was at least one revert.
-                // We can wait for finalization without submitting a new attempt.
+                // All nonces were seen on L1, but we didn't get a successful
+                // settlement result for any of them. Also,
+                // there was at least one revert. We can wait
+                // for finalization without submitting a new attempt.
                 let (
                     earliest_revert_wallet,
                     earliest_revert_nonce,
@@ -708,7 +715,8 @@ impl<
                         (wallet, nonce, *attempt_number, result.clone())
                     })
                     .min_by_key(|(_, _, _, result)| result.block_number)
-                    .unwrap(); // No panic: we checked `!reverts.is_empty()` just before.
+                    .unwrap(); // No panic: we checked `!reverts.is_empty()`
+                               // just before.
                 for (wallet, nonce) in self.all_used_nonces() {
                     if let Some(tx_hash) = nonces_used_externally.remove(&(wallet, nonce)) {
                         let settlement_result = retry!(
@@ -736,11 +744,14 @@ impl<
                         self.write_nonce_revert_to_db(wallet, nonce, attempt_number, result)
                             .await;
                     } else {
-                        // Invariant: If we finish the `'nonces` loop with `all_nonces_seen_on_l1`,
-                        // all nonces must be one of success, revert or external use.
-                        // Any success would have led to either an early return, or a loop back to
+                        // Invariant: If we finish the `'nonces` loop with
+                        // `all_nonces_seen_on_l1`,
+                        // all nonces must be one of success, revert or external
+                        // use. Any success would have
+                        // led to either an early return, or a loop back to
                         // `'start` if it did not settle properly.
-                        // As such, we must have entered at least one of the two branches above for
+                        // As such, we must have entered at least one of the two
+                        // branches above for
                         // each nonce.
                         panic!(
                             "Settlement logic invariant broken: nonces seen on L1 must be either \
@@ -758,13 +769,15 @@ impl<
                     .await;
                 return SettlementTaskRunResult::Completed(job_result);
             }
-            // There was no successful attempt, and either at least one nonce was not yet
-            // seen on L1 or there is no reverting attempt. So we need to wait
-            // for more nonces to be seen on L1.
+            // There was no successful attempt, and either at least one nonce
+            // was not yet seen on L1 or there is no reverting
+            // attempt. So we need to wait for more nonces to be
+            // seen on L1.
             if need_to_submit_attempt_with_new_nonce {
-                // There was no attempt that was pending or that received a retry in the
-                // `'nonces` loop above. This means that either all nonces were
-                // used externally, or that we no longer have the required wallets to bump
+                // There was no attempt that was pending or that received a
+                // retry in the `'nonces` loop above. This means
+                // that either all nonces were used externally,
+                // or that we no longer have the required wallets to bump
                 // pending nonces. So we need to submit a new attempt with a new
                 // nonce.
                 //
@@ -805,8 +818,9 @@ impl<
                     return run_result;
                 }
             }
-            // We now are sure we did at least one step to make things move forward. Wait
-            // for the next external event or for the next deadline.
+            // We now are sure we did at least one step to make things move
+            // forward. Wait for the next external event or for the
+            // next deadline.
             let timeout = self
                 .next_overall_deadline()
                 .expect("There is at least one attempt but no deadline")
@@ -990,8 +1004,9 @@ impl<
             return SystemTime::now();
         };
 
-        // RPC-level failures retry on the fast transient policy; an attempt still
-        // pending inclusion on L1 retries on the slow non-inclusion policy.
+        // RPC-level failures retry on the fast transient policy; an attempt
+        // still pending inclusion on L1 retries on the slow
+        // non-inclusion policy.
         let policy = match last_attempt.result {
             Some(SettlementAttemptResult::ClientError(_)) => {
                 &self.tx_config.retry_on_transient_failure
@@ -1000,7 +1015,8 @@ impl<
         };
 
         // Exponential backoff matching `retry_callback_until_success`: the n-th
-        // attempt waits `initial * multiplier^(n-1)`, capped per step at max_interval.
+        // attempt waits `initial * multiplier^(n-1)`, capped per step at
+        // max_interval.
         let retries = attempts_for_nonce.len().saturating_sub(1) as u64;
         let interval = (0..retries).fold(policy.initial_interval, |interval, _| {
             policy
@@ -1028,8 +1044,9 @@ impl<
     /// inclusion rather than returning instantly on an already-included
     /// nonce.
     async fn wait_for_any_nonce_on_l1(&self, pending: &BTreeSet<(Address, Nonce)>) {
-        // Result discarded: the caller wraps this in a timeout and re-queries under
-        // `retry!` in `'start`, which escalates non-recoverable errors there.
+        // Result discarded: the caller wraps this in a timeout and re-queries
+        // under `retry!` in `'start`, which escalates non-recoverable
+        // errors there.
         let _ = crate::utils::retry_callback_until_success(
             &self.tx_config.retry_on_not_included_on_l1,
             &self.control.cancellation_token,
@@ -1055,8 +1072,9 @@ impl<
         wallet: Address,
         nonce: Nonce,
     ) -> Result<Option<SettlementTxHash>, RetryCallbackError<TransportError>> {
-        // Test-only failpoint: pretend the nonce is not yet included on L1 so the
-        // run loop keeps waiting and resubmits. Compiled out of production builds.
+        // Test-only failpoint: pretend the nonce is not yet included on L1 so
+        // the run loop keeps waiting and resubmits. Compiled out of
+        // production builds.
         #[cfg(feature = "testutils")]
         if fail::eval("settlement::tx_not_included", |_| true).unwrap_or(false) {
             return Ok(None);
@@ -1168,8 +1186,9 @@ impl<
             .get_transaction_receipt(tx_hash.into())
             .await?;
 
-        // Test-only failpoint: hide an otherwise-available receipt so the run loop
-        // treats it as indexing lag and keeps polling. Compiled out of production.
+        // Test-only failpoint: hide an otherwise-available receipt so the run
+        // loop treats it as indexing lag and keeps polling. Compiled
+        // out of production.
         #[cfg(feature = "testutils")]
         let receipt = receipt.filter(|_| {
             !fail::eval("settlement::receipt_transiently_unavailable", |_| true).unwrap_or(false)
@@ -1286,7 +1305,8 @@ impl<
         };
 
         // A receipt whose block number no longer resolves to the same canonical
-        // block hash is a reorg signal, not a transient "wait longer" condition.
+        // block hash is a reorg signal, not a transient "wait longer"
+        // condition.
         let canonical_block_hash = canonical_block.header().hash;
         if canonical_block_hash != block_hash {
             debug!(
@@ -1339,7 +1359,8 @@ impl<
         // The priority fee must never exceed the max fee, otherwise the
         // transaction is invalid. Independent per-field floors/ceilings could
         // otherwise produce `priority > max_fee` under misconfiguration, so we
-        // cap it here to keep the EIP-1559 invariant at the point of resolution.
+        // cap it here to keep the EIP-1559 invariant at the point of
+        // resolution.
         let max_priority_fee_per_gas = clamp_u128(
             config
                 .max_priority_fee_per_gas_multiplier_factor
@@ -1502,7 +1523,8 @@ impl<
                 )?;
                 let gas = match live_tx_fees {
                     Some((previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) => {
-                        // Out-bid the live tx; impossible once it sits at the ceiling.
+                        // Out-bid the live tx; impossible once it sits at the
+                        // ceiling.
                         let Some(gas) = self.bump_gas_params(
                             previous_max_fee_per_gas,
                             previous_max_priority_fee_per_gas,
@@ -1589,18 +1611,20 @@ impl<
         &self,
         tx: TxEnvelope,
     ) -> Result<(), RetryCallbackError<TransportError>> {
-        // Encode the signed transaction once, consuming the envelope. This is the
-        // only thing `send_tx_envelope` does with it before calling
-        // `eth_sendRawTransaction`, so each retry can re-broadcast the same bytes
-        // via `send_raw_transaction` without cloning or re-encoding the envelope.
-        // Re-broadcasting is idempotent: the bytes carry the same sender, nonce, and
-        // signature, hence the same hash, so retrying cannot submit a second
+        // Encode the signed transaction once, consuming the envelope. This is
+        // the only thing `send_tx_envelope` does with it before calling
+        // `eth_sendRawTransaction`, so each retry can re-broadcast the same
+        // bytes via `send_raw_transaction` without cloning or
+        // re-encoding the envelope. Re-broadcasting is idempotent: the
+        // bytes carry the same sender, nonce, and signature, hence the
+        // same hash, so retrying cannot submit a second
         // on-chain transaction.
         let encoded_tx = tx.encoded_2718();
 
-        // Retry only transient network failures, mirroring `tx_hash_on_l1_for_nonce`.
-        // The returned pending-transaction handle is dropped on purpose: this helper
-        // must never wait for inclusion or settlement.
+        // Retry only transient network failures, mirroring
+        // `tx_hash_on_l1_for_nonce`. The returned pending-transaction
+        // handle is dropped on purpose: this helper must never wait for
+        // inclusion or settlement.
         let submission = crate::utils::retry_alloy_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
@@ -1797,7 +1821,8 @@ impl<
     ) -> SettlementJobResult {
         // Attempt results are persisted before this terminal job result; if the
         // process stops in between, the next startup's run loop re-derives the
-        // completion from L1 and finishes it here — no special resumption needed.
+        // completion from L1 and finishes it here — no special resumption
+        // needed.
         self.record_attempt_result_to_db(
             attempt_number,
             SettlementAttemptResult::ContractCall(tx_result.clone()),
@@ -1892,8 +1917,9 @@ impl<
             }
 
             if !current_result.can_be_replaced_by(&result) {
-                // A "settled elsewhere" note can reach an attempt that already has a real
-                // result. Keep the real result. Panicking here would repeat on every restart
+                // A "settled elsewhere" note can reach an attempt that already
+                // has a real result. Keep the real result.
+                // Panicking here would repeat on every restart
                 // and wedge the job forever.
                 if result.is_resolved_elsewhere() {
                     warn!(

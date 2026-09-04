@@ -90,14 +90,16 @@ async fn deconstruct_reconstruct_transaction(#[case] state: Forest) {
     // instead of using interop_sendCertificate RPC
 
     // Prepare the arguments for verifyPessimisticTrustedAggregator.
-    // For testing purposes, we'll use dummy/placeholder values for some parameters.
-    // In a real scenario, these would come from the actual proof generation.
+    // For testing purposes, we'll use dummy/placeholder values for some
+    // parameters. In a real scenario, these would come from the actual
+    // proof generation.
     let rollup_id: u32 = certificate.network_id.to_u32();
     let l_1_info_tree_leaf_count: u32 = certificate.l1_info_tree_leaf_count.unwrap_or(0);
     let new_local_exit_root: FixedBytes<32> =
         FixedBytes::from_slice(certificate.new_local_exit_root.as_ref());
     let new_pessimistic_root: FixedBytes<32> = FixedBytes::from([0u8; 32]); // Placeholder
-    let proof: Bytes = Bytes::from(vec![0u8; 64]); // Placeholder proof (minimum size)
+    let proof: Bytes = Bytes::from(vec![0u8; 64]); // Placeholder proof (minimum
+                                                   // size)
     let custom_chain_data: Bytes = Bytes::from(certificate.custom_chain_data.clone());
 
     info!(%rollup_id, %l_1_info_tree_leaf_count, new_local_exit_root=format!("0x{}", hex::encode(new_local_exit_root)),
@@ -107,7 +109,8 @@ async fn deconstruct_reconstruct_transaction(#[case] state: Forest) {
         "Building verifyPessimisticTrustedAggregator transaction");
 
     // Create the transaction call, set various parameters
-    // Gas fees: max_fee_per_gas = 1000 gwei, max_priority_fee_per_gas = 100 gwei
+    // Gas fees: max_fee_per_gas = 1000 gwei, max_priority_fee_per_gas = 100
+    // gwei
     let original_tx_call = rollup_manager
         .verifyPessimisticTrustedAggregator(
             rollup_id,

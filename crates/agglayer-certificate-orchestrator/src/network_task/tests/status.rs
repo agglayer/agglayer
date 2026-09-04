@@ -318,9 +318,10 @@ async fn from_candidate_to_settled() {
         .insert_certificate_header(&certificate, CertificateStatus::Candidate)
         .expect("Failed to insert certificate header");
 
-    // Recovered Candidate certificate: it already has a persisted settlement job
-    // id (set when it first moved to Candidate). `process_from_candidate` looks
-    // the id up and waits for the settlement result.
+    // Recovered Candidate certificate: it already has a persisted settlement
+    // job id (set when it first moved to Candidate).
+    // `process_from_candidate` looks the id up and waits for the settlement
+    // result.
     storage
         .state
         .insert_settlement_job_with_certificate(
