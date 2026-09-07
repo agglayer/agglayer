@@ -12,6 +12,7 @@ use agglayer_types::{
     Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
     CertificateStatusError, Digest, Height, NetworkId, RpcErrorCode, SettlementJobId, U256,
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use alloy::providers::{Provider, WalletProvider};
 use eyre::Context as _;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
@@ -588,7 +589,7 @@ where
         token_info: Option<TokenInfo>,
     ) -> RpcResult<GetTokenBalanceResponse> {
         let state = self.state.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let Some(balance_tree) = state
                 .read_local_network_state(network_id)
                 .map_err(|error| {
@@ -631,7 +632,7 @@ where
     ) -> RpcResult<(Certificate, Option<CertificateHeader>)> {
         let debug_store = self.debug_store.clone();
         let state = self.state.clone();
-        tokio::task::spawn_blocking(move || match debug_store.get_certificate(&certificate_id) {
+        spawn_blocking_in_current_span(move || match debug_store.get_certificate(&certificate_id) {
             Ok(Some(cert)) => match state
                 .get_certificate_header(&certificate_id)
                 .map(|header| (cert, header))
@@ -667,7 +668,7 @@ where
         );
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let header = state
                 .get_certificate_header(&certificate.hash())
                 .map_err(|error| {
@@ -777,7 +778,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         let state = self.state.clone();
-        let header = tokio::task::spawn_blocking(move || {
+        let header = spawn_blocking_in_current_span(move || {
             let header = state
                 .get_certificate_header(&certificate_id)
                 .map_err(|error| {
@@ -866,7 +867,7 @@ where
         );
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let certificate = if let Some(certificate) = state
                 .get_certificate_header(&certificate_id)
                 .map_err(|error| {
@@ -903,7 +904,7 @@ where
         );
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let certificate = if let Some(certificate) = state
                 .get_certificate_header(&certificate_id)
                 .map_err(|error| {
@@ -958,7 +959,7 @@ where
         );
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
-        let certificate_id = tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let certificate_id = if let Some(certificate) = pending_store
                 .get_certificate(network_id, height)
                 .map_err(|error| {
@@ -971,6 +972,9 @@ where
                     "PendingCertificate({network_id:?}, {height:?})",
                 )));
             };
+            // Record as soon as the id is known, so failure events below carry
+            // it too.
+            tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
             pending_store
                 .remove_pending_certificate(network_id, height)
@@ -1006,12 +1010,10 @@ where
                     })?;
             }
 
-            Ok::<_, Error>(certificate_id)
+            Ok::<_, Error>(())
         })
         .await
         .expect("admin pending-certificate removal task panicked")?;
-
-        tracing::Span::current().record("certificate_id", certificate_id.to_string());
 
         Ok(())
     }
@@ -1072,7 +1074,7 @@ where
         debug!("Listing settlement jobs");
         let state = self.state.clone();
         let settlement_service = self.settlement_service.clone();
-        tokio::task::spawn_blocking(move || -> eyre::Result<_> {
+        spawn_blocking_in_current_span(move || -> eyre::Result<_> {
             let job_ids = state
                 .list_settlement_job_ids()
                 .wrap_err("Failed to scan settlement job ids")?;
@@ -1101,7 +1103,7 @@ where
         debug!("Reading settlement job {job_id}");
         let state = self.state.clone();
         let settlement_service = self.settlement_service.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             Self::read_settlement_job_blocking(state.as_ref(), &settlement_service, job_id)
         })
         .await

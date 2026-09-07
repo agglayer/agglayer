@@ -9,6 +9,7 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::EpochNumber;
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use tokio::sync::broadcast::error::TryRecvError;
 use tracing::{debug, error, info};
 
@@ -86,7 +87,7 @@ impl EpochSynchronizer {
         let current_epoch_number = clock_ref.current_epoch();
         let epoch_stream = clock_ref.subscribe()?;
 
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             // Get the latest settled epoch
             let lse_number = state_store.get_latest_settled_epoch()?;
 

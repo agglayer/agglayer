@@ -17,6 +17,7 @@ use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateStatus, CertificateStatusError,
     ContractCallOutcome, Digest, Proof, SettlementJob, SettlementJobId, SettlementJobResult, U256,
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use pessimistic_proof::{core::PESSIMISTIC_PROOF_PROGRAM_SELECTOR, PessimisticProofOutput};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -521,7 +522,7 @@ where
         certificate_id: CertificateId,
     ) -> Result<Option<SettlementJobId>, agglayer_storage::error::Error> {
         let state_store = self.state_store.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let job_id = state_store.get_certificate_settlement_job_id(&certificate_id)?;
             if job_id.is_some() {
                 state_store.update_certificate_header_status(
@@ -543,7 +544,7 @@ where
     ) -> Result<(), agglayer_storage::error::Error> {
         let state_store = self.state_store.clone();
         let pending_store = self.pending_store.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             state_store
                 .update_certificate_header_status(&certificate_id, &CertificateStatus::Pending)?;
             pending_store.remove_generated_proof(&certificate_id)

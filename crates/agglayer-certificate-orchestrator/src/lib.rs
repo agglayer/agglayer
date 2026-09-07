@@ -20,6 +20,7 @@ use agglayer_storage::{
     },
 };
 use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use arc_swap::ArcSwap;
 use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use network_task::{NetworkTask, NewCertificate};
@@ -367,7 +368,7 @@ where
         let closing_epoch = self.current_epoch.load_full();
         let epochs_store = self.epochs_store.clone();
         let cancellation_token = self.cancellation_token.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             if let Err(error) = closing_epoch.start_packing() {
                 error!("Failed to pack the epoch {}: {:?}", epoch, error);
 

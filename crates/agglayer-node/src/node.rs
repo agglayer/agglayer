@@ -17,6 +17,7 @@ use agglayer_storage::{
         PerEpochReader as _,
     },
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use alloy::{
     network::EthereumWallet,
     providers::{ProviderBuilder, WalletProvider, WsConnect},
@@ -90,7 +91,7 @@ impl Node {
         let storage_config = config.clone();
         let storage_cancellation_token = cancellation_token.clone();
         let (pending_store, state_store, debug_store, backup_engine, backup_client) =
-            tokio::task::spawn_blocking(move || -> eyre::Result<_> {
+            spawn_blocking_in_current_span(move || -> eyre::Result<_> {
                 let pending_db = Arc::new(PendingStore::init_db(
                     &storage_config.storage.pending_db_path,
                 )?);

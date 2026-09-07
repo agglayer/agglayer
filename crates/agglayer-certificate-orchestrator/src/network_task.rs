@@ -14,6 +14,7 @@ use agglayer_types::{
     CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError, EpochNumber,
     ExecutionMode, Height, LocalNetworkStateData, NetworkId,
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use arc_swap::ArcSwap;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -125,7 +126,7 @@ where
         settlement_service: Arc<SettlementService>,
         current_epoch: Arc<ArcSwap<PerEpochStore>>,
     ) -> Result<Self, Error> {
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             info!("Creating a new network task for network {}", network_id);
 
             let local_state = Box::new(
@@ -392,7 +393,7 @@ where
         let state_store = self.state_store.clone();
         let certifier_client = self.certifier_client.clone();
         let settlement_service = self.settlement_service.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let certificate = pending_store
                 .get_certificate(network_id, height)
                 .inspect_err(|err| {
@@ -444,10 +445,7 @@ where
         let current_epoch = self.current_epoch.clone();
         let state_store = self.state_store.clone();
         let network_id = self.network_id;
-        let span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || {
-            let _entered = span.enter();
-
+        spawn_blocking_in_current_span(move || {
             // Assign the epoch BEFORE advancing local state: a failed
             // assignment then leaves the cert `Candidate` with the
             // pre-settlement state intact (recoverable). Retry to ride

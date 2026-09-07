@@ -12,6 +12,7 @@ agglayer-rate-limiting.workspace = true
 agglayer-storage.workspace = true
 agglayer-tries.workspace = true
 agglayer-types.workspace = true
+agglayer-utils.workspace = true
 pessimistic-proof.workspace = true
 
 

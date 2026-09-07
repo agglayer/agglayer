@@ -17,6 +17,7 @@ use agglayer_types::{
     CertificateId, CertificateStatus, ContractCallOutcome, EpochConfiguration, Height, NetworkId,
     NetworkInfo, NetworkStatus, NetworkType, SettledClaim, U256,
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use error::SignatureVerificationError;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
@@ -130,7 +131,7 @@ where
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
 
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             Self::get_latest_known_certificate_header_blocking(
                 pending_store.as_ref(),
                 state.as_ref(),
@@ -271,7 +272,7 @@ where
     ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
         let state = self.state.clone();
 
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             Self::get_latest_settled_certificate_header_blocking(state.as_ref(), network_id)
         })
         .await
@@ -300,7 +301,7 @@ where
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
 
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             Self::get_latest_pending_certificate_header_blocking(
                 pending_store.as_ref(),
                 state.as_ref(),
@@ -507,7 +508,7 @@ where
         let state = self.state.clone();
         let epochs_store = self.epochs_store.clone();
 
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             Self::get_network_info_blocking(
                 pending_store.as_ref(),
                 state.as_ref(),
@@ -956,7 +957,7 @@ where
         let height = certificate.height;
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
-        let pre_existing = tokio::task::spawn_blocking(move || {
+        let pre_existing = spawn_blocking_in_current_span(move || {
             Self::check_replacement_storage_blocking(
                 pending_store.as_ref(),
                 state.as_ref(),
@@ -1160,7 +1161,7 @@ where
         let state = self.state.clone();
         let debug_store = self.debug_store.clone();
         let notification = (certificate.network_id, certificate.height, hash);
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             // TODO: Batch the different queries.
             pending_store
                 .insert_pending_certificate(

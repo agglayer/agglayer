@@ -11,6 +11,7 @@ use agglayer_types::{
     CertificateStatus, Height, NetworkId, Nonce, Proof, SettlementAttempt, SettlementAttemptResult,
     SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 
 use super::{
     EditEvenIfCompleted, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
@@ -31,7 +32,7 @@ pub trait AsyncPendingCertificateReaderExt: PendingCertificateReader + 'static {
     ) -> impl Future<Output = Result<Option<Certificate>, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 PendingCertificateReader::get_certificate(store.as_ref(), network_id, height)
             })
             .await
@@ -45,7 +46,7 @@ pub trait AsyncPendingCertificateReaderExt: PendingCertificateReader + 'static {
     ) -> impl Future<Output = Result<Option<Proof>, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 PendingCertificateReader::get_proof(store.as_ref(), certificate_id)
             })
             .await
@@ -58,7 +59,7 @@ pub trait AsyncPendingCertificateReaderExt: PendingCertificateReader + 'static {
     ) -> impl Future<Output = Result<Vec<ProvenCertificate>, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 PendingCertificateReader::get_current_proven_height(store.as_ref())
             })
             .await
@@ -78,7 +79,7 @@ pub trait AsyncPendingCertificateWriterExt: PendingCertificateWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 PendingCertificateWriter::insert_generated_proof(
                     store.as_ref(),
                     &certificate_id,
@@ -96,7 +97,7 @@ pub trait AsyncPendingCertificateWriterExt: PendingCertificateWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 PendingCertificateWriter::remove_generated_proof(store.as_ref(), &certificate_id)
             })
             .await
@@ -112,7 +113,7 @@ pub trait AsyncPendingCertificateWriterExt: PendingCertificateWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 PendingCertificateWriter::set_latest_proven_certificate_per_network(
                     store.as_ref(),
                     &network_id,
@@ -136,7 +137,7 @@ pub trait AsyncStateReaderExt: StateReader + 'static {
     ) -> impl Future<Output = Result<Option<CertificateHeader>, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 StateReader::get_certificate_header(store.as_ref(), &certificate_id)
             })
             .await
@@ -150,7 +151,7 @@ pub trait AsyncStateReaderExt: StateReader + 'static {
     ) -> impl Future<Output = Result<Option<SettlementJobId>, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 StateReader::get_certificate_settlement_job_id(store.as_ref(), &certificate_id)
             })
             .await
@@ -163,9 +164,11 @@ pub trait AsyncStateReaderExt: StateReader + 'static {
     ) -> impl Future<Output = Result<Vec<NetworkId>, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || StateReader::get_disabled_networks(store.as_ref()))
-                .await
-                .expect("disabled network scan task panicked")
+            spawn_blocking_in_current_span(move || {
+                StateReader::get_disabled_networks(store.as_ref())
+            })
+            .await
+            .expect("disabled network scan task panicked")
         }
     }
 }
@@ -183,7 +186,7 @@ pub trait AsyncStateWriterExt: StateWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 StateWriter::update_settlement_tx_hash(
                     store.as_ref(),
                     &certificate_id,
@@ -204,7 +207,7 @@ pub trait AsyncStateWriterExt: StateWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 StateWriter::update_certificate_header_status(
                     store.as_ref(),
                     &certificate_id,
@@ -223,7 +226,7 @@ pub trait AsyncStateWriterExt: StateWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 StateWriter::disable_network(store.as_ref(), &network_id, disabled_by)
             })
             .await
@@ -237,7 +240,7 @@ pub trait AsyncStateWriterExt: StateWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 StateWriter::enable_network(store.as_ref(), &network_id)
             })
             .await
@@ -255,7 +258,7 @@ pub trait AsyncSettlementReaderExt: SettlementReader + 'static {
     ) -> impl Future<Output = Result<Vec<SettlementJobId>, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementReader::list_settlement_job_ids(store.as_ref())
             })
             .await
@@ -269,7 +272,7 @@ pub trait AsyncSettlementReaderExt: SettlementReader + 'static {
     ) -> impl Future<Output = Result<Option<Nonce>, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementReader::max_settlement_nonce_for_wallet(store.as_ref(), wallet)
             })
             .await
@@ -293,7 +296,7 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
     ) -> impl Future<Output = Result<SettlementJob, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 match certificate_id {
                     Some(certificate_id) => {
                         SettlementWriter::insert_settlement_job_with_certificate(
@@ -324,7 +327,7 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
     ) -> impl Future<Output = Result<SettlementAttempt, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementWriter::insert_settlement_attempt(
                     store.as_ref(),
                     &settlement_job_id,
@@ -345,7 +348,7 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
     ) -> impl Future<Output = Result<SettlementJobResult, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementWriter::insert_settlement_job_result(
                     store.as_ref(),
                     &settlement_job_id,
@@ -366,7 +369,7 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
     ) -> impl Future<Output = Result<SettlementAttemptResult, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementWriter::record_settlement_attempt_result(
                     store.as_ref(),
                     &settlement_job_id,
@@ -388,7 +391,7 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
     ) -> impl Future<Output = Result<u64, Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementWriter::admin_insert_settlement_attempt(
                     store.as_ref(),
                     &settlement_job_id,
@@ -410,7 +413,7 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementWriter::admin_override_settlement_attempt_result(
                     store.as_ref(),
                     &settlement_job_id,
@@ -432,7 +435,7 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementWriter::admin_remove_settlement_attempt_result(
                     store.as_ref(),
                     &settlement_job_id,
@@ -451,7 +454,7 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
     ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
         let store = Arc::clone(self);
         async move {
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking_in_current_span(move || {
                 SettlementWriter::admin_force_remove_settlement_job_result(
                     store.as_ref(),
                     &settlement_job_id,

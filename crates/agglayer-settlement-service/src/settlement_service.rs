@@ -9,6 +9,7 @@ use agglayer_types::{
     Address, CertificateId, ClientError, Nonce, RpcErrorCode, SettlementAttempt,
     SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use alloy::{
     consensus::Transaction as _,
     network::TransactionResponse as _,
@@ -405,7 +406,7 @@ impl<
     /// reads are irrelevant for cost.
     async fn classify_missing_task(&self, job_id: SettlementJobId) -> eyre::Report {
         let store = self.store.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let job = match store.get_settlement_job(&job_id) {
                 Ok(job) => job,
                 Err(error) => {
@@ -439,7 +440,7 @@ impl<
         job_id: SettlementJobId,
     ) -> eyre::Result<(Option<SettlementJobResult>, bool)> {
         let store = self.store.clone();
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking_in_current_span(move || {
             let result = store.get_settlement_job_result(&job_id).wrap_err_with(|| {
                 format!("Failed to read settlement job terminal result for id {job_id}")
             })?;

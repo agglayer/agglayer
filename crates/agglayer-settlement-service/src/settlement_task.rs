@@ -22,6 +22,7 @@ use agglayer_types::{
     Nonce, SettlementAttempt, SettlementAttemptNumber, SettlementAttemptResult, SettlementJob,
     SettlementJobId, SettlementJobResult, SettlementTxHash,
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use alloy::{
     consensus::{BlockHeader as _, EthereumTxEnvelope, Transaction as _, TxEip4844Variant},
     eips::{eip1559::Eip1559Estimation, eip2718::Encodable2718 as _, BlockNumberOrTag},
@@ -533,7 +534,7 @@ impl<
         store: Arc<SettlementStore>,
         wallet_nonce_locks: Arc<WalletNonceLocks>,
     ) -> eyre::Result<RecoveredSettlementJob<L1Provider, SettlementStore>> {
-        tokio::task::spawn_blocking(move || -> eyre::Result<_> {
+        spawn_blocking_in_current_span(move || -> eyre::Result<_> {
             match Self::load_settlement_job_from_db(store.as_ref(), id)? {
                 (_job, Some(result)) => Ok(RecoveredSettlementJob::Completed(result)),
                 (job, None) => {
