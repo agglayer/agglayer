@@ -52,6 +52,7 @@ agglayer-signer.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
+agglayer-utils.workspace = true
 pessimistic-proof.workspace = true
 prover-executor.workspace = true
 

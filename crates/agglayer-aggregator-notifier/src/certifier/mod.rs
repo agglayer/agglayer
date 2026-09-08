@@ -4,7 +4,10 @@ use agglayer_certificate_orchestrator::{CertificationError, Certifier, Certifier
 use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
 use agglayer_sp1::{AcceptancePolicy, ProofError, ProofExt as _};
-use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
+use agglayer_storage::stores::{
+    async_api::{AsyncPendingCertificateReaderExt, AsyncPendingCertificateWriterExt},
+    PendingCertificateReader, PendingCertificateWriter,
+};
 use agglayer_types::{
     aggchain_proof::AggchainData, Certificate, Digest, Height, LocalNetworkStateData, NetworkId,
     Proof,
@@ -206,7 +209,8 @@ where
         // Fetch certificate from storage
         let certificate = self
             .pending_store
-            .get_certificate(network_id, height)?
+            .get_certificate_async(network_id, height)
+            .await?
             .ok_or(CertificationError::CertificateNotFound(network_id, height))?;
 
         let certificate_id = certificate.hash();
@@ -362,7 +366,9 @@ where
             info!("Successfully generated and verified the p-proof!");
 
             // TODO: Check if the key already exists
-            pending_store.insert_generated_proof(&certificate_id, &proof)?;
+            pending_store
+                .insert_generated_proof_async(certificate_id, proof)
+                .await?;
 
             // Prune the SMTs of the state
             state

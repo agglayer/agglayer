@@ -114,6 +114,21 @@ fn assert_recorded_rpc_request(
     assert_eq!(request["params"], expected_params);
 }
 
+async fn catch_future_unwind<F>(future: F) -> Result<F::Output, Box<dyn std::any::Any + Send>>
+where
+    F: std::future::Future,
+{
+    tokio::pin!(future);
+    std::future::poll_fn(
+        |cx| match catch_unwind(AssertUnwindSafe(|| future.as_mut().poll(cx))) {
+            Ok(Poll::Ready(output)) => Poll::Ready(Ok(output)),
+            Ok(Poll::Pending) => Poll::Pending,
+            Err(panic) => Poll::Ready(Err(panic)),
+        },
+    )
+    .await
+}
+
 fn mk_job_id(seed: u128) -> SettlementJobId {
     SettlementJobId::from(ulid::Ulid::from(seed))
 }
@@ -322,7 +337,7 @@ async fn load_job_from_store<L1Provider: Provider + WalletProvider + 'static>(
     store: &MockStateStore,
     job_id: SettlementJobId,
 ) -> eyre::Result<(SettlementJob, Option<SettlementJobResult>)> {
-    SettlementTask::<L1Provider, MockStateStore>::load_settlement_job_from_db(store, job_id).await
+    SettlementTask::<L1Provider, MockStateStore>::load_settlement_job_from_db(store, job_id)
 }
 
 #[tokio::test]
@@ -472,6 +487,65 @@ async fn recover_from_storage_returns_completed_without_loading_attempts() {
             panic!("completed settlement job should not recover as pending")
         }
     }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn recover_from_storage_dispatches_blocking_reads() {
+    let mut store = MockStateStore::new();
+    let job_id = mk_job_id(52);
+    let job = mk_job();
+    let job_result = mk_job_result(6, ContractCallOutcome::Success);
+    let (read_started_tx, read_started_rx) = std::sync::mpsc::channel();
+    let (release_read_tx, release_read_rx) = std::sync::mpsc::channel();
+
+    store
+        .expect_get_settlement_job()
+        .once()
+        .return_once(move |_| {
+            read_started_tx
+                .send(())
+                .expect("test observer should wait for the storage read");
+            release_read_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("test observer should release the storage read");
+            Ok(Some(job))
+        });
+    store
+        .expect_get_settlement_job_result()
+        .once()
+        .return_once(move |_| Ok(Some(job_result)));
+
+    let runtime = tokio::runtime::Handle::current();
+    let observer = std::thread::spawn(move || {
+        read_started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("storage read should start");
+
+        let (heartbeat_tx, heartbeat_rx) = std::sync::mpsc::channel();
+        runtime.spawn(async move {
+            let _ = heartbeat_tx.send(());
+        });
+        let runtime_advanced = heartbeat_rx.recv_timeout(Duration::from_secs(1)).is_ok();
+        release_read_tx
+            .send(())
+            .expect("blocked storage read should still be running");
+        runtime_advanced
+    });
+
+    SettlementTask::recover_from_storage(
+        job_id,
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(mk_provider()),
+        Arc::new(store),
+        Arc::new(WalletNonceLocks::default()),
+    )
+    .await
+    .expect("completed settlement job should recover");
+
+    assert!(
+        observer.join().expect("test observer should not panic"),
+        "the current-thread runtime did not advance while storage was blocked"
+    );
 }
 
 #[tokio::test]
@@ -672,7 +746,8 @@ async fn save_attempt_to_db_records_attempt_in_storage_and_memory() {
 
     let mut task = mk_task(Arc::new(store), BTreeMap::new());
 
-    task.save_attempt_to_db(wallet, nonce, attempt_number, &tx);
+    task.save_attempt_to_db(wallet, nonce, attempt_number, &tx)
+        .await;
 
     let active_attempt = task
         .attempts
@@ -701,9 +776,13 @@ async fn save_attempt_to_db_does_not_track_attempt_when_storage_write_fails() {
     let tx = mk_tx(4);
     let mut task = mk_task(Arc::new(store), BTreeMap::new());
 
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        task.save_attempt_to_db(wallet, nonce, SettlementAttemptNumber(3), &tx);
-    }));
+    let result = catch_future_unwind(task.save_attempt_to_db(
+        wallet,
+        nonce,
+        SettlementAttemptNumber(3),
+        &tx,
+    ))
+    .await;
 
     assert!(result.is_err());
     assert!(task.attempts.is_empty());
@@ -729,9 +808,9 @@ async fn save_attempt_to_db_rejects_attempt_number_already_tracked_for_other_non
     let mut task = mk_task(Arc::new(store), attempts);
     let tx = mk_tx(4);
 
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        task.save_attempt_to_db(new_wallet, new_nonce, attempt_number, &tx);
-    }));
+    let result =
+        catch_future_unwind(task.save_attempt_to_db(new_wallet, new_nonce, attempt_number, &tx))
+            .await;
 
     assert!(result.is_err());
     assert_eq!(task.attempts.len(), 1);
@@ -773,7 +852,8 @@ async fn record_attempt_result_keeps_revert_over_conflicting_write() {
         SettlementAttemptResult::ClientError(ClientError::settlement_succeeded_elsewhere(
             mk_tx_hash(9),
         )),
-    );
+    )
+    .await;
 
     assert_eq!(
         task.attempts[&(wallet, nonce)][&attempt_number].result,

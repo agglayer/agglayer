@@ -136,6 +136,7 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-test-suite",
  "agglayer-types",
+ "agglayer-utils",
  "arc-swap",
  "async-trait",
  "buildstructor 0.6.0",
@@ -417,6 +418,7 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-tries 0.18.0",
  "agglayer-types",
+ "agglayer-utils",
  "alloy",
  "axum 0.8.8",
  "buildstructor 0.6.0",
@@ -474,6 +476,7 @@ dependencies = [
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
+ "agglayer-utils",
  "alloy",
  "arc-swap",
  "async-trait",
@@ -569,7 +572,9 @@ dependencies = [
  "agglayer-storage",
  "agglayer-tries 0.18.0",
  "agglayer-types",
+ "agglayer-utils",
  "alloy",
+ "async-trait",
  "eyre",
  "futures",
  "mockall",
@@ -589,6 +594,7 @@ dependencies = [
  "agglayer-storage",
  "agglayer-telemetry 0.1.0",
  "agglayer-types",
+ "agglayer-utils",
  "alloy",
  "async-trait",
  "derive_more 2.1.1",
@@ -651,6 +657,7 @@ dependencies = [
  "agglayer-telemetry 0.1.0",
  "agglayer-tries 0.18.0",
  "agglayer-types",
+ "agglayer-utils",
  "alloy-primitives",
  "arbitrary",
  "bolero",
@@ -790,7 +797,9 @@ dependencies = [
 name = "agglayer-utils"
 version = "0.1.0"
 dependencies = [
+ "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

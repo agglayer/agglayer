@@ -22,8 +22,8 @@ use pessimistic_proof_test_suite::forest::Forest;
 const DEFAULT_NETWORK_INFO: NetworkInfo = NetworkInfo::from_network_id(NetworkId::new(1));
 const NETWORK_1: NetworkId = NetworkId::new(1);
 
-#[test]
-fn transient_network_info() {
+#[tokio::test]
+async fn transient_network_info() {
     let certificate_sender = tokio::sync::mpsc::channel(1).0;
 
     let mut pending_store = MockPendingStore::new();
@@ -106,7 +106,7 @@ fn transient_network_info() {
         l1_rpc_provider,
     );
 
-    let info = service.get_network_info(1.into()).unwrap();
+    let info = service.get_network_info(1.into()).await.unwrap();
     assert_eq!(info.settled_certificate_id, None);
     assert_eq!(info.settled_claim, None);
     assert_eq!(info.settled_height, None);
@@ -122,8 +122,8 @@ fn transient_network_info() {
     assert_eq!(info.latest_pending_height, Some(0.into()));
 }
 
-#[test]
-fn pending_certificate_defined() {
+#[tokio::test]
+async fn pending_certificate_defined() {
     let certificate_sender = tokio::sync::mpsc::channel(1).0;
 
     let mut pending_store = MockPendingStore::new();
@@ -269,7 +269,7 @@ fn pending_certificate_defined() {
         l1_rpc_provider,
     );
 
-    let info = service.get_network_info(1.into()).unwrap();
+    let info = service.get_network_info(1.into()).await.unwrap();
 
     assert_eq!(info.settled_certificate_id, Some(settled_certificate_id));
     assert_eq!(info.settled_claim, None);
@@ -289,8 +289,8 @@ fn pending_certificate_defined() {
     assert_eq!(info.latest_pending_height, Some(1.into()));
 }
 
-#[test]
-fn pending_certificate_defined_with_network_info() {
+#[tokio::test]
+async fn pending_certificate_defined_with_network_info() {
     let certificate_sender = tokio::sync::mpsc::channel(1).0;
 
     let pending_store = MockPendingStore::new();
@@ -340,7 +340,7 @@ fn pending_certificate_defined_with_network_info() {
         l1_rpc_provider,
     );
 
-    let info = service.get_network_info(1.into()).unwrap();
+    let info = service.get_network_info(1.into()).await.unwrap();
 
     assert_eq!(
         info.settled_certificate_id,
@@ -360,8 +360,8 @@ fn pending_certificate_defined_with_network_info() {
     assert_eq!(info.latest_pending_height, Some(11.into()));
 }
 
-#[test]
-fn get_network_info_propagates_error_from_read_local_network_state() {
+#[tokio::test]
+async fn get_network_info_propagates_error_from_read_local_network_state() {
     let certificate_sender = tokio::sync::mpsc::channel(1).0;
 
     let mut pending_store = MockPendingStore::new();
@@ -441,15 +441,15 @@ fn get_network_info_propagates_error_from_read_local_network_state() {
         l1_rpc_provider,
     );
 
-    let res = service.get_network_info(NETWORK_1);
+    let res = service.get_network_info(NETWORK_1).await;
     assert!(matches!(
         res,
         Err(crate::error::GetNetworkInfoError::InternalError { .. })
     ));
 }
 
-#[test]
-fn get_network_info_propagates_error_from_get_latest_settled_claim() {
+#[tokio::test]
+async fn get_network_info_propagates_error_from_get_latest_settled_claim() {
     let certificate_sender = tokio::sync::mpsc::channel(1).0;
 
     let mut pending_store = MockPendingStore::new();
@@ -538,7 +538,7 @@ fn get_network_info_propagates_error_from_get_latest_settled_claim() {
         l1_rpc_provider,
     );
 
-    let res = service.get_network_info(NETWORK_1);
+    let res = service.get_network_info(NETWORK_1).await;
     assert!(matches!(
         res,
         Err(crate::error::GetNetworkInfoError::InternalError { .. })
