@@ -39578,7 +39578,7 @@ var Tracker = class {
         throw new Error(`Review task #${task.issue} acquired an unrelated parent; it was preserved.`);
       }
     }
-    if (target && !current) {
+    if (target) {
       if (!sameIssue(attempted, target)) {
         task.attemptedParent = target;
         await this.save();
