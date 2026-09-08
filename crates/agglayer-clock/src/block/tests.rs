@@ -259,7 +259,8 @@ async fn regression_block_disconnection() {
     // Assert that we read the first epoch
     assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
 
-    // Kill & restart using the same port so we end up with the same endpoint url:
+    // Kill & restart using the same port so we end up with the same endpoint
+    // url:
     drop(anvil);
 
     // Add some delay to make the reconnect fails
@@ -293,7 +294,8 @@ async fn disconnection_with_timeout() {
     // Assert that we read the first epoch
     assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
 
-    // Kill & restart using the same port so we end up with the same endpoint url:
+    // Kill & restart using the same port so we end up with the same endpoint
+    // url:
     drop(anvil);
 
     // Add some delay to make the reconnect fails. There are 10 tries spread 3
@@ -328,7 +330,8 @@ async fn can_catchup_on_disconnection() {
     // Assert that we read the first epoch
     assert_eq!(recv.recv().await, Ok(Event::EpochEnded(EpochNumber::ZERO)));
 
-    // Kill & restart using the same port so we end up with the same endpoint url:
+    // Kill & restart using the same port so we end up with the same endpoint
+    // url:
     drop(anvil);
 
     // Add some delay to make the reconnect fails

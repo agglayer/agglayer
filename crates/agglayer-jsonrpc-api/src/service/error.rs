@@ -59,8 +59,8 @@ impl SendTxError {
     /// Decode the dry run contract errors.
     pub fn dry_run(err: ContractError) -> Self {
         // Note: In alloy, contract error decoding is handled differently
-        // This is a simplified version and may need adjustment based on actual contract
-        // error handling
+        // This is a simplified version and may need adjustment based on actual
+        // contract error handling
         Self::DryRunOther(err)
     }
 }

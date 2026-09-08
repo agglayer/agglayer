@@ -4,7 +4,10 @@ use agglayer_certificate_orchestrator::{CertificationError, Certifier, Certifier
 use agglayer_config::Config;
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
 use agglayer_sp1::{AcceptancePolicy, ProofError, ProofExt as _};
-use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
+use agglayer_storage::stores::{
+    async_api::{AsyncPendingCertificateReaderExt, AsyncPendingCertificateWriterExt},
+    PendingCertificateReader, PendingCertificateWriter,
+};
 use agglayer_types::{
     aggchain_proof::AggchainData, Certificate, Digest, Height, LocalNetworkStateData, NetworkId,
     Proof,
@@ -206,7 +209,8 @@ where
         // Fetch certificate from storage
         let certificate = self
             .pending_store
-            .get_certificate(network_id, height)?
+            .get_certificate_async(network_id, height)
+            .await?
             .ok_or(CertificationError::CertificateNotFound(network_id, height))?;
 
         let certificate_id = certificate.hash();
@@ -239,9 +243,10 @@ where
         .map_err(CertificationError::Other)?;
 
         // Writing the proof to the stdin if needed
-        // At this point, we have the proof and the verifying key coming from the chain
-        // The witness execution already checked that the vk in the proof is valid and
-        // the multibatch header is configured to use the hash from L1
+        // At this point, we have the proof and the verifying key coming from
+        // the chain The witness execution already checked that the vk
+        // in the proof is valid and the multibatch header is configured
+        // to use the hash from L1
         let aggchain_proof = match &certificate.aggchain_data {
             AggchainData::ECDSA { .. } | AggchainData::MultisigOnly { .. } => None,
             AggchainData::Generic { proof, .. } => Some(proof.clone()),
@@ -251,8 +256,8 @@ where
         };
 
         let stdin = if let Some(proof) = aggchain_proof {
-            // This operation is unwind safe: if it errors, we will discard stdin and
-            // stark_proof anyway.
+            // This operation is unwind safe: if it errors, we will discard
+            // stdin and stark_proof anyway.
             sp1_blocking(AssertUnwindSafe(move || {
                 let mut stdin = stdin;
                 let stark_proof = proof.executable_sp1(&AcceptancePolicy::DEFAULT)?;
@@ -266,7 +271,8 @@ where
             stdin
         };
 
-        // SP1 native execution which includes the aggchain proof stark verification
+        // SP1 native execution which includes the aggchain proof stark
+        // verification
         let (pv_sp1_execute, _report) = {
             // Do not verify the deferred proof if we are in mock mode
             let deferred_proof_verification = !self.config.mock_verifier;
@@ -360,7 +366,9 @@ where
             info!("Successfully generated and verified the p-proof!");
 
             // TODO: Check if the key already exists
-            pending_store.insert_generated_proof(&certificate_id, &proof)?;
+            pending_store
+                .insert_generated_proof_async(certificate_id, proof)
+                .await?;
 
             // Prune the SMTs of the state
             state
@@ -414,8 +422,8 @@ where
             NetworkState::from(ns).get_state_commitment()
         };
 
-        // Perform the native PP execution without the STARK verification in order to
-        // cross check the target roots.
+        // Perform the native PP execution without the STARK verification in
+        // order to cross check the target roots.
         let (pv, targets_native_execution) = tokio::task::spawn_blocking({
             let initial_state = initial_state.clone();
             let multi_batch_header = multi_batch_header.clone();
@@ -453,8 +461,8 @@ where
             }
         }
 
-        // Verify that the public values used in the aggchain proof match the ones
-        // computed during witness generation.
+        // Verify that the public values used in the aggchain proof match the
+        // ones computed during witness generation.
         let pv_params_from_proof = match &certificate.aggchain_data {
             AggchainData::Generic {
                 public_values,

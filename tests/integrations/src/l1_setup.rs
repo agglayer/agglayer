@@ -69,7 +69,8 @@ impl L1Docker {
         // Load the snapshot through the CLI `--load-state` flag rather than the
         // `anvil_loadState` RPC: only the CLI path restores the per-block
         // historical states captured with `--preserve-historical-states`, which
-        // `eth_getTransactionBySenderAndNonce` needs to resolve a settled nonce.
+        // `eth_getTransactionBySenderAndNonce` needs to resolve a settled
+        // nonce.
         let anvil = Anvil::new()
             .chain_id(1337u64)
             .block_time(1u64)
@@ -170,8 +171,9 @@ async fn docker_published_port(id: &str, container_port: &str) -> u16 {
 impl Drop for DockerContainer {
     fn drop(&mut self) {
         println!("Removing docker container {}", self.id);
-        // Best-effort cleanup: never panic in `Drop`, because this can run while
-        // unwinding from a setup panic, where a second panic would abort.
+        // Best-effort cleanup: never panic in `Drop`, because this can run
+        // while unwinding from a setup panic, where a second panic
+        // would abort.
         if let Err(error) = std::process::Command::new("docker")
             .args(["rm", "-f", &self.id])
             .output()
@@ -243,10 +245,10 @@ pub fn next_available_addr() -> std::net::SocketAddr {
     let listener = TcpListener::bind((host, 0)).expect("Can't bind to an available port");
     let addr = listener.local_addr().expect("Can't find an available port");
 
-    // Create and accept a connection (which we'll promptly drop) in order to force
-    // the port into the TIME_WAIT state, ensuring that the port will be
-    // reserved from some limited amount of time (roughly 60s on some Linux
-    // systems)
+    // Create and accept a connection (which we'll promptly drop) in order to
+    // force the port into the TIME_WAIT state, ensuring that the port will
+    // be reserved from some limited amount of time (roughly 60s on some
+    // Linux systems)
     let _sender = TcpStream::connect(addr).expect("Can't connect to an available port");
     let _incoming = listener.accept().expect("Can't accept an available port");
 

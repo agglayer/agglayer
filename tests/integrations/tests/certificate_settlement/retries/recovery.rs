@@ -21,16 +21,16 @@ use tokio_util::sync::CancellationToken;
 #[tokio::test]
 #[timeout(Duration::from_secs(90))]
 async fn submitted_job_recover(#[case] state: Forest) {
-    // Shutdown the node after persisting the settlement job but before recording
-    // the certificate as Candidate. Recover by sending the same certificate after
-    // startup.
+    // Shutdown the node after persisting the settlement job but before
+    // recording the certificate as Candidate. Recover by sending the same
+    // certificate after startup.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
     let cancellation_token = CancellationToken::new();
 
-    // Cancel (graceful shutdown) then panic when the failpoint fires, so the node
-    // actually stops and `agglayer_shutdowned` resolves -- a plain panic only kills
-    // the runtime thread without shutting the node down.
+    // Cancel (graceful shutdown) then panic when the failpoint fires, so the
+    // node actually stops and `agglayer_shutdowned` resolves -- a plain
+    // panic only kills the runtime thread without shutting the node down.
     let token = cancellation_token.clone();
     fail::cfg_callback(
         "certificate_task::process_impl::about_to_record_candidate",
@@ -77,9 +77,10 @@ async fn submitted_job_recover(#[case] state: Forest) {
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     // Settle one certificate, shutdown node.
-    // Submit a second certificate and shut the node down right after it is recorded
-    // `Candidate` (its settlement tx is in flight and settles in the background).
-    // Try to recover after starting up agglayer for the second time.
+    // Submit a second certificate and shut the node down right after it is
+    // recorded `Candidate` (its settlement tx is in flight and settles in
+    // the background). Try to recover after starting up agglayer for the
+    // second time.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
     let cancellation_token = CancellationToken::new();
@@ -107,8 +108,9 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
     let (agglayer_shutdowned, client, _) =
         start_agglayer(&tmp_dir.path, &l1, None, Some(cancellation_token.clone())).await;
 
-    // Let the restarted node finish recovery (epoch-checkpoint re-seeding) before
-    // submitting the next certificate, otherwise it races and latches in error.
+    // Let the restarted node finish recovery (epoch-checkpoint re-seeding)
+    // before submitting the next certificate, otherwise it races and
+    // latches in error.
     tokio::time::sleep(Duration::from_secs(20)).await;
 
     fail::cfg_callback(
@@ -158,9 +160,9 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 #[timeout(Duration::from_secs(120))]
 #[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
 async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
-    // Submit a certificate, inject an invalid tx hash in the header, then shutdown
-    // node. Recover on startup and verify the node can detect and recover from
-    // the invalid hash.
+    // Submit a certificate, inject an invalid tx hash in the header, then
+    // shutdown node. Recover on startup and verify the node can detect and
+    // recover from the invalid hash.
     let tmp_dir = TempDBDir::new();
     let scenario = FailScenario::setup();
     let cancellation_token = CancellationToken::new();

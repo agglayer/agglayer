@@ -127,7 +127,8 @@ where
         );
 
         // Await for the related block to be finalized
-        // NOTE: Cannot use block subscription because the provider is not websocket
+        // NOTE: Cannot use block subscription because the provider is not
+        // websocket
         {
             let mut tick = tokio::time::interval(CHECK_BLOCK_FINALIZED_TICK_INTERVAL);
             let mut finalized_block_number = 0;
@@ -151,7 +152,8 @@ where
                         l1_leaf_count, event_block_number, finalized_block_number,
                     );
 
-                    // Check whether the block number containing the event is now finalized.
+                    // Check whether the block number containing the event is
+                    // now finalized.
                     if finalized_block_number >= event_block_number {
                         // Verify that the hash of the block containing
                         // the event did not change due to potential reorg

@@ -67,7 +67,7 @@ where
                 )
             })?;
 
-        match self.service.fetch_certificate_header(certificate_id) {
+        match self.service.fetch_certificate_header(certificate_id).await {
             Err(agglayer_rpc::CertificateRetrievalError::Storage(error)) => {
                 error!(?error, "returning internal storage error to RPC");
                 Err(tonic::Status::internal("Internal storage error"))
@@ -104,12 +104,16 @@ where
         let network_id = request.network_id;
 
         let result = match request.r#type() {
-            LatestCertificateRequestType::Pending => self
-                .service
-                .get_latest_pending_certificate_header(network_id.into()),
-            LatestCertificateRequestType::Settled => self
-                .service
-                .get_latest_settled_certificate_header(network_id.into()),
+            LatestCertificateRequestType::Pending => {
+                self.service
+                    .get_latest_pending_certificate_header(network_id.into())
+                    .await
+            }
+            LatestCertificateRequestType::Settled => {
+                self.service
+                    .get_latest_settled_certificate_header(network_id.into())
+                    .await
+            }
             LatestCertificateRequestType::Unspecified => {
                 let error =
                     Error::invalid_data("invalid request type".to_owned()).inside_field("type");
@@ -163,6 +167,7 @@ where
         let network_info: agglayer_grpc_types::node::types::v1::NetworkInfo = self
             .service
             .get_network_info(request.into_inner().network_id.into())
+            .await
             .map_err(|error| {
                 error!(?error, "Failed to get network state");
                 match error {

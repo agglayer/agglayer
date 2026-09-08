@@ -162,8 +162,8 @@ where
             .allow_origin(tower_http::cors::Any)
             .allow_headers([hyper::header::CONTENT_TYPE]);
 
-        // Create a middleware stack with the CORS middleware and a proxy layer for
-        // health checks.
+        // Create a middleware stack with the CORS middleware and a proxy layer
+        // for health checks.
         let middleware = tower::ServiceBuilder::new()
             .layer(CompressionLayer::new())
             .layer(cors);
@@ -172,8 +172,8 @@ where
             server_builder.set_rpc_middleware(rpc_middleware::from_config(config));
 
         let (stop_handle, server_handle) = jsonrpsee::server::stop_channel();
-        // Server handle isn't used as we're relying on axum to manage the server
-        // lifecycle.
+        // Server handle isn't used as we're relying on axum to manage the
+        // server lifecycle.
         std::mem::forget(server_handle);
 
         let service = self.into_rpc();
@@ -237,52 +237,53 @@ where
         &self,
         certificate_id: CertificateId,
     ) -> RpcResult<CertificateHeader> {
-        Ok(self.rpc_service.fetch_certificate_header(certificate_id)?)
+        Ok(self
+            .rpc_service
+            .fetch_certificate_header(certificate_id)
+            .await?)
     }
 
     async fn get_epoch_configuration(&self) -> RpcResult<EpochConfiguration> {
-        Ok(self.rpc_service.get_epoch_configuration().ok_or_else(|| {
+        self.rpc_service.get_epoch_configuration().ok_or_else(|| {
             Error::internal(
                 "AggLayer isn't configured with a BlockClock configuration, thus no \
                  EpochConfiguration is available",
             )
-        })?)
+        })
     }
 
     async fn get_latest_known_certificate_header(
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>> {
-        let header = self
+        Ok(self
             .rpc_service
-            .get_latest_known_certificate_header(network_id)?;
-        Ok(header)
+            .get_latest_known_certificate_header(network_id)
+            .await?)
     }
 
     async fn get_latest_settled_certificate_header(
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>> {
-        let header = self
+        Ok(self
             .rpc_service
-            .get_latest_settled_certificate_header(network_id)?;
-        Ok(header)
+            .get_latest_settled_certificate_header(network_id)
+            .await?)
     }
 
     async fn get_latest_pending_certificate_header(
         &self,
         network_id: NetworkId,
     ) -> RpcResult<Option<CertificateHeader>> {
-        let header = self
+        Ok(self
             .rpc_service
-            .get_latest_pending_certificate_header(network_id)?;
-        Ok(header)
+            .get_latest_pending_certificate_header(network_id)
+            .await?)
     }
 
     async fn get_network_info(&self, network_id: NetworkId) -> RpcResult<NetworkInfo> {
-        let state = self.rpc_service.get_network_info(network_id)?;
-
-        Ok(state)
+        Ok(self.rpc_service.get_network_info(network_id).await?)
     }
 }
 

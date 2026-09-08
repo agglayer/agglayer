@@ -59,10 +59,11 @@ where
     RpcProvider: Provider + Clone + 'static,
 {
     fn decode_contract_revert(error: &ContractError) -> Option<String> {
-        // Try to get raw revert data and decode it manually if the interface method
-        // fails
+        // Try to get raw revert data and decode it manually if the interface
+        // method fails
         if let Some(revert_data) = error.as_revert_data() {
-            // If specific error decoding fails, try to extract a revert reason string
+            // If specific error decoding fails, try to extract a revert reason
+            // string
             if let Some(reason) = alloy::sol_types::decode_revert_reason(revert_data.as_ref()) {
                 return Some(reason);
             }
@@ -125,9 +126,11 @@ where
                 if let Some((nonce, previous_max_fee_per_gas, previous_max_priority_fee_per_gas)) =
                     nonce_info
                 {
-                    // This is repeated transaction, increase the previous max_fee_per_gas and
+                    // This is repeated transaction, increase the previous
+                    // max_fee_per_gas and
                     // max_priority_fee_per_gas by a factor
-                    // If previous_max_priority_fee_per_gas is None, set it to estimated.
+                    // If previous_max_priority_fee_per_gas is None, set it to
+                    // estimated.
                     let adjust = Eip1559Estimation {
                         max_fee_per_gas: {
                             previous_max_fee_per_gas
