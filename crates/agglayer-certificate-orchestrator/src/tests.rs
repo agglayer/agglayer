@@ -923,4 +923,8 @@ impl Certifier for Check {
     fn default_l1_info_tree_leaf_count(&self) -> u32 {
         0
     }
+
+    fn pp_selector(&self) -> [u8; 4] {
+        pessimistic_proof::core::PP_SELECTOR_GROTH16
+    }
 }

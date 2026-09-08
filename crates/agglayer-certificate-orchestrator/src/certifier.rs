@@ -53,4 +53,8 @@ pub trait Certifier: Unpin + Send + Sync + 'static {
 
     /// Default l1-info-tree leaf count, used when the certificate carries none.
     fn default_l1_info_tree_leaf_count(&self) -> u32;
+
+    /// Selector prefixed to the proof so the `AgglayerGateway` picks the
+    /// verifier route matching the configured wrapping.
+    fn pp_selector(&self) -> [u8; 4];
 }

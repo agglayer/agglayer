@@ -37,6 +37,28 @@ fn can_parse_value() {
     assert!(matches!(expected_value, Proof::SP1(_)));
 }
 
+/// Groth16 rows coexist with pre-existing Plonk ones: the wrapping is a bincode
+/// enum tag, so the column needs no migration.
+#[test]
+fn groth16_round_trips_alongside_stored_plonk() {
+    let value = Proof::SP1(sp1_sdk::SP1ProofWithPublicValues {
+        proof: sp1_sdk::SP1Proof::Groth16(sp1_prover::Groth16Bn254Proof::default()),
+        public_values: sp1_sdk::SP1PublicValues::new(),
+        sp1_version: sp1_sdk::SP1_CIRCUIT_VERSION.to_owned(),
+        tee_proof: None,
+    });
+
+    let encoded = value.encode().expect("Unable to encode value");
+    let Proof::SP1(decoded) = Proof::decode(&encoded[..]).expect("Unable to decode value");
+    assert!(matches!(decoded.proof, sp1_sdk::SP1Proof::Groth16(_)));
+
+    let stored_plonk: SP1ProofWithPublicValues =
+        SP1ProofWithPublicValuesV3::load(non_regression_proof_path())
+            .unwrap()
+            .into();
+    assert!(matches!(stored_plonk.proof, sp1_sdk_v5::SP1Proof::Plonk(_)));
+}
+
 fn non_regression_proof_path() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("./src/columns/proof_per_certificate/fixtures/non_regression_proof_encoding.proof")

@@ -322,3 +322,15 @@ mockall::mock! {
         ) -> Result<alloy::providers::PendingTransactionBuilder<Ethereum>, ContractError>;
     }
 }
+
+#[test]
+fn pp_selector_differs_only_by_wrapping() {
+    use agglayer_config::proof_wrapping::ProofWrapping;
+
+    let groth16 = super::pp_selector(ProofWrapping::Groth16);
+    let plonk = super::pp_selector(ProofWrapping::Plonk);
+
+    assert_eq!(groth16[0], 0x01);
+    assert_eq!(plonk[0], 0x00);
+    assert_eq!(groth16[1..], plonk[1..]);
+}

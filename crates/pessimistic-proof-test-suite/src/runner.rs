@@ -75,8 +75,8 @@ impl Runner {
             .clone())
     }
 
-    /// Generate one plonk proof.
-    pub fn generate_plonk_proof(
+    /// Generate one SNARK-wrapped proof.
+    pub fn generate_snark_proof(
         &self,
         state: &NetworkState,
         batch_header: &MultiBatchHeader,
@@ -95,7 +95,7 @@ impl Runner {
         let proof = self
             .client
             .prove(&pk, stdin)
-            .plonk()
+            .groth16()
             .run()
             .map_err(|e| eyre!(e))?;
         let output = Self::extract_output(proof.public_values.clone());

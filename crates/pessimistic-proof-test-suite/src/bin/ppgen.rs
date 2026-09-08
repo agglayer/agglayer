@@ -119,11 +119,11 @@ pub fn main() {
 
     let start = Instant::now();
     let (proof, vk, new_roots) = Runner::new()
-        .generate_plonk_proof(&old_state.into(), &multi_batch_header)
+        .generate_snark_proof(&old_state.into(), &multi_batch_header)
         .expect("proving failed");
     let duration = start.elapsed();
     info!(
-        "Successfully generated the plonk proof with a latency of {:?}",
+        "Successfully generated the proof with a latency of {:?}",
         duration
     );
 
@@ -140,7 +140,7 @@ pub fn main() {
     };
 
     if let Some(proof_dir) = args.proof_dir {
-        // Save the plonk proof to a json file.
+        // Save the proof to a json file.
         let proof_path = proof_dir.join(format!(
             "{}-exits-v{}-{}.json",
             args.n_exits,

@@ -26,6 +26,7 @@ pub mod log;
 mod multiplier;
 pub mod outbound;
 mod port;
+pub mod proof_wrapping;
 pub mod rate_limiting;
 pub(crate) mod rpc;
 pub mod settlement_service;
@@ -114,6 +115,10 @@ pub struct Config {
     #[serde(default)]
     pub prover: prover_config::ProverType,
 
+    /// Wrapping used for the pessimistic proof, which also picks its L1 route.
+    #[serde(default)]
+    pub proof_wrapping: proof_wrapping::ProofWrapping,
+
     #[serde(default = "default_prover_buffer_size")]
     pub prover_buffer_size: usize,
 
@@ -178,6 +183,7 @@ impl Config {
             prover: prover_config::ProverType::NetworkProver(
                 prover_config::NetworkProverConfig::default(),
             ),
+            proof_wrapping: Default::default(),
             prover_buffer_size: default_prover_buffer_size(),
             debug_mode: false,
             mock_verifier: false,

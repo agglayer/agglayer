@@ -1,7 +1,7 @@
 use std::{panic::AssertUnwindSafe, sync::Arc};
 
 use agglayer_certificate_orchestrator::{CertificationError, Certifier, CertifierOutput};
-use agglayer_config::Config;
+use agglayer_config::{proof_wrapping::ProofWrapping, Config};
 use agglayer_contracts::{aggchain::AggchainContract, RollupContract};
 use agglayer_sp1::{AcceptancePolicy, ProofError, ProofExt as _};
 use agglayer_storage::stores::{PendingCertificateReader, PendingCertificateWriter};
@@ -11,7 +11,10 @@ use agglayer_types::{
 };
 use eyre::{eyre, Context as _};
 use pessimistic_proof::{
-    core::{commitment::StateCommitment, generate_pessimistic_proof, AggchainHashValues},
+    core::{
+        commitment::StateCommitment, generate_pessimistic_proof, AggchainHashValues,
+        PP_SELECTOR_GROTH16, PP_SELECTOR_PLONK,
+    },
     local_state::LocalNetworkState,
     multi_batch_header::MultiBatchHeader,
     unified_bridge::{
@@ -39,6 +42,21 @@ type ProverService = Buffer<
     BoxCloneService<prover_executor::Request, prover_executor::Response, prover_executor::Error>,
     prover_executor::Request,
 >;
+
+fn proof_type(wrapping: ProofWrapping) -> prover_executor::ProofType {
+    match wrapping {
+        ProofWrapping::Groth16 => prover_executor::ProofType::Groth16,
+        ProofWrapping::Plonk => prover_executor::ProofType::Plonk,
+    }
+}
+
+fn pp_selector(wrapping: ProofWrapping) -> [u8; 4] {
+    match wrapping {
+        ProofWrapping::Groth16 => PP_SELECTOR_GROTH16,
+        ProofWrapping::Plonk => PP_SELECTOR_PLONK,
+    }
+}
+
 #[derive(Clone)]
 pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The pending store to fetch and store certificates and proofs.
@@ -194,6 +212,10 @@ where
         self.l1_rpc.default_l1_info_tree_entry().0
     }
 
+    fn pp_selector(&self) -> [u8; 4] {
+        pp_selector(self.config.proof_wrapping)
+    }
+
     #[instrument(skip(self, state, height), fields(certificate_id, %network_id), level = "info")]
     async fn certify(
         &self,
@@ -307,7 +329,7 @@ where
 
         let request = prover_executor::Request {
             stdin,
-            proof_type: prover_executor::ProofType::Plonk,
+            proof_type: proof_type(self.config.proof_wrapping),
         };
         info!("Sending the Proof generation request to the agglayer-prover service...");
         // Check if fail points are active and log warnings

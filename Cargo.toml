@@ -57,11 +57,11 @@ agglayer-tries = "0.18.0"
 unified-bridge = "0.18.0"
 
 # Provers
-prover-alloy = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
-prover-config = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
-prover-logger = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
-prover-executor = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
-prover-engine = { git = "https://github.com/agglayer/provers.git", tag = "v2.0.0-rc.6" }
+prover-alloy = { git = "https://github.com/agglayer/provers.git", branch = "feat/proof-type-groth16" }
+prover-config = { git = "https://github.com/agglayer/provers.git", branch = "feat/proof-type-groth16" }
+prover-logger = { git = "https://github.com/agglayer/provers.git", branch = "feat/proof-type-groth16" }
+prover-executor = { git = "https://github.com/agglayer/provers.git", branch = "feat/proof-type-groth16" }
+prover-engine = { git = "https://github.com/agglayer/provers.git", branch = "feat/proof-type-groth16" }
 
 # SP1 dependencies
 # Note: Whenever these are updated, also consider updating the SP1 toolchain docker image version.
@@ -148,3 +148,4 @@ tracing-appender = "0.2.4"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 ulid = { version = "1.2", features = ["serde"] }
 url = { version = "2.5", features = ["serde"] }
+

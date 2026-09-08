@@ -25,7 +25,7 @@ pub mod core {
         },
         generate_pessimistic_proof,
         local_state::commitment,
-        PESSIMISTIC_PROOF_PROGRAM_SELECTOR, PESSIMISTIC_PROOF_PROGRAM_VERSION,
+        PESSIMISTIC_PROOF_PROGRAM_VERSION, PP_SELECTOR_GROTH16, PP_SELECTOR_PLONK,
     };
 }
 

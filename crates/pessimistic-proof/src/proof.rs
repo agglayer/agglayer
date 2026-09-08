@@ -42,7 +42,24 @@ pub enum Proof {
     SP1(SP1ProofWithPublicValues),
 }
 
+/// Only SNARK-wrapped proofs carry an on-chain verifiable encoding.
+#[derive(Debug, thiserror::Error)]
+#[error("proof mode {0} is not verifiable on-chain")]
+pub struct NotOnchainVerifiable(String);
+
 impl Proof {
+    /// Proof bytes as expected by the on-chain verifier.
+    ///
+    /// `SP1ProofWithPublicValues::bytes` panics on non-SNARK modes, so the
+    /// mode is checked first.
+    pub fn onchain_bytes(&self) -> Result<Vec<u8>, NotOnchainVerifiable> {
+        let Self::SP1(proof) = self;
+        match &proof.proof {
+            SP1Proof::Plonk(_) | SP1Proof::Groth16(_) => Ok(proof.bytes()),
+            other => Err(NotOnchainVerifiable(other.to_string())),
+        }
+    }
+
     pub fn dummy() -> Self {
         Self::SP1(SP1ProofWithPublicValues {
             proof: SP1Proof::Core(vec![]),
