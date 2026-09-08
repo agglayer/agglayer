@@ -138,6 +138,8 @@ sanitized warnings and errors, and repeats these exact commands:
 `unmanage` relinquishes recorded parent provenance for every review task without touching any
 GitHub relationship; existing relationships become unmanaged.
 Use it when a recorded parent can no longer be read or verified.
+It also cancels parent work queued by earlier commands recovered in the same run;
+a later `set`, `none`, `infer`, or `reconcile` re-enables that work.
 
 Only users with effective repository write permission reach the privileged command processor.
 The workflow author-association filter is an optimization, not the authorization boundary;

@@ -1257,6 +1257,46 @@ test("scanned commands without write access are ignored once with a warning", as
   assert.equal(result.warnings.some((warning) => /drive-by/.test(warning)), false);
 });
 
+test("a newer source command supersedes a recovered infer request", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.project.find = async () => alternate;
+  fixture.github.comments.push({ id: 30, user: { login: "maintainer" }, body: "/review-tracker infer" });
+
+  let result = await run(fixture, command("/review-tracker set bridge#8", 40));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.source.via, "manual");
+  assert.equal(result.state.source.number, 8);
+
+  fixture.github.comments.push({ id: 50, user: { login: "maintainer" }, body: "/review-tracker set bridge#8" });
+  result = await run(fixture, command("/review-tracker infer", 60));
+  assert.equal(result.state.source.via, "closing");
+  assert.equal(result.state.lastCommand, "60");
+});
+
+test("a newer unmanage cancels parent work from a recovered source command", async () => {
+  const fixture = createFixture([reviewer("alice")]), alternate = alternateSource();
+  await run(fixture, direct("opened"));
+  fixture.hierarchy.parents.clear();
+  fixture.project.find = async () => alternate;
+  fixture.github.comments.push({ id: 30, user: { login: "maintainer" }, body: "/review-tracker set bridge#8" });
+  const attaches = fixture.hierarchy.attaches.length;
+
+  let result = await run(fixture, command("/review-tracker unmanage", 40));
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.state.source.number, 8);
+  assert.equal(fixture.project.syncs.at(-1).source.number, 8);
+  assert.equal(result.state.tasks.U_alice.hierarchyPending, false);
+  assert.equal(result.state.tasks.U_alice.managedParent, undefined);
+  assert.equal(fixture.hierarchy.attaches.length, attaches);
+
+  fixture.github.comments.push({ id: 50, user: { login: "maintainer" }, body: "/review-tracker unmanage" });
+  result = await run(fixture, command("/review-tracker reconcile", 60));
+  assert.equal(result.errors.length, 0);
+  assert.equal(fixture.hierarchy.attaches.length, attaches + 1);
+  assert.equal(result.state.tasks.U_alice.managedParent.issueId, alternate.issueId);
+});
+
 test("newer command comments cannot be overwritten by delayed older commands", async () => {
   const fixture = createFixture([]);
   let result = await run(fixture, command("/review-tracker none", 20));

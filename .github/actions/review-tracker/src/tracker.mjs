@@ -113,6 +113,7 @@ export class Tracker {
       if (!command) continue;
       applied += 1;
       if (command.kind === "infer") infer = true;
+      else if (command.kind === "set" || command.kind === "none") infer = false;
       if (command.kind === "reconcile") reconcile = true;
       sourceChanged = await this.capture("command", () => this.applyCommand(command)) === true || sourceChanged;
     }
@@ -173,6 +174,7 @@ export class Tracker {
     return pending;
   }
   async applyCommand(command) {
+    this.unmanaged = command.kind === "unmanage";
     if (command.kind === "set") {
       const item = await this.project.find(command.repository, command.number);
       if (!item) throw Object.assign(new Error("That issue is not an active, non-generated item in Project 47."), { stage: "command" });
@@ -382,7 +384,7 @@ export class Tracker {
   }
   async prepareHierarchy(sourceChanged, reconcile) {
     let changed = sourceChanged;
-    for (const task of Object.values(this.state.tasks)) if (sourceChanged || reconcile ||
+    if (!this.unmanaged) for (const task of Object.values(this.state.tasks)) if (sourceChanged || reconcile ||
       typeof task.hierarchyPending !== "boolean") { task.hierarchyPending = true; changed = true; }
     if (changed) await this.save();
   }
