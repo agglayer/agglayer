@@ -441,3 +441,28 @@ fn certificate_serialization(#[case] cert_name: &str) {
     let hash = pessimistic_proof::keccak::keccak256(&encoded);
     insta::assert_debug_snapshot!(cert_name, hash);
 }
+
+/// The settled-pointer scan seeds the native network metrics at startup: an
+/// entry that fails to decode must fail the scan instead of being skipped,
+/// or the gauges would silently stay incomplete until the next restart.
+#[test]
+fn get_current_settled_height_fails_on_undecodable_entries() {
+    use crate::schema::Codec as _;
+
+    let tmp = TempDBDir::new();
+    let store = StateStore::new_with_path(&tmp.path, BackupClient::noop()).unwrap();
+
+    let key = NetworkId::new(2).encode().unwrap();
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(LatestSettledCertificatePerNetworkColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+    store
+        .db
+        .raw_rocksdb()
+        .put_cf(&cf, &key, b"garbage")
+        .unwrap();
+
+    assert!(store.get_current_settled_height().is_err());
+}
