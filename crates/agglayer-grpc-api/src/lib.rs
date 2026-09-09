@@ -143,7 +143,8 @@ impl Server {
 
 /// Extracts client info from GRPC metadata headers for logging purposes
 pub(crate) fn client_info_from_metadata(metadata: &tonic::metadata::MetadataMap) -> String {
-    // HTTP/2 GRPC headers must be lowercase, no need to do case-insensitive search
+    // HTTP/2 GRPC headers must be lowercase, no need to do case-insensitive
+    // search
     let mut client_info = Vec::new();
     for (header, warn_if_not_found) in [
         (GRPC_METADATA_CLIENT_TYPE, true),

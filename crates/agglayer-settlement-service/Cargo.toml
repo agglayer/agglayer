@@ -9,6 +9,7 @@ agglayer-config.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
+agglayer-utils.workspace = true
 
 alloy.workspace = true
 async-trait.workspace = true

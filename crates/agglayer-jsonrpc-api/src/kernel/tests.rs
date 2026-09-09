@@ -108,7 +108,8 @@ async fn interop_executor_verify_zkp() {
         Err(e) => {
             println!("Expected error due to incomplete mock setup: {e:?}");
             // This is expected until we complete the provider mock setup
-            // The error should be about transport/mock, not about contract calls
+            // The error should be about transport/mock, not about contract
+            // calls
             assert!(
                 e.to_string().contains("Transport")
                     || e.to_string().contains("mock")

@@ -37,14 +37,16 @@ impl Multiplier {
     ///
     /// Fails if the value has more than 3 decimal places or is out of range.
     pub fn try_from_f64_strict(x: f64) -> Result<Self, FromF64Error> {
-        // We first get the rounded conversion, check the delta against the original
-        // value and fail if there is too much precision loss, indicating there were
-        // too many decimals in the original floating point number.
+        // We first get the rounded conversion, check the delta against the
+        // original value and fail if there is too much precision loss,
+        // indicating there were too many decimals in the original
+        // floating point number.
         let r = Self::try_from_f64_lossy(x)?;
         let delta = r.as_u64_per_1000() as f64 - Self::scale_f64(x);
 
-        // We still allow some tolerance to account for the fact that floating point
-        // cannot represent base-10 decimals (such as 1.2) exactly.
+        // We still allow some tolerance to account for the fact that floating
+        // point cannot represent base-10 decimals (such as 1.2)
+        // exactly.
         (delta.abs() <= Self::FROM_F64_TOLERANCE)
             .then_some(r)
             .ok_or(FromF64Error::Imprecise)

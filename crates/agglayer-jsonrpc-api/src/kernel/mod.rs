@@ -320,8 +320,9 @@ where
             .signer()
             .map_err(SignatureVerificationError::CouldNotRecoverTxSigner)?;
 
-        // ECDSA-k256 signature verification works by recovering the public key from the
-        // signature, and then checking that it is the expected one.
+        // ECDSA-k256 signature verification works by recovering the public key
+        // from the signature, and then checking that it is the expected
+        // one.
         if signer != sequencer_address {
             return Err(SignatureVerificationError::InvalidSigner {
                 signer,
@@ -415,7 +416,8 @@ where
     ) -> Result<TransactionReceipt, SettlementError> {
         let timeout = settlement_config
             .retry_interval
-            .mul_f64(settlement_config.max_retries as f64); // only used for logs
+            .mul_f64(settlement_config.max_retries as f64); // only used for
+                                                            // logs
         let max_retries = settlement_config.max_retries;
         let retry_interval = settlement_config.retry_interval;
         let required_confirmations = settlement_config.confirmations;
@@ -447,7 +449,8 @@ where
                             required_confirmations, "Waiting for L1 block confirmations"
                         );
 
-                        // Wait until we have the required number of confirmations
+                        // Wait until we have the required number of
+                        // confirmations
                         for confirmation_attempt in attempt..=max_retries {
                             match rpc.get_block_number().await {
                                 Ok(current_block) => {
@@ -503,7 +506,8 @@ where
                     }
                 }
                 Ok(None) => {
-                    // Transaction not yet included in a block, continue retrying
+                    // Transaction not yet included in a block, continue
+                    // retrying
                     if attempt < max_retries {
                         debug!(
                             %tx_hash,

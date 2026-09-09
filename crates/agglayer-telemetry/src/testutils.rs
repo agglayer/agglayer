@@ -50,6 +50,38 @@ impl MetricsHarness {
     }
 }
 
+/// Value of the sample line for `name` carrying every label pair in
+/// `labels`, or `None` when no such line was exported.
+///
+/// Takes an already-gathered body rather than re-scraping, so one snapshot
+/// can back many assertions and be printed on failure.
+///
+/// # Panics
+///
+/// Panics when a matching line's value does not parse as a number, which
+/// means the exporter emitted something unparseable rather than that the
+/// series is missing.
+#[must_use]
+pub fn sample(body: &str, name: &str, labels: &[(&str, &str)]) -> Option<f64> {
+    let labels: Vec<String> = labels
+        .iter()
+        .map(|(key, value)| format!("{key}=\"{value}\""))
+        .collect();
+
+    body.lines()
+        .find(|line| {
+            line.starts_with(&format!("{name}{{"))
+                && labels.iter().all(|label| line.contains(label))
+        })
+        .map(|line| {
+            line.rsplit(' ')
+                .next()
+                .expect("a sample line has a value")
+                .parse()
+                .expect("a sample value parses as f64")
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -237,8 +237,8 @@ fn e2e_local_pp_random() {
     let target = u(u64::MAX);
     let upper = u64::MAX / 10;
     let mut forest = Forest::new(vec![(USDC, target), (ETH, target)]);
-    // Generate random bridge events such that the sum of the USDC and ETH amounts
-    // is less than `target`
+    // Generate random bridge events such that the sum of the USDC and ETH
+    // amounts is less than `target`
     let get_events = || {
         let mut usdc_acc = U256::ZERO;
         let mut eth_acc = U256::ZERO;

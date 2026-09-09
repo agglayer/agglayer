@@ -74,7 +74,8 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
     let result = wait_for_settlement_or_error!(client, certificate_id).await;
     assert!(matches!(result.status, CertificateStatus::InError { .. }));
 
-    // Clear the revert and submit a corrected certificate (new id -> fresh job).
+    // Clear the revert and submit a corrected certificate (new id -> fresh
+    // job).
     fail::cfg("settlement::force_revert", "off").expect("Failed to configure failpoint");
 
     let mut corrected = state.clone().apply_events(&[], &withdrawals);

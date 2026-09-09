@@ -69,6 +69,13 @@ pub trait StateWriter: Send + Sync {
 
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error>;
 
+    /// Inserts the header of `certificate` with the given `status`.
+    ///
+    /// Inserting a [`CertificateStatus::Pending`] header also requests a
+    /// backup of the state and pending databases: it is the write that
+    /// accepts a newly submitted certificate. Callers must persist the
+    /// certificate body to the pending store *before* inserting the header,
+    /// so the backup is guaranteed to capture the body together with it.
     fn insert_certificate_header(
         &self,
         certificate: &Certificate,

@@ -14,6 +14,7 @@ agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
 agglayer-tries.workspace = true
 agglayer-types.workspace = true
+agglayer-utils.workspace = true
 pessimistic-proof.workspace = true
 unified-bridge.workspace = true
 

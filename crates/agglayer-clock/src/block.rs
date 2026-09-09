@@ -169,9 +169,10 @@ where
     ) -> Result<(), BlockClockError> {
         info!("Starting BlockClock task");
 
-        // Start by setting the current Block height based on the current L1 Block
-        // number. If the current L1 Block number is less than the genesis block
-        // number, we walk the L1 block stream until reaching the genesis block.
+        // Start by setting the current Block height based on the current L1
+        // Block number. If the current L1 Block number is less than the
+        // genesis block number, we walk the L1 block stream until
+        // reaching the genesis block.
         self.latest_seen_block = self.provider.get_block_number().await.map_err(|e| {
             error!(error = %e, "Failed to get initial block number from L1");
             agglayer_telemetry::clock::record_connection_failed();
@@ -205,7 +206,8 @@ where
 
         info!("Reached genesis L1 block, starting epoch tracking");
 
-        // Calculate the local Block height based on the current L1 Block number.
+        // Calculate the local Block height based on the current L1 Block
+        // number.
         let current_block = self.calculate_block_number(self.latest_seen_block);
 
         #[cfg(feature = "testutils")]
@@ -340,8 +342,9 @@ where
         &mut self,
         sender: &broadcast::Sender<Event>,
     ) -> Result<(), BlockClockError> {
-        // Increase the Block height by 1. The `fetch_add` method returns the previous
-        // value, so we need to add 1 to it to get the current Block height.
+        // Increase the Block height by 1. The `fetch_add` method returns the
+        // previous value, so we need to add 1 to it to get the current
+        // Block height.
         if let Some(current_block) = self
             .block_height
             .fetch_add(1, Ordering::Release)
@@ -350,11 +353,13 @@ where
             // Record block processing metrics
             agglayer_telemetry::clock::record_current_block_height(current_block);
 
-            // If the current Block height is a multiple of the Epoch duration, the current
-            // Epoch has ended. In this case, we calculate the epoch number on demand and
+            // If the current Block height is a multiple of the Epoch duration,
+            // the current Epoch has ended. In this case, we
+            // calculate the epoch number on demand and
             // send an `EpochEnded` event to the subscribers.
             if current_block % *self.epoch_duration == 0 {
-                // Calculate the epoch that just ended (current_block / epoch_duration - 1)
+                // Calculate the epoch that just ended (current_block /
+                // epoch_duration - 1)
                 let epoch_ended = EpochNumber::new(
                     <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration)
                         .saturating_sub(1),
@@ -417,8 +422,9 @@ impl PubSubConnect for WsConnectWithTimeout {
 
         #[cfg(feature = "testutils")]
         {
-            // This fail point is used to insert delay in the reconnection to make the block
-            // progress when the client is disconnected.
+            // This fail point is used to insert delay in the reconnection to
+            // make the block progress when the client is
+            // disconnected.
             fail::fail_point!("block_clock::PubSubConnect::try_reconnect::add_delay");
         }
 
