@@ -8,6 +8,7 @@ use pessimistic_proof::ELF;
 use sp1_sdk::HashableKey as _;
 
 mod cli;
+mod storage;
 
 fn main() -> eyre::Result<()> {
     install_default_crypto_provider();
@@ -88,6 +89,42 @@ fn main() -> eyre::Result<()> {
                 println!("Backups are not enabled in the configuration file.");
                 exit(1);
             }
+        }
+
+        cli::Commands::Storage(cli::Storage::ExportTrees {
+            storage_path,
+            output_path,
+            l1_rpc_url,
+        }) => {
+            let l1_rpc_url = l1_rpc_url
+                .as_deref()
+                .map(cli::parse_l1_rpc_url)
+                .transpose()
+                .map_err(eyre::Report::msg)?;
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?
+                .block_on(storage::export_trees(
+                    &storage_path,
+                    &output_path,
+                    l1_rpc_url,
+                ))?;
+        }
+        cli::Commands::Storage(cli::Storage::EnrichTreePrices {
+            input_path,
+            output_path,
+            refresh_misses,
+            seed_price_cache,
+        }) => {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?
+                .block_on(storage::enrich_tree_prices(
+                    &input_path,
+                    &output_path,
+                    refresh_misses,
+                    seed_price_cache.as_deref(),
+                ))?;
         }
     }
 

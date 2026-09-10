@@ -19,6 +19,7 @@ pub mod epochs;
 pub mod pending;
 pub mod per_epoch;
 pub mod state;
+pub mod tree_snapshot;
 
 mod migration_helpers;
 

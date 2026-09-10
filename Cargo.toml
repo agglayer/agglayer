@@ -112,6 +112,7 @@ insta = { version = "1.48", features = [
 jsonrpsee = { version = "0.24.7", features = ["full"] }
 lazy_static = "1.5"
 mockall = "0.14"
+num-bigint = "0.4.6"
 parking_lot = "0.12.5"
 pbjson = "0.9.0"
 pin-project = "1.1"

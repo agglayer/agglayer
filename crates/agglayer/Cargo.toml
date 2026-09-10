@@ -4,21 +4,31 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+alloy.workspace = true
 clap = { workspace = true, features = ["derive", "env", "string"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 dirs.workspace = true
 dotenvy.workspace = true
 eyre.workspace = true
+futures.workspace = true
 hex.workspace = true
-serde_json.workspace = true
+num-bigint.workspace = true
+reqwest.workspace = true
+rustix = { version = "1.1", features = ["fs"] }
+serde.workspace = true
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
 sp1-sdk.workspace = true
+tempfile = "3.27"
 toml.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+url.workspace = true
 
 agglayer-config.workspace = true
 agglayer-node.workspace = true
 agglayer-storage.workspace = true
+agglayer-types.workspace = true
 pessimistic-proof.workspace = true
 prover-executor.workspace = true
 rustls.workspace = true
