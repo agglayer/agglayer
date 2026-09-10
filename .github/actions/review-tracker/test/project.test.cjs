@@ -54,12 +54,81 @@ test("no source clears copy fields while preserving the Notes omission", async (
   assert.deepEqual(fields.at(-1), { id: config.estimateFieldId, value: 0 });
 });
 
+test("a missing source item is reported as a source failure without writing", async () => {
+  const client = fakeClient();
+  const request = client.request.bind(client);
+  client.request = async (route, params) => {
+    if (route.startsWith("GET")) throw Object.assign(new Error("Not Found"), { status: 404 });
+    return request(route, params);
+  };
+  const project = new Project(client, config);
+  let captured;
+  await assert.rejects(project.sync(22, { item: 11 }), (error) => {
+    captured = error;
+    return error.status === 404 && error.sourceMissing === true;
+  });
+  assert.match(captured.message, /no longer a Project item/);
+  assert.equal(client.requests.some(([route]) => route.startsWith("PATCH")), false);
+});
+
 test("addIssue accepts the current direct REST response", async () => {
   const client = fakeClient();
   client.postResult = { id: 22, node_id: "PVTI_22" };
   const project = new Project(client, config);
   assert.deepEqual(await project.addIssue(1234), { id: 22, nodeId: "PVTI_22" });
   assert.deepEqual(client.requests.at(-1)[1].id, 1234);
+});
+
+test("ensureIssue reuses an item added by Project automation", async () => {
+  const client = fakeClient();
+  client.items = [{
+    id: 22, node_id: "PVTI_22", content_type: "Issue", archived_at: null, fields: [],
+    content: { id: 1234, node_id: "I_1234", number: 99, repository: { full_name: "agglayer/agglayer" },
+      user: { login: "github-actions[bot]" }, body: "<!-- review-tracker-task:signed -->", assignees: [] },
+  }];
+  const project = new Project(client, config);
+
+  assert.deepEqual(await project.ensureIssue({ id: 1234, node_id: "I_1234" }), { id: 22, nodeId: "PVTI_22" });
+  assert.equal(client.requests.some(([route]) => route.startsWith("POST")), false);
+});
+
+test("ensureIssue refreshes the Project listing once per instance", async () => {
+  const client = fakeClient();
+  const entry = (id, nodeId, databaseId, issueId, number) => ({
+    id, node_id: nodeId, content_type: "Issue", archived_at: null, fields: [],
+    content: { id: databaseId, node_id: issueId, number, repository: { full_name: "agglayer/agglayer" },
+      user: { login: "github-actions[bot]" }, body: "<!-- review-tracker-task:signed -->", assignees: [] },
+  });
+  let listings = 0;
+  client.paginate = async () => { listings += 1; return [entry(22, "PVTI_22", 1234, "I_1234", 99), entry(23, "PVTI_23", 2345, "I_2345", 100)]; };
+  const project = new Project(client, config);
+
+  assert.deepEqual(await project.ensureIssue({ id: 1234, node_id: "I_1234" }), { id: 22, nodeId: "PVTI_22" });
+  assert.deepEqual(await project.ensureIssue({ id: 2345, node_id: "I_2345" }), { id: 23, nodeId: "PVTI_23" });
+  assert.equal(listings, 1);
+});
+
+test("ensureIssue recovers when Project automation wins the add race", async () => {
+  const client = fakeClient(), item = {
+    id: 22, node_id: "PVTI_22", content_type: "Issue", archived_at: null, fields: [],
+    content: { id: 1234, node_id: "I_1234", number: 99, repository: { full_name: "agglayer/agglayer" },
+      user: { login: "github-actions[bot]" }, body: "<!-- review-tracker-task:signed -->", assignees: [] },
+  };
+  let listings = 0;
+  client.paginate = async () => listings++ ? [item] : [];
+  const request = client.request.bind(client);
+  client.request = async (route, params) => {
+    if (route.startsWith("POST")) {
+      client.requests.push([route, params]);
+      throw Object.assign(new Error("already added"), { status: 422 });
+    }
+    return request(route, params);
+  };
+  const project = new Project(client, config);
+
+  assert.deepEqual(await project.ensureIssue({ id: 1234, node_id: "I_1234" }), { id: 22, nodeId: "PVTI_22" });
+  assert.equal(client.requests.some(([route]) => route.startsWith("POST")), true);
+  assert.equal(listings, 2);
 });
 
 test("a review moves only an older In Review or Blocked source status", async () => {
@@ -111,6 +180,14 @@ test("a user-authored marker cannot hide a source issue", () => {
   assert.equal(item.generated, false);
 });
 
+test("manual lookup rejects repositories outside the Project owner before listing items", async () => {
+  const project = new Project(fakeClient(), config);
+  let listings = 0;
+  project.items = async () => { listings += 1; return []; };
+  assert.equal(await project.find("outside/private", 7), null);
+  assert.equal(listings, 0);
+});
+
 function fakeClient() {
   return {
     requests: [],
@@ -128,9 +205,10 @@ function fakeClient() {
       },
     },
     status: null,
+    items: [],
     postResult: {},
     async paginate() {
-      return [];
+      return this.items;
     },
     async request(route, params) {
       this.requests.push([route, params]);

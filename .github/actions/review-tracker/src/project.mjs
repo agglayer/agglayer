@@ -10,13 +10,26 @@ export class Project {
   params(extra = {}) {
     return { org: this.config.projectOwner, project_number: this.config.projectNumber, headers: this.headers, ...extra };
   }
-  async items() {
-    if (this.cachedItems) return this.cachedItems;
+  async items(refresh = false) {
+    if (!refresh && this.cachedItems) return this.cachedItems;
     const data = await this.client.paginate("GET /orgs/{org}/projectsV2/{project_number}/items", this.params({
       fields: this.config.contextFieldIds.join(","), per_page: 100,
     }));
     this.cachedItems = data.filter((item) => item.content_type === "Issue" && item.content).map(normalizeItem);
     return this.cachedItems;
+  }
+  async ensureIssue(issue) {
+    const existing = (await this.items(!this.verifiedItems)).find((item) => item.issueId === issue.node_id);
+    this.verifiedItems = true;
+    if (existing) return { id: existing.item, nodeId: existing.itemNode };
+    try { return await this.addIssue(issue.id); }
+    catch (error) {
+      try {
+        const raced = (await this.items(true)).find((item) => item.issueId === issue.node_id);
+        if (raced) return { id: raced.item, nodeId: raced.itemNode };
+      } catch { /* Preserve the original add failure. */ }
+      throw error;
+    }
   }
   async getItem(id) {
     const { data } = await this.client.request("GET /orgs/{org}/projectsV2/{project_number}/items/{item_id}", this.params({
@@ -30,10 +43,19 @@ export class Project {
     );
     const item = data?.value ?? data;
     if (!Number.isSafeInteger(item?.id) || !item.node_id) throw new Error("GitHub did not return the new Project item IDs.");
+    delete this.cachedItems;
     return { id: item.id, nodeId: item.node_id };
   }
   async sync(itemId, source, status = null) {
-    const sourceItem = source?.item ? await this.getItem(source.item) : null;
+    let sourceItem = null;
+    if (source?.item) {
+      try { sourceItem = await this.getItem(source.item); }
+      catch (error) {
+        throw error?.status !== 404 ? error : Object.assign(
+          new Error("The selected source is no longer a Project item; correct it with /review-tracker set or none."),
+          { status: 404, sourceMissing: true, cause: error });
+      }
+    }
     const sourceFields = new Map((sourceItem?.fields ?? []).map((field) => [field.id, field]));
     const fields = this.config.copyFieldIds.map((id) => ({ id, value: sourceFields.get(id)?.value?.id ?? null }));
     fields.push({ id: this.config.estimateFieldId, value: 0 });
@@ -55,6 +77,7 @@ export class Project {
       this.params({ item_id: itemId, fields }));
   }
   async find(repository, number) {
+    if (repository.split("/")[0]?.toLowerCase() !== this.config.projectOwner.toLowerCase()) return null;
     return (await this.items()).find((item) => !item.archived && !item.generated &&
       item.repository?.toLowerCase() === repository.toLowerCase() && item.number === number);
   }
