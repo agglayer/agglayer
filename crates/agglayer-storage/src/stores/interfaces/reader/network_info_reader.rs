@@ -7,6 +7,16 @@ pub trait NetworkInfoReader: Send + Sync {
 
     fn get_latest_pending_height(&self, network_id: NetworkId) -> Result<Option<Height>, Error>;
 
+    fn get_latest_pending_certificate_id(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<CertificateId>, Error>;
+
+    fn get_latest_proven_certificate_id(
+        &self,
+        network_id: NetworkId,
+    ) -> Result<Option<CertificateId>, Error>;
+
     fn get_latest_settled_certificate_id(
         &self,
         network_id: NetworkId,

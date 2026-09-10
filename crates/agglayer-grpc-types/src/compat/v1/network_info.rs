@@ -80,7 +80,10 @@ impl From<AgglayerRpcNetworkInfo> for v1::NetworkInfo {
             latest_pending_status: latest_pending_status.map(|status| status as i32),
             latest_pending_error,
             latest_epoch_with_settlement: value.latest_epoch_with_settlement,
-            latest_pending_certificate_id: None,
+            latest_pending_certificate_id: value.latest_pending_certificate_id.map(Into::into),
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
