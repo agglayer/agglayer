@@ -4,11 +4,19 @@
 //! providing functionality to read and retrieve network-related information
 //! from the database.
 use agglayer_types::{CertificateId, Height, NetworkId, NetworkInfo, NetworkType};
+use rocksdb::WriteBatch;
 
 use crate::{
-    columns::network_info::NetworkInfoColumn,
+    columns::{
+        certificate_header::CertificateHeaderColumn,
+        latest_settled_certificate_per_network::{
+            LatestSettledCertificatePerNetworkColumn, SettledCertificate as SettledCursor,
+        },
+        network_info::NetworkInfoColumn,
+    },
     error::Error,
-    stores::{expected_type_or_fail, state::StateStore, try_digest, StateReader as _},
+    storage::Snapshot,
+    stores::{expected_type_or_fail, state::StateStore, try_digest},
     types::network_info::{
         self,
         v0::{
@@ -19,12 +27,44 @@ use crate::{
     },
 };
 
-impl crate::stores::NetworkInfoReader for StateStore {
-    fn get_network_info(&self, network_id: NetworkId) -> Result<NetworkInfo, Error> {
+impl StateStore {
+    /// One row of a network's info record, keyed by the kind of value it holds.
+    ///
+    /// Deriving the key from the value is what keeps the two in step: a value
+    /// can never be stored under another kind's key.
+    pub(super) fn network_info_row(
+        network_id: NetworkId,
+        value: network_info_value::Value,
+    ) -> (network_info::Key, network_info::Value) {
+        let key = network_info::Key {
+            network_id: network_id.to_u32(),
+            kind: (&value).into(),
+        };
+
+        (key, network_info::Value { value: Some(value) })
+    }
+
+    pub(super) fn stage_network_info(
+        &self,
+        network_id: NetworkId,
+        value: network_info_value::Value,
+        batch: &mut WriteBatch,
+    ) -> Result<(), Error> {
+        let (key, value) = Self::network_info_row(network_id, value);
+
+        Ok(self
+            .db
+            .multi_insert_batch::<NetworkInfoColumn>([(&key, &value)], batch)?)
+    }
+
+    fn network_info_from_snapshot(
+        snapshot: &Snapshot<'_>,
+        network_id: NetworkId,
+    ) -> Result<NetworkInfo, Error> {
         let mut state = NetworkInfo::from_network_id(network_id);
         let keys = network_info::Key::all_keys_for_network(network_id);
-        self.db
-            .atomic_multi_get::<NetworkInfoColumn>(keys.clone())?
+        snapshot
+            .multi_get::<NetworkInfoColumn>(keys.clone())?
             .into_iter()
             .zip(keys)
             .try_for_each(|(maybe_value, network_info::Key { kind, .. })| {
@@ -62,7 +102,7 @@ impl crate::stores::NetworkInfoReader for StateStore {
                         {
                             let certificate_id = try_digest!(&*id, "CertificateId")?
                                 .into();
-                            if let Some(header) = self.get_certificate_header(&certificate_id)? {
+                            if let Some(header) = snapshot.get::<CertificateHeaderColumn>(&certificate_id)? {
                                 state.settled_certificate_id = Some(certificate_id);
                                 state.settled_height = Some(header.height);
                                 state.settled_ler = Some(header.new_local_exit_root);
@@ -133,7 +173,33 @@ impl crate::stores::NetworkInfoReader for StateStore {
                 Ok::<(), Error>(())
             })?;
 
+        // Legacy databases can have a settled cursor without a network-info
+        // row. Its header must come from the same snapshot as the cached claim.
+        if state.settled_certificate_id.is_none() {
+            if let Some(SettledCursor(certificate_id, _, _, _)) =
+                snapshot.get::<LatestSettledCertificatePerNetworkColumn>(&network_id)?
+            {
+                if let Some(header) = snapshot.get::<CertificateHeaderColumn>(&certificate_id)? {
+                    state.settled_certificate_id = Some(certificate_id);
+                    state.settled_height = Some(header.height);
+                    state.settled_ler = Some(header.new_local_exit_root);
+                    state.latest_epoch_with_settlement =
+                        header.epoch_number.map(|epoch| epoch.as_u64());
+                }
+            }
+        }
+
+        // The live LET may already include the next certificate before its
+        // settled cursor is published. Only the count recorded alongside the
+        // settled pointer belongs to this settlement; missing counts stay
+        // absent.
         Ok(state)
+    }
+}
+
+impl crate::stores::NetworkInfoReader for StateStore {
+    fn get_network_info(&self, network_id: NetworkId) -> Result<NetworkInfo, Error> {
+        Self::network_info_from_snapshot(&self.db.snapshot(), network_id)
     }
 
     fn get_latest_pending_height(&self, network_id: NetworkId) -> Result<Option<Height>, Error> {

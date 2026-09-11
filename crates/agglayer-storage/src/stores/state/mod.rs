@@ -8,8 +8,8 @@ use std::{
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementJobId,
-    SettlementTxHash,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettledClaim,
+    SettlementJobId, SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -39,7 +39,12 @@ use crate::{
     schema::ColumnSchema,
     storage::DB,
     stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
-    types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
+    types::{
+        network_info::v0::{
+            self as network_info_v0, network_info_value::Value as NetworkInfoValue,
+        },
+        MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue,
+    },
     NetworkMetrics,
 };
 
@@ -367,14 +372,60 @@ impl StateWriter for StateStore {
         certificate_id: &CertificateId,
         epoch_number: &EpochNumber,
         certificate_index: &CertificateIndex,
+        settled_claim: Option<SettledClaim>,
     ) -> Result<(), Error> {
         let prometheus_height = NetworkMetrics::prometheus_height(*height)?;
         let mut metrics = self.network_metrics.mutation();
-        self.db.put::<LatestSettledCertificatePerNetworkColumn>(
-            network_id,
-            &SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index),
+
+        let mut batch = WriteBatch::default();
+
+        let cursor =
+            SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index);
+        self.db
+            .multi_insert_batch::<LatestSettledCertificatePerNetworkColumn>(
+                [(network_id, &cursor)],
+                &mut batch,
+            )?;
+
+        let settled_certificate = network_info_v0::SettledCertificate {
+            certificate_id: Some(network_info_v0::SettledCertificateId {
+                id: certificate_id.as_digest().as_slice().to_vec().into(),
+            }),
+            let_leaf_count: self.local_exit_tree_leaf_count(*network_id)?.map(|count| {
+                network_info_v0::SettledLocalExitTreeLeafCount {
+                    settled_let_leaf_count: u64::from(count),
+                }
+            }),
+            // `pp_root` and `ler` are left unset: nothing writes the former, and
+            // the reader takes the latter off the settled certificate header.
+            ..Default::default()
+        };
+        self.stage_network_info(
+            *network_id,
+            NetworkInfoValue::SettledCertificate(settled_certificate),
+            &mut batch,
         )?;
+
+        // A certificate without an imported bridge exit leaves the stored claim
+        // in place: it is still the latest one settled.
+        if let Some(claim) = settled_claim {
+            self.stage_network_info(
+                *network_id,
+                NetworkInfoValue::SettledClaim(network_info_v0::SettledClaim {
+                    global_index: Some(network_info_v0::GlobalIndex {
+                        value: claim.global_index.as_slice().to_vec().into(),
+                    }),
+                    bridge_exit_hash: Some(network_info_v0::BridgeExitHash {
+                        bridge_exit_hash: claim.bridge_exit_hash.as_slice().to_vec().into(),
+                    }),
+                }),
+                &mut batch,
+            )?;
+        }
+
+        self.db.write_batch(batch)?;
         metrics.height_written(*network_id, NetworkStage::Settled, prometheus_height);
+
         Ok(())
     }
 
@@ -471,6 +522,17 @@ impl StateWriter for StateStore {
 }
 
 impl StateStore {
+    /// The leaf count recorded for the network's local exit tree.
+    fn local_exit_tree_leaf_count(&self, network_id: NetworkId) -> Result<Option<u32>, Error> {
+        match self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
+            network_id: network_id.into(),
+            key_type: LET::KeyType::LeafCount,
+        })? {
+            None => Ok(None),
+            Some(LET::Value::LeafCount(leaf_count)) => Ok(Some(leaf_count)),
+            Some(_) => Err(Error::WrongValueType),
+        }
+    }
     /// Requests a best-effort backup of the state and pending databases.
     fn request_backup(&self) {
         if let Err(error) = self.backup_client.backup_state() {

@@ -12,7 +12,7 @@ use agglayer_storage::{
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
     CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError, EpochNumber,
-    ExecutionMode, Height, LocalNetworkStateData, NetworkId,
+    ExecutionMode, Height, LocalNetworkStateData, NetworkId, SettledClaim,
 };
 use agglayer_utils::task::spawn_blocking_in_current_span;
 use arc_swap::ArcSwap;
@@ -281,7 +281,7 @@ where
         let task = self
             .initialize_certificate_task(height, sender, cancellation_token.clone())
             .await?;
-        let Some((task, bridge_exit_hashes, certificate_id)) = task else {
+        let Some((task, bridge_exit_hashes, settled_claim, certificate_id)) = task else {
             debug!(
                 "No certificate found for network {} at height {}",
                 self.network_id, *next_expected_height
@@ -350,6 +350,7 @@ where
                             .assign_and_persist_settled_certificate(
                                 new,
                                 bridge_exit_hashes,
+                                settled_claim,
                                 height,
                                 certificate_id,
                             )
@@ -384,6 +385,7 @@ where
         Option<(
             CertificateTask<StateStore, PendingStore, CertifierClient, SettlementService>,
             Vec<Digest>,
+            Option<SettledClaim>,
             CertificateId,
         )>,
         Error,
@@ -412,6 +414,10 @@ where
                 .iter()
                 .map(|exit| exit.hash())
                 .collect::<Vec<Digest>>();
+            let settled_claim = certificate
+                .imported_bridge_exits
+                .last()
+                .map(SettledClaim::from);
             let task = CertificateTask::new(
                 certificate,
                 sender,
@@ -422,7 +428,12 @@ where
                 cancellation_token,
             )?;
 
-            Ok(Some((task, bridge_exit_hashes, certificate_id)))
+            Ok(Some((
+                task,
+                bridge_exit_hashes,
+                settled_claim,
+                certificate_id,
+            )))
         })
         .await
         .expect("certificate task initialization panicked")
@@ -439,6 +450,7 @@ where
         &self,
         new: Box<LocalNetworkStateData>,
         bridge_exit_hashes: Vec<Digest>,
+        settled_claim: Option<SettledClaim>,
         height: Height,
         certificate_id: CertificateId,
     ) -> Result<(Box<LocalNetworkStateData>, EpochNumber, CertificateIndex), Error> {
@@ -500,6 +512,7 @@ where
                     &certificate_id,
                     &epoch_number,
                     &certificate_index,
+                    settled_claim,
                 )
             })();
             persistence.map_err(|e| Error::PersistenceError {
