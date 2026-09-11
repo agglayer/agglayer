@@ -6,10 +6,7 @@ use agglayer_grpc_types::node::v1::GetCertificateHeaderRequest;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
     backup::BackupClient,
-    stores::{
-        debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
-        StateWriter as _,
-    },
+    stores::{debug::DebugStore, pending::PendingStore, state::StateStore, StateWriter as _},
     tests::TempDBDir,
 };
 use agglayer_types::{CertificateId, CertificateStatus, Digest, Height};
@@ -43,18 +40,9 @@ async fn get_certificate_header() {
     let (sender, _receiver) = tokio::sync::mpsc::channel(10);
     let service = Arc::new(AgglayerService::new(
         sender,
-        pending_store.clone(),
-        state_store.clone(),
+        pending_store,
+        state_store,
         debug_store,
-        Arc::new(
-            EpochsStore::new(
-                config.clone(),
-                pending_store,
-                state_store,
-                BackupClient::noop(),
-            )
-            .unwrap(),
-        ),
         config,
         Arc::new(L1Rpc {}),
     ));

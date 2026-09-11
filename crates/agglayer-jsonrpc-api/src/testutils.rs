@@ -8,7 +8,7 @@ use agglayer_contracts::L1RpcClient;
 use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     backup::BackupClient,
-    stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
+    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
     NetworkMetrics,
 };
@@ -46,7 +46,6 @@ pub type RawRpcClient = crate::AgglayerImpl<
     PendingStore,
     StateStore,
     DebugStore,
-    EpochsStore<PendingStore, StateStore>,
 >;
 
 pub struct RawRpcContext {
@@ -171,24 +170,12 @@ impl TestContext {
             crate::kernel::Kernel::new(real_provider.clone(), config.clone()).unwrap(),
         ));
 
-        // Create a real epoch store for testing
-        let epochs_store = Arc::new(
-            EpochsStore::new(
-                config.clone(),
-                pending_store.clone(),
-                state_store.clone(),
-                BackupClient::noop(),
-            )
-            .unwrap(),
-        );
-
         // Create agglayer_rpc::AgglayerService with the provider
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             certificate_sender.clone(),
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
-            epochs_store,
             config.clone(),
             Arc::new(l1_rpc_client),
         ));
@@ -327,24 +314,12 @@ impl TestContext {
             crate::kernel::Kernel::new(Arc::new(mock_provider.clone()), config.clone()).unwrap(),
         ));
 
-        // Create a real epoch store for testing
-        let epochs_store = Arc::new(
-            EpochsStore::new(
-                config.clone(),
-                pending_store.clone(),
-                state_store.clone(),
-                BackupClient::noop(),
-            )
-            .unwrap(),
-        );
-
         // Create agglayer_rpc::AgglayerService
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             certificate_sender,
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
-            epochs_store,
             config.clone(),
             Arc::new(l1_rpc_client),
         ));
