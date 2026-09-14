@@ -92,6 +92,10 @@ fn tag_admin_storage_error(error: agglayer_storage::error::Error) -> eyre::Repor
         | E::SettlementAttemptResultNotRecorded { .. } => RpcErrorCode::NotFound,
         E::SettlementJobAlreadyCompleted(_) => RpcErrorCode::AlreadyCompleted,
         E::SettlementJobNotCompleted(_) => RpcErrorCode::NotCompleted,
+        // `admin_unlinkCertificateSettlementJob` refusals.
+        E::CertificateHasNoSettlementJob(_) => RpcErrorCode::NotFound,
+        E::CertificateSettlementJobNotCompleted { .. } => RpcErrorCode::NotCompleted,
+        E::CertificateSettlementJobSucceeded { .. } => RpcErrorCode::AlreadyCompleted,
         _ => return error.into(),
     };
     eyre::Report::new(error).wrap_err(code)
@@ -833,6 +837,37 @@ impl<
                  one re-recorded concurrently?"
             )),
         }
+    }
+
+    /// Unlink `certificate_id` from its settlement job, so that a
+    /// re-submission of the same certificate can be given a fresh job.
+    ///
+    /// Only a job that terminally reverted can be unlinked: a pending job may
+    /// still settle and a succeeded one already did, so in both cases a
+    /// replacement's job would compete for the same height. The job itself,
+    /// its attempts, its result, and its own link back to the certificate all
+    /// stay in storage. Returns the unlinked job id.
+    pub async fn admin_unlink_certificate_settlement_job(
+        &self,
+        certificate_id: CertificateId,
+    ) -> eyre::Result<SettlementJobId> {
+        let _admin_op = self.admin_operation_lock.lock().await;
+
+        let settlement_job_id = self
+            .store
+            .admin_unlink_certificate_settlement_job(&certificate_id)
+            .map_err(tag_admin_storage_error)
+            .wrap_err_with(|| {
+                format!("Failed to unlink certificate {certificate_id} from its settlement job")
+            })?;
+
+        warn!(
+            %certificate_id,
+            %settlement_job_id,
+            "(ADMIN) Certificate unlinked from its settlement job; its next re-submission gets a \
+             fresh job"
+        );
+        Ok(settlement_job_id)
     }
 
     #[tracing::instrument(skip(self))]

@@ -385,6 +385,42 @@ pub(crate) trait AdminAgglayer {
     /// settlement task re-drives the job.
     #[method(name = "forceRemoveSettlementJobResult")]
     async fn force_remove_settlement_job_result(&self, job_id: SettlementJobId) -> RpcResult<()>;
+
+    /// Unlink a certificate from its settlement job, so that a re-submission
+    /// of the same certificate can be given a fresh settlement job.
+    ///
+    /// **JSON-RPC method:** `admin_unlinkCertificateSettlementJob`
+    ///
+    /// A certificate keeps pointing at its settlement job, including after
+    /// that job terminally reverted on L1. The aggsender then re-sends the
+    /// same certificate (same id, fresh proof) and the replacement is
+    /// accepted, but the fresh job cannot be persisted, so the certificate
+    /// lands in `InError` with "Failed to submit settlement job: Failed to
+    /// persist settlement job ...". Call this method on that certificate: its
+    /// next re-submission gets a fresh job and settles.
+    ///
+    /// Only the certificate→job link is removed. The job, its attempts, its
+    /// terminal result, and its own link back to the certificate stay in
+    /// storage. Returns the unlinked job id.
+    ///
+    /// **Safety**: only a job that terminally *reverted* can be unlinked. A
+    /// job without a terminal result may still settle, and a job that
+    /// succeeded already did; in both cases the replacement's job would
+    /// compete for the same height. Never revive the unlinked job
+    /// (`admin_forceRemoveSettlementJobResult`, `admin_reloadSettlementTask`)
+    /// afterwards, for the same reason.
+    ///
+    /// # Errors
+    ///
+    /// Certificates without a settlement job return `RpcErrorCode::NotFound`'s
+    /// code; jobs without a terminal result return
+    /// `RpcErrorCode::NotCompleted`'s code; jobs that succeeded return
+    /// `RpcErrorCode::AlreadyCompleted`'s code.
+    #[method(name = "unlinkCertificateSettlementJob")]
+    async fn unlink_certificate_settlement_job(
+        &self,
+        certificate_id: CertificateId,
+    ) -> RpcResult<SettlementJobId>;
 }
 
 /// The Admin RPC agglayer service implementation.
@@ -1143,6 +1179,17 @@ where
         warn!("(ADMIN) Force-removing terminal result of settlement job {job_id}");
         self.settlement_service
             .admin_force_remove_settlement_job_result(job_id)
+            .await
+            .map_err(map_admin_error)
+    }
+
+    async fn unlink_certificate_settlement_job(
+        &self,
+        certificate_id: CertificateId,
+    ) -> RpcResult<SettlementJobId> {
+        warn!("(ADMIN) Unlinking certificate {certificate_id} from its settlement job");
+        self.settlement_service
+            .admin_unlink_certificate_settlement_job(certificate_id)
             .await
             .map_err(map_admin_error)
     }
