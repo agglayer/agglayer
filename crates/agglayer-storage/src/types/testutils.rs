@@ -47,4 +47,13 @@ impl SettlementJobResult {
             contract_call_result: Some(contract_call_success_for_test(seed)),
         }
     }
+
+    /// A terminal result whose on-chain call reverted.
+    pub fn contract_call_revert_for_test(seed: u8) -> Self {
+        let mut result = Self::contract_call_success_for_test(seed);
+        if let Some(contract_call_result) = result.contract_call_result.as_mut() {
+            contract_call_result.outcome = ContractCallOutcome::Revert as i32;
+        }
+        result
+    }
 }

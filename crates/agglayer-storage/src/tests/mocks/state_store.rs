@@ -229,5 +229,10 @@ mock! {
             &self,
             settlement_job_id: &SettlementJobId,
         ) -> Result<(), Error>;
+
+        fn admin_unlink_certificate_settlement_job(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<SettlementJobId, Error>;
     }
 }

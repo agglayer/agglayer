@@ -27,6 +27,7 @@ The examples use positional parameters in their wire order and target
 | 3. A job blocks a wallet's nonce pipeline | `admin_abortSettlementTask(job_id)` | Stop the in-memory task without changing stored state. Reload it when it is safe to continue. |
 | 4. A transaction was handled outside the node | `admin_insertSettlementAttempt(job_id, attempt, force?)` or `admin_markSettlementAttemptDefinitelyFailed(job_id, attempt_number, reason, force?)` | Register the external transaction, or record the trusted assertion that an existing attempt cannot land. |
 | 5. An attempt or completed-job result is wrong | `admin_removeSettlementAttemptResult(job_id, attempt_number, force?)` or `admin_forceRemoveSettlementJobResult(job_id)` | Remove the wrong attempt result, or un-complete and immediately re-drive the whole job. Correct attempt rows before force-removing a completed-job result. |
+| 6. A certificate is `InError` after a reverted settlement and every re-submission fails with "Failed to persist settlement job" | `admin_unlinkCertificateSettlementJob(certificate_id)` | Drop the certificate's link to its reverted job, so the aggsender's next re-submission of the same certificate gets a fresh job and settles. Refused unless the job terminally reverted. |
 
 ### Scenario 1: find and inspect a job
 
@@ -228,6 +229,42 @@ Outstanding callers that already hold the completed job's result watcher are not
 Ensure certificate processing for the associated job is quiesced before force-removing the result,
 or a certificate task can act on the removed result while the fresh settlement task re-drives the
 job.
+
+### Scenario 6: unlink a certificate from its reverted settlement job
+
+A settlement job that terminally reverted on L1 leaves its certificate `InError`,
+and the aggsender re-sends that certificate with a fresh proof.
+The certificate id covers the state transition only, not the proof,
+so the re-submission arrives under the same id and is accepted.
+The certificate still points at the reverted job, though,
+so the fresh job cannot be persisted and the certificate goes back to `InError` with
+`Failed to submit settlement job: Failed to persist settlement job <job-id>: ...`.
+Each cycle costs a full re-proof, so act quickly.
+
+First confirm the linked job really reverted, then unlink the certificate:
+
+```bash
+ADMIN_RPC_URL="${ADMIN_RPC_URL:-http://127.0.0.1:9091/}"
+CERTIFICATE_ID='0x<certificate-id>'
+
+curl -sS -X POST "$ADMIN_RPC_URL" \
+  -H 'content-type: application/json' \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"admin_unlinkCertificateSettlementJob\",\"params\":[\"$CERTIFICATE_ID\"]}"
+```
+
+The response carries the unlinked job id.
+Only the certificate→job link is removed:
+the job, its attempts, its terminal result, and its own link back to the certificate stay,
+so `admin_getSettlementJob` still shows the certificate on it.
+The aggsender's next re-submission then gets a fresh settlement job and settles.
+
+The call is refused unless the linked job terminally reverted:
+`NotCompleted` while it has no terminal result, because it may still settle,
+and `AlreadyCompleted` when it succeeded, because the certificate is settled through it.
+In both cases a replacement's job would compete for the same height.
+For the same reason, never revive an unlinked job with `admin_forceRemoveSettlementJobResult`
+or `admin_reloadSettlementTask`.
+Certificates without a settlement job return `NotFound`.
 
 ## Mutation response contract
 
