@@ -176,4 +176,25 @@ pub trait SettlementWriter: Send + Sync {
         &self,
         settlement_job_id: &SettlementJobId,
     ) -> Result<(), Error>;
+
+    /// Removes the certificate→job-id forward link of `certificate_id`, so a
+    /// re-submission of that certificate can be given a fresh settlement job,
+    /// and returns the unlinked job id.
+    ///
+    /// Admin-only escape hatch for a certificate whose job terminally reverted
+    /// and whose re-submissions (same id, fresh proof) keep failing to persist
+    /// a fresh job. Only the forward link is removed: the job, its attempts,
+    /// its terminal result, and its job-id→certificate reverse link stay.
+    ///
+    /// Only a job that terminally *reverted* can be unlinked. It fails with
+    /// [`Error::CertificateHasNoSettlementJob`] if the certificate has no job,
+    /// with [`Error::CertificateSettlementJobNotCompleted`] if the linked job
+    /// has no terminal result yet (it may still settle), and with
+    /// [`Error::CertificateSettlementJobSucceeded`] if it settled (the
+    /// certificate is settled through it). In both refused cases a
+    /// replacement's job would compete for the same height.
+    fn admin_unlink_certificate_settlement_job(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<SettlementJobId, Error>;
 }

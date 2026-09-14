@@ -1,6 +1,7 @@
 use agglayer_types::{
-    Address, CertificateId, ClientError, ClientErrorType, Nonce, SettlementAttempt,
-    SettlementAttemptResult, SettlementJob, SettlementJobId, SettlementJobResult,
+    Address, CertificateId, ClientError, ClientErrorType, ContractCallOutcome, Nonce,
+    SettlementAttempt, SettlementAttemptResult, SettlementJob, SettlementJobId,
+    SettlementJobResult,
 };
 use rocksdb::{Direction, WriteBatch};
 use tracing::warn;
@@ -550,6 +551,52 @@ impl SettlementWriter for StateStore {
             Ok(self
                 .db
                 .delete::<SettlementJobResultsColumn>(settlement_job_id)?)
+        })
+    }
+
+    fn admin_unlink_certificate_settlement_job(
+        &self,
+        certificate_id: &CertificateId,
+    ) -> Result<SettlementJobId, Error> {
+        let settlement_job_id = self
+            .db
+            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
+            .ok_or(Error::CertificateHasNoSettlementJob(*certificate_id))?;
+
+        // Same per-job lock as the other admin edits, so the job's terminal
+        // result cannot be edited while it is being checked here.
+        self.with_settlement_write_lock(&settlement_job_id, || {
+            // Only a job that terminally reverted may be unlinked. A pending
+            // job may still settle and a succeeded one already did; either
+            // way a replacement's job would compete for the same height. The
+            // match is exhaustive on purpose: a new outcome must take a stance.
+            let outcome = self
+                .db
+                .get::<SettlementJobResultsColumn>(&settlement_job_id)?
+                .map(SettlementJobResult::try_from)
+                .transpose()?
+                .map(|result| result.contract_call_result.outcome);
+            match outcome {
+                Some(ContractCallOutcome::Revert) => {}
+                None => {
+                    return Err(Error::CertificateSettlementJobNotCompleted {
+                        certificate_id: *certificate_id,
+                        settlement_job_id,
+                    });
+                }
+                Some(ContractCallOutcome::Success) => {
+                    return Err(Error::CertificateSettlementJobSucceeded {
+                        certificate_id: *certificate_id,
+                        settlement_job_id,
+                    });
+                }
+            }
+
+            // Only the certificate→job direction goes. The job keeps its own
+            // link back to the certificate, so it stays attributable.
+            self.db
+                .delete::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?;
+            Ok(settlement_job_id)
         })
     }
 }

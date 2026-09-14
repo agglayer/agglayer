@@ -1513,3 +1513,139 @@ fn result_absent_does_not_imply_attempt_absent() {
         None
     );
 }
+
+#[test]
+fn admin_unlink_certificate_settlement_job_removes_only_the_forward_link() {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(31);
+    let job_id = mk_job_id(3100);
+
+    store
+        .insert_settlement_job_with_certificate(&job_id, &mk_settlement_job(31), &certificate_id)
+        .expect("atomic insert must succeed");
+    store
+        .insert_settlement_job_result(
+            &job_id,
+            &v0::SettlementJobResult::contract_call_revert_for_test(31)
+                .try_into()
+                .expect("test tx result helper should be decodable"),
+        )
+        .expect("terminal result must be recordable");
+
+    let unlinked = store
+        .admin_unlink_certificate_settlement_job(&certificate_id)
+        .expect("a terminally reverted job can be unlinked");
+    assert_eq!(unlinked, job_id);
+
+    // The certificate no longer points at the job...
+    assert_eq!(
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        None
+    );
+    // ...but the job, its result, and its own link back are untouched.
+    assert_eq!(
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&job_id)
+            .expect("Unable to read stored value"),
+        Some(certificate_id)
+    );
+    assert!(db
+        .get::<SettlementJobsColumn>(&job_id)
+        .expect("Unable to read stored value")
+        .is_some());
+    assert!(store
+        .get_settlement_job_result(&job_id)
+        .expect("Unable to read stored value")
+        .is_some());
+
+    // A fresh job for the same certificate is accepted afterwards.
+    let fresh_job_id = mk_job_id(3101);
+    store
+        .insert_settlement_job_with_certificate(
+            &fresh_job_id,
+            &mk_settlement_job(32),
+            &certificate_id,
+        )
+        .expect("a fresh job must be accepted once the certificate is unlinked");
+    assert_eq!(
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(fresh_job_id)
+    );
+}
+
+#[test]
+fn admin_unlink_certificate_settlement_job_refuses_job_without_terminal_result() {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(33);
+    let job_id = mk_job_id(3300);
+
+    store
+        .insert_settlement_job_with_certificate(&job_id, &mk_settlement_job(33), &certificate_id)
+        .expect("atomic insert must succeed");
+
+    let res = store.admin_unlink_certificate_settlement_job(&certificate_id);
+    assert!(
+        matches!(
+            res,
+            Err(Error::CertificateSettlementJobNotCompleted {
+                certificate_id: c,
+                settlement_job_id: j,
+            }) if c == certificate_id && j == job_id
+        ),
+        "{res:?}"
+    );
+    assert_eq!(
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(job_id)
+    );
+}
+
+#[test]
+fn admin_unlink_certificate_settlement_job_without_link_fails() {
+    let (_tmp, _db, store) = setup_store();
+    let certificate_id = mk_certificate_id(35);
+
+    let res = store.admin_unlink_certificate_settlement_job(&certificate_id);
+    assert!(
+        matches!(res, Err(Error::CertificateHasNoSettlementJob(c)) if c == certificate_id),
+        "{res:?}"
+    );
+}
+
+#[test]
+fn admin_unlink_certificate_settlement_job_refuses_successful_job() {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(37);
+    let job_id = mk_job_id(3700);
+
+    store
+        .insert_settlement_job_with_certificate(&job_id, &mk_settlement_job(37), &certificate_id)
+        .expect("atomic insert must succeed");
+    store
+        .insert_settlement_job_result(
+            &job_id,
+            &v0::SettlementJobResult::contract_call_success_for_test(37)
+                .try_into()
+                .expect("test tx result helper should be decodable"),
+        )
+        .expect("terminal result must be recordable");
+
+    let res = store.admin_unlink_certificate_settlement_job(&certificate_id);
+    assert!(
+        matches!(
+            res,
+            Err(Error::CertificateSettlementJobSucceeded {
+                certificate_id: c,
+                settlement_job_id: j,
+            }) if c == certificate_id && j == job_id
+        ),
+        "{res:?}"
+    );
+    assert_eq!(
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(job_id)
+    );
+}
