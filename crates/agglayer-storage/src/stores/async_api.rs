@@ -464,6 +464,23 @@ pub trait AsyncSettlementWriterExt: SettlementWriter + 'static {
             .expect("admin settlement job result removal task panicked")
         }
     }
+
+    fn admin_unlink_certificate_settlement_job_async(
+        self: &Arc<Self>,
+        certificate_id: CertificateId,
+    ) -> impl Future<Output = Result<SettlementJobId, Error>> + Send + 'static {
+        let store = Arc::clone(self);
+        async move {
+            spawn_blocking_in_current_span(move || {
+                SettlementWriter::admin_unlink_certificate_settlement_job(
+                    store.as_ref(),
+                    &certificate_id,
+                )
+            })
+            .await
+            .expect("admin certificate settlement job unlink task panicked")
+        }
+    }
 }
 
 impl<S> AsyncSettlementWriterExt for S where S: SettlementWriter + ?Sized + 'static {}
