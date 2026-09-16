@@ -103,6 +103,16 @@ impl<P> BlockClock<P> {
     fn calculate_block_number(&self, from_block: u64) -> u64 {
         from_block.saturating_sub(self.genesis_block)
     }
+
+    fn increment_block_height(block_height: &AtomicU64) -> Result<u64, BlockClockError> {
+        let previous = block_height
+            .fetch_update(Ordering::Release, Ordering::Relaxed, |height| {
+                height.checked_add(1)
+            })
+            .map_err(|_| BlockClockError::BlockHeightOverflow)?;
+
+        Ok(previous + 1)
+    }
 }
 
 impl BlockClock<BlockProvider> {
@@ -143,6 +153,8 @@ pub enum BlockClockError {
     SetBlockHeight(u64),
     #[error("Failed to notify the start of the Clock task")]
     UnableToNotifyStart,
+    #[error("Block height overflow")]
+    BlockHeightOverflow,
     #[error("Transport initialization: {0}")]
     Transport(#[from] alloy::transports::RpcError<TransportErrorKind>),
     #[error("L1 block channel unexpectedly closed")]
@@ -342,41 +354,34 @@ where
         &mut self,
         sender: &broadcast::Sender<Event>,
     ) -> Result<(), BlockClockError> {
-        // Increase the Block height by 1. The `fetch_add` method returns the
-        // previous value, so we need to add 1 to it to get the current
-        // Block height.
-        if let Some(current_block) = self
-            .block_height
-            .fetch_add(1, Ordering::Release)
-            .checked_add(1)
-        {
-            // Record block processing metrics
-            agglayer_telemetry::clock::record_current_block_height(current_block);
+        let current_block = Self::increment_block_height(&self.block_height)?;
 
-            // If the current Block height is a multiple of the Epoch duration,
-            // the current Epoch has ended. In this case, we
-            // calculate the epoch number on demand and
-            // send an `EpochEnded` event to the subscribers.
-            if current_block % *self.epoch_duration == 0 {
-                // Calculate the epoch that just ended (current_block /
-                // epoch_duration - 1)
-                let epoch_ended = EpochNumber::new(
-                    <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration)
-                        .saturating_sub(1),
-                );
+        // Record block processing metrics
+        agglayer_telemetry::clock::record_current_block_height(current_block);
 
-                info!(
-                    finished_epoch_number = epoch_ended.as_u64(),
-                    block_height = current_block,
-                    epoch_duration = self.epoch_duration.get(),
-                    "Epoch ended, broadcasting event"
-                );
+        // If the current Block height is a multiple of the Epoch duration,
+        // the current Epoch has ended. In this case, we
+        // calculate the epoch number on demand and
+        // send an `EpochEnded` event to the subscribers.
+        if current_block % *self.epoch_duration == 0 {
+            // Calculate the epoch that just ended (current_block /
+            // epoch_duration - 1)
+            let epoch_ended = EpochNumber::new(
+                <Self as Clock>::calculate_epoch_number(current_block, *self.epoch_duration)
+                    .saturating_sub(1),
+            );
 
-                // Record new current epoch (the epoch we just entered)
-                agglayer_telemetry::clock::record_current_epoch(epoch_ended.as_u64() + 1);
+            info!(
+                finished_epoch_number = epoch_ended.as_u64(),
+                block_height = current_block,
+                epoch_duration = self.epoch_duration.get(),
+                "Epoch ended, broadcasting event"
+            );
 
-                _ = sender.send(Event::EpochEnded(epoch_ended));
-            }
+            // Record new current epoch (the epoch we just entered)
+            agglayer_telemetry::clock::record_current_epoch(epoch_ended.as_u64() + 1);
+
+            _ = sender.send(Event::EpochEnded(epoch_ended));
         }
 
         Ok(())
