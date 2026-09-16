@@ -396,13 +396,10 @@ pub(crate) trait AdminAgglayer {
     ///
     /// **JSON-RPC method:** `admin_unlinkCertificateSettlementJob`
     ///
-    /// A certificate keeps pointing at its settlement job, including after
-    /// that job terminally reverted on L1. The aggsender then re-sends the
-    /// same certificate (same id, fresh proof) and the replacement is
-    /// accepted, but the fresh job cannot be persisted, so the certificate
-    /// lands in `InError` with "Failed to submit settlement job: Failed to
-    /// persist settlement job ...". Call this method on that certificate: its
-    /// next re-submission gets a fresh job and settles.
+    /// Re-submitting the same certificate with a fresh proof automatically
+    /// supersedes its terminally reverted settlement job. This method lets
+    /// an operator unlink that job before the re-submission. Once the cause
+    /// of the revert is corrected, the fresh job can settle the certificate.
     ///
     /// Only the certificate→job link is removed. The job, its attempts, its
     /// terminal result, and its own link back to the certificate stay in

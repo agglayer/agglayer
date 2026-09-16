@@ -1,6 +1,6 @@
 use std::{
-    sync::Arc,
-    time::{Duration, SystemTime},
+    sync::{Arc, Barrier, Mutex},
+    time::{Duration, Instant, SystemTime},
 };
 
 use agglayer_types::{
@@ -212,7 +212,8 @@ fn insert_settlement_job_with_certificate_duplicate_certificate_writes_nothing()
     );
 
     assert!(matches!(res, Err(Error::UnprocessedAction(_))));
-    // The second job is not written when the certificate is already linked.
+    // The second job is not written while the certificate's current job has
+    // no terminal result yet.
     assert_eq!(
         db.get::<SettlementJobsColumn>(&second_job_id)
             .expect("Unable to read stored value"),
@@ -223,6 +224,414 @@ fn insert_settlement_job_with_certificate_duplicate_certificate_writes_nothing()
             .expect("Unable to read stored value"),
         Some(first_job_id)
     );
+}
+
+/// A certificate whose settlement job terminally reverted may be re-submitted
+/// with a fresh proof, so a fresh job must be accepted for it. The reverted
+/// job stays behind, still linked back to the certificate, for auditing.
+#[rstest::rstest]
+#[case::old_job_first(900, 901)]
+#[case::new_job_first(901, 900)]
+#[timeout(Duration::from_secs(10))]
+fn insert_settlement_job_with_certificate_supersedes_terminally_reverted_job(
+    #[case] old_id: u128,
+    #[case] new_id: u128,
+) {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(9);
+    let reverted_job_id = mk_job_id(old_id);
+    let new_job_id = mk_job_id(new_id);
+
+    store
+        .insert_settlement_job_with_certificate(
+            &reverted_job_id,
+            &mk_settlement_job(9),
+            &certificate_id,
+        )
+        .expect("first atomic insert must succeed");
+    store
+        .insert_settlement_job_result(
+            &reverted_job_id,
+            &v0::SettlementJobResult::contract_call_revert_for_test(9)
+                .try_into()
+                .expect("test tx result helper should be decodable"),
+        )
+        .expect("terminal revert must be recordable");
+
+    store
+        .insert_settlement_job_with_certificate(
+            &new_job_id,
+            &mk_settlement_job(10),
+            &certificate_id,
+        )
+        .expect("a terminally reverted job must be superseded by a fresh one");
+
+    // The new job exists and the certificate's forward link now points at it.
+    assert!(db
+        .get::<SettlementJobsColumn>(&new_job_id)
+        .expect("Unable to read stored value")
+        .is_some());
+    assert_eq!(
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(new_job_id)
+    );
+    // Both jobs point back at the certificate.
+    assert_eq!(
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&new_job_id)
+            .expect("Unable to read stored value"),
+        Some(certificate_id)
+    );
+    assert_eq!(
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&reverted_job_id)
+            .expect("Unable to read stored value"),
+        Some(certificate_id)
+    );
+    // The reverted job and its terminal result are left untouched, and the
+    // new job starts without a result.
+    assert!(db
+        .get::<SettlementJobsColumn>(&reverted_job_id)
+        .expect("Unable to read stored value")
+        .is_some());
+    assert_eq!(
+        db.get::<SettlementJobResultsColumn>(&reverted_job_id)
+            .expect("Unable to read stored value"),
+        Some(v0::SettlementJobResult::contract_call_revert_for_test(9))
+    );
+    assert!(store
+        .get_settlement_job_result(&new_job_id)
+        .expect("Unable to read stored value")
+        .is_none());
+}
+
+/// Reusing the linked job id must fail without trying to acquire its mutex
+/// twice.
+#[rstest::rstest]
+#[timeout(Duration::from_secs(10))]
+fn insert_settlement_job_with_certificate_same_job_id_fails_without_deadlocking() {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(10);
+    let job_id = mk_job_id(1000);
+    let job = mk_settlement_job(10);
+    store
+        .insert_settlement_job_with_certificate(&job_id, &job, &certificate_id)
+        .unwrap();
+    let result = v0::SettlementJobResult::contract_call_revert_for_test(10);
+    store
+        .insert_settlement_job_result(&job_id, &result.clone().try_into().unwrap())
+        .unwrap();
+
+    let res = store.insert_settlement_job_with_certificate(
+        &job_id,
+        &mk_settlement_job(11),
+        &certificate_id,
+    );
+
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))), "{res:?}");
+    assert_eq!(
+        db.get::<SettlementJobsColumn>(&job_id).unwrap(),
+        Some((&job).into())
+    );
+    assert_eq!(
+        db.get::<SettlementJobResultsColumn>(&job_id).unwrap(),
+        Some(result)
+    );
+    assert_eq!(
+        store
+            .get_certificate_settlement_job_id(&certificate_id)
+            .unwrap(),
+        Some(job_id)
+    );
+}
+
+/// A settled certificate must never get a second settlement job.
+#[test]
+fn insert_settlement_job_with_certificate_refuses_after_successful_job() {
+    let (_tmp, db, store) = setup_store();
+    let certificate_id = mk_certificate_id(11);
+    let settled_job_id = mk_job_id(1100);
+    let second_job_id = mk_job_id(1101);
+
+    store
+        .insert_settlement_job_with_certificate(
+            &settled_job_id,
+            &mk_settlement_job(11),
+            &certificate_id,
+        )
+        .expect("first atomic insert must succeed");
+    store
+        .insert_settlement_job_result(
+            &settled_job_id,
+            &v0::SettlementJobResult::contract_call_success_for_test(11)
+                .try_into()
+                .expect("test tx result helper should be decodable"),
+        )
+        .expect("terminal success must be recordable");
+
+    let res = store.insert_settlement_job_with_certificate(
+        &second_job_id,
+        &mk_settlement_job(12),
+        &certificate_id,
+    );
+
+    assert!(matches!(res, Err(Error::UnprocessedAction(_))), "{res:?}");
+    assert_eq!(
+        db.get::<SettlementJobsColumn>(&second_job_id)
+            .expect("Unable to read stored value"),
+        None
+    );
+    assert_eq!(
+        db.get::<CertificateIdPerSettlementJobIdColumn>(&second_job_id)
+            .expect("Unable to read stored value"),
+        None
+    );
+    assert_eq!(
+        db.get::<SettlementJobIdPerCertificateIdColumn>(&certificate_id)
+            .expect("Unable to read stored value"),
+        Some(settled_job_id)
+    );
+}
+
+/// Concurrent re-submissions must produce only one replacement job.
+#[test]
+fn insert_settlement_job_with_certificate_concurrent_supersede_accepts_only_one_job() {
+    let (_tmp, _db, store) = setup_store();
+    let certificate_id = mk_certificate_id(12);
+    let reverted_job_id = mk_job_id(1200);
+    store
+        .insert_settlement_job_with_certificate(
+            &reverted_job_id,
+            &mk_settlement_job(12),
+            &certificate_id,
+        )
+        .unwrap();
+    store
+        .insert_settlement_job_result(
+            &reverted_job_id,
+            &v0::SettlementJobResult::contract_call_revert_for_test(12)
+                .try_into()
+                .unwrap(),
+        )
+        .unwrap();
+
+    let barrier = Barrier::new(8);
+    let results = std::thread::scope(|scope| {
+        let handles: Vec<_> = (1..=8)
+            .map(|i| {
+                let store = &store;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let job_id = mk_job_id(1200 + i);
+                    barrier.wait();
+                    let result = store.insert_settlement_job_with_certificate(
+                        &job_id,
+                        &mk_settlement_job(13),
+                        &certificate_id,
+                    );
+                    (job_id, result)
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        results.iter().filter(|(_, result)| result.is_ok()).count(),
+        1
+    );
+    for (job_id, result) in results {
+        if result.is_ok() {
+            assert_eq!(
+                store
+                    .get_certificate_settlement_job_id(&certificate_id)
+                    .unwrap(),
+                Some(job_id)
+            );
+            assert_eq!(
+                store.get_settlement_job_certificate_id(&job_id).unwrap(),
+                Some(certificate_id)
+            );
+        } else {
+            assert!(matches!(result, Err(Error::UnprocessedAction(_))));
+            assert!(store.get_settlement_job(&job_id).unwrap().is_none());
+            assert!(store
+                .get_settlement_job_certificate_id(&job_id)
+                .unwrap()
+                .is_none());
+        }
+    }
+    assert_eq!(store.list_settlement_job_ids().unwrap().len(), 2);
+}
+
+/// A replacement that waited for its locks must observe a competing fresh job,
+/// even though the job linked before that wait had reverted.
+#[rstest::rstest]
+#[timeout(Duration::from_secs(10))]
+fn insert_settlement_job_with_certificate_rechecks_link_after_waiting_for_locks() {
+    let (_tmp, _db, store) = setup_store();
+    let certificate_id = mk_certificate_id(18);
+    let waiting_job_id = mk_job_id(1799);
+    let reverted_job_id = mk_job_id(1800);
+    let fresh_job_id = mk_job_id(1801);
+    store
+        .insert_settlement_job_with_certificate(
+            &reverted_job_id,
+            &mk_settlement_job(18),
+            &certificate_id,
+        )
+        .unwrap();
+    store
+        .insert_settlement_job_result(
+            &reverted_job_id,
+            &v0::SettlementJobResult::contract_call_revert_for_test(18)
+                .try_into()
+                .unwrap(),
+        )
+        .unwrap();
+
+    // The waiting job sorts before the reverted job, so blocking its mutex
+    // leaves the reverted job available for a competing replacement.
+    let waiting_job_lock = Arc::new(Mutex::new(()));
+    store
+        .settlement_write_locks
+        .lock()
+        .unwrap()
+        .insert(waiting_job_id, Arc::clone(&waiting_job_lock));
+    let res = std::thread::scope(|scope| {
+        let blocked = waiting_job_lock.lock().unwrap();
+        let waiting = scope.spawn(|| {
+            store.insert_settlement_job_with_certificate(
+                &waiting_job_id,
+                &mk_settlement_job(19),
+                &certificate_id,
+            )
+        });
+
+        // The map and this test own two Arcs. The third proves the insert
+        // captured the old link and reached the blocked lock acquisition.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Arc::strong_count(&waiting_job_lock) < 3 {
+            assert!(
+                Instant::now() < deadline,
+                "insert did not reach the job lock"
+            );
+            std::thread::yield_now();
+        }
+        let fresh = scope.spawn(|| {
+            store.insert_settlement_job_with_certificate(
+                &fresh_job_id,
+                &mk_settlement_job(20),
+                &certificate_id,
+            )
+        });
+        while !fresh.is_finished() {
+            assert!(
+                Instant::now() < deadline,
+                "fresh replacement blocked behind the waiting job"
+            );
+            std::thread::yield_now();
+        }
+        fresh.join().unwrap().unwrap();
+        drop(blocked);
+        waiting.join().unwrap()
+    });
+
+    let Err(Error::UnprocessedAction(message)) = res else {
+        panic!("the fresh pending job must block the waiting insert: {res:?}");
+    };
+    assert!(message.contains(&fresh_job_id.to_string()), "{message}");
+    assert_eq!(
+        store
+            .get_certificate_settlement_job_id(&certificate_id)
+            .unwrap(),
+        Some(fresh_job_id)
+    );
+    assert!(store.get_settlement_job(&waiting_job_id).unwrap().is_none());
+    assert!(store
+        .get_settlement_job_certificate_id(&waiting_job_id)
+        .unwrap()
+        .is_none());
+    assert_eq!(store.list_settlement_job_ids().unwrap().len(), 2);
+}
+
+/// Unlink may remove the reverted link or refuse the fresh pending job, but
+/// it must never remove the fresh job's link after checking the old result.
+#[rstest::rstest]
+#[case::old_job_first(false)]
+#[case::new_job_first(true)]
+#[timeout(Duration::from_secs(10))]
+fn admin_unlink_certificate_settlement_job_racing_supersede_preserves_fresh_link(
+    #[case] new_job_first: bool,
+) {
+    let (_tmp, _db, store) = setup_store();
+    for seed in 1..=16 {
+        let certificate_id = mk_certificate_id(seed);
+        let first_job_id = mk_job_id(u128::from(seed) * 100);
+        let second_job_id = mk_job_id(u128::from(seed) * 100 + 1);
+        let (reverted_job_id, fresh_job_id) = if new_job_first {
+            (second_job_id, first_job_id)
+        } else {
+            (first_job_id, second_job_id)
+        };
+        store
+            .insert_settlement_job_with_certificate(
+                &reverted_job_id,
+                &mk_settlement_job(seed),
+                &certificate_id,
+            )
+            .unwrap();
+        store
+            .insert_settlement_job_result(
+                &reverted_job_id,
+                &v0::SettlementJobResult::contract_call_revert_for_test(seed)
+                    .try_into()
+                    .unwrap(),
+            )
+            .unwrap();
+
+        let barrier = Barrier::new(2);
+        let unlink_result = std::thread::scope(|scope| {
+            let unlink = scope.spawn(|| {
+                barrier.wait();
+                store.admin_unlink_certificate_settlement_job(&certificate_id)
+            });
+            barrier.wait();
+            store
+                .insert_settlement_job_with_certificate(
+                    &fresh_job_id,
+                    &mk_settlement_job(seed + 1),
+                    &certificate_id,
+                )
+                .unwrap();
+            unlink.join().unwrap()
+        });
+
+        match unlink_result {
+            Ok(unlinked_job_id) => assert_eq!(unlinked_job_id, reverted_job_id),
+            Err(Error::CertificateSettlementJobNotCompleted {
+                certificate_id: blocked_certificate_id,
+                settlement_job_id,
+            }) => {
+                assert_eq!(blocked_certificate_id, certificate_id);
+                assert_eq!(settlement_job_id, fresh_job_id);
+            }
+            other => panic!("unexpected unlink result: {other:?}"),
+        }
+        assert_eq!(
+            store
+                .get_certificate_settlement_job_id(&certificate_id)
+                .unwrap(),
+            Some(fresh_job_id)
+        );
+        for job_id in [reverted_job_id, fresh_job_id] {
+            assert_eq!(
+                store.get_settlement_job_certificate_id(&job_id).unwrap(),
+                Some(certificate_id)
+            );
+        }
+    }
 }
 
 #[test]

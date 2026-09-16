@@ -55,13 +55,26 @@ pub trait SettlementWriter: Send + Sync {
     ///
     /// Writing all three together means a crash can never leave a certificate
     /// pointing at a settlement job that was never saved. Insert-only: fails if
-    /// `settlement_job_id` already exists or `certificate_id` already has a
-    /// job.
+    /// `settlement_job_id` already exists, or if `certificate_id` already has a
+    /// job that is still pending or that succeeded.
     ///
-    /// The `certificate_id` uniqueness check is serialized per settlement job
-    /// id, not per certificate, so this must not be called concurrently with
-    /// the same `certificate_id` (production calls it only from the single
-    /// per-certificate task).
+    /// The one exception is a certificate whose current job terminally
+    /// *reverted* on L1: the certificate may then be re-submitted with a fresh
+    /// proof, and this call supersedes the reverted job. The new job is
+    /// written, the certificate→job-id forward link moves to it, and the
+    /// reverted job keeps its own job-id→certificate reverse link for
+    /// auditing. Reviving a superseded job (e.g. through admin edits) is
+    /// never safe, since two jobs would then compete to settle the same
+    /// height.
+    ///
+    /// The existing and new jobs are locked in ascending job-id order. The
+    /// certificate link is rechecked under those locks; if it changed, both
+    /// locks are released before retrying. This serializes replacement with
+    /// admin unlink and protects the existing job's terminal-result check.
+    ///
+    /// Callers must serialize submissions for a given certificate: when no
+    /// job is linked, including after admin unlink, there is no shared job
+    /// lock for competing inserts. Production uses a single certificate task.
     fn insert_settlement_job_with_certificate(
         &self,
         settlement_job_id: &SettlementJobId,
@@ -181,10 +194,13 @@ pub trait SettlementWriter: Send + Sync {
     /// re-submission of that certificate can be given a fresh settlement job,
     /// and returns the unlinked job id.
     ///
-    /// Admin-only escape hatch for a certificate whose job terminally reverted
-    /// and whose re-submissions (same id, fresh proof) keep failing to persist
-    /// a fresh job. Only the forward link is removed: the job, its attempts,
-    /// its terminal result, and its job-id→certificate reverse link stay.
+    /// Admin-only escape hatch for unlinking a terminally reverted job before
+    /// the certificate is re-submitted. Re-submission also supersedes the
+    /// reverted job automatically. Only the forward link is removed: the job,
+    /// its attempts, its terminal result, and its job-id→certificate reverse
+    /// link stay. The linked job is locked and the certificate link rechecked
+    /// before checking the terminal result and deleting the link. If the link
+    /// changed, the lock is released before retrying with the current job.
     ///
     /// Only a job that terminally *reverted* can be unlinked. It fails with
     /// [`Error::CertificateHasNoSettlementJob`] if the certificate has no job,
