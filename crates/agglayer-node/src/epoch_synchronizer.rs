@@ -290,7 +290,7 @@ mod tests {
                 Ok(mock)
             });
 
-        let (sender, mut receiver) = tokio::sync::broadcast::channel(8);
+        let (sender, receiver) = tokio::sync::broadcast::channel(8);
         drop(receiver);
         let clock_ref = ClockRef::new(
             sender.clone(),
