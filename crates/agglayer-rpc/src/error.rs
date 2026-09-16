@@ -111,55 +111,7 @@ impl SignatureVerificationError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ProofRetrievalError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-
-    #[error("Proof for certificate {certificate_id} not found")]
-    NotFound { certificate_id: CertificateId },
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum GetLatestCertificateError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-
-    #[error("Unknown latest certificate header for network {network_id}")]
-    UnknownLatestCertificateHeader {
-        network_id: NetworkId,
-        source: Box<CertificateRetrievalError>,
-    },
-
-    #[error(
-        "Mismatch on the certificate id. expected: {expected}, re-computed from the certificate \
-         in DB: {got}"
-    )]
-    CertificateIdHashMismatch {
-        expected: CertificateId,
-        got: CertificateId,
-    },
-
-    #[error("Latest certificate header for certificate {certificate_id} not found")]
-    NotFound { certificate_id: CertificateId },
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum GetLatestSettledClaimError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-
-    #[error("Could not get latest settled claim, inconsistent state for {network_id}")]
-    InconsistentState {
-        network_id: NetworkId,
-        height: Height,
-    },
-}
-
-#[derive(Debug, thiserror::Error)]
 pub enum GetNetworkInfoError {
-    #[error("Unable to determine network type for network {network_id}")]
-    UnknownNetworkType { network_id: NetworkId },
-
     #[error("Could not get network status for network {network_id}, internal error: {source}")]
     InternalError {
         network_id: NetworkId,

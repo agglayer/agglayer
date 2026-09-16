@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use agglayer_config::Config;
-use agglayer_storage::tests::mocks::{
-    MockDebugStore, MockEpochsStore, MockPendingStore, MockStateStore,
-};
+use agglayer_storage::tests::mocks::{MockDebugStore, MockPendingStore, MockStateStore};
 use agglayer_types::{
     Address, Certificate, CertificateId, ContractCallOutcome, ContractCallResult, Digest,
     NetworkId, Nonce, SettlementAttemptNumber, SettlementJobId, SettlementJobResult,
@@ -42,7 +40,6 @@ fn service_with_state(
     MockPendingStore,
     MockStateStore,
     MockDebugStore,
-    MockEpochsStore,
 > {
     let certificate_sender = tokio::sync::mpsc::channel(1).0;
     let asserter = Asserter::new();
@@ -53,7 +50,6 @@ fn service_with_state(
         Arc::new(MockPendingStore::new()),
         Arc::new(state_store),
         Arc::new(MockDebugStore::new()),
-        Arc::new(MockEpochsStore::new()),
         Arc::new(Config::default()),
         l1_rpc_provider,
     )

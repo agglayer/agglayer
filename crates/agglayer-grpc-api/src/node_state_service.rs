@@ -12,7 +12,7 @@ use agglayer_grpc_types::{
 };
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{
-    DebugReader, EpochStoreReader, NetworkInfoReader, PendingCertificateReader, StateReader,
+    DebugReader, NetworkInfoReader, PendingCertificateReader, StateReader,
 };
 use tonic_types::{ErrorDetails, StatusExt as _};
 use tracing::error;
@@ -24,20 +24,18 @@ const GET_LATEST_CERTIFICATE_HEADER_METHOD_PATH: &str =
 const GET_NETWORK_INFO_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.node-state-service.get_network_info";
 
-pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
-    pub(crate) service:
-        Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>>,
+pub struct NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore> {
+    pub(crate) service: Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>>,
 }
 
 #[tonic::async_trait]
-impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> NodeStateService
-    for NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore> NodeStateService
+    for NodeStateServer<L1Rpc, PendingStore, StateStore, DebugStore>
 where
     PendingStore: PendingCertificateReader + 'static,
     StateStore: NetworkInfoReader + StateReader + 'static,
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
-    EpochsStore: EpochStoreReader + 'static,
 {
     #[tracing::instrument(level = "debug", skip(self, request), fields(
         request_id = tracing::field::Empty,
@@ -171,17 +169,6 @@ where
             .map_err(|error| {
                 error!(?error, "Failed to get network state");
                 match error {
-                    agglayer_rpc::GetNetworkInfoError::UnknownNetworkType { .. } => {
-                        tonic::Status::with_error_details(
-                            tonic::Code::NotFound,
-                            "Network type could not be determined",
-                            ErrorDetails::with_error_info(
-                                GetNetworkInfoErrorKind::UnknownNetworkType.as_str_name(),
-                                GET_NETWORK_INFO_METHOD_PATH,
-                                [],
-                            ),
-                        )
-                    }
                     agglayer_rpc::GetNetworkInfoError::InternalError { source, .. } => {
                         tonic::Status::with_error_details(
                             tonic::Code::Internal,

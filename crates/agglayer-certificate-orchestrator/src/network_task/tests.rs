@@ -248,8 +248,9 @@ async fn start_from_zero() {
             eq(certificate_id),
             eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
+            eq(None),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     state
         .expect_get_certificate_settlement_job_id()
@@ -651,8 +652,9 @@ async fn retries() {
             eq(certificate_id2),
             eq(EpochNumber::ZERO),
             eq(CertificateIndex::ZERO),
+            eq(None),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _, _, _, _, _| Ok(()));
 
     let mut settlement_service = MockSettlementServiceTrait::new();
     settlement_service
@@ -1294,7 +1296,7 @@ async fn dropped_settlement_still_persists_settled_state() {
     state
         .expect_set_latest_settled_certificate_for_network()
         .once()
-        .return_once(move |_, _, _, _, _| {
+        .return_once(move |_, _, _, _, _, _| {
             sender.send("settled_cursor").expect("test channel closed");
             Ok(())
         });
@@ -1317,6 +1319,7 @@ async fn dropped_settlement_still_persists_settled_state() {
         task.assign_and_persist_settled_certificate(
             Box::new(LocalNetworkStateData::default()),
             Vec::new(),
+            None,
             Height::ZERO,
             certificate_id,
         )
