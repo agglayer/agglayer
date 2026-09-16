@@ -173,9 +173,11 @@ where
         if self.header.status == CertificateStatus::Proven {
             // A settlement job may already exist for this certificate if a
             // previous run crashed after submitting it but before
-            // recording `Candidate`. Resume that job rather than
-            // re-proving and re-submitting (which the at-most-once
-            // guard rejects), so it recovers instead of erroring.
+            // recording `Candidate`. Resume that job: a pending or successful
+            // job blocks replacement. If a re-submission crashed after
+            // re-proof but before superseding a reverted job, this resumes
+            // the revert and costs one extra InError cycle; the next resend
+            // can create a fresh job.
             let job_id = self.resume_settlement_job(certificate_id).await?;
             if let Some(job_id) = job_id {
                 info!(%job_id, "Proven certificate already has a settlement job; resuming");

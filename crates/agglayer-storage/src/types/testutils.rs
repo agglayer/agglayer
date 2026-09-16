@@ -4,9 +4,9 @@ use super::generated::agglayer::storage::v0::{
     SettlementJobResult, TxHash,
 };
 
-fn contract_call_success_for_test(seed: u8) -> ContractCallResult {
+fn contract_call_for_test(seed: u8, outcome: ContractCallOutcome) -> ContractCallResult {
     ContractCallResult {
-        outcome: ContractCallOutcome::Success as i32,
+        outcome: outcome as i32,
         metadata: Some(ContractCallMetadata {
             metadata: vec![seed, seed.wrapping_add(1)].into(),
         }),
@@ -26,7 +26,7 @@ impl SettlementAttemptResult {
     pub fn contract_call_success_for_test(seed: u8) -> Self {
         Self {
             result: Some(settlement_attempt_result::Result::ContractCallResult(
-                contract_call_success_for_test(seed),
+                contract_call_for_test(seed, ContractCallOutcome::Success),
             )),
         }
     }
@@ -34,6 +34,15 @@ impl SettlementAttemptResult {
 
 impl SettlementJobResult {
     pub fn contract_call_success_for_test(seed: u8) -> Self {
+        Self::for_test(seed, ContractCallOutcome::Success)
+    }
+
+    /// A terminal result whose on-chain call reverted.
+    pub fn contract_call_revert_for_test(seed: u8) -> Self {
+        Self::for_test(seed, ContractCallOutcome::Revert)
+    }
+
+    fn for_test(seed: u8, outcome: ContractCallOutcome) -> Self {
         Self {
             wallet: Some(Address {
                 address: vec![seed.wrapping_add(3); 20].into(),
@@ -44,16 +53,7 @@ impl SettlementJobResult {
             attempt_number: Some(AttemptSequenceNumber {
                 number: seed as u64 + 300,
             }),
-            contract_call_result: Some(contract_call_success_for_test(seed)),
+            contract_call_result: Some(contract_call_for_test(seed, outcome)),
         }
-    }
-
-    /// A terminal result whose on-chain call reverted.
-    pub fn contract_call_revert_for_test(seed: u8) -> Self {
-        let mut result = Self::contract_call_success_for_test(seed);
-        if let Some(contract_call_result) = result.contract_call_result.as_mut() {
-            contract_call_result.outcome = ContractCallOutcome::Revert as i32;
-        }
-        result
     }
 }

@@ -93,13 +93,14 @@ fn tag_admin_storage_error(error: agglayer_storage::error::Error) -> eyre::Repor
     let code = match &error {
         E::SettlementJobNotFound(_)
         | E::SettlementAttemptNotFound { .. }
-        | E::SettlementAttemptResultNotRecorded { .. } => RpcErrorCode::NotFound,
-        E::SettlementJobAlreadyCompleted(_) => RpcErrorCode::AlreadyCompleted,
-        E::SettlementJobNotCompleted(_) => RpcErrorCode::NotCompleted,
-        // `admin_unlinkCertificateSettlementJob` refusals.
-        E::CertificateHasNoSettlementJob(_) => RpcErrorCode::NotFound,
-        E::CertificateSettlementJobNotCompleted { .. } => RpcErrorCode::NotCompleted,
-        E::CertificateSettlementJobSucceeded { .. } => RpcErrorCode::AlreadyCompleted,
+        | E::SettlementAttemptResultNotRecorded { .. }
+        | E::CertificateHasNoSettlementJob(_) => RpcErrorCode::NotFound,
+        E::SettlementJobAlreadyCompleted(_) | E::CertificateSettlementJobSucceeded { .. } => {
+            RpcErrorCode::AlreadyCompleted
+        }
+        E::SettlementJobNotCompleted(_) | E::CertificateSettlementJobNotCompleted { .. } => {
+            RpcErrorCode::NotCompleted
+        }
         _ => return error.into(),
     };
     eyre::Report::new(error).wrap_err(code)

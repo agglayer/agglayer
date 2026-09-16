@@ -4,7 +4,7 @@ use agglayer_types::{
     SettlementJobResult,
 };
 use rocksdb::{Direction, WriteBatch};
-use tracing::warn;
+use tracing::{info, warn};
 
 use super::StateStore;
 use crate::{
@@ -25,6 +25,26 @@ use crate::{
 };
 
 impl StateStore {
+    /// Locks distinct jobs in ascending ULID order. Call without holding any
+    /// job lock; the callback holds both locks until it returns.
+    fn with_ordered_settlement_write_locks<T>(
+        &self,
+        settlement_job_id: &SettlementJobId,
+        other_job_id: Option<&SettlementJobId>,
+        callback: impl FnOnce() -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let Some(other_job_id) = other_job_id.filter(|id| *id != settlement_job_id) else {
+            return self.with_settlement_write_lock(settlement_job_id, callback);
+        };
+        let (first, second) = if settlement_job_id < other_job_id {
+            (settlement_job_id, other_job_id)
+        } else {
+            (other_job_id, settlement_job_id)
+        };
+
+        self.with_settlement_write_lock(first, || self.with_settlement_write_lock(second, callback))
+    }
+
     fn with_settlement_write_lock<T>(
         &self,
         settlement_job_id: &SettlementJobId,
@@ -264,43 +284,95 @@ impl SettlementWriter for StateStore {
     ) -> Result<(), Error> {
         let settlement_job: v0::SettlementJob = settlement_job.into();
 
-        self.with_settlement_write_lock(settlement_job_id, || {
-            if self
+        loop {
+            let existing_job_id = self
                 .db
-                .get::<SettlementJobsColumn>(settlement_job_id)?
-                .is_some()
-            {
-                return Err(Error::UnprocessedAction(format!(
-                    "Settlement job already exists for id {settlement_job_id}"
-                )));
-            }
-            if self
-                .db
-                .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
-                .is_some()
-            {
-                return Err(Error::UnprocessedAction(format!(
-                    "Certificate {certificate_id} already has a settlement job id"
-                )));
-            }
+                .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?;
+            let inserted = self.with_ordered_settlement_write_locks(
+                settlement_job_id,
+                existing_job_id.as_ref(),
+                || {
+                    // The link may change while either job lock is acquired.
+                    // Release both locks before retrying with the current link.
+                    if self
+                        .db
+                        .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
+                        != existing_job_id
+                    {
+                        return Ok(false);
+                    }
+                    if self
+                        .db
+                        .get::<SettlementJobsColumn>(settlement_job_id)?
+                        .is_some()
+                    {
+                        return Err(Error::UnprocessedAction(format!(
+                            "Settlement job already exists for id {settlement_job_id}"
+                        )));
+                    }
+                    // Only a terminal revert permits a fresh job for the same
+                    // certificate, matching the RPC replacement gate. Preserve
+                    // the old job and its reverse link for auditing. The
+                    // exhaustive match requires any new
+                    // outcome to take an explicit stance.
+                    let superseded_job_id = existing_job_id
+                        .map(|existing_job_id| -> Result<SettlementJobId, Error> {
+                            let outcome = self
+                                .db
+                                .get::<SettlementJobResultsColumn>(&existing_job_id)?
+                                .map(SettlementJobResult::try_from)
+                                .transpose()?
+                                .map(|result| result.contract_call_result.outcome);
 
-            let mut batch = WriteBatch::default();
-            self.db.multi_insert_batch::<SettlementJobsColumn>(
-                [(settlement_job_id, &settlement_job)],
-                &mut batch,
+                            match outcome {
+                                Some(ContractCallOutcome::Revert) => Ok(existing_job_id),
+                                None => Err(Error::UnprocessedAction(format!(
+                                    "Certificate {certificate_id} already has settlement job \
+                                     {existing_job_id}, which has no terminal result yet"
+                                ))),
+                                Some(ContractCallOutcome::Success) => {
+                                    Err(Error::UnprocessedAction(format!(
+                                        "Certificate {certificate_id} already settled through \
+                                         settlement job {existing_job_id}"
+                                    )))
+                                }
+                            }
+                        })
+                        .transpose()?;
+
+                    let mut batch = WriteBatch::default();
+                    self.db.multi_insert_batch::<SettlementJobsColumn>(
+                        [(settlement_job_id, &settlement_job)],
+                        &mut batch,
+                    )?;
+                    self.db
+                        .multi_insert_batch::<SettlementJobIdPerCertificateIdColumn>(
+                            [(certificate_id, settlement_job_id)],
+                            &mut batch,
+                        )?;
+                    self.db
+                        .multi_insert_batch::<CertificateIdPerSettlementJobIdColumn>(
+                            [(settlement_job_id, certificate_id)],
+                            &mut batch,
+                        )?;
+                    self.db.write_batch(batch)?;
+
+                    if let Some(superseded_job_id) = superseded_job_id {
+                        info!(
+                            %certificate_id,
+                            %superseded_job_id,
+                            new_settlement_job_id = %settlement_job_id,
+                            "Superseding a terminally reverted settlement job with a new one"
+                        );
+                    }
+
+                    Ok(true)
+                },
             )?;
-            self.db
-                .multi_insert_batch::<SettlementJobIdPerCertificateIdColumn>(
-                    [(certificate_id, settlement_job_id)],
-                    &mut batch,
-                )?;
-            self.db
-                .multi_insert_batch::<CertificateIdPerSettlementJobIdColumn>(
-                    [(settlement_job_id, certificate_id)],
-                    &mut batch,
-                )?;
-            Ok(self.db.write_batch(batch)?)
-        })
+            if inserted {
+                return Ok(());
+            }
+        }
     }
 
     fn insert_settlement_job_result(
@@ -558,45 +630,55 @@ impl SettlementWriter for StateStore {
         &self,
         certificate_id: &CertificateId,
     ) -> Result<SettlementJobId, Error> {
-        let settlement_job_id = self
-            .db
-            .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
-            .ok_or(Error::CertificateHasNoSettlementJob(*certificate_id))?;
-
-        // Same per-job lock as the other admin edits, so the job's terminal
-        // result cannot be edited while it is being checked here.
-        self.with_settlement_write_lock(&settlement_job_id, || {
-            // Only a job that terminally reverted may be unlinked. A pending
-            // job may still settle and a succeeded one already did; either
-            // way a replacement's job would compete for the same height. The
-            // match is exhaustive on purpose: a new outcome must take a stance.
-            let outcome = self
+        loop {
+            let settlement_job_id = self
                 .db
-                .get::<SettlementJobResultsColumn>(&settlement_job_id)?
-                .map(SettlementJobResult::try_from)
-                .transpose()?
-                .map(|result| result.contract_call_result.outcome);
-            match outcome {
-                Some(ContractCallOutcome::Revert) => {}
-                None => {
-                    return Err(Error::CertificateSettlementJobNotCompleted {
-                        certificate_id: *certificate_id,
-                        settlement_job_id,
-                    });
-                }
-                Some(ContractCallOutcome::Success) => {
-                    return Err(Error::CertificateSettlementJobSucceeded {
-                        certificate_id: *certificate_id,
-                        settlement_job_id,
-                    });
-                }
-            }
+                .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
+                .ok_or(Error::CertificateHasNoSettlementJob(*certificate_id))?;
 
-            // Only the certificate→job direction goes. The job keeps its own
-            // link back to the certificate, so it stays attributable.
-            self.db
-                .delete::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?;
-            Ok(settlement_job_id)
-        })
+            // Same per-job lock as the other admin edits, so the job's terminal
+            // result cannot be edited while it is being checked here.
+            let unlinked = self.with_settlement_write_lock(&settlement_job_id, || {
+                if self
+                    .db
+                    .get::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?
+                    != Some(settlement_job_id)
+                {
+                    return Ok(false);
+                }
+                // Only a terminal revert permits unlink. A pending job may
+                // still settle and a successful job already did. Keep the
+                // match exhaustive so a new outcome must take a stance.
+                let outcome = self
+                    .db
+                    .get::<SettlementJobResultsColumn>(&settlement_job_id)?
+                    .map(SettlementJobResult::try_from)
+                    .transpose()?
+                    .map(|result| result.contract_call_result.outcome);
+                match outcome {
+                    Some(ContractCallOutcome::Revert) => {}
+                    None => {
+                        return Err(Error::CertificateSettlementJobNotCompleted {
+                            certificate_id: *certificate_id,
+                            settlement_job_id,
+                        });
+                    }
+                    Some(ContractCallOutcome::Success) => {
+                        return Err(Error::CertificateSettlementJobSucceeded {
+                            certificate_id: *certificate_id,
+                            settlement_job_id,
+                        });
+                    }
+                }
+
+                // Keep the job's reverse link for auditing.
+                self.db
+                    .delete::<SettlementJobIdPerCertificateIdColumn>(certificate_id)?;
+                Ok(true)
+            })?;
+            if unlinked {
+                return Ok(settlement_job_id);
+            }
+        }
     }
 }
