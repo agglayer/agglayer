@@ -11,7 +11,7 @@ use agglayer_types::{
     Proof,
 };
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use rocksdb::ReadOptions;
+use rocksdb::{ReadOptions, WriteBatch};
 use tracing::{debug, error, instrument, warn};
 
 use super::{
@@ -253,6 +253,129 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
     }
 }
 
+impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore>
+where
+    PendingStore: PendingCertificateReader + PendingCertificateWriter,
+    StateStore: StateWriter,
+{
+    fn find_persisted_certificate_index(
+        &self,
+        certificate_id: CertificateId,
+    ) -> Result<Option<CertificateIndex>, Error> {
+        for entry in self.db.iter_with_direction::<CertificatePerIndexProtoColumn>(
+            ReadOptions::default(),
+            rocksdb::Direction::Reverse,
+        )? {
+            let (index, certificate) = entry?;
+            if certificate.hash() == certificate_id {
+                return Ok(Some(index));
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn validate_persisted_certificate(
+        &self,
+        certificate_id: CertificateId,
+        network_id: NetworkId,
+        height: Height,
+        certificate_index: CertificateIndex,
+    ) -> Result<(), Error> {
+        let certificate = self
+            .db
+            .get::<CertificatePerIndexProtoColumn>(&certificate_index)?
+            .ok_or_else(|| {
+                Error::Unexpected(format!(
+                    "Certificate {certificate_id} is assigned to epoch {} at index {certificate_index}, but the epoch certificate row is missing",
+                    self.epoch_number
+                ))
+            })?;
+
+        if certificate.hash() != certificate_id
+            || certificate.network_id != network_id
+            || certificate.height != height
+        {
+            return Err(Error::Unexpected(format!(
+                "Certificate {certificate_id} does not match the epoch row at index {certificate_index}"
+            )));
+        }
+
+        if self
+            .db
+            .get::<ProofPerIndexColumn>(&certificate_index)?
+            .is_none()
+        {
+            return Err(Error::Unexpected(format!(
+                "Certificate {certificate_id} is persisted at epoch index {certificate_index}, but its proof is missing"
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn finish_recovered_certificate(
+        &self,
+        certificate_id: CertificateId,
+        network_id: NetworkId,
+        height: Height,
+        certificate_index: CertificateIndex,
+        assign_state: bool,
+    ) -> Result<(EpochNumber, CertificateIndex), Error> {
+        self.validate_persisted_certificate(
+            certificate_id,
+            network_id,
+            height,
+            certificate_index,
+        )?;
+
+        if assign_state {
+            self.state_store.assign_certificate_to_epoch(
+                &certificate_id,
+                &self.epoch_number,
+                &certificate_index,
+            )?;
+        }
+
+        self.cleanup_pending_certificate(certificate_id, network_id, height)?;
+
+        Ok((*self.epoch_number, certificate_index))
+    }
+
+    fn cleanup_pending_certificate(
+        &self,
+        certificate_id: CertificateId,
+        network_id: NetworkId,
+        height: Height,
+    ) -> Result<(), Error> {
+        // The proof is keyed by certificate id, so deleting it is safe and
+        // idempotent even if the retry happens after it was already removed.
+        self.pending_store.remove_generated_proof(&certificate_id)?;
+
+        // The pending body is keyed only by network + height. Avoid deleting a
+        // different certificate that may have replaced this row while the
+        // settled transition was being completed.
+        if let Some(pending_certificate) =
+            self.pending_store.get_certificate(network_id, height)?
+        {
+            if pending_certificate.hash() == certificate_id {
+                self.pending_store
+                    .remove_pending_certificate(network_id, height)?;
+            } else {
+                warn!(
+                    %certificate_id,
+                    %network_id,
+                    %height,
+                    pending_certificate_id = %pending_certificate.hash(),
+                    "Pending row was replaced while completing epoch assignment; leaving it intact"
+                );
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Migration step for the certificate serialization switch from the legacy
 /// epoch certificate CF to the proto-backed CF.
 ///
@@ -296,6 +419,68 @@ where
         let network_id = certificate_header.network_id;
         let height = certificate_header.height;
 
+        if mode == ExecutionMode::Default {
+            match (
+                certificate_header.epoch_number,
+                certificate_header.certificate_index,
+            ) {
+                (Some(epoch_number), Some(certificate_index))
+                    if epoch_number == *self.epoch_number =>
+                {
+                    return self.finish_recovered_certificate(
+                        certificate_id,
+                        network_id,
+                        height,
+                        certificate_index,
+                        false,
+                    );
+                }
+                (Some(epoch_number), Some(certificate_index)) => {
+                    return Err(Error::UnprocessedAction(format!(
+                        "Certificate {certificate_id} is already assigned to epoch {epoch_number} at index {certificate_index}"
+                    )));
+                }
+                (Some(_), None) | (None, Some(_)) => {
+                    return Err(Error::Unexpected(format!(
+                        "Certificate {certificate_id} has an incomplete epoch assignment"
+                    )));
+                }
+                (None, None) => {}
+            }
+        }
+
+        // Check for network rate limiting.
+        let start_checkpoint = self.start_checkpoint.get(&network_id);
+        let mut end_checkpoint = self.end_checkpoint.write();
+
+        debug!(
+            "{}Try adding certificate for network {} at height {} in epoch {}",
+            mode.prefix(),
+            network_id,
+            height,
+            self.epoch_number
+        );
+
+        // The epoch-local batch is the durable first phase of the transition.
+        // If it committed but state assignment or pending cleanup did not, the
+        // checkpoint already points at this height. Resume from the persisted
+        // certificate instead of allocating a second index.
+        if mode == ExecutionMode::Default
+            && end_checkpoint.get(&network_id).copied() == Some(height)
+        {
+            if let Some(certificate_index) =
+                self.find_persisted_certificate_index(certificate_id)?
+            {
+                return self.finish_recovered_certificate(
+                    certificate_id,
+                    network_id,
+                    height,
+                    certificate_index,
+                    true,
+                );
+            }
+        }
+
         let certificate = self
             .pending_store
             .get_certificate(network_id, height)?
@@ -316,17 +501,7 @@ where
         } else {
             certificate_id
         };
-        // Check for network rate limiting
-        let start_checkpoint = self.start_checkpoint.get(&network_id);
-        let mut end_checkpoint = self.end_checkpoint.write();
 
-        debug!(
-            "{}Try adding certificate for network {} at height {} in epoch {}",
-            mode.prefix(),
-            network_id,
-            height,
-            self.epoch_number
-        );
         let end_checkpoint_entry = end_checkpoint.entry(network_id);
 
         let end_checkpoint_entry_assignment;
@@ -435,42 +610,52 @@ where
             })?;
 
         let certificate_index =
-            CertificateIndex::new(self.next_certificate_index.fetch_add(1, Ordering::SeqCst));
+            CertificateIndex::new(self.next_certificate_index.load(Ordering::SeqCst));
+        let mut batch = WriteBatch::default();
 
-        // TODO: all of this need to be batched
-
-        // Adding the certificate and proof to the current epoch store
+        // Certificate, proof, and checkpoint live in the same epoch RocksDB, so
+        // commit them as one durable phase. Cross-DB state/pending updates are
+        // completed idempotently below and can be resumed on retry.
         self.db
-            .put::<CertificatePerIndexProtoColumn>(&certificate_index, &certificate)?;
+            .multi_insert_batch::<CertificatePerIndexProtoColumn>(
+                [(&certificate_index, &certificate)],
+                &mut batch,
+            )?;
+        self.db.multi_insert_batch::<ProofPerIndexColumn>(
+            [(&certificate_index, &proof)],
+            &mut batch,
+        )?;
+        if let Some(height) = end_checkpoint_entry_assignment {
+            self.db.multi_insert_batch::<EndCheckpointColumn>(
+                [(&network_id, &height)],
+                &mut batch,
+            )?;
+        }
+        self.db.write_batch(batch)?;
 
-        self.db
-            .put::<ProofPerIndexColumn>(&certificate_index, &proof)?;
+        self.next_certificate_index.fetch_add(1, Ordering::SeqCst);
 
-        // Removing the certificate and proof from the pending store
-        self.pending_store.remove_generated_proof(&certificate_id)?;
+        if let Some(height) = end_checkpoint_entry_assignment {
+            let entry = end_checkpoint_entry.or_default();
+            *entry = height;
+            debug!(
+                "Updated end checkpoint for network {} to height {}",
+                network_id, height
+            );
+        }
 
-        self.pending_store
-            .remove_pending_certificate(network_id, height)?;
-        debug!("Certificate and proof removed from pending store");
-
+        // Keep pending data intact until the state header is durably assigned.
+        // If assignment or cleanup fails, a retry detects the persisted epoch
+        // row above and resumes from this same index.
         self.state_store.assign_certificate_to_epoch(
             &certificate_id,
             &self.epoch_number,
             &certificate_index,
         )?;
-
         debug!("Certificate assigned to epoch");
-        if let Some(height) = end_checkpoint_entry_assignment {
-            let entry = end_checkpoint_entry.or_default();
-            *entry = height;
 
-            debug!(
-                "Updating end checkpoint for network {} to height {}",
-                network_id, height
-            );
-
-            self.db.put::<EndCheckpointColumn>(&network_id, &height)?;
-        }
+        self.cleanup_pending_certificate(certificate_id, network_id, height)?;
+        debug!("Certificate and proof cleaned up from pending store");
 
         drop(lock);
 
