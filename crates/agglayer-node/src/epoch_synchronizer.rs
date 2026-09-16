@@ -133,7 +133,12 @@ impl EpochSynchronizer {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, num::NonZeroU64, sync::atomic::AtomicU64, time::Duration};
+    use std::{
+        collections::BTreeMap,
+        num::NonZeroU64,
+        sync::atomic::{AtomicBool, AtomicU64, Ordering},
+        time::Duration,
+    };
 
     use agglayer_config::Config;
     use agglayer_storage::{
@@ -265,22 +270,31 @@ mod tests {
                 Ok(mock)
             });
 
-        let (sender, _receiver) = tokio::sync::broadcast::channel(8);
+        let (sender, receiver) = tokio::sync::broadcast::channel(8);
+        drop(receiver);
         let clock_ref = ClockRef::new(
             sender.clone(),
             Arc::new(AtomicU64::new(1)),
             Arc::new(NonZeroU64::new(1).unwrap()),
         );
 
+        let failpoint_fired = Arc::new(AtomicBool::new(false));
         let sender_for_failpoint = sender.clone();
+        let failpoint_fired_callback = failpoint_fired.clone();
         fail::cfg_callback(
             "epoch_synchronizer::start::between_subscription_and_snapshot",
             move || {
-                // Keep the sampled epoch at 1. Reaching epoch 2 therefore
-                // requires observing this event rather than relying on the
-                // current-epoch snapshot.
-                let _ = sender_for_failpoint
-                    .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)));
+                // Failpoints are process-global, so only act once our receiver
+                // is registered on this test's sender.
+                if sender_for_failpoint.receiver_count() == 1
+                    && !failpoint_fired_callback.swap(true, Ordering::SeqCst)
+                {
+                    // Keep the sampled epoch at 1. Reaching epoch 2 therefore
+                    // requires observing this event rather than relying on the
+                    // current-epoch snapshot.
+                    let _ = sender_for_failpoint
+                        .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)));
+                }
             },
         )
         .unwrap();
@@ -290,6 +304,7 @@ mod tests {
                 .await
                 .unwrap();
 
+        assert!(failpoint_fired.load(Ordering::SeqCst));
         assert_eq!(result.get_epoch_number(), EpochNumber::new(2));
         scenario.teardown();
     }
