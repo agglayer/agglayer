@@ -145,8 +145,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                     ReadOptions::default(),
                     rocksdb::Direction::Forward,
                 )?
-                .filter_map(|v| v.ok())
-                .collect::<BTreeMap<NetworkId, Height>>();
+                .collect::<Result<BTreeMap<NetworkId, Height>, _>>()?;
 
             if readonly {
                 // For readonly access, we just use the existing checkpoint
@@ -187,12 +186,13 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             // are backfilled into it during `init_db`, so consulting the legacy
             // CF here would only re-read data that has already been
             // migrated.
-            if let Some(Ok((index, _))) = db
+            if let Some((index, _)) = db
                 .iter_with_direction::<CertificatePerIndexProtoColumn>(
                     ReadOptions::default(),
                     rocksdb::Direction::Reverse,
                 )?
                 .next()
+                .transpose()?
             {
                 // We're starting from the next index after the last one found
                 // in the database.
@@ -208,8 +208,7 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                     ReadOptions::default(),
                     rocksdb::Direction::Forward,
                 )?
-                .filter_map(|v| v.ok())
-                .collect::<BTreeMap<NetworkId, Height>>();
+                .collect::<Result<BTreeMap<NetworkId, Height>, _>>()?;
 
             if readonly {
                 // For readonly access, just use the existing checkpoint
