@@ -722,11 +722,11 @@ async fn test_pre_subscribed_epoch_stream_preserves_handoff_events() {
         .expect("Unable to create store"),
     );
 
-    let current_epoch = ArcSwap::new(Arc::new(
+    let current_epoch = Arc::new(ArcSwap::new(Arc::new(
         epochs_store
             .open(EpochNumber::new(1))
             .expect("Unable to open epoch"),
-    ));
+    )));
     let (clock_sender, _receiver) = broadcast::channel(2);
     let clock = ClockRef::new(
         clock_sender.clone(),
@@ -735,7 +735,7 @@ async fn test_pre_subscribed_epoch_stream_preserves_handoff_events() {
     );
 
     // Subscribe before the handoff gap, then emit the rollover before the
-    // orchestrator exists. A fresh subscription inside try_new would miss it.
+    // orchestrator exists. A fresh subscription during start would miss it.
     let clock_stream = clock.subscribe().expect("Unable to subscribe to clock");
     clock_sender
         .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)))
@@ -750,26 +750,24 @@ async fn test_pre_subscribed_epoch_stream_preserves_handoff_events() {
         .executed(check_sender)
         .build();
 
-    let mut orchestrator = CertificateOrchestrator::try_new_with_clock_stream(
-        clock,
-        clock_stream,
-        data_receiver,
-        cancellation_token,
-        check,
-        pending_store,
-        epochs_store.clone(),
-        Arc::new(current_epoch),
-        state_store,
-        Arc::new(MockSettlementServiceTrait::new()),
-    )
-    .expect("Unable to create orchestrator");
+    let orchestrator_handle = CertificateOrchestrator::builder()
+        .clock(clock)
+        .clock_stream(clock_stream)
+        .data_receiver(data_receiver)
+        .cancellation_token(cancellation_token.clone())
+        .certifier_task_builder(check)
+        .pending_store(pending_store)
+        .epochs_store(epochs_store.clone())
+        .current_epoch(current_epoch.clone())
+        .state_store(state_store)
+        .settlement_service(Arc::new(MockSettlementServiceTrait::new()))
+        .start()
+        .await
+        .expect("Unable to start orchestrator");
 
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            let _ = poll!(&mut orchestrator);
-            if orchestrator.epoch_rollover.is_none()
-                && orchestrator.current_epoch.load().get_epoch_number() == EpochNumber::new(2)
-            {
+            if current_epoch.load().get_epoch_number() == EpochNumber::new(2) {
                 break;
             }
             tokio::task::yield_now().await;
@@ -778,14 +776,15 @@ async fn test_pre_subscribed_epoch_stream_preserves_handoff_events() {
     .await
     .expect("handoff epoch event was not processed");
 
-    assert_eq!(
-        orchestrator.current_epoch.load().get_epoch_number(),
-        EpochNumber::new(2)
-    );
     assert!(epochs_store
         .open(EpochNumber::new(1))
         .expect("Unable to reopen epoch 1")
         .is_epoch_packed());
+
+    cancellation_token.cancel();
+    orchestrator_handle
+        .await
+        .expect("certificate orchestrator task panicked");
 }
 
 // A certificate received after an EpochEnded is stored for next epoch
