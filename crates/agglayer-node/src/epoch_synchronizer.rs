@@ -16,6 +16,31 @@ use tracing::{debug, error, info};
 pub(crate) struct EpochSynchronizer {}
 
 impl EpochSynchronizer {
+    fn drain_epoch_events(
+        current_epoch_number: &mut EpochNumber,
+        epoch_stream: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
+    ) -> eyre::Result<()> {
+        loop {
+            match epoch_stream.try_recv() {
+                Ok(agglayer_clock::Event::EpochEnded(n)) => {
+                    *current_epoch_number = (*current_epoch_number).max(n.next());
+                }
+                Err(TryRecvError::Closed) => {
+                    eyre::bail!("Epoch stream closed during epoch synchronization");
+                }
+                Err(TryRecvError::Lagged(n)) => {
+                    debug!(
+                        "Epoch stream lagged on {} EpochEnded update during epoch synchronization",
+                        n
+                    );
+                }
+                Err(TryRecvError::Empty) => break,
+            }
+        }
+
+        Ok(())
+    }
+
     fn walk_epochs<EpochsStore>(
         epochs_store: Arc<EpochsStore>,
         mut opened_epoch: EpochsStore::PerEpochStore,
@@ -26,7 +51,16 @@ impl EpochSynchronizer {
         EpochsStore: EpochStoreWriter,
         EpochsStore::PerEpochStore: PerEpochReader + PerEpochWriter,
     {
-        while opened_epoch.get_epoch_number() < current_epoch_number {
+        loop {
+            // Consume every epoch transition already queued before deciding
+            // synchronization is complete. Older queued events must never move
+            // the target backwards from the sampled current epoch.
+            Self::drain_epoch_events(&mut current_epoch_number, &mut epoch_stream)?;
+
+            if opened_epoch.get_epoch_number() >= current_epoch_number {
+                break;
+            }
+
             match opened_epoch.start_packing() {
                 Err(StorageError::AlreadyPacked(_)) => {
                     info!(
@@ -49,25 +83,6 @@ impl EpochSynchronizer {
                 opened_epoch.get_epoch_number().next(),
                 opened_epoch.get_end_checkpoint(),
             )?;
-
-            match epoch_stream.try_recv() {
-                Ok(agglayer_clock::Event::EpochEnded(n)) => {
-                    current_epoch_number = n.next();
-                }
-                Err(TryRecvError::Closed) => {
-                    eyre::bail!("Epoch stream closed during epoch synchronization");
-                }
-                Err(TryRecvError::Lagged(n)) => {
-                    debug!(
-                        "Epoch stream lagged on {} EpochEnded update during epoch synchronization",
-                        n
-                    );
-                }
-                Err(TryRecvError::Empty) => {
-                    // We don't care about empty stream during epoch
-                    // synchronization
-                }
-            }
         }
 
         Ok(opened_epoch)
@@ -307,6 +322,113 @@ mod tests {
         assert!(failpoint_fired.load(Ordering::SeqCst));
         assert_eq!(result.get_epoch_number(), EpochNumber::new(2));
         scenario.teardown();
+    }
+
+    #[test]
+    fn queued_events_do_not_move_synchronization_target_backwards() {
+        let mut epochs_store = MockEpochsStore::new();
+
+        let mut opened_epoch = MockPerEpochStore::new();
+        opened_epoch
+            .expect_get_epoch_number()
+            .returning(|| EpochNumber::new(10));
+        opened_epoch
+            .expect_start_packing()
+            .once()
+            .returning(|| Ok(()));
+        opened_epoch
+            .expect_get_end_checkpoint()
+            .once()
+            .returning(BTreeMap::new);
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .with(eq(EpochNumber::new(11)), eq(BTreeMap::new()))
+            .returning(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .with(eq(EpochNumber::new(12)), eq(BTreeMap::new()))
+            .returning(|epoch, _end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().never();
+                mock.expect_get_end_checkpoint().never();
+                Ok(mock)
+            });
+
+        let (sender, receiver) = tokio::sync::broadcast::channel(8);
+        sender
+            .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(10)))
+            .unwrap();
+        sender
+            .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(11)))
+            .unwrap();
+
+        let result = EpochSynchronizer::walk_epochs(
+            Arc::new(epochs_store),
+            opened_epoch,
+            EpochNumber::new(12),
+            receiver,
+        )
+        .unwrap();
+
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(12));
+    }
+
+    #[test]
+    fn drains_queued_events_before_finishing_synchronization() {
+        let mut epochs_store = MockEpochsStore::new();
+
+        let mut opened_epoch = MockPerEpochStore::new();
+        opened_epoch
+            .expect_get_epoch_number()
+            .returning(|| EpochNumber::new(10));
+        opened_epoch
+            .expect_start_packing()
+            .once()
+            .returning(|| Ok(()));
+        opened_epoch
+            .expect_get_end_checkpoint()
+            .once()
+            .returning(BTreeMap::new);
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .with(eq(EpochNumber::new(11)), eq(BTreeMap::new()))
+            .returning(|epoch, _end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().never();
+                mock.expect_get_end_checkpoint().never();
+                Ok(mock)
+            });
+
+        let (sender, receiver) = tokio::sync::broadcast::channel(8);
+        sender
+            .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(10)))
+            .unwrap();
+
+        let result = EpochSynchronizer::walk_epochs(
+            Arc::new(epochs_store),
+            opened_epoch,
+            EpochNumber::new(10),
+            receiver,
+        )
+        .unwrap();
+
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(11));
     }
 
     #[tokio::test]
