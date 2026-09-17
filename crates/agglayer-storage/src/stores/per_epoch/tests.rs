@@ -6,11 +6,13 @@ use std::{
 
 use agglayer_config::Config;
 use agglayer_types::{
-    Certificate, CertificateIndex, CertificateStatus, EpochNumber, Height, NetworkId, Proof,
+    Certificate, CertificateIndex, CertificateStatus, EpochNumber, Height, Metadata, NetworkId,
+    Proof,
 };
 use parking_lot::RwLock;
 use pessimistic_proof_test_suite::sample_data;
 use prost::Message as _;
+use rocksdb::WriteBatch;
 use rstest::{fixture, rstest};
 use tracing::info;
 
@@ -29,7 +31,8 @@ use crate::{
         pending::PendingStore,
         per_epoch::PerEpochStore,
         state::StateStore,
-        EpochStoreReader as _, PendingCertificateWriter as _, PerEpochReader as _, StateReader,
+        EpochStoreReader as _, PendingCertificateReader as _, PendingCertificateWriter as _,
+        PerEpochReader as _, StateReader,
     },
     tests::TempDBDir,
     types::generated::agglayer::storage::v0,
@@ -125,6 +128,254 @@ fn seed_epoch_checkpoints(path: &std::path::Path, network_id: NetworkId, height:
     db.put::<StartCheckpointColumn>(&network_id, &height)
         .unwrap();
     db.put::<EndCheckpointColumn>(&network_id, &height).unwrap();
+}
+
+fn persist_epoch_phase(
+    store: &PerEpochStore<PendingStore, StateStore>,
+    certificate: &Certificate,
+    proof: &Proof,
+    index: CertificateIndex,
+) {
+    let mut batch = WriteBatch::default();
+    let network_id = certificate.network_id;
+    let height = certificate.height;
+
+    store
+        .db
+        .multi_insert_batch::<CertificatePerIndexProtoColumn>(
+            [(&index, certificate)],
+            &mut batch,
+        )
+        .unwrap();
+    store
+        .db
+        .multi_insert_batch::<crate::columns::epochs::proofs::ProofPerIndexColumn>(
+            [(&index, proof)],
+            &mut batch,
+        )
+        .unwrap();
+    store
+        .db
+        .multi_insert_batch::<EndCheckpointColumn>(
+            [(&network_id, &height)],
+            &mut batch,
+        )
+        .unwrap();
+    store.db.write_batch(batch).unwrap();
+}
+
+#[test]
+fn add_certificate_recovers_committed_epoch_phase_after_restart() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let store = PerEpochStore::try_open(
+        config.clone(),
+        EpochNumber::ZERO,
+        pending_store.clone(),
+        state_store.clone(),
+        None,
+        BackupClient::noop(),
+    )
+    .unwrap();
+
+    let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+    let certificate_id = certificate.hash();
+    let proof = Proof::dummy();
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+    pending_store
+        .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
+        .unwrap();
+    pending_store
+        .insert_generated_proof(&certificate_id, &proof)
+        .unwrap();
+
+    persist_epoch_phase(&store, &certificate, &proof, CertificateIndex::ZERO);
+
+    // A later write for another network makes the incomplete certificate no
+    // longer the last row in the epoch. Recovery must search by certificate
+    // id instead of assuming the previous index is the one to resume.
+    let later = Certificate::new_for_test(NetworkId::new(2), Height::ZERO);
+    persist_epoch_phase(
+        &store,
+        &later,
+        &Proof::dummy(),
+        CertificateIndex::new(1),
+    );
+
+    drop(store);
+
+    let store = PerEpochStore::try_open(
+        config,
+        EpochNumber::ZERO,
+        pending_store.clone(),
+        state_store.clone(),
+        None,
+        BackupClient::noop(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        store
+            .add_certificate(certificate_id, agglayer_types::ExecutionMode::Default)
+            .unwrap(),
+        (EpochNumber::ZERO, CertificateIndex::ZERO)
+    );
+
+    let header = state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(header.epoch_number, Some(EpochNumber::ZERO));
+    assert_eq!(header.certificate_index, Some(CertificateIndex::ZERO));
+    assert_eq!(header.status, CertificateStatus::Settled);
+    assert!(pending_store
+        .get_certificate(certificate.network_id, certificate.height)
+        .unwrap()
+        .is_none());
+    assert!(pending_store.get_proof(certificate_id).unwrap().is_none());
+    assert!(store
+        .get_certificate_at_index(CertificateIndex::new(2))
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn add_certificate_finishes_pending_cleanup_after_restart() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let store = PerEpochStore::try_open(
+        config.clone(),
+        EpochNumber::ZERO,
+        pending_store.clone(),
+        state_store.clone(),
+        None,
+        BackupClient::noop(),
+    )
+    .unwrap();
+
+    let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+    let certificate_id = certificate.hash();
+    let proof = Proof::dummy();
+    let index = CertificateIndex::ZERO;
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+    pending_store
+        .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
+        .unwrap();
+    pending_store
+        .insert_generated_proof(&certificate_id, &proof)
+        .unwrap();
+
+    persist_epoch_phase(&store, &certificate, &proof, index);
+    state_store
+        .assign_certificate_to_epoch(&certificate_id, &EpochNumber::ZERO, &index)
+        .unwrap();
+
+    // Simulate a crash after the first cleanup delete.
+    pending_store.remove_generated_proof(&certificate_id).unwrap();
+    drop(store);
+
+    let store = PerEpochStore::try_open(
+        config,
+        EpochNumber::ZERO,
+        pending_store.clone(),
+        state_store.clone(),
+        None,
+        BackupClient::noop(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        store
+            .add_certificate(certificate_id, agglayer_types::ExecutionMode::Default)
+            .unwrap(),
+        (EpochNumber::ZERO, index)
+    );
+    assert!(pending_store
+        .get_certificate(certificate.network_id, certificate.height)
+        .unwrap()
+        .is_none());
+    assert!(pending_store.get_proof(certificate_id).unwrap().is_none());
+    assert!(store
+        .get_certificate_at_index(CertificateIndex::new(1))
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn recovered_cleanup_does_not_delete_replaced_pending_certificate() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+    let store = PerEpochStore::try_open(
+        config,
+        EpochNumber::ZERO,
+        pending_store.clone(),
+        state_store.clone(),
+        None,
+        BackupClient::noop(),
+    )
+    .unwrap();
+
+    let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+    let certificate_id = certificate.hash();
+    let proof = Proof::dummy();
+    let index = CertificateIndex::ZERO;
+
+    state_store
+        .insert_certificate_header(&certificate, CertificateStatus::Proven)
+        .unwrap();
+    pending_store
+        .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
+        .unwrap();
+    pending_store
+        .insert_generated_proof(&certificate_id, &proof)
+        .unwrap();
+
+    persist_epoch_phase(&store, &certificate, &proof, index);
+    state_store
+        .assign_certificate_to_epoch(&certificate_id, &EpochNumber::ZERO, &index)
+        .unwrap();
+
+    let mut replacement = Certificate::new_for_test(certificate.network_id, certificate.height);
+    replacement.metadata = Metadata::new([1; 32].into());
+    assert_ne!(replacement.hash(), certificate_id);
+    pending_store
+        .insert_pending_certificate(replacement.network_id, replacement.height, &replacement)
+        .unwrap();
+
+    assert_eq!(
+        store
+            .add_certificate(certificate_id, agglayer_types::ExecutionMode::Default)
+            .unwrap(),
+        (EpochNumber::ZERO, index)
+    );
+
+    assert_eq!(
+        pending_store
+            .get_certificate(replacement.network_id, replacement.height)
+            .unwrap(),
+        Some(replacement)
+    );
 }
 
 #[rstest]
