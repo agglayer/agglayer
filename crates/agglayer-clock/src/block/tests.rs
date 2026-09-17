@@ -1,6 +1,9 @@
 use std::{
     num::NonZeroU64,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -52,6 +55,27 @@ fn test_block_calculation() {
     assert_eq!(
         0,
         BlockClock::new((), 2, NonZeroU64::new(3).unwrap()).calculate_block_number(2)
+    );
+}
+
+#[test]
+fn block_height_increment_does_not_wrap_on_overflow() {
+    let block_height = AtomicU64::new(u64::MAX - 1);
+
+    assert_eq!(
+        BlockClock::<()>::increment_block_height(&block_height).unwrap(),
+        u64::MAX
+    );
+    assert_eq!(block_height.load(Ordering::Relaxed), u64::MAX);
+
+    assert!(matches!(
+        BlockClock::<()>::increment_block_height(&block_height),
+        Err(BlockClockError::BlockHeightOverflow)
+    ));
+    assert_eq!(
+        block_height.load(Ordering::Relaxed),
+        u64::MAX,
+        "overflow must leave the atomic block height unchanged"
     );
 }
 
