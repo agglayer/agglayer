@@ -368,7 +368,7 @@ impl StateWriter for StateStore {
         epoch_number: &EpochNumber,
         certificate_index: &CertificateIndex,
     ) -> Result<(), Error> {
-        let prometheus_height = NetworkMetrics::prometheus_height(*height)?;
+        let prometheus_height = NetworkMetrics::prometheus_height(*height);
         let mut metrics = self.network_metrics.mutation();
         self.db.put::<LatestSettledCertificatePerNetworkColumn>(
             network_id,
