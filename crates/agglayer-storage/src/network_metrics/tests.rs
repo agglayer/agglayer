@@ -309,7 +309,7 @@ fn new_pending_pointer_clears_the_stale_error_series() {
 /// Regression test for agglayer/issues#26: bali's pending pointers carried
 /// heights above `i64::MAX` and v0.6.1-rc.1 refused to start on them.
 #[test]
-fn heights_beyond_the_gauge_range_saturate_and_warn_once_per_run() {
+fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
     let pending_dir = TempDBDir::new();
     let state_dir = TempDBDir::new();
     // The exact pointer that took bali down.
@@ -330,7 +330,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_once_per_run() {
         .unwrap();
 
         // Every write goes through and persists the real height; only the
-        // exported gauge saturates, and a single warning covers all three.
+        // exported gauge saturates, and no write logs.
         let warnings = WarningCounter::default();
         warnings.observe(|| {
             pending
@@ -358,7 +358,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_once_per_run() {
         for stage in ["pending", "proven", "settled"] {
             assert!(height_is_saturated(&registry, 84_803_420, stage), "{stage}");
         }
-        assert_eq!(warnings.count(), 1);
+        assert_eq!(warnings.count(), 0);
 
         pending
             .insert_pending_certificate(NetworkId::new(1), Height::new(5), &healthy)
@@ -384,7 +384,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_once_per_run() {
     assert_eq!(height_of(&registry, 1, "pending"), Some(5));
     assert_eq!(warnings.count(), 1);
 
-    // The run already warned: a later oversized write stays silent.
+    // Only hydration reports: a later oversized write stays silent.
     warnings.observe(|| {
         pending
             .set_latest_proven_certificate_per_network(

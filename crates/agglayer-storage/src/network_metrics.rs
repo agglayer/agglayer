@@ -1,12 +1,6 @@
 //! Native Prometheus metrics mirroring authoritative per-network pointers.
 
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{collections::HashMap, sync::Arc};
 
 use agglayer_types::{CertificateId, CertificateStatus, Height, NetworkId};
 use parking_lot::{Mutex, MutexGuard};
@@ -55,8 +49,6 @@ struct Inner {
     height: IntGaugeVec,
     in_error: IntGaugeVec,
     mutation: Mutex<MutationState>,
-    /// Whether the out-of-range height warning has been logged in this run.
-    saturation_warned: AtomicBool,
 }
 
 #[derive(Default)]
@@ -116,15 +108,14 @@ impl NetworkMetrics {
                 height,
                 in_error,
                 mutation: Mutex::new(MutationState::default()),
-                saturation_warned: AtomicBool::new(false),
             }),
         })
     }
 
     /// Seed every native series from a complete, fallible storage snapshot.
     ///
-    /// Storage read and decode errors abort hydration. Heights beyond the
-    /// gauge range do not: they saturate, see [`Self::prometheus_height`].
+    /// Storage read and decode errors abort hydration; out-of-range heights do
+    /// not, they saturate.
     pub fn hydrate<P, S>(&self, pending: &P, state: &S) -> Result<(), Error>
     where
         P: PendingCertificateReader,
@@ -134,33 +125,49 @@ impl NetworkMetrics {
             .get_current_pending_heights()?
             .into_iter()
             .map(|(network_id, PendingCertificate(certificate_id, height))| {
-                (
-                    network_id,
-                    certificate_id,
-                    self.prometheus_height(network_id, NetworkStage::Pending, height),
-                )
+                (network_id, certificate_id, Self::prometheus_height(height))
             })
             .collect::<Vec<_>>();
         let proven_pointers = pending
             .get_current_proven_height()?
             .into_iter()
             .map(|ProvenCertificate(_, network_id, height)| {
-                (
-                    network_id,
-                    self.prometheus_height(network_id, NetworkStage::Proven, height),
-                )
+                (network_id, Self::prometheus_height(height))
             })
             .collect::<Vec<_>>();
         let settled_pointers = state
             .get_current_settled_height()?
             .into_iter()
             .map(|(network_id, SettledCertificate(_, height, _, _))| {
-                (
-                    network_id,
-                    self.prometheus_height(network_id, NetworkStage::Settled, height),
-                )
+                (network_id, Self::prometheus_height(height))
             })
             .collect::<Vec<_>>();
+        // A series sitting at the gauge maximum saturated: no real network
+        // reaches that height.
+        let saturated: Vec<String> = pending_pointers
+            .iter()
+            .map(|(network_id, _, height)| (network_id, NetworkStage::Pending, height))
+            .chain(
+                proven_pointers
+                    .iter()
+                    .map(|(network_id, height)| (network_id, NetworkStage::Proven, height)),
+            )
+            .chain(
+                settled_pointers
+                    .iter()
+                    .map(|(network_id, height)| (network_id, NetworkStage::Settled, height)),
+            )
+            .filter(|(_, _, height)| **height == i64::MAX)
+            .map(|(network_id, stage, _)| format!("{}/{}", network_id.to_u32(), stage.as_str()))
+            .collect();
+        if !saturated.is_empty() {
+            warn!(
+                pointers = saturated.join(" "),
+                "Stored certificate heights exceed the Prometheus height gauge range, exporting \
+                 the gauge maximum"
+            );
+        }
+
         let pending_statuses = pending_pointers
             .iter()
             .map(|(network_id, certificate_id, _)| {
@@ -220,7 +227,7 @@ impl NetworkMetrics {
             return Ok(());
         }
 
-        let height = self.prometheus_height(network_id, NetworkStage::Pending, height);
+        let height = Self::prometheus_height(height);
         let header = state.get_certificate_header(&certificate_id)?;
         metrics.pending_written(network_id, certificate_id, height);
         if let Some(header) = header {
@@ -232,36 +239,11 @@ impl NetworkMetrics {
 
     /// Convert a stored height into the `i64` domain of the height gauge.
     ///
-    /// Heights are `u64` in storage. A stored height above `i64::MAX` is a
-    /// metrics limitation, not a reason to refuse a write or abort startup
-    /// (bali carried such pending pointers and v0.6.1-rc.1 crash-looped on
-    /// them at hydration), so the value saturates to `i64::MAX`, which the
-    /// exposition format renders as `2^63`. The first occurrence per run is
-    /// logged; later ones are silent, and saturated series are recognisable
-    /// by sitting at that maximum.
-    pub(crate) fn prometheus_height(
-        &self,
-        network_id: NetworkId,
-        stage: NetworkStage,
-        height: Height,
-    ) -> i64 {
-        match i64::try_from(height.as_u64()) {
-            Ok(height) => height,
-            Err(_) => {
-                if !self.inner.saturation_warned.swap(true, Ordering::Relaxed) {
-                    warn!(
-                        network_id = network_id.to_u32(),
-                        stage = stage.as_str(),
-                        height = height.as_u64(),
-                        saturated_to = i64::MAX,
-                        "Certificate height exceeds the range of the native Prometheus height \
-                         gauge, exporting the gauge maximum instead. Further occurrences in this \
-                         run are not logged: saturated series are the ones pinned at 2^63."
-                    );
-                }
-                i64::MAX
-            }
-        }
+    /// Heights are `u64` in storage. A height the gauge cannot hold saturates
+    /// to its maximum: a metrics limitation is no reason to refuse a write or
+    /// abort startup.
+    pub(crate) fn prometheus_height(height: Height) -> i64 {
+        i64::try_from(height.as_u64()).unwrap_or(i64::MAX)
     }
 
     pub(crate) fn mutation(&self) -> NetworkMetricsGuard<'_> {
