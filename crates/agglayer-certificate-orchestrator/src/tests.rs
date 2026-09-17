@@ -698,6 +698,95 @@ async fn test_epoch_rollovers_are_ordered() {
     );
 }
 
+// A receiver created before orchestrator construction must preserve epoch events
+// emitted during startup handoff.
+#[test_log::test(tokio::test)]
+async fn test_pre_subscribed_epoch_stream_preserves_handoff_events() {
+    let path = TempDBDir::new();
+    let config = Config::new(&path.path);
+    let pending_store = Arc::new(
+        PendingStore::new_with_path(&config.storage.pending_db_path)
+            .expect("Unable to create store"),
+    );
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
+            .expect("Unable to create store"),
+    );
+    let epochs_store = Arc::new(
+        EpochsStore::new(
+            Arc::new(config),
+            pending_store.clone(),
+            state_store.clone(),
+            BackupClient::noop(),
+        )
+        .expect("Unable to create store"),
+    );
+
+    let current_epoch = Arc::new(ArcSwap::new(Arc::new(
+        epochs_store
+            .open(EpochNumber::new(1))
+            .expect("Unable to open epoch"),
+    )));
+    let (clock_sender, _receiver) = broadcast::channel(2);
+    let clock = ClockRef::new(
+        clock_sender.clone(),
+        Arc::new(AtomicU64::new(1)),
+        Arc::new(NonZeroU64::new(1).unwrap()),
+    );
+
+    // Subscribe before the handoff gap, then emit the rollover before the
+    // orchestrator exists. A fresh subscription during start would miss it.
+    let clock_stream = clock.subscribe().expect("Unable to subscribe to clock");
+    clock_sender
+        .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)))
+        .expect("pre-subscribed receiver should keep the event alive");
+
+    let (_data_sender, data_receiver) = mpsc::channel(10);
+    let cancellation_token = CancellationToken::new();
+    let (check_sender, _check_receiver) = mpsc::channel(1);
+    let check = Check::builder()
+        .pending_store(pending_store.clone())
+        .state_store(state_store.clone())
+        .executed(check_sender)
+        .build();
+
+    let orchestrator_handle = CertificateOrchestrator::builder()
+        .clock(clock)
+        .clock_stream(clock_stream)
+        .data_receiver(data_receiver)
+        .cancellation_token(cancellation_token.clone())
+        .certifier_task_builder(check)
+        .pending_store(pending_store)
+        .epochs_store(epochs_store.clone())
+        .current_epoch(current_epoch.clone())
+        .state_store(state_store)
+        .settlement_service(Arc::new(MockSettlementServiceTrait::new()))
+        .start()
+        .await
+        .expect("Unable to start orchestrator");
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if current_epoch.load().get_epoch_number() == EpochNumber::new(2) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("handoff epoch event was not processed");
+
+    assert!(epochs_store
+        .open(EpochNumber::new(1))
+        .expect("Unable to reopen epoch 1")
+        .is_epoch_packed());
+
+    cancellation_token.cancel();
+    orchestrator_handle
+        .await
+        .expect("certificate orchestrator task panicked");
+}
+
 // A certificate received after an EpochEnded is stored for next epoch
 #[tokio::test]
 #[ignore]

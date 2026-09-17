@@ -25,7 +25,10 @@ use arc_swap::ArcSwap;
 use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use network_task::{NetworkTask, NewCertificate};
 use tokio::{
-    sync::mpsc::{self, Receiver},
+    sync::{
+        broadcast,
+        mpsc::{self, Receiver},
+    },
     task::JoinHandle,
 };
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
@@ -142,10 +145,38 @@ where
         state_store: Arc<StateStore>,
         settlement_service: Arc<SettlementService>,
     ) -> Result<Self, Error> {
+        let clock_stream = clock.subscribe()?;
+        Self::try_new_with_clock_stream(
+            clock,
+            clock_stream,
+            data_receiver,
+            cancellation_token,
+            certifier_task_builder,
+            pending_store,
+            epochs_store,
+            current_epoch,
+            state_store,
+            settlement_service,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn try_new_with_clock_stream(
+        clock: ClockRef,
+        clock_stream: broadcast::Receiver<Event>,
+        data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
+        cancellation_token: CancellationToken,
+        certifier_task_builder: CertifierClient,
+        pending_store: Arc<PendingStore>,
+        epochs_store: Arc<EpochsStore>,
+        current_epoch: Arc<ArcSwap<PerEpochStore>>,
+        state_store: Arc<StateStore>,
+        settlement_service: Arc<SettlementService>,
+    ) -> Result<Self, Error> {
         Ok(Self {
             epoch_rollover: None,
             clock: Box::pin(tokio_stream::StreamExt::filter_map(
-                tokio_stream::wrappers::BroadcastStream::new(clock.subscribe()?),
+                tokio_stream::wrappers::BroadcastStream::new(clock_stream),
                 |v| v.ok(),
             )),
             clock_ref: clock,
@@ -201,6 +232,7 @@ where
     #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
         clock: ClockRef,
+        clock_stream: Option<broadcast::Receiver<Event>>,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
         certifier_task_builder: CertifierClient,
@@ -210,17 +242,31 @@ where
         state_store: Arc<StateStore>,
         settlement_service: Arc<SettlementService>,
     ) -> eyre::Result<JoinHandle<()>> {
-        let mut orchestrator = Self::try_new(
-            clock,
-            data_receiver,
-            cancellation_token,
-            certifier_task_builder,
-            pending_store.clone(),
-            epochs_store,
-            current_epoch,
-            state_store,
-            settlement_service,
-        )?;
+        let mut orchestrator = match clock_stream {
+            Some(clock_stream) => Self::try_new_with_clock_stream(
+                clock,
+                clock_stream,
+                data_receiver,
+                cancellation_token,
+                certifier_task_builder,
+                pending_store.clone(),
+                epochs_store,
+                current_epoch,
+                state_store,
+                settlement_service,
+            )?,
+            None => Self::try_new(
+                clock,
+                data_receiver,
+                cancellation_token,
+                certifier_task_builder,
+                pending_store.clone(),
+                epochs_store,
+                current_epoch,
+                state_store,
+                settlement_service,
+            )?,
+        };
 
         // Try to spawn the certifier tasks for the next height of each network.
         let proven_certificates = pending_store.get_current_proven_height_async().await?;
