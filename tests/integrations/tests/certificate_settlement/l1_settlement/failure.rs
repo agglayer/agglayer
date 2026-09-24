@@ -1,10 +1,13 @@
 use std::time::Duration;
 
 use agglayer_storage::tests::TempDBDir;
-use agglayer_types::{CertificateId, CertificateStatus, Digest, Metadata};
+use agglayer_types::{CertificateId, CertificateStatus, Digest, Metadata, SettlementJobId};
 use fail::FailScenario;
-use integrations::{agglayer_setup::setup_network, wait_for_settlement_or_error};
-use jsonrpsee::{core::client::ClientT as _, rpc_params};
+use integrations::{
+    agglayer_setup::{setup_network, setup_network_with_config},
+    wait_for_settlement_or_error,
+};
+use jsonrpsee::{core::client::ClientT as _, http_client::HttpClientBuilder, rpc_params};
 use pessimistic_proof_test_suite::forest::Forest;
 use rstest::rstest;
 use tokio_util::sync::CancellationToken;
@@ -44,12 +47,13 @@ async fn transaction_with_receipt_status_0(#[case] state: Forest) {
     scenario.teardown();
 }
 
-/// A settlement revert drives the certificate to `InError`. The fix is a
+/// A settlement revert drives the certificate to `InError`. One fix is a
 /// *corrected* certificate: a new id gets a fresh settlement job and settles.
-/// Re-sending the *same* cert can't recover -- the at-most-once job guard
-/// rejects a second job for the same id, and a deterministic revert would just
-/// repeat anyway. An empty cert's only id-affecting free field is `metadata`,
-/// so bumping it stands in for corrected content.
+/// An empty cert's only id-affecting free field is `metadata`, so bumping it
+/// stands in for corrected content. Recovery with the same id is covered by
+/// `transaction_with_receipt_status_0_same_certificate_resend` (automatic
+/// supersede) and `transaction_with_receipt_status_0_admin_unlink_then_resend`
+/// (the admin escape hatch).
 #[rstest]
 #[tokio::test]
 #[timeout(Duration::from_secs(180))]
@@ -86,6 +90,119 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
         .unwrap();
     let result = wait_for_settlement_or_error!(client, corrected_id).await;
     assert!(matches!(result.status, CertificateStatus::Settled));
+
+    cancellation_token.cancel();
+    _ = agglayer_shutdowned.await;
+
+    scenario.teardown();
+}
+
+/// After a settlement revert, the aggsender re-sends the *same* certificate
+/// (the id excludes the aggchain proof) once the cause is gone,
+/// e.g. an L1 config change that raced the first settlement. The replacement
+/// is accepted because the first job terminally reverted, and the fresh proof
+/// gets a fresh settlement job that supersedes the reverted one instead of
+/// tripping over its certificate link. The certificate then settles.
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(180))]
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn transaction_with_receipt_status_0_same_certificate_resend(#[case] state: Forest) {
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
+
+    fail::cfg("settlement::force_revert", "return").expect("Failed to configure failpoint");
+
+    // L1 is a RAII guard
+    let (agglayer_shutdowned, _l1, client) =
+        setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
+
+    let withdrawals = vec![];
+    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate.clone()])
+        .await
+        .unwrap();
+    let result = wait_for_settlement_or_error!(client, certificate_id).await;
+    assert!(matches!(result.status, CertificateStatus::InError { .. }));
+
+    // The cause of the revert is gone; the very same certificate comes back.
+    fail::cfg("settlement::force_revert", "off").expect("Failed to configure failpoint");
+
+    let resent_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate])
+        .await
+        .expect("re-sending a certificate whose settlement reverted must be accepted");
+    assert_eq!(resent_id, certificate_id, "same certificate, same id");
+
+    let result = wait_for_settlement_or_error!(client, certificate_id).await;
+    assert!(
+        matches!(result.status, CertificateStatus::Settled),
+        "{:?}",
+        result.status
+    );
+    assert!(result.settlement_tx_hash.is_some());
+
+    cancellation_token.cancel();
+    _ = agglayer_shutdowned.await;
+
+    scenario.teardown();
+}
+
+/// An operator can unlink a certificate from its terminally reverted job
+/// before the aggsender re-sends it. The same certificate then gets a fresh
+/// job and settles. Automatic recovery without an admin mutation is covered
+/// by `transaction_with_receipt_status_0_same_certificate_resend`.
+#[rstest]
+#[tokio::test]
+#[timeout(Duration::from_secs(180))]
+#[case::type_0_ecdsa(crate::common::type_0_ecdsa_forest())]
+async fn transaction_with_receipt_status_0_admin_unlink_then_resend(#[case] state: Forest) {
+    let tmp_dir = TempDBDir::new();
+    let scenario = FailScenario::setup();
+    let cancellation_token = CancellationToken::new();
+
+    fail::cfg("settlement::force_revert", "return").expect("Failed to configure failpoint");
+
+    // L1 is a RAII guard
+    let (agglayer_shutdowned, _l1, client, config) =
+        setup_network_with_config(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
+    let admin_client = HttpClientBuilder::default()
+        .build(format!("http://{}/", config.admin_rpc_addr()))
+        .expect("Failed to build the admin client");
+
+    let withdrawals = vec![];
+    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate.clone()])
+        .await
+        .unwrap();
+    let result = wait_for_settlement_or_error!(client, certificate_id).await;
+    assert!(matches!(result.status, CertificateStatus::InError { .. }));
+
+    // The cause of the revert is gone. An operator unlinks the reverted job
+    // before the aggsender re-sends the certificate.
+    fail::cfg("settlement::force_revert", "off").expect("Failed to configure failpoint");
+    let _unlinked_job_id: SettlementJobId = admin_client
+        .request(
+            "admin_unlinkCertificateSettlementJob",
+            rpc_params![certificate_id],
+        )
+        .await
+        .expect("unlinking a certificate from its reverted job must succeed");
+    let resent_id: CertificateId = client
+        .request("interop_sendCertificate", rpc_params![certificate])
+        .await
+        .expect("re-sending after the unlink must be accepted");
+    assert_eq!(resent_id, certificate_id, "same certificate, same id");
+    let result = wait_for_settlement_or_error!(client, certificate_id).await;
+    assert!(
+        matches!(result.status, CertificateStatus::Settled),
+        "{:?}",
+        result.status
+    );
+    assert!(result.settlement_tx_hash.is_some());
 
     cancellation_token.cancel();
     _ = agglayer_shutdowned.await;

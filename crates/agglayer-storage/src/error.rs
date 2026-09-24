@@ -55,6 +55,27 @@ pub enum Error {
     #[error("Settlement job {0} has no terminal result to remove")]
     SettlementJobNotCompleted(SettlementJobId),
 
+    #[error("Certificate {0} has no settlement job linked to it")]
+    CertificateHasNoSettlementJob(CertificateId),
+
+    #[error(
+        "Settlement job {settlement_job_id} linked to certificate {certificate_id} has no \
+         terminal result yet; a job that may still settle cannot be unlinked"
+    )]
+    CertificateSettlementJobNotCompleted {
+        certificate_id: CertificateId,
+        settlement_job_id: SettlementJobId,
+    },
+
+    #[error(
+        "Settlement job {settlement_job_id} linked to certificate {certificate_id} settled \
+         successfully; only a terminally reverted job can be unlinked"
+    )]
+    CertificateSettlementJobSucceeded {
+        certificate_id: CertificateId,
+        settlement_job_id: SettlementJobId,
+    },
+
     #[error("Settlement attempt {attempt} does not exist for job {job}")]
     SettlementAttemptNotFound { job: SettlementJobId, attempt: u64 },
 
@@ -81,9 +102,6 @@ pub enum Error {
          latest pending height is {2}"
     )]
     InvalidPendingHeight(NetworkId, Height, Height),
-
-    #[error("Certificate height {0} exceeds the range of the native Prometheus height gauge")]
-    NetworkMetricHeightOutOfRange(Height),
 }
 
 impl From<Error> for CertificateStatusError {

@@ -146,7 +146,7 @@ impl PendingCertificateWriter for PendingStore {
         height: &Height,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        let prometheus_height = NetworkMetrics::prometheus_height(*height)?;
+        let prometheus_height = NetworkMetrics::prometheus_height(*height);
         let mut metrics = self.network_metrics.mutation();
         self.set_latest_pending_certificate_per_network_ungated(
             &mut metrics,
@@ -163,7 +163,7 @@ impl PendingCertificateWriter for PendingStore {
         height: Height,
         certificate: &Certificate,
     ) -> Result<(), Error> {
-        let prometheus_height = NetworkMetrics::prometheus_height(height)?;
+        let prometheus_height = NetworkMetrics::prometheus_height(height);
         let mut metrics = self.network_metrics.mutation();
         if let Some((_id, latest_height)) =
             self.get_latest_pending_certificate_for_network(&network_id)?
@@ -215,7 +215,7 @@ impl PendingCertificateWriter for PendingStore {
         height: &Height,
         certificate_id: &CertificateId,
     ) -> Result<(), Error> {
-        let prometheus_height = NetworkMetrics::prometheus_height(*height)?;
+        let prometheus_height = NetworkMetrics::prometheus_height(*height);
         let mut metrics = self.network_metrics.mutation();
         self.db.put::<LatestProvenCertificatePerNetworkColumn>(
             network_id,

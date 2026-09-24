@@ -374,7 +374,7 @@ impl StateWriter for StateStore {
         certificate_index: &CertificateIndex,
         settled_claim: Option<SettledClaim>,
     ) -> Result<(), Error> {
-        let prometheus_height = NetworkMetrics::prometheus_height(*height)?;
+        let prometheus_height = NetworkMetrics::prometheus_height(*height);
         let mut metrics = self.network_metrics.mutation();
 
         let mut batch = WriteBatch::default();

@@ -1,8 +1,8 @@
 # Settlement operations
 
-This runbook maps the five settlement-job recovery scenarios from
-[#1675](https://github.com/agglayer/agglayer/issues/1675) to the private
-`admin` JSON-RPC methods that resolve them.
+This runbook covers settlement-job recovery,
+including the five scenarios from [#1675](https://github.com/agglayer/agglayer/issues/1675)
+and the private `admin` JSON-RPC methods that resolve them.
 These methods inspect or edit stored settlement state, or control a live settlement task.
 They can cause an L1 transaction to be stopped, replaced, or re-driven.
 
@@ -20,13 +20,14 @@ The examples use positional parameters in their wire order and target
 
 ### Choose the recovery path
 
-| Scenario from #1675 | Method | Effect and recovery |
+| Scenario | Method | Effect and recovery |
 |---|---|---|
 | 1. A job looks stuck and must be inspected | `admin_listSettlementJobs`, then `admin_getSettlementJob(job_id)` | Find the job and inspect its task liveness, attempts, errors, and result. A pending job with `hasLiveTask: false` is wedged; call reload. |
 | 2. A job is wedged for a transient reason | `admin_abortSettlementTask(job_id)`, then `admin_reloadSettlementTask(job_id)` | Stop the stale task, wait for teardown, and respawn it from storage. |
 | 3. A job blocks a wallet's nonce pipeline | `admin_abortSettlementTask(job_id)` | Stop the in-memory task without changing stored state. Reload it when it is safe to continue. |
 | 4. A transaction was handled outside the node | `admin_insertSettlementAttempt(job_id, attempt, force?)` or `admin_markSettlementAttemptDefinitelyFailed(job_id, attempt_number, reason, force?)` | Register the external transaction, or record the trusted assertion that an existing attempt cannot land. |
 | 5. An attempt or completed-job result is wrong | `admin_removeSettlementAttemptResult(job_id, attempt_number, force?)` or `admin_forceRemoveSettlementJobResult(job_id)` | Remove the wrong attempt result, or un-complete and immediately re-drive the whole job. Correct attempt rows before force-removing a completed-job result. |
+| 6. A certificate is `InError` after a reverted settlement | `interop_sendCertificate`, optionally `admin_unlinkCertificateSettlementJob(certificate_id)` first | Re-submitting the same certificate automatically supersedes its terminally reverted job with a fresh one. Manual unlink is available before re-submission. Both paths refuse a pending or successful linked job. |
 
 ### Scenario 1: find and inspect a job
 
@@ -228,6 +229,63 @@ Outstanding callers that already hold the completed job's result watcher are not
 Ensure certificate processing for the associated job is quiesced before force-removing the result,
 or a certificate task can act on the removed result while the fresh settlement task re-drives the
 job.
+
+### Scenario 6: unlink a certificate from its reverted settlement job
+
+The default recovery path is [automatic supersede on re-submission](#certificate-re-submitted-after-a-reverted-settlement).
+The aggsender can re-send the same certificate with a fresh proof once the cause of the revert is corrected;
+no admin call is required.
+Use `admin_unlinkCertificateSettlementJob`
+when an operator wants to remove the certificate's link to the reverted job before that re-submission.
+
+First confirm the linked job really reverted, then unlink the certificate:
+
+```bash
+ADMIN_RPC_URL="${ADMIN_RPC_URL:-http://127.0.0.1:9091/}"
+CERTIFICATE_ID='0x<certificate-id>'
+
+curl -sS -X POST "$ADMIN_RPC_URL" \
+  -H 'content-type: application/json' \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"admin_unlinkCertificateSettlementJob\",\"params\":[\"$CERTIFICATE_ID\"]}"
+```
+
+The response carries the unlinked job id.
+Only the certificate→job link is removed: the job, its attempts, its terminal result,
+and its own link back to the certificate stay, so `admin_getSettlementJob` still shows the certificate on it.
+The aggsender's next re-submission then gets a fresh settlement job.
+It can settle once the cause of the original revert is corrected.
+
+The call is refused unless the linked job terminally reverted:
+`NotCompleted` while it has no terminal result, because it may still settle,
+and `AlreadyCompleted` when it succeeded, because the certificate is settled through it.
+In both cases a replacement's job would compete for the same height.
+For the same reason, never revive an unlinked job with `admin_forceRemoveSettlementJobResult`
+or `admin_reloadSettlementTask`.
+Certificates without a settlement job return `NotFound`.
+
+### Certificate re-submitted after a reverted settlement
+
+A settlement job that terminally reverted on L1 leaves its certificate `InError`.
+The aggsender may re-send that certificate with a fresh proof for the same state transition.
+[`Certificate::hash`](../../../crates/agglayer-types/src/certificate/mod.rs) excludes `aggchain_data`
+and the explicit L1 info tree leaf count, so updating those fields preserves the certificate id.
+The [RPC replacement gate](../../../crates/agglayer-rpc/src/lib.rs) accepts the replacement
+because the stored job's result is a terminal revert.
+It refuses while that job has no terminal result or after it succeeded.
+
+The node re-proves the certificate and creates a fresh settlement job for it.
+The reverted job's calldata is frozen at creation
+and may contain a proof whose public inputs no longer match L1 after an aggchain parameter or verification key change.
+[`insert_settlement_job_with_certificate`](../../../crates/agglayer-storage/src/stores/state/settlement/mod.rs) lets the fresh job supersede the reverted one.
+It writes the new job and moves the certificate's forward link in one atomic batch,
+while preserving the reverted job, its terminal result, and its link back to the certificate.
+`admin_getSettlementJob` therefore shows the certificate on both jobs.
+
+Supersede relies on the terminal revert remaining valid across L1 reorgs,
+the same assumption made by the RPC replacement gate.
+Do not revive a superseded job with `admin_forceRemoveSettlementJobResult` or `admin_reloadSettlementTask`.
+A revived job would compete with the fresh one for the same height,
+leaving the settlement contract's replay protection as the double-settlement backstop.
 
 ## Mutation response contract
 

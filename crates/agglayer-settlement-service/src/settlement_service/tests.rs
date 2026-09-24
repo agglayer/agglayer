@@ -893,7 +893,12 @@ async fn request_new_settlement_persistence_failure_leaves_no_registrations() {
         panic!("a failed persistence write must reject the settlement request");
     };
 
-    assert!(format!("{error:#}").contains("Failed to persist settlement job"));
+    let error_chain = format!("{error:#}");
+    assert!(error_chain.contains("Failed to persist settlement job"));
+    assert!(
+        error_chain.contains("Unprocessed action: settlement job insert failed"),
+        "the full error chain must retain the storage cause: {error_chain}"
+    );
     assert!(service
         .task_controls
         .lock()

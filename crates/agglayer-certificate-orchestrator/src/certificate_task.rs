@@ -112,6 +112,14 @@ where
                 CertificateStatusError::InternalError(error) => {
                     error!(?error, "Internal error in certificate processing");
                 }
+                // A settlement error is definitive by the time it gets here:
+                // the settlement service has already exhausted its own retries
+                // and reorg handling, so this is a reverted (or otherwise
+                // failed) settlement of a proven certificate, not a transient
+                // hiccup. Operators need to see it without DEBUG logs.
+                CertificateStatusError::SettlementError(error) => {
+                    warn!(%error, "Settlement failed in certificate processing");
+                }
                 _ => {
                     let error = eyre::Error::from(error.clone());
                     debug!(?error, "Error in certificate processing");
@@ -165,9 +173,11 @@ where
         if self.header.status == CertificateStatus::Proven {
             // A settlement job may already exist for this certificate if a
             // previous run crashed after submitting it but before
-            // recording `Candidate`. Resume that job rather than
-            // re-proving and re-submitting (which the at-most-once
-            // guard rejects), so it recovers instead of erroring.
+            // recording `Candidate`. Resume that job: a pending or successful
+            // job blocks replacement. If a re-submission crashed after
+            // re-proof but before superseding a reverted job, this resumes
+            // the revert and costs one extra InError cycle; the next resend
+            // can create a fresh job.
             let job_id = self.resume_settlement_job(certificate_id).await?;
             if let Some(job_id) = job_id {
                 info!(%job_id, "Proven certificate already has a settlement job; resuming");
@@ -336,8 +346,11 @@ where
             .submit_settlement_job(certificate_id, job)
             .await
             .map_err(|error| {
+                // `{error:?}` keeps the whole cause chain (and its location),
+                // like the settlement wait below: the storage refusal is the
+                // interesting part, not the outer "failed to persist".
                 CertificateStatusError::InternalError(format!(
-                    "Failed to submit settlement job: {error}"
+                    "Failed to submit settlement job: {error:?}"
                 ))
             })?;
         info!(%job_id, "Settlement job submitted");

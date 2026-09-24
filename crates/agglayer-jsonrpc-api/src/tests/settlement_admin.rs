@@ -4,7 +4,9 @@ use std::{
     time::SystemTime,
 };
 
-use agglayer_storage::stores::{EditEvenIfCompleted, SettlementReader, SettlementWriter};
+use agglayer_storage::stores::{
+    EditEvenIfCompleted, SettlementReader, SettlementWriter, StateReader as _,
+};
 use agglayer_types::{
     Address, CertificateId, ClientError as SettlementClientError, ClientErrorType,
     ContractCallOutcome, ContractCallResult, Digest, Nonce, RpcErrorCode, SettlementAttempt,
@@ -84,6 +86,12 @@ fn settlement_result() -> SettlementJobResult {
             tx_hash: SettlementTxHash::new(Digest::from([0xde; 32])),
         },
     }
+}
+
+fn reverted_settlement_result() -> SettlementJobResult {
+    let mut result = settlement_result();
+    result.contract_call_result.outcome = ContractCallOutcome::Revert;
+    result
 }
 
 fn settlement_attempt() -> SettlementAttempt {
@@ -1032,4 +1040,146 @@ async fn admin_get_settlement_job_unknown_id_is_not_found() {
         .expect_err("unknown job must fail");
 
     let _ = error_payload(error, RpcErrorCode::NotFound);
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_unlink_certificate_settlement_job_round_trips_over_http() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+    let job_id = SettlementJobId::from(30_u128);
+    let certificate_id = CertificateId::new(Digest::from([0x30; 32]));
+
+    context
+        .state_store
+        .insert_settlement_job_with_certificate(&job_id, &settlement_job(), &certificate_id)
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_job_result(&job_id, &reverted_settlement_result())
+        .unwrap();
+
+    let unlinked: SettlementJobId = context
+        .admin_client
+        .request(
+            "admin_unlinkCertificateSettlementJob",
+            rpc_params![certificate_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(unlinked, job_id);
+
+    // Forward link gone, everything about the job itself untouched.
+    assert_eq!(
+        context
+            .state_store
+            .get_certificate_settlement_job_id(&certificate_id)
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        context
+            .state_store
+            .get_settlement_job_certificate_id(&job_id)
+            .unwrap(),
+        Some(certificate_id)
+    );
+    assert!(context
+        .state_store
+        .get_settlement_job_result(&job_id)
+        .unwrap()
+        .is_some());
+}
+
+#[test_log::test(tokio::test)]
+async fn admin_unlink_certificate_settlement_job_errors_are_classified() {
+    let context = TestContext::new_with_config(TestContext::get_default_config()).await;
+
+    // A job without a terminal result may still settle: refused, link kept.
+    let pending_job_id = SettlementJobId::from(31_u128);
+    let pending_certificate_id = CertificateId::new(Digest::from([0x31; 32]));
+    context
+        .state_store
+        .insert_settlement_job_with_certificate(
+            &pending_job_id,
+            &settlement_job(),
+            &pending_certificate_id,
+        )
+        .unwrap();
+    let pending_error = call_error(
+        context
+            .admin_client
+            .request::<SettlementJobId, _>(
+                "admin_unlinkCertificateSettlementJob",
+                rpc_params![pending_certificate_id],
+            )
+            .await
+            .map(|_| ()),
+        RpcErrorCode::NotCompleted,
+    );
+    assert!(
+        pending_error.contains("has no terminal result yet"),
+        "{pending_error}"
+    );
+    assert_eq!(
+        context
+            .state_store
+            .get_certificate_settlement_job_id(&pending_certificate_id)
+            .unwrap(),
+        Some(pending_job_id)
+    );
+
+    // A certificate without any job.
+    let unknown_certificate_id = CertificateId::new(Digest::from([0x32; 32]));
+    let unknown_error = call_error(
+        context
+            .admin_client
+            .request::<SettlementJobId, _>(
+                "admin_unlinkCertificateSettlementJob",
+                rpc_params![unknown_certificate_id],
+            )
+            .await
+            .map(|_| ()),
+        RpcErrorCode::NotFound,
+    );
+    assert!(
+        unknown_error.contains("has no settlement job linked"),
+        "{unknown_error}"
+    );
+
+    // A job that settled successfully: the certificate is settled through it.
+    let settled_job_id = SettlementJobId::from(33_u128);
+    let settled_certificate_id = CertificateId::new(Digest::from([0x33; 32]));
+    context
+        .state_store
+        .insert_settlement_job_with_certificate(
+            &settled_job_id,
+            &settlement_job(),
+            &settled_certificate_id,
+        )
+        .unwrap();
+    context
+        .state_store
+        .insert_settlement_job_result(&settled_job_id, &settlement_result())
+        .unwrap();
+    let settled_error = call_error(
+        context
+            .admin_client
+            .request::<SettlementJobId, _>(
+                "admin_unlinkCertificateSettlementJob",
+                rpc_params![settled_certificate_id],
+            )
+            .await
+            .map(|_| ()),
+        RpcErrorCode::AlreadyCompleted,
+    );
+    assert!(
+        settled_error.contains("settled successfully"),
+        "{settled_error}"
+    );
+    assert_eq!(
+        context
+            .state_store
+            .get_certificate_settlement_job_id(&settled_certificate_id)
+            .unwrap(),
+        Some(settled_job_id)
+    );
 }
