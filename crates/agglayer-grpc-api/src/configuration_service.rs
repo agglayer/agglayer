@@ -47,7 +47,7 @@ where
             );
 
             tonic::Status::with_error_details(
-                tonic::Code::InvalidArgument,
+                tonic::Code::FailedPrecondition,
                 "Unexpected clock configuration.",
                 error_details,
             )
