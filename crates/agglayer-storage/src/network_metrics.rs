@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 use agglayer_types::{CertificateId, CertificateStatus, Height, NetworkId};
 use parking_lot::{Mutex, MutexGuard};
 use prometheus::{IntGaugeVec, Opts, Registry};
+use tracing::warn;
 
 use crate::{
     columns::{
@@ -112,6 +113,9 @@ impl NetworkMetrics {
     }
 
     /// Seed every native series from a complete, fallible storage snapshot.
+    ///
+    /// Storage read and decode errors abort hydration; out-of-range heights do
+    /// not, they saturate.
     pub fn hydrate<P, S>(&self, pending: &P, state: &S) -> Result<(), Error>
     where
         P: PendingCertificateReader,
@@ -121,23 +125,49 @@ impl NetworkMetrics {
             .get_current_pending_heights()?
             .into_iter()
             .map(|(network_id, PendingCertificate(certificate_id, height))| {
-                Ok((network_id, certificate_id, Self::prometheus_height(height)?))
+                (network_id, certificate_id, Self::prometheus_height(height))
             })
-            .collect::<Result<Vec<_>, Error>>()?;
+            .collect::<Vec<_>>();
         let proven_pointers = pending
             .get_current_proven_height()?
             .into_iter()
             .map(|ProvenCertificate(_, network_id, height)| {
-                Ok((network_id, Self::prometheus_height(height)?))
+                (network_id, Self::prometheus_height(height))
             })
-            .collect::<Result<Vec<_>, Error>>()?;
+            .collect::<Vec<_>>();
         let settled_pointers = state
             .get_current_settled_height()?
             .into_iter()
             .map(|(network_id, SettledCertificate(_, height, _, _))| {
-                Ok((network_id, Self::prometheus_height(height)?))
+                (network_id, Self::prometheus_height(height))
             })
-            .collect::<Result<Vec<_>, Error>>()?;
+            .collect::<Vec<_>>();
+        // A series sitting at the gauge maximum saturated: no real network
+        // reaches that height.
+        let saturated: Vec<String> = pending_pointers
+            .iter()
+            .map(|(network_id, _, height)| (network_id, NetworkStage::Pending, height))
+            .chain(
+                proven_pointers
+                    .iter()
+                    .map(|(network_id, height)| (network_id, NetworkStage::Proven, height)),
+            )
+            .chain(
+                settled_pointers
+                    .iter()
+                    .map(|(network_id, height)| (network_id, NetworkStage::Settled, height)),
+            )
+            .filter(|(_, _, height)| **height == i64::MAX)
+            .map(|(network_id, stage, _)| format!("{}/{}", network_id.to_u32(), stage.as_str()))
+            .collect();
+        if !saturated.is_empty() {
+            warn!(
+                pointers = saturated.join(" "),
+                "Stored certificate heights exceed the Prometheus height gauge range, exporting \
+                 the gauge maximum"
+            );
+        }
+
         let pending_statuses = pending_pointers
             .iter()
             .map(|(network_id, certificate_id, _)| {
@@ -197,7 +227,7 @@ impl NetworkMetrics {
             return Ok(());
         }
 
-        let height = Self::prometheus_height(height)?;
+        let height = Self::prometheus_height(height);
         let header = state.get_certificate_header(&certificate_id)?;
         metrics.pending_written(network_id, certificate_id, height);
         if let Some(header) = header {
@@ -207,8 +237,13 @@ impl NetworkMetrics {
         Ok(())
     }
 
-    pub(crate) fn prometheus_height(height: Height) -> Result<i64, Error> {
-        i64::try_from(height.as_u64()).map_err(|_| Error::NetworkMetricHeightOutOfRange(height))
+    /// Convert a stored height into the `i64` domain of the height gauge.
+    ///
+    /// Heights are `u64` in storage. A height the gauge cannot hold saturates
+    /// to its maximum: a metrics limitation is no reason to refuse a write or
+    /// abort startup.
+    pub(crate) fn prometheus_height(height: Height) -> i64 {
+        i64::try_from(height.as_u64()).unwrap_or(i64::MAX)
     }
 
     pub(crate) fn mutation(&self) -> NetworkMetricsGuard<'_> {

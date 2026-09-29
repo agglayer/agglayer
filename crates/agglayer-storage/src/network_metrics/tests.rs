@@ -1,4 +1,10 @@
-use std::{sync::Arc, thread};
+use std::{
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    thread,
+};
 
 use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError,
@@ -9,7 +15,6 @@ use prometheus::{Encoder as _, Registry, TextEncoder};
 use super::{NetworkMetrics, NETWORK_HEIGHT, NETWORK_LATEST_CERTIFICATE_IN_ERROR};
 use crate::{
     backup::BackupClient,
-    error::Error,
     storage::DB,
     stores::{
         pending::PendingStore, state::StateStore, PendingCertificateReader as _,
@@ -47,9 +52,14 @@ fn gather(registry: &Registry) -> String {
     String::from_utf8(buffer).unwrap()
 }
 
-/// Extract the value of the sample line for `metric`, `network_id` and, when
-/// given, the `stage` label.
-fn sample_value(body: &str, metric: &str, network_id: u32, stage: Option<&str>) -> Option<i64> {
+/// Extract the raw value text of the sample line for `metric`, `network_id`
+/// and, when given, the `stage` label.
+fn sample_text<'a>(
+    body: &'a str,
+    metric: &str,
+    network_id: u32,
+    stage: Option<&str>,
+) -> Option<&'a str> {
     let prefix = format!("{metric}{{");
     let network_label = format!("network_id=\"{network_id}\"");
     let stage_label = stage.map(|stage| format!("stage=\"{stage}\""));
@@ -61,11 +71,25 @@ fn sample_value(body: &str, metric: &str, network_id: u32, stage: Option<&str>) 
                     .as_ref()
                     .is_none_or(|label| line.contains(label))
         })
-        .and_then(|line| line.rsplit(' ').next()?.parse().ok())
+        .and_then(|line| line.rsplit(' ').next())
+}
+
+/// Extract the value of the sample line for `metric`, `network_id` and, when
+/// given, the `stage` label.
+fn sample_value(body: &str, metric: &str, network_id: u32, stage: Option<&str>) -> Option<i64> {
+    sample_text(body, metric, network_id, stage)?.parse().ok()
 }
 
 fn height_of(registry: &Registry, network_id: u32, stage: &str) -> Option<i64> {
     sample_value(&gather(registry), NETWORK_HEIGHT, network_id, Some(stage))
+}
+
+/// Whether the exported height of `network_id` at `stage` is the saturated
+/// gauge maximum. The text format renders the `i64` gauge through `f64`, so
+/// `i64::MAX` shows up as `2^63`, which no integer parse accepts.
+fn height_is_saturated(registry: &Registry, network_id: u32, stage: &str) -> bool {
+    sample_text(&gather(registry), NETWORK_HEIGHT, network_id, Some(stage))
+        == Some((i64::MAX as f64).to_string().as_str())
 }
 
 fn error_of(registry: &Registry, network_id: u32) -> Option<i64> {
@@ -79,6 +103,44 @@ fn error_of(registry: &Registry, network_id: u32) -> Option<i64> {
 
 fn in_error_status() -> CertificateStatus {
     CertificateStatus::error(CertificateStatusError::InternalError("test".to_string()))
+}
+
+/// Minimal subscriber counting the `WARN` events of the metrics module.
+#[derive(Clone, Default)]
+struct WarningCounter(Arc<AtomicUsize>);
+
+impl WarningCounter {
+    fn count(&self) -> usize {
+        self.0.load(Ordering::SeqCst)
+    }
+
+    /// Run `f` with this counter installed as the thread's subscriber.
+    fn observe<T>(&self, f: impl FnOnce() -> T) -> T {
+        tracing::subscriber::with_default(self.clone(), f)
+    }
+}
+
+impl tracing::Subscriber for WarningCounter {
+    fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
+        *metadata.level() == tracing::Level::WARN
+            && metadata.target() == "agglayer_storage::network_metrics"
+    }
+
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+    fn event(&self, _: &tracing::Event<'_>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn enter(&self, _: &tracing::span::Id) {}
+
+    fn exit(&self, _: &tracing::span::Id) {}
 }
 
 #[test]
@@ -244,26 +306,96 @@ fn new_pending_pointer_clears_the_stale_error_series() {
     assert_eq!(error_of(&registry, 1), None);
 }
 
+/// Regression test for agglayer/issues#26: bali's pending pointers carried
+/// heights above `i64::MAX` and v0.6.1-rc.1 refused to start on them.
 #[test]
-fn heights_beyond_the_gauge_range_are_rejected_before_the_write() {
-    let (_registry, metrics) = network_metrics();
-    let (_pending_dir, _state_dir, pending, _state) = stores(&metrics);
-    let network = NetworkId::new(1);
+fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
+    let pending_dir = TempDBDir::new();
+    let state_dir = TempDBDir::new();
+    // The exact pointer that took bali down.
+    let network = NetworkId::new(84_803_420);
+    let oversized = Height::new(13_521_720_084_024_907_505);
+    let certificate_id = CertificateId::new([7; 32].into());
+    let healthy = Certificate::new_for_test(NetworkId::new(1), Height::new(5));
 
-    let result = pending.set_latest_pending_certificate_per_network(
-        &network,
-        &Height::new(u64::MAX),
-        &CertificateId::new([7; 32].into()),
-    );
+    {
+        let (registry, metrics) = network_metrics();
+        let pending =
+            PendingStore::new_with_path_and_metrics(&pending_dir.path, metrics.clone()).unwrap();
+        let state = StateStore::new_with_path_and_metrics(
+            &state_dir.path,
+            BackupClient::noop(),
+            metrics.clone(),
+        )
+        .unwrap();
 
-    assert!(matches!(
-        result,
-        Err(Error::NetworkMetricHeightOutOfRange(_))
-    ));
-    assert!(pending
-        .get_latest_pending_certificate_for_network(&network)
-        .unwrap()
-        .is_none());
+        // Every write goes through and persists the real height; only the
+        // exported gauge saturates, and no write logs.
+        let warnings = WarningCounter::default();
+        warnings.observe(|| {
+            pending
+                .set_latest_pending_certificate_per_network(&network, &oversized, &certificate_id)
+                .unwrap();
+            pending
+                .set_latest_proven_certificate_per_network(&network, &oversized, &certificate_id)
+                .unwrap();
+            state
+                .set_latest_settled_certificate_for_network(
+                    &network,
+                    &oversized,
+                    &certificate_id,
+                    &EpochNumber::ZERO,
+                    &CertificateIndex::ZERO,
+                )
+                .unwrap();
+        });
+        assert_eq!(
+            pending
+                .get_latest_pending_certificate_for_network(&network)
+                .unwrap(),
+            Some((certificate_id, oversized))
+        );
+        for stage in ["pending", "proven", "settled"] {
+            assert!(height_is_saturated(&registry, 84_803_420, stage), "{stage}");
+        }
+        assert_eq!(warnings.count(), 0);
+
+        pending
+            .insert_pending_certificate(NetworkId::new(1), Height::new(5), &healthy)
+            .unwrap();
+    }
+
+    // Restart: hydration used to abort node startup on the stored pointer.
+    let (registry, metrics) = network_metrics();
+    let pending =
+        PendingStore::new_with_path_and_metrics(&pending_dir.path, metrics.clone()).unwrap();
+    let state = StateStore::new_with_path_and_metrics(
+        &state_dir.path,
+        BackupClient::noop(),
+        metrics.clone(),
+    )
+    .unwrap();
+    let warnings = WarningCounter::default();
+    warnings.observe(|| metrics.hydrate(&pending, &state).unwrap());
+
+    for stage in ["pending", "proven", "settled"] {
+        assert!(height_is_saturated(&registry, 84_803_420, stage), "{stage}");
+    }
+    assert_eq!(height_of(&registry, 1, "pending"), Some(5));
+    assert_eq!(warnings.count(), 1);
+
+    // Only hydration reports: a later oversized write stays silent.
+    warnings.observe(|| {
+        pending
+            .set_latest_proven_certificate_per_network(
+                &network,
+                &Height::new(u64::MAX),
+                &certificate_id,
+            )
+            .unwrap();
+    });
+    assert!(height_is_saturated(&registry, 84_803_420, "proven"));
+    assert_eq!(warnings.count(), 1);
 }
 
 #[test]
