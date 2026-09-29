@@ -347,6 +347,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
                     &certificate_id,
                     &EpochNumber::ZERO,
                     &CertificateIndex::ZERO,
+                    None,
                 )
                 .unwrap();
         });

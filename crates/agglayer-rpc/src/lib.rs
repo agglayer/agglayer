@@ -14,7 +14,7 @@ use agglayer_storage::{
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
     CertificateId, CertificateStatus, ContractCallOutcome, EpochConfiguration, Height, NetworkId,
-    NetworkInfo, NetworkStatus,
+    NetworkInfo, NetworkStatus, NetworkType,
 };
 use agglayer_utils::task::spawn_blocking_in_current_span;
 use error::SignatureVerificationError;
@@ -311,15 +311,34 @@ where
             }
         })?;
 
-        let latest_pending_certificate = match network_info.latest_pending_certificate_id {
-            Some(certificate_id) => {
-                Self::get_pending_certificate_header_blocking(state, certificate_id)
-            }
-            None => Self::get_latest_pending_certificate_header_blocking(
-                pending_store,
-                state,
-                network_id,
-            ),
+        let latest_pending_certificate_id = match network_info.latest_pending_certificate_id {
+            Some(certificate_id) => Some(certificate_id),
+            None => pending_store
+                .get_latest_pending_certificate_for_network(&network_id)
+                .inspect_err(|error| error!("Failed to get latest pending certificate id: {error}"))
+                .map_err(|error| GetNetworkInfoError::InternalError {
+                    network_id,
+                    source: error.into(),
+                })?
+                .map(|(id, _)| id),
+        };
+
+        if !Self::network_is_known_blocking(
+            pending_store,
+            state,
+            &network_info,
+            latest_pending_certificate_id,
+        )
+        .map_err(|error| GetNetworkInfoError::InternalError {
+            network_id,
+            source: error.into(),
+        })? {
+            return Err(GetNetworkInfoError::UnknownNetworkType { network_id });
+        }
+
+        let latest_pending_certificate = match latest_pending_certificate_id {
+            Some(id) => Self::get_pending_certificate_header_blocking(state, id),
+            None => Ok(None),
         };
 
         let latest_pending_certificate = match latest_pending_certificate {
@@ -392,6 +411,36 @@ where
         }
 
         Ok(network_info)
+    }
+
+    fn network_is_known_blocking(
+        pending_store: &PendingStore,
+        state: &StateStore,
+        network_info: &NetworkInfo,
+        latest_pending_certificate_id: Option<CertificateId>,
+    ) -> Result<bool, agglayer_storage::error::Error> {
+        let network_id = network_info.network_id;
+
+        // An unpopulated type does not make a network unknown. Check pointers
+        // even if their headers are absent, including legacy indexes until
+        // migration and all writers populate the cache. These extra reads only
+        // establish existence; they must not change the settlement snapshot.
+        Ok(network_info.network_type != NetworkType::Unspecified
+            || network_info.settled_certificate_id.is_some()
+            || network_info.settled_claim.is_some()
+            || latest_pending_certificate_id.is_some()
+            || state
+                .get_latest_proven_certificate_id(network_id)?
+                .is_some()
+            || state
+                .get_latest_settled_certificate_id(network_id)?
+                .is_some()
+            || pending_store
+                .get_latest_proven_certificate_per_network(&network_id)?
+                .is_some()
+            || state
+                .get_latest_settled_certificate_per_network(&network_id)?
+                .is_some())
     }
 }
 

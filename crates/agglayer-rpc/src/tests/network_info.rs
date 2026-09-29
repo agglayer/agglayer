@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_storage::{
+    columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error as StorageError,
     tests::mocks::{MockDebugStore, MockPendingStore, MockStateStore},
 };
@@ -98,6 +99,151 @@ async fn transient_network_info() {
         Some(pending_certificate_id)
     );
     assert_eq!(info.latest_pending_height, Some(0.into()));
+}
+
+#[tokio::test]
+async fn network_existence_uses_cached_data_and_certificate_pointers() {
+    for known_from in [
+        "nowhere",
+        "cached type",
+        "cached claim",
+        "cached pending",
+        "cached proven",
+        "cached settled",
+        "legacy pending",
+        "legacy proven",
+        "legacy settled",
+        "unreadable cached proven",
+        "unreadable legacy settled",
+    ] {
+        let certificate_id = Digest([1; 32]).into();
+        let mut network_info = DEFAULT_NETWORK_INFO;
+        match known_from {
+            "cached type" => network_info.network_type = NetworkType::Generic,
+            "cached claim" => {
+                network_info.settled_claim = Some(SettledClaim {
+                    global_index: Digest([2; 32]),
+                    bridge_exit_hash: Digest([3; 32]),
+                });
+            }
+            "cached pending" => {
+                network_info.latest_pending_certificate_id = Some(certificate_id);
+                network_info.latest_pending_height = Some(0.into());
+            }
+            _ => {}
+        }
+
+        let mut state_store = MockStateStore::new();
+        state_store
+            .expect_get_network_info()
+            .with(eq(NETWORK_1))
+            .once()
+            .return_once(move |_| Ok(network_info));
+        state_store
+            .expect_get_latest_proven_certificate_id()
+            .with(eq(NETWORK_1))
+            .times(0..=1)
+            .returning(move |_| match known_from {
+                "unreadable cached proven" => Err(StorageError::Unexpected(known_from.into())),
+                "cached proven" => Ok(Some(certificate_id)),
+                _ => Ok(None),
+            });
+        state_store
+            .expect_get_latest_settled_certificate_id()
+            .with(eq(NETWORK_1))
+            .times(0..=1)
+            .returning(move |_| Ok((known_from == "cached settled").then_some(certificate_id)));
+        state_store
+            .expect_get_latest_settled_certificate_per_network()
+            .with(eq(NETWORK_1))
+            .times(0..=1)
+            .returning(move |_| match known_from {
+                "unreadable legacy settled" => Err(StorageError::Unexpected(known_from.into())),
+                "legacy settled" => Ok(Some((
+                    NETWORK_1,
+                    SettledCertificate(
+                        certificate_id,
+                        0.into(),
+                        0.into(),
+                        CertificateIndex::new(0),
+                    ),
+                ))),
+                _ => Ok(None),
+            });
+        // A pointer still identifies a known network when its header is absent.
+        state_store
+            .expect_get_certificate_header()
+            .with(eq(certificate_id))
+            .times(0..=1)
+            .returning(|_| Ok(None));
+        state_store
+            .expect_is_network_disabled()
+            .with(eq(NETWORK_1))
+            .times(0..=1)
+            .returning(|_| Ok(false));
+
+        let mut pending_store = MockPendingStore::new();
+        pending_store
+            .expect_get_latest_pending_certificate_for_network()
+            .with(eq(NETWORK_1))
+            .times(0..=1)
+            .returning(move |_| {
+                Ok((known_from == "legacy pending").then_some((certificate_id, 0.into())))
+            });
+        pending_store
+            .expect_get_latest_proven_certificate_per_network()
+            .with(eq(NETWORK_1))
+            .times(0..=1)
+            .returning(move |_| {
+                Ok(
+                    (known_from == "legacy proven").then_some((
+                        NETWORK_1,
+                        0.into(),
+                        certificate_id,
+                    )),
+                )
+            });
+
+        let service = crate::AgglayerService::new(
+            tokio::sync::mpsc::channel(1).0,
+            Arc::new(pending_store),
+            Arc::new(state_store),
+            Arc::new(MockDebugStore::new()),
+            Arc::new(Config::default()),
+            Arc::new(ProviderBuilder::new().connect_mocked_client(Asserter::new())),
+        );
+
+        let result = service.get_network_info(NETWORK_1).await;
+        match known_from {
+            "nowhere" => assert!(matches!(
+                result,
+                Err(crate::GetNetworkInfoError::UnknownNetworkType { network_id })
+                    if network_id == NETWORK_1
+            )),
+            "unreadable cached proven" | "unreadable legacy settled" => {
+                let Err(crate::GetNetworkInfoError::InternalError { network_id, source }) = result
+                else {
+                    panic!("Expected an internal error for {known_from}");
+                };
+                assert_eq!(network_id, NETWORK_1);
+                assert!(source.to_string().contains(known_from));
+            }
+            _ => {
+                let info = result.unwrap_or_else(|error| panic!("{known_from}: {error}"));
+                assert_eq!(info.network_id, NETWORK_1);
+                assert_eq!(
+                    info.network_type,
+                    if known_from == "cached type" {
+                        NetworkType::Generic
+                    } else {
+                        NetworkType::Unspecified
+                    }
+                );
+                assert_eq!(info.latest_pending_certificate_id, None);
+                assert_eq!(info.settled_certificate_id, None);
+            }
+        }
+    }
 }
 
 #[tokio::test]
@@ -313,7 +459,6 @@ async fn settled_cached_pending_header_is_omitted() {
         settlement_tx_hash: Some(Digest::ZERO.into()),
     };
     let network_info = NetworkInfo {
-        network_type: agglayer_types::NetworkType::Generic,
         latest_pending_certificate_id: Some(certificate_id),
         latest_pending_height: Some(certificate.height),
         latest_pending_status: Some(agglayer_types::CertificateStatus::Pending),
@@ -378,7 +523,6 @@ async fn settled_claim_is_served_from_the_network_info_record() {
             let certificate = Certificate::new_for_test(NETWORK_1, 10_000.into());
             let certificate_id = certificate.hash();
             let network_info = NetworkInfo {
-                network_type: agglayer_types::NetworkType::Generic,
                 settled_certificate_id: Some(certificate_id),
                 settled_height: Some(certificate.height),
                 settled_claim: claim.clone(),
@@ -413,7 +557,7 @@ async fn settled_claim_is_served_from_the_network_info_record() {
 
             let info = service.get_network_info(NETWORK_1).await.unwrap();
             assert_eq!(info.settled_claim, claim);
-            assert_eq!(info.network_type, NetworkType::Generic);
+            assert_eq!(info.network_type, NetworkType::Unspecified);
             assert_eq!(info.settled_let_leaf_count, leaf_count);
             assert_eq!(info.settled_pp_root, None);
         }
@@ -439,7 +583,10 @@ async fn network_info_storage_error_is_propagated() {
     );
 
     let crate::error::GetNetworkInfoError::InternalError { network_id, source } =
-        service.get_network_info(NETWORK_1).await.unwrap_err();
+        service.get_network_info(NETWORK_1).await.unwrap_err()
+    else {
+        panic!("Expected an internal error");
+    };
     assert_eq!(network_id, NETWORK_1);
     assert!(source.to_string().contains("unreadable network info"));
 }

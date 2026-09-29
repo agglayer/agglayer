@@ -169,6 +169,17 @@ where
             .map_err(|error| {
                 error!(?error, "Failed to get network state");
                 match error {
+                    agglayer_rpc::GetNetworkInfoError::UnknownNetworkType { .. } => {
+                        tonic::Status::with_error_details(
+                            tonic::Code::NotFound,
+                            "Network type could not be determined",
+                            ErrorDetails::with_error_info(
+                                GetNetworkInfoErrorKind::UnknownNetworkType.as_str_name(),
+                                GET_NETWORK_INFO_METHOD_PATH,
+                                [],
+                            ),
+                        )
+                    }
                     agglayer_rpc::GetNetworkInfoError::InternalError { source, .. } => {
                         tonic::Status::with_error_details(
                             tonic::Code::Internal,
