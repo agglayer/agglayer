@@ -28,20 +28,16 @@ use sp1_sdk::{
     blocking::{EnvProver, Prover, ProverClient},
     Elf, ProvingKey, SP1ProofWithPublicValues, SP1Stdin, SP1VerificationError, SP1VerifyingKey,
 };
-use tower::{buffer::Buffer, util::BoxCloneService, Service, ServiceExt};
+use tower::{Service, ServiceExt};
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::ELF;
+use crate::{ProverRouter, ELF};
 
 mod l1_context;
 
 #[cfg(test)]
 mod tests;
 
-type ProverService = Buffer<
-    BoxCloneService<prover_executor::Request, prover_executor::Response, prover_executor::Error>,
-    prover_executor::Request,
->;
 #[derive(Clone)]
 pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The pending store to fetch and store certificates and proofs.
@@ -51,7 +47,7 @@ pub struct CertifierClient<PendingStore, L1Rpc> {
     /// The verifying key of the SP1 proof system.
     verifying_key: SP1VerifyingKey,
     /// The prover service to generate pessimistic-proofs.
-    prover: ProverService,
+    prover: ProverRouter,
     /// The L1 RPC client.
     l1_rpc: Arc<L1Rpc>,
     config: Arc<Config>,
@@ -62,7 +58,7 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         pending_store: Arc<PendingStore>,
         l1_rpc: Arc<L1Rpc>,
         config: Arc<Config>,
-        mut prover: ProverService,
+        prover: ProverRouter,
     ) -> eyre::Result<Self> {
         debug!("Initializing the CertifierClient verifier...");
         let (verifier, verifying_key) = sp1_blocking({
@@ -80,11 +76,6 @@ impl<PendingStore, L1Rpc> CertifierClient<PendingStore, L1Rpc> {
         })
         .await
         .context("Failed setting up SP1 verifier")??;
-        prover
-            .ready()
-            .await
-            .map_err(|error| eyre!("Failed setting up Prover executor: {:?}", error))?;
-
         debug!("CertifierClient verifier successfully initialized!");
 
         Ok(Self {
@@ -324,7 +315,10 @@ where
             warn!("FAIL POINT ACTIVE: Simulating ProverService timeout");
             return Err(CertificationError::ProverFailed("Timeout".to_string()));
         }
-        let mut prover = self.prover.clone();
+        let mut prover = self
+            .prover
+            .for_network(certificate.network_id)
+            .map_err(CertificationError::Other)?;
         let prover_response = prover
             .ready()
             .await
