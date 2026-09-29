@@ -84,7 +84,8 @@ mock! {
             height: &Height,
             certificate_id: &CertificateId,
             epoch_number: &EpochNumber,
-            certificate_index: &agglayer_types::CertificateIndex
+            certificate_index: &agglayer_types::CertificateIndex,
+            settled_claim: Option<agglayer_types::SettledClaim>
         ) -> Result<(), Error>;
 
         fn write_local_network_state(

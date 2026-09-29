@@ -12,7 +12,7 @@ use agglayer_interop::grpc::v1 as interop_v1;
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
     backup::BackupClient,
-    stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
+    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
 use agglayer_types::{
@@ -198,18 +198,9 @@ async fn start_server_with_certificate_submission_service(
     );
     let service = Arc::new(AgglayerService::new(
         sender,
-        pending_store.clone(),
-        state_store.clone(),
+        pending_store,
+        state_store,
         Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap()),
-        Arc::new(
-            EpochsStore::new(
-                config.clone(),
-                pending_store,
-                state_store,
-                BackupClient::noop(),
-            )
-            .unwrap(),
-        ),
         config,
         Arc::new(L1Rpc),
     ));
