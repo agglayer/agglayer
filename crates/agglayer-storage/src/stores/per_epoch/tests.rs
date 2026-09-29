@@ -127,6 +127,84 @@ fn seed_epoch_checkpoints(path: &std::path::Path, network_id: NetworkId, height:
     db.put::<EndCheckpointColumn>(&network_id, &height).unwrap();
 }
 
+fn write_raw_epoch_cf(
+    path: &std::path::Path,
+    cf_name: &str,
+    key: Vec<u8>,
+    value: &[u8],
+) {
+    let db = PerEpochStore::<PendingStore, StateStore>::init_db(path).unwrap();
+    let cf = db.raw_rocksdb().cf_handle(cf_name).unwrap();
+    db.raw_rocksdb().put_cf(&cf, key, value).unwrap();
+}
+
+fn try_open_epoch(
+    config: Arc<Config>,
+) -> Result<PerEpochStore<PendingStore, StateStore>, Error> {
+    let pending_store =
+        Arc::new(PendingStore::new_with_path(&config.storage.pending_db_path).unwrap());
+    let state_store = Arc::new(
+        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop()).unwrap(),
+    );
+
+    PerEpochStore::try_open(
+        config,
+        EpochNumber::ZERO,
+        pending_store,
+        state_store,
+        None,
+        BackupClient::noop(),
+    )
+}
+
+#[test]
+fn startup_rejects_corrupt_start_checkpoint() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let epoch_path = config.storage.epoch_db_path(EpochNumber::ZERO);
+
+    write_raw_epoch_cf(
+        &epoch_path,
+        StartCheckpointColumn::COLUMN_FAMILY_NAME,
+        NetworkId::new(1).encode().unwrap(),
+        b"not-a-height",
+    );
+
+    assert!(matches!(try_open_epoch(config), Err(Error::DBError(_))));
+}
+
+#[test]
+fn startup_rejects_corrupt_end_checkpoint() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let epoch_path = config.storage.epoch_db_path(EpochNumber::ZERO);
+
+    write_raw_epoch_cf(
+        &epoch_path,
+        EndCheckpointColumn::COLUMN_FAMILY_NAME,
+        NetworkId::new(1).encode().unwrap(),
+        b"not-a-height",
+    );
+
+    assert!(matches!(try_open_epoch(config), Err(Error::DBError(_))));
+}
+
+#[test]
+fn startup_rejects_corrupt_latest_certificate_row() {
+    let tmp = TempDBDir::new();
+    let config = Arc::new(Config::new(&tmp.path));
+    let epoch_path = config.storage.epoch_db_path(EpochNumber::ZERO);
+
+    write_raw_epoch_cf(
+        &epoch_path,
+        CertificatePerIndexProtoColumn::COLUMN_FAMILY_NAME,
+        CertificateIndex::ZERO.encode().unwrap(),
+        b"not-a-certificate",
+    );
+
+    assert!(matches!(try_open_epoch(config), Err(Error::DBError(_))));
+}
+
 #[rstest]
 fn add_certificate_writes_proto_bytes_to_epoch_store(
     store: PerEpochStore<PendingStore, StateStore>,
