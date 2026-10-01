@@ -3,7 +3,10 @@
 //! The agglayer is configured via its TOML configuration file, `agglayer.toml`
 //! by default, which is deserialized into the [`Config`] struct.
 
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use agglayer_primitives::Address;
 use outbound::OutboundConfig;
@@ -114,6 +117,10 @@ pub struct Config {
     #[serde(default)]
     pub prover: prover_config::ProverType,
 
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
+    pub succinct_cluster: BTreeMap<u32, Url>,
+
     #[serde(default = "default_prover_buffer_size")]
     pub prover_buffer_size: usize,
 
@@ -179,6 +186,7 @@ impl Config {
                 prover_config::NetworkProverConfig::default(),
             ),
             prover_buffer_size: default_prover_buffer_size(),
+            succinct_cluster: BTreeMap::new(),
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),
