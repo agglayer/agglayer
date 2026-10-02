@@ -23,9 +23,12 @@ async fn schedule_two_certs(#[case] mut state: Forest) {
 
     let withdrawals = vec![];
 
-    let certificate_one = state.apply_events(&[], &withdrawals);
-    let mut certificate_two = state.apply_events(&[], &withdrawals);
+    let certificate_one = state.apply_events_v5(&[], &withdrawals);
+    let mut certificate_two = state.apply_events_v5(&[], &withdrawals);
     certificate_two.height = Height::new(1);
+    // Mutating the certificate after signing invalidates its V5 signature,
+    // since V5 commits to the certificate's own hash.
+    state.resign_for_test(&mut certificate_two);
 
     let certificate_one_id: CertificateId = client
         .request(

@@ -135,13 +135,7 @@ impl Certificate {
     ) -> Result<(), SignerError> {
         let signature_commitment_values = self.signature_commitment_values();
 
-        let recovered_expected_signer = [
-            SignatureCommitmentVersion::V5,
-            SignatureCommitmentVersion::V3,
-            SignatureCommitmentVersion::V2,
-        ]
-        .iter()
-        .any(|version| {
+        let recovered_expected_signer = [SignatureCommitmentVersion::V5].iter().any(|version| {
             let commitment = signature_commitment_values.commitment(*version);
             match signature.recover_address_from_prehash(&commitment) {
                 Ok(recovered) => recovered == expected_signer,

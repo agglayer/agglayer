@@ -48,7 +48,7 @@ async fn settlement_path_metrics_are_exposed(#[case] state: Forest) {
     let metrics_url = format!("http://{}/metrics", config.telemetry.addr);
 
     let withdrawals = vec![];
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
     let network_id = certificate.network_id.to_u32();
 
     let certificate_id: CertificateId = client
