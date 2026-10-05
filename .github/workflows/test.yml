@@ -118,7 +118,7 @@ jobs:
             "sequencer_type": "op-reth",
             "l1_el_type": "reth",
             "reth_image": "ghcr.io/paradigmxyz/reth:v1.11.3",
-            "aggkit_image": "ghcr.io/agglayer/aggkit:0.5.4",
+            "aggkit_image": "ghcr.io/agglayer/aggkit:0.10.0",
             "consensus_contract_type": "pessimistic",
             "verbosity": "debug"
           }
