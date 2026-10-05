@@ -114,12 +114,6 @@ pub enum L1RpcError {
     #[error("Unable to find `UpdateL1InfoTreeV2` events")]
     UpdateL1InfoTreeV2EventNotFound,
 
-    #[error("Unable to fetch the latest finalized block")]
-    LatestFinalizedBlockNotFound,
-
-    #[error("Timeout exceeded while waiting for block {0} to be finalized.")]
-    FinalizationTimeoutExceeded(u64),
-
     #[error("L1 Reorg detected for block number {0}")]
     ReorgDetected(u64),
 
