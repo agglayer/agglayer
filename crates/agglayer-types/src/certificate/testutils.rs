@@ -20,33 +20,53 @@ impl Default for Certificate {
         // here.
         let local_exit_root = LocalExitTree::<32>::default().get_root().into();
         let height = Height::ZERO;
-        let (_new_local_exit_root, signature, _signer) = compute_signature_info(
-            local_exit_root,
-            &[],
-            &wallet,
-            height,
-            SignatureCommitmentVersion::V2,
-        );
-        Self {
+
+        // `hash()` does not depend on `aggchain_data`, so a placeholder
+        // signature lets us compute the real certificate id before
+        // signing with it (needed by versions that commit to it, e.g.
+        // V5).
+        let mut certificate = Self {
             network_id,
             height,
             prev_local_exit_root: local_exit_root,
             new_local_exit_root: local_exit_root,
             bridge_exits: Default::default(),
             imported_bridge_exits: Default::default(),
-            aggchain_data: AggchainData::ECDSA { signature },
+            aggchain_data: AggchainData::ECDSA {
+                signature: Signature::new(U256::ZERO, U256::ZERO, false),
+            },
             metadata: Default::default(),
             custom_chain_data: vec![],
             l1_info_tree_leaf_count: None,
-        }
+        };
+        let certificate_id = certificate.hash().into();
+        let (_new_local_exit_root, signature, _signer) = compute_signature_info(
+            local_exit_root,
+            &[],
+            &wallet,
+            height,
+            certificate_id,
+            SignatureCommitmentVersion::V2,
+        );
+        certificate.aggchain_data = AggchainData::ECDSA { signature };
+        certificate
     }
 }
 
+/// Computes a test signature over the given values.
+///
+/// `certificate_id` must be the hash of the certificate this signature is
+/// for (see [`Certificate::hash`]), since versions V4 and V5 commit to it.
+/// Callers that don't know it yet (because they still need to sign before
+/// building the final certificate) can build a draft certificate with a
+/// placeholder signature, call `.hash()` on it, then sign and overwrite its
+/// `aggchain_data` -- `hash()` never looks at `aggchain_data`.
 pub fn compute_signature_info(
     new_local_exit_root: LocalExitRoot,
     imported_bridge_exits: &[ImportedBridgeExit],
     wallet: &alloy::signers::local::PrivateKeySigner,
     height: Height,
+    certificate_id: Digest,
     version: SignatureCommitmentVersion,
 ) -> (B256, Signature, Address) {
     use alloy::signers::SignerSync;
@@ -60,7 +80,7 @@ pub fn compute_signature_info(
         },
         height: height.as_u64(),
         aggchain_params: None,
-        certificate_id: Digest::default(),
+        certificate_id,
     }
     .commitment(version);
 
@@ -85,6 +105,12 @@ impl Certificate {
 
     pub fn new_for_test(network_id: NetworkId, height: Height) -> Self {
         Self::new_for_test_with_version(network_id, height, SignatureCommitmentVersion::V2)
+    }
+
+    /// Like [`Self::new_for_test`], but signed on V5, the only legacy-ECDSA
+    /// commitment version the Agglayer RPC accepts.
+    pub fn new_for_test_v5(network_id: NetworkId, height: Height) -> Self {
+        Self::new_for_test_with_version(network_id, height, SignatureCommitmentVersion::V5)
     }
 
     pub fn new_for_test_with_version(
@@ -159,8 +185,34 @@ impl Certificate {
         };
 
         let wallet = Self::wallet_for_test(network_id);
-        let (_, signature, _signer) =
-            compute_signature_info(new_local_exit_root, &[], &wallet, height, version);
+
+        // `hash()` does not depend on `aggchain_data`, so build a draft
+        // certificate with a placeholder signature first to compute the
+        // real certificate id, which versions V4 and V5 commit to.
+        let draft = Self {
+            network_id,
+            height,
+            prev_local_exit_root,
+            new_local_exit_root,
+            bridge_exits: bridge_exits.clone(),
+            imported_bridge_exits: Default::default(),
+            aggchain_data: AggchainData::ECDSA {
+                signature: Signature::new(U256::ZERO, U256::ZERO, false),
+            },
+            metadata: Default::default(),
+            custom_chain_data: vec![],
+            l1_info_tree_leaf_count: None,
+        };
+        let certificate_id = draft.hash().into();
+
+        let (_, signature, _signer) = compute_signature_info(
+            new_local_exit_root,
+            &[],
+            &wallet,
+            height,
+            certificate_id,
+            version,
+        );
 
         let aggchain_data = match aggchain_data_type {
             AggchainDataType::Ecdsa => AggchainData::ECDSA { signature },
@@ -232,6 +284,28 @@ impl Certificate {
         self.new_local_exit_root = new_local_exit_root;
         self
     }
+
+    /// Re-signs this certificate's legacy-ECDSA data on V5, using the
+    /// deterministic test wallet for its network.
+    ///
+    /// Call this after mutating a certificate built by one of the
+    /// `new_for_test*` helpers and before submitting it somewhere that
+    /// verifies the signature: V5 commits to the certificate's own hash
+    /// (`Self::hash`), so any field change invalidates the signature it was
+    /// built with.
+    pub fn resign_for_test(&mut self) {
+        let wallet = Self::wallet_for_test(self.network_id);
+        let certificate_id = self.hash().into();
+        let (_, signature, _signer) = compute_signature_info(
+            self.new_local_exit_root,
+            &self.imported_bridge_exits,
+            &wallet,
+            self.height,
+            certificate_id,
+            SignatureCommitmentVersion::V5,
+        );
+        self.aggchain_data = AggchainData::ECDSA { signature };
+    }
 }
 
 /// Enum to specify which AggchainData variant to use in test certificates
@@ -291,28 +365,52 @@ mod tests {
 
     #[rstest]
     fn can_retrieve_correct_signer(
-        #[values(SignatureCommitmentVersion::V2, SignatureCommitmentVersion::V3)]
+        #[values(
+            SignatureCommitmentVersion::V2,
+            SignatureCommitmentVersion::V3,
+            SignatureCommitmentVersion::V5
+        )]
         version: SignatureCommitmentVersion,
     ) {
         let certificate = Certificate::new_for_test_with_version(2.into(), 1.into(), version);
         let expected_signer = certificate.get_signer();
 
-        // Can retrieve the correct signer address from the signature
+        // Can retrieve the correct signer address from the signature, for every
+        // version the signing helper supports -- this is independent of which
+        // versions the Agglayer RPC happens to accept.
         assert_eq!(
             certificate.retrieve_signer(version).unwrap(),
             expected_signer
         );
+    }
 
-        // Check that the signature is valid
+    #[rstest]
+    fn verify_legacy_ecdsa_only_accepts_v5(
+        #[values(
+            SignatureCommitmentVersion::V2,
+            SignatureCommitmentVersion::V3,
+            SignatureCommitmentVersion::V5
+        )]
+        version: SignatureCommitmentVersion,
+    ) {
+        let certificate = Certificate::new_for_test_with_version(2.into(), 1.into(), version);
+        let expected_signer = certificate.get_signer();
+
         let agglayer_types::aggchain_proof::AggchainData::ECDSA { signature } =
             certificate.aggchain_data
         else {
             panic!("inconsistent test data")
         };
 
-        assert!(certificate
-            .verify_legacy_ecdsa(expected_signer, &signature)
-            .is_ok())
+        let result = certificate.verify_legacy_ecdsa(expected_signer, &signature);
+        if matches!(version, SignatureCommitmentVersion::V5) {
+            assert!(result.is_ok(), "V5 must be accepted, got {result:?}");
+        } else {
+            assert!(
+                result.is_err(),
+                "{version:?} must be rejected now that only V5 is accepted"
+            );
+        }
     }
 
     #[test]
