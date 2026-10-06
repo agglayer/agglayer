@@ -119,7 +119,10 @@ jobs:
             "l1_el_type": "reth",
             "reth_image": "ghcr.io/paradigmxyz/reth:v1.11.3",
             "aggkit_image": "ghcr.io/agglayer/aggkit:0.10.0",
-            "consensus_contract_type": "pessimistic",
+            "consensus_contract_type": "ecdsa-multisig",
+            "use_agg_sender_validator": true,
+            "agg_sender_validator_total_number": 1,
+            "agg_sender_multisig_threshold": 1,
             "verbosity": "debug"
           }
         }
