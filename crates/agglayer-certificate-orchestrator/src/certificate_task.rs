@@ -573,7 +573,8 @@ where
             self.bridging_timer.as_mut(),
             Self::stage_label(&self.header.status),
         ) {
-            timer.complete_stage(stage);
+            let seconds = timer.complete_stage(stage);
+            info!(%stage, seconds, "Certificate stage completed");
         }
     }
 
@@ -601,7 +602,8 @@ where
 
         // For fresh certificates, record the end-to-end bridging duration.
         if let Some(timer) = &self.bridging_timer {
-            timer.complete();
+            let seconds = timer.complete();
+            info!(seconds, "Certificate bridging completed");
         }
 
         self.send_to_network_task(NetworkTaskMessage::CertificateSettled {
