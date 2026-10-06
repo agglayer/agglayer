@@ -97,9 +97,8 @@ pub struct L1RpcClient<RpcProvider> {
     gas_multiplier_factor: u32,
     /// Gas price parameters for transactions.
     gas_price_params: GasPriceParams,
-    /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
-    /// Map<leaf_count, l1_info_root>
-    l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
+    /// Cached UpdateL1InfoTreeV2 roots and their event block identities.
+    l1_info_roots: Arc<RwLock<HashMap<u32, rollup::CachedL1InfoRoot>>>,
     /// Number of blocks to query when filtering for events.
     /// This is to avoid hitting provider limits when querying large block
     /// ranges or errors like "query returned more than 10000 results".
@@ -113,12 +112,6 @@ pub enum L1RpcError {
 
     #[error("Unable to find `UpdateL1InfoTreeV2` events")]
     UpdateL1InfoTreeV2EventNotFound,
-
-    #[error("Unable to fetch the latest finalized block")]
-    LatestFinalizedBlockNotFound,
-
-    #[error("Timeout exceeded while waiting for block {0} to be finalized.")]
-    FinalizationTimeoutExceeded(u64),
 
     #[error("L1 Reorg detected for block number {0}")]
     ReorgDetected(u64),
