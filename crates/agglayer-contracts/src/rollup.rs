@@ -4,7 +4,7 @@ use agglayer_primitives::Address;
 use agglayer_types::SettlementTxHash;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
-    primitives::{TxHash, U256},
+    primitives::{TxHash, B256, U256},
     providers::Provider,
     rpc::types::Filter,
 };
@@ -23,6 +23,13 @@ pub enum VerifierType {
     StateTransition = 0,
     Pessimistic = 1,
     ALGateway = 2,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct CachedL1InfoRoot {
+    root: [u8; 32],
+    block_number: u64,
+    block_hash: B256,
 }
 
 #[async_trait::async_trait]
@@ -61,19 +68,43 @@ where
     }
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
-        // Check if we already have this l1_info_root cached
-        {
-            let cache = self
-                .l1_info_roots
-                .read()
-                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
-            if let Some(&cached_root) = cache.get(&l1_leaf_count) {
+        // Copy the entry so the cache lock is released before querying L1.
+        let cached = self
+            .l1_info_roots
+            .read()
+            .map_err(|_| L1RpcError::CacheLockPoisoned)?
+            .get(&l1_leaf_count)
+            .copied();
+        if let Some(cached) = cached {
+            // Query by number: an orphaned block may still be available by
+            // hash.
+            let block = self
+                .rpc
+                .get_block(BlockId::number(cached.block_number))
+                .await
+                .map_err(|_| L1RpcError::BlockHashNotFound(cached.block_number))?;
+            if block.is_some_and(|block| block.header.hash == cached.block_hash) {
                 trace!(
                     l1_leaf_count,
-                    cached_root = %alloy::primitives::B256::from(cached_root),
+                    cached_root = %B256::from(cached.root),
                     "Retrieved cached L1 info root for leaf count",
                 );
-                return Ok(cached_root);
+                return Ok(cached.root);
+            }
+
+            debug!(
+                l1_leaf_count,
+                block_number = cached.block_number,
+                block_hash = %cached.block_hash,
+                "Invalidating cached L1 info root with missing or changed event block",
+            );
+            let mut cache = self
+                .l1_info_roots
+                .write()
+                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
+            // Another caller may have already replaced the stale entry.
+            if cache.get(&l1_leaf_count) == Some(&cached) {
+                cache.remove(&l1_leaf_count);
             }
         }
 
@@ -147,7 +178,14 @@ where
                 .l1_info_roots
                 .write()
                 .map_err(|_| L1RpcError::CacheLockPoisoned)?;
-            cache.insert(l1_leaf_count, l1_info_root);
+            cache.insert(
+                l1_leaf_count,
+                CachedL1InfoRoot {
+                    root: l1_info_root,
+                    block_number: event_block_number,
+                    block_hash: event_block_hash,
+                },
+            );
         }
 
         Ok(l1_info_root)
