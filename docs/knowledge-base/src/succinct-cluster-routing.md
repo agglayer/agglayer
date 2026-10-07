@@ -23,10 +23,10 @@ prover service.
 
 An override is binding for every Succinct RPC operation for that network. The
 node prepares all configured routes before startup completes; initialization
-failure prevents startup. Request errors, timeouts, and missing configured
-routes surface errors and never redirect the network to another cluster. SP1
-artifact transfers still use URLs supplied by the selected cluster. CPU and mock
-provers retain their configured modes.
+failure prevents startup. Request errors and timeouts surface errors and never
+redirect the network to another cluster. SP1 artifact transfers still use URLs
+supplied by the selected cluster. CPU and mock provers retain their configured
+modes.
 
 At startup, one log is emitted per applied override, in network-ID order. It
 shows only the endpoint origin (scheme, host and port), so credentials in the
