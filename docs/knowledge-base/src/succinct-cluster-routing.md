@@ -28,10 +28,12 @@ routes surface errors and never redirect the network to another cluster. SP1
 artifact transfers still use URLs supplied by the selected cluster. CPU and mock
 provers retain their configured modes.
 
-At startup, one log is emitted per applied override, in network-ID order:
+At startup, one log is emitted per applied override, in network-ID order. It
+shows only the endpoint origin (scheme, host and port), so credentials in the
+URL's user-info, path or query never reach the logs:
 
 ```text
-INFO Using configured Succinct RPC endpoint network_id=48 rpc_url=https://private-cluster.example/
+INFO Using configured Succinct RPC endpoint network_id=48 rpc_origin=https://private-cluster.example
 ```
 
 Restart the node after changing the configuration. Removing an entry restores

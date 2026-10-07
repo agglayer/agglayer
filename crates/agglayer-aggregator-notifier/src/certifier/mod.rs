@@ -315,10 +315,7 @@ where
             warn!("FAIL POINT ACTIVE: Simulating ProverService timeout");
             return Err(CertificationError::ProverFailed("Timeout".to_string()));
         }
-        let mut prover = self
-            .prover
-            .for_network(certificate.network_id)
-            .map_err(CertificationError::Other)?;
+        let mut prover = self.prover.for_network(certificate.network_id);
         let prover_response = prover
             .ready()
             .await
