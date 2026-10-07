@@ -30,7 +30,7 @@ async fn transaction_with_receipt_status_0(#[case] state: Forest) {
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -70,7 +70,7 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
         .await
@@ -82,8 +82,11 @@ async fn transaction_with_receipt_status_0_retry(#[case] state: Forest) {
     // job).
     fail::cfg("settlement::force_revert", "off").expect("Failed to configure failpoint");
 
-    let mut corrected = state.clone().apply_events(&[], &withdrawals);
+    let mut corrected = state.clone().apply_events_v5(&[], &withdrawals);
     corrected.metadata = Metadata::new(Digest::from([1u8; 32]));
+    // Mutating the certificate after signing invalidates its V5 signature,
+    // since V5 commits to the certificate's own hash.
+    state.resign_for_test(&mut corrected);
     let corrected_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![corrected])
         .await
@@ -119,7 +122,7 @@ async fn transaction_with_receipt_status_0_same_certificate_resend(#[case] state
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
@@ -173,7 +176,7 @@ async fn transaction_with_receipt_status_0_admin_unlink_then_resend(#[case] stat
         .expect("Failed to build the admin client");
 
     let withdrawals = vec![];
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
@@ -230,7 +233,7 @@ async fn transaction_without_receipt_settles(#[case] state: Forest) {
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -267,7 +270,7 @@ async fn transaction_with_receipt_timeout_many_times_settles(#[case] state: Fore
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -302,7 +305,7 @@ async fn transaction_with_receipt_timeout_2_times(#[case] state: Forest) {
         setup_network(&tmp_dir.path, None, Some(cancellation_token.clone())).await;
 
     let withdrawals = vec![];
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])

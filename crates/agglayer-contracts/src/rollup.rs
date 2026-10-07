@@ -4,10 +4,9 @@ use agglayer_primitives::Address;
 use agglayer_types::SettlementTxHash;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
-    primitives::{TxHash, U256},
+    primitives::{TxHash, B256, U256},
     providers::Provider,
     rpc::types::Filter,
-    signers::k256::elliptic_curve::ff::derive::bitvec::macros::internal::funty::Fundamental,
 };
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -25,12 +24,13 @@ pub enum VerifierType {
     Pessimistic = 1,
     ALGateway = 2,
 }
-/// Polling tick interval used to check for one block to be finalized.
-const CHECK_BLOCK_FINALIZED_TICK_INTERVAL: tokio::time::Duration =
-    tokio::time::Duration::from_secs(10);
 
-/// Conservative time for finality on Ethereum.
-const TIME_TO_FINALITY_ETHEREUM: tokio::time::Duration = tokio::time::Duration::from_secs(30 * 60);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct CachedL1InfoRoot {
+    root: [u8; 32],
+    block_number: u64,
+    block_hash: B256,
+}
 
 #[async_trait::async_trait]
 pub trait RollupContract {
@@ -68,19 +68,43 @@ where
     }
 
     async fn get_l1_info_root(&self, l1_leaf_count: u32) -> Result<[u8; 32], L1RpcError> {
-        // Check if we already have this l1_info_root cached
-        {
-            let cache = self
-                .l1_info_roots
-                .read()
-                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
-            if let Some(&cached_root) = cache.get(&l1_leaf_count) {
+        // Copy the entry so the cache lock is released before querying L1.
+        let cached = self
+            .l1_info_roots
+            .read()
+            .map_err(|_| L1RpcError::CacheLockPoisoned)?
+            .get(&l1_leaf_count)
+            .copied();
+        if let Some(cached) = cached {
+            // Query by number: an orphaned block may still be available by
+            // hash.
+            let block = self
+                .rpc
+                .get_block(BlockId::number(cached.block_number))
+                .await
+                .map_err(|_| L1RpcError::BlockHashNotFound(cached.block_number))?;
+            if block.is_some_and(|block| block.header.hash == cached.block_hash) {
                 trace!(
                     l1_leaf_count,
-                    cached_root = %alloy::primitives::B256::from(cached_root),
+                    cached_root = %B256::from(cached.root),
                     "Retrieved cached L1 info root for leaf count",
                 );
-                return Ok(cached_root);
+                return Ok(cached.root);
+            }
+
+            debug!(
+                l1_leaf_count,
+                block_number = cached.block_number,
+                block_hash = %cached.block_hash,
+                "Invalidating cached L1 info root with missing or changed event block",
+            );
+            let mut cache = self
+                .l1_info_roots
+                .write()
+                .map_err(|_| L1RpcError::CacheLockPoisoned)?;
+            // Another caller may have already replaced the stale entry.
+            if cache.get(&l1_leaf_count) == Some(&cached) {
+                cache.remove(&l1_leaf_count);
             }
         }
 
@@ -96,7 +120,8 @@ where
             .address(self.global_exit_root_manager_contract)
             .event_signature(UpdateL1InfoTreeV2::SIGNATURE_HASH)
             .topic1(U256::from(l1_leaf_count))
-            .from_block(BlockNumberOrTag::Earliest);
+            .from_block(BlockNumberOrTag::Earliest)
+            .to_block(BlockNumberOrTag::Latest);
         let events = self.rpc.get_logs(&filter).await.map_err(|error| {
             error!(?error, "Failed to fetch UpdateL1InfoTreeV2 logs");
             L1RpcError::UpdateL1InfoTreeV2EventFailure(error.into())
@@ -126,70 +151,25 @@ where
             "Retrieved UpdateL1InfoTreeV2 event",
         );
 
-        // Await for the related block to be finalized
-        // NOTE: Cannot use block subscription because the provider is not
-        // websocket
-        {
-            let mut tick = tokio::time::interval(CHECK_BLOCK_FINALIZED_TICK_INTERVAL);
-            let mut finalized_block_number = 0;
-
-            _ = tokio::time::timeout(TIME_TO_FINALITY_ETHEREUM, async {
-                loop {
-                    tick.tick().await;
-
-                    finalized_block_number = self
-                        .rpc
-                        .get_block(BlockId::Number(BlockNumberOrTag::Finalized))
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|block| block.header.number)
-                        .ok_or(L1RpcError::LatestFinalizedBlockNotFound)?;
-
-                    debug!(
-                        "Awaiting L1 info tree leaf count ({}) set at block {} to be finalized. \
-                         Latest finalized block: {}",
-                        l1_leaf_count, event_block_number, finalized_block_number,
-                    );
-
-                    // Check whether the block number containing the event is
-                    // now finalized.
-                    if finalized_block_number >= event_block_number {
-                        // Verify that the hash of the block containing
-                        // the event did not change due to potential reorg
-                        let retrieved_block_hash = self
-                            .rpc
-                            .get_block(BlockId::Number(event_block_number.into()))
-                            .await
-                            .ok()
-                            .flatten()
-                            .map(|block| block.header.hash)
-                            .ok_or(L1RpcError::BlockHashNotFound(event_block_number))?;
-
-                        if retrieved_block_hash != event_block_hash {
-                            error!(
-                                "Reorg detected! Retrieved block hash ({:?}) does not match \
-                                 expected event block hash ({:?}).",
-                                retrieved_block_hash, event_block_hash
-                            );
-                            return Err(L1RpcError::ReorgDetected(event_block_number));
-                        }
-
-                        break;
-                    }
-                }
-
-                Ok(())
-            })
+        // Inclusion on L1 is sufficient: settlement contracts validate the root
+        // again. Reject a reorg already visible between the log and block
+        // reads.
+        let retrieved_block_hash = self
+            .rpc
+            .get_block(BlockId::number(event_block_number))
             .await
-            .map_err(|_| {
-                error!(
-                    "Timeout occurred while waiting for block {} to be finalized. Latest \
-                     finalized block: {}",
-                    event_block_number, finalized_block_number
-                );
-                L1RpcError::FinalizationTimeoutExceeded(event_block_number.as_u64())
-            })??;
+            .ok()
+            .flatten()
+            .map(|block| block.header.hash)
+            .ok_or(L1RpcError::BlockHashNotFound(event_block_number))?;
+
+        if retrieved_block_hash != event_block_hash {
+            error!(
+                "Reorg detected! Retrieved block hash ({:?}) does not match expected event block \
+                 hash ({:?}).",
+                retrieved_block_hash, event_block_hash
+            );
+            return Err(L1RpcError::ReorgDetected(event_block_number));
         }
 
         // Cache the retrieved l1_info_root for future use
@@ -198,7 +178,14 @@ where
                 .l1_info_roots
                 .write()
                 .map_err(|_| L1RpcError::CacheLockPoisoned)?;
-            cache.insert(l1_leaf_count, l1_info_root);
+            cache.insert(
+                l1_leaf_count,
+                CachedL1InfoRoot {
+                    root: l1_info_root,
+                    block_number: event_block_number,
+                    block_hash: event_block_hash,
+                },
+            );
         }
 
         Ok(l1_info_root)
@@ -302,3 +289,6 @@ where
         self.event_filter_block_range
     }
 }
+
+#[cfg(test)]
+mod tests;

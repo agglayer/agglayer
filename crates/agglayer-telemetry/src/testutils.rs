@@ -59,7 +59,7 @@ impl MetricsHarness {
 /// # Panics
 ///
 /// Panics when a matching line's value does not parse as a number, which
-/// means the exporter emitted something unparseable rather than that the
+/// means the exporter emitted something unparsable rather than that the
 /// series is missing.
 #[must_use]
 pub fn sample(body: &str, name: &str, labels: &[(&str, &str)]) -> Option<f64> {
