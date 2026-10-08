@@ -9,9 +9,7 @@ use std::{
 
 use agglayer_config::Config;
 use agglayer_contracts::{AggchainContract, L1RpcError, L1TransactionFetcher, RollupContract};
-use agglayer_storage::tests::mocks::{
-    MockDebugStore, MockEpochsStore, MockPendingStore, MockStateStore,
-};
+use agglayer_storage::tests::mocks::{MockDebugStore, MockPendingStore, MockStateStore};
 use agglayer_types::{Address, Certificate, CertificateId, Digest, Height, NetworkId};
 use alloy::{
     network::Ethereum,
@@ -59,7 +57,6 @@ async fn certificate_header_query_keeps_the_runtime_responsive() {
         Arc::new(MockPendingStore::new()),
         Arc::new(state_store),
         Arc::new(MockDebugStore::new()),
-        Arc::new(MockEpochsStore::new()),
         Arc::new(Config::default()),
         Arc::new(ProviderBuilder::new().connect_mocked_client(asserter)),
     ));
@@ -239,7 +236,6 @@ async fn dropped_send_certificate_still_notifies_orchestrator() {
         Arc::new(pending_store),
         Arc::new(state_store),
         Arc::new(debug_store),
-        Arc::new(MockEpochsStore::new()),
         Arc::new(config),
         Arc::new(StubL1Rpc),
     ));

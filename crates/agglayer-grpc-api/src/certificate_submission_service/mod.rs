@@ -7,8 +7,8 @@ use agglayer_grpc_types::node::v1::{
 };
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, EpochStoreReader, PendingCertificateReader, PendingCertificateWriter,
-    SettlementReader, StateReader, StateWriter,
+    DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
+    StateReader, StateWriter,
 };
 use error::CertificateSubmissionErrorWrapper;
 use tonic_types::{ErrorDetails, StatusExt};
@@ -17,22 +17,20 @@ use tracing::instrument;
 const SUBMIT_CERTIFICATE_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.certificate-submission-service.submit_certificate";
 
-pub struct CertificateSubmissionServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
-    pub(crate) service:
-        Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>>,
+pub struct CertificateSubmissionServer<L1Rpc, PendingStore, StateStore, DebugStore> {
+    pub(crate) service: Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>>,
 }
 
 mod error;
 
 #[tonic::async_trait]
-impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> CertificateSubmissionService
-    for CertificateSubmissionServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore> CertificateSubmissionService
+    for CertificateSubmissionServer<L1Rpc, PendingStore, StateStore, DebugStore>
 where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     StateStore: SettlementReader + StateReader + StateWriter + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Rpc: RollupContract + AggchainContract + L1TransactionFetcher + Send + Sync + 'static,
-    EpochsStore: EpochStoreReader + 'static,
 {
     #[instrument(skip(self, request), level = "debug", fields(
         certificate_id = tracing::field::Empty,

@@ -11,20 +11,18 @@ use tracing::instrument;
 pub(crate) const GET_EPOCH_CONFIGURATION_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.configuration-service.get-epoch-configuration";
 
-pub struct ConfigurationServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> {
-    pub(crate) service:
-        Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>>,
+pub struct ConfigurationServer<L1Rpc, PendingStore, StateStore, DebugStore> {
+    pub(crate) service: Arc<AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>>,
 }
 
 #[tonic::async_trait]
-impl<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore> ConfigurationService
-    for ConfigurationServer<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>
+impl<L1Rpc, PendingStore, StateStore, DebugStore> ConfigurationService
+    for ConfigurationServer<L1Rpc, PendingStore, StateStore, DebugStore>
 where
     DebugStore: Send + Sync + 'static,
     L1Rpc: Send + Sync + 'static,
     PendingStore: Send + Sync + 'static,
     StateStore: Send + Sync + 'static,
-    EpochsStore: Send + Sync + 'static,
 {
     #[instrument(skip(self, _request), level = "debug", fields(
         client = crate::client_info_from_metadata(_request.metadata())

@@ -397,6 +397,7 @@ impl StateWriter for DummyPendingStore {
         _certificate_id: &CertificateId,
         _epoch_number: &EpochNumber,
         _certificate_index: &CertificateIndex,
+        _settled_claim: Option<agglayer_types::SettledClaim>,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }

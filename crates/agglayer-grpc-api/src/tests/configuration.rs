@@ -10,7 +10,7 @@ use agglayer_grpc_types::node::{types::v1, v1::GetEpochConfigurationRequest};
 use agglayer_rpc::AgglayerService;
 use agglayer_storage::{
     backup::BackupClient,
-    stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
+    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
 };
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
@@ -101,18 +101,9 @@ async fn start_server_with_configuration_service(
     );
     let service = Arc::new(AgglayerService::new(
         sender,
-        pending_store.clone(),
-        state_store.clone(),
+        pending_store,
+        state_store,
         Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path).unwrap()),
-        Arc::new(
-            EpochsStore::new(
-                config.clone(),
-                pending_store,
-                state_store,
-                BackupClient::noop(),
-            )
-            .unwrap(),
-        ),
         config,
         Arc::new(L1Rpc {}),
     ));

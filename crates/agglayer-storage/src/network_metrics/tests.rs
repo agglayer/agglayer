@@ -222,6 +222,7 @@ fn store_mutations_update_gauges_after_each_successful_write() {
             &certificate_id,
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
+            None,
         )
         .unwrap();
     assert_eq!(height_of(&registry, 1, "settled"), Some(0));
@@ -346,6 +347,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
                     &certificate_id,
                     &EpochNumber::ZERO,
                     &CertificateIndex::ZERO,
+                    None,
                 )
                 .unwrap();
         });
@@ -457,6 +459,7 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
                 &CertificateId::new([5; 32].into()),
                 &EpochNumber::ZERO,
                 &CertificateIndex::ZERO,
+                None,
             )
             .unwrap();
     }
@@ -551,6 +554,7 @@ fn failed_writes_leave_gauges_unchanged() {
                 &certificate_id,
                 &EpochNumber::ZERO,
                 &CertificateIndex::ZERO,
+                None,
             )
             .unwrap();
     }
@@ -601,6 +605,7 @@ fn failed_writes_leave_gauges_unchanged() {
             &certificate_id,
             &EpochNumber::ZERO,
             &CertificateIndex::ZERO,
+            None,
         )
         .is_err());
 
