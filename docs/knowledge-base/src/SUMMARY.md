@@ -10,5 +10,6 @@
 - [PR review tracker Project token](review-tracker-projects-token.md)
 - [PR review tracker cross-repository Issues access](review-tracker-org-issues-write.md)
 - [Settlement operations](settlement-operations.md)
+- [Per-network Succinct RPC endpoints](succinct-cluster-routing.md)
 - [AI Agent Configuration](ai-agents.md)
 - [Documentation Publishing](docs-publishing.md)
