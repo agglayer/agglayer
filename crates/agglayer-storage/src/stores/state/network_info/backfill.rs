@@ -5,8 +5,8 @@
 //! certificate it names: without a claim row next to it, that history holds no
 //! claim. Anything wrong with the settled pointer or its history therefore
 //! fails the migration. Pending and proven pointers that do not match a
-//! certificate header are skipped with a warning: they are not evidence about
-//! claims.
+//! certificate header of the network they are stored under are skipped with
+//! a warning: they are not evidence about claims.
 
 use agglayer_types::{
     Certificate, CertificateHeader, CertificateId, CertificateIndex, Digest, EpochNumber, Height,
@@ -20,8 +20,12 @@ use crate::{
     columns::{
         certificate_header::CertificateHeaderColumn,
         certificate_per_network::{self, CertificatePerNetworkColumn},
-        latest_pending_certificate_per_network::PendingCertificate,
-        latest_proven_certificate_per_network::ProvenCertificate,
+        latest_pending_certificate_per_network::{
+            LatestPendingCertificatePerNetworkColumn, PendingCertificate,
+        },
+        latest_proven_certificate_per_network::{
+            LatestProvenCertificatePerNetworkColumn, ProvenCertificate,
+        },
         latest_settled_certificate_per_network::{
             LatestSettledCertificatePerNetworkColumn, SettledCertificate,
         },
@@ -29,7 +33,7 @@ use crate::{
     },
     error::Error,
     storage::{DBError, DB},
-    stores::{state::StateStore, EpochStoreReader, PendingCertificateReader},
+    stores::{state::StateStore, EpochStoreReader},
     types::network_info::{
         self,
         v0::{
@@ -57,7 +61,7 @@ impl StateStore {
     /// in `epochs`. Everything is read before anything is written.
     pub(in crate::stores::state) fn network_info_backfill(
         db: &DB,
-        pending: &dyn PendingCertificateReader,
+        pending: &DB,
         epochs: &dyn EpochStoreReader,
     ) -> Result<Vec<Row>, Error> {
         let network = |network_id| NetworkBackfill {
@@ -72,7 +76,11 @@ impl StateStore {
         };
 
         let mut rows = Vec::new();
-        for (network_id, PendingCertificate(id, height)) in pending.get_current_pending_heights()? {
+        for entry in pending.iter_with_direction::<LatestPendingCertificatePerNetworkColumn>(
+            ReadOptions::default(),
+            Direction::Forward,
+        )? {
+            let (network_id, PendingCertificate(id, height)) = entry?;
             let network = network(network_id);
             if let Some(header) = network
                 .unsettled_header("pending", (id, height))
@@ -90,7 +98,13 @@ impl StateStore {
                 )));
             }
         }
-        for ProvenCertificate(id, network_id, height) in pending.get_current_proven_height()? {
+        for entry in pending.iter_with_direction::<LatestProvenCertificatePerNetworkColumn>(
+            ReadOptions::default(),
+            Direction::Forward,
+        )? {
+            // The key decides the network, and the header check confirms it:
+            // the network id repeated in the value is not trusted.
+            let (network_id, ProvenCertificate(id, _, height)) = entry?;
             let network = network(network_id);
             if let Some(header) = network
                 .unsettled_header("proven", (id, height))

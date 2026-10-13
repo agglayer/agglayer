@@ -271,7 +271,10 @@ impl Fixture {
     /// Like [`Self::migrate`], reading epochs from `epochs`.
     fn migrate_with(&mut self, epochs: &dyn EpochStoreReader) -> Result<(), DBOpenError> {
         drop(self.state.take());
-        let result = StateStore::init_db(&self.state_dir.path, Some((&self.pending, epochs)));
+        let result = StateStore::init_db(
+            &self.state_dir.path,
+            Some((self.pending_db.as_ref(), epochs)),
+        );
 
         match result {
             Ok(db) => {
@@ -695,6 +698,40 @@ fn prebackfill_row_with_a_matching_settled_id_is_reset_and_reconstructed() {
     assert_eq!(fixture.info(1).settled_claim, claim_of(&history[0]));
     assert_eq!(fixture.info(1).network_type, NetworkType::Ecdsa);
     assert_eq!(fixture.row(99, ValueDiscriminants::NetworkType), None);
+}
+
+#[test_log::test]
+fn proven_pointer_stored_under_another_network_is_skipped() {
+    let mut fixture = Fixture::new();
+    let settled = certificate(2, 0, &[]);
+    fixture.settle(std::slice::from_ref(&settled));
+    let proven = certificate(2, 1, &[]);
+    fixture.submit(&proven);
+    fixture.prove(&proven);
+    // A legacy row under network 9 whose value names network 2's settled
+    // certificate: it matches a real header, and network 9 is written after
+    // network 2, so trusting the value would replace network 2's pointer.
+    fixture
+        .pending_db
+        .put::<LatestProvenCertificatePerNetworkColumn>(
+            &NetworkId::new(9),
+            &ProvenCertificate(settled.hash(), NetworkId::new(2), Height::ZERO),
+        )
+        .unwrap();
+
+    fixture.migrate(1).unwrap();
+
+    assert_eq!(
+        fixture
+            .state()
+            .get_latest_proven_certificate_id(NetworkId::new(2))
+            .unwrap(),
+        Some(proven.hash())
+    );
+    assert_eq!(
+        fixture.row(9, ValueDiscriminants::LatestProvenCertificateInfo),
+        None
+    );
 }
 
 #[rstest]

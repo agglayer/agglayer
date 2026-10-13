@@ -111,7 +111,7 @@ impl Node {
             let state_db = Arc::new(StateStore::init_db(
                 &storage_config.storage.state_db_path,
                 Some((
-                    &PendingStore::new(pending_db.clone()),
+                    pending_db.as_ref(),
                     &EpochsStore::read_only(storage_config.clone()),
                 )),
             )?);

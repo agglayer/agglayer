@@ -165,14 +165,16 @@ whose latest certificate carries no claim.
 The health endpoint is not bound yet while it runs,
 so relax liveness and startup probes for the first start:
 a probe that kills it makes every restart run the whole backfill again.
-Opening a database that holds certificates without the pending and epoch stores
+Opening a database that holds certificates without the pending database and the epoch store
 panics in the migration step, so the step can never be recorded with an empty column by mistake.
 The first open by a binary with this step logs a migration-framework warning
 that it drops the existing column, even on a fresh database: this is expected.
 
 For each network in the legacy indexes:
 
-- A pending or proven pointer whose header is missing, belongs to another network,
+- A pending or proven pointer belongs to the network it is stored under;
+  the network id repeated in a proven value is not trusted.
+  A pointer whose header is missing, belongs to another network,
   or sits at another height is skipped with a warning.
 - The settled row is rebuilt with its claim.
   The latest settled certificate's own claim is used when it has one.

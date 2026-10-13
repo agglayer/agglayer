@@ -19,10 +19,7 @@ use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::{info, instrument, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
-use super::{
-    EpochStoreReader, MetadataReader, MetadataWriter, PendingCertificateReader, StateReader,
-    StateWriter,
-};
+use super::{EpochStoreReader, MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
     backup::BackupClient,
     columns::{
@@ -66,7 +63,7 @@ impl StateStore {
     /// Open the state database, migrating it if needed.
     ///
     /// The V3 migration step fills the network info column from the latest
-    /// certificate indexes, which needs the pending store and a read-only
+    /// certificate indexes, which needs the pending database and a read-only
     /// epoch store. Without them, that step panics on a database holding
     /// certificates: recording it with an empty column could never be
     /// repaired. A database created empty, or one already migrated, opens
@@ -74,7 +71,7 @@ impl StateStore {
     /// step unrecorded.
     pub fn init_db(
         path: &Path,
-        sources: Option<(&dyn PendingCertificateReader, &dyn EpochStoreReader)>,
+        sources: Option<(&DB, &dyn EpochStoreReader)>,
     ) -> Result<DB, crate::storage::DBOpenError> {
         // V0 is the eight-CF schema that pre-dates `disabled_networks_cf`
         // and the settlement family. Legacy production snapshots still
