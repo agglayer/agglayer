@@ -135,7 +135,7 @@ impl TestContext {
         let config = Arc::new(config);
 
         // Create the databases using the provided paths in the config
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path, None).unwrap());
         let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
         let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 
@@ -288,7 +288,7 @@ impl TestContext {
     pub async fn new_raw_rpc_with_config(config: Config) -> RawRpcContext {
         let config = Arc::new(config);
 
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path, None).unwrap());
         let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
         let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 

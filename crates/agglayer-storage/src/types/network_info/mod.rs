@@ -71,6 +71,20 @@ impl TryFrom<v0::NetworkType> for agglayer_types::NetworkType {
     }
 }
 
+impl From<agglayer_types::NetworkType> for v0::NetworkType {
+    fn from(value: agglayer_types::NetworkType) -> Self {
+        match value {
+            agglayer_types::NetworkType::Unspecified => NetworkType::Unspecified,
+            agglayer_types::NetworkType::Ecdsa => NetworkType::Ecdsa,
+            agglayer_types::NetworkType::Generic => NetworkType::Generic,
+            agglayer_types::NetworkType::MultisigOnly => NetworkType::MultisigOnly,
+            agglayer_types::NetworkType::MultisigAndAggchainProof => {
+                NetworkType::MultisigAndAggchainProof
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use strum::EnumCount;
@@ -115,6 +129,25 @@ mod tests {
                     assert_eq!(i, 4, "LatestProvenCertificateInfo should be at index 4")
                 }
             }
+        }
+    }
+
+    #[test]
+    fn network_type_maps_to_its_storage_value() {
+        use agglayer_types::NetworkType as Domain;
+
+        use crate::types::network_info::v0::NetworkType as Stored;
+
+        for (domain, stored) in [
+            (Domain::Unspecified, 0),
+            (Domain::Ecdsa, 1),
+            (Domain::Generic, 2),
+            (Domain::MultisigOnly, 3),
+            (Domain::MultisigAndAggchainProof, 4),
+        ] {
+            assert_eq!(Stored::from(domain.clone()) as i32, stored, "{domain:?}");
+            let decoded = Domain::try_from(Stored::try_from(stored).unwrap()).unwrap();
+            assert_eq!(decoded, domain);
         }
     }
 
