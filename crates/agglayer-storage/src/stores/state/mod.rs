@@ -19,7 +19,7 @@ use rocksdb::{Direction, ReadOptions, WriteBatch};
 use tracing::{info, instrument, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
-use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
+use super::{EpochStoreReader, MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
     backup::BackupClient,
     columns::{
@@ -31,20 +31,16 @@ use crate::{
         },
         local_exit_tree_per_network as LET,
         metadata::MetadataColumn,
+        network_info::NetworkInfoColumn,
         nullifier_tree_per_network::NullifierTreePerNetworkColumn,
         settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
     },
     error::Error,
     network_metrics::NetworkStage,
     schema::ColumnSchema,
-    storage::DB,
+    storage::{DBMigrationErrorDetails, DB},
     stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
-    types::{
-        network_info::v0::{
-            self as network_info_v0, network_info_value::Value as NetworkInfoValue,
-        },
-        MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue,
-    },
+    types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
     NetworkMetrics,
 };
 
@@ -64,7 +60,19 @@ pub struct StateStore {
 }
 
 impl StateStore {
-    pub fn init_db(path: &Path) -> Result<DB, crate::storage::DBOpenError> {
+    /// Open the state database, migrating it if needed.
+    ///
+    /// The V3 migration step fills the network info column from the latest
+    /// certificate indexes, which needs the pending database and a read-only
+    /// epoch store. Without them, that step panics on a database holding
+    /// certificates: recording it with an empty column could never be
+    /// repaired. A database created empty, or one already migrated, opens
+    /// fine without them. A failed backfill fails the open and leaves the
+    /// step unrecorded.
+    pub fn init_db(
+        path: &Path,
+        sources: Option<(&DB, &dyn EpochStoreReader)>,
+    ) -> Result<DB, crate::storage::DBOpenError> {
         // V0 is the eight-CF schema that pre-dates `disabled_networks_cf`
         // and the settlement family. Legacy production snapshots still
         // have only those CFs; running the current binary against them
@@ -72,9 +80,40 @@ impl StateStore {
         // path. Each `ensure_cfs` call is a recorded migration step, so new
         // catch-up CFs must be added in a new step instead of changing an
         // already-recorded target list.
+        //
+        // The V3 `add_cfs` step drops the network info CF, creates it again,
+        // and backfills it, exactly once: it is recorded only after the whole
+        // backfill is written, and a rerun starts again from an empty column.
+        // The record stores step numbers only, so a step released before this
+        // one lands must go ahead of it; otherwise databases migrated by that
+        // release would skip the backfill and later run it again.
         DB::builder(path, cf_definitions::STATE_DB_V0)?
             .ensure_cfs(cf_definitions::STATE_DB_V1_ADDED_CFS)?
             .ensure_cfs(cf_definitions::STATE_DB_V2_ADDED_CFS)?
+            .add_cfs(cf_definitions::STATE_DB_V3_RESET_CFS, |access| {
+                let rows = match sources {
+                    Some((pending, epochs)) => {
+                        Self::network_info_backfill(access.db(), pending, epochs)
+                            .map_err(|error| DBMigrationErrorDetails::Custom(error.into()))?
+                    }
+                    None => {
+                        assert!(
+                            access
+                                .db()
+                                .keys::<CertificateHeaderColumn>()?
+                                .next()
+                                .is_none(),
+                            "the state database holds certificates, so migrating it needs the \
+                             pending and epoch stores to backfill network info"
+                        );
+                        Vec::new()
+                    }
+                };
+                access
+                    .put_all::<NetworkInfoColumn>(rows.iter().map(|(key, value)| (key, value)))?;
+                info!(rows = rows.len(), "Recreated the network info column");
+                Ok(())
+            })?
             .finalize(cf_definitions::STATE_DB)
     }
 
@@ -95,20 +134,27 @@ impl StateStore {
         }
     }
 
+    /// Open the state store without the network info backfill sources, like
+    /// [`Self::init_db`] without them.
     pub fn new_with_path(
         path: &Path,
         backup_client: BackupClient,
     ) -> Result<Self, crate::storage::DBOpenError> {
-        Ok(Self::new(Arc::new(Self::init_db(path)?), backup_client))
+        Ok(Self::new(
+            Arc::new(Self::init_db(path, None)?),
+            backup_client,
+        ))
     }
 
+    /// Open the state store without the network info backfill sources, like
+    /// [`Self::init_db`] without them.
     pub fn new_with_path_and_metrics(
         path: &Path,
         backup_client: BackupClient,
         network_metrics: NetworkMetrics,
     ) -> Result<Self, crate::storage::DBOpenError> {
         Ok(Self::new_with_metrics(
-            Arc::new(Self::init_db(path)?),
+            Arc::new(Self::init_db(path, None)?),
             backup_client,
             network_metrics,
         ))
@@ -387,40 +433,27 @@ impl StateWriter for StateStore {
                 &mut batch,
             )?;
 
-        let settled_certificate = network_info_v0::SettledCertificate {
-            certificate_id: Some(network_info_v0::SettledCertificateId {
-                id: certificate_id.as_digest().as_slice().to_vec().into(),
-            }),
-            let_leaf_count: self.local_exit_tree_leaf_count(*network_id)?.map(|count| {
-                network_info_v0::SettledLocalExitTreeLeafCount {
-                    settled_let_leaf_count: u64::from(count),
-                }
-            }),
-            // `pp_root` and `ler` are left unset: nothing writes the former, and
-            // the reader takes the latter off the settled certificate header.
-            ..Default::default()
-        };
+        // `pp_root` is left unset: nothing writes it at settlement yet.
+        let header = self
+            .db
+            .get::<CertificateHeaderColumn>(certificate_id)?
+            .ok_or(Error::NoCertificateHeader)?;
+        let let_leaf_count = self.local_exit_tree_leaf_count(*network_id)?;
         self.stage_network_info(
             *network_id,
-            NetworkInfoValue::SettledCertificate(settled_certificate),
+            Self::settled_certificate_value(
+                *certificate_id,
+                header.new_local_exit_root,
+                None,
+                let_leaf_count.map(u64::from),
+            ),
             &mut batch,
         )?;
 
         // A certificate without an imported bridge exit leaves the stored claim
         // in place: it is still the latest one settled.
         if let Some(claim) = settled_claim {
-            self.stage_network_info(
-                *network_id,
-                NetworkInfoValue::SettledClaim(network_info_v0::SettledClaim {
-                    global_index: Some(network_info_v0::GlobalIndex {
-                        value: claim.global_index.as_slice().to_vec().into(),
-                    }),
-                    bridge_exit_hash: Some(network_info_v0::BridgeExitHash {
-                        bridge_exit_hash: claim.bridge_exit_hash.as_slice().to_vec().into(),
-                    }),
-                }),
-                &mut batch,
-            )?;
+            self.stage_network_info(*network_id, Self::settled_claim_value(&claim), &mut batch)?;
         }
 
         self.db.write_batch(batch)?;
@@ -443,7 +476,8 @@ impl StateWriter for StateStore {
             let new_leaf_count = new_state.exit_tree.leaf_count();
             let start_leaf_count = new_leaf_count - new_leaves.len() as u32;
 
-            if let Some(stored_exit_tree) = self.read_local_exit_tree(network_id.into())? {
+            if let Some(stored_exit_tree) = Self::read_local_exit_tree(&self.db, network_id.into())?
+            {
                 if stored_exit_tree.leaf_count() != start_leaf_count {
                     return Err(Error::InconsistentState {
                         network_id: network_id.into(),
@@ -586,9 +620,12 @@ impl StateStore {
         Ok(())
     }
 
-    fn read_local_exit_tree(&self, network_id: NetworkId) -> Result<Option<LocalExitTree>, Error> {
+    fn read_local_exit_tree(
+        db: &DB,
+        network_id: NetworkId,
+    ) -> Result<Option<LocalExitTree>, Error> {
         let leaf_count = if let Some(leaf_count_value) =
-            self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
+            db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
                 network_id: network_id.into(),
                 key_type: LET::KeyType::LeafCount,
             })? {
@@ -600,8 +637,7 @@ impl StateStore {
             return Ok(None);
         };
 
-        let retrieved_frontier: Vec<_> = self
-            .db
+        let retrieved_frontier: Vec<_> = db
             .multi_get::<LocalExitTreePerNetworkColumn>((0..32).map(|layer| LET::Key {
                 network_id: network_id.into(),
                 key_type: LET::KeyType::Frontier(layer),
@@ -622,13 +658,13 @@ impl StateStore {
     }
 
     fn read_smt<C, const DEPTH: usize>(
-        &self,
+        db: &DB,
         network_id: NetworkId,
     ) -> Result<Option<Smt<DEPTH>>, Error>
     where
         C: ColumnSchema<Key = SmtKey, Value = SmtValue>,
     {
-        let root_node: Node = if let Some(root_node_value) = self.db.get::<C>(&SmtKey {
+        let root_node: Node = if let Some(root_node_value) = db.get::<C>(&SmtKey {
             network_id: network_id.into(),
             key_type: SmtKeyType::Root,
         })? {
@@ -652,8 +688,7 @@ impl StateStore {
 
         let mut queued = BTreeSet::new();
         while let Some(key) = keys.pop_front() {
-            let value = self
-                .db
+            let value = db
                 .get::<C>(&SmtKey {
                     network_id: network_id.into(),
                     key_type: key.clone(),
@@ -784,11 +819,13 @@ impl StateReader for StateStore {
         &self,
         network_id: NetworkId,
     ) -> Result<Option<LocalNetworkStateData>, Error> {
-        let local_exit_tree = self.read_local_exit_tree(network_id)?;
-        let balance_tree =
-            self.read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(network_id)?;
-        let nullifier_tree =
-            self.read_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(network_id)?;
+        let local_exit_tree = Self::read_local_exit_tree(&self.db, network_id)?;
+        let balance_tree = Self::read_smt::<BalanceTreePerNetworkColumn, LOCAL_BALANCE_TREE_DEPTH>(
+            &self.db, network_id,
+        )?;
+        let nullifier_tree = Self::read_smt::<NullifierTreePerNetworkColumn, NULLIFIER_TREE_DEPTH>(
+            &self.db, network_id,
+        )?;
 
         match (local_exit_tree, balance_tree, nullifier_tree) {
             (None, None, None) => Ok(None), // consistent empty state

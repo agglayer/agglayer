@@ -26,7 +26,7 @@ use crate::{
 /// return, and the flush is what notices.
 fn owned_store() -> (crate::tests::TempDBDir, StateStore) {
     let tmp = crate::tests::TempDBDir::new();
-    let db = std::sync::Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
+    let db = std::sync::Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
 
     (
         tmp,
@@ -243,6 +243,20 @@ fn settled_info_advances_together(network_id: NetworkId, #[case] replace_claim: 
         assert_eq!(info.settled_certificate_id, Some(certificate_id));
         assert_eq!(info.settled_height, Some(height));
         assert_eq!(info.settled_ler, Some(certificate.new_local_exit_root));
+        // The row stores the LER too, so it never depends on the header.
+        let stored = store
+            .db
+            .get::<NetworkInfoColumn>(&Key {
+                network_id: network_id.to_u32(),
+                kind: network_info_value::ValueDiscriminants::SettledCertificate,
+            })
+            .unwrap();
+        assert!(matches!(
+            stored,
+            Some(NetworkInfoValue { value: Some(network_info_value::Value::SettledCertificate(
+                SettledCertificate { ler: Some(ref ler), .. }
+            )) }) if ler.root.as_ref() == Digest::from(certificate.new_local_exit_root).as_slice()
+        ));
         assert_eq!(info.settled_let_leaf_count, Some(height.as_u64() + 1));
         assert_eq!(info.settled_claim, expected_claim);
         assert_eq!(

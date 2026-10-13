@@ -316,7 +316,10 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
     // The exact pointer that took bali down.
     let network = NetworkId::new(84_803_420);
     let oversized = Height::new(13_521_720_084_024_907_505);
-    let certificate_id = CertificateId::new([7; 32].into());
+    // The settled writer copies the local exit root from the certificate's
+    // header, so the pointer needs one.
+    let settled = Certificate::new_for_test(network, oversized);
+    let certificate_id = settled.hash();
     let healthy = Certificate::new_for_test(NetworkId::new(1), Height::new(5));
 
     {
@@ -329,6 +332,10 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
             metrics.clone(),
         )
         .unwrap();
+
+        state
+            .insert_certificate_header(&settled, CertificateStatus::Settled)
+            .unwrap();
 
         // Every write goes through and persists the real height; only the
         // exported gauge saturates, and no write logs.
@@ -452,11 +459,15 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
                 &CertificateId::new([4; 32].into()),
             )
             .unwrap();
+        let settled = Certificate::new_for_test(NetworkId::new(5), Height::new(9));
+        state
+            .insert_certificate_header(&settled, CertificateStatus::Settled)
+            .unwrap();
         state
             .set_latest_settled_certificate_for_network(
                 &NetworkId::new(5),
                 &Height::new(9),
-                &CertificateId::new([5; 32].into()),
+                &settled.hash(),
                 &EpochNumber::ZERO,
                 &CertificateIndex::ZERO,
                 None,
