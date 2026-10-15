@@ -99,6 +99,9 @@ pub struct L1RpcClient<RpcProvider> {
     gas_price_params: GasPriceParams,
     /// Cached UpdateL1InfoTreeV2 roots and their event block identities.
     l1_info_roots: Arc<RwLock<HashMap<u32, rollup::CachedL1InfoRoot>>>,
+    /// Cached `AGGCHAIN_TYPE` per rollup contract address (constant per
+    /// contract).
+    aggchain_types: Arc<RwLock<HashMap<Address, u16>>>,
     /// Number of blocks to query when filtering for events.
     /// This is to avoid hitting provider limits when querying large block
     /// ranges or errors like "query returned more than 10000 results".
@@ -198,6 +201,7 @@ where
             gas_multiplier_factor,
             gas_price_params,
             l1_info_roots: Arc::new(RwLock::new(HashMap::new())),
+            aggchain_types: Arc::new(RwLock::new(HashMap::new())),
             event_filter_block_range,
         }
     }

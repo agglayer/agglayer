@@ -4,7 +4,7 @@ use alloy::{
     eips::BlockId,
     primitives::{Bytes, TxHash},
 };
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{block_pinning::block_before_tx, contracts::AggchainBase, L1RpcClient, L1RpcError};
 
@@ -40,6 +40,55 @@ pub trait AggchainContract {
     ) -> Result<(Vec<Address>, usize), L1RpcError>;
 }
 
+/// Builds the aggchain vkey selector `[version (2B) | AGGCHAIN_TYPE (2B)]`.
+fn build_aggchain_selector(aggchain_vkey_version: u16, aggchain_type: u16) -> [u8; 4] {
+    (((aggchain_vkey_version as u32) << 16) | aggchain_type as u32).to_be_bytes()
+}
+
+impl<RpcProvider> L1RpcClient<RpcProvider>
+where
+    RpcProvider: alloy::providers::Provider + Clone + 'static,
+{
+    /// Returns the `AGGCHAIN_TYPE` of the rollup's aggchain contract, fetching
+    /// it from L1 on first use and caching it per rollup address.
+    async fn get_aggchain_type(&self, rollup_address: Address) -> Result<u16, L1RpcError> {
+        let key: alloy::primitives::Address = rollup_address.into();
+
+        if let Some(cached) = self
+            .aggchain_types
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&key)
+        {
+            return Ok(*cached);
+        }
+
+        let aggchain_type = AggchainBase::new(key, self.rpc.clone())
+            .AGGCHAIN_TYPE()
+            .call()
+            .await
+            .map(|bytes| u16::from_be_bytes(bytes.0))
+            .map_err(|error| {
+                error!(?error, %rollup_address, "Unable to fetch the aggchain type");
+
+                L1RpcError::AggchainVkeyFetchFailed
+            })?;
+
+        info!(
+            %rollup_address,
+            aggchain_type = format_args!("{aggchain_type:#06x}"),
+            "Fetched AGGCHAIN_TYPE from rollup contract"
+        );
+
+        self.aggchain_types
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key, aggchain_type);
+
+        Ok(aggchain_type)
+    }
+}
+
 #[async_trait::async_trait]
 impl<RpcProvider> AggchainContract for L1RpcClient<RpcProvider>
 where
@@ -50,7 +99,8 @@ where
         rollup_address: Address,
         aggchain_vkey_selector: u16,
     ) -> Result<VKeyHash, L1RpcError> {
-        let aggchain_selector = (((aggchain_vkey_selector as u32) << 16) | 1u32).to_be_bytes();
+        let aggchain_type = self.get_aggchain_type(rollup_address).await?;
+        let aggchain_selector = build_aggchain_selector(aggchain_vkey_selector, aggchain_type);
 
         let client = AggchainBase::new(rollup_address.into(), self.rpc.clone());
 
@@ -123,5 +173,89 @@ where
         };
 
         Ok((signers, threshold))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use alloy::{
+        primitives::B256,
+        providers::{mock::Asserter, ProviderBuilder},
+    };
+
+    use super::*;
+    use crate::{contracts::PolygonRollupManager, GasPriceParams};
+
+    type AlloyAddress = alloy::primitives::Address;
+
+    fn mock_client(asserter: Asserter) -> L1RpcClient<impl alloy::providers::Provider + Clone> {
+        let rpc = ProviderBuilder::new().connect_mocked_client(asserter);
+        L1RpcClient::new(
+            Arc::new(rpc.clone()),
+            PolygonRollupManager::new(AlloyAddress::ZERO, rpc),
+            AlloyAddress::ZERO,
+            (0, [0; 32]),
+            100,
+            GasPriceParams::default(),
+            10_000,
+        )
+    }
+
+    /// ABI-encoded `bytes2` return value (left-aligned in a 32-byte word).
+    fn bytes2_word(value: u16) -> B256 {
+        let mut word = [0u8; 32];
+        word[..2].copy_from_slice(&value.to_be_bytes());
+        B256::from(word)
+    }
+
+    #[test]
+    fn selector_for_qbft_type() {
+        assert_eq!(build_aggchain_selector(1, 0x0002), [0x00, 0x01, 0x00, 0x02]);
+        assert_eq!(
+            u32::from_be_bytes(build_aggchain_selector(1, 2)),
+            0x0001_0002
+        );
+    }
+
+    #[test]
+    fn selector_for_fep_type_is_unchanged() {
+        assert_eq!(build_aggchain_selector(1, 0x0001), [0x00, 0x01, 0x00, 0x01]);
+        assert_eq!(build_aggchain_selector(0, 0x0001), [0x00, 0x00, 0x00, 0x01]);
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn aggchain_type_is_fetched_once_and_cached() {
+        let asserter = Asserter::new();
+        let client = mock_client(asserter.clone());
+        let rollup = Address::from(AlloyAddress::repeat_byte(7));
+
+        asserter.push_success(&bytes2_word(0x0002));
+        assert_eq!(client.get_aggchain_type(rollup).await.unwrap(), 0x0002);
+
+        // Second call must be served from the cache: the mock has no responses
+        // left, so any RPC call would fail.
+        assert_eq!(client.get_aggchain_type(rollup).await.unwrap(), 0x0002);
+        assert!(asserter.read_q().is_empty());
+
+        // A different rollup address is fetched independently.
+        let other = Address::from(AlloyAddress::repeat_byte(8));
+        asserter.push_success(&bytes2_word(0x0001));
+        assert_eq!(client.get_aggchain_type(other).await.unwrap(), 0x0001);
+        assert_eq!(client.get_aggchain_type(rollup).await.unwrap(), 0x0002);
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn aggchain_type_fetch_failure_is_not_cached() {
+        let asserter = Asserter::new();
+        let client = mock_client(asserter.clone());
+        let rollup = Address::from(AlloyAddress::repeat_byte(7));
+
+        asserter.push_failure_msg("boom");
+        assert!(client.get_aggchain_type(rollup).await.is_err());
+
+        asserter.push_success(&bytes2_word(0x0002));
+        assert_eq!(client.get_aggchain_type(rollup).await.unwrap(), 0x0002);
     }
 }
