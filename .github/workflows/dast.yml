@@ -1,0 +1,82 @@
+name: DAST
+
+# Fuzzes the read RPC of the latest released agglayer image with nuclei's DAST templates
+# (OWASP Top 10 classes), against a throwaway node on a local anvil L1. Fails on high/critical.
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dast:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start anvil L1 and agglayer
+        run: |
+          mkdir -p dast
+          docker run -d --network host -v "$PWD/tests/integrations/fixtures/anvil-l1/state.json:/state.json:ro" \
+            --entrypoint anvil ghcr.io/foundry-rs/foundry:v1.7.1 --chain-id 1337 --block-time 1 --load-state /state.json
+          curl -sf --retry 30 --retry-delay 1 --retry-all-errors -o /dev/null -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' http://localhost:8545
+          docker run --rm -v "$PWD/dast:/k" --entrypoint cast ghcr.io/foundry-rs/foundry:v1.7.1 \
+            wallet new /k signer --unsafe-password dast
+          cat > dast/agglayer.toml <<'EOF'
+          [l1]
+          chain-id = 1337
+          node-url = "http://localhost:8545/"
+          ws-node-url = "ws://localhost:8545/"
+          rollup-manager-contract = "0x0B306BF915C4d645ff596e518fAf3F9669b97016"
+          polygon-zkevm-global-exit-root-v2-contract = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"
+
+          [prover.mock-prover]
+
+          [storage]
+          db-path = "/tmp/agglayer"
+
+          [[auth.local.private-keys]]
+          path = "/dast/signer"
+          password = "dast"
+          EOF
+          docker run -d --network host -v "$PWD/dast:/dast:ro" ghcr.io/agglayer/agglayer:latest \
+            agglayer run --cfg /dast/agglayer.toml
+          curl -sf --retry 30 --retry-delay 2 --retry-all-errors -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","method":"interop_getEpochConfiguration","params":[],"id":1}' http://localhost:9090/
+
+      - name: Fuzz the read RPC
+        run: |
+          # One seed request per read method. nuclei mutates the JSON-RPC envelope fields.
+          while read -r method params; do
+            body="{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}"
+            raw=$(printf 'POST / HTTP/1.1\r\nHost: localhost:9090\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s' "${#body}" "$body")
+            jq -nc --arg raw "$raw" '{request: {method: "POST", endpoint: "http://localhost:9090/", raw: $raw}}'
+          done > dast/requests.jsonl <<'EOF'
+          interop_getEpochConfiguration []
+          interop_getNetworkInfo [1]
+          interop_getLatestKnownCertificateHeader [1]
+          interop_getLatestSettledCertificateHeader [1]
+          interop_getLatestPendingCertificateHeader [1]
+          interop_getCertificateHeader ["0x0000000000000000000000000000000000000000000000000000000000000000"]
+          interop_getTxStatus ["0x0000000000000000000000000000000000000000000000000000000000000000"]
+          EOF
+          docker run --rm --network host -v "$PWD/dast:/dast" projectdiscovery/nuclei:v3.11.1 \
+            -l /dast/requests.jsonl -im jsonl -dast -jsonl -o /dast/results.jsonl -silent
+
+      - name: Fail on high or critical findings
+        run: "! grep -E '\"severity\":\"(high|critical)\"' dast/results.jsonl"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dast-results
+          path: dast/results.jsonl
