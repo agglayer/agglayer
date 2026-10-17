@@ -11,7 +11,7 @@ Each case corresponds to what the chain may submit to the agglayer.
 
 | #   | Case             | Verified in Agglayer | Verified in PP   | Commitment Version           |
 | --- | ---------------- | -------------------- | ---------------- | ---------------------------- |
-| 1   | Legacy ECDSA     | ECDSA                | Multisig 1-of-1  | V2, post-migration: V3 or V5 |
+| 1   | Legacy ECDSA     | ECDSA (V5 only)      | Multisig 1-of-1  | Agglayer: V5. PP: V2, post-migration: V3 or V5 |
 | 2   | Multisig only    | Multisig             | Multisig         | V5                           |
 | 3   | STARK + Multisig | STARK + Multisig     | STARK + Multisig | V5                           |
 
@@ -19,6 +19,9 @@ Notes:
 
 - Case 1 corresponds to all chains with a simple ECDSA performed by the trusted sequencer.
   - For each of them, the signer is registered in the L1 as a multisig 1-of-1.
+  - The Agglayer RPC only accepts signatures on the V5 commitment.
+    Certificates signed on V2 or V3 are rejected at submission time.
+  - The PP still accepts V2, V3 and V5 so that the PP vkey stays unchanged.
 - Katana fits in case 3
   - Single signer is registered in the L1 as a multisig 1-of-1.
   - Agglayer and PP verify this multisig alongside the FEP aggchain proof.

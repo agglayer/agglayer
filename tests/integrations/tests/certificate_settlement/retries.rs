@@ -31,7 +31,7 @@ async fn regression_pushing_certificate_while_settling(#[case] state: Forest) {
 
     let withdrawals = vec![];
 
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
 
     let first_certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
@@ -90,7 +90,7 @@ async fn regression_pushing_certificate_after_settling(#[case] state: Forest) {
 
     let withdrawals = vec![];
 
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
 
     let first_certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])

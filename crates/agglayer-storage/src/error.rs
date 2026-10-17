@@ -102,9 +102,6 @@ pub enum Error {
          latest pending height is {2}"
     )]
     InvalidPendingHeight(NetworkId, Height, Height),
-
-    #[error("Certificate height {0} exceeds the range of the native Prometheus height gauge")]
-    NetworkMetricHeightOutOfRange(Height),
 }
 
 impl From<Error> for CertificateStatusError {

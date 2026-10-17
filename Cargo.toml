@@ -121,7 +121,7 @@ prometheus = "0.14.0"
 rand = "0.9.0"
 reqwest = "0.12"
 rstest = "0.26"
-rustls = { version = "0.23.37", default-features = false, features = [
+rustls = { version = "0.23.45", default-features = false, features = [
     "aws_lc_rs",
     "std",
 ] }
