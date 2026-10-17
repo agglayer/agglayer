@@ -48,7 +48,7 @@ async fn submitted_job_recover(#[case] state: Forest) {
     let imported_bridge_events = vec![];
     let certificate = state
         .clone()
-        .apply_events(&imported_bridge_events, &withdrawals);
+        .apply_events_v5(&imported_bridge_events, &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
@@ -90,7 +90,7 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     let withdrawals = vec![];
     let imported_bridge_events = vec![];
-    let certificate = state.apply_events(&imported_bridge_events, &withdrawals);
+    let certificate = state.apply_events_v5(&imported_bridge_events, &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await
@@ -121,12 +121,16 @@ async fn sent_transaction_recover_after_settlement(#[case] mut state: Forest) {
 
     let mut certificate2 = state.apply_events(&imported_bridge_events, &withdrawals);
     certificate2.height = 1.into();
+    // The Agglayer RPC only accepts the V5 commitment version; re-derive the
+    // certificate id after mutating `height`, since V5 commits to it.
+    let certificate2_id_for_signing = certificate2.hash().into();
     let (_, signature2, _) = compute_signature_info(
         certificate2.new_local_exit_root,
         &certificate2.imported_bridge_exits,
         &state.wallet,
         certificate2.height,
-        SignatureCommitmentVersion::V3,
+        certificate2_id_for_signing,
+        SignatureCommitmentVersion::V5,
     );
     certificate2.aggchain_data = AggchainData::ECDSA {
         signature: signature2,
@@ -202,7 +206,7 @@ async fn recover_after_invalid_transaction_in_header(#[case] state: Forest) {
     let imported_bridge_events = vec![];
     let certificate = state
         .clone()
-        .apply_events(&imported_bridge_events, &withdrawals);
+        .apply_events_v5(&imported_bridge_events, &withdrawals);
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate.clone()])
         .await

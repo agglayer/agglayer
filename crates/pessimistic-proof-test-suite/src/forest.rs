@@ -210,26 +210,38 @@ impl Forest {
         let new_local_exit_root = self.state_b.exit_tree.get_root().into();
 
         let height = Height::ZERO;
-        let (_combined_hash, signature, _signer) = compute_signature_info(
-            new_local_exit_root,
-            &imported_bridge_exits,
-            &self.wallet,
-            height,
-            version,
-        );
 
-        Certificate {
+        // `Certificate::hash()` does not depend on `aggchain_data`, so build a
+        // draft certificate with a placeholder signature first to
+        // compute the real certificate id, which versions V4 and V5
+        // commit to.
+        let mut certificate = Certificate {
             network_id: self.network_id.into(),
             height,
             prev_local_exit_root,
             new_local_exit_root,
             bridge_exits,
             imported_bridge_exits,
-            aggchain_data: AggchainData::ECDSA { signature },
+            aggchain_data: AggchainData::ECDSA {
+                signature: Signature::new(U256::ZERO, U256::ZERO, false),
+            },
             metadata: Default::default(),
             custom_chain_data: vec![],
             l1_info_tree_leaf_count: None,
-        }
+        };
+        let certificate_id = certificate.hash().into();
+
+        let (_combined_hash, signature, _signer) = compute_signature_info(
+            new_local_exit_root,
+            &certificate.imported_bridge_exits,
+            &self.wallet,
+            height,
+            certificate_id,
+            version,
+        );
+        certificate.aggchain_data = AggchainData::ECDSA { signature };
+
+        certificate
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].
@@ -243,6 +255,40 @@ impl Forest {
             bridge_events,
             SignatureCommitmentVersion::V2,
         )
+    }
+
+    /// Like [`Self::apply_events`], but signed on V5, the only legacy-ECDSA
+    /// commitment version the Agglayer RPC accepts.
+    pub fn apply_events_v5(
+        &mut self,
+        imported_bridge_events: &[(TokenInfo, U256)],
+        bridge_events: &[(TokenInfo, U256)],
+    ) -> Certificate {
+        self.apply_events_with_version(
+            imported_bridge_events,
+            bridge_events,
+            SignatureCommitmentVersion::V5,
+        )
+    }
+
+    /// Re-signs `certificate`'s legacy-ECDSA data on V5, using this forest's
+    /// wallet (which may not be the network's default test wallet).
+    ///
+    /// Call this after mutating a certificate built by one of the
+    /// `apply_*` methods (for example, to assign it a specific height):
+    /// V5 commits to the certificate's own hash, so any field change
+    /// invalidates the signature it was built with.
+    pub fn resign_for_test(&self, certificate: &mut Certificate) {
+        let certificate_id = certificate.hash().into();
+        let (_, signature, _) = compute_signature_info(
+            certificate.new_local_exit_root,
+            &certificate.imported_bridge_exits,
+            &self.wallet,
+            certificate.height,
+            certificate_id,
+            SignatureCommitmentVersion::V5,
+        );
+        certificate.aggchain_data = AggchainData::ECDSA { signature };
     }
 
     /// Apply a sequence of events and return the corresponding [`Certificate`].
