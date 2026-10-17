@@ -123,7 +123,7 @@ async fn recover_with_backup(#[case] state: Forest) {
 
     let withdrawals = vec![];
 
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
     let network_id = certificate.network_id;
     let height = certificate.height;
 
@@ -291,9 +291,12 @@ async fn purge_after_n_backup(#[case] state: Forest) {
 
     let withdrawals = vec![];
 
-    let certificate = state.clone().apply_events(&[], &withdrawals);
-    let mut certificate2 = state.clone().apply_events(&[], &[]);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
+    let mut certificate2 = state.clone().apply_events_v5(&[], &[]);
     certificate2.height = Height::new(1);
+    // Mutating the certificate after signing invalidates its V5 signature,
+    // since V5 commits to the certificate's own hash.
+    state.resign_for_test(&mut certificate2);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -390,9 +393,12 @@ async fn report_contains_all_backups(#[case] state: Forest) {
 
     let withdrawals = vec![];
 
-    let certificate = state.clone().apply_events(&[], &withdrawals);
-    let mut certificate2 = state.clone().apply_events(&[], &[]);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
+    let mut certificate2 = state.clone().apply_events_v5(&[], &[]);
     certificate2.height = Height::new(1);
+    // Mutating the certificate after signing invalidates its V5 signature,
+    // since V5 commits to the certificate's own hash.
+    state.resign_for_test(&mut certificate2);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -489,9 +495,12 @@ async fn restore_at_particular_level(#[case] state: Forest) {
 
     let withdrawals = vec![];
 
-    let certificate = state.clone().apply_events(&[], &withdrawals);
-    let mut certificate2 = state.clone().apply_events(&[], &[]);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
+    let mut certificate2 = state.clone().apply_events_v5(&[], &[]);
     certificate2.height = Height::new(1);
+    // Mutating the certificate after signing invalidates its V5 signature,
+    // since V5 commits to the certificate's own hash.
+    state.resign_for_test(&mut certificate2);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
