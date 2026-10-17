@@ -32,7 +32,7 @@ async fn send_certificate_method_can_be_called_and_succeed() {
     let cert_id: CertificateId = client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
+            rpc_params![Certificate::new_for_test_v5(1.into(), Height::ZERO)],
         )
         .await
         .unwrap();
@@ -72,11 +72,12 @@ async fn send_certificate_method_requires_known_signer() {
     );
 
     let context = TestContext::new_with_config(config).await;
+    // Signed on V5 so the only reason this can fail is the signer mismatch.
     let send_request: Result<CertificateId, _> = context
         .api_client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
+            rpc_params![Certificate::new_for_test_v5(1.into(), Height::ZERO)],
         )
         .await;
 
@@ -99,8 +100,11 @@ async fn pending_certificate_in_error_can_be_replaced() {
     let network_id = 1.into();
 
     let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
-    let mut second_pending = Certificate::new_for_test(network_id, Height::ZERO);
+    let mut second_pending = Certificate::new_for_test_v5(network_id, Height::ZERO);
     second_pending.metadata = Metadata::new([1; 32].into());
+    // Mutating the certificate after signing invalidates its V5 signature,
+    // since V5 commits to the certificate's own hash.
+    second_pending.resign_for_test();
 
     assert_ne!(pending_certificate.hash(), second_pending.hash());
     context

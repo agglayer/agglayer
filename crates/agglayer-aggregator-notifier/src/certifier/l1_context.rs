@@ -162,8 +162,7 @@ where
         })
     }
 
-    /// Fetch, verify consistency, and wait for the finalization of the l1 info
-    /// root.
+    /// Fetch the L1 info root and verify consistency with the certificate.
     pub async fn fetch_l1_info_root(
         &self,
         certificate: &Certificate,
@@ -181,9 +180,8 @@ where
                 return Err(CertificationError::MissingL1InfoTreeLeafCountForGenericAggchainData);
             }
             (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
-            // Retrieve the event corresponding to the declared entry and await for finalization
+            // Retrieve the event corresponding to the declared entry.
             (Some(declared_leaf), declared_root) => {
-                // Retrieve from contract and await for finalization
                 let retrieved_root = self
                     .l1_rpc
                     .get_l1_info_root(declared_leaf)

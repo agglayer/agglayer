@@ -159,13 +159,13 @@ async fn verify_cert_signature() {
 
     {
         // valid signature
-        let signed_cert = Certificate::new_for_test(1.into(), Height::ZERO);
+        let signed_cert = Certificate::new_for_test_v5(1.into(), Height::ZERO);
         assert!(kernel.verify_cert_signature(&signed_cert).await.is_ok());
     }
 
     {
-        // valid signature with wrong signer
-        let signed_cert = Certificate::new_for_test(2.into(), Height::ZERO);
+        // valid (V5) signature with wrong signer
+        let signed_cert = Certificate::new_for_test_v5(2.into(), Height::ZERO);
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
             Err(
@@ -191,8 +191,9 @@ async fn verify_cert_signature() {
     }
 
     {
-        // wrong signature with valid signer
-        let mut signed_cert = Certificate::new_for_test(1.into(), Height::ZERO);
+        // wrong signature with valid signer: a V5 signature invalidated by
+        // mutating the certificate after signing (deliberately not re-signed)
+        let mut signed_cert = Certificate::new_for_test_v5(1.into(), Height::ZERO);
         signed_cert.new_local_exit_root.as_mut()[0] += 1;
         assert!(matches!(
             kernel.verify_cert_signature(&signed_cert).await,
