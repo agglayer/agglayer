@@ -1470,6 +1470,22 @@ impl<
             .max_priority_fee_per_gas(gas.max_priority_fee_per_gas)
             .with_chain_id(chain_id);
 
+        // Test-only failpoint, compiled out of production builds: corrupt the
+        // calldata so the settlement call never reaches the real contract
+        // method on L1. Only faking the receipt (see
+        // `contract_call_result_from_receipt`) let the real call succeed and
+        // advance `lastPessimisticRoot` on-chain while the certificate was
+        // recorded as reverted; a later retry then saw that divergence, which a
+        // genuine L1 revert can never produce. Gas was resolved against the
+        // real calldata in `resolve_settlement_gas_limit`, so estimation is
+        // unaffected.
+        #[cfg(feature = "testutils")]
+        let request = if fail::eval("settlement::force_revert", |_| true).unwrap_or(false) {
+            request.input(vec![0xff, 0xff, 0xff, 0xff].into())
+        } else {
+            request
+        };
+
         request.build(self.provider.wallet()).await
     }
 

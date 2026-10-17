@@ -184,7 +184,7 @@ impl L1TransactionFetcher for StubL1Rpc {
 #[tokio::test]
 async fn dropped_send_certificate_still_notifies_orchestrator() {
     let network_id = NetworkId::new(1);
-    let certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let certificate = Certificate::new_for_test_v5(network_id, Height::ZERO);
     let certificate_id = certificate.hash();
 
     let mut config = Config::default();
