@@ -17,9 +17,11 @@ use crate::{
     backup::BackupClient,
     storage::DB,
     stores::{
-        pending::PendingStore, state::StateStore, PendingCertificateReader as _,
-        PendingCertificateWriter as _, StateWriter as _, UpdateEvenIfAlreadyPresent,
-        UpdateStatusToCandidate,
+        certificate_updater::{set_pending, submit},
+        pending::PendingStore,
+        state::StateStore,
+        PendingCertificateReader as _, PendingCertificateWriter as _, StateWriter as _,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
     tests::TempDBDir,
 };
@@ -804,4 +806,50 @@ fn exposition_preserves_names_help_and_scope_label() {
     assert!(samples
         .iter()
         .any(|line| line.starts_with(NETWORK_HEIGHT) && line.contains("stage=\"pending\"")));
+}
+
+#[test]
+fn updater_and_admin_caller_restore_pending_error_after_the_legacy_pointer() {
+    let (registry, metrics) = network_metrics();
+    let (_pending_dir, _state_dir, pending, state) = stores(&metrics);
+    let network = NetworkId::new(1);
+    let certificate = Certificate::new_for_test(network, Height::ZERO);
+    submit(
+        &pending,
+        &state,
+        &certificate,
+        &CertificateStatus::error(CertificateStatusError::InternalError(
+            "admin recovery".into(),
+        )),
+    )
+    .unwrap();
+    assert_eq!(
+        sample_value(
+            &gather(&registry),
+            NETWORK_LATEST_CERTIFICATE_IN_ERROR,
+            network.to_u32(),
+            None
+        ),
+        Some(1)
+    );
+    set_pending(
+        &pending,
+        &state,
+        network,
+        certificate.height,
+        certificate.hash(),
+    )
+    .unwrap();
+    metrics
+        .reconcile_pending_error(&pending, &state, network, certificate.hash())
+        .unwrap();
+    assert_eq!(
+        sample_value(
+            &gather(&registry),
+            NETWORK_LATEST_CERTIFICATE_IN_ERROR,
+            network.to_u32(),
+            None
+        ),
+        Some(1)
+    );
 }

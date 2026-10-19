@@ -5,8 +5,8 @@ use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
-        async_api::AsyncPendingCertificateWriterExt, PendingCertificateReader,
-        PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+        async_api::AsyncStateWriterExt, PendingCertificateReader, PendingCertificateWriter,
+        PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
@@ -315,14 +315,10 @@ where
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateProven { height, certificate_id }) => {
-                        if let Err(error) = self
-                            .pending_store
-                            .set_latest_proven_certificate_per_network_async(
-                                self.network_id,
-                                height,
-                                certificate_id,
-                            )
-                            .await
+                        if let Err(error) = self.state_store
+                            .set_latest_proven_certificate_async(
+                                self.pending_store.clone(), self.network_id, height, certificate_id,
+                            ).await
                         {
                             error!(
                                 hash = certificate_id.to_string(),

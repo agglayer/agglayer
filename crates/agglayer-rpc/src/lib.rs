@@ -311,6 +311,15 @@ where
             }
         })?;
 
+        if !Self::network_is_known_blocking(state, &network_info).map_err(|error| {
+            GetNetworkInfoError::InternalError {
+                network_id,
+                source: error.into(),
+            }
+        })? {
+            return Err(GetNetworkInfoError::UnknownNetworkType { network_id });
+        }
+
         let latest_pending_certificate_id = match network_info.latest_pending_certificate_id {
             Some(certificate_id) => Some(certificate_id),
             None => pending_store
@@ -322,19 +331,6 @@ where
                 })?
                 .map(|(id, _)| id),
         };
-
-        if !Self::network_is_known_blocking(
-            pending_store,
-            state,
-            &network_info,
-            latest_pending_certificate_id,
-        )
-        .map_err(|error| GetNetworkInfoError::InternalError {
-            network_id,
-            source: error.into(),
-        })? {
-            return Err(GetNetworkInfoError::UnknownNetworkType { network_id });
-        }
 
         let latest_pending_certificate = match latest_pending_certificate_id {
             Some(id) => Self::get_pending_certificate_header_blocking(state, id),
@@ -414,32 +410,27 @@ where
     }
 
     fn network_is_known_blocking(
-        pending_store: &PendingStore,
         state: &StateStore,
         network_info: &NetworkInfo,
-        latest_pending_certificate_id: Option<CertificateId>,
     ) -> Result<bool, agglayer_storage::error::Error> {
         let network_id = network_info.network_id;
 
-        // An unpopulated type does not make a network unknown. Check pointers
-        // even if their headers are absent, including legacy indexes until
-        // migration and all writers populate the cache. These extra reads only
+        // The migrated cache owns existence. A cached pointer still identifies
+        // a known network when its header is absent. These bounded reads only
         // establish existence; they must not change the settlement snapshot.
+        // The response's settled id may come from the retained legacy fallback,
+        // so only the direct cached settled pointer can establish existence.
         Ok(network_info.network_type != NetworkType::Unspecified
-            || network_info.settled_certificate_id.is_some()
             || network_info.settled_claim.is_some()
-            || latest_pending_certificate_id.is_some()
+            || network_info.latest_pending_certificate_id.is_some()
+            || state
+                .get_latest_pending_certificate_id(network_id)?
+                .is_some()
             || state
                 .get_latest_proven_certificate_id(network_id)?
                 .is_some()
             || state
                 .get_latest_settled_certificate_id(network_id)?
-                .is_some()
-            || pending_store
-                .get_latest_proven_certificate_per_network(&network_id)?
-                .is_some()
-            || state
-                .get_latest_settled_certificate_per_network(&network_id)?
                 .is_some())
     }
 }
@@ -585,11 +576,12 @@ where
             "Certificate already exists in store for network {} at height {}", network_id, height
         );
 
+        let header = state.get_certificate_header(&pre_existing_certificate_id)?;
         if let Some(CertificateHeader {
             status: CertificateStatus::InError { .. },
             settlement_tx_hash,
             ..
-        }) = state.get_certificate_header(&pre_existing_certificate_id)?
+        }) = header
         {
             Self::ensure_no_live_settlement_job_blocking(
                 state,
@@ -834,29 +826,13 @@ where
         let debug_store = self.debug_store.clone();
         let notification = (certificate.network_id, certificate.height, hash);
         spawn_blocking_in_current_span(move || {
-            // TODO: Batch the different queries.
-            pending_store
-                .insert_pending_certificate(
-                    certificate.network_id,
-                    certificate.height,
-                    &certificate,
-                )
-                .inspect_err(|e| error!("Failed to insert certificate into pending store: {e}"))?;
-
-            // Inserting a `Pending` header also requests the backup of the
-            // newly accepted certificate, so this write must stay ordered
-            // after the pending-store insert above: the backup has to capture
-            // the certificate body together with the header.
             state
-                .insert_certificate_header(&certificate, CertificateStatus::Pending)
-                .inspect_err(|e| error!("Failed to insert certificate into state store: {e}"))?;
-
+                .submit_pending_certificate(pending_store.as_ref(), &certificate)
+                .inspect_err(|error| error!(?error, "Failed to persist pending certificate"))?;
             debug_store
                 .add_certificate(&certificate)
                 .inspect_err(|e| error!("Failed to insert certificate into debug store: {e}"))?;
-
             notification_permit.send(notification);
-
             Ok::<_, CertificateSubmissionError>(())
         })
         .await

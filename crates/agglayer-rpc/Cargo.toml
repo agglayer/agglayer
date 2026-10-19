@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agglayer-errors.workspace = true
 agglayer-contracts.workspace = true
 agglayer-config.workspace = true
 agglayer-rate-limiting.workspace = true

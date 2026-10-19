@@ -8,7 +8,7 @@ use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
     error as storage_error,
     storage::DBError,
-    stores::{PendingCertificateReader, PendingCertificateWriter, SettlementWriter, StateWriter},
+    stores::{PendingCertificateReader, PendingCertificateWriter, SettlementWriter},
     tests::{
         mocks::{MockPendingStore, MockPerEpochStore, MockStateStore},
         TempDBDir,
@@ -224,6 +224,12 @@ async fn start_from_zero() {
         .returning(|_, _, _| Ok(()));
 
     state
+        .expect_set_latest_proven_certificate_pointer()
+        .once()
+        .with(eq(network_id), eq(certificate_id))
+        .returning(|_, _| Ok(()));
+
+    state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Proven))
@@ -333,6 +339,12 @@ async fn repeated_unreadable_proof_errors_certificate() {
         .once()
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
         .returning(|_, _, _| Ok(()));
+
+    state
+        .expect_set_latest_proven_certificate_pointer()
+        .once()
+        .with(eq(network_id), eq(certificate_id))
+        .returning(|_, _| Ok(()));
 
     // The settlement job is built from the certificate proof, so an unreadable
     // proof now fails at `build_settlement_job` before any settlement happens.
@@ -595,11 +607,23 @@ async fn retries() {
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
         .returning(|_, _, _| Ok(()));
 
+    state
+        .expect_set_latest_proven_certificate_pointer()
+        .once()
+        .with(eq(network_id), eq(certificate_id))
+        .returning(|_, _| Ok(()));
+
     pending
         .expect_set_latest_proven_certificate_per_network()
         .once()
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id2))
         .returning(|_, _, _| Ok(()));
+
+    state
+        .expect_set_latest_proven_certificate_pointer()
+        .once()
+        .with(eq(network_id), eq(certificate_id2))
+        .returning(|_, _| Ok(()));
 
     state
         .expect_update_certificate_header_status()

@@ -6,7 +6,10 @@ use agglayer_types::{
     SettlementTxHash,
 };
 
-use crate::{error::Error, stores::PerEpochReader};
+use crate::{
+    error::Error,
+    stores::{PerEpochReader, StateReader},
+};
 
 pub mod settlement_writer;
 
@@ -52,6 +55,51 @@ pub enum UpdateStatusToCandidate {
 }
 
 pub trait StateWriter: Send + Sync {
+    /// Persist a normal submission through the pending and state stores.
+    /// StateStore serializes this sequence through both database writes.
+    fn submit_pending_certificate<P: PendingCertificateWriter>(
+        &self,
+        pending: &P,
+        certificate: &Certificate,
+    ) -> eyre::Result<()>
+    where
+        Self: StateReader + Sized,
+    {
+        crate::stores::certificate_updater::submit(
+            pending,
+            self,
+            certificate,
+            &CertificateStatus::Pending,
+        )
+    }
+
+    /// Publish a submission's header and pending pointer in one state batch.
+    /// The legacy pending pointer and body must already be persisted. Requests
+    /// a best-effort backup after a successful batch when the status requires
+    /// it.
+    fn publish_pending_certificate(
+        &self,
+        certificate: &Certificate,
+        status: &CertificateStatus,
+    ) -> Result<(), Error>;
+
+    /// Publish only the cached pending pointer, preserving the header status.
+    fn set_latest_pending_certificate_pointer(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        certificate_id: CertificateId,
+    ) -> Result<(), Error>;
+
+    /// Publish the proven cache pointer without changing header status.
+    /// Production callers use `certificate_updater::set_proven` to publish
+    /// both pointers.
+    fn set_latest_proven_certificate_pointer(
+        &self,
+        network_id: NetworkId,
+        certificate_id: CertificateId,
+    ) -> Result<(), Error>;
+
     fn disable_network(
         &self,
         network_id: &NetworkId,
@@ -69,19 +117,6 @@ pub trait StateWriter: Send + Sync {
     ) -> Result<(), Error>;
 
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error>;
-
-    /// Inserts the header of `certificate` with the given `status`.
-    ///
-    /// Inserting a [`CertificateStatus::Pending`] header also requests a
-    /// backup of the state and pending databases: it is the write that
-    /// accepts a newly submitted certificate. Callers must persist the
-    /// certificate body to the pending store *before* inserting the header,
-    /// so the backup is guaranteed to capture the body together with it.
-    fn insert_certificate_header(
-        &self,
-        certificate: &Certificate,
-        status: CertificateStatus,
-    ) -> Result<(), Error>;
 
     /// Updates the stored status of `certificate_id`.
     ///
@@ -136,6 +171,8 @@ pub trait PendingCertificateWriter: Send + Sync {
 
     fn remove_generated_proof(&self, certificate_id: &CertificateId) -> Result<(), Error>;
 
+    /// Persist the legacy pending pointer and certificate body. Production
+    /// submission calls this through `certificate_updater::submit`.
     fn insert_pending_certificate(
         &self,
         network_id: NetworkId,

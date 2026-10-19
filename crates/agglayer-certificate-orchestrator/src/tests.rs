@@ -305,6 +305,31 @@ impl PendingCertificateWriter for DummyPendingStore {
 }
 
 impl StateWriter for DummyPendingStore {
+    fn publish_pending_certificate(
+        &self,
+        _certificate: &Certificate,
+        _status: &CertificateStatus,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn set_latest_pending_certificate_pointer(
+        &self,
+        _network_id: NetworkId,
+        _height: Height,
+        _certificate_id: CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn set_latest_proven_certificate_pointer(
+        &self,
+        _network_id: NetworkId,
+        _certificate_id: CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
     fn disable_network(
         &self,
         _network_id: &NetworkId,
@@ -342,35 +367,6 @@ impl StateWriter for DummyPendingStore {
         _certificate_index: &agglayer_types::CertificateIndex,
     ) -> Result<(), agglayer_storage::error::Error> {
         todo!()
-    }
-
-    fn insert_certificate_header(
-        &self,
-        certificate: &Certificate,
-        status: CertificateStatus,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        self.certificate_per_network.write().unwrap().insert(
-            (certificate.network_id, certificate.height),
-            certificate.hash(),
-        );
-
-        self.certificate_headers.write().unwrap().insert(
-            certificate.hash(),
-            CertificateHeader {
-                network_id: certificate.network_id,
-                height: certificate.height,
-                epoch_number: None,
-                certificate_index: None,
-                certificate_id: certificate.hash(),
-                prev_local_exit_root: certificate.prev_local_exit_root,
-                new_local_exit_root: certificate.new_local_exit_root,
-                status,
-                metadata: certificate.metadata,
-                settlement_tx_hash: None,
-            },
-        );
-
-        Ok(())
     }
 
     fn update_certificate_header_status(

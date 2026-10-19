@@ -137,8 +137,7 @@ mod tests {
         backup::BackupClient,
         columns::epochs::end_checkpoint::EndCheckpointColumn,
         stores::{
-            epochs::EpochsStore, pending::PendingStore, state::StateStore,
-            PendingCertificateWriter, StateWriter,
+            epochs::EpochsStore, pending::PendingStore, state::StateStore, PendingCertificateWriter,
         },
         tests::{
             mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},

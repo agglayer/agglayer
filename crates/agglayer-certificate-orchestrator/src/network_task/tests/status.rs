@@ -3,8 +3,7 @@ use std::{collections::VecDeque, sync::Mutex, time::Duration};
 use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
     stores::{
-        PendingCertificateReader, PendingCertificateWriter, SettlementReader as _,
-        SettlementWriter, StateWriter,
+        PendingCertificateReader, PendingCertificateWriter, SettlementReader as _, SettlementWriter,
     },
     tests::TempDBDir,
 };

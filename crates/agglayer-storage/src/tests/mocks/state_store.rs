@@ -46,6 +46,10 @@ mock! {
     }
 
     impl StateWriter for StateStore {
+        fn publish_pending_certificate(&self, certificate: &Certificate, status: &CertificateStatus) -> Result<(), Error>;
+        fn set_latest_pending_certificate_pointer(&self, network_id: NetworkId, height: Height, certificate_id: CertificateId) -> Result<(), Error>;
+        fn set_latest_proven_certificate_pointer(&self, network_id: NetworkId, certificate_id: CertificateId) -> Result<(), Error>;
+
         fn update_settlement_tx_hash(
             &self,
             certificate_id: &CertificateId,
@@ -64,12 +68,6 @@ mock! {
             certificate_id: &CertificateId,
             epoch_number: &EpochNumber,
             certificate_index: &agglayer_types::CertificateIndex,
-        ) -> Result<(), Error>;
-
-        fn insert_certificate_header(
-            &self,
-            certificate: &Certificate,
-            status: CertificateStatus,
         ) -> Result<(), Error>;
 
         fn update_certificate_header_status(
