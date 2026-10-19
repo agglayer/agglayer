@@ -33,6 +33,7 @@ agglayer-grpc-client.workspace = true
 agglayer-storage = { workspace = true, features = ["testutils"] }
 agglayer-types = { workspace = true, features = ["testutils"] }
 async-trait.workspace = true
+prost-types.workspace = true
 
 tokio = { workspace = true, features = [
     "macros",
