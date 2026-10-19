@@ -52,6 +52,12 @@ pub const STATE_DB_V2_ADDED_CFS: &[ColumnDescriptor] = &[
     ColumnDescriptor::new::<CertificateIdPerSettlementJobIdColumn>(),
 ];
 
+/// CFs recreated by the third migration, which backfills them from the
+/// latest certificate indexes. Rows written before that step may vouch for a
+/// settled certificate without the claim history behind it.
+pub const STATE_DB_V3_RESET_CFS: &[ColumnDescriptor] =
+    &[ColumnDescriptor::new::<NetworkInfoColumn>()];
+
 /// Definitions for the column families in the state storage. The
 /// authoritative target schema: `init_db` ensures every CF listed here
 /// exists on disk, regardless of whether the source was V0 or already at

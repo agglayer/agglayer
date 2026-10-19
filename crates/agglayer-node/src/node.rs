@@ -1,6 +1,6 @@
 use std::{num::NonZeroU64, sync::Arc};
 
-use agglayer_aggregator_notifier::CertifierClient;
+use agglayer_aggregator_notifier::{CertifierClient, ProverRouter};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
@@ -27,7 +27,6 @@ use eyre::Context as _;
 use prometheus::Registry;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tower::buffer::Buffer;
 use tracing::{debug, error, info, warn};
 
 use crate::epoch_synchronizer::EpochSynchronizer;
@@ -74,6 +73,8 @@ impl Node {
     /// # Errors
     ///
     /// This function will return an error if:
+    /// - The storage could not be opened or migrated, including a failed
+    ///   network info backfill.
     /// - The L1 node URL is invalid.
     /// - The configured signer is invalid.
     /// - The RPC server failed to start.
@@ -105,7 +106,15 @@ impl Node {
             let pending_db = Arc::new(PendingStore::init_db(
                 &storage_config.storage.pending_db_path,
             )?);
-            let state_db = Arc::new(StateStore::init_db(&storage_config.storage.state_db_path)?);
+            // The first open of the state database by this binary backfills
+            // network info, before anything can read or write it.
+            let state_db = Arc::new(StateStore::init_db(
+                &storage_config.storage.state_db_path,
+                Some((
+                    pending_db.as_ref(),
+                    &EpochsStore::read_only(storage_config.clone()),
+                )),
+            )?);
 
             let (backup_engine, backup_client) = if let BackupConfig::Enabled {
                 path,
@@ -308,17 +317,13 @@ impl Node {
         );
         tracing::debug!("RollupManager created");
 
-        let (_vkey, prover_executor) =
-            prover_executor::Executor::create_prover(config.prover.clone(), pessimistic_proof::ELF)
-                .await?;
-
-        let prover_buffer = Buffer::new(prover_executor, config.prover_buffer_size);
+        let prover = ProverRouter::new(&config).await?;
 
         let certifier_client = CertifierClient::try_new(
             pending_store.clone(),
             Arc::clone(&rollup_manager),
             Arc::clone(&config),
-            prover_buffer,
+            prover,
         )
         .await?;
         info!("Certifier client created.");
@@ -454,3 +459,6 @@ impl Node {
         debug!("Node shutdown completed.");
     }
 }
+
+#[cfg(test)]
+mod tests;

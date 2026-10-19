@@ -68,10 +68,23 @@ where
     }
 }
 
+impl EpochsStore<(), ()> {
+    /// An epoch store that can only read, so it needs neither the pending nor
+    /// the state store: for the state database's own migration.
+    pub fn read_only(config: Arc<agglayer_config::Config>) -> Self {
+        Self {
+            config,
+            pending_store: Arc::new(()),
+            state_store: Arc::new(()),
+            backup_client: BackupClient::noop(),
+        }
+    }
+}
+
 impl<PendingStore, StateStore> EpochStoreReader for EpochsStore<PendingStore, StateStore>
 where
-    PendingStore: PendingCertificateReader,
-    StateStore: StateReader,
+    PendingStore: Send + Sync,
+    StateStore: Send + Sync,
 {
     fn get_certificate(
         &self,

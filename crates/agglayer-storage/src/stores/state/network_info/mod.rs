@@ -57,6 +57,46 @@ impl StateStore {
             .multi_insert_batch::<NetworkInfoColumn>([(&key, &value)], batch)?)
     }
 
+    /// The settled row: every field a settlement knows, so the row is never
+    /// partial. The optional aggregates stay unset only when their source is
+    /// gone.
+    pub(super) fn settled_certificate_value(
+        certificate_id: CertificateId,
+        ler: agglayer_tries::roots::LocalExitRoot,
+        pp_root: Option<agglayer_types::Digest>,
+        let_leaf_count: Option<u64>,
+    ) -> network_info_value::Value {
+        network_info_value::Value::SettledCertificate(network_info::v0::SettledCertificate {
+            certificate_id: Some(network_info::v0::SettledCertificateId {
+                id: certificate_id.as_digest().as_slice().to_vec().into(),
+            }),
+            ler: Some(network_info::v0::SettledLocalExitRoot {
+                root: agglayer_types::Digest::from(ler).as_slice().to_vec().into(),
+            }),
+            pp_root: pp_root.map(|root| SettledPessimisticProofRoot {
+                root: root.as_slice().to_vec().into(),
+            }),
+            let_leaf_count: let_leaf_count.map(|settled_let_leaf_count| {
+                SettledLocalExitTreeLeafCount {
+                    settled_let_leaf_count,
+                }
+            }),
+        })
+    }
+
+    pub(super) fn settled_claim_value(
+        claim: &agglayer_types::SettledClaim,
+    ) -> network_info_value::Value {
+        network_info_value::Value::SettledClaim(SettledClaim {
+            global_index: Some(network_info::v0::GlobalIndex {
+                value: claim.global_index.as_slice().to_vec().into(),
+            }),
+            bridge_exit_hash: Some(network_info::v0::BridgeExitHash {
+                bridge_exit_hash: claim.bridge_exit_hash.as_slice().to_vec().into(),
+            }),
+        })
+    }
+
     fn network_info_from_snapshot(
         snapshot: &Snapshot<'_>,
         network_id: NetworkId,
@@ -300,6 +340,8 @@ impl crate::stores::NetworkInfoReader for StateStore {
             })
     }
 }
+
+pub(super) mod backfill;
 
 #[cfg(test)]
 mod tests;
