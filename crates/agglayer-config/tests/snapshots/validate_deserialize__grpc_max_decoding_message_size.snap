@@ -62,6 +62,7 @@ db-path = "/tmp/agglayer/tests/fixtures/valide_config/storage"
 [prover.network-prover]
 proving-timeout = "5m"
 sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+private-stdin = false
 
 [grpc]
 max-decoding-message-size = 104857600
