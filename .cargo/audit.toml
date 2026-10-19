@@ -24,7 +24,37 @@ ignore = [
     # i.e. the legacy hyper 0.14 AWS connector. That code path is an HTTP/2
     # *client* talking to AWS KMS endpoints only, so the attack (a malicious
     # peer flooding empty DATA frames) is not reachable in practice.
-    # Drop this entry once agglayer-interop-types moves to sp1-sdk >= 6,
-    # whose aws-sdk-kms dependency already avoids the legacy connector.
-    "RUSTSEC-2026-0258"
+    # Drop this entry once the sp1-sdk 5.x pins go away (`sp1-sdk-v5` in the
+    # workspace manifest and `agglayer-interop-types-v13` in agglayer-storage);
+    # sp1-sdk 6's aws-sdk-kms dependency already avoids the legacy connector.
+    "RUSTSEC-2026-0258",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0344.html
+    # `ruzstd` decompression bomb (DoS only, no memory unsafety), fixed only
+    # in ruzstd >= 0.9.1. Unreachable upstream: ruzstd is pulled solely by
+    # `object` 0.37 (req ^0.8.1); only object 0.40 moves to ^0.9, while both
+    # of our `object` consumers cap below that (`backtrace` 0.3.76 and
+    # `sp1-core-executor` 6.2.2 require ^0.37).
+    # Not exploitable here: object uses ruzstd only to inflate compressed
+    # sections of ELF files, and the only ELFs we parse are our own (the SP1
+    # program ELFs we build and ship, and the running binary for backtraces);
+    # no untrusted zstd input is ever decoded.
+    "RUSTSEC-2026-0344",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0346.html
+    # https://rustsec.org/advisories/RUSTSEC-2026-0349.html
+    # Both are fixed in rustls >= 0.23.46, which we use. The remaining hit is
+    # rustls 0.21.12, which has no patched release and is pulled solely by the
+    # same legacy hyper 0.14 AWS connector as the h2 0.3 entry above
+    # (`aws-smithy-http-client/legacy-rustls-ring`, enabled by sp1-sdk 5.x
+    # through aws-sdk-kms's default `rustls` feature).
+    # Not exploitable there:
+    # - 0346: the derived `Debug` impls leaking session secrets only matter
+    #   for custom `ClientSessionStore` impls that log those values; the
+    #   legacy connector uses rustls's built-in store, whose output is
+    #   redacted.
+    # - 0349: the downgrade is from post-quantum (X25519MLKEM768) to classical
+    #   key exchange, and rustls 0.21 never offers post-quantum groups in the
+    #   first place, so there is no post-quantum confidentiality to lose.
+    # Drop both entries together with the h2 0.3 one.
+    "RUSTSEC-2026-0346",
+    "RUSTSEC-2026-0349",
 ]
