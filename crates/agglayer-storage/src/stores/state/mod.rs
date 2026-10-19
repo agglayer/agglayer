@@ -47,6 +47,8 @@ use crate::{
 pub(crate) mod cf_definitions;
 mod network_info;
 mod settlement;
+#[cfg(any(test, feature = "testutils"))]
+mod testutils;
 
 #[cfg(test)]
 mod tests;
@@ -57,6 +59,7 @@ pub struct StateStore {
     backup_client: BackupClient,
     settlement_write_locks: Mutex<HashMap<SettlementJobId, Arc<Mutex<()>>>>,
     network_metrics: NetworkMetrics,
+    submission: parking_lot::Mutex<()>,
 }
 
 impl StateStore {
@@ -130,6 +133,7 @@ impl StateStore {
             db,
             backup_client,
             settlement_write_locks: Mutex::new(HashMap::new()),
+            submission: Default::default(),
             network_metrics,
         }
     }
@@ -161,7 +165,133 @@ impl StateStore {
     }
 }
 
+impl StateStore {
+    fn certificate_header(
+        certificate: &Certificate,
+        status: CertificateStatus,
+    ) -> CertificateHeader {
+        CertificateHeader {
+            certificate_id: certificate.hash(),
+            network_id: certificate.network_id,
+            height: certificate.height,
+            epoch_number: None,
+            certificate_index: None,
+            prev_local_exit_root: certificate.prev_local_exit_root,
+            new_local_exit_root: certificate.new_local_exit_root,
+            status,
+            metadata: certificate.metadata,
+            settlement_tx_hash: None,
+        }
+    }
+
+    fn stage_pending_certificate_pointer(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        certificate_id: CertificateId,
+        batch: &mut WriteBatch,
+    ) -> Result<(), Error> {
+        use crate::types::network_info::v0::{
+            network_info_value::Value, LatestPendingCertificateHeight, LatestPendingCertificateId,
+            LatestPendingCertificateInfo,
+        };
+        self.stage_network_info(
+            network_id,
+            Value::LatestPendingCertificateInfo(LatestPendingCertificateInfo {
+                height: Some(LatestPendingCertificateHeight {
+                    height: height.as_u64(),
+                }),
+                id: Some(LatestPendingCertificateId {
+                    id: certificate_id.as_digest().as_slice().to_vec().into(),
+                }),
+            }),
+            batch,
+        )
+    }
+}
+
 impl StateWriter for StateStore {
+    fn submit_pending_certificate<P: super::PendingCertificateWriter>(
+        &self,
+        pending: &P,
+        certificate: &Certificate,
+    ) -> eyre::Result<()> {
+        let _submission = self.submission.lock();
+        super::certificate_updater::submit(pending, self, certificate, &CertificateStatus::Pending)
+    }
+
+    fn publish_pending_certificate(
+        &self,
+        certificate: &Certificate,
+        status: &CertificateStatus,
+    ) -> Result<(), Error> {
+        let id = certificate.hash();
+        let network_id = certificate.network_id;
+        let mut metrics = self.network_metrics.mutation();
+        let stored = self.db.get::<CertificateHeaderColumn>(&id)?;
+        let created = stored.is_none();
+        let mut header =
+            stored.unwrap_or_else(|| Self::certificate_header(certificate, status.clone()));
+        header.status = status.clone();
+        let mut batch = WriteBatch::default();
+        self.db
+            .multi_insert_batch::<CertificateHeaderColumn>([(&id, &header)], &mut batch)?;
+        if *status == CertificateStatus::Settled {
+            self.db.multi_insert_batch::<CertificatePerNetworkColumn>(
+                [(
+                    &certificate_per_network::Key {
+                        network_id: network_id.to_u32(),
+                        height: certificate.height,
+                    },
+                    &id,
+                )],
+                &mut batch,
+            )?;
+        }
+        self.stage_pending_certificate_pointer(network_id, certificate.height, id, &mut batch)?;
+        self.db.write_batch(batch)?;
+        metrics.header_written(network_id, id, &header.status);
+        if created
+            || matches!(
+                status,
+                CertificateStatus::Pending | CertificateStatus::Proven
+            )
+        {
+            self.request_backup();
+        }
+        Ok(())
+    }
+
+    fn set_latest_pending_certificate_pointer(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        certificate_id: CertificateId,
+    ) -> Result<(), Error> {
+        let mut batch = WriteBatch::default();
+        self.stage_pending_certificate_pointer(network_id, height, certificate_id, &mut batch)?;
+        Ok(self.db.write_batch(batch)?)
+    }
+
+    fn set_latest_proven_certificate_pointer(
+        &self,
+        network_id: NetworkId,
+        certificate_id: CertificateId,
+    ) -> Result<(), Error> {
+        use crate::types::network_info::v0::{
+            network_info_value::Value, LatestProvenCertificateInfo,
+        };
+        let mut batch = WriteBatch::default();
+        self.stage_network_info(
+            network_id,
+            Value::LatestProvenCertificateInfo(LatestProvenCertificateInfo {
+                id: certificate_id.as_digest().as_slice().to_vec().into(),
+            }),
+            &mut batch,
+        )?;
+        Ok(self.db.write_batch(batch)?)
+    }
+
     fn disable_network(
         &self,
         network_id: &NetworkId,
@@ -312,58 +442,6 @@ impl StateWriter for StateStore {
                 *certificate_id,
                 &certificate_header.status,
             );
-        }
-
-        Ok(())
-    }
-
-    fn insert_certificate_header(
-        &self,
-        certificate: &Certificate,
-        status: CertificateStatus,
-    ) -> Result<(), Error> {
-        // TODO: make it a batch write
-        let certificate_id = certificate.hash();
-        let certificate_header = CertificateHeader {
-            certificate_id,
-            network_id: certificate.network_id,
-            height: certificate.height,
-            epoch_number: None,
-            certificate_index: None,
-            prev_local_exit_root: certificate.prev_local_exit_root,
-            new_local_exit_root: certificate.new_local_exit_root,
-            status: status.clone(),
-            metadata: certificate.metadata,
-            settlement_tx_hash: None,
-        };
-        let mut metrics = self.network_metrics.mutation();
-        self.db
-            .put::<CertificateHeaderColumn>(&certificate_id, &certificate_header)?;
-        metrics.header_written(
-            certificate.network_id,
-            certificate_id,
-            &certificate_header.status,
-        );
-
-        if let CertificateStatus::Settled = status {
-            // TODO: Check certificate conflict during insert (if conflict it's
-            // too late)
-            self.db.put::<CertificatePerNetworkColumn>(
-                &certificate_per_network::Key {
-                    network_id: certificate.network_id.to_u32(),
-                    height: certificate.height,
-                },
-                &certificate_id,
-            )?;
-        }
-
-        // A `Pending` header is written when a certificate is accepted from
-        // the RPC, after its body reached the pending db and before the
-        // orchestrator picks it up. The certificate body only exists in the
-        // pending db until then, so this backup is what lets a submitted but
-        // not yet processed certificate survive a loss of the live databases.
-        if let CertificateStatus::Pending = status {
-            self.request_backup();
         }
 
         Ok(())

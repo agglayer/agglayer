@@ -411,6 +411,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-errors",
  "agglayer-rate-limiting",
  "agglayer-rpc",
  "agglayer-settlement-service",
@@ -568,6 +569,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-errors",
  "agglayer-rate-limiting",
  "agglayer-storage",
  "agglayer-tries 0.18.0",

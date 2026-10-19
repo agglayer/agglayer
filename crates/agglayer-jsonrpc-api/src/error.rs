@@ -135,6 +135,16 @@ impl Error {
         Self::Internal(detail.into())
     }
 
+    pub(crate) fn from_certificate_update(error: eyre::Error) -> Self {
+        use agglayer_storage::error::Error as StorageError;
+
+        tracing::error!(?error, "Failed to update certificate");
+        agglayer_errors::match_err!(error,
+            type<StorageError>(StorageError::UnprocessedAction(message)) => Self::InvalidArgument(message),
+            else(_) => Self::internal("Unable to update certificate"),
+        )
+    }
+
     /// Get the jsonrpc error code for this error.
     pub fn code(&self) -> i32 {
         match self {

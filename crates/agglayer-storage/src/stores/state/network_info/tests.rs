@@ -408,3 +408,137 @@ fn settled_header_is_read_from_the_same_snapshot(network_id: NetworkId, store: S
         Some(1)
     );
 }
+
+#[test]
+fn pending_and_proven_writers_preserve_other_rows_and_header_metadata() {
+    use crate::stores::StateReader;
+    let (_tmp, store) = owned_store();
+    let certificate = Certificate::new_for_test(NetworkId::new(1), Height::new(7));
+    let id = certificate.hash();
+    store
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .unwrap();
+    let type_row = StateStore::network_info_row(
+        certificate.network_id,
+        network_info_value::Value::NetworkType(NetworkType::Ecdsa as i32),
+    );
+    store
+        .db
+        .put::<NetworkInfoColumn>(&type_row.0, &type_row.1)
+        .unwrap();
+    let settled_row = StateStore::network_info_row(
+        certificate.network_id,
+        StateStore::settled_certificate_value(id, certificate.new_local_exit_root, None, Some(3)),
+    );
+    let claim_row = StateStore::network_info_row(
+        certificate.network_id,
+        StateStore::settled_claim_value(&agglayer_types::SettledClaim {
+            global_index: Digest([4; 32]),
+            bridge_exit_hash: Digest([5; 32]),
+        }),
+    );
+    for (key, value) in [&settled_row, &claim_row] {
+        store.db.put::<NetworkInfoColumn>(key, value).unwrap();
+    }
+    let error = CertificateStatus::error(agglayer_types::CertificateStatusError::InternalError(
+        "retry".into(),
+    ));
+    store
+        .publish_pending_certificate(&certificate, &error)
+        .unwrap();
+    let header = store.get_certificate_header(&id).unwrap().unwrap();
+    assert_eq!(header.status, error);
+    assert_eq!(header.new_local_exit_root, certificate.new_local_exit_root);
+    assert_eq!(
+        store
+            .get_latest_pending_certificate_id(certificate.network_id)
+            .unwrap(),
+        Some(id)
+    );
+    assert_eq!(
+        store
+            .get_latest_pending_height(certificate.network_id)
+            .unwrap(),
+        Some(certificate.height)
+    );
+    assert_eq!(
+        store
+            .get_latest_proven_certificate_id(certificate.network_id)
+            .unwrap(),
+        None
+    );
+    store
+        .update_certificate_header_status(&id, &CertificateStatus::Proven)
+        .unwrap();
+    assert_eq!(
+        store
+            .get_latest_proven_certificate_id(certificate.network_id)
+            .unwrap(),
+        None
+    );
+    store
+        .set_latest_proven_certificate_pointer(certificate.network_id, id)
+        .unwrap();
+    assert_eq!(
+        store
+            .get_latest_proven_certificate_id(certificate.network_id)
+            .unwrap(),
+        Some(id)
+    );
+    assert_eq!(
+        store.db.get::<NetworkInfoColumn>(&type_row.0).unwrap(),
+        Some(type_row.1)
+    );
+    for (key, value) in [settled_row, claim_row] {
+        assert_eq!(
+            store.db.get::<NetworkInfoColumn>(&key).unwrap(),
+            Some(value)
+        );
+    }
+}
+
+#[test]
+fn failed_pending_batch_preserves_initial_header_and_previous_pointer() {
+    use std::sync::Arc;
+
+    use crate::{
+        backup::BackupClient,
+        storage::{DBError, DB},
+        stores::StateReader,
+    };
+    let (tmp, store) = owned_store();
+    let first = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+    let next = Certificate::new_for_test(NetworkId::new(1), Height::new(1));
+    store
+        .insert_certificate_header(&first, CertificateStatus::Pending)
+        .unwrap();
+    store
+        .set_latest_pending_certificate_pointer(first.network_id, first.height, first.hash())
+        .unwrap();
+    store
+        .insert_certificate_header(&next, CertificateStatus::Pending)
+        .unwrap();
+    let header = store.get_certificate_header(&next.hash()).unwrap().unwrap();
+    drop(store);
+    let store = StateStore::new(
+        Arc::new(
+            DB::open_cf_readonly(&tmp.path, crate::stores::state::cf_definitions::STATE_DB)
+                .unwrap(),
+        ),
+        BackupClient::noop(),
+    );
+    assert!(matches!(
+        store.publish_pending_certificate(&next, &CertificateStatus::Proven),
+        Err(Error::DBError(DBError::ReadOnlyMode))
+    ));
+    assert_eq!(
+        store.get_certificate_header(&next.hash()).unwrap().unwrap(),
+        header
+    );
+    assert_eq!(
+        store
+            .get_latest_pending_certificate_id(first.network_id)
+            .unwrap(),
+        Some(first.hash())
+    );
+}

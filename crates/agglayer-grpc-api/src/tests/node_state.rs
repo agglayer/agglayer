@@ -70,6 +70,13 @@ async fn get_network_info_unknown_network() {
     pending_store
         .insert_pending_certificate(certificate.network_id, certificate.height, &certificate)
         .unwrap();
+    state_store
+        .set_latest_pending_certificate_pointer(
+            certificate.network_id,
+            certificate.height,
+            certificate.hash(),
+        )
+        .unwrap();
 
     let info = server
         .get_network_info(tonic::Request::new(GetNetworkInfoRequest { network_id: 1 }))

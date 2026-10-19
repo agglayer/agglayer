@@ -1,6 +1,7 @@
 mod interfaces;
 
 pub mod async_api;
+pub mod certificate_updater;
 
 pub use interfaces::{
     reader::{
