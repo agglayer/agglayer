@@ -67,6 +67,7 @@ pending-max-backup-count = 100
 [prover.network-prover]
 proving-timeout = "5m"
 sp1-cluster-endpoint = "https://rpc.production.succinct.xyz/"
+private-stdin = false
 
 [grpc]
 
