@@ -2154,6 +2154,21 @@ fn build_retry_policy_bounds_signer_failures_and_rejects_build_bugs() {
     }
     assert!(!policy.should_retry(&signer_failure()));
 
+    // An L1 RPC error is always retried: the build only reads from L1.
+    let mut policy = BuildRetryPolicy::new();
+    assert!(policy.should_retry(&BuildAttemptError::Transport(
+        TransportErrorKind::custom_str("connection reset by peer")
+    )));
+    assert!(
+        policy.should_retry(&BuildAttemptError::Transport(TransportError::ErrorResp(
+            alloy::rpc::json_rpc::ErrorPayload {
+                code: -32603,
+                message: "internal error".into(),
+                data: None,
+            }
+        )))
+    );
+
     // A structural build error is never recoverable by retrying.
     let mut policy = BuildRetryPolicy::new();
     assert!(!policy.should_retry(&BuildAttemptError::from(
@@ -2252,6 +2267,74 @@ async fn build_next_attempt_with_new_nonce_uses_assigned_nonce_and_default_walle
     // Fees are within the configured bounds (defaults: floor 0, ceiling 100
     // gwei).
     assert!(envelope.max_fee_per_gas() <= 100_000_000_000);
+}
+
+/// Mock transport that fails its first `failures` requests at the transport
+/// level, as a dropped connection does, then defers to the asserter.
+#[derive(Clone, Debug)]
+struct FlakyAsserterTransport {
+    inner: MockTransport,
+    failures: Arc<Mutex<usize>>,
+}
+
+impl tower::Service<RequestPacket> for FlakyAsserterTransport {
+    type Response = alloy::rpc::json_rpc::ResponsePacket;
+    type Error = TransportError;
+    type Future = TransportFut<'static>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        tower::Service::poll_ready(&mut self.inner, cx)
+    }
+
+    fn call(&mut self, request: RequestPacket) -> Self::Future {
+        let mut failures = self.failures.lock().expect("failure counter lock poisoned");
+        if *failures > 0 {
+            *failures -= 1;
+            return Box::pin(async {
+                Err(TransportErrorKind::custom_str(
+                    "error sending request: connection reset by peer",
+                ))
+            });
+        }
+        tower::Service::call(&mut self.inner, request)
+    }
+}
+
+#[tokio::test]
+async fn l1_read_retries_errors_outside_the_transient_allowlist() {
+    // A transport failure and an unexpected JSON-RPC error, neither on the
+    // allowlist, used to panic the task. A read must retry both.
+    let asserter = Asserter::new();
+    asserter.push_failure(alloy::rpc::json_rpc::ErrorPayload {
+        code: -32603,
+        message: "internal error".into(),
+        data: None,
+    });
+    asserter.push_success(&Option::<alloy::rpc::types::Transaction>::None);
+    let client = RpcClient::new(
+        FlakyAsserterTransport {
+            inner: MockTransport::new(asserter),
+            failures: Arc::new(Mutex::new(1)),
+        },
+        true,
+    );
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(test_signer()))
+        .connect_client(client);
+
+    let mut tx_config = SettlementTransactionConfig::default();
+    tx_config.retry_on_transient_failure.initial_interval = Duration::from_millis(1);
+    tx_config.retry_on_transient_failure.jitter = Duration::ZERO;
+    let task = mk_task_with_tx_config(provider, tx_config);
+
+    let tx_hash = tokio::time::timeout(
+        Duration::from_secs(10),
+        task.tx_hash_on_l1_for_nonce(Address::from([1; 20]), Nonce(0)),
+    )
+    .await
+    .expect("the read must retry until L1 answers");
+
+    assert!(matches!(tx_hash, Ok(None)));
 }
 
 #[test]

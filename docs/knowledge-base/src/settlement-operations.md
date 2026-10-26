@@ -55,6 +55,13 @@ A `pending` job with `hasLiveTask: false` has durable state but no registered in
 It is wedged and needs `admin_reloadSettlementTask`.
 A completed job normally has no live task, so `hasLiveTask: false` is expected there.
 
+An L1 RPC error never ends a task: L1 reads retry every error until L1 answers.
+A pending job with `hasLiveTask: true` and repeated
+`Transient error while executing retryable callback` warnings is waiting on L1, not wedged.
+Fix the L1 connection or configuration; the task resumes on its own.
+A queued `admin_reloadSettlementTask` takes effect only once L1 answers.
+To stop the task sooner, use `admin_abortSettlementTask`, which interrupts the wait.
+
 Both reads are point-in-time and not transactional.
 A job that completes during a read can briefly appear pending without a live task, and task
 liveness can change immediately after it is sampled.

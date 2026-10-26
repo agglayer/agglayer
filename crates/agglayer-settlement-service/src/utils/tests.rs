@@ -871,3 +871,37 @@ async fn tx_hash_on_l1_for_nonce_supports_external_l1_rpc_when_configured() {
 
     println!("External L1 RPC sender+nonce lookup validated");
 }
+
+#[tokio::test]
+async fn retry_every_error_until_success_ends_only_on_cancellation() {
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let cancellation_token = CancellationToken::new();
+    let policy = retry_policy(
+        Duration::from_millis(1),
+        1000,
+        Duration::from_millis(1),
+        Duration::ZERO,
+    );
+
+    let result = retry_every_error_until_success(
+        &policy,
+        &cancellation_token,
+        || {
+            let attempts = attempts.clone();
+            let cancellation_token = cancellation_token.clone();
+            async move {
+                // Fail with an error no allowlist knows; cancel once it has
+                // been retried a few times.
+                if attempts.fetch_add(1, Ordering::SeqCst) == 3 {
+                    cancellation_token.cancel();
+                }
+                Err::<(), _>(PermanentTestError)
+            }
+        },
+        |_| true,
+    )
+    .await;
+
+    assert!(matches!(result, Err(RetryCallbackError::Cancelled)));
+    assert_eq!(attempts.load(Ordering::SeqCst), 4);
+}
