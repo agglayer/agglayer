@@ -129,14 +129,60 @@ When changing storage schemas or keys:
 
 ## Network info backfill
 
-`network_info_cf` caches each network's latest certificate pointers,
-its network type, and its latest settled claim.
+`network_info_cf` caches each network's latest certificate pointers, its network type, and its latest settled claim.
 The legacy latest-certificate indexes hold the same pointers:
 `latest_settled_certificate_per_network_cf` in the state DB,
 and the latest pending and proven indexes in the pending DB.
 Until the readers move to `network_info_cf`, the writers are meant to keep both up to date.
-Settlement already writes both; the pending and proven writers come next,
-and settlement will also write the network type.
+Submission
+and explicit pending/proven overrides write both representations through the [shared certificate updater][certificate-updater].
+The state store serializes normal submissions through the height check and both database writes.
+One storage-owned submission mutex covers this short sequence across networks;
+L1 requests, initial replacement validation, debug writes, and orchestrator notifications run outside it.
+The existing height check remains inside the pending write.
+Admin operations require exclusive operational access and do not take the submission mutex.
+Proof completion uses the sequential network task and a storage async adapter,
+without a submission lock.
+Changing an arbitrary header's status to `Proven` does not advance the proven pointer.
+Settlement will also write the network type; pending and proven writes leave it untouched.
+
+Submission reuses the pending store's height check and rejects changes to settled certificates.
+Persisted header identity and proof-completion inputs are trusted.
+It uses the existing insertion order: legacy pending pointer, certificate body, then header
+and cached pending pointer together in one state DB batch.
+That batch creates a missing header or preserves its metadata while updating its status.
+The state store requests any submission backup after the batch succeeds.
+A concurrent legacy reader can briefly observe a pointer before its body or header is available.
+Explicit overrides retain the ability to move a pointer backwards.
+Admin force-push uses the same submission updater,
+including initial header creation for a certificate that has no header yet.
+Status, error, height, epoch, index, and local exit root remain certificate-header facts.
+Only pending height/id and proven id are written to their respective cache rows.
+
+The state and pending databases cannot share a transaction.
+Explicit pointer overrides write the cache before the legacy pointer.
+Success means all writes for the requested operation completed.
+The updater returns database errors immediately as `eyre::Error` with write-stage context.
+It does not retry, roll back, or repair a partial publication on a later write.
+A failure between writes can leave the legacy and cached pointers out of sync;
+operators must repair that state before relying on it.
+Crash recovery between consecutive writes is outside this writer's scope.
+On proof completion, the network task logs a publication error and continues processing.
+Normal RPC submission retains its original one-time certificate replacement validation,
+including settlement jobs and L1 receipts.
+It does not revalidate the storage snapshot after L1/signature validation;
+concurrent same-height requests retain the preexisting replacement race.
+Admin force-push bypasses normal replacement validation but still refuses changes to settled certificates.
+The standalone header-insertion helper is available only to tests and fixtures.
+
+`getNetworkInfo` determines network existence from cached data and bounded cache pointer reads.
+Legacy pointers skipped as junk by backfill do not make a network known.
+A missing network type does not make a pending-only or proven-only network unknown,
+and a dangling cached pointer still establishes existence.
+Cache read failures propagate as errors.
+Unknown networks retain the existing JSON-RPC error conversion and gRPC `NotFound` mapping.
+
+[certificate-updater]: ../../../crates/agglayer-storage/src/stores/certificate_updater.rs
 
 A settled row's claim is complete by construction.
 A settled row without a claim row means that no imported bridge exit

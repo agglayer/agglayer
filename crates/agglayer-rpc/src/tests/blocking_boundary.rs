@@ -10,7 +10,9 @@ use std::{
 use agglayer_config::Config;
 use agglayer_contracts::{AggchainContract, L1RpcError, L1TransactionFetcher, RollupContract};
 use agglayer_storage::tests::mocks::{MockDebugStore, MockPendingStore, MockStateStore};
-use agglayer_types::{Address, Certificate, CertificateId, Digest, Height, NetworkId};
+use agglayer_types::{
+    Address, Certificate, CertificateId, CertificateStatus, Digest, Height, NetworkId,
+};
 use alloy::{
     network::Ethereum,
     providers::{mock::Asserter, ProviderBuilder, RootProvider},
@@ -50,7 +52,6 @@ async fn certificate_header_query_keeps_the_runtime_responsive() {
             storage_timed_out_from_query.store(timeout.timed_out(), Ordering::SeqCst);
             Ok(None)
         });
-
     let asserter = Asserter::new();
     let service = Arc::new(crate::AgglayerService::new(
         tokio::sync::mpsc::channel(1).0,
@@ -183,7 +184,6 @@ async fn dropped_send_certificate_still_notifies_orchestrator() {
     let network_id = NetworkId::new(1);
     let certificate = Certificate::new_for_test_v5(network_id, Height::ZERO);
     let certificate_id = certificate.hash();
-
     let mut config = Config::default();
     config
         .proof_signers
@@ -193,11 +193,18 @@ async fn dropped_send_certificate_still_notifies_orchestrator() {
     let mut pending_store = MockPendingStore::new();
     pending_store
         .expect_get_certificate()
-        .return_once(|_, _| Ok(None));
+        .once()
+        .returning(|_, _| Ok(None));
     let mut state_store = MockStateStore::new();
     state_store
         .expect_get_certificate_header_by_cursor()
-        .return_once(|_, _| Ok(None));
+        .once()
+        .returning(|_, _| Ok(None));
+    state_store
+        .expect_get_certificate_header()
+        .once()
+        .with(mockall::predicate::eq(certificate_id))
+        .return_once(|_| Ok(None));
 
     // Hold the first persistence write until the submission future has been
     // cancelled mid-persistence.
@@ -206,6 +213,9 @@ async fn dropped_send_certificate_still_notifies_orchestrator() {
     let release_for_storage = release.clone();
     pending_store
         .expect_insert_pending_certificate()
+        .withf(move |network, height, stored| {
+            *network == network_id && *height == Height::ZERO && stored.hash() == certificate_id
+        })
         .return_once(move |_, _, _| {
             persistence_started
                 .send(())
@@ -225,7 +235,14 @@ async fn dropped_send_certificate_still_notifies_orchestrator() {
             Ok(())
         });
     state_store
-        .expect_insert_certificate_header()
+        .expect_publish_pending_certificate()
+        .once()
+        .withf(move |certificate, status| {
+            certificate.network_id == network_id
+                && certificate.height == Height::ZERO
+                && certificate.hash() == certificate_id
+                && *status == CertificateStatus::Pending
+        })
         .return_once(|_, _| Ok(()));
     let mut debug_store = MockDebugStore::new();
     debug_store.expect_add_certificate().return_once(|_| Ok(()));

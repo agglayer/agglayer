@@ -39,6 +39,15 @@ pub enum CertificateSubmissionError {
     },
 }
 
+impl From<eyre::Error> for CertificateSubmissionError {
+    fn from(error: eyre::Error) -> Self {
+        agglayer_errors::match_err!(error,
+            type<StorageError>(error) => Self::Storage(error),
+            else(error) => Self::Storage(StorageError::Unexpected(format!("{error:?}"))),
+        )
+    }
+}
+
 /// Errors related to signature verification process.
 #[derive(thiserror::Error, Debug)]
 pub enum SignatureVerificationError {

@@ -8,7 +8,7 @@ use agglayer_storage::{
     },
     stores::{
         pending::PendingStore, state::StateStore, NetworkInfoReader as _,
-        PendingCertificateWriter as _, StateWriter as _,
+        PendingCertificateWriter as _,
     },
     tests::{init_state_db_before_network_info_backfill, TempDBDir},
 };
