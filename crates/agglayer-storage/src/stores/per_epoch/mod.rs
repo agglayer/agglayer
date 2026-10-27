@@ -518,8 +518,8 @@ where
 
         // Fetch the network current point for this epoch
         match (start_checkpoint, &end_checkpoint_entry) {
-            // If the network is not found in the end checkpoint, but is present in
-            // the start checkpoint, this is an invalid state.
+            // If the network is not found in the end checkpoint, but is present
+            // in the start checkpoint, this is an invalid state.
             (Some(_), Entry::Vacant(_)) => {
                 warn!(
                     "{}Network {} is present in the start checkpoint but not in the end checkpoint",
@@ -532,8 +532,8 @@ where
                     network_id
                 )));
             }
-            // If the network is not found in the end checkpoint and the height is 0,
-            // this is the first certificate for this network.
+            // If the network is not found in the end checkpoint and the height
+            // is 0, this is the first certificate for this network.
             (None, Entry::Vacant(_entry)) if height == Height::ZERO => {
                 debug!(
                     "{}First certificate for network {}",
@@ -543,13 +543,15 @@ where
                 // Adding the network to the end checkpoint.
                 end_checkpoint_entry_assignment = Some(Height::ZERO);
             }
-            // If the network is not found in the end checkpoint and the height is not 0,
-            // this is an invalid certificate candidate and the operation should fail.
+            // If the network is not found in the end checkpoint and the height
+            // is not 0, this is an invalid certificate candidate and the
+            // operation should fail.
             (None, Entry::Vacant(_)) => {
                 return Err(CertificateCandidateError::Invalid(network_id, height))?
             }
-            // If the network is found in the end checkpoint and the height is 0,
-            // this is an invalid certificate candidate and the operation should fail.
+            // If the network is found in the end checkpoint and the height is
+            // 0, this is an invalid certificate candidate and the operation
+            // should fail.
             (Some(_start_height), Entry::Occupied(ref current_height))
                 if height == Height::ZERO =>
             {
@@ -568,8 +570,9 @@ where
                 )
                 .into());
             }
-            // If the network is found in the end checkpoint and the height minus one is equal to
-            // the current network height. We can add the certificate.
+            // If the network is found in the end checkpoint and the height
+            // minus one is equal to the current network height. We can add the
+            // certificate.
             (_, Entry::Occupied(current_height)) if current_height.get().next() == height => {
                 debug!(
                     "{}Certificate candidate for network {} at height {} accepted",
@@ -727,8 +730,8 @@ where
             // Epoch DBs created before the proto migration and only reopened
             // read-only since were never migrated: read-only opens never create
             // column families, so the proto CF is absent here. Fall back to the
-            // still-present legacy CF, decoding through the same `Certificate::from`
-            // conversion the migration backfill uses.
+            // still-present legacy CF, decoding through the same
+            // `Certificate::from` conversion the migration backfill uses.
             Err(crate::storage::DBError::ColumnFamilyNotFound) => {
                 warn!(
                     "Proto certificate CF missing for epoch {}: reading from the legacy CF",
