@@ -8,14 +8,6 @@ ignore = [
     "RUSTSEC-2026-0098",
     # https://rustsec.org/advisories/RUSTSEC-2026-0099.html
     "RUSTSEC-2026-0099",
-    # https://rustsec.org/advisories/RUSTSEC-2026-0253.html
-    # `lru` unsoundness (panic-unsafe `pop()`), fixed only in lru >= 0.18.2.
-    # Unreachable upstream: sp1-prover (all releases) requires lru ^0.12 and
-    # alloy-provider 1.x caps at ^0.16; only alloy 2.x moves to ^0.18.2.
-    # Not exploitable here: all cache key types in our tree (u64, B256,
-    # SP1 shape/artifact structs) have no Drop impl, so the required
-    # panic-in-Drop cannot occur.
-    "RUSTSEC-2026-0253",
     # https://rustsec.org/advisories/RUSTSEC-2026-0258.html
     # h2 unbounded empty DATA frames (low-severity DoS), patched only in the
     # 0.4 line (>= 0.4.16, which we use). The remaining hit is h2 0.3, which
@@ -66,4 +58,22 @@ ignore = [
     # agglayer has no AWS signer or client, so that verifier never runs.
     # Drop this entry together with the h2 0.3 one.
     "RUSTSEC-2026-0382",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0387.html
+    # crypto-bigint timing leaks, fixed in 0.7.6. We use 0.5, through
+    # elliptic-curve 0.13 (alloy 1.x, sp1). Our only use on secret keys is
+    # k256 signing, and none of the fixed code runs there: 0.5 has no
+    # subtraction branch (it came in 0.7), and k256 does not call the other
+    # fixed functions. Drop this entry with alloy 2.x.
+    "RUSTSEC-2026-0387",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0391.html
+    # https://rustsec.org/advisories/RUSTSEC-2026-0398.html
+    # https://rustsec.org/advisories/RUSTSEC-2026-0403.html
+    # zstd bugs, fixed in zstd 0.14.3 / zstd-safe 8.2.0. tonic 0.13 and
+    # sp1-sdk still use zstd 0.13. They only call APIs that are not
+    # affected: tonic makes a new reader per message, sp1-sdk uses
+    # `encode_all`, and nothing enables the `seekable` feature. Drop these
+    # entries once tonic and sp1-sdk move to zstd 0.14.
+    "RUSTSEC-2026-0391",
+    "RUSTSEC-2026-0398",
+    "RUSTSEC-2026-0403",
 ]
