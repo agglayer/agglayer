@@ -568,8 +568,8 @@ impl From<RocksBackupEngineInfo> for BackupEngineInfo {
     fn from(info: RocksBackupEngineInfo) -> Self {
         Self {
             backup_id: info.backup_id,
-            // We use the default timestamp if the conversion fails as this timestamp is purely
-            // informative.
+            // We use the default timestamp if the conversion fails as this
+            // timestamp is purely informative.
             timestamp: chrono::DateTime::<chrono::Utc>::from_timestamp(info.timestamp, 0)
                 .unwrap_or_default(),
             size: info.size,

@@ -175,7 +175,8 @@ where
         let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
 
         let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
-            // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
+            // Use the default corresponding to the entry set by the event
+            // `InitL1InfoRootMap`
             (None, _) if matches!(certificate.aggchain_data, AggchainData::Generic { .. }) => {
                 return Err(CertificationError::MissingL1InfoTreeLeafCountForGenericAggchainData);
             }
