@@ -57,4 +57,13 @@ ignore = [
     # Drop both entries together with the h2 0.3 one.
     "RUSTSEC-2026-0346",
     "RUSTSEC-2026-0349",
+    # https://rustsec.org/advisories/RUSTSEC-2026-0382.html
+    # Certificate verification accepting the distrusted emSign intermediates,
+    # fixed in rustls-webpki >= 0.103.16, which we use. The remaining hit is
+    # rustls-webpki 0.101.7, which has no patched release and is pulled solely
+    # by the same legacy hyper 0.14 AWS connector as the h2 0.3 entry above.
+    # Not exploitable here: that connector only talks to AWS endpoints, and
+    # agglayer has no AWS signer or client, so that verifier never runs.
+    # Drop this entry together with the h2 0.3 one.
+    "RUSTSEC-2026-0382",
 ]
