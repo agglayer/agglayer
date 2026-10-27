@@ -1148,12 +1148,12 @@ impl<
             RetryCallbackError::Error(WaitForSettlementError::Transport(error)) => {
                 RetryCallbackError::Error(error)
             }
-            // Defensive only: `is_transient` marks these always-transient, so the
-            // retry helper never returns them terminally. Listing them explicitly
-            // keeps this match exhaustive, so adding a new variant is a compile
-            // error rather than a silent fallthrough. Degrade to a transport error
-            // instead of `unreachable!()` so a future drift cannot panic the
-            // settlement loop.
+            // Defensive only: `is_transient` marks these always-transient, so
+            // the retry helper never returns them terminally. Listing them
+            // explicitly keeps this match exhaustive, so adding a new variant
+            // is a compile error rather than a silent fallthrough. Degrade to a
+            // transport error instead of `unreachable!()` so a future drift
+            // cannot panic the settlement loop.
             RetryCallbackError::Error(
                 unexpected @ (WaitForSettlementError::NotSettledYet
                 | WaitForSettlementError::NotIncludedYet),
