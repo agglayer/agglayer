@@ -165,6 +165,9 @@ pub(crate) trait AdminAgglayer {
     /// # Guards
     ///
     /// - A [`CertificateStatus::Settled`] certificate cannot be edited.
+    /// - A certificate cannot be moved to [`CertificateStatus::Settled`]. Only
+    ///   settlement may set this status, after assigning the epoch and updating
+    ///   the settlement state.
     /// - The `from=` value of every operation must exactly match the current
     ///   state of the certificate header (with the `InError` relaxation
     ///   described above).
@@ -173,7 +176,7 @@ pub(crate) trait AdminAgglayer {
     ///
     /// | Error | When |
     /// |---|---|
-    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate; the retired `set-settlement-tx-hash` operation |
+    /// | `INVALID_PARAMS` | Malformed operation string; `from=` mismatch; attempting to edit a `Settled` certificate or set status to `Settled`; the retired `set-settlement-tx-hash` operation |
     /// | `ResourceNotFound` (`-10008`) | No certificate header found for `certificate_id` |
     /// | `INTERNAL_ERROR` | Storage read/write failure; orchestrator channel failure |
     #[method(name = "forceEditCertificate")]
@@ -824,7 +827,15 @@ where
             // Check that the current values match the "from" value
             for operation in operations.iter() {
                 match operation {
-                    Operation::SetStatus { from, to: _ } => {
+                    Operation::SetStatus { from, to } => {
+                        if *to == CertificateStatus::Settled {
+                            return Err(Error::InvalidArgument(
+                                "Cannot set certificate status to Settled: only settlement may \
+                                 mark a certificate as settled"
+                                    .to_string(),
+                            ));
+                        }
+
                         // Ensure that the original status is the one described
                         // in `from=`. However, for
                         // InError status, the `from=` does not contain the
