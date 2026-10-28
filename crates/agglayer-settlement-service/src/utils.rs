@@ -13,7 +13,7 @@ use alloy::{
 };
 use rand::Rng as _;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 #[derive(Debug)]
 pub(crate) enum RetryCallbackError<E> {
@@ -69,6 +69,7 @@ where
             }
         },
         needs_warning_log,
+        false,
     )
     .await
 }
@@ -79,7 +80,9 @@ where
 /// error can be returned. Use it for idempotent calls such as L1 reads, where
 /// no error, however unexpected, is a reason to give up.
 ///
-/// Logging and cancellation behave as in [`retry_callback_until_success`].
+/// Errors are logged as in [`retry_callback_until_success`], but at error
+/// level instead of warning level: an L1 read that keeps failing stalls the
+/// task, so it must stand out in the logs. Cancellation behaves the same.
 pub(crate) async fn retry_every_error_until_success<T, E, F, Fut, W>(
     policy: &TxRetryPolicy,
     cancellation_token: &CancellationToken,
@@ -98,18 +101,21 @@ where
         callback,
         Ok::<E, Infallible>,
         needs_warning_log,
+        true,
     )
     .await
 }
 
 /// Shared retry loop. `retryable` returns `Ok` with the error to retry it,
-/// or `Err` with the error to return.
+/// or `Err` with the error to return. `log_as_error` raises the log level of
+/// notable retries from warning to error.
 async fn retry_loop<T, E, P, F, Fut, R, W>(
     policy: &TxRetryPolicy,
     cancellation_token: &CancellationToken,
     mut callback: F,
     mut retryable: R,
     mut needs_warning_log: W,
+    log_as_error: bool,
 ) -> Result<T, RetryCallbackError<P>>
 where
     E: std::fmt::Debug,
@@ -137,7 +143,16 @@ where
 
                 retry_attempt = retry_attempt.saturating_add(1);
                 let sleep_duration = next_interval.saturating_add(random_jitter(policy.jitter));
-                if needs_warning_log(&error) || retry_attempt >= FORCE_WARNING_AFTER_RETRIES {
+                let notable =
+                    needs_warning_log(&error) || retry_attempt >= FORCE_WARNING_AFTER_RETRIES;
+                if notable && log_as_error {
+                    error!(
+                        ?error,
+                        retry_attempt,
+                        ?sleep_duration,
+                        "Error while executing retryable callback"
+                    );
+                } else if notable {
                     warn!(
                         ?error,
                         retry_attempt,
