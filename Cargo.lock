@@ -231,8 +231,8 @@ dependencies = [
 
 [[package]]
 name = "agglayer-elf-build"
-version = "0.18.0"
-source = "git+https://github.com/agglayer/interop?rev=3f6e12b945b2286369a3a07440d661d3f6581582#3f6e12b945b2286369a3a07440d661d3f6581582"
+version = "0.19.0"
+source = "git+https://github.com/agglayer/interop?rev=623e2379b807eb9856e0d629d4c3ce0f98a350b8#623e2379b807eb9856e0d629d4c3ce0f98a350b8"
 dependencies = [
  "cargo_metadata",
  "clap",
