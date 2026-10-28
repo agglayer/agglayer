@@ -57,7 +57,7 @@ A completed job normally has no live task, so `hasLiveTask: false` is expected t
 
 An L1 RPC error never ends a task: L1 reads retry every error until L1 answers.
 A pending job with `hasLiveTask: true` and repeated
-`Transient error while executing retryable callback` warnings is waiting on L1, not wedged.
+`Error while executing retryable callback` errors is waiting on L1, not wedged.
 Fix the L1 connection or configuration; the task resumes on its own.
 A queued `admin_reloadSettlementTask` takes effect only once L1 answers.
 To stop the task sooner, use `admin_abortSettlementTask`, which interrupts the wait.
