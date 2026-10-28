@@ -29,6 +29,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tower.workspace = true
 tracing.workspace = true
+url.workspace = true
 
 sp1-sdk.workspace = true
 sp1-prover.workspace = true
