@@ -1,4 +1,4 @@
-use std::{future::Future, time::Duration};
+use std::{convert::Infallible, future::Future, time::Duration};
 
 use agglayer_config::settlement_service::TxRetryPolicy;
 use agglayer_types::{ContractCallOutcome, ContractCallResult, Nonce, SettlementTxHash};
@@ -13,7 +13,7 @@ use alloy::{
 };
 use rand::Rng as _;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 #[derive(Debug)]
 pub(crate) enum RetryCallbackError<E> {
@@ -46,15 +46,82 @@ const FORCE_WARNING_AFTER_RETRIES: u64 = 64;
 pub(crate) async fn retry_callback_until_success<T, E, F, Fut, I, W>(
     policy: &TxRetryPolicy,
     cancellation_token: &CancellationToken,
-    mut callback: F,
+    callback: F,
     mut is_transient: I,
-    mut needs_warning_log: W,
+    needs_warning_log: W,
 ) -> Result<T, RetryCallbackError<E>>
 where
     E: std::fmt::Debug,
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, E>>,
     I: FnMut(&E) -> bool,
+    W: FnMut(&E) -> bool,
+{
+    retry_loop(
+        policy,
+        cancellation_token,
+        callback,
+        |error| {
+            if is_transient(&error) {
+                Ok(error)
+            } else {
+                Err(error)
+            }
+        },
+        needs_warning_log,
+        false,
+    )
+    .await
+}
+
+/// Calls `callback` until it succeeds, retrying every error.
+///
+/// Only cancellation ends the loop early, and the error type says so: no
+/// error can be returned. Use it for idempotent calls such as L1 reads, where
+/// no error, however unexpected, is a reason to give up.
+///
+/// Errors are logged as in [`retry_callback_until_success`], but at error
+/// level instead of warning level: an L1 read that keeps failing stalls the
+/// task, so it must stand out in the logs. Cancellation behaves the same.
+pub(crate) async fn retry_every_error_until_success<T, E, F, Fut, W>(
+    policy: &TxRetryPolicy,
+    cancellation_token: &CancellationToken,
+    callback: F,
+    needs_warning_log: W,
+) -> Result<T, RetryCallbackError<Infallible>>
+where
+    E: std::fmt::Debug,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+    W: FnMut(&E) -> bool,
+{
+    retry_loop(
+        policy,
+        cancellation_token,
+        callback,
+        Ok::<E, Infallible>,
+        needs_warning_log,
+        true,
+    )
+    .await
+}
+
+/// Shared retry loop. `retryable` returns `Ok` with the error to retry it,
+/// or `Err` with the error to return. `log_as_error` raises the log level of
+/// notable retries from warning to error.
+async fn retry_loop<T, E, P, F, Fut, R, W>(
+    policy: &TxRetryPolicy,
+    cancellation_token: &CancellationToken,
+    mut callback: F,
+    mut retryable: R,
+    mut needs_warning_log: W,
+    log_as_error: bool,
+) -> Result<T, RetryCallbackError<P>>
+where
+    E: std::fmt::Debug,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+    R: FnMut(E) -> Result<E, P>,
     W: FnMut(&E) -> bool,
 {
     let mut next_interval = policy.initial_interval;
@@ -72,13 +139,20 @@ where
         match outcome {
             Ok(value) => return Ok(value),
             Err(error) => {
-                if !is_transient(&error) {
-                    return Err(RetryCallbackError::Error(error));
-                }
+                let error = retryable(error).map_err(RetryCallbackError::Error)?;
 
                 retry_attempt = retry_attempt.saturating_add(1);
                 let sleep_duration = next_interval.saturating_add(random_jitter(policy.jitter));
-                if needs_warning_log(&error) || retry_attempt >= FORCE_WARNING_AFTER_RETRIES {
+                let notable =
+                    needs_warning_log(&error) || retry_attempt >= FORCE_WARNING_AFTER_RETRIES;
+                if notable && log_as_error {
+                    error!(
+                        ?error,
+                        retry_attempt,
+                        ?sleep_duration,
+                        "Error while executing retryable callback"
+                    );
+                } else if notable {
                     warn!(
                         ?error,
                         retry_attempt,
@@ -113,6 +187,11 @@ where
 
 /// Calls an alloy callback until it succeeds, retrying on transient transport
 /// and JSON-RPC errors.
+///
+/// Only for calls where an error can be a definite answer: the settlement
+/// broadcast and gas estimation. L1 reads use
+/// [`retry_every_error_until_success`] instead, since a read is always safe
+/// to repeat and an unexpected error must never end it.
 pub(crate) async fn retry_alloy_callback_until_success<T, F, Fut>(
     policy: &TxRetryPolicy,
     cancellation_token: &CancellationToken,
@@ -132,7 +211,9 @@ where
     .await
 }
 
-pub(crate) fn is_transient_alloy_error(error: &TransportError) -> bool {
+/// Allowlist of errors known to be transient. It is incomplete by nature, so
+/// it only drives [`retry_alloy_callback_until_success`].
+fn is_transient_alloy_error(error: &TransportError) -> bool {
     RateLimitRetryPolicy::default().should_retry(error) || is_request_timeout_error(error)
 }
 
@@ -204,8 +285,9 @@ pub(crate) async fn tx_hash_on_l1_for_nonce(
         // Tenderly Gateway (the L1 RPC of current deployments) answers
         // `-32001 "not found"` instead of the `null` other nodes return when
         // no transaction matches the sender and nonce. Only this exact
-        // dialect maps to `None`; any other error response keeps failing
-        // loudly rather than being silently read as "not included yet".
+        // dialect maps to `None`; any other error response is returned, so
+        // callers retry it with a warning rather than read it as "not
+        // included yet".
         Err(TransportError::ErrorResp(error))
             if error.code == -32001 && error.message == "not found" =>
         {

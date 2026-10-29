@@ -1000,7 +1000,6 @@ async fn panicked_task_deregisters_control_and_abort_reports_no_live_task() {
     let mut store = MockStateStore::new();
     let job_id = mk_job_id(28);
     let job = mk_job(28);
-    let attempt = mk_resolved_attempt(28, SettlementTxHash::new(Digest::from([29; 32])));
 
     store
         .expect_list_settlement_job_ids()
@@ -1025,11 +1024,35 @@ async fn panicked_task_deregisters_control_and_abort_reports_no_live_task() {
         .expect_list_settlement_attempts()
         .once()
         .withf(move |requested_job_id| requested_job_id == &job_id)
-        .return_once(move |_| Ok(vec![(0, attempt)]));
+        .return_once(|_| Ok(Vec::new()));
+    // With no attempt, the task assigns a fresh nonce. L1 answers, but the
+    // local nonce lookup fails, which is non-recoverable: the task panics.
+    // L1 errors cannot trigger this path, since reads retry every error.
+    store
+        .expect_max_settlement_nonce_for_wallet()
+        .once()
+        .return_once(|_| {
+            Err(StorageError::UnprocessedAction(
+                "settlement nonce lookup failed".to_owned(),
+            ))
+        });
 
-    // `mk_service` uses the dead endpoint at http://127.0.0.1:0. The task's
-    // first L1 query fails non-recoverably and deliberately panics.
-    let service = mk_service(Arc::new(store)).await;
+    let anvil = alloy::node_bindings::Anvil::new().spawn();
+    let provider = ProviderBuilder::new()
+        .wallet(EthereumWallet::from(PrivateKeySigner::from(
+            anvil.keys()[0].clone(),
+        )))
+        .connect_http(anvil.endpoint_url());
+    let service = SettlementService::start(
+        SettlementServiceConfig::default(),
+        Arc::new(SettlementTransactionConfig::default()),
+        Arc::new(provider),
+        Arc::new(store),
+        CancellationToken::new(),
+    )
+    .await
+    .expect("settlement service should start")
+    .0;
     wait_until(|| !service.has_live_task(job_id)).await;
 
     let error = service
