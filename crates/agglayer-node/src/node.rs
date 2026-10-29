@@ -181,10 +181,7 @@ impl Node {
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
             Epoch::BlockClock(cfg) => {
-                info!(
-                    "Starting BlockClock with provider: {}",
-                    config.l1.ws_node_url
-                );
+                info!("Starting BlockClock");
 
                 let clock = BlockClock::new_with_ws(
                     WsConnect::new(config.l1.ws_node_url.as_str()),
