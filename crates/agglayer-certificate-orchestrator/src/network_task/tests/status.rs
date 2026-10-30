@@ -21,6 +21,8 @@ use super::{mock_current_epoch, *};
 use crate::tests::{clock, mocks::MockCertifier};
 
 const SETTLEMENT_TX_HASH_TEST: SettlementTxHash = SettlementTxHash::new(Digest([1; 32]));
+/// The root the stored proof of a certificate commits to.
+const STORED_PROOF_ROOT: Digest = Digest([0x5e; 32]);
 
 #[rstest]
 #[test_log::test(tokio::test)]
@@ -52,6 +54,8 @@ async fn from_pending_to_settled() {
         .expect("Failed to insert certificate header");
 
     let pending_store = storage.pending.clone();
+    let proven_pp_root = Arc::new(Mutex::new(None));
+    let proven_pp_root_slot = proven_pp_root.clone();
     certifier
         .expect_certify()
         .times(1)
@@ -64,9 +68,9 @@ async fn from_pending_to_settled() {
             pending_store
                 .insert_generated_proof(
                     &certificate.hash(),
-                    &agglayer_test_suite::dummy_settlement_proof(),
+                    &agglayer_test_suite::settlement_proof_with_root(STORED_PROOF_ROOT),
                 )
-                .expect("insert dummy settlement proof");
+                .expect("insert settlement proof");
             let signer = agglayer_types::Address::new([0; 20]);
 
             let ctx_from_l1 = L1WitnessCtx {
@@ -94,6 +98,7 @@ async fn from_pending_to_settled() {
                 };
             let pp_root =
                 pp_commitment_values.compute_pp_root(PessimisticRootCommitmentVersion::V3);
+            *proven_pp_root_slot.lock().unwrap() = Some(pp_root);
 
             Ok(CertifierOutput {
                 certificate,
@@ -154,6 +159,16 @@ async fn from_pending_to_settled() {
         .unwrap();
 
     assert!(header.status == CertificateStatus::Settled);
+    // The fresh path publishes the stored proof's root, not the certifier's
+    // own output.
+    assert_ne!(*proven_pp_root.lock().unwrap(), Some(STORED_PROOF_ROOT));
+    assert_settlement_published(
+        &storage.state,
+        network_id,
+        &certificate,
+        &certificate,
+        Some(STORED_PROOF_ROOT),
+    );
 }
 
 #[rstest]
@@ -319,6 +334,13 @@ async fn from_candidate_to_settled() {
         .state
         .insert_certificate_header(&certificate, CertificateStatus::Candidate)
         .expect("Failed to insert certificate header");
+    storage
+        .pending
+        .insert_generated_proof(
+            &certificate_id,
+            &agglayer_test_suite::settlement_proof_with_root(STORED_PROOF_ROOT),
+        )
+        .expect("insert settlement proof");
 
     // Recovered Candidate certificate: it already has a persisted settlement
     // job id (set when it first moved to Candidate).
@@ -334,6 +356,8 @@ async fn from_candidate_to_settled() {
         .unwrap();
 
     certifier.expect_certify().never();
+    let recomputed_pp_root = Arc::new(Mutex::new(None));
+    let recomputed_pp_root_slot = recomputed_pp_root.clone();
     certifier
         .expect_witness_generation()
         .withf(move |c, _, _| c.hash() == certificate_id)
@@ -356,6 +380,7 @@ async fn from_candidate_to_settled() {
                 .unwrap();
 
             let (pv, _) = generate_pessimistic_proof(initial.clone().into(), &batch).unwrap();
+            *recomputed_pp_root_slot.lock().unwrap() = Some(pv.new_pessimistic_root);
             Ok((batch, initial, pv))
         });
 
@@ -401,6 +426,155 @@ async fn from_candidate_to_settled() {
         .unwrap();
 
     assert!(header.status == CertificateStatus::Settled);
+    // The recovery path publishes through the same settlement input as the
+    // fresh path.
+    let recomputed_pp_root = *recomputed_pp_root.lock().unwrap();
+    // The published root is the stored proof's, not the recomputed one.
+    assert_ne!(recomputed_pp_root, Some(STORED_PROOF_ROOT));
+    assert_settlement_published(
+        &storage.state,
+        network_id,
+        &certificate,
+        &certificate,
+        Some(STORED_PROOF_ROOT),
+    );
+}
+
+/// Two recovered `Candidate` certificates settle one after the other through
+/// the same publication path as fresh ones: the second, claim-free one ends
+/// up published over the state of both, with the first one's claim kept.
+#[rstest]
+#[test_log::test(tokio::test)]
+#[timeout(Duration::from_secs(30))]
+async fn recovered_candidates_settle_sequentially() {
+    let tmp = TempDBDir::new();
+    let storage = new_storage(&tmp.path);
+
+    let mut certifier = MockCertifier::new();
+    let clock_ref = clock();
+    let network_id = 1.into();
+    let (_sender, certificate_stream) = mpsc::channel(100);
+
+    let mut forest = Forest::default();
+    let signer = forest.get_signer();
+
+    let certificate = forest.apply_events(
+        &[(USDC, 10.try_into().unwrap())],
+        &[(USDC, 1.try_into().unwrap())],
+    );
+    let certificate2 = {
+        let mut c = forest.apply_events(&[], &[(USDC, 1.try_into().unwrap())]);
+        c.height = Height::new(1);
+        c
+    };
+    for (seed, c) in [(1, &certificate), (2, &certificate2)] {
+        storage
+            .pending
+            .insert_pending_certificate(network_id, c.height, c)
+            .expect("unable to insert certificate in pending");
+        storage
+            .state
+            .insert_certificate_header(c, CertificateStatus::Candidate)
+            .expect("Failed to insert certificate header");
+        storage
+            .pending
+            .insert_generated_proof(
+                &c.hash(),
+                &agglayer_test_suite::settlement_proof_with_root(STORED_PROOF_ROOT),
+            )
+            .expect("insert settlement proof");
+        storage
+            .state
+            .insert_settlement_job_with_certificate(
+                &job_id(seed),
+                &dummy_settlement_job(),
+                &c.hash(),
+            )
+            .unwrap();
+    }
+
+    certifier.expect_certify().never();
+    let recomputed_pp_root = Arc::new(Mutex::new(None));
+    let recomputed_pp_root_slot = recomputed_pp_root.clone();
+    certifier
+        .expect_witness_generation()
+        .times(2)
+        .returning(move |cert, state, _tx_hash| {
+            let initial = LocalNetworkState::from(state.clone());
+            let l1_info_root = cert.l1_info_root().unwrap().unwrap_or_default();
+
+            let batch = state
+                .apply_certificate(
+                    cert,
+                    L1WitnessCtx {
+                        l1_info_root,
+                        prev_pessimistic_root: PessimisticRootInput::Computed(
+                            PessimisticRootCommitmentVersion::V2,
+                        ),
+                        aggchain_data_ctx: CertificateAggchainDataCtx::LegacyEcdsa { signer },
+                    },
+                )
+                .unwrap();
+
+            let (pv, _) = generate_pessimistic_proof(initial.clone().into(), &batch).unwrap();
+            // The last recomputation is the second certificate's.
+            *recomputed_pp_root_slot.lock().unwrap() = Some(pv.new_pessimistic_root);
+            Ok((batch, initial, pv))
+        });
+
+    let mut settlement_service = MockSettlementServiceTrait::new();
+    settlement_service
+        .expect_wait_for_settlement()
+        .times(2)
+        .returning(|_| {
+            Ok(settlement_result(
+                SETTLEMENT_TX_HASH_TEST,
+                ContractCallOutcome::Success,
+            ))
+        });
+
+    let mut task = NetworkTask::new(
+        Arc::clone(&storage.pending),
+        Arc::clone(&storage.state),
+        Arc::new(certifier),
+        clock_ref.clone(),
+        network_id,
+        certificate_stream,
+        Arc::new(settlement_service),
+        mock_current_epoch(),
+    )
+    .await
+    .expect("Failed to create a new network task");
+
+    let mut next_expected_height = Height::ZERO;
+    let mut first_run = true;
+    task.make_progress(
+        &mut next_expected_height,
+        &mut first_run,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(next_expected_height, Height::new(2));
+    for c in [&certificate, &certificate2] {
+        let header = storage
+            .state
+            .get_certificate_header(&c.hash())
+            .unwrap()
+            .unwrap();
+        assert_eq!(header.status, CertificateStatus::Settled);
+    }
+    let recomputed_pp_root = *recomputed_pp_root.lock().unwrap();
+    // The published root is the stored proof's, not the recomputed one.
+    assert_ne!(recomputed_pp_root, Some(STORED_PROOF_ROOT));
+    assert_settlement_published(
+        &storage.state,
+        network_id,
+        &certificate2,
+        &certificate,
+        Some(STORED_PROOF_ROOT),
+    );
 }
 
 #[rstest]
@@ -432,6 +606,13 @@ async fn from_candidate_to_settle_via_pending() {
         .state
         .insert_certificate_header(&certificate, CertificateStatus::Candidate)
         .expect("Failed to insert certificate header");
+    storage
+        .pending
+        .insert_generated_proof(
+            &certificate_id,
+            &agglayer_test_suite::dummy_settlement_proof(),
+        )
+        .expect("insert dummy settlement proof");
 
     // Recovered Candidate certificate with a persisted settlement job id;
     // `process_from_candidate` recomputes state then waits for the result.

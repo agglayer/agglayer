@@ -8,8 +8,8 @@ use std::{
 use agglayer_tries::{node::Node, smt::Smt};
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateHeader, CertificateId, CertificateIndex,
-    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettledClaim,
-    SettlementJobId, SettlementTxHash,
+    CertificateStatus, EpochNumber, Height, LocalNetworkStateData, NetworkId, SettlementJobId,
+    SettlementTxHash,
 };
 use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
@@ -39,7 +39,9 @@ use crate::{
     network_metrics::NetworkStage,
     schema::ColumnSchema,
     storage::{DBMigrationErrorDetails, DB},
-    stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
+    stores::interfaces::writer::{
+        NetworkSettlement, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+    },
     types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
     NetworkMetrics,
 };
@@ -492,46 +494,52 @@ impl StateWriter for StateStore {
     fn set_latest_settled_certificate_for_network(
         &self,
         network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
-        epoch_number: &EpochNumber,
-        certificate_index: &CertificateIndex,
-        settled_claim: Option<SettledClaim>,
+        settlement: &NetworkSettlement,
     ) -> Result<(), Error> {
-        let prometheus_height = NetworkMetrics::prometheus_height(*height);
+        use crate::types::network_info::v0::{network_info_value::Value, NetworkType};
+        let prometheus_height = NetworkMetrics::prometheus_height(settlement.height);
         let mut metrics = self.network_metrics.mutation();
 
         let mut batch = WriteBatch::default();
 
-        let cursor =
-            SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index);
+        let cursor = SettledCertificate(
+            settlement.certificate_id,
+            settlement.height,
+            settlement.epoch_number,
+            settlement.certificate_index,
+        );
         self.db
             .multi_insert_batch::<LatestSettledCertificatePerNetworkColumn>(
                 [(network_id, &cursor)],
                 &mut batch,
             )?;
 
-        // `pp_root` is left unset: nothing writes it at settlement yet.
-        let header = self
-            .db
-            .get::<CertificateHeaderColumn>(certificate_id)?
-            .ok_or(Error::NoCertificateHeader)?;
-        let let_leaf_count = self.local_exit_tree_leaf_count(*network_id)?;
+        // The type follows settlement: the first settled certificate of a new
+        // type switches it.
+        let network_type = NetworkType::from(settlement.network_type.clone());
+        self.stage_network_info(
+            *network_id,
+            Value::NetworkType(network_type as i32),
+            &mut batch,
+        )?;
+
+        // Every field comes from this settlement, so a backfilled root is
+        // replaced rather than cleared or carried over.
         self.stage_network_info(
             *network_id,
             Self::settled_certificate_value(
-                *certificate_id,
-                header.new_local_exit_root,
-                None,
-                let_leaf_count.map(u64::from),
+                settlement.certificate_id,
+                settlement.new_local_exit_root,
+                Some(settlement.new_pp_root),
+                Some(settlement.settled_let_leaf_count),
             ),
             &mut batch,
         )?;
 
         // A certificate without an imported bridge exit leaves the stored claim
         // in place: it is still the latest one settled.
-        if let Some(claim) = settled_claim {
-            self.stage_network_info(*network_id, Self::settled_claim_value(&claim), &mut batch)?;
+        if let Some(claim) = &settlement.settled_claim {
+            self.stage_network_info(*network_id, Self::settled_claim_value(claim), &mut batch)?;
         }
 
         self.db.write_batch(batch)?;
@@ -634,17 +642,6 @@ impl StateWriter for StateStore {
 }
 
 impl StateStore {
-    /// The leaf count recorded for the network's local exit tree.
-    fn local_exit_tree_leaf_count(&self, network_id: NetworkId) -> Result<Option<u32>, Error> {
-        match self.db.get::<LocalExitTreePerNetworkColumn>(&LET::Key {
-            network_id: network_id.into(),
-            key_type: LET::KeyType::LeafCount,
-        })? {
-            None => Ok(None),
-            Some(LET::Value::LeafCount(leaf_count)) => Ok(Some(leaf_count)),
-            Some(_) => Err(Error::WrongValueType),
-        }
-    }
     /// Requests a best-effort backup of the state and pending databases.
     fn request_backup(&self) {
         if let Err(error) = self.backup_client.backup_state() {

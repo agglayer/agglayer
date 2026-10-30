@@ -1,6 +1,6 @@
 pub use agglayer_interop_types::{aggchain_proof, bincode, NetworkId};
 pub use agglayer_primitives::{self as primitives, Address, Digest, Signature, B256, U256, U512};
-use agglayer_tries::roots::LocalExitRoot;
+pub use agglayer_tries::roots::LocalExitRoot;
 pub use pessimistic_proof::proof::Proof;
 
 pub mod aggchain_data;

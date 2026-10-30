@@ -5,14 +5,15 @@ use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     stores::{
-        async_api::AsyncStateWriterExt, PendingCertificateReader, PendingCertificateWriter,
-        PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+        async_api::AsyncStateWriterExt, NetworkSettlement, PendingCertificateReader,
+        PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
     },
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
     CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError, EpochNumber,
-    ExecutionMode, Height, LocalNetworkStateData, NetworkId, SettledClaim,
+    ExecutionMode, Height, LocalExitRoot, LocalNetworkStateData, NetworkId, NetworkType,
+    SettledClaim,
 };
 use agglayer_utils::task::spawn_blocking_in_current_span;
 use arc_swap::ArcSwap;
@@ -47,11 +48,12 @@ pub enum NetworkTaskMessage {
     /// executed.
     ///
     /// Also encodes the new state of the network after the certificate has been
-    /// executed.
+    /// executed, and the pessimistic root its proof commits to.
     CertificateExecuted {
         height: Height,
         certificate_id: CertificateId,
         new_state: Box<LocalNetworkStateData>,
+        new_pp_root: Digest,
     },
 
     /// Notify the network task that a certificate has been successfully proven.
@@ -75,7 +77,22 @@ pub enum NetworkTaskMessage {
     },
 }
 
+/// What a certificate contributes to its own settlement, read once when its
+/// task starts so that settlement does not decode the certificate again.
+struct CertificateSettlementInput {
+    /// The bridge exit hashes, appended to the stored local exit tree.
+    bridge_exit_hashes: Vec<Digest>,
+    new_local_exit_root: LocalExitRoot,
+    network_type: NetworkType,
+    /// The last imported bridge exit, if any.
+    settled_claim: Option<SettledClaim>,
+}
+
 /// Network task that is responsible to certify the certificates for a network.
+///
+/// It is the sole runtime owner of its network's settled pointer, settled
+/// row, network type, and settled claim: fresh certification and recovery
+/// publish them through the same path, one certificate at a time.
 pub(crate) struct NetworkTask<
     CertifierClient,
     PendingStore,
@@ -281,7 +298,7 @@ where
         let task = self
             .initialize_certificate_task(height, sender, cancellation_token.clone())
             .await?;
-        let Some((task, bridge_exit_hashes, settled_claim, certificate_id)) = task else {
+        let Some((task, settlement_input, certificate_id)) = task else {
             debug!(
                 "No certificate found for network {} at height {}",
                 self.network_id, *next_expected_height
@@ -293,8 +310,8 @@ where
         tracing::Span::current().record("certificate_id", certificate_id.to_string());
         let task = tokio::spawn(task.process());
 
-        // The pending local network state that should be applied on receiving
-        // settlement response.
+        // The pending local network state, and the pessimistic root proven
+        // over it, that should be applied on receiving settlement response.
         let mut pending_state = None;
         loop {
             tokio::select! {
@@ -310,8 +327,8 @@ where
                         })?;
                         continue;
                     }
-                    Some(NetworkTaskMessage::CertificateExecuted { new_state, .. }) => {
-                        pending_state = Some(new_state);
+                    Some(NetworkTaskMessage::CertificateExecuted { new_state, new_pp_root, .. }) => {
+                        pending_state = Some((new_state, new_pp_root));
                         continue;
                     }
                     Some(NetworkTaskMessage::CertificateProven { height, certificate_id }) => {
@@ -331,7 +348,7 @@ where
                         next_expected_height.increment();
                         debug!("Certification process completed");
 
-                        let Some(new) = pending_state else {
+                        let Some((new, new_pp_root)) = pending_state else {
                             return Err(Error::InternalError(format!(
                                 "Missing pending state needed upon settlement, current state: {}",
                                 self.local_state.get_roots().display_to_hex()
@@ -345,8 +362,8 @@ where
                         let (new_state, epoch_number, certificate_index) = self
                             .assign_and_persist_settled_certificate(
                                 new,
-                                bridge_exit_hashes,
-                                settled_claim,
+                                new_pp_root,
+                                settlement_input,
                                 height,
                                 certificate_id,
                             )
@@ -380,8 +397,7 @@ where
     ) -> Result<
         Option<(
             CertificateTask<StateStore, PendingStore, CertifierClient, SettlementService>,
-            Vec<Digest>,
-            Option<SettledClaim>,
+            CertificateSettlementInput,
             CertificateId,
         )>,
         Error,
@@ -405,15 +421,19 @@ where
             };
 
             let certificate_id = certificate.hash();
-            let bridge_exit_hashes = certificate
-                .bridge_exits
-                .iter()
-                .map(|exit| exit.hash())
-                .collect::<Vec<Digest>>();
-            let settled_claim = certificate
-                .imported_bridge_exits
-                .last()
-                .map(SettledClaim::from);
+            let settlement_input = CertificateSettlementInput {
+                bridge_exit_hashes: certificate
+                    .bridge_exits
+                    .iter()
+                    .map(|exit| exit.hash())
+                    .collect(),
+                new_local_exit_root: certificate.new_local_exit_root,
+                network_type: NetworkType::from(&certificate.aggchain_data),
+                settled_claim: certificate
+                    .imported_bridge_exits
+                    .last()
+                    .map(SettledClaim::from),
+            };
             let task = CertificateTask::new(
                 certificate,
                 sender,
@@ -424,12 +444,7 @@ where
                 cancellation_token,
             )?;
 
-            Ok(Some((
-                task,
-                bridge_exit_hashes,
-                settled_claim,
-                certificate_id,
-            )))
+            Ok(Some((task, settlement_input, certificate_id)))
         })
         .await
         .expect("certificate task initialization panicked")
@@ -441,12 +456,15 @@ where
     /// The whole sequence runs in a single blocking task: once it starts,
     /// dropping the network task future can no longer stop the transition
     /// between the epoch assignment (which marks the header `Settled`) and
-    /// the local network state, RPC cursor, and settled-cursor writes.
+    /// the local network state, RPC cursor, and settlement-publication writes.
+    /// Only cancellation drops that future, and it shuts the orchestrator
+    /// down rather than replacing this task, so no other writer for this
+    /// network can start while the detached transition is still running.
     async fn assign_and_persist_settled_certificate(
         &self,
         new: Box<LocalNetworkStateData>,
-        bridge_exit_hashes: Vec<Digest>,
-        settled_claim: Option<SettledClaim>,
+        new_pp_root: Digest,
+        settlement_input: CertificateSettlementInput,
         height: Height,
         certificate_id: CertificateId,
     ) -> Result<(Box<LocalNetworkStateData>, EpochNumber, CertificateIndex), Error> {
@@ -491,7 +509,7 @@ where
                 state_store.write_local_network_state(
                     &network_id,
                     &new,
-                    bridge_exit_hashes.as_slice(),
+                    settlement_input.bridge_exit_hashes.as_slice(),
                 )?;
 
                 // Kept as the sole writer of `CertificatePerNetworkColumn`
@@ -502,13 +520,21 @@ where
                     &CertificateStatus::Settled,
                 )?;
 
+                // The leaf count is the one of the state just persisted, so
+                // the published aggregate belongs to this settlement.
                 state_store.set_latest_settled_certificate_for_network(
                     &network_id,
-                    &height,
-                    &certificate_id,
-                    &epoch_number,
-                    &certificate_index,
-                    settled_claim,
+                    &NetworkSettlement {
+                        certificate_id,
+                        height,
+                        epoch_number,
+                        certificate_index,
+                        new_pp_root,
+                        new_local_exit_root: settlement_input.new_local_exit_root,
+                        settled_let_leaf_count: u64::from(new.exit_tree.leaf_count()),
+                        network_type: settlement_input.network_type,
+                        settled_claim: settlement_input.settled_claim,
+                    },
                 )
             })();
             persistence.map_err(|e| Error::PersistenceError {
