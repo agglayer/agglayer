@@ -23,8 +23,8 @@ use crate::{
     schema::bincode_codec,
     storage::{DBMigrationError, DBMigrationErrorDetails, DBOpenError},
     stores::{
-        pending::PendingStore, NetworkInfoReader, PendingCertificateWriter, StateReader,
-        StateWriter,
+        pending::PendingStore, NetworkInfoReader, NetworkSettlement, PendingCertificateWriter,
+        StateReader, StateWriter,
     },
     tests::{init_state_db_before_network_info_backfill, mocks::MockEpochsStore, TempDBDir},
     types::{
@@ -537,6 +537,72 @@ fn optional_settled_aggregates_are_recovered_when_available() {
     assert_eq!(info.settled_pp_root, Some(digest(5)));
     // The stored exit tree is still the one the certificate settled.
     assert_eq!(info.settled_let_leaf_count, Some(2));
+}
+
+/// The first settlement after the migration replaces every backfilled
+/// aggregate with its own and advances the legacy cursor in the same batch.
+#[test_log::test]
+fn settlement_after_the_backfill_replaces_the_backfilled_row() {
+    let mut fixture = Fixture::new();
+    let settled = certificate(1, 0, &[10]);
+    let output = PessimisticProofOutput {
+        prev_local_exit_root: digest(1).into(),
+        prev_pessimistic_root: digest(2),
+        l1_info_root: digest(3),
+        origin_network: NetworkId::new(1),
+        aggchain_hash: digest(4),
+        new_local_exit_root: settled.new_local_exit_root,
+        new_pessimistic_root: digest(5),
+    };
+    let proof = proof_with_public_values(
+        &PessimisticProofOutput::bincode_codec()
+            .serialize(&output)
+            .unwrap(),
+    );
+    fixture.epoch_proofs.insert(epoch_of(&settled), proof);
+    fixture.settle(std::slice::from_ref(&settled));
+    fixture.migrate(1).unwrap();
+    let backfilled = fixture.info(1);
+    assert_eq!(backfilled.settled_pp_root, Some(digest(5)));
+    assert_eq!(backfilled.settled_claim, claim_of(&settled));
+    assert_eq!(backfilled.network_type, NetworkType::Ecdsa);
+
+    let next = multisig(certificate(1, 1, &[]));
+    let state = fixture.state();
+    state
+        .insert_certificate_header(&next, CertificateStatus::Settled)
+        .unwrap();
+    state
+        .set_latest_settled_certificate_for_network(
+            &next.network_id,
+            &NetworkSettlement {
+                certificate_id: next.hash(),
+                height: next.height,
+                epoch_number: EpochNumber::new(1),
+                certificate_index: CertificateIndex::ZERO,
+                new_pp_root: digest(6),
+                new_local_exit_root: next.new_local_exit_root,
+                settled_let_leaf_count: 3,
+                network_type: NetworkType::from(&next.aggchain_data),
+                settled_claim: None,
+            },
+        )
+        .unwrap();
+
+    let info = fixture.info(1);
+    assert_eq!(info.settled_certificate_id, Some(next.hash()));
+    assert_eq!(info.settled_pp_root, Some(digest(6)));
+    assert_eq!(info.settled_let_leaf_count, Some(3));
+    assert_eq!(info.network_type, NetworkType::MultisigOnly);
+    // A certificate without a claim keeps the backfilled one.
+    assert_eq!(info.settled_claim, claim_of(&settled));
+    assert_eq!(
+        state
+            .get_latest_settled_certificate_per_network(&next.network_id)
+            .unwrap()
+            .map(|(_, SettledCertificate(id, height, epoch, _))| (id, height, epoch)),
+        Some((next.hash(), next.height, EpochNumber::new(1)))
+    );
 }
 
 #[test_log::test]
