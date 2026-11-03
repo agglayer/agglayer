@@ -2339,11 +2339,23 @@ async fn l1_read_retries_errors_outside_the_transient_allowlist() {
 
 #[test]
 fn polling_signals_skip_the_retry_warning_log() {
-    assert!(!WaitForSettlementError::NotIncludedYet.needs_warning_log());
-    assert!(!WaitForSettlementError::NotSettledYet.needs_warning_log());
-    assert!(
+    assert_eq!(
+        WaitForSettlementError::NotIncludedYet.log_level(),
+        Level::DEBUG
+    );
+    assert_eq!(
+        WaitForSettlementError::NotSettledYet.log_level(),
+        Level::DEBUG
+    );
+    assert_eq!(
         WaitForSettlementError::Transport(TransportErrorKind::custom_str("connection reset"))
-            .needs_warning_log()
+            .log_level(),
+        Level::WARN
+    );
+    assert_eq!(
+        WaitForSettlementError::Transport(TransportErrorKind::http_error(401, String::new()))
+            .log_level(),
+        Level::ERROR
     );
 }
 

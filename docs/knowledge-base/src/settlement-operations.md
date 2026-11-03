@@ -56,8 +56,14 @@ It is wedged and needs `admin_reloadSettlementTask`.
 A completed job normally has no live task, so `hasLiveTask: false` is expected there.
 
 An L1 RPC error never ends a task: L1 reads retry every error until L1 answers.
-A pending job with `hasLiveTask: true` and repeated
-`Error while executing retryable callback` errors is waiting on L1, not wedged.
+A definite answer from the endpoint (HTTP 4xx other than 408 and 429, or JSON-RPC `-32600`,
+`-32601`, `-32602`) logs at error from the first retry, as
+`L1 endpoint gave a definite error answer, likely misconfigured`.
+It usually means a wrong URL, API key or method support, and affects every network on that endpoint.
+Other L1 errors log at warning, then at error as `Error while executing retryable callback`
+after 5 failures in a row.
+A pending job with `hasLiveTask: true` and repeated error logs of either kind is waiting on L1,
+not wedged.
 Fix the L1 connection or configuration; the task resumes on its own.
 A queued `admin_reloadSettlementTask` takes effect only once L1 answers.
 To stop the task sooner, use `admin_abortSettlementTask`, which interrupts the wait.

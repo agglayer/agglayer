@@ -39,7 +39,7 @@ use alloy::{
 use eyre::Context as _;
 use tokio::sync::{mpsc, OwnedMutexGuard};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, warn, Level};
 
 use crate::{utils::RetryCallbackError, wallet_nonce_locks::WalletNonceLocks};
 
@@ -108,6 +108,15 @@ impl BuildAttemptError {
                 alloy::signers::Error::Other(_)
             ))
         )
+    }
+
+    /// How the retry loop logs this error: L1 RPC errors by
+    /// [`crate::utils::transport_log_level`], anything else as an anomaly.
+    fn log_level(&self) -> Level {
+        match self {
+            Self::Transport(error) => crate::utils::transport_log_level(error),
+            Self::NonceAssignment(_) | Self::Build(_) => Level::WARN,
+        }
     }
 }
 
@@ -194,21 +203,18 @@ fn classify_attempt_error(error: &TransportError) -> SettlementAttemptErrorKind 
 enum WaitForSettlementError {
     NotSettledYet,
     NotIncludedYet,
-    Transport(
-        #[expect(dead_code, reason = "read only through Debug, in retry logs")] TransportError,
-    ),
+    Transport(TransportError),
 }
 
 impl WaitForSettlementError {
-    /// Whether the retry loop should log this error at warning
-    /// level. The "not yet" variants are the expected steady state while
-    /// polling for inclusion or settlement of a submitted transaction, so they
-    /// are only worth debug logs; transport errors are anomalies worth
-    /// surfacing.
-    fn needs_warning_log(&self) -> bool {
+    /// How the retry loop logs this error. The "not yet" variants are the
+    /// expected steady state while polling for inclusion or settlement of a
+    /// submitted transaction, so they are only worth debug logs; transport
+    /// errors are logged by [`crate::utils::transport_log_level`].
+    fn log_level(&self) -> Level {
         match self {
-            Self::NotSettledYet | Self::NotIncludedYet => false,
-            Self::Transport(_) => true,
+            Self::NotSettledYet | Self::NotIncludedYet => Level::DEBUG,
+            Self::Transport(error) => crate::utils::transport_log_level(error),
         }
     }
 }
@@ -1062,7 +1068,7 @@ impl<
                 }
                 Err(WaitForSettlementError::NotIncludedYet)
             },
-            WaitForSettlementError::needs_warning_log,
+            WaitForSettlementError::log_level,
         )
         .await;
     }
@@ -1083,7 +1089,7 @@ impl<
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce),
-            |_| true,
+            crate::utils::transport_log_level,
         )
         .await
     }
@@ -1139,7 +1145,7 @@ impl<
             &self.tx_config.retry_on_not_included_on_l1,
             &self.control.cancellation_token,
             check,
-            WaitForSettlementError::needs_warning_log,
+            WaitForSettlementError::log_level,
         )
         .await
     }
@@ -1535,7 +1541,7 @@ impl<
                 Ok(Some((attempt_number, attempt_kind, tx)))
             },
             |error| retry_policy.should_retry(error),
-            |_| true,
+            BuildAttemptError::log_level,
         )
         .await
     }
@@ -1582,7 +1588,7 @@ impl<
                 Ok((wallet, nonce, attempt_number, tx))
             },
             |error| retry_policy.should_retry(error),
-            |_| true,
+            BuildAttemptError::log_level,
         )
         .await
     }

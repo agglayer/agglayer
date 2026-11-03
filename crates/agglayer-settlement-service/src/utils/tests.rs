@@ -86,7 +86,7 @@ async fn retry_callback_until_success_returns_permanent_error_immediately() {
             }
         },
         |_| false,
-        |_| true,
+        |_| Level::WARN,
     )
     .await
     .unwrap_err();
@@ -116,7 +116,7 @@ async fn retry_callback_until_success_retries_transient_error_until_ok() {
             }
         },
         |_| true,
-        |_| true,
+        |_| Level::WARN,
     )
     .await
     .unwrap();
@@ -128,6 +128,7 @@ async fn retry_callback_until_success_retries_transient_error_until_ok() {
 /// Counts emitted tracing events by level, to assert which level the retry
 /// helper picks for a transient error.
 struct LevelCountingSubscriber {
+    error_events: Arc<AtomicUsize>,
     warn_events: Arc<AtomicUsize>,
     debug_events: Arc<AtomicUsize>,
 }
@@ -147,6 +148,7 @@ impl tracing::Subscriber for LevelCountingSubscriber {
 
     fn event(&self, event: &tracing::Event<'_>) {
         match *event.metadata().level() {
+            tracing::Level::ERROR => self.error_events.fetch_add(1, Ordering::SeqCst),
             tracing::Level::WARN => self.warn_events.fetch_add(1, Ordering::SeqCst),
             tracing::Level::DEBUG => self.debug_events.fetch_add(1, Ordering::SeqCst),
             _ => 0,
@@ -158,19 +160,22 @@ impl tracing::Subscriber for LevelCountingSubscriber {
     fn exit(&self, _span: &tracing::span::Id) {}
 }
 
-/// Runs `retry_callback_until_success` through `failures` transient
-/// failures with the given `needs_warning_log`, returning `(warn_events,
-/// debug_events)`.
-async fn count_retry_log_levels(
-    failures: usize,
-    needs_warning_log: fn(&TransientTestError) -> bool,
-) -> (usize, usize) {
+/// Error whose retry log level is set by the test.
+#[derive(Debug)]
+struct LoggedTestError(Level);
+
+/// Runs `retry_callback_until_success` through one failure per entry of
+/// `failures`, each logged as that entry says, returning `(error_events,
+/// warn_events, debug_events)`.
+async fn count_retry_log_levels(failures: &[Level]) -> (usize, usize, usize) {
+    let error_events = Arc::new(AtomicUsize::new(0));
     let warn_events = Arc::new(AtomicUsize::new(0));
     let debug_events = Arc::new(AtomicUsize::new(0));
     // Thread-local default: `#[tokio::test]` runs on a current-thread
     // runtime, so every retry log lands on this subscriber and parallel
     // tests cannot pollute the counters.
     let _guard = tracing::subscriber::set_default(LevelCountingSubscriber {
+        error_events: error_events.clone(),
         warn_events: warn_events.clone(),
         debug_events: debug_events.clone(),
     });
@@ -185,40 +190,102 @@ async fn count_retry_log_levels(
         || {
             let attempts = attempts.clone();
             async move {
-                if attempts.fetch_add(1, Ordering::SeqCst) < failures {
-                    Err::<(), _>(TransientTestError)
-                } else {
-                    Ok(())
+                match failures.get(attempts.fetch_add(1, Ordering::SeqCst)) {
+                    Some(&level) => Err(LoggedTestError(level)),
+                    None => Ok(()),
                 }
             }
         },
         |_| true,
-        needs_warning_log,
+        |error: &LoggedTestError| error.0,
     )
     .await
     .unwrap();
 
     (
+        error_events.load(Ordering::SeqCst),
         warn_events.load(Ordering::SeqCst),
         debug_events.load(Ordering::SeqCst),
     )
 }
 
 #[tokio::test]
-async fn retry_callback_until_success_logs_retries_at_warning_by_default() {
-    assert_eq!(count_retry_log_levels(2, |_| true).await, (2, 0));
+async fn retry_callback_until_success_logs_definite_answers_at_error_from_first_retry() {
+    assert_eq!(count_retry_log_levels(&[Level::ERROR]).await, (1, 0, 0));
 }
 
 #[tokio::test]
-async fn retry_callback_until_success_logs_quiet_retries_at_debug() {
-    assert_eq!(count_retry_log_levels(2, |_| false).await, (0, 2));
+async fn retry_callback_until_success_escalates_anomalies_to_error_after_streak() {
+    // Retries 1..=4 stay at warning, 5 and 6 are escalated to errors.
+    assert_eq!(count_retry_log_levels(&[Level::WARN; 6]).await, (2, 4, 0));
 }
 
 #[tokio::test]
-async fn retry_callback_until_success_escalates_quiet_retries_to_warning_after_threshold() {
+async fn retry_callback_until_success_resets_anomaly_streak_on_expected_error() {
+    let mut failures = vec![Level::WARN; 4];
+    failures.push(Level::DEBUG);
+    failures.extend([Level::WARN; 4]);
+    assert_eq!(count_retry_log_levels(&failures).await, (0, 8, 1));
+}
+
+#[tokio::test]
+async fn retry_callback_until_success_logs_expected_retries_at_debug() {
+    assert_eq!(count_retry_log_levels(&[Level::DEBUG; 2]).await, (0, 0, 2));
+}
+
+#[tokio::test]
+async fn retry_callback_until_success_escalates_expected_retries_to_warning_after_threshold() {
     // 65 consecutive failures: retries 1..=63 stay at debug, 64 and 65 are
     // escalated to warnings.
-    assert_eq!(count_retry_log_levels(65, |_| false).await, (2, 63));
+    assert_eq!(
+        count_retry_log_levels(&[Level::DEBUG; 65]).await,
+        (0, 2, 63)
+    );
+}
+
+#[test]
+fn definite_answer_covers_endpoint_wide_http_and_json_rpc_errors() {
+    for status in [400, 401, 403, 404, 405, 413] {
+        assert!(
+            is_definite_answer(&TransportErrorKind::http_error(status, String::new())),
+            "HTTP {status}"
+        );
+    }
+    for status in [408, 429, 500, 502, 503, 504] {
+        assert!(
+            !is_definite_answer(&TransportErrorKind::http_error(status, String::new())),
+            "HTTP {status}"
+        );
+    }
+
+    for (code, definite) in [
+        (-32600, true),
+        (-32601, true),
+        (-32602, true),
+        (-32000, false),
+        (-32005, false),
+        (-32603, false),
+        (3, false),
+    ] {
+        let error = RpcError::ErrorResp(alloy::rpc::json_rpc::ErrorPayload {
+            code,
+            message: Cow::Borrowed("error"),
+            data: None,
+        });
+        assert_eq!(is_definite_answer(&error), definite, "JSON-RPC {code}");
+    }
+
+    assert!(!is_definite_answer(&TransportErrorKind::custom_str(
+        "connection reset"
+    )));
+    assert_eq!(
+        transport_log_level(&TransportErrorKind::http_error(401, String::new())),
+        Level::ERROR
+    );
+    assert_eq!(
+        transport_log_level(&TransportErrorKind::http_error(429, String::new())),
+        Level::WARN
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -247,7 +314,7 @@ async fn retry_callback_until_success_stops_when_cancelled() {
                     }
                 },
                 |_| true,
-                |_| true,
+                |_| Level::WARN,
             )
             .await
         }
@@ -289,7 +356,7 @@ async fn retry_callback_until_success_returns_cancelled_before_calling_callback(
             }
         },
         |_| true,
-        |_| true,
+        |_| Level::WARN,
     )
     .await;
 
@@ -318,7 +385,7 @@ async fn retry_callback_until_success_stops_when_cancelled_during_callback() {
                 &cancellation_token,
                 std::future::pending::<Result<(), TransientTestError>>,
                 |_| true,
-                |_| true,
+                |_| Level::WARN,
             )
             .await
         }
@@ -368,7 +435,7 @@ async fn retry_callback_until_success_applies_backoff_until_max_interval() {
                     }
                 },
                 |_| true,
-                |_| true,
+                |_| Level::WARN,
             )
             .await
         }
@@ -898,7 +965,7 @@ async fn retry_every_error_until_success_ends_only_on_cancellation() {
                 Err::<(), _>(PermanentTestError)
             }
         },
-        |_| true,
+        |_| Level::WARN,
     )
     .await;
 
