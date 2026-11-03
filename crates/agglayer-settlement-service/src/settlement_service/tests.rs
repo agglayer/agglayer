@@ -1038,11 +1038,7 @@ async fn panicked_task_deregisters_control_and_abort_reports_no_live_task() {
         });
 
     let anvil = alloy::node_bindings::Anvil::new().spawn();
-    let provider = ProviderBuilder::new()
-        .wallet(EthereumWallet::from(PrivateKeySigner::from(
-            anvil.keys()[0].clone(),
-        )))
-        .connect_http(anvil.endpoint_url());
+    let provider = crate::utils::build_provider(&anvil);
     let service = SettlementService::start(
         SettlementServiceConfig::default(),
         Arc::new(SettlementTransactionConfig::default()),
