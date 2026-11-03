@@ -587,6 +587,21 @@ impl<
             };
         }
 
+        // For the L1 reads, which end only on cancellation. Matching on the
+        // uninhabited error turns a read that can fail again into a compile
+        // error instead of a silent cancellation.
+        macro_rules! cancellable {
+            ($result:expr) => {
+                match $result {
+                    Ok(value) => value,
+                    Err(RetryCallbackError::Cancelled) => {
+                        return SettlementTaskRunResult::Cancelled;
+                    }
+                    Err(RetryCallbackError::Error(never)) => match never {},
+                }
+            };
+        }
+
         'start: loop {
             if let Some(run_result) = self.try_handle_control_action() {
                 return run_result;
@@ -611,9 +626,7 @@ impl<
                     return run_result;
                 }
 
-                let Ok(tx_hash_on_l1) = self.tx_hash_on_l1_for_nonce(wallet, nonce).await else {
-                    return SettlementTaskRunResult::Cancelled;
-                };
+                let tx_hash_on_l1 = cancellable!(self.tx_hash_on_l1_for_nonce(wallet, nonce).await);
                 if let Some(tx_hash) = tx_hash_on_l1 {
                     // If the nonce is used on L1, we won't need to submit any
                     // new tx related to it.
@@ -623,10 +636,8 @@ impl<
                         nonces_used_externally.insert((wallet, nonce), tx_hash);
                         continue 'nonces;
                     };
-                    let Ok(tx_result) = self.current_result_on_l1_for(wallet, nonce, tx_hash).await
-                    else {
-                        return SettlementTaskRunResult::Cancelled;
-                    };
+                    let tx_result =
+                        cancellable!(self.current_result_on_l1_for(wallet, nonce, tx_hash).await);
                     let Some(tx_result) = tx_result else {
                         continue 'start; // reorg
                     };
@@ -634,9 +645,8 @@ impl<
                         reverts.insert((wallet, nonce), (attempt_number, tx_hash, tx_result));
                         continue 'nonces;
                     }
-                    let Ok(settlement_result) = self.wait_for_settlement_of(tx_hash).await else {
-                        return SettlementTaskRunResult::Cancelled;
-                    };
+                    let settlement_result =
+                        cancellable!(self.wait_for_settlement_of(tx_hash).await);
                     let Some(settled_result) = settlement_result else {
                         continue 'start; // reorg
                     };
@@ -668,11 +678,9 @@ impl<
                         // need to wait for the previous
                         // nonce to be included before processing it further.
                         if let Some(previous_nonce) = nonce.previous() {
-                            let Ok(previous_nonce_on_l1) =
+                            let previous_nonce_on_l1 = cancellable!(
                                 self.tx_hash_on_l1_for_nonce(wallet, previous_nonce).await
-                            else {
-                                return SettlementTaskRunResult::Cancelled;
-                            };
+                            );
                             if previous_nonce_on_l1.is_none() {
                                 continue 'nonces; // wait for previous nonce to
                                                   // be included
@@ -725,10 +733,8 @@ impl<
                                // just before.
                 for (wallet, nonce) in self.all_used_nonces() {
                     if let Some(tx_hash) = nonces_used_externally.remove(&(wallet, nonce)) {
-                        let Ok(settlement_result) = self.wait_for_settlement_of(tx_hash).await
-                        else {
-                            return SettlementTaskRunResult::Cancelled;
-                        };
+                        let settlement_result =
+                            cancellable!(self.wait_for_settlement_of(tx_hash).await);
                         if settlement_result.is_none() {
                             continue 'start; // reorg
                         }
@@ -737,10 +743,8 @@ impl<
                     } else if let Some((attempt_number, tx_hash, result)) =
                         reverts.remove(&(wallet, nonce))
                     {
-                        let Ok(settlement_result) = self.wait_for_settlement_of(tx_hash).await
-                        else {
-                            return SettlementTaskRunResult::Cancelled;
-                        };
+                        let settlement_result =
+                            cancellable!(self.wait_for_settlement_of(tx_hash).await);
                         let Some(settled_result) = settlement_result else {
                             continue 'start; // reorg
                         };
