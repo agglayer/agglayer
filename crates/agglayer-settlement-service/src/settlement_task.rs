@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    convert::Infallible,
     future::IntoFuture as _,
     sync::{Arc, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -33,12 +34,12 @@ use alloy::{
     primitives::{Address, TxHash},
     providers::{Provider, WalletProvider},
     rpc::types::TransactionRequest,
-    transports::{TransportError, TransportErrorKind},
+    transports::TransportError,
 };
 use eyre::Context as _;
 use tokio::sync::{mpsc, OwnedMutexGuard};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, warn, Level};
 
 use crate::{utils::RetryCallbackError, wallet_nonce_locks::WalletNonceLocks};
 
@@ -108,11 +109,21 @@ impl BuildAttemptError {
             ))
         )
     }
+
+    /// How the retry loop logs this error: L1 RPC errors by
+    /// [`crate::utils::transport_log_level`], anything else as an anomaly.
+    fn log_level(&self) -> Level {
+        match self {
+            Self::Transport(error) => crate::utils::transport_log_level(error),
+            Self::NonceAssignment(_) | Self::Build(_) => Level::WARN,
+        }
+    }
 }
 
 /// Retry policy for building a settlement attempt.
 ///
-/// Transport (L1 RPC) failures are retried for as long as they look transient.
+/// Transport (L1 RPC) failures are always retried: the build only reads from
+/// L1, so no RPC error, however unexpected, is a reason to give up.
 /// Opaque signer-backend failures are retried a bounded number of times — long
 /// enough to ride out a transient remote-signer (e.g. GCP KMS) blip, but not
 /// forever, so a permanent signer misconfiguration eventually surfaces through
@@ -131,7 +142,7 @@ impl BuildRetryPolicy {
 
     fn should_retry(&mut self, error: &BuildAttemptError) -> bool {
         match error {
-            BuildAttemptError::Transport(error) => crate::utils::is_transient_alloy_error(error),
+            BuildAttemptError::Transport(_) => true,
             error if error.is_signer_backend() => {
                 self.signer_failures += 1;
                 self.signer_failures <= Self::MAX_SIGNER_BUILD_RETRIES
@@ -185,8 +196,9 @@ fn classify_attempt_error(error: &TransportError) -> SettlementAttemptErrorKind 
     }
 }
 
-/// Error returned by the L1 polling callbacks; the "not yet" variants are
-/// transient and tell the retry loop to keep polling.
+/// Error returned by the L1 polling callbacks. Every variant is retried: the
+/// "not yet" variants tell the retry loop to keep polling, and a transport
+/// error is retried because the callbacks only read from L1.
 #[derive(Debug)]
 enum WaitForSettlementError {
     NotSettledYet,
@@ -195,22 +207,14 @@ enum WaitForSettlementError {
 }
 
 impl WaitForSettlementError {
-    fn is_transient(&self) -> bool {
+    /// How the retry loop logs this error. The "not yet" variants are the
+    /// expected steady state while polling for inclusion or settlement of a
+    /// submitted transaction, so they are only worth debug logs; transport
+    /// errors are logged by [`crate::utils::transport_log_level`].
+    fn log_level(&self) -> Level {
         match self {
-            Self::NotSettledYet | Self::NotIncludedYet => true,
-            Self::Transport(error) => crate::utils::is_transient_alloy_error(error),
-        }
-    }
-
-    /// Whether the retry loop should log this transient error at warning
-    /// level. The "not yet" variants are the expected steady state while
-    /// polling for inclusion or settlement of a submitted transaction, so they
-    /// are only worth debug logs; transport errors are anomalies worth
-    /// surfacing.
-    fn needs_warning_log(&self) -> bool {
-        match self {
-            Self::NotSettledYet | Self::NotIncludedYet => false,
-            Self::Transport(_) => true,
+            Self::NotSettledYet | Self::NotIncludedYet => Level::DEBUG,
+            Self::Transport(error) => crate::utils::transport_log_level(error),
         }
     }
 }
@@ -558,6 +562,9 @@ impl<
     pub async fn run(&mut self) -> SettlementTaskRunResult {
         let settlement_task_id = self.id;
 
+        // Only for the attempt builds, whose signer and storage errors can be
+        // non-recoverable. L1 reads never fail, only get cancelled: they
+        // retry every error, so no L1 RPC error can reach this panic.
         macro_rules! retry {
             ($result:expr, $($format_args:tt)*) => {
                 match $result {
@@ -576,6 +583,21 @@ impl<
                             })
                         )
                     }
+                }
+            };
+        }
+
+        // For the L1 reads, which end only on cancellation. Matching on the
+        // uninhabited error turns a read that can fail again into a compile
+        // error instead of a silent cancellation.
+        macro_rules! cancellable {
+            ($result:expr) => {
+                match $result {
+                    Ok(value) => value,
+                    Err(RetryCallbackError::Cancelled) => {
+                        return SettlementTaskRunResult::Cancelled;
+                    }
+                    Err(RetryCallbackError::Error(never)) => match never {},
                 }
             };
         }
@@ -604,10 +626,7 @@ impl<
                     return run_result;
                 }
 
-                let tx_hash_on_l1 = retry!(
-                    self.tx_hash_on_l1_for_nonce(wallet, nonce).await,
-                    "querying nonce inclusion on L1 for wallet {wallet} / nonce {nonce}",
-                );
+                let tx_hash_on_l1 = cancellable!(self.tx_hash_on_l1_for_nonce(wallet, nonce).await);
                 if let Some(tx_hash) = tx_hash_on_l1 {
                     // If the nonce is used on L1, we won't need to submit any
                     // new tx related to it.
@@ -617,10 +636,8 @@ impl<
                         nonces_used_externally.insert((wallet, nonce), tx_hash);
                         continue 'nonces;
                     };
-                    let tx_result = retry!(
-                        self.current_result_on_l1_for(wallet, nonce, tx_hash).await,
-                        "querying current result on L1 for tx {tx_hash}",
-                    );
+                    let tx_result =
+                        cancellable!(self.current_result_on_l1_for(wallet, nonce, tx_hash).await);
                     let Some(tx_result) = tx_result else {
                         continue 'start; // reorg
                     };
@@ -628,10 +645,8 @@ impl<
                         reverts.insert((wallet, nonce), (attempt_number, tx_hash, tx_result));
                         continue 'nonces;
                     }
-                    let settlement_result = retry!(
-                        self.wait_for_settlement_of(tx_hash).await,
-                        "waiting for settlement of tx {tx_hash}",
-                    );
+                    let settlement_result =
+                        cancellable!(self.wait_for_settlement_of(tx_hash).await);
                     let Some(settled_result) = settlement_result else {
                         continue 'start; // reorg
                     };
@@ -663,10 +678,8 @@ impl<
                         // need to wait for the previous
                         // nonce to be included before processing it further.
                         if let Some(previous_nonce) = nonce.previous() {
-                            let previous_nonce_on_l1 = retry!(
-                                self.tx_hash_on_l1_for_nonce(wallet, previous_nonce).await,
-                                "querying previous nonce inclusion on L1 for wallet {wallet} / \
-                                 nonce {previous_nonce}",
+                            let previous_nonce_on_l1 = cancellable!(
+                                self.tx_hash_on_l1_for_nonce(wallet, previous_nonce).await
                             );
                             if previous_nonce_on_l1.is_none() {
                                 continue 'nonces; // wait for previous nonce to
@@ -720,10 +733,8 @@ impl<
                                // just before.
                 for (wallet, nonce) in self.all_used_nonces() {
                     if let Some(tx_hash) = nonces_used_externally.remove(&(wallet, nonce)) {
-                        let settlement_result = retry!(
-                            self.wait_for_settlement_of(tx_hash).await,
-                            "waiting for settlement of externally-used tx {tx_hash}",
-                        );
+                        let settlement_result =
+                            cancellable!(self.wait_for_settlement_of(tx_hash).await);
                         if settlement_result.is_none() {
                             continue 'start; // reorg
                         }
@@ -732,10 +743,8 @@ impl<
                     } else if let Some((attempt_number, tx_hash, result)) =
                         reverts.remove(&(wallet, nonce))
                     {
-                        let settlement_result = retry!(
-                            self.wait_for_settlement_of(tx_hash).await,
-                            "waiting for settlement of reverting tx {tx_hash}",
-                        );
+                        let settlement_result =
+                            cancellable!(self.wait_for_settlement_of(tx_hash).await);
                         let Some(settled_result) = settlement_result else {
                             continue 'start; // reorg
                         };
@@ -788,7 +797,9 @@ impl<
                 // https://github.com/agglayer/agglayer/issues/1597.
                 let locked_wallet = self.provider.default_signer_address();
                 // Race the lock wait against cancellation: the holder may be
-                // stuck in transient L1 retries, and an aborted task must not
+                // stuck in L1 retries, which never give up on an RPC error
+                // (even one that keeps failing, e.g. a node without
+                // `eth_feeHistory`), and an aborted task must not
                 // stay parked in the lock queue until the holder releases.
                 let nonce_guard = tokio::select! {
                     biased;
@@ -1045,10 +1056,9 @@ impl<
     /// inclusion rather than returning instantly on an already-included
     /// nonce.
     async fn wait_for_any_nonce_on_l1(&self, pending: &BTreeSet<(Address, Nonce)>) {
-        // Result discarded: the caller wraps this in a timeout and re-queries
-        // under `retry!` in `'start`, which escalates non-recoverable
-        // errors there.
-        let _ = crate::utils::retry_callback_until_success(
+        // Result discarded: the only possible error is cancellation, which the
+        // caller observes at its next control check in `'start`.
+        let _ = crate::utils::retry_every_error_until_success(
             &self.tx_config.retry_on_not_included_on_l1,
             &self.control.cancellation_token,
             || async move {
@@ -1062,8 +1072,7 @@ impl<
                 }
                 Err(WaitForSettlementError::NotIncludedYet)
             },
-            WaitForSettlementError::is_transient,
-            WaitForSettlementError::needs_warning_log,
+            WaitForSettlementError::log_level,
         )
         .await;
     }
@@ -1072,7 +1081,7 @@ impl<
         &self,
         wallet: Address,
         nonce: Nonce,
-    ) -> Result<Option<SettlementTxHash>, RetryCallbackError<TransportError>> {
+    ) -> Result<Option<SettlementTxHash>, RetryCallbackError<Infallible>> {
         // Test-only failpoint: pretend the nonce is not yet included on L1 so
         // the run loop keeps waiting and resubmits. Compiled out of
         // production builds.
@@ -1080,10 +1089,11 @@ impl<
         if fail::eval("settlement::tx_not_included", |_| true).unwrap_or(false) {
             return Ok(None);
         }
-        crate::utils::retry_alloy_callback_until_success(
+        crate::utils::retry_every_error_until_success(
             &self.tx_config.retry_on_transient_failure,
             &self.control.cancellation_token,
             || crate::utils::tx_hash_on_l1_for_nonce(self.provider.as_ref(), wallet, nonce),
+            crate::utils::transport_log_level,
         )
         .await
     }
@@ -1122,51 +1132,26 @@ impl<
     }
 
     /// Polls an L1 settlement check until it yields a terminal answer, retrying
-    /// transient "not ready yet" signals with the not-included backoff. The
-    /// inner check returns `Ok(None)` to report a reorg, which the caller turns
-    /// into a fresh cycle.
+    /// "not ready yet" signals and every transport error with the
+    /// not-included backoff. The inner check returns `Ok(None)` to report a
+    /// reorg, which the caller turns into a fresh cycle.
     async fn retry_l1_check<Check, Fut>(
         &self,
         check: Check,
-    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>>
+    ) -> Result<Option<ContractCallResult>, RetryCallbackError<Infallible>>
     where
         Check: FnMut() -> Fut,
         Fut: std::future::Future<
             Output = Result<Option<ContractCallResult>, WaitForSettlementError>,
         >,
     {
-        crate::utils::retry_callback_until_success(
+        crate::utils::retry_every_error_until_success(
             &self.tx_config.retry_on_not_included_on_l1,
             &self.control.cancellation_token,
             check,
-            WaitForSettlementError::is_transient,
-            WaitForSettlementError::needs_warning_log,
+            WaitForSettlementError::log_level,
         )
         .await
-        .map_err(|error| match error {
-            RetryCallbackError::Cancelled => RetryCallbackError::Cancelled,
-            RetryCallbackError::Error(WaitForSettlementError::Transport(error)) => {
-                RetryCallbackError::Error(error)
-            }
-            // Defensive only: `is_transient` marks these always-transient, so
-            // the retry helper never returns them terminally. Listing them
-            // explicitly keeps this match exhaustive, so adding a new variant
-            // is a compile error rather than a silent fallthrough. Degrade to a
-            // transport error instead of `unreachable!()` so a future drift
-            // cannot panic the settlement loop.
-            RetryCallbackError::Error(
-                unexpected @ (WaitForSettlementError::NotSettledYet
-                | WaitForSettlementError::NotIncludedYet),
-            ) => {
-                error!(
-                    ?unexpected,
-                    "transient signal surfaced as terminal settlement error"
-                );
-                RetryCallbackError::Error(TransportErrorKind::custom_str(
-                    "settlement retry returned a transient signal as terminal",
-                ))
-            }
-        })
     }
 
     /// Reads the current result of `tx_hash` on L1 without waiting for
@@ -1215,7 +1200,7 @@ impl<
         wallet: Address,
         nonce: Nonce,
         tx_hash: SettlementTxHash,
-    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>> {
+    ) -> Result<Option<ContractCallResult>, RetryCallbackError<Infallible>> {
         self.retry_l1_check(|| self.current_result_once(wallet, nonce, tx_hash))
             .await
     }
@@ -1223,7 +1208,7 @@ impl<
     async fn wait_for_settlement_of(
         &self,
         tx_hash: SettlementTxHash,
-    ) -> Result<Option<ContractCallResult>, RetryCallbackError<TransportError>> {
+    ) -> Result<Option<ContractCallResult>, RetryCallbackError<Infallible>> {
         self.retry_l1_check(|| self.check_settlement_once(tx_hash))
             .await
     }
@@ -1560,7 +1545,7 @@ impl<
                 Ok(Some((attempt_number, attempt_kind, tx)))
             },
             |error| retry_policy.should_retry(error),
-            |_| true,
+            BuildAttemptError::log_level,
         )
         .await
     }
@@ -1568,8 +1553,9 @@ impl<
     /// Selects a wallet and a fresh nonce, resolves base gas parameters from
     /// the latest L1 fee estimate, and builds a signed settlement attempt.
     ///
-    /// Transient L1 RPC failures are retried in place using the configured
-    /// transient-failure policy; a build/sign failure is non-recoverable.
+    /// Every L1 RPC failure is retried in place using the configured
+    /// transient-failure policy; see [`BuildRetryPolicy`] for signer and build
+    /// failures.
     async fn build_next_attempt_with_new_nonce(
         &self,
     ) -> Result<
@@ -1606,7 +1592,7 @@ impl<
                 Ok((wallet, nonce, attempt_number, tx))
             },
             |error| retry_policy.should_retry(error),
-            |_| true,
+            BuildAttemptError::log_level,
         )
         .await
     }
@@ -1638,9 +1624,10 @@ impl<
         // on-chain transaction.
         let encoded_tx = tx.encoded_2718();
 
-        // Retry only transient network failures, mirroring
-        // `tx_hash_on_l1_for_nonce`. The returned pending-transaction
-        // handle is dropped on purpose: this helper must never wait for
+        // Retry only allowlisted transient failures: unlike a read, a
+        // broadcast error can be a definite rejection, which is recorded as a
+        // `ClientError` instead. The returned pending-transaction handle is
+        // dropped on purpose: this helper must never wait for
         // inclusion or settlement.
         let submission = crate::utils::retry_alloy_callback_until_success(
             &self.tx_config.retry_on_transient_failure,
