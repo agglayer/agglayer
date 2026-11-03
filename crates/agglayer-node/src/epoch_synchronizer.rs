@@ -16,17 +16,51 @@ use tracing::{debug, error, info};
 pub(crate) struct EpochSynchronizer {}
 
 impl EpochSynchronizer {
+    fn drain_epoch_events(
+        current_epoch_number: &mut EpochNumber,
+        epoch_stream: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
+    ) -> eyre::Result<()> {
+        loop {
+            match epoch_stream.try_recv() {
+                Ok(agglayer_clock::Event::EpochEnded(n)) => {
+                    *current_epoch_number = (*current_epoch_number).max(n.next());
+                }
+                Err(TryRecvError::Closed) => {
+                    eyre::bail!("Epoch stream closed during epoch synchronization");
+                }
+                Err(TryRecvError::Lagged(n)) => {
+                    debug!(
+                        "Epoch stream lagged on {} EpochEnded update during epoch synchronization",
+                        n
+                    );
+                }
+                Err(TryRecvError::Empty) => break,
+            }
+        }
+
+        Ok(())
+    }
+
     fn walk_epochs<EpochsStore>(
         epochs_store: Arc<EpochsStore>,
         mut opened_epoch: EpochsStore::PerEpochStore,
         mut current_epoch_number: EpochNumber,
-        mut epoch_stream: tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
+        epoch_stream: &mut tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
     ) -> eyre::Result<EpochsStore::PerEpochStore>
     where
         EpochsStore: EpochStoreWriter,
         EpochsStore::PerEpochStore: PerEpochReader + PerEpochWriter,
     {
-        while opened_epoch.get_epoch_number() < current_epoch_number {
+        loop {
+            // Consume every epoch transition already queued before deciding
+            // synchronization is complete. Older queued events must never move
+            // the target backwards from the sampled current epoch.
+            Self::drain_epoch_events(&mut current_epoch_number, epoch_stream)?;
+
+            if opened_epoch.get_epoch_number() >= current_epoch_number {
+                break;
+            }
+
             match opened_epoch.start_packing() {
                 Err(StorageError::AlreadyPacked(_)) => {
                     info!(
@@ -49,25 +83,6 @@ impl EpochSynchronizer {
                 opened_epoch.get_epoch_number().next(),
                 opened_epoch.get_end_checkpoint(),
             )?;
-
-            match epoch_stream.try_recv() {
-                Ok(agglayer_clock::Event::EpochEnded(n)) => {
-                    current_epoch_number = n.next();
-                }
-                Err(TryRecvError::Closed) => {
-                    eyre::bail!("Epoch stream closed during epoch synchronization");
-                }
-                Err(TryRecvError::Lagged(n)) => {
-                    debug!(
-                        "Epoch stream lagged on {} EpochEnded update during epoch synchronization",
-                        n
-                    );
-                }
-                Err(TryRecvError::Empty) => {
-                    // We don't care about empty stream during epoch
-                    // synchronization
-                }
-            }
         }
 
         Ok(opened_epoch)
@@ -77,15 +92,21 @@ impl EpochSynchronizer {
         state_store: Arc<StateStore>,
         epochs_store: Arc<EpochsStore>,
         clock_ref: ClockRef,
-    ) -> eyre::Result<EpochsStore::PerEpochStore>
+    ) -> eyre::Result<(
+        EpochsStore::PerEpochStore,
+        tokio::sync::broadcast::Receiver<agglayer_clock::Event>,
+    )>
     where
         StateStore: StateReader + MetadataReader + MetadataWriter + 'static,
         EpochsStore: EpochStoreWriter + 'static,
         EpochsStore::PerEpochStore: PerEpochReader + PerEpochWriter + 'static,
     {
-        // Get current epoch
+        // Subscribe before sampling the current epoch so an EpochEnded event
+        // cannot be lost between taking the snapshot and creating the receiver.
+        let mut epoch_stream = clock_ref.subscribe()?;
+        #[cfg(test)]
+        fail::fail_point!("epoch_synchronizer::start::between_subscription_and_snapshot");
         let current_epoch_number = clock_ref.current_epoch();
-        let epoch_stream = clock_ref.subscribe()?;
 
         spawn_blocking_in_current_span(move || {
             // Get the latest settled epoch
@@ -116,12 +137,14 @@ impl EpochSynchronizer {
                 }
             };
 
-            Self::walk_epochs(
+            let opened_epoch = Self::walk_epochs(
                 epochs_store,
                 opened_epoch,
                 current_epoch_number,
-                epoch_stream,
-            )
+                &mut epoch_stream,
+            )?;
+
+            Ok((opened_epoch, epoch_stream))
         })
         .await
         .expect("epoch synchronization task panicked")
@@ -130,7 +153,12 @@ impl EpochSynchronizer {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, num::NonZeroU64, sync::atomic::AtomicU64, time::Duration};
+    use std::{
+        collections::BTreeMap,
+        num::NonZeroU64,
+        sync::atomic::{AtomicBool, AtomicU64, Ordering},
+        time::Duration,
+    };
 
     use agglayer_config::Config;
     use agglayer_storage::{
@@ -148,6 +176,7 @@ mod tests {
     use agglayer_types::{
         Certificate, CertificateStatus, EpochNumber, ExecutionMode, Height, NetworkId, Proof,
     };
+    use fail::FailScenario;
     use mockall::{predicate::eq, Sequence};
 
     use super::*;
@@ -206,6 +235,249 @@ mod tests {
             .await
             .expect("synchronization task panicked")
             .expect("synchronization failed");
+    }
+
+    #[tokio::test]
+    async fn subscribes_before_sampling_current_epoch() {
+        let scenario = FailScenario::setup();
+
+        let mut state_store = MockStateStore::new();
+        state_store
+            .expect_get_latest_settled_epoch()
+            .once()
+            .returning(|| Ok(None));
+
+        let mut epochs_store = MockEpochsStore::new();
+        epochs_store
+            .expect_open()
+            .once()
+            .with(eq(EpochNumber::ZERO))
+            .return_once(|epoch| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .returning(BTreeMap::new);
+                Ok(mock)
+            });
+
+        let mut seq = Sequence::new();
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(1)), eq(BTreeMap::new()))
+            .returning(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .in_sequence(&mut seq)
+            .with(eq(EpochNumber::new(2)), eq(BTreeMap::new()))
+            .returning(|epoch, _end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().never();
+                mock.expect_get_end_checkpoint().never();
+                Ok(mock)
+            });
+
+        let (sender, receiver) = tokio::sync::broadcast::channel(8);
+        drop(receiver);
+        let clock_ref = ClockRef::new(
+            sender.clone(),
+            Arc::new(AtomicU64::new(1)),
+            Arc::new(NonZeroU64::new(1).unwrap()),
+        );
+
+        let failpoint_fired = Arc::new(AtomicBool::new(false));
+        let sender_for_failpoint = sender.clone();
+        let failpoint_fired_callback = failpoint_fired.clone();
+        fail::cfg_callback(
+            "epoch_synchronizer::start::between_subscription_and_snapshot",
+            move || {
+                // Failpoints are process-global, so only act once our receiver
+                // is registered on this test's sender.
+                if sender_for_failpoint.receiver_count() == 1
+                    && !failpoint_fired_callback.swap(true, Ordering::SeqCst)
+                {
+                    // Keep the sampled epoch at 1. Reaching epoch 2 therefore
+                    // requires observing this event rather than relying on the
+                    // current-epoch snapshot.
+                    let _ = sender_for_failpoint
+                        .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)));
+                }
+            },
+        )
+        .unwrap();
+
+        let (result, _epoch_stream) =
+            EpochSynchronizer::start(Arc::new(state_store), Arc::new(epochs_store), clock_ref)
+                .await
+                .unwrap();
+
+        assert!(failpoint_fired.load(Ordering::SeqCst));
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(2));
+        scenario.teardown();
+    }
+
+    #[tokio::test]
+    async fn keeps_epoch_subscription_alive_after_synchronization() {
+        let mut state_store = MockStateStore::new();
+        state_store
+            .expect_get_latest_settled_epoch()
+            .once()
+            .returning(|| Ok(None));
+
+        let mut epochs_store = MockEpochsStore::new();
+        epochs_store
+            .expect_open()
+            .once()
+            .with(eq(EpochNumber::ZERO))
+            .return_once(|epoch| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().never();
+                mock.expect_get_end_checkpoint().never();
+                Ok(mock)
+            });
+
+        let (sender, receiver) = tokio::sync::broadcast::channel(8);
+        drop(receiver);
+        let clock_ref = ClockRef::new(
+            sender.clone(),
+            Arc::new(AtomicU64::new(0)),
+            Arc::new(NonZeroU64::new(1).unwrap()),
+        );
+
+        let (epoch, mut epoch_stream) =
+            EpochSynchronizer::start(Arc::new(state_store), Arc::new(epochs_store), clock_ref)
+                .await
+                .unwrap();
+
+        assert_eq!(epoch.get_epoch_number(), EpochNumber::ZERO);
+        sender
+            .send(agglayer_clock::Event::EpochEnded(EpochNumber::ZERO))
+            .unwrap();
+        assert_eq!(
+            epoch_stream.try_recv(),
+            Ok(agglayer_clock::Event::EpochEnded(EpochNumber::ZERO))
+        );
+    }
+
+    #[test]
+    fn queued_events_do_not_move_synchronization_target_backwards() {
+        let mut epochs_store = MockEpochsStore::new();
+
+        let mut opened_epoch = MockPerEpochStore::new();
+        opened_epoch
+            .expect_get_epoch_number()
+            .returning(|| EpochNumber::new(10));
+        opened_epoch
+            .expect_start_packing()
+            .once()
+            .returning(|| Ok(()));
+        opened_epoch
+            .expect_get_end_checkpoint()
+            .once()
+            .returning(BTreeMap::new);
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .with(eq(EpochNumber::new(11)), eq(BTreeMap::new()))
+            .returning(|epoch, end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().once().returning(|| Ok(()));
+                mock.expect_get_end_checkpoint()
+                    .once()
+                    .return_once(move || end_checkpoint.clone());
+                Ok(mock)
+            });
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .with(eq(EpochNumber::new(12)), eq(BTreeMap::new()))
+            .returning(|epoch, _end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().never();
+                mock.expect_get_end_checkpoint().never();
+                Ok(mock)
+            });
+
+        let (sender, mut receiver) = tokio::sync::broadcast::channel(8);
+        sender
+            .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(10)))
+            .unwrap();
+        sender
+            .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(11)))
+            .unwrap();
+
+        let result = EpochSynchronizer::walk_epochs(
+            Arc::new(epochs_store),
+            opened_epoch,
+            EpochNumber::new(12),
+            &mut receiver,
+        )
+        .unwrap();
+
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(12));
+    }
+
+    #[test]
+    fn drains_queued_events_before_finishing_synchronization() {
+        let mut epochs_store = MockEpochsStore::new();
+
+        let mut opened_epoch = MockPerEpochStore::new();
+        opened_epoch
+            .expect_get_epoch_number()
+            .returning(|| EpochNumber::new(10));
+        opened_epoch
+            .expect_start_packing()
+            .once()
+            .returning(|| Ok(()));
+        opened_epoch
+            .expect_get_end_checkpoint()
+            .once()
+            .returning(BTreeMap::new);
+
+        epochs_store
+            .expect_open_with_start_checkpoint()
+            .once()
+            .with(eq(EpochNumber::new(11)), eq(BTreeMap::new()))
+            .returning(|epoch, _end_checkpoint: BTreeMap<NetworkId, Height>| {
+                let mut mock = MockPerEpochStore::new();
+                mock.expect_get_epoch_number().returning(move || epoch);
+                mock.expect_start_packing().never();
+                mock.expect_get_end_checkpoint().never();
+                Ok(mock)
+            });
+
+        let (sender, mut receiver) = tokio::sync::broadcast::channel(8);
+        sender
+            .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(10)))
+            .unwrap();
+
+        let result = EpochSynchronizer::walk_epochs(
+            Arc::new(epochs_store),
+            opened_epoch,
+            EpochNumber::new(10),
+            &mut receiver,
+        )
+        .unwrap();
+
+        assert_eq!(result.get_epoch_number(), EpochNumber::new(11));
     }
 
     #[tokio::test]
@@ -280,7 +552,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let epoch = result.unwrap();
+        let (epoch, _epoch_stream) = result.unwrap();
 
         assert_eq!(epoch.get_epoch_number(), EpochNumber::new(10));
     }
@@ -361,7 +633,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let epoch = result.unwrap();
+        let (epoch, _epoch_stream) = result.unwrap();
 
         assert_eq!(epoch.get_epoch_number(), EpochNumber::new(15));
     }
@@ -454,9 +726,10 @@ mod tests {
             Arc::new(NonZeroU64::new(1).unwrap()),
         );
 
-        let result = EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref)
-            .await
-            .unwrap();
+        let (result, _epoch_stream) =
+            EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref)
+                .await
+                .unwrap();
 
         assert_eq!(result.get_epoch_number(), EpochNumber::new(15));
 
@@ -587,9 +860,10 @@ mod tests {
             Arc::new(NonZeroU64::new(1).unwrap()),
         );
 
-        let result = EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref)
-            .await
-            .unwrap();
+        let (result, _epoch_stream) =
+            EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref)
+                .await
+                .unwrap();
 
         assert_eq!(result.get_epoch_number(), EpochNumber::new(15));
 
@@ -689,7 +963,7 @@ mod tests {
                 Ok(mock)
             });
 
-        let result =
+        let (result, _epoch_stream) =
             EpochSynchronizer::start(Arc::new(state_store), Arc::new(epochs_store), clock_ref)
                 .await
                 .unwrap();
