@@ -13,16 +13,11 @@ use agglayer_config::Config;
 use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
     backup::BackupClient,
-    columns::{
-        latest_pending_certificate_per_network::PendingCertificate,
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
     stores::{
         epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
-        EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
-        PerEpochWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
-        UpdateStatusToCandidate,
+        EpochStoreWriter, LatestCertificateHeaders, PendingCertificateReader,
+        PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
     tests::{
         mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
@@ -57,11 +52,8 @@ pub(crate) struct DummyPendingStore {
     pub(crate) current_epoch: EpochNumber,
     pub(crate) pending_certificate: RwLock<BTreeMap<(NetworkId, Height), Certificate>>,
     pub(crate) proofs: RwLock<BTreeMap<CertificateId, Proof>>,
-    pub(crate) settled: RwLock<BTreeMap<NetworkId, (Height, CertificateId)>>,
     pub(crate) certificate_per_network: RwLock<BTreeMap<(NetworkId, Height), CertificateId>>,
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
-    pub(crate) latest_proven_certificate_per_network:
-        RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
     pub(crate) is_packed: bool,
 }
 
@@ -129,13 +121,6 @@ impl StateReader for DummyPendingStore {
         Ok(vec![])
     }
 
-    fn get_latest_settled_certificate_per_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,
@@ -153,22 +138,6 @@ impl StateReader for DummyPendingStore {
         _certificate_id: &CertificateId,
     ) -> Result<Option<SettlementJobId>, agglayer_storage::error::Error> {
         unimplemented!()
-    }
-
-    fn get_current_settled_height(
-        &self,
-    ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
-        self.settled
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(network_id, (height, id))| {
-                Ok((
-                    *network_id,
-                    SettledCertificate(*id, *height, EpochNumber::ZERO, CertificateIndex::ZERO),
-                ))
-            })
-            .collect()
     }
 
     fn get_certificate_header_by_cursor(
@@ -279,18 +248,10 @@ impl PendingCertificateWriter for DummyPendingStore {
     }
     fn set_latest_proven_certificate_per_network(
         &self,
-        network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
+        _network_id: &NetworkId,
+        _height: &Height,
+        _certificate_id: &CertificateId,
     ) -> Result<(), agglayer_storage::error::Error> {
-        self.latest_proven_certificate_per_network
-            .write()
-            .unwrap()
-            .insert(
-                *network_id,
-                ProvenCertificate(*certificate_id, *network_id, *height),
-            );
-
         Ok(())
     }
 
@@ -405,48 +366,6 @@ impl StateWriter for DummyPendingStore {
 }
 
 impl PendingCertificateReader for DummyPendingStore {
-    fn get_latest_proven_certificate_per_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-    fn get_latest_pending_certificate_for_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn get_current_pending_heights(
-        &self,
-    ) -> Result<Vec<(NetworkId, PendingCertificate)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn get_current_proven_height(
-        &self,
-    ) -> Result<Vec<ProvenCertificate>, agglayer_storage::error::Error> {
-        Ok(self
-            .latest_proven_certificate_per_network
-            .read()
-            .unwrap()
-            .values()
-            .cloned()
-            .collect())
-    }
-    fn get_current_proven_height_for_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<Height>, agglayer_storage::error::Error> {
-        Ok(self
-            .latest_proven_certificate_per_network
-            .read()
-            .unwrap()
-            .get(network_id)
-            .map(|x| x.2))
-    }
-
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -564,24 +483,69 @@ async fn test_certificate_orchestrator_can_stop() {
     assert!(orchestrator.spawned_network_tasks.is_empty());
 }
 
+/// Startup resumes only the networks with a proven certificate: the
+/// settled-only and pending-only networks, listed first, spawn no task, and
+/// the proven one's initialization failure stops startup.
 #[tokio::test]
 async fn startup_propagates_proven_network_initialization_storage_failure() {
-    let network_id = NetworkId::new(1);
-    let certificate_id = CertificateId::new([1; 32].into());
+    let network_id = NetworkId::new(3);
+    let certificate_id = CertificateId::new([3; 32].into());
+    let header = |network_id: NetworkId, certificate_id, status| CertificateHeader {
+        network_id,
+        height: Height::ZERO,
+        epoch_number: None,
+        certificate_index: None,
+        certificate_id,
+        prev_local_exit_root: [0; 32].into(),
+        new_local_exit_root: [0; 32].into(),
+        metadata: agglayer_types::Metadata::ZERO,
+        status,
+        settlement_tx_hash: None,
+    };
 
-    let mut pending_store = MockPendingStore::new();
-    pending_store
-        .expect_get_current_proven_height()
-        .once()
-        .return_once(move || {
-            Ok(vec![ProvenCertificate(
-                certificate_id,
-                network_id,
-                Height::ZERO,
-            )])
-        });
+    let pending_store = MockPendingStore::new();
 
     let mut state_store = MockStateStore::new();
+    state_store
+        .expect_get_all_latest_certificate_headers()
+        .once()
+        .return_once(move || {
+            Ok(BTreeMap::from([
+                (
+                    NetworkId::new(1),
+                    LatestCertificateHeaders {
+                        settled: Some(header(
+                            NetworkId::new(1),
+                            CertificateId::new([1; 32].into()),
+                            CertificateStatus::Settled,
+                        )),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    NetworkId::new(2),
+                    LatestCertificateHeaders {
+                        pending: Some(header(
+                            NetworkId::new(2),
+                            CertificateId::new([2; 32].into()),
+                            CertificateStatus::Pending,
+                        )),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    network_id,
+                    LatestCertificateHeaders {
+                        proven: Some(header(
+                            network_id,
+                            certificate_id,
+                            CertificateStatus::Proven,
+                        )),
+                        ..Default::default()
+                    },
+                ),
+            ]))
+        });
     state_store
         .expect_read_local_network_state()
         .with(eq(network_id))

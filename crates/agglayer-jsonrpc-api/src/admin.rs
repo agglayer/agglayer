@@ -5,7 +5,7 @@ use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     stores::{
         async_api::{AsyncPendingCertificateWriterExt, AsyncStateReaderExt, AsyncStateWriterExt},
-        certificate_updater, DebugReader, DebugWriter, PendingCertificateReader,
+        certificate_updater, DebugReader, DebugWriter, NetworkInfoReader, PendingCertificateReader,
         PendingCertificateWriter, SettlementReader, SettlementWriter, StateReader, StateWriter,
     },
     NetworkMetrics,
@@ -468,7 +468,12 @@ impl<PendingStore, StateStore, DebugStore, L1Provider>
     AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
+    StateStore: NetworkInfoReader
+        + StateReader
+        + StateWriter
+        + SettlementReader
+        + SettlementWriter
+        + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Provider: Provider + WalletProvider + 'static,
 {
@@ -630,7 +635,12 @@ impl<PendingStore, StateStore, DebugStore, L1Provider> AdminAgglayerServer
     for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
+    StateStore: NetworkInfoReader
+        + StateReader
+        + StateWriter
+        + SettlementReader
+        + SettlementWriter
+        + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Provider: Provider + WalletProvider + 'static,
 {
@@ -917,7 +927,6 @@ where
             .map_err(Error::from_certificate_update)?;
             network_metrics
                 .reconcile_pending_error(
-                    pending_store.as_ref(),
                     state.as_ref(),
                     certificate.network_id,
                     certificate.certificate_id,

@@ -3,18 +3,15 @@ use std::sync::Arc;
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_rate_limiting as rate_limiting;
-use agglayer_storage::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{
-        async_api::AsyncStateReaderExt, DebugReader, DebugWriter, NetworkInfoReader,
-        PendingCertificateReader, PendingCertificateWriter, SettlementReader, StateReader,
-        StateWriter,
-    },
+use agglayer_storage::stores::{
+    async_api::AsyncStateReaderExt, DebugReader, DebugWriter, LatestCertificateHeaders,
+    NetworkInfoReader, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
+    StateReader, StateWriter,
 };
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
     CertificateId, CertificateStatus, ContractCallOutcome, EpochConfiguration, Height, NetworkId,
-    NetworkInfo, NetworkStatus, NetworkType,
+    NetworkInfo, NetworkStatus,
 };
 use agglayer_utils::task::spawn_blocking_in_current_span;
 use error::SignatureVerificationError;
@@ -93,83 +90,41 @@ impl<L1Rpc, PendingStore, StateStore, DebugStore> Drop
 impl<L1Rpc, PendingStore, StateStore, DebugStore>
     AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>
 where
-    PendingStore: PendingCertificateReader + 'static,
     StateStore: NetworkInfoReader + StateReader + 'static,
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
 {
-    fn latest_settled_id_and_height_blocking(
+    /// The headers of the network's latest pending, proven, and settled
+    /// certificates, from one storage snapshot.
+    fn latest_certificate_headers_blocking(
         state: &StateStore,
-        network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
+        network_id: NetworkId,
+    ) -> Result<LatestCertificateHeaders, CertificateRetrievalError> {
         Ok(state
-            .get_latest_settled_certificate_per_network(network_id)
-            .inspect_err(|e| error!("Failed to get latest settled certificate: {e}"))?
-            .map(|(_, SettledCertificate(id, height, _, _))| (id, height)))
-    }
-
-    fn latest_proven_id_and_height_blocking(
-        pending_store: &PendingStore,
-        network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
-        Ok(pending_store
-            .get_latest_proven_certificate_per_network(network_id)
-            .inspect_err(|e| error!("Failed to get latest proven certificate: {e}"))?
-            .map(|(_, height, id)| (id, height)))
+            .get_latest_certificate_headers(network_id)
+            .inspect_err(|e| error!("Failed to get the latest certificate headers: {e}"))?)
     }
 
     pub async fn get_latest_known_certificate_header(
         &self,
         network_id: NetworkId,
     ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let pending_store = self.pending_store.clone();
         let state = self.state.clone();
 
         spawn_blocking_in_current_span(move || {
-            Self::get_latest_known_certificate_header_blocking(
-                pending_store.as_ref(),
-                state.as_ref(),
-                network_id,
+            debug!(
+                "Received request to get the latest known certificate header for rollup \
+                 {network_id}",
+            );
+
+            Ok(
+                Self::latest_certificate_headers_blocking(state.as_ref(), network_id)?
+                    .latest_known()
+                    .cloned(),
             )
         })
         .await
         .expect("latest-known-certificate query task panicked")
-    }
-
-    fn get_latest_known_certificate_header_blocking(
-        pending_store: &PendingStore,
-        state: &StateStore,
-        network_id: NetworkId,
-    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        debug!(
-            "Received request to get the latest known certificate header for rollup {network_id}",
-        );
-
-        let settled_certificate_id_and_height =
-            Self::latest_settled_id_and_height_blocking(state, &network_id)?;
-        let proven_certificate_id_and_height =
-            Self::latest_proven_id_and_height_blocking(pending_store, &network_id)?;
-
-        let pending_certificate_id_and_height = pending_store
-            .get_latest_pending_certificate_for_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest pending certificate: {e}"))?;
-
-        let certificate_id = [
-            pending_certificate_id_and_height,
-            proven_certificate_id_and_height,
-            settled_certificate_id_and_height,
-        ]
-        .into_iter()
-        .flatten()
-        .max_by(|x, y| x.1.cmp(&y.1))
-        .map(|v| v.0);
-
-        match certificate_id {
-            None => Ok(None),
-            Some(certificate_id) => {
-                Self::fetch_certificate_header_blocking(state, certificate_id).map(Some)
-            }
-        }
     }
 
     pub async fn get_latest_settled_certificate_header(
@@ -179,74 +134,39 @@ where
         let state = self.state.clone();
 
         spawn_blocking_in_current_span(move || {
-            Self::get_latest_settled_certificate_header_blocking(state.as_ref(), network_id)
+            Ok(Self::latest_certificate_headers_blocking(state.as_ref(), network_id)?.settled)
         })
         .await
         .expect("latest-settled-certificate query task panicked")
-    }
-
-    fn get_latest_settled_certificate_header_blocking(
-        state: &StateStore,
-        network_id: NetworkId,
-    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let id = match state
-            .get_latest_settled_certificate_per_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest settled certificate id: {e}"))?
-        {
-            Some((_, SettledCertificate(id, _, _, _))) => id,
-            None => return Ok(None),
-        };
-
-        Self::fetch_certificate_header_blocking(state, id).map(Some)
     }
 
     pub async fn get_latest_pending_certificate_header(
         &self,
         network_id: NetworkId,
     ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let pending_store = self.pending_store.clone();
         let state = self.state.clone();
 
         spawn_blocking_in_current_span(move || {
-            Self::get_latest_pending_certificate_header_blocking(
-                pending_store.as_ref(),
-                state.as_ref(),
-                network_id,
+            Ok(
+                Self::latest_certificate_headers_blocking(state.as_ref(), network_id)?
+                    .pending
+                    .and_then(Self::pending_certificate_header),
             )
         })
         .await
         .expect("latest-pending-certificate query task panicked")
     }
 
-    fn get_latest_pending_certificate_header_blocking(
-        pending_store: &PendingStore,
-        state: &StateStore,
-        network_id: NetworkId,
-    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        let id = match pending_store
-            .get_latest_pending_certificate_for_network(&network_id)
-            .inspect_err(|e| error!("Failed to get latest pending certificate id: {e}"))?
-        {
-            Some((id, _height)) => id,
-            None => return Ok(None),
-        };
-
-        Self::get_pending_certificate_header_blocking(state, id)
-    }
-
-    fn get_pending_certificate_header_blocking(
-        state: &StateStore,
-        certificate_id: CertificateId,
-    ) -> Result<Option<CertificateHeader>, CertificateRetrievalError> {
-        Self::fetch_certificate_header_blocking(state, certificate_id).map(|header| {
-            match header.status {
-                CertificateStatus::Pending
-                | CertificateStatus::Proven
-                | CertificateStatus::Candidate
-                | CertificateStatus::InError { .. } => Some(header),
-                CertificateStatus::Settled => None,
-            }
-        })
+    /// The cached pending pointer may still name a certificate that settled
+    /// since; that header is not served as pending.
+    fn pending_certificate_header(header: CertificateHeader) -> Option<CertificateHeader> {
+        match header.status {
+            CertificateStatus::Pending
+            | CertificateStatus::Proven
+            | CertificateStatus::Candidate
+            | CertificateStatus::InError { .. } => Some(header),
+            CertificateStatus::Settled => None,
+        }
     }
 
     /// Get the certificate header, raising an error if not found.
@@ -261,16 +181,6 @@ where
             .ok_or(CertificateRetrievalError::NotFound { certificate_id })
     }
 
-    fn fetch_certificate_header_blocking(
-        state: &StateStore,
-        certificate_id: CertificateId,
-    ) -> Result<CertificateHeader, CertificateRetrievalError> {
-        state
-            .get_certificate_header(&certificate_id)
-            .inspect_err(|err| error!("Failed to get certificate header: {err}"))?
-            .ok_or(CertificateRetrievalError::NotFound { certificate_id })
-    }
-
     /// Assemble the current information of the specified network from
     /// the data in various sources.
     #[instrument(skip(self))]
@@ -278,11 +188,10 @@ where
         &self,
         network_id: NetworkId,
     ) -> Result<NetworkInfo, GetNetworkInfoError> {
-        let pending_store = self.pending_store.clone();
         let state = self.state.clone();
 
         spawn_blocking_in_current_span(move || {
-            Self::get_network_info_blocking(pending_store.as_ref(), state.as_ref(), network_id)
+            Self::get_network_info_blocking(state.as_ref(), network_id)
         })
         .await
         .expect("network-info query task panicked")
@@ -291,100 +200,50 @@ where
     /// Every field comes from storage: no epoch database is opened, no
     /// certificate or proof is decoded, and nothing is written.
     fn get_network_info_blocking(
-        pending_store: &PendingStore,
         state: &StateStore,
         network_id: NetworkId,
     ) -> Result<NetworkInfo, GetNetworkInfoError> {
         debug!("Received request to get the network state for rollup {network_id}");
-
-        // Storage owns the complete settlement snapshot, including any legacy
-        // fallback. Further point reads here could attach a newer settlement
-        // to the claim and aggregates from that snapshot.
-        let mut network_info = state.get_network_info(network_id).map_err(|error| {
-            error!(
-                ?error,
-                "Failed to retrieve network info for network {network_id} from the storage"
-            );
-            GetNetworkInfoError::InternalError {
+        let internal_error =
+            |source: agglayer_storage::error::Error| GetNetworkInfoError::InternalError {
                 network_id,
-                source: error.into(),
-            }
-        })?;
+                source: source.into(),
+            };
 
-        if !Self::network_is_known_blocking(state, &network_info).map_err(|error| {
-            GetNetworkInfoError::InternalError {
-                network_id,
-                source: error.into(),
-            }
-        })? {
-            return Err(GetNetworkInfoError::UnknownNetworkType { network_id });
-        }
-
-        let latest_pending_certificate_id = match network_info.latest_pending_certificate_id {
-            Some(certificate_id) => Some(certificate_id),
-            None => pending_store
-                .get_latest_pending_certificate_for_network(&network_id)
-                .inspect_err(|error| error!("Failed to get latest pending certificate id: {error}"))
-                .map_err(|error| GetNetworkInfoError::InternalError {
-                    network_id,
-                    source: error.into(),
-                })?
-                .map(|(id, _)| id),
-        };
-
-        let latest_pending_certificate = match latest_pending_certificate_id {
-            Some(id) => Self::get_pending_certificate_header_blocking(state, id),
-            None => Ok(None),
-        };
-
-        let latest_pending_certificate = match latest_pending_certificate {
-            Ok(cert) => cert,
-            Err(CertificateRetrievalError::NotFound { .. }) => {
-                info!("No latest pending certificate found for network {network_id}");
-                None
-            }
-            Err(error) => {
+        // Storage owns the complete snapshot: the cached rows and the headers
+        // they point to. Further point reads here could attach a newer
+        // settlement to the claim and aggregates from that snapshot. The
+        // migrated cache owns existence: a network without any cached row is
+        // unknown.
+        let mut network_info = state
+            .get_network_info(network_id)
+            .inspect_err(|error| {
                 error!(
                     ?error,
-                    "Failed to get latest pending certificate for network {network_id}"
-                );
-                return Err(GetNetworkInfoError::InternalError {
-                    network_id,
-                    source: error.into(),
-                });
-            }
-        };
+                    "Failed to retrieve network info for network {network_id} from the storage"
+                )
+            })
+            .map_err(internal_error)?
+            .ok_or(GetNetworkInfoError::UnknownNetworkType { network_id })?;
 
-        // Certificate-owned pending data always comes from the header,
-        // including on cache hits. A cached pointer whose header is
-        // already settled is omitted by
-        // `get_pending_certificate_header_blocking` and must not leak stale
-        // response fields.
-        network_info.latest_pending_certificate_id = None;
-        network_info.latest_pending_height = None;
-        network_info.latest_pending_status = None;
-        network_info.latest_pending_error = None;
-
-        if let Some(cert) = latest_pending_certificate {
-            network_info.latest_pending_certificate_id = Some(cert.certificate_id);
-            network_info.latest_pending_height = Some(cert.height);
-            if let CertificateStatus::InError { ref error } = &cert.status {
-                network_info.latest_pending_error = Some(*error.clone());
-            }
-
-            network_info.latest_pending_status = Some(cert.status);
+        // A cached pending pointer whose header is already settled must not
+        // leak stale response fields.
+        if network_info.latest_pending_status == Some(CertificateStatus::Settled) {
+            network_info.latest_pending_certificate_id = None;
+            network_info.latest_pending_height = None;
+            network_info.latest_pending_status = None;
+            network_info.latest_pending_error = None;
         }
 
-        let network_is_disabled = state.is_network_disabled(&network_id).map_err(|error| {
-            error!(
-                ?error,
-                "Failed to check if network {network_id} is disabled in storage"
-            );
-            GetNetworkInfoError::InternalError {
-                network_id,
-                source: error.into(),
-            }
-        })?;
+        let network_is_disabled = state
+            .is_network_disabled(&network_id)
+            .inspect_err(|error| {
+                error!(
+                    ?error,
+                    "Failed to check if network {network_id} is disabled in storage"
+                )
+            })
+            .map_err(internal_error)?;
 
         match network_info.latest_pending_status {
             _ if network_is_disabled => {
@@ -407,31 +266,6 @@ where
         }
 
         Ok(network_info)
-    }
-
-    fn network_is_known_blocking(
-        state: &StateStore,
-        network_info: &NetworkInfo,
-    ) -> Result<bool, agglayer_storage::error::Error> {
-        let network_id = network_info.network_id;
-
-        // The migrated cache owns existence. A cached pointer still identifies
-        // a known network when its header is absent. These bounded reads only
-        // establish existence; they must not change the settlement snapshot.
-        // The response's settled id may come from the retained legacy fallback,
-        // so only the direct cached settled pointer can establish existence.
-        Ok(network_info.network_type != NetworkType::Unspecified
-            || network_info.settled_claim.is_some()
-            || network_info.latest_pending_certificate_id.is_some()
-            || state
-                .get_latest_pending_certificate_id(network_id)?
-                .is_some()
-            || state
-                .get_latest_proven_certificate_id(network_id)?
-                .is_some()
-            || state
-                .get_latest_settled_certificate_id(network_id)?
-                .is_some())
     }
 }
 

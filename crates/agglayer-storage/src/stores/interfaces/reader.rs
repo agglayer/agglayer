@@ -5,14 +5,7 @@ use agglayer_types::{
     LocalNetworkStateData, NetworkId, Proof, SettlementJobId,
 };
 
-use crate::{
-    columns::{
-        latest_pending_certificate_per_network::PendingCertificate,
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
-    error::Error,
-};
+use crate::error::Error;
 
 pub mod network_info_reader;
 pub mod settlement_reader;
@@ -39,20 +32,6 @@ pub trait EpochStoreReader: Send + Sync {
 }
 
 pub trait PendingCertificateReader: Send + Sync {
-    /// Read the latest pending certificate's ID and height with one
-    /// lookup in the pending database.
-    fn get_latest_pending_certificate_for_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, Error>;
-
-    /// Scan the latest pending certificate pointer of every network.
-    ///
-    /// Fails on the first entry that cannot be decoded: this scan seeds the
-    /// native network metrics at startup, where silently skipping an entry
-    /// would leave a gauge permanently incomplete.
-    fn get_current_pending_heights(&self) -> Result<Vec<(NetworkId, PendingCertificate)>, Error>;
-
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -67,16 +46,6 @@ pub trait PendingCertificateReader: Send + Sync {
     ) -> Result<Vec<Option<Certificate>>, Error>;
 
     fn multi_get_proof(&self, keys: &[CertificateId]) -> Result<Vec<Option<Proof>>, Error>;
-    fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error>;
-    fn get_current_proven_height_for_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<Height>, Error>;
-
-    fn get_latest_proven_certificate_per_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error>;
 }
 
 pub trait MetadataReader: Send + Sync {
@@ -109,12 +78,6 @@ pub trait StateReader: Send + Sync {
         network_id: NetworkId,
         height: Height,
     ) -> Result<Option<CertificateHeader>, Error>;
-
-    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
-    fn get_latest_settled_certificate_per_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, SettledCertificate)>, Error>;
 
     /// Get the local network state.
     fn read_local_network_state(
