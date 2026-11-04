@@ -7,6 +7,7 @@ use rstest::rstest;
 
 use super::*;
 use crate::{
+    columns::latest_settled_certificate_per_network::SettledCertificate as SettledCursor,
     stores::{
         state::tests::{network_id, store},
         NetworkInfoReader, NetworkSettlement, StateReader, StateWriter,
@@ -79,10 +80,11 @@ fn owned_store() -> (crate::tests::TempDBDir, StateStore) {
 
 #[test_log::test(rstest)]
 fn fetching_an_unexisting_network(network_id: NetworkId, store: StateStore) {
-    let network_info = store.get_network_info(network_id).unwrap();
-
-    assert_eq!(network_info.latest_pending_certificate_id, None);
-    assert_eq!(network_info.latest_pending_height, None);
+    assert_eq!(store.get_network_info(network_id).unwrap(), None);
+    assert_eq!(
+        store.get_latest_certificate_headers(network_id).unwrap(),
+        LatestCertificateHeaders::default()
+    );
     assert_eq!(
         store.get_latest_pending_certificate_id(network_id).unwrap(),
         None
@@ -109,7 +111,7 @@ fn fetching_an_existing_network(network_id: NetworkId, store: StateStore) {
             },
         )
         .unwrap();
-    let network_info = store.get_network_info(network_id).unwrap();
+    let network_info = store.get_network_info(network_id).unwrap().unwrap();
 
     assert_eq!(
         network_info.network_type,
@@ -119,9 +121,17 @@ fn fetching_an_existing_network(network_id: NetworkId, store: StateStore) {
 
 #[test_log::test(rstest)]
 fn pending_and_proven_ids_round_trip(network_id: NetworkId, store: StateStore) {
-    let pending_id = CertificateId::new(Digest::from([1; 32]));
-    let proven_id = CertificateId::new(Digest::from([2; 32]));
-    let pending_height = Height::new(42);
+    let pending = Certificate::new_for_test(network_id, Height::new(42));
+    let proven = Certificate::new_for_test(network_id, Height::new(41));
+    let pending_id = pending.hash();
+    let proven_id = proven.hash();
+    let pending_height = pending.height;
+    store
+        .insert_certificate_header(&pending, CertificateStatus::Pending)
+        .unwrap();
+    store
+        .insert_certificate_header(&proven, CertificateStatus::Proven)
+        .unwrap();
 
     store
         .db
@@ -161,9 +171,23 @@ fn pending_and_proven_ids_round_trip(network_id: NetworkId, store: StateStore) {
         )
         .unwrap();
 
-    let network_info = store.get_network_info(network_id).unwrap();
+    let network_info = store.get_network_info(network_id).unwrap().unwrap();
     assert_eq!(network_info.latest_pending_certificate_id, Some(pending_id));
     assert_eq!(network_info.latest_pending_height, Some(pending_height));
+    assert_eq!(
+        network_info.latest_pending_status,
+        Some(CertificateStatus::Pending)
+    );
+    let headers = store.get_latest_certificate_headers(network_id).unwrap();
+    assert_eq!(
+        headers.pending.map(|header| header.certificate_id),
+        Some(pending_id)
+    );
+    assert_eq!(
+        headers.proven.map(|header| header.certificate_id),
+        Some(proven_id)
+    );
+    assert_eq!(headers.settled, None);
     assert_eq!(
         store.get_latest_pending_certificate_id(network_id).unwrap(),
         Some(pending_id)
@@ -208,7 +232,7 @@ fn settled_pointer_allows_absent_optional_aggregates(network_id: NetworkId, stor
         )
         .unwrap();
 
-    let network_info = store.get_network_info(network_id).unwrap();
+    let network_info = store.get_network_info(network_id).unwrap().unwrap();
     assert_eq!(network_info.settled_certificate_id, Some(certificate_id));
     assert_eq!(network_info.settled_height, Some(certificate.height));
     assert_eq!(
@@ -272,8 +296,18 @@ fn settled_info_advances_together(
         // None of that moves the published settlement: the leaf count and the
         // settled pointer advance only when the settlement publishes them.
         let unpublished = store.get_network_info(network_id).unwrap();
-        assert_eq!(unpublished.settled_certificate_id, published_settled_id);
-        assert_eq!(unpublished.settled_let_leaf_count, published_leaf_count);
+        assert_eq!(
+            unpublished
+                .as_ref()
+                .and_then(|info| info.settled_certificate_id),
+            published_settled_id
+        );
+        assert_eq!(
+            unpublished
+                .as_ref()
+                .and_then(|info| info.settled_let_leaf_count),
+            published_leaf_count
+        );
 
         let claim = has_claim.then_some(Claim {
             global_index: leaf,
@@ -290,7 +324,7 @@ fn settled_info_advances_together(
             .set_latest_settled_certificate_for_network(&network_id, &settlement)
             .unwrap();
 
-        let info = store.get_network_info(network_id).unwrap();
+        let info = store.get_network_info(network_id).unwrap().unwrap();
         assert_eq!(info.settled_certificate_id, Some(certificate_id));
         assert_eq!(info.settled_height, Some(height));
         assert_eq!(info.settled_ler, Some(certificate.new_local_exit_root));
@@ -327,7 +361,11 @@ fn settled_info_advances_together(
         published_leaf_count = info.settled_let_leaf_count;
     }
     assert_eq!(
-        store.get_network_info(network_id).unwrap().network_type,
+        store
+            .get_network_info(network_id)
+            .unwrap()
+            .unwrap()
+            .network_type,
         agglayer_types::NetworkType::MultisigOnly
     );
 }
@@ -345,19 +383,29 @@ fn settlement_replaces_backfilled_aggregates_and_keeps_other_rows(
         global_index: Digest([4; 32]),
         bridge_exit_hash: Digest([5; 32]),
     };
+    let pending = Certificate::new_for_test(network_id, Height::new(2));
+    let proven = Certificate::new_for_test(network_id, Height::new(3));
+    for (certificate, status) in [
+        (&pending, CertificateStatus::Pending),
+        (&proven, CertificateStatus::Proven),
+    ] {
+        store
+            .insert_certificate_header(certificate, status)
+            .unwrap();
+    }
     let pending_row = StateStore::network_info_row(
         network_id,
         network_info_value::Value::LatestPendingCertificateInfo(LatestPendingCertificateInfo {
             height: Some(LatestPendingCertificateHeight { height: 2 }),
             id: Some(LatestPendingCertificateId {
-                id: vec![6; 32].into(),
+                id: pending.hash().as_digest().as_slice().to_vec().into(),
             }),
         }),
     );
     let proven_row = StateStore::network_info_row(
         network_id,
         network_info_value::Value::LatestProvenCertificateInfo(LatestProvenCertificateInfo {
-            id: vec![7; 32].into(),
+            id: proven.hash().as_digest().as_slice().to_vec().into(),
         }),
     );
     let backfilled_rows = [
@@ -410,7 +458,7 @@ fn settlement_replaces_backfilled_aggregates_and_keeps_other_rows(
         )
         .unwrap();
 
-    let info = store.get_network_info(network_id).unwrap();
+    let info = store.get_network_info(network_id).unwrap().unwrap();
     assert_eq!(info.settled_certificate_id, Some(next.hash()));
     assert_eq!(info.settled_pp_root, Some(Digest([0xcc; 32])));
     assert_eq!(info.settled_let_leaf_count, Some(5));
@@ -486,13 +534,10 @@ fn failed_settlement_batch_leaves_both_representations_unchanged() {
     assert_eq!(store.get_network_info(network_id).unwrap(), info);
 }
 
+/// A settled pointer without a leaf count stays without one across the next
+/// settlement's local-state write, as a backfilled row without aggregates does.
 #[test_log::test(rstest)]
-#[case::legacy_cursor(false)]
-#[case::cached_pointer_without_leaf_count(true)]
-fn legacy_settlement_does_not_borrow_the_next_settlements_leaf_count(
-    network_id: NetworkId,
-    #[case] cached_pointer: bool,
-) {
+fn settlement_does_not_borrow_the_next_settlements_leaf_count(network_id: NetworkId) {
     let (_tmp, store) = owned_store();
     let mut local_state = LocalNetworkStateData::default();
     let first_leaf = Digest([1; 32]);
@@ -509,25 +554,16 @@ fn legacy_settlement_does_not_borrow_the_next_settlements_leaf_count(
     store
         .assign_certificate_to_epoch(&certificate_id, &epoch, &CertificateIndex::ZERO)
         .unwrap();
-    store
-        .db
-        .put::<LatestSettledCertificatePerNetworkColumn>(
-            &network_id,
-            &SettledCursor(certificate_id, Height::ZERO, epoch, CertificateIndex::ZERO),
-        )
-        .unwrap();
-    if cached_pointer {
-        let (key, value) = StateStore::network_info_row(
-            network_id,
-            network_info_value::Value::SettledCertificate(SettledCertificate {
-                certificate_id: Some(SettledCertificateId {
-                    id: certificate_id.as_digest().as_slice().to_vec().into(),
-                }),
-                ..Default::default()
+    let (key, value) = StateStore::network_info_row(
+        network_id,
+        network_info_value::Value::SettledCertificate(SettledCertificate {
+            certificate_id: Some(SettledCertificateId {
+                id: certificate_id.as_digest().as_slice().to_vec().into(),
             }),
-        );
-        store.db.put::<NetworkInfoColumn>(&key, &value).unwrap();
-    }
+            ..Default::default()
+        }),
+    );
+    store.db.put::<NetworkInfoColumn>(&key, &value).unwrap();
 
     // The next settlement writes the LET before publishing its cursor. A
     // database snapshot in this interval must not associate that count with
@@ -538,7 +574,7 @@ fn legacy_settlement_does_not_borrow_the_next_settlements_leaf_count(
         .write_local_network_state(&network_id, &local_state, &[second_leaf])
         .unwrap();
     let snapshot = store.db.snapshot();
-    let before = store.get_network_info(network_id).unwrap();
+    let before = store.get_network_info(network_id).unwrap().unwrap();
     assert_eq!(before.settled_certificate_id, Some(certificate_id));
     assert_eq!(before.settled_height, Some(Height::ZERO));
     assert_eq!(before.settled_ler, Some(certificate.new_local_exit_root));
@@ -569,10 +605,12 @@ fn legacy_settlement_does_not_borrow_the_next_settlements_leaf_count(
         .unwrap();
 
     assert_eq!(
-        StateStore::network_info_from_snapshot(&snapshot, network_id).unwrap(),
-        before,
+        StateStore::network_info_from_snapshot(&snapshot, network_id)
+            .unwrap()
+            .as_ref(),
+        Some(&before),
     );
-    let after = store.get_network_info(network_id).unwrap();
+    let after = store.get_network_info(network_id).unwrap().unwrap();
     assert_eq!(after.settled_certificate_id, Some(next_id));
     assert_eq!(after.settled_let_leaf_count, Some(2));
     assert_eq!(after.settled_claim, Some(claim));
@@ -611,12 +649,14 @@ fn settled_header_is_read_from_the_same_snapshot(network_id: NetworkId, store: S
     assert_eq!(
         StateStore::network_info_from_snapshot(&snapshot, network_id)
             .unwrap()
+            .unwrap()
             .latest_epoch_with_settlement,
         Some(0),
     );
     assert_eq!(
         store
             .get_network_info(network_id)
+            .unwrap()
             .unwrap()
             .latest_epoch_with_settlement,
         Some(1)
@@ -755,4 +795,307 @@ fn failed_pending_batch_preserves_initial_header_and_previous_pointer() {
             .unwrap(),
         Some(first.hash())
     );
+}
+
+/// Every network with a cached pointer is found by the bulk scan, with the
+/// same headers the per-network read joins: pending-only, proven-only, and
+/// settled networks alike. A network without any row is unknown.
+#[test]
+fn latest_certificate_headers_join_cached_pointers_per_network_and_in_bulk() {
+    let (_tmp, store) = owned_store();
+    assert_eq!(
+        store.get_all_latest_certificate_headers().unwrap(),
+        BTreeMap::new()
+    );
+
+    let pending = Certificate::new_for_test(NetworkId::new(1), Height::new(4));
+    store
+        .insert_certificate_header(&pending, CertificateStatus::Pending)
+        .unwrap();
+    store
+        .set_latest_pending_certificate_pointer(pending.network_id, pending.height, pending.hash())
+        .unwrap();
+    let proven = Certificate::new_for_test(NetworkId::new(2), Height::new(5));
+    store
+        .insert_certificate_header(&proven, CertificateStatus::Proven)
+        .unwrap();
+    store
+        .set_latest_proven_certificate_pointer(proven.network_id, proven.hash())
+        .unwrap();
+    let settled = Certificate::new_for_test(NetworkId::new(3), Height::new(6));
+    store
+        .insert_certificate_header(&settled, CertificateStatus::Settled)
+        .unwrap();
+    store
+        .set_latest_settled_certificate_for_network(
+            &settled.network_id,
+            &settlement(&settled, Digest::ZERO, 0, None),
+        )
+        .unwrap();
+
+    let header =
+        |certificate: &Certificate| store.get_certificate_header(&certificate.hash()).unwrap();
+    let expected = BTreeMap::from([
+        (
+            pending.network_id,
+            LatestCertificateHeaders {
+                pending: header(&pending),
+                ..Default::default()
+            },
+        ),
+        (
+            proven.network_id,
+            LatestCertificateHeaders {
+                proven: header(&proven),
+                ..Default::default()
+            },
+        ),
+        (
+            settled.network_id,
+            LatestCertificateHeaders {
+                settled: header(&settled),
+                ..Default::default()
+            },
+        ),
+    ]);
+    assert_eq!(
+        store.get_all_latest_certificate_headers().unwrap(),
+        expected
+    );
+    for (network_id, headers) in expected {
+        assert_eq!(
+            store.get_latest_certificate_headers(network_id).unwrap(),
+            headers
+        );
+        // Each is a known network whose pending and settled fields follow the
+        // joined headers.
+        let info = store.get_network_info(network_id).unwrap().unwrap();
+        let pending = headers.pending.as_ref();
+        assert_eq!(
+            info.latest_pending_certificate_id,
+            pending.map(|header| header.certificate_id)
+        );
+        assert_eq!(
+            info.latest_pending_height,
+            pending.map(|header| header.height)
+        );
+        assert_eq!(
+            info.latest_pending_status,
+            pending.map(|header| header.status.clone())
+        );
+        let settled = headers.settled.as_ref();
+        assert_eq!(
+            info.settled_certificate_id,
+            settled.map(|header| header.certificate_id)
+        );
+        assert_eq!(info.settled_height, settled.map(|header| header.height));
+    }
+    assert_eq!(store.get_network_info(NetworkId::new(4)).unwrap(), None);
+    assert_eq!(
+        store
+            .get_latest_certificate_headers(NetworkId::new(4))
+            .unwrap(),
+        LatestCertificateHeaders::default()
+    );
+}
+
+/// A cached pointer without its header is inconsistent storage for every
+/// reader: none of them reads it as absent.
+#[rstest]
+#[case::pending("pending")]
+#[case::proven("proven")]
+#[case::settled("settled")]
+fn pointer_without_header_is_an_error(#[case] kind: &'static str) {
+    let (_tmp, store) = owned_store();
+    let network_id = NetworkId::new(1);
+    let certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let certificate_id = certificate.hash();
+    match kind {
+        "pending" => store
+            .set_latest_pending_certificate_pointer(network_id, certificate.height, certificate_id)
+            .unwrap(),
+        "proven" => store
+            .set_latest_proven_certificate_pointer(network_id, certificate_id)
+            .unwrap(),
+        _ => store
+            .set_latest_settled_certificate_for_network(
+                &network_id,
+                &settlement(&certificate, Digest::ZERO, 0, None),
+            )
+            .unwrap(),
+    }
+
+    let dangling = |error: Error| {
+        assert!(
+            matches!(
+                error,
+                Error::DanglingCertificatePointer {
+                    network_id: dangling_network,
+                    kind: dangling_kind,
+                    certificate_id: dangling_id,
+                } if dangling_network == network_id
+                    && dangling_kind == kind
+                    && dangling_id == certificate_id
+            ),
+            "{error}"
+        );
+    };
+    dangling(
+        store
+            .get_latest_certificate_headers(network_id)
+            .unwrap_err(),
+    );
+    dangling(store.get_all_latest_certificate_headers().unwrap_err());
+    if kind == "proven" {
+        // The info serves no proven field, so it does not read that header.
+        assert!(store.get_network_info(network_id).unwrap().is_some());
+    } else {
+        dangling(store.get_network_info(network_id).unwrap_err());
+    }
+
+    // The header makes the pointer readable again.
+    store
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .unwrap();
+    assert!(store.get_network_info(network_id).unwrap().is_some());
+}
+
+/// The bulk scan seeds the native network metrics at startup: a row that
+/// fails to decode must fail the scan instead of being skipped, or the gauges
+/// would silently stay incomplete until the next restart.
+#[test]
+fn cache_reads_fail_on_undecodable_rows() {
+    use crate::schema::{Codec as _, ColumnSchema as _};
+
+    let (_tmp, store) = owned_store();
+    let key = Key {
+        network_id: 2,
+        kind: network_info_value::ValueDiscriminants::LatestPendingCertificateInfo,
+    }
+    .encode()
+    .unwrap();
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(NetworkInfoColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+    store
+        .db
+        .raw_rocksdb()
+        .put_cf(&cf, &key, b"garbage")
+        .unwrap();
+
+    assert!(store.get_all_latest_certificate_headers().is_err());
+    assert!(store
+        .get_latest_certificate_headers(NetworkId::new(2))
+        .is_err());
+    assert!(store.get_network_info(NetworkId::new(2)).is_err());
+}
+
+/// A network is known as soon as any of its rows exists, whichever kind,
+/// including the kinds that point to no certificate.
+#[test_log::test(rstest)]
+#[case::network_type(network_info_value::Value::NetworkType(NetworkType::Generic as i32))]
+#[case::settled_claim(StateStore::settled_claim_value(&Claim {
+    global_index: Digest([2; 32]),
+    bridge_exit_hash: Digest([3; 32]),
+}))]
+fn any_row_makes_a_network_known(
+    network_id: NetworkId,
+    store: StateStore,
+    #[case] value: network_info_value::Value,
+) {
+    let (key, value) = StateStore::network_info_row(network_id, value);
+    store.db.put::<NetworkInfoColumn>(&key, &value).unwrap();
+
+    assert!(store.get_network_info(network_id).unwrap().is_some());
+    assert_eq!(
+        store.get_latest_certificate_headers(network_id).unwrap(),
+        LatestCertificateHeaders::default()
+    );
+}
+
+/// Pending status, error, and height come from the referenced header: the
+/// cached pending height is not authoritative.
+#[test]
+fn pending_fields_come_from_the_referenced_header() {
+    let (_tmp, store) = owned_store();
+    let network_id = NetworkId::new(1);
+    let certificate = Certificate::new_for_test(network_id, Height::new(7));
+    let error = agglayer_types::CertificateStatusError::InternalError("retry".into());
+    store
+        .insert_certificate_header(&certificate, CertificateStatus::error(error.clone()))
+        .unwrap();
+    // A cached height that disagrees with the header's.
+    store
+        .set_latest_pending_certificate_pointer(network_id, Height::new(3), certificate.hash())
+        .unwrap();
+
+    let info = store.get_network_info(network_id).unwrap().unwrap();
+    assert_eq!(info.latest_pending_certificate_id, Some(certificate.hash()));
+    assert_eq!(info.latest_pending_height, Some(Height::new(7)));
+    assert_eq!(
+        info.latest_pending_status,
+        Some(CertificateStatus::error(error.clone()))
+    );
+    assert_eq!(info.latest_pending_error, Some(error));
+    assert_eq!(
+        store.get_latest_pending_height(network_id).unwrap(),
+        Some(Height::new(3))
+    );
+}
+
+/// Rows a newer binary may write do not stop the header reads: a row of an
+/// unknown kind is skipped by the bulk scan, and a type value this binary
+/// does not know is not decoded by them. Only `get_network_info`, which
+/// serves the type, is strict about it.
+#[test]
+fn header_reads_tolerate_rows_this_binary_does_not_know() {
+    use crate::schema::ColumnSchema as _;
+
+    let (_tmp, store) = owned_store();
+    let certificate = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
+    store
+        .insert_certificate_header(&certificate, CertificateStatus::Pending)
+        .unwrap();
+    store
+        .set_latest_pending_certificate_pointer(
+            certificate.network_id,
+            certificate.height,
+            certificate.hash(),
+        )
+        .unwrap();
+    let (key, value) = StateStore::network_info_row(
+        certificate.network_id,
+        network_info_value::Value::NetworkType(99),
+    );
+    store.db.put::<NetworkInfoColumn>(&key, &value).unwrap();
+    // Network 2 has only a row of kind 99.
+    let mut unknown_kind = 2u32.to_be_bytes().to_vec();
+    unknown_kind.extend_from_slice(&99u32.to_be_bytes());
+    let cf = store
+        .db
+        .raw_rocksdb()
+        .cf_handle(NetworkInfoColumn::COLUMN_FAMILY_NAME)
+        .unwrap();
+    store
+        .db
+        .raw_rocksdb()
+        .put_cf(&cf, &unknown_kind, b"")
+        .unwrap();
+
+    let networks = store.get_all_latest_certificate_headers().unwrap();
+    assert_eq!(networks.len(), 1);
+    let headers = &networks[&certificate.network_id];
+    assert_eq!(
+        headers.pending.as_ref().map(|header| header.certificate_id),
+        Some(certificate.hash())
+    );
+    assert_eq!(
+        &store
+            .get_latest_certificate_headers(certificate.network_id)
+            .unwrap(),
+        headers
+    );
+    assert!(store.get_network_info(certificate.network_id).is_err());
 }

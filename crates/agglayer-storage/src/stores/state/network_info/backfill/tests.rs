@@ -311,6 +311,7 @@ impl Fixture {
         self.state()
             .get_network_info(NetworkId::new(network_id))
             .unwrap()
+            .expect("the backfilled network has a cached row")
     }
 
     fn cached_settled_id(&self, network_id: u32) -> Option<CertificateId> {

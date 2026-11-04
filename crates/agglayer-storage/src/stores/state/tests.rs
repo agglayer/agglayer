@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, primitives::Hashable as _, Certificate,
-    CertificateId, CertificateIndex, Digest, EpochNumber, Height, L1WitnessCtx,
-    LocalNetworkStateData, NetworkId, PessimisticRootInput,
+    CertificateId, Digest, L1WitnessCtx, LocalNetworkStateData, NetworkId, PessimisticRootInput,
 };
 use pessimistic_proof::{
     core::{
@@ -18,9 +17,7 @@ use tracing::info;
 use super::cf_definitions;
 use crate::{
     backup::BackupClient,
-    columns::latest_settled_certificate_per_network::{
-        LatestSettledCertificatePerNetworkColumn, SettledCertificate,
-    },
+    columns::network_info::NetworkInfoColumn,
     error::Error,
     schema::ColumnSchema as _,
     storage::DB,
@@ -155,16 +152,17 @@ fn can_retrieve_list_of_network() {
     let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_active_networks().unwrap().is_empty());
 
-    db.put::<LatestSettledCertificatePerNetworkColumn>(
-        &1.into(),
-        &SettledCertificate(
+    let (key, value) = StateStore::network_info_row(
+        1.into(),
+        StateStore::settled_certificate_value(
             CertificateId::new([0; 32].into()),
-            Height::ZERO,
-            EpochNumber::ZERO,
-            CertificateIndex::ZERO,
+            Digest::ZERO.into(),
+            None,
+            None,
         ),
-    )
-    .expect("Unable to put certificate into storage");
+    );
+    db.put::<NetworkInfoColumn>(&key, &value)
+        .expect("Unable to put the settled row into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);
 }
 
@@ -440,29 +438,4 @@ fn certificate_serialization(#[case] cert_name: &str) {
     let encoded = certificate.encode().unwrap();
     let hash = pessimistic_proof::keccak::keccak256(&encoded);
     insta::assert_debug_snapshot!(cert_name, hash);
-}
-
-/// The settled-pointer scan seeds the native network metrics at startup: an
-/// entry that fails to decode must fail the scan instead of being skipped,
-/// or the gauges would silently stay incomplete until the next restart.
-#[test]
-fn get_current_settled_height_fails_on_undecodable_entries() {
-    use crate::schema::Codec as _;
-
-    let tmp = TempDBDir::new();
-    let store = StateStore::new_with_path(&tmp.path, BackupClient::noop()).unwrap();
-
-    let key = NetworkId::new(2).encode().unwrap();
-    let cf = store
-        .db
-        .raw_rocksdb()
-        .cf_handle(LatestSettledCertificatePerNetworkColumn::COLUMN_FAMILY_NAME)
-        .unwrap();
-    store
-        .db
-        .raw_rocksdb()
-        .put_cf(&cf, &key, b"garbage")
-        .unwrap();
-
-    assert!(store.get_current_settled_height().is_err());
 }

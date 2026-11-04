@@ -127,7 +127,11 @@ fn submission_and_overrides_publish_both_pointers_without_type() {
             CertificateStatus::Pending
         );
         assert_eq!(
-            state.get_network_info(network).unwrap().network_type,
+            state
+                .get_network_info(network)
+                .unwrap()
+                .unwrap()
+                .network_type,
             agglayer_types::NetworkType::Unspecified
         );
     }
