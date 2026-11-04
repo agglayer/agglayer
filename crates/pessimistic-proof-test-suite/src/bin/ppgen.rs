@@ -23,23 +23,23 @@ use uuid::Uuid;
 
 /// The arguments for the pp generator.
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None)]
 struct PPGenArgs {
     /// The number of bridge exits.
-    #[clap(long, default_value = "10")]
+    #[arg(long, default_value = "10")]
     n_exits: usize,
 
     /// The number of imported bridge exits.
-    #[clap(long, default_value = "10")]
+    #[arg(long, default_value = "10")]
     n_imported_exits: usize,
 
     /// The optional output directory to write the proofs in JSON. If not set,
     /// the proof is simply logged.
-    #[clap(long)]
+    #[arg(long)]
     proof_dir: Option<PathBuf>,
 
     /// The optional path to the custom sample data.
-    #[clap(long)]
+    #[arg(long)]
     sample_path: Option<PathBuf>,
 }
 
