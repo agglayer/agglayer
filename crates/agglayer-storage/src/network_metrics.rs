@@ -7,15 +7,7 @@ use parking_lot::{Mutex, MutexGuard};
 use prometheus::{IntGaugeVec, Opts, Registry};
 use tracing::warn;
 
-use crate::{
-    columns::{
-        latest_pending_certificate_per_network::PendingCertificate,
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
-    error::Error,
-    stores::{PendingCertificateReader, StateReader},
-};
+use crate::{error::Error, stores::NetworkInfoReader};
 
 #[cfg(test)]
 mod tests;
@@ -114,50 +106,29 @@ impl NetworkMetrics {
 
     /// Seed every native series from a complete, fallible storage snapshot.
     ///
-    /// Storage read and decode errors abort hydration; out-of-range heights do
-    /// not, they saturate.
-    pub fn hydrate<P, S>(&self, pending: &P, state: &S) -> Result<(), Error>
-    where
-        P: PendingCertificateReader,
-        S: StateReader,
-    {
-        let pending_pointers = pending
-            .get_current_pending_heights()?
-            .into_iter()
-            .map(|(network_id, PendingCertificate(certificate_id, height))| {
-                (network_id, certificate_id, Self::prometheus_height(height))
-            })
-            .collect::<Vec<_>>();
-        let proven_pointers = pending
-            .get_current_proven_height()?
-            .into_iter()
-            .map(|ProvenCertificate(_, network_id, height)| {
-                (network_id, Self::prometheus_height(height))
-            })
-            .collect::<Vec<_>>();
-        let settled_pointers = state
-            .get_current_settled_height()?
-            .into_iter()
-            .map(|(network_id, SettledCertificate(_, height, _, _))| {
-                (network_id, Self::prometheus_height(height))
-            })
-            .collect::<Vec<_>>();
+    /// Storage read and decode errors abort hydration, as does a cached
+    /// pointer without its header; out-of-range heights do not, they
+    /// saturate.
+    pub fn hydrate<S: NetworkInfoReader>(&self, state: &S) -> Result<(), Error> {
+        let networks = state.get_all_latest_certificate_headers()?;
         // A series sitting at the gauge maximum saturated: no real network
         // reaches that height.
-        let saturated: Vec<String> = pending_pointers
+        let saturated: Vec<String> = networks
             .iter()
-            .map(|(network_id, _, height)| (network_id, NetworkStage::Pending, height))
-            .chain(
-                proven_pointers
-                    .iter()
-                    .map(|(network_id, height)| (network_id, NetworkStage::Proven, height)),
-            )
-            .chain(
-                settled_pointers
-                    .iter()
-                    .map(|(network_id, height)| (network_id, NetworkStage::Settled, height)),
-            )
-            .filter(|(_, _, height)| **height == i64::MAX)
+            .flat_map(|(network_id, headers)| {
+                [
+                    (NetworkStage::Pending, &headers.pending),
+                    (NetworkStage::Proven, &headers.proven),
+                    (NetworkStage::Settled, &headers.settled),
+                ]
+                .into_iter()
+                .filter_map(move |(stage, header)| {
+                    header
+                        .as_ref()
+                        .map(|header| (network_id, stage, Self::prometheus_height(header.height)))
+                })
+            })
+            .filter(|(_, _, height)| *height == i64::MAX)
             .map(|(network_id, stage, _)| format!("{}/{}", network_id.to_u32(), stage.as_str()))
             .collect();
         if !saturated.is_empty() {
@@ -168,33 +139,30 @@ impl NetworkMetrics {
             );
         }
 
-        let pending_statuses = pending_pointers
-            .iter()
-            .map(|(network_id, certificate_id, _)| {
-                Ok((
-                    *network_id,
-                    *certificate_id,
-                    state
-                        .get_certificate_header(certificate_id)?
-                        .map(|header| header.status),
-                ))
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-
         let mut metrics = self.mutation();
         metrics.reset();
-        for (network_id, certificate_id, height) in pending_pointers {
-            metrics.pending_written(network_id, certificate_id, height);
-        }
-        for (network_id, height) in proven_pointers {
-            metrics.height_written(network_id, NetworkStage::Proven, height);
-        }
-        for (network_id, height) in settled_pointers {
-            metrics.height_written(network_id, NetworkStage::Settled, height);
-        }
-        for (network_id, certificate_id, status) in pending_statuses {
-            if let Some(status) = status {
-                metrics.header_written(network_id, certificate_id, &status);
+        for (network_id, headers) in networks {
+            if let Some(header) = headers.pending {
+                metrics.pending_written(
+                    network_id,
+                    header.certificate_id,
+                    Self::prometheus_height(header.height),
+                );
+                metrics.header_written(network_id, header.certificate_id, &header.status);
+            }
+            if let Some(header) = headers.proven {
+                metrics.height_written(
+                    network_id,
+                    NetworkStage::Proven,
+                    Self::prometheus_height(header.height),
+                );
+            }
+            if let Some(header) = headers.settled {
+                metrics.height_written(
+                    network_id,
+                    NetworkStage::Settled,
+                    Self::prometheus_height(header.height),
+                );
             }
         }
 
@@ -203,36 +171,30 @@ impl NetworkMetrics {
 
     /// Refresh the error series after a direct admin latest-pending write.
     ///
-    /// The authoritative pointer and header are reread while holding the same
-    /// mutation mutex used by both concrete stores. A newer pointer wins and is
-    /// left untouched.
-    pub fn reconcile_pending_error<P, S>(
+    /// The cached pointer and its header are reread while holding the same
+    /// mutation mutex used by both concrete stores. A newer pointer wins and
+    /// is left untouched. Fails, after the override has already been written,
+    /// when any of the network's cached pointers has no header.
+    pub fn reconcile_pending_error<S: NetworkInfoReader>(
         &self,
-        pending: &P,
         state: &S,
         network_id: NetworkId,
         expected_certificate_id: CertificateId,
-    ) -> Result<(), Error>
-    where
-        P: PendingCertificateReader,
-        S: StateReader,
-    {
+    ) -> Result<(), Error> {
         let mut metrics = self.mutation();
-        let Some((certificate_id, height)) =
-            pending.get_latest_pending_certificate_for_network(&network_id)?
-        else {
+        let Some(header) = state.get_latest_certificate_headers(network_id)?.pending else {
             return Ok(());
         };
-        if certificate_id != expected_certificate_id {
+        if header.certificate_id != expected_certificate_id {
             return Ok(());
         }
 
-        let height = Self::prometheus_height(height);
-        let header = state.get_certificate_header(&certificate_id)?;
-        metrics.pending_written(network_id, certificate_id, height);
-        if let Some(header) = header {
-            metrics.header_written(network_id, certificate_id, &header.status);
-        }
+        metrics.pending_written(
+            network_id,
+            header.certificate_id,
+            Self::prometheus_height(header.height),
+        );
+        metrics.header_written(network_id, header.certificate_id, &header.status);
 
         Ok(())
     }

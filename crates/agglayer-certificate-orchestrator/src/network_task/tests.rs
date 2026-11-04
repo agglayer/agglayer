@@ -9,7 +9,7 @@ use agglayer_storage::{
     error as storage_error,
     storage::DBError,
     stores::{
-        state::StateStore, NetworkInfoReader as _, PendingCertificateReader,
+        state::StateStore, LatestCertificateHeaders, PendingCertificateReader,
         PendingCertificateWriter, SettlementWriter,
     },
     tests::{
@@ -130,7 +130,10 @@ fn assert_settlement_published(
     claim_carrier: &Certificate,
     new_pp_root: Option<Digest>,
 ) {
-    let info = state.get_network_info(network_id).unwrap();
+    let info = state
+        .get_network_info(network_id)
+        .unwrap()
+        .expect("the settled network has a cached row");
     assert_eq!(info.settled_certificate_id, Some(certificate.hash()));
     assert_eq!(info.settled_height, Some(certificate.height));
     assert_eq!(info.settled_ler, Some(certificate.new_local_exit_root));
@@ -211,10 +214,10 @@ async fn start_from_zero() {
         .returning(|_, _| Ok(None));
 
     state
-        .expect_get_latest_settled_certificate_per_network()
+        .expect_get_latest_certificate_headers()
         .once()
         .with(eq(network_id))
-        .returning(|_| Ok(None));
+        .returning(|_| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -409,10 +412,10 @@ async fn repeated_unreadable_proof_errors_certificate() {
         });
 
     state
-        .expect_get_latest_settled_certificate_per_network()
+        .expect_get_latest_certificate_headers()
         .once()
         .with(eq(network_id))
-        .returning(|_| Ok(None));
+        .returning(|_| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -557,10 +560,10 @@ async fn retries() {
         });
 
     state
-        .expect_get_latest_settled_certificate_per_network()
+        .expect_get_latest_certificate_headers()
         .once()
         .with(eq(network_id))
-        .returning(|_| Ok(None));
+        .returning(|_| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -863,10 +866,10 @@ async fn timeout_certifier() {
     let expected_error = String::from("Internal error: TimedOut");
 
     state
-        .expect_get_latest_settled_certificate_per_network()
+        .expect_get_latest_certificate_headers()
         .once()
         .with(eq(network_id))
-        .returning(|_| Ok(None));
+        .returning(|_| Ok(Default::default()));
 
     state
         .expect_update_certificate_header_status()
@@ -1329,8 +1332,8 @@ async fn dropped_settlement_still_persists_settled_state() {
         .expect_read_local_network_state()
         .returning(|_| Ok(Default::default()));
     state
-        .expect_get_latest_settled_certificate_per_network()
-        .returning(|_| Ok(None));
+        .expect_get_latest_certificate_headers()
+        .returning(|_| Ok(Default::default()));
 
     // Hold the epoch assignment until the settlement future has been
     // cancelled mid-transition.
@@ -1448,4 +1451,80 @@ async fn dropped_settlement_still_persists_settled_state() {
             .expect("the mock write channel should stay open");
         assert_eq!(write, expected);
     }
+}
+
+/// Restarting on a settled network resumes right after the latest settled
+/// certificate: the task reads the settled header from the cache and asks the
+/// pending store for the next height.
+#[tokio::test]
+async fn resumes_after_the_latest_settled_certificate() {
+    let network_id = 1.into();
+    let settled = Certificate::new_for_test(network_id, Height::new(5));
+    let settled_id = settled.hash();
+    let settled_header = agglayer_types::CertificateHeader {
+        network_id,
+        height: settled.height,
+        epoch_number: Some(EpochNumber::ZERO),
+        certificate_index: Some(CertificateIndex::ZERO),
+        certificate_id: settled_id,
+        prev_local_exit_root: settled.prev_local_exit_root,
+        new_local_exit_root: settled.new_local_exit_root,
+        metadata: Metadata::ZERO,
+        status: CertificateStatus::Settled,
+        settlement_tx_hash: None,
+    };
+
+    let mut state = MockStateStore::new();
+    state
+        .expect_read_local_network_state()
+        .once()
+        .with(eq(network_id))
+        .returning(|_| Ok(Default::default()));
+    state
+        .expect_get_latest_certificate_headers()
+        .once()
+        .with(eq(network_id))
+        .return_once(move |_| {
+            Ok(LatestCertificateHeaders {
+                settled: Some(settled_header),
+                ..Default::default()
+            })
+        });
+
+    // The first progress step looks for the certificate right after the
+    // settled height; finding none, the task waits for a notification.
+    let (probed, probed_rx) = oneshot::channel();
+    let mut pending = MockPendingStore::new();
+    pending
+        .expect_get_certificate()
+        .once()
+        .with(eq(network_id), eq(Height::new(6)))
+        .return_once(move |_, _| {
+            let _ = probed.send(());
+            Ok(None)
+        });
+
+    let (sender, certificate_stream) = mpsc::channel(1);
+    let task = NetworkTask::new(
+        Arc::new(pending),
+        Arc::new(state),
+        Arc::new(MockCertifier::new()),
+        clock(),
+        network_id,
+        certificate_stream,
+        Arc::new(MockSettlementServiceTrait::new()),
+        mock_current_epoch(),
+    )
+    .await
+    .expect("Failed to create a new network task");
+    assert_eq!(task.latest_settled, Some((settled_id, Height::new(5))));
+
+    let cancellation_token = CancellationToken::new();
+    let run = tokio::spawn(task.run(cancellation_token.clone()));
+    probed_rx
+        .await
+        .expect("the task should look for the next certificate");
+    cancellation_token.cancel();
+    assert_eq!(run.await.unwrap().unwrap(), network_id);
+    drop(sender);
 }

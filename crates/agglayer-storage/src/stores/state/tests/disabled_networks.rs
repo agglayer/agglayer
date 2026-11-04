@@ -1,15 +1,10 @@
 use std::{sync::Arc, time::SystemTime};
 
-use agglayer_types::EpochNumber;
+use agglayer_types::Digest;
 
 use crate::{
     backup::BackupClient,
-    columns::{
-        disabled_networks::DisabledNetworksColumn,
-        latest_settled_certificate_per_network::{
-            LatestSettledCertificatePerNetworkColumn, SettledCertificate,
-        },
-    },
+    columns::{disabled_networks::DisabledNetworksColumn, network_info::NetworkInfoColumn},
     stores::{state::StateStore, StateReader},
     tests::TempDBDir,
     types::network_info::v0::{DisabledBy, DisabledNetwork},
@@ -21,16 +16,17 @@ fn can_retrieve_the_list_of_networks() {
     let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
 
     let store = StateStore::new(db.clone(), BackupClient::noop());
-    db.put::<LatestSettledCertificatePerNetworkColumn>(
-        &1.into(),
-        &SettledCertificate(
+    let (key, value) = StateStore::network_info_row(
+        1.into(),
+        StateStore::settled_certificate_value(
             agglayer_types::CertificateId::new([0; 32].into()),
-            agglayer_types::Height::ZERO,
-            EpochNumber::ZERO,
-            agglayer_types::CertificateIndex::ZERO,
+            Digest::ZERO.into(),
+            None,
+            None,
         ),
-    )
-    .expect("Unable to put latest settled certificate into storage");
+    );
+    db.put::<NetworkInfoColumn>(&key, &value)
+        .expect("Unable to put the settled row into storage");
 
     assert_eq!(1, store.get_active_networks().unwrap().len());
 
