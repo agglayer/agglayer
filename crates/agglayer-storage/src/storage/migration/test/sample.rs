@@ -121,7 +121,8 @@ impl Builder {
                 let key = key?;
                 migration_failpoint()?;
                 if let Some(v0_value) = db.get::<NetworkInfoV0Column>(&key)? {
-                    // Transform V0 to V1 (widen num_failures to u64, add is_cool field)
+                    // Transform V0 to V1 (widen num_failures to u64, add
+                    // is_cool field)
                     let v1_value = NetworkInfoV1 {
                         height: v0_value.height,
                         num_beans: v0_value.num_beans,

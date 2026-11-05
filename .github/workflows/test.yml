@@ -101,14 +101,14 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@9f00e31ac55af956e9bf556599a4f67b25586081 # 2026/07/21
+    uses: agglayer/e2e/.github/workflows/agglayer-node-e2e.yml@442dd31f863113f00c121abfb2ed93404d416b46 # 2026/09/01, agglayer/e2e#267
     secrets: inherit
     with:
       docker-image-override: agglayer_image
       docker-tag: ${{ needs.docker-build-local.outputs.tags }}
       kurtosis-cdk-ref: 3787a9515cc48296219fcab2f3ea6ffd8d9a088e # 2026/07/21
       docker-artifact-name: ${{ github.event_name == 'merge_group' && 'docker-image' || '' }}
-      agglayer-e2e-ref: 9f00e31ac55af956e9bf556599a4f67b25586081 # 2026/07/21
+      agglayer-e2e-ref: 442dd31f863113f00c121abfb2ed93404d416b46 # 2026/09/01, agglayer/e2e#267
       kurtosis-cdk-args: |
         {
           "deployment_stages": {
@@ -118,8 +118,11 @@ jobs:
             "sequencer_type": "op-reth",
             "l1_el_type": "reth",
             "reth_image": "ghcr.io/paradigmxyz/reth:v1.11.3",
-            "aggkit_image": "ghcr.io/agglayer/aggkit:0.5.4",
-            "consensus_contract_type": "pessimistic",
+            "aggkit_image": "ghcr.io/agglayer/aggkit:0.10.0",
+            "consensus_contract_type": "ecdsa-multisig",
+            "use_agg_sender_validator": true,
+            "agg_sender_validator_total_number": 1,
+            "agg_sender_multisig_threshold": 1,
             "verbosity": "debug"
           }
         }

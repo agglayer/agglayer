@@ -49,9 +49,8 @@ pub struct L1RpcClient<RpcProvider> {
     global_exit_root_manager_contract: Address,
     /// L1 info tree entry used for certificates without imported bridge exits.
     default_l1_info_tree_entry: (u32, [u8; 32]),
-    /// Cached UpdateL1InfoTreeV2 first l1_info_root for each leaf count.
-    /// Map<leaf_count, l1_info_root>
-    l1_info_roots: Arc<RwLock<HashMap<u32, [u8; 32]>>>,
+    /// Cached UpdateL1InfoTreeV2 roots and their event block identities.
+    l1_info_roots: Arc<RwLock<HashMap<u32, rollup::CachedL1InfoRoot>>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -61,12 +60,6 @@ pub enum L1RpcError {
 
     #[error("Unable to find `UpdateL1InfoTreeV2` events")]
     UpdateL1InfoTreeV2EventNotFound,
-
-    #[error("Unable to fetch the latest finalized block")]
-    LatestFinalizedBlockNotFound,
-
-    #[error("Timeout exceeded while waiting for block {0} to be finalized.")]
-    FinalizationTimeoutExceeded(u64),
 
     #[error("L1 Reorg detected for block number {0}")]
     ReorgDetected(u64),
@@ -150,8 +143,9 @@ where
         use crate::contracts::PolygonZkEvmGlobalExitRootV2::InitL1InfoRootMap;
 
         let default_l1_info_tree_entry = {
-            // Start search from genesis. Contracts have very few `InitL1InfoRootMap`
-            // events, so should not hit the provider limits.
+            // Start search from genesis. Contracts have very few
+            // `InitL1InfoRootMap` events, so should not hit the
+            // provider limits.
             debug!(
                 "Querying InitL1InfoRootMap event search contract address: \
                  {global_exit_root_manager_contract}"
@@ -276,7 +270,8 @@ mod tests {
     async fn test_get_l1_info_root_for_leaf_counts() {
         use url::Url;
 
-        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
+        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia
+        // endpoint)
         let rpc_url = std::env::var("L1_RPC_ENDPOINT")
             .expect("L1_RPC_ENDPOINT must be defined")
             .parse::<Url>()
@@ -291,8 +286,8 @@ mod tests {
 
         tracing::info!("Testing get_l1_info_root for leaf counts for Bali testnet");
 
-        // Create L1RpcClient with default config for other parameters for Bali testnet
-        // InitL1InfoRootMap event is on block 6487027
+        // Create L1RpcClient with default config for other parameters for Bali
+        // testnet InitL1InfoRootMap event is on block 6487027
         let contracts = ContractSetup::new();
         let l1_rpc = L1RpcClient::try_new(
             Arc::new(rpc.clone()),
@@ -321,8 +316,8 @@ mod tests {
                         leaf_count,
                         FixedBytes::<32>::from(l1_info_root)
                     );
-                    // Verify that the root is not all zeros (which would indicate an invalid
-                    // result)
+                    // Verify that the root is not all zeros (which would
+                    // indicate an invalid result)
                     assert_ne!(
                         l1_info_root, [0u8; 32],
                         "L1 info root should not be all zeros for leaf count {leaf_count}",
@@ -393,7 +388,8 @@ mod tests {
     async fn test_create_l1_rpc_client_for_bali_testnet() {
         use url::Url;
 
-        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia endpoint)
+        // Use L1_RPC_ENDPOINT environment variable (should be set to Sepolia
+        // endpoint)
         let rpc_url = std::env::var("L1_RPC_ENDPOINT")
             .expect("L1_RPC_ENDPOINT must be defined")
             .parse::<Url>()
@@ -408,8 +404,8 @@ mod tests {
 
         tracing::info!("Test fetching of the InitL1InfoRootMap for Bali testnet");
 
-        // Create L1RpcClient with default config for other parameters for Bali testnet
-        // InitL1InfoRootMap event is on block 6487027
+        // Create L1RpcClient with default config for other parameters for Bali
+        // testnet InitL1InfoRootMap event is on block 6487027
         let contracts = ContractSetup::new();
         let _l1_rpc = L1RpcClient::try_new(
             Arc::new(rpc.clone()),

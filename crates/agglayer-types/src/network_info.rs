@@ -87,6 +87,9 @@ pub struct NetworkInfo {
     pub settled_claim: Option<SettledClaim>,
     /// The height of the latest pending certificate.
     pub latest_pending_height: Option<Height>,
+    /// The ID of the latest pending certificate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_pending_certificate_id: Option<CertificateId>,
     /// The status of the latest pending certificate.
     pub latest_pending_status: Option<CertificateStatus>,
     /// Any error message associated with the latest pending certificate.
@@ -108,9 +111,13 @@ impl NetworkInfo {
             settled_let_leaf_count: None,
             settled_claim: None,
             latest_pending_height: None,
+            latest_pending_certificate_id: None,
             latest_pending_status: None,
             latest_pending_error: None,
             latest_epoch_with_settlement: None,
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

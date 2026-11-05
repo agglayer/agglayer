@@ -125,8 +125,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
         backup_client: BackupClient,
         readonly: bool,
     ) -> Result<Self, Error> {
-        // Check if the epoch is already packed, if no value is found, the epoch is not
-        // packed
+        // Check if the epoch is already packed, if no value is found, the epoch
+        // is not packed
         let packed = db
             .get::<PerEpochMetadataColumn>(&PerEpochMetadataKey::Packed)?
             .map(|value| match value {
@@ -181,10 +181,12 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
             // For readonly access, we don't need to track the next index
             AtomicU64::new(0)
         } else {
-            // For read-write access, calculate the next index from existing certificates.
-            // The proto-backed CF is the single source of truth at runtime: legacy rows
-            // are backfilled into it during `init_db`, so consulting the legacy CF here
-            // would only re-read data that has already been migrated.
+            // For read-write access, calculate the next index from existing
+            // certificates. The proto-backed CF is the single
+            // source of truth at runtime: legacy rows
+            // are backfilled into it during `init_db`, so consulting the legacy
+            // CF here would only re-read data that has already been
+            // migrated.
             if let Some(Ok((index, _))) = db
                 .iter_with_direction::<CertificatePerIndexProtoColumn>(
                     ReadOptions::default(),
@@ -192,7 +194,8 @@ impl<PendingStore, StateStore> PerEpochStore<PendingStore, StateStore> {
                 )?
                 .next()
             {
-                // We're starting from the next index after the last one found in the database.
+                // We're starting from the next index after the last one found
+                // in the database.
                 AtomicU64::new(index.as_u64() + 1)
             } else {
                 AtomicU64::new(0)
@@ -330,8 +333,8 @@ where
 
         // Fetch the network current point for this epoch
         match (start_checkpoint, &end_checkpoint_entry) {
-            // If the network is not found in the end checkpoint, but is present in
-            // the start checkpoint, this is an invalid state.
+            // If the network is not found in the end checkpoint, but is present
+            // in the start checkpoint, this is an invalid state.
             (Some(_), Entry::Vacant(_)) => {
                 warn!(
                     "{}Network {} is present in the start checkpoint but not in the end checkpoint",
@@ -344,8 +347,8 @@ where
                     network_id
                 )));
             }
-            // If the network is not found in the end checkpoint and the height is 0,
-            // this is the first certificate for this network.
+            // If the network is not found in the end checkpoint and the height
+            // is 0, this is the first certificate for this network.
             (None, Entry::Vacant(_entry)) if height == Height::ZERO => {
                 debug!(
                     "{}First certificate for network {}",
@@ -355,13 +358,15 @@ where
                 // Adding the network to the end checkpoint.
                 end_checkpoint_entry_assignment = Some(Height::ZERO);
             }
-            // If the network is not found in the end checkpoint and the height is not 0,
-            // this is an invalid certificate candidate and the operation should fail.
+            // If the network is not found in the end checkpoint and the height
+            // is not 0, this is an invalid certificate candidate and the
+            // operation should fail.
             (None, Entry::Vacant(_)) => {
                 return Err(CertificateCandidateError::Invalid(network_id, height))?
             }
-            // If the network is found in the end checkpoint and the height is 0,
-            // this is an invalid certificate candidate and the operation should fail.
+            // If the network is found in the end checkpoint and the height is
+            // 0, this is an invalid certificate candidate and the operation
+            // should fail.
             (Some(_start_height), Entry::Occupied(ref current_height))
                 if height == Height::ZERO =>
             {
@@ -380,8 +385,9 @@ where
                 )
                 .into());
             }
-            // If the network is found in the end checkpoint and the height minus one is equal to
-            // the current network height. We can add the certificate.
+            // If the network is found in the end checkpoint and the height
+            // minus one is equal to the current network height. We can add the
+            // certificate.
             (_, Entry::Occupied(current_height)) if current_height.get().next() == height => {
                 debug!(
                     "{}Certificate candidate for network {} at height {} accepted",
@@ -412,8 +418,8 @@ where
         }
 
         if mode == ExecutionMode::DryRun {
-            // If this is a dry run, we don't want to add the certificate to the DB
-            // The certificate index is informal
+            // If this is a dry run, we don't want to add the certificate to the
+            // DB The certificate index is informal
             return Ok((
                 *self.epoch_number,
                 CertificateIndex::new(self.next_certificate_index.load(Ordering::Relaxed)),
@@ -486,9 +492,10 @@ where
             &PerEpochMetadataValue::Packed(true),
         )?;
 
-        if let Err(error) = self.backup_client.backup(crate::backup::BackupRequest {
-            epoch_db: Some((self.db.clone(), *self.epoch_number)),
-        }) {
+        if let Err(error) = self
+            .backup_client
+            .backup_epoch(self.db.clone(), *self.epoch_number)
+        {
             error!("Couldn't trigger the backup of the epoch DB: {}", error);
         }
 
@@ -528,8 +535,8 @@ where
             // Epoch DBs created before the proto migration and only reopened
             // read-only since were never migrated: read-only opens never create
             // column families, so the proto CF is absent here. Fall back to the
-            // still-present legacy CF, decoding through the same `Certificate::from`
-            // conversion the migration backfill uses.
+            // still-present legacy CF, decoding through the same
+            // `Certificate::from` conversion the migration backfill uses.
             Err(crate::storage::DBError::ColumnFamilyNotFound) => {
                 warn!(
                     "Proto certificate CF missing for epoch {}: reading from the legacy CF",

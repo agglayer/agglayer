@@ -30,7 +30,7 @@ use crate::certificate_submission_service::CertificateSubmissionServer;
 const SUBMIT_CERTIFICATE_METHOD_PATH: &str =
     "agglayer-node.grpc-api.v1.certificate-submission-service.submit_certificate";
 
-struct L1Rpc;
+pub(super) struct L1Rpc;
 
 #[async_trait::async_trait]
 impl RollupContract for L1Rpc {

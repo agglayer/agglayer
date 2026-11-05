@@ -11,6 +11,7 @@ agglayer-primitives.workspace = true
 agglayer-storage.workspace = true
 agglayer-tries.workspace = true
 agglayer-types.workspace = true
+agglayer-utils.workspace = true
 pessimistic-proof.workspace = true
 
 
@@ -24,6 +25,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 agglayer-storage = { workspace = true, features = ["testutils"] }
+async-trait.workspace = true
 pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 mockall.workspace = true
 

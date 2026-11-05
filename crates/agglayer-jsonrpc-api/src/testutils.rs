@@ -10,6 +10,7 @@ use agglayer_storage::{
     backup::BackupClient,
     stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
+    NetworkMetrics,
 };
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId};
 use alloy::{
@@ -53,6 +54,9 @@ pub struct RawRpcContext {
     pub state_store: Arc<StateStore>,
     pub pending_store: Arc<PendingStore>,
     pub debug_store: Arc<DebugStore>,
+    /// Kept alive so `send_certificate` can reserve its orchestrator
+    /// notification slot before persisting.
+    pub certificate_receiver: tokio::sync::mpsc::Receiver<(NetworkId, Height, CertificateId)>,
 }
 
 impl RawRpcContext {
@@ -136,8 +140,16 @@ impl TestContext {
         let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 
         // Create stores using the provided databases
-        let state_store = Arc::new(StateStore::new(state_db, BackupClient::noop()));
-        let pending_store = Arc::new(PendingStore::new(pending_db));
+        let network_metrics = NetworkMetrics::unregistered();
+        let state_store = Arc::new(StateStore::new_with_metrics(
+            state_db,
+            BackupClient::noop(),
+            network_metrics.clone(),
+        ));
+        let pending_store = Arc::new(PendingStore::new_with_metrics(
+            pending_db,
+            network_metrics.clone(),
+        ));
         let debug_store = if config.debug_mode {
             Arc::new(DebugStore::new(debug_db))
         } else {
@@ -198,6 +210,7 @@ impl TestContext {
             debug_store.clone(),
             config.clone(),
             settlement_service,
+            network_metrics,
         )
         .start()
         .await
@@ -298,7 +311,7 @@ impl TestContext {
         let l1_rpc_client = Self::create_l1_rpc_client(Arc::new(mock_provider.clone()));
 
         // Create certificate sender channel
-        let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
+        let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
         // Create a real epoch store for testing
         let epochs_store = Arc::new(
@@ -331,6 +344,7 @@ impl TestContext {
             state_store,
             pending_store,
             debug_store,
+            certificate_receiver,
         }
     }
 }

@@ -28,7 +28,7 @@ async fn successfully_push_certificate(#[case] state: Forest) {
 
     let withdrawals = vec![];
 
-    let certificate = state.clone().apply_events(&[], &withdrawals);
+    let certificate = state.clone().apply_events_v5(&[], &withdrawals);
 
     let certificate_id: CertificateId = client
         .request("interop_sendCertificate", rpc_params![certificate])
@@ -67,12 +67,17 @@ async fn send_multiple_certificates(#[case] mut state: Forest) {
 
         let mut certificate = state.apply_events(&[], &withdrawals);
         certificate.height = i.into();
+        // The Agglayer RPC only accepts the V5 commitment version; re-derive
+        // the certificate id after mutating `height`, since V5 commits
+        // to it.
+        let certificate_id = certificate.hash().into();
         let (_, signature, _) = compute_signature_info(
             certificate.new_local_exit_root,
             &certificate.imported_bridge_exits,
             &state.wallet,
             certificate.height,
-            SignatureCommitmentVersion::V3,
+            certificate_id,
+            SignatureCommitmentVersion::V5,
         );
         certificate.aggchain_data = AggchainData::ECDSA { signature };
 

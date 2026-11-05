@@ -3,6 +3,7 @@ use std::{future::IntoFuture, path::PathBuf, sync::Arc};
 use agglayer_config::Config;
 use eyre::bail;
 use node::Node;
+use prometheus::Registry;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 mod logging;
@@ -62,8 +63,9 @@ pub fn main(
             if e.to_string()
                 .contains("trace dispatcher has already been set") =>
         {
-            // This is a common case in integration tests where the logger is initialized
-            // multiple times. We can safely ignore this error.
+            // This is a common case in integration tests where the logger is
+            // initialized multiple times. We can safely ignore this
+            // error.
             debug!("Logger already initialized, ignoring error: {e}");
         }
         Err(e) => {
@@ -93,10 +95,13 @@ pub fn main(
         .enable_all()
         .build()?;
 
+    let registry = Registry::new();
+
     // Create the metrics server.
     let metric_server = metrics_runtime.block_on(
         MetricsBuilder::builder()
             .addr(config.telemetry.addr)
+            .registry(registry.clone())
             .cancellation_token(global_cancellation_token.clone())
             .build(),
     )?;
@@ -104,9 +109,9 @@ pub fn main(
     // Spawn the metrics server into the metrics runtime.
     let metrics_handle = {
         // This guard is used to ensure that the metrics runtime is entered
-        // before the server is spawned. This is necessary because the `into_future`
-        // of `WithGracefulShutdown` is spawning various tasks before returning the
-        // actual server instance to spawn.
+        // before the server is spawned. This is necessary because the
+        // `into_future` of `WithGracefulShutdown` is spawning various
+        // tasks before returning the actual server instance to spawn.
         let _guard = metrics_runtime.enter();
         // Spawn the metrics server
         metrics_runtime.spawn(metric_server.into_future())
@@ -117,6 +122,7 @@ pub fn main(
         Node::builder()
             .config(config.clone())
             .cancellation_token(global_cancellation_token.clone())
+            .registry(registry)
             .version(version.to_string())
             .start(),
     )?;

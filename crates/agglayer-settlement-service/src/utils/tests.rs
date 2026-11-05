@@ -462,11 +462,14 @@ fn transient_alloy_error_recognizes_request_timeouts_narrowly() {
         408,
         String::new()
     )));
+    assert!(is_transient_alloy_error(&TransportErrorKind::http_error(
+        504,
+        String::new()
+    )));
     assert!(!is_transient_alloy_error(&TransportErrorKind::http_error(
         400,
         TIMEOUT_RESPONSE.to_owned()
     )));
-
     for message in ["Request timed out", "REQUEST TIMEOUT", "request time-out"] {
         let error = RpcError::ErrorResp(alloy::rpc::json_rpc::ErrorPayload {
             code: -32009,
@@ -492,7 +495,7 @@ fn transient_alloy_error_recognizes_request_timeouts_narrowly() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn retry_alloy_callback_until_success_retries_http_request_timeouts() {
+async fn retry_alloy_callback_until_success_retries_http_timeout_responses() {
     const TIMEOUT_RESPONSE: &str =
         r#"{"id":11481,"jsonrpc":"2.0","error":{"code":-32009,"message":"Request timed out"}}"#;
 
@@ -515,7 +518,7 @@ async fn retry_alloy_callback_until_success_retries_http_request_timeouts() {
                     let attempt = attempts.fetch_add(1, Ordering::SeqCst);
                     if attempt < 2 {
                         Err::<u64, _>(TransportErrorKind::http_error(
-                            408,
+                            if attempt == 0 { 408 } else { 504 },
                             TIMEOUT_RESPONSE.to_owned(),
                         ))
                     } else {

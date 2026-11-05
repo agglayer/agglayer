@@ -9,7 +9,7 @@ test.before(async () => ({ askModel, selectSource } = await import("../src/sourc
 
 const config = {
   owner: "agglayer", repo: "agglayer", repository: "agglayer/agglayer",
-  botLogin: "github-actions[bot]", maxPromptBytes: 3_500_000,
+  projectOwner: "agglayer", botLogin: "github-actions[bot]", maxPromptBytes: 3_500_000,
 };
 
 test("one validated closing relationship bypasses Claude", async () => {
@@ -103,7 +103,21 @@ test("no assigned candidates locks a null result without needing a key", async (
     github: fakeGithub([]), project: { items: async () => [item] }, config,
     pull: pull(), pullComments: [], anthropic: null, allowModel: true,
   });
-  assert.deepEqual(source, { none: true, via: "model-none" });
+  assert.deepEqual(source, { none: true, via: "no-candidates" });
+});
+
+test("Project items outside the configured owner never cause repository requests", async () => {
+  const external = candidate(); external.repository = "outside/private";
+  let conversations = 0;
+  const source = await selectSource({
+    github: fakeGithub([{ id: external.issueId }]), project: {
+      items: async () => [external],
+      client: { paginate: async () => { conversations += 1; return []; } },
+    },
+    config, pull: pull(), pullComments: [], anthropic: null, allowModel: true,
+  });
+  assert.deepEqual(source, { none: true, via: "no-candidates" });
+  assert.equal(conversations, 0);
 });
 
 test("every assigned candidate is considered above the former count limit", async () => {

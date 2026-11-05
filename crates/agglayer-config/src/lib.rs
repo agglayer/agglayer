@@ -3,13 +3,17 @@
 //! The agglayer is configured via its TOML configuration file, `agglayer.toml`
 //! by default, which is deserialized into the [`Config`] struct.
 
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use agglayer_primitives::Address;
 use outbound::OutboundConfig;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
 use serde_with::DisplayFromStr;
 use shutdown::ShutdownConfig;
+use url::Url;
 
 pub use self::telemetry::TelemetryConfig;
 
@@ -95,6 +99,13 @@ pub struct Config {
     #[serde(default)]
     pub prover: prover_config::ProverType,
 
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
+    pub succinct_cluster: BTreeMap<u32, Url>,
+
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub succinct_cluster_mtls: BTreeMap<Url, prover_config::MtlsConfig>,
+
     #[serde(default = "default_prover_buffer_size")]
     pub prover_buffer_size: usize,
 
@@ -157,6 +168,8 @@ impl Config {
                 prover_config::NetworkProverConfig::default(),
             ),
             prover_buffer_size: default_prover_buffer_size(),
+            succinct_cluster: BTreeMap::new(),
+            succinct_cluster_mtls: BTreeMap::new(),
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),

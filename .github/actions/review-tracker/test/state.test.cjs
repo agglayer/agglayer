@@ -35,6 +35,9 @@ test("canonical state round-trips identifiers and repeats every command", () => 
     issue: 99,
     item: 11,
     closedByPr: false,
+    hierarchyPending: true,
+    hierarchyInFlight: true,
+    managedParent: { issueId: "I_source", repository: "agglayer/agglayer", number: 7 },
   };
   state.reviews.push("123");
   config.runUrl = "https://github.com/run/1";
@@ -47,6 +50,7 @@ test("canonical state round-trips identifiers and repeats every command", () => 
 
   assert.deepEqual(loaded.state, state);
   assert.match(body, /@alice: \[#99\]/);
+  assert.match(body, /parent sync pending/);
   assert.match(body, /review-tracker-state:[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
   for (const command of COMMANDS) assert.match(body, new RegExp(escape(command)));
   assert.doesNotMatch(body, /private issue title|private notes|model prompt/);
@@ -74,8 +78,9 @@ test("signed state rejects payload tampering", () => {
 });
 
 test("task markers contain only routing identifiers", () => {
-  const marker = taskMarker(config, 42, "U_alice");
+  const marker = taskMarker(config, 42, "U_alice", { id: 999, node_id: "I_99", number: 99 });
   assert.match(marker, /review-tracker-task/);
+  assert.match(marker, /review-tracker-task:[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
   assert.doesNotMatch(marker, /title|Notes|alice/);
 });
 

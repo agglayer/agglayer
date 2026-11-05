@@ -61,8 +61,8 @@ where
             .await
             .map_err(CertificationError::RollupContractAddressNotFound)?;
 
-        // Fetch context based on the aggchain data type that we received from the
-        // chain.
+        // Fetch context based on the aggchain data type that we received from
+        // the chain.
         let aggchain_data_ctx: CertificateAggchainDataCtx = match aggchain_data_payload {
             CertificateAggchainData::LegacyEcdsa { .. } => {
                 let signer = self
@@ -162,8 +162,7 @@ where
         })
     }
 
-    /// Fetch, verify consistency, and wait for the finalization of the l1 info
-    /// root.
+    /// Fetch the L1 info root and verify consistency with the certificate.
     pub async fn fetch_l1_info_root(
         &self,
         certificate: &Certificate,
@@ -176,14 +175,14 @@ where
         let declared_l1_info_leaf_count = certificate.l1_info_tree_leaf_count();
 
         let l1_info_root = match (declared_l1_info_leaf_count, declared_l1_info_root) {
-            // Use the default corresponding to the entry set by the event `InitL1InfoRootMap`
+            // Use the default corresponding to the entry set by the event
+            // `InitL1InfoRootMap`
             (None, _) if matches!(certificate.aggchain_data, AggchainData::Generic { .. }) => {
                 return Err(CertificationError::MissingL1InfoTreeLeafCountForGenericAggchainData);
             }
             (None, None) => self.l1_rpc.default_l1_info_tree_entry().1.into(),
-            // Retrieve the event corresponding to the declared entry and await for finalization
+            // Retrieve the event corresponding to the declared entry.
             (Some(declared_leaf), declared_root) => {
-                // Retrieve from contract and await for finalization
                 let retrieved_root = self
                     .l1_rpc
                     .get_l1_info_root(declared_leaf)
@@ -194,7 +193,8 @@ where
                     .into();
 
                 if let Some(declared_root) = declared_root {
-                    // Check that the retrieved l1 info root is equal to the declared one
+                    // Check that the retrieved l1 info root is equal to the
+                    // declared one
                     if declared_root != retrieved_root {
                         return Err(CertificationError::Types {
                             source: agglayer_types::Error::L1InfoRootIncorrect {

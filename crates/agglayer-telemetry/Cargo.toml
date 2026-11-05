@@ -15,7 +15,7 @@ strum_macros.workspace = true
 opentelemetry = { version = "0.31.0", features = ["metrics"] }
 opentelemetry-prometheus = "0.31.0"
 opentelemetry_sdk = { version = "0.31.0", features = ["metrics"] }
-prometheus = "0.14.0"
+prometheus.workspace = true
 eyre.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }

@@ -137,13 +137,15 @@ impl Server {
             .add_rpc_service(configuration_service)
             .add_rpc_service(network_state_service)
             .add_reflection_service(agglayer_grpc_types::node::v1::FILE_DESCRIPTOR_SET)
+            .add_reflection_service(agglayer_grpc_types::node::types::v1::FILE_DESCRIPTOR_SET)
             .add_reflection_service(agglayer_interop::grpc::v1::FILE_DESCRIPTOR_SET)
     }
 }
 
 /// Extracts client info from GRPC metadata headers for logging purposes
 pub(crate) fn client_info_from_metadata(metadata: &tonic::metadata::MetadataMap) -> String {
-    // HTTP/2 GRPC headers must be lowercase, no need to do case-insensitive search
+    // HTTP/2 GRPC headers must be lowercase, no need to do case-insensitive
+    // search
     let mut client_info = Vec::new();
     for (header, warn_if_not_found) in [
         (GRPC_METADATA_CLIENT_TYPE, true),

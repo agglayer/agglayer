@@ -981,6 +981,9 @@ impl serde::Serialize for NetworkInfo {
         if self.latest_epoch_with_settlement.is_some() {
             len += 1;
         }
+        if self.latest_pending_certificate_id.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("agglayer.node.types.v1.NetworkInfo", len)?;
         if self.network_status != 0 {
             let v = NetworkStatus::try_from(self.network_status)
@@ -1035,6 +1038,9 @@ impl serde::Serialize for NetworkInfo {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("latestEpochWithSettlement", ToString::to_string(&v).as_str())?;
         }
+        if let Some(v) = self.latest_pending_certificate_id.as_ref() {
+            struct_ser.serialize_field("latestPendingCertificateId", v)?;
+        }
         struct_ser.end()
     }
 }
@@ -1071,6 +1077,8 @@ impl<'de> serde::Deserialize<'de> for NetworkInfo {
             "latestPendingError",
             "latest_epoch_with_settlement",
             "latestEpochWithSettlement",
+            "latest_pending_certificate_id",
+            "latestPendingCertificateId",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -1088,6 +1096,7 @@ impl<'de> serde::Deserialize<'de> for NetworkInfo {
             LatestPendingStatus,
             LatestPendingError,
             LatestEpochWithSettlement,
+            LatestPendingCertificateId,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -1122,6 +1131,7 @@ impl<'de> serde::Deserialize<'de> for NetworkInfo {
                             "latestPendingStatus" | "latest_pending_status" => Ok(GeneratedField::LatestPendingStatus),
                             "latestPendingError" | "latest_pending_error" => Ok(GeneratedField::LatestPendingError),
                             "latestEpochWithSettlement" | "latest_epoch_with_settlement" => Ok(GeneratedField::LatestEpochWithSettlement),
+                            "latestPendingCertificateId" | "latest_pending_certificate_id" => Ok(GeneratedField::LatestPendingCertificateId),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -1154,6 +1164,7 @@ impl<'de> serde::Deserialize<'de> for NetworkInfo {
                 let mut latest_pending_status__ = None;
                 let mut latest_pending_error__ = None;
                 let mut latest_epoch_with_settlement__ = None;
+                let mut latest_pending_certificate_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::NetworkStatus => {
@@ -1244,6 +1255,12 @@ impl<'de> serde::Deserialize<'de> for NetworkInfo {
                                 map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
+                        GeneratedField::LatestPendingCertificateId => {
+                            if latest_pending_certificate_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("latestPendingCertificateId"));
+                            }
+                            latest_pending_certificate_id__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(NetworkInfo {
@@ -1260,6 +1277,7 @@ impl<'de> serde::Deserialize<'de> for NetworkInfo {
                     latest_pending_status: latest_pending_status__,
                     latest_pending_error: latest_pending_error__,
                     latest_epoch_with_settlement: latest_epoch_with_settlement__,
+                    latest_pending_certificate_id: latest_pending_certificate_id__,
                 })
             }
         }

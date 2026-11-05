@@ -19,9 +19,9 @@ use crate::constant::AGGLAYER_RPC_OTEL_SCOPE_NAME;
 
 mod constant;
 
+pub mod backup;
 pub mod certificate;
 pub mod clock;
-pub mod network;
 pub mod settlement;
 
 // Testing.

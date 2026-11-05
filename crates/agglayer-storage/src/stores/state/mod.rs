@@ -21,7 +21,7 @@ use tracing::{info, instrument, warn};
 use self::LET::LocalExitTreePerNetworkColumn;
 use super::{MetadataReader, MetadataWriter, StateReader, StateWriter};
 use crate::{
-    backup::{BackupClient, BackupRequest},
+    backup::BackupClient,
     columns::{
         balance_tree_per_network::BalanceTreePerNetworkColumn,
         certificate_header::CertificateHeaderColumn,
@@ -35,13 +35,15 @@ use crate::{
         settlement_job_id_per_certificate_id::SettlementJobIdPerCertificateIdColumn,
     },
     error::Error,
+    network_metrics::NetworkStage,
     schema::ColumnSchema,
     storage::DB,
     stores::interfaces::writer::{UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate},
     types::{MetadataKey, MetadataValue, SmtKey, SmtKeyType, SmtValue},
+    NetworkMetrics,
 };
 
-mod cf_definitions;
+pub(crate) mod cf_definitions;
 mod network_info;
 mod settlement;
 
@@ -53,6 +55,7 @@ pub struct StateStore {
     db: Arc<DB>,
     backup_client: BackupClient,
     settlement_write_locks: Mutex<HashMap<SettlementJobId, Arc<Mutex<()>>>>,
+    network_metrics: NetworkMetrics,
 }
 
 impl StateStore {
@@ -71,10 +74,19 @@ impl StateStore {
     }
 
     pub fn new(db: Arc<DB>, backup_client: BackupClient) -> Self {
+        Self::new_with_metrics(db, backup_client, NetworkMetrics::unregistered())
+    }
+
+    pub fn new_with_metrics(
+        db: Arc<DB>,
+        backup_client: BackupClient,
+        network_metrics: NetworkMetrics,
+    ) -> Self {
         Self {
             db,
             backup_client,
             settlement_write_locks: Mutex::new(HashMap::new()),
+            network_metrics,
         }
     }
 
@@ -82,12 +94,19 @@ impl StateStore {
         path: &Path,
         backup_client: BackupClient,
     ) -> Result<Self, crate::storage::DBOpenError> {
-        let db = Arc::new(Self::init_db(path)?);
-        Ok(Self {
-            db,
+        Ok(Self::new(Arc::new(Self::init_db(path)?), backup_client))
+    }
+
+    pub fn new_with_path_and_metrics(
+        path: &Path,
+        backup_client: BackupClient,
+        network_metrics: NetworkMetrics,
+    ) -> Result<Self, crate::storage::DBOpenError> {
+        Ok(Self::new_with_metrics(
+            Arc::new(Self::init_db(path)?),
             backup_client,
-            settlement_write_locks: Mutex::new(HashMap::new()),
-        })
+            network_metrics,
+        ))
     }
 }
 
@@ -123,6 +142,7 @@ impl StateWriter for StateStore {
         set_status: UpdateStatusToCandidate,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
+        let mut metrics = self.network_metrics.mutation();
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
@@ -150,6 +170,11 @@ impl StateWriter for StateStore {
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+            metrics.header_written(
+                certificate_header.network_id,
+                *certificate_id,
+                &certificate_header.status,
+            );
 
             self.request_backup();
         } else {
@@ -165,6 +190,7 @@ impl StateWriter for StateStore {
     #[instrument(skip(self))]
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
+        let mut metrics = self.network_metrics.mutation();
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
@@ -187,6 +213,11 @@ impl StateWriter for StateStore {
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+            metrics.header_written(
+                certificate_header.network_id,
+                *certificate_id,
+                &certificate_header.status,
+            );
 
             self.request_backup();
         } else {
@@ -206,6 +237,7 @@ impl StateWriter for StateStore {
         certificate_index: &CertificateIndex,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
+        let mut metrics = self.network_metrics.mutation();
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
@@ -224,6 +256,11 @@ impl StateWriter for StateStore {
 
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+            metrics.header_written(
+                certificate_header.network_id,
+                *certificate_id,
+                &certificate_header.status,
+            );
         }
 
         Ok(())
@@ -235,31 +272,47 @@ impl StateWriter for StateStore {
         status: CertificateStatus,
     ) -> Result<(), Error> {
         // TODO: make it a batch write
-        self.db.put::<CertificateHeaderColumn>(
-            &certificate.hash(),
-            &CertificateHeader {
-                certificate_id: certificate.hash(),
-                network_id: certificate.network_id,
-                height: certificate.height,
-                epoch_number: None,
-                certificate_index: None,
-                prev_local_exit_root: certificate.prev_local_exit_root,
-                new_local_exit_root: certificate.new_local_exit_root,
-                status: status.clone(),
-                metadata: certificate.metadata,
-                settlement_tx_hash: None,
-            },
-        )?;
+        let certificate_id = certificate.hash();
+        let certificate_header = CertificateHeader {
+            certificate_id,
+            network_id: certificate.network_id,
+            height: certificate.height,
+            epoch_number: None,
+            certificate_index: None,
+            prev_local_exit_root: certificate.prev_local_exit_root,
+            new_local_exit_root: certificate.new_local_exit_root,
+            status: status.clone(),
+            metadata: certificate.metadata,
+            settlement_tx_hash: None,
+        };
+        let mut metrics = self.network_metrics.mutation();
+        self.db
+            .put::<CertificateHeaderColumn>(&certificate_id, &certificate_header)?;
+        metrics.header_written(
+            certificate.network_id,
+            certificate_id,
+            &certificate_header.status,
+        );
 
         if let CertificateStatus::Settled = status {
-            // TODO: Check certificate conflict during insert (if conflict it's too late)
+            // TODO: Check certificate conflict during insert (if conflict it's
+            // too late)
             self.db.put::<CertificatePerNetworkColumn>(
                 &certificate_per_network::Key {
                     network_id: certificate.network_id.to_u32(),
                     height: certificate.height,
                 },
-                &certificate.hash(),
+                &certificate_id,
             )?;
+        }
+
+        // A `Pending` header is written when a certificate is accepted from
+        // the RPC, after its body reached the pending db and before the
+        // orchestrator picks it up. The certificate body only exists in the
+        // pending db until then, so this backup is what lets a submitted but
+        // not yet processed certificate survive a loss of the live databases.
+        if let CertificateStatus::Pending = status {
+            self.request_backup();
         }
 
         Ok(())
@@ -272,12 +325,18 @@ impl StateWriter for StateStore {
         status: &CertificateStatus,
     ) -> Result<(), Error> {
         // TODO: make lockguard for certificate_id
+        let mut metrics = self.network_metrics.mutation();
         let certificate_header = self.db.get::<CertificateHeaderColumn>(certificate_id)?;
 
         if let Some(mut certificate_header) = certificate_header {
             certificate_header.status = status.clone();
             self.db
                 .put::<CertificateHeaderColumn>(certificate_id, &certificate_header)?;
+            metrics.header_written(
+                certificate_header.network_id,
+                *certificate_id,
+                &certificate_header.status,
+            );
 
             if let CertificateStatus::Settled = status {
                 self.db.put::<CertificatePerNetworkColumn>(
@@ -289,9 +348,10 @@ impl StateWriter for StateStore {
                 )?;
             }
 
-            // A `Proven` certificate is submitted to L1 from a spawned task shortly
-            // after, so this is the last status write still ordered ahead of the
-            // settlement tx. Its proof is already persisted by now.
+            // A `Proven` certificate is submitted to L1 from a spawned task
+            // shortly after, so this is the last status write still
+            // ordered ahead of the settlement tx. Its proof is
+            // already persisted by now.
             if let CertificateStatus::Proven = status {
                 self.request_backup();
             }
@@ -308,10 +368,14 @@ impl StateWriter for StateStore {
         epoch_number: &EpochNumber,
         certificate_index: &CertificateIndex,
     ) -> Result<(), Error> {
-        Ok(self.db.put::<LatestSettledCertificatePerNetworkColumn>(
+        let prometheus_height = NetworkMetrics::prometheus_height(*height);
+        let mut metrics = self.network_metrics.mutation();
+        self.db.put::<LatestSettledCertificatePerNetworkColumn>(
             network_id,
             &SettledCertificate(*certificate_id, *height, *epoch_number, *certificate_index),
-        )?)
+        )?;
+        metrics.height_written(*network_id, NetworkStage::Settled, prometheus_height);
+        Ok(())
     }
 
     fn write_local_network_state(
@@ -409,7 +473,9 @@ impl StateWriter for StateStore {
 impl StateStore {
     /// Requests a best-effort backup of the state and pending databases.
     fn request_backup(&self) {
-        if let Err(error) = self.backup_client.backup(BackupRequest { epoch_db: None }) {
+        if let Err(error) = self.backup_client.backup_state() {
+            // A full queue coalesces silently, so the queue is closed:
+            // the shutdown drain, or a dead engine.
             warn!("Unable to trigger backup for the state database: {}", error);
         }
     }
@@ -633,14 +699,13 @@ impl StateReader for StateStore {
     }
 
     fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error> {
-        Ok(self
-            .db
+        self.db
             .iter_with_direction::<LatestSettledCertificatePerNetworkColumn>(
                 ReadOptions::default(),
                 Direction::Forward,
             )?
-            .filter_map(|v| v.ok())
-            .collect())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     fn get_latest_settled_certificate_per_network(

@@ -3,5 +3,9 @@ format_strings = true
 group_imports = "StdExternalCrate"
 reorder_imports = true
 unstable_features = true
+# Reformatting pessimistic-proof-core shifts the panic-location line numbers
+# baked into the pessimistic-proof ELF, which changes the PP vkey. Only
+# reformat it as part of a deliberate PP version/selector bump.
+ignore = ["crates/pessimistic-proof-core"]
 wrap_comments = true
 imports_granularity = "Crate"

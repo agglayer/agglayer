@@ -13,7 +13,8 @@ fn default_cf_not_empty() -> eyre::Result<()> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
-    // Phase 1: Create a raw RocksDB database with data in the default column family
+    // Phase 1: Create a raw RocksDB database with data in the default column
+    // family
     {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
@@ -106,7 +107,8 @@ fn unexpected_schema() -> eyre::Result<()> {
     let temp_dir = TempDBDir::new();
     let db_path = &temp_dir.path;
 
-    // Phase 1: Create a database with an unexpected column family using raw RocksDB
+    // Phase 1: Create a database with an unexpected column family using raw
+    // RocksDB
     {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);

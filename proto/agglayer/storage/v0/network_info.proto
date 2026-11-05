@@ -14,6 +14,8 @@ message NetworkInfoValue {
     SettledClaim settled_claim = 3;
     // The latest pending certificate.
     LatestPendingCertificateInfo latest_pending_certificate_info = 4;
+    // The latest proven certificate.
+    LatestProvenCertificateInfo latest_proven_certificate_info = 5;
   }
 }
 
@@ -104,5 +106,11 @@ message LatestPendingCertificateHeight {
 // The ID of the latest pending certificate.
 message LatestPendingCertificateId {
   // The certificate ID in bytes
+  bytes id = 1;
+}
+
+// The latest proven certificate.
+message LatestProvenCertificateInfo {
+  // The certificate ID in bytes.
   bytes id = 1;
 }

@@ -45,8 +45,9 @@ pub async fn start_l1() -> L1Docker {
     // nextest runs each test in its own process, and the thread name is not
     // guaranteed to be unique across those processes, so it cannot name the
     // Docker container on its own. Combine the process id with a per-process
-    // counter so the container name stays unique even when tests run in parallel
-    // (the `resource-limited` group), avoiding `docker run --name` collisions.
+    // counter so the container name stays unique even when tests run in
+    // parallel (the `resource-limited` group), avoiding `docker run --name`
+    // collisions.
     static L1_CONTAINER_SEQ: AtomicU64 = AtomicU64::new(0);
     let name = format!(
         "agglayer-integration-l1-{}-{}",
@@ -125,10 +126,11 @@ pub async fn start_agglayer_with_config(
             .unwrap();
 
     // Tune settlement for the test L1: it mines ~1s blocks but its "safe" head
-    // lags many blocks, so the prod SafeBlock policy would idle each certificate
-    // for tens of seconds. Settle on latest with one confirmation, and poll a few
-    // seconds apart (kept above the ~1s block time so an attempt is never
-    // abandoned before it can mine, which would resubmit and double-settle).
+    // lags many blocks, so the prod SafeBlock policy would idle each
+    // certificate for tens of seconds. Settle on latest with one
+    // confirmation, and poll a few seconds apart (kept above the ~1s block
+    // time so an attempt is never abandoned before it can mine, which would
+    // resubmit and double-settle).
     {
         let tx_config = &mut config.settlement.pessimistic_proof_tx_config;
         tx_config.settlement_policy =
@@ -322,9 +324,9 @@ pub async fn l1_block_number(l1: &L1Docker) -> Option<u64> {
 }
 
 pub async fn wait_for_l1_blocks(l1: &L1Docker, additional_blocks: u64) {
-    // Poll tolerantly: a transient L1 RPC error yields `None` and re-polls within
-    // the timeout budget instead of panicking through the loop. The target is
-    // anchored to the first successful block read.
+    // Poll tolerantly: a transient L1 RPC error yields `None` and re-polls
+    // within the timeout budget instead of panicking through the loop. The
+    // target is anchored to the first successful block read.
     let start = tokio::time::Instant::now();
     let mut target = None;
 

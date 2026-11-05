@@ -20,6 +20,7 @@ hyper.workspace = true
 http.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
 pin-project.workspace = true
+prometheus.workspace = true
 reqwest = "0.12"
 reqwest13 = { package = "reqwest", version = "0.13" }
 serde = { workspace = true, features = ["derive"] }
@@ -41,6 +42,7 @@ agglayer-certificate-orchestrator.workspace = true
 agglayer-clock.workspace = true
 agglayer-config.workspace = true
 agglayer-contracts.workspace = true
+agglayer-errors.workspace = true
 agglayer-grpc-api.workspace = true
 agglayer-grpc-types.workspace = true
 agglayer-jsonrpc-api.workspace = true
@@ -50,6 +52,7 @@ agglayer-signer.workspace = true
 agglayer-storage.workspace = true
 agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
+agglayer-utils.workspace = true
 pessimistic-proof.workspace = true
 prover-executor.workspace = true
 
@@ -69,7 +72,6 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 agglayer-jsonrpc-api = { workspace = true, features = ["testutils"] }
 agglayer-config = { workspace = true, features = ["testutils"] }
 agglayer-storage = { workspace = true, features = ["testutils"] }
-agglayer-telemetry = { workspace = true, features = ["testutils"] }
 agglayer-types = { workspace = true, features = ["testutils"] }
 
 [features]

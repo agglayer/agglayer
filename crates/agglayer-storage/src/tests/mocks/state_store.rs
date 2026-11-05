@@ -21,6 +21,16 @@ mock! {
 
         fn get_latest_pending_height(&self, network_id: NetworkId) -> Result<Option<Height>, Error>;
 
+        fn get_latest_pending_certificate_id(
+            &self,
+            network_id: NetworkId,
+        ) -> Result<Option<CertificateId>, Error>;
+
+        fn get_latest_proven_certificate_id(
+            &self,
+            network_id: NetworkId,
+        ) -> Result<Option<CertificateId>, Error>;
+
         fn get_latest_settled_certificate_id(
             &self,
             network_id: NetworkId,
@@ -219,5 +229,10 @@ mock! {
             &self,
             settlement_job_id: &SettlementJobId,
         ) -> Result<(), Error>;
+
+        fn admin_unlink_certificate_settlement_job(
+            &self,
+            certificate_id: &CertificateId,
+        ) -> Result<SettlementJobId, Error>;
     }
 }

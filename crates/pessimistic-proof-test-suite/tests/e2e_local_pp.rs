@@ -75,9 +75,24 @@ impl VersionConsistencyChecker {
             panic!("inconsistent test data")
         };
 
-        self.certificate
-            .verify_legacy_ecdsa(signer, &signature)
-            .unwrap();
+        // This test exercises the PP-level version-migration state machine
+        // across V2/V3/V5, independently of which versions the Agglayer
+        // RPC currently chooses to accept at submission time. So
+        // recover the signer directly for the version under test,
+        // rather than going through `Certificate::verify_legacy_ecdsa`
+        // (which encodes that RPC-side policy).
+        let commitment = self
+            .certificate
+            .signature_commitment_values()
+            .commitment(self.certificate_signature_version);
+        let recovered_signer = signature
+            .recover_address_from_prehash(&commitment)
+            .expect("signature should recover a signer for the version it was signed with");
+        assert_eq!(
+            recovered_signer, signer,
+            "signature must recover to the expected signer for version {:?}",
+            self.certificate_signature_version
+        );
 
         // Previous state settled in L1
         let expected_prev_pp_root = PessimisticRootCommitmentValues {
@@ -237,8 +252,8 @@ fn e2e_local_pp_random() {
     let target = u(u64::MAX);
     let upper = u64::MAX / 10;
     let mut forest = Forest::new(vec![(USDC, target), (ETH, target)]);
-    // Generate random bridge events such that the sum of the USDC and ETH amounts
-    // is less than `target`
+    // Generate random bridge events such that the sum of the USDC and ETH
+    // amounts is less than `target`
     let get_events = || {
         let mut usdc_acc = U256::ZERO;
         let mut eth_acc = U256::ZERO;

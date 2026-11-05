@@ -32,7 +32,7 @@ async fn send_certificate_method_can_be_called_and_succeed() {
     let cert_id: CertificateId = client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
+            rpc_params![Certificate::new_for_test_v5(1.into(), Height::ZERO)],
         )
         .await
         .unwrap();
@@ -72,11 +72,12 @@ async fn send_certificate_method_requires_known_signer() {
     );
 
     let context = TestContext::new_with_config(config).await;
+    // Signed on V5 so the only reason this can fail is the signer mismatch.
     let send_request: Result<CertificateId, _> = context
         .api_client
         .request(
             "interop_sendCertificate",
-            rpc_params![Certificate::new_for_test(1.into(), Height::ZERO)],
+            rpc_params![Certificate::new_for_test_v5(1.into(), Height::ZERO)],
         )
         .await;
 
@@ -99,8 +100,11 @@ async fn pending_certificate_in_error_can_be_replaced() {
     let network_id = 1.into();
 
     let pending_certificate = Certificate::new_for_test(network_id, Height::ZERO);
-    let mut second_pending = Certificate::new_for_test(network_id, Height::ZERO);
+    let mut second_pending = Certificate::new_for_test_v5(network_id, Height::ZERO);
     second_pending.metadata = Metadata::new([1; 32].into());
+    // Mutating the certificate after signing invalidates its V5 signature,
+    // since V5 commits to the certificate's own hash.
+    second_pending.resign_for_test();
 
     assert_ne!(pending_certificate.hash(), second_pending.hash());
     context
@@ -504,6 +508,67 @@ async fn admin_set_settlement_tx_hash_is_retired() {
 
     assert!(matches!(res.status, CertificateStatus::InError { .. }));
     assert_eq!(res.settlement_tx_hash, Some(fake_settlement_tx_hash));
+}
+
+#[rstest::rstest]
+#[case("Pending", CertificateStatus::Pending)]
+#[case("Proven", CertificateStatus::Proven)]
+#[case("Candidate", CertificateStatus::Candidate)]
+#[case("InError", CertificateStatus::error(agglayer_types::CertificateStatusError::InternalError("testing".to_string())))]
+#[test_log::test(tokio::test)]
+async fn admin_force_set_status_to_settled_is_rejected(
+    #[case] from_status: &str,
+    #[case] status: CertificateStatus,
+    #[values(false, true)] second_operation: bool,
+) {
+    let path = TempDBDir::new();
+    let mut config = Config::new(&path.path);
+    config.debug_mode = true;
+    let mut context = TestContext::new_with_config(config).await;
+    let certificate = Certificate::new_for_test(1.into(), Height::ZERO);
+    let certificate_id = certificate.hash();
+
+    context
+        .state_store
+        .insert_certificate_header(&certificate, status)
+        .expect("unable to insert certificate header");
+    let original_header = context
+        .state_store
+        .get_certificate_header(&certificate_id)
+        .unwrap()
+        .unwrap();
+
+    let forbidden_operation = format!("set-status,from={from_status},to=Settled");
+    let (operation_1, operation_2) = if second_operation {
+        (
+            format!("set-status,from={from_status},to=Proven"),
+            Some(forbidden_operation),
+        )
+    } else {
+        (forbidden_operation, None)
+    };
+    let result: Result<(), ClientError> = context
+        .admin_client
+        .request(
+            "admin_forceEditCertificate",
+            rpc_params![certificate_id, "process-now=true", operation_1, operation_2],
+        )
+        .await;
+
+    let error = result.unwrap_err();
+    let ClientError::Call(error) = error else {
+        panic!("expected a call error, got: {error}");
+    };
+    assert_eq!(error.code(), jsonrpsee::types::error::INVALID_PARAMS_CODE);
+    assert!(context.certificate_receiver.try_recv().is_err());
+    assert_eq!(
+        context
+            .state_store
+            .get_certificate_header(&certificate_id)
+            .unwrap()
+            .unwrap(),
+        original_header
+    );
 }
 
 #[test_log::test(tokio::test)]

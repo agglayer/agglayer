@@ -1,10 +1,11 @@
 use std::{num::NonZeroU64, sync::Arc};
 
-use agglayer_aggregator_notifier::CertifierClient;
+use agglayer_aggregator_notifier::{CertifierClient, ProverRouter};
 use agglayer_certificate_orchestrator::CertificateOrchestrator;
 use agglayer_clock::{BlockClock, Clock, TimeClock};
 use agglayer_config::{storage::backup::BackupConfig, Config, Epoch};
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
+use agglayer_errors::ResultExt as _;
 use agglayer_jsonrpc_api::{admin::AdminAgglayerImpl, AgglayerImpl};
 use agglayer_signer::ConfiguredSigner;
 use agglayer_storage::{
@@ -13,15 +14,17 @@ use agglayer_storage::{
         debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore,
         PerEpochReader as _,
     },
+    NetworkMetrics,
 };
+use agglayer_utils::task::spawn_blocking_in_current_span;
 use alloy::{
     network::EthereumWallet,
     providers::{ProviderBuilder, WalletProvider, WsConnect},
 };
 use eyre::Context as _;
+use prometheus::Registry;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tower::buffer::Buffer;
 use tracing::{debug, error, info, warn};
 
 use crate::epoch_synchronizer::EpochSynchronizer;
@@ -56,6 +59,7 @@ impl Node {
     ///    Node::builder()
     ///      .config(config)
     ///      .cancellation_token(CancellationToken::new())
+    ///      .registry(prometheus::Registry::new())
     ///      .version(env!("CARGO_PKG_VERSION").to_string())
     ///      .start()
     ///      .await?;
@@ -75,6 +79,7 @@ impl Node {
     pub(crate) async fn start(
         config: Arc<Config>,
         cancellation_token: CancellationToken,
+        registry: Registry,
         version: String,
     ) -> eyre::Result<Self> {
         if config.mock_verifier {
@@ -84,42 +89,92 @@ impl Node {
             );
         }
 
-        // Initializing storage
-        let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path)?);
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path)?);
+        let storage_config = config.clone();
+        let storage_cancellation_token = cancellation_token.clone();
+        let (
+            pending_store,
+            state_store,
+            debug_store,
+            backup_engine,
+            backup_client,
+            network_metrics,
+        ) = spawn_blocking_in_current_span(move || -> eyre::Result<_> {
+            let pending_db = Arc::new(PendingStore::init_db(
+                &storage_config.storage.pending_db_path,
+            )?);
+            let state_db = Arc::new(StateStore::init_db(&storage_config.storage.state_db_path)?);
 
-        // Initialize backup engine
-        let backup_client = if let BackupConfig::Enabled {
-            path,
-            state_max_backup_count,
-            pending_max_backup_count,
-        } = &config.storage.backup
-        {
-            let (backup_engine, client) = BackupEngine::new(
+            let (backup_engine, backup_client) = if let BackupConfig::Enabled {
                 path,
-                state_db.clone(),
-                pending_db.clone(),
-                *state_max_backup_count,
-                *pending_max_backup_count,
-                cancellation_token.clone(),
-            )?;
-            tokio::spawn(backup_engine.run());
+                state_max_backup_count,
+                pending_max_backup_count,
+            } = &storage_config.storage.backup
+            {
+                info!(
+                    ?path,
+                    state_max_backup_count, pending_max_backup_count, "Backups enabled"
+                );
 
-            client
-        } else {
-            BackupClient::noop()
-        };
-        let state_store = Arc::new(StateStore::new(state_db, backup_client.clone()));
-        let pending_store = Arc::new(PendingStore::new(pending_db));
-        let debug_store = if config.debug_mode {
-            Arc::new(DebugStore::new_with_path(&config.storage.debug_db_path)?)
-        } else {
-            Arc::new(DebugStore::Disabled)
-        };
+                let (engine, client) = BackupEngine::new(
+                    path,
+                    state_db.clone(),
+                    pending_db.clone(),
+                    *state_max_backup_count,
+                    *pending_max_backup_count,
+                    storage_cancellation_token,
+                )?;
+                (Some(engine), client)
+            } else {
+                warn!("Backups are disabled");
+
+                (None, BackupClient::noop())
+            };
+
+            let network_metrics = NetworkMetrics::new(&registry)
+                .context("Failed registering network storage metrics")?;
+            let state_store = Arc::new(StateStore::new_with_metrics(
+                state_db,
+                backup_client.clone(),
+                network_metrics.clone(),
+            ));
+            let pending_store = Arc::new(PendingStore::new_with_metrics(
+                pending_db,
+                network_metrics.clone(),
+            ));
+            let debug_store = if storage_config.debug_mode {
+                Arc::new(DebugStore::new_with_path(
+                    &storage_config.storage.debug_db_path,
+                )?)
+            } else {
+                Arc::new(DebugStore::Disabled)
+            };
+
+            network_metrics
+                .hydrate(pending_store.as_ref(), state_store.as_ref())
+                .context("Failed hydrating network storage metrics")?;
+
+            Ok((
+                pending_store,
+                state_store,
+                debug_store,
+                backup_engine,
+                backup_client,
+                network_metrics,
+            ))
+        })
+        .await
+        .expect("storage initialization task panicked")?;
+
+        if let Some(backup_engine) = backup_engine {
+            tokio::spawn(async move {
+                backup_engine
+                    .run()
+                    .await
+                    .log_err("Backup engine failed, no further backups will be taken")
+            });
+        }
 
         info!("Storage initialized.");
-
-        crate::metrics::register_network_state_metrics(&pending_store, &state_store);
 
         // Spawn the TimeClock.
         let clock_ref = match &config.epoch {
@@ -190,7 +245,8 @@ impl Node {
                     ),
             );
 
-            // The signer always has at least one address, so `next()` is always `Some`.
+            // The signer always has at least one address, so `next()` is always
+            // `Some`.
             let cert_signer = provider_cert.signer_addresses().next().unwrap();
             tracing::info!("Cert signer address: {cert_signer:?}");
 
@@ -211,17 +267,13 @@ impl Node {
         );
         tracing::debug!("RollupManager created");
 
-        let (_vkey, prover_executor) =
-            prover_executor::Executor::create_prover(config.prover.clone(), pessimistic_proof::ELF)
-                .await?;
-
-        let prover_buffer = Buffer::new(prover_executor, config.prover_buffer_size);
+        let prover = ProverRouter::new(&config).await?;
 
         let certifier_client = CertifierClient::try_new(
             pending_store.clone(),
             Arc::clone(&rollup_manager),
             Arc::clone(&config),
-            prover_buffer,
+            prover,
         )
         .await?;
         info!("Certifier client created.");
@@ -286,6 +338,7 @@ impl Node {
             debug_store.clone(),
             config.clone(),
             settlement_service_for_admin,
+            network_metrics,
         )
         .start()
         .await

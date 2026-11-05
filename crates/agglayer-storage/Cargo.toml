@@ -16,6 +16,7 @@ hex.workspace = true
 parking_lot.workspace = true
 prost.workspace = true
 prost-types.workspace = true
+prometheus.workspace = true
 rand = { workspace = true, optional = true }
 rocksdb = "0.24.0"
 serde.workspace = true
@@ -28,7 +29,9 @@ tracing.workspace = true
 
 agglayer-config.workspace = true
 agglayer-sp1.workspace = true
+agglayer-telemetry.workspace = true
 agglayer-types.workspace = true
+agglayer-utils.workspace = true
 agglayer-tries.workspace = true
 pessimistic-proof.workspace = true
 
@@ -53,6 +56,7 @@ tokio.workspace = true
 
 agglayer-types = { workspace = true, features = ["testutils"] }
 agglayer-sp1.workspace = true
+agglayer-telemetry = { workspace = true, features = ["testutils"] }
 pessimistic-proof-test-suite.workspace = true
 
 agglayer-storage = { workspace = true, features = ["testutils"] }

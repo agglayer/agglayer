@@ -1,5 +1,7 @@
 mod interfaces;
 
+pub mod async_api;
+
 pub use interfaces::{
     reader::{
         network_info_reader::NetworkInfoReader, settlement_reader::SettlementReader, DebugReader,

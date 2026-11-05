@@ -78,8 +78,8 @@ where
         epoch_number: EpochNumber,
         index: CertificateIndex,
     ) -> Result<Option<Certificate>, Error> {
-        // Use readonly access to prevent concurrency issues when multiple processes
-        // are accessing the database
+        // Use readonly access to prevent concurrency issues when multiple
+        // processes are accessing the database
         let per_epoch_store = PerEpochStore::try_open_readonly(
             self.config.clone(),
             epoch_number,
@@ -94,8 +94,8 @@ where
         epoch_number: EpochNumber,
         index: CertificateIndex,
     ) -> Result<Option<agglayer_types::Proof>, Error> {
-        // Use readonly access to prevent concurrency issues when multiple processes
-        // are accessing the database
+        // Use readonly access to prevent concurrency issues when multiple
+        // processes are accessing the database
         let per_epoch_store = PerEpochStore::try_open_readonly(
             self.config.clone(),
             epoch_number,

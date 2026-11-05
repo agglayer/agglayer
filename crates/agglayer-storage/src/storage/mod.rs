@@ -56,8 +56,10 @@ impl DB {
     /// processes need to read from the database.
     pub fn open_cf_readonly(path: &Path, cfs: &[ColumnDescriptor]) -> Result<DB, DBError> {
         let mut options = Options::default();
-        options.create_if_missing(false); // Don't create if missing in readonly mode
-        options.create_missing_column_families(false); // Don't create missing column families
+        options.create_if_missing(false); // Don't create if missing in readonly
+                                          // mode
+        options.create_missing_column_families(false); // Don't create missing
+                                                       // column families
 
         let descriptors: Vec<_> = match rocksdb::DB::list_cf(&options, path) {
             Ok(names) => names

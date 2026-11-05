@@ -24,7 +24,7 @@ use sp1_sdk::{
 };
 use tower::buffer::Buffer;
 
-use crate::{CertifierClient, ELF};
+use crate::{CertifierClient, ProverRouter, ELF};
 
 #[test_log::test(tokio::test)]
 #[serial]
@@ -144,7 +144,7 @@ async fn happy_path() {
         Arc::new(pending_store),
         Arc::new(l1_rpc),
         Arc::new(config),
-        buffer,
+        ProverRouter::from_default(buffer),
     )
     .await
     .unwrap();
@@ -241,7 +241,7 @@ async fn prover_timeout() {
         Arc::new(pending_store),
         Arc::new(l1_rpc),
         Arc::new(config),
-        buffer,
+        ProverRouter::from_default(buffer),
     )
     .await
     .unwrap();

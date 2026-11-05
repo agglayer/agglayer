@@ -73,9 +73,9 @@ where
         before_tx_hash: Option<TxHash>,
     ) -> Result<[u8; 32], L1RpcError> {
         let at_block = match before_tx_hash {
-            // A transaction that did not successfully advance the state we depend
-            // on (not mined, reverted, or whose receipt could not be fetched)
-            // leaves the current state as the one to query.
+            // A transaction that did not successfully advance the state we
+            // depend on (not mined, reverted, or whose receipt could not be
+            // fetched) leaves the current state as the one to query.
             Some(tx_hash) => block_before_tx(&self.rpc, tx_hash)
                 .await
                 .unwrap_or_else(|_| BlockId::latest()),
