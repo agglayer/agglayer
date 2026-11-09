@@ -467,6 +467,9 @@ async fn recovered_candidates_settle_sequentially() {
         c.height = Height::new(1);
         c
     };
+    // Each proof commits to its own root, so a root carried over from the
+    // first certificate would be told apart from the second one's.
+    let proof_root = |seed: u128| Digest([0x50 + seed as u8; 32]);
     for (seed, c) in [(1, &certificate), (2, &certificate2)] {
         storage
             .pending
@@ -480,7 +483,7 @@ async fn recovered_candidates_settle_sequentially() {
             .pending
             .insert_generated_proof(
                 &c.hash(),
-                &agglayer_test_suite::settlement_proof_with_root(STORED_PROOF_ROOT),
+                &agglayer_test_suite::settlement_proof_with_root(proof_root(seed)),
             )
             .expect("insert settlement proof");
         storage
@@ -566,14 +569,15 @@ async fn recovered_candidates_settle_sequentially() {
         assert_eq!(header.status, CertificateStatus::Settled);
     }
     let recomputed_pp_root = *recomputed_pp_root.lock().unwrap();
-    // The published root is the stored proof's, not the recomputed one.
-    assert_ne!(recomputed_pp_root, Some(STORED_PROOF_ROOT));
+    // The published root is the second certificate's stored proof's, not the
+    // first one's and not the recomputed one.
+    assert_ne!(recomputed_pp_root, Some(proof_root(2)));
     assert_settlement_published(
         &storage.state,
         network_id,
         &certificate2,
         &certificate,
-        Some(STORED_PROOF_ROOT),
+        Some(proof_root(2)),
     );
 }
 

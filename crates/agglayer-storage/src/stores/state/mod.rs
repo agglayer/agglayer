@@ -496,7 +496,9 @@ impl StateWriter for StateStore {
         network_id: &NetworkId,
         settlement: &NetworkSettlement,
     ) -> Result<(), Error> {
-        use crate::types::network_info::v0::{network_info_value::Value, NetworkType};
+        use crate::types::network_info::v0::{
+            network_info_value::Value, NetworkType as ProtoNetworkType,
+        };
         let prometheus_height = NetworkMetrics::prometheus_height(settlement.height);
         let mut metrics = self.network_metrics.mutation();
 
@@ -516,7 +518,7 @@ impl StateWriter for StateStore {
 
         // The type follows settlement: the first settled certificate of a new
         // type switches it.
-        let network_type = NetworkType::from(settlement.network_type.clone());
+        let network_type = ProtoNetworkType::from(settlement.network_type.clone());
         self.stage_network_info(
             *network_id,
             Value::NetworkType(network_type as i32),

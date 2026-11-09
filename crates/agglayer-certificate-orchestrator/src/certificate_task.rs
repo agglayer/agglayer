@@ -236,10 +236,11 @@ where
 
         debug!("Recomputing new state for already-proven certificate");
 
-        // Recompute the local network state in place; the proof output is
-        // unused here. The settlement cache takes the pessimistic root from
-        // the stored proof, as on the fresh path.
-        self.certifier_client
+        // Recompute the local network state in place. The settlement cache
+        // takes the pessimistic root from the stored proof, as on the fresh
+        // path; the recomputed one only cross-checks it.
+        let (_, _, output) = self
+            .certifier_client
             .witness_generation(&self.certificate, &mut state, before_tx)
             .await
             .map_err(|error| {
@@ -250,15 +251,8 @@ where
                 error
             })?;
         debug!("Recomputing new state completed");
-        // L1 already accepted this certificate, so a proof that is gone by now
-        // (admin removal, or a crash between the epoch's writes) is an
-        // internal inconsistency, not a settlement failure.
-        let proof = self.stored_proof().await.map_err(|error| {
-            CertificateStatusError::InternalError(format!(
-                "Proof of a certificate accepted by L1 is missing: {error}"
-            ))
-        })?;
-        let new_pp_root = Self::proof_output(&proof)?.new_pessimistic_root;
+        let new_pp_root = Self::proof_output(&self.stored_proof().await?)?.new_pessimistic_root;
+        Self::report_pp_root_mismatch(output.new_pessimistic_root, new_pp_root);
 
         // Send the new state to the network task
         // TODO: Once we update the storage we'll have to remove this! It
@@ -321,6 +315,7 @@ where
         // just stored, the public values settlement submits to L1, on every
         // path; the certifier's own output is not the source.
         let new_pp_root = Self::proof_output(&self.stored_proof().await?)?.new_pessimistic_root;
+        Self::report_pp_root_mismatch(certifier_output.new_pp_root, new_pp_root);
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
@@ -393,14 +388,15 @@ where
     }
 
     /// The certificate's proof from the pending store, which keeps it until
-    /// the certificate is settled.
+    /// the certificate is settled. A proof that is gone is an internal
+    /// inconsistency, never a settlement outcome.
     async fn stored_proof(&self) -> Result<Proof, CertificateStatusError> {
         let certificate_id = self.header.certificate_id;
         self.pending_store
             .get_proof_async(certificate_id)
             .await?
             .ok_or_else(|| {
-                CertificateStatusError::SettlementError(format!(
+                CertificateStatusError::InternalError(format!(
                     "No SP1 proof found for certificate {certificate_id}"
                 ))
             })
@@ -412,10 +408,26 @@ where
         PessimisticProofOutput::bincode_codec()
             .deserialize::<PessimisticProofOutput>(proof.public_values.as_slice())
             .map_err(|error| {
-                CertificateStatusError::SettlementError(format!(
+                CertificateStatusError::InternalError(format!(
                     "Failed to deserialize proof output: {error}"
                 ))
             })
+    }
+
+    /// The settlement cache publishes `stored`, the root of the proof L1
+    /// verifies. `derived` is the root of the local state about to be
+    /// persisted for the same certificate; a mismatch is an inconsistency
+    /// worth an operator's attention, but not a reason to hold back a
+    /// settlement L1 already accepted or a proof it will verify itself.
+    fn report_pp_root_mismatch(derived: Digest, stored: Digest) {
+        if derived != stored {
+            error!(
+                %derived,
+                %stored,
+                "The pessimistic root of the local state differs from the stored proof's; \
+                 publishing the stored one"
+            );
+        }
     }
 
     /// Build the real `verifyPessimisticTrustedAggregator` settlement calldata
