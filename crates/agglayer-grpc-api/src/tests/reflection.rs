@@ -2,9 +2,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use agglayer_config::Config;
 use agglayer_rpc::AgglayerService;
-use agglayer_storage::tests::mocks::{
-    MockDebugStore, MockEpochsStore, MockPendingStore, MockStateStore,
-};
+use agglayer_storage::tests::mocks::{MockDebugStore, MockPendingStore, MockStateStore};
 use prost::Message as _;
 use prost_types::FileDescriptorSet;
 
@@ -20,7 +18,6 @@ fn reflection_descriptors_include_all_dependencies() {
         Arc::new(MockPendingStore::new()),
         Arc::new(MockStateStore::new()),
         Arc::new(MockDebugStore::new()),
-        Arc::new(MockEpochsStore::new()),
         config.clone(),
         Arc::new(L1Rpc),
     ));

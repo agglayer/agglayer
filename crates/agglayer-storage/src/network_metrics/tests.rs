@@ -8,7 +8,7 @@ use std::{
 
 use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError,
-    Digest, EpochNumber, Height, NetworkId, SettlementTxHash,
+    Digest, EpochNumber, Height, NetworkId, NetworkType, SettlementTxHash,
 };
 use prometheus::{Encoder as _, Registry, TextEncoder};
 
@@ -20,11 +20,27 @@ use crate::{
         certificate_updater::{set_pending, submit},
         pending::PendingStore,
         state::StateStore,
-        PendingCertificateReader as _, PendingCertificateWriter as _, StateWriter as _,
-        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        NetworkSettlement, PendingCertificateReader as _, PendingCertificateWriter as _,
+        StateWriter as _, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
     tests::TempDBDir,
 };
+
+/// A settlement of `certificate_id` at `height`: these tests only read the
+/// cursor height.
+fn settlement(certificate_id: CertificateId, height: Height) -> NetworkSettlement {
+    NetworkSettlement {
+        certificate_id,
+        height,
+        epoch_number: EpochNumber::ZERO,
+        certificate_index: CertificateIndex::ZERO,
+        new_pp_root: Digest::ZERO,
+        new_local_exit_root: Digest::ZERO.into(),
+        settled_let_leaf_count: 0,
+        network_type: NetworkType::Ecdsa,
+        settled_claim: None,
+    }
+}
 
 fn network_metrics() -> (Registry, NetworkMetrics) {
     let registry = Registry::new();
@@ -220,11 +236,7 @@ fn store_mutations_update_gauges_after_each_successful_write() {
     state
         .set_latest_settled_certificate_for_network(
             &network,
-            &Height::ZERO,
-            &certificate_id,
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
-            None,
+            &settlement(certificate_id, Height::ZERO),
         )
         .unwrap();
     assert_eq!(height_of(&registry, 1, "settled"), Some(0));
@@ -352,11 +364,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
             state
                 .set_latest_settled_certificate_for_network(
                     &network,
-                    &oversized,
-                    &certificate_id,
-                    &EpochNumber::ZERO,
-                    &CertificateIndex::ZERO,
-                    None,
+                    &settlement(certificate_id, oversized),
                 )
                 .unwrap();
         });
@@ -468,11 +476,7 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
         state
             .set_latest_settled_certificate_for_network(
                 &NetworkId::new(5),
-                &Height::new(9),
-                &settled.hash(),
-                &EpochNumber::ZERO,
-                &CertificateIndex::ZERO,
-                None,
+                &settlement(settled.hash(), Height::new(9)),
             )
             .unwrap();
     }
@@ -563,11 +567,7 @@ fn failed_writes_leave_gauges_unchanged() {
         state
             .set_latest_settled_certificate_for_network(
                 &network,
-                &Height::ZERO,
-                &certificate_id,
-                &EpochNumber::ZERO,
-                &CertificateIndex::ZERO,
-                None,
+                &settlement(certificate_id, Height::ZERO),
             )
             .unwrap();
     }
@@ -614,11 +614,7 @@ fn failed_writes_leave_gauges_unchanged() {
     assert!(state
         .set_latest_settled_certificate_for_network(
             &network,
-            &Height::new(9),
-            &certificate_id,
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
-            None,
+            &settlement(certificate_id, Height::new(9))
         )
         .is_err());
 

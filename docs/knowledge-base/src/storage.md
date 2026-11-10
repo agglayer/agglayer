@@ -144,7 +144,7 @@ Admin operations require exclusive operational access and do not take the submis
 Proof completion uses the sequential network task and a storage async adapter,
 without a submission lock.
 Changing an arbitrary header's status to `Proven` does not advance the proven pointer.
-Settlement will also write the network type; pending and proven writes leave it untouched.
+Settlement also writes the network type; pending and proven writes leave it untouched.
 
 Submission reuses the pending store's height check and rejects changes to settled certificates.
 Persisted header identity and proof-completion inputs are trusted.
@@ -188,6 +188,43 @@ A settled row's claim is complete by construction.
 A settled row without a claim row means that no imported bridge exit
 was settled through that certificate.
 No completion flag records this.
+
+### Settlement writer
+
+The sequential network task is the sole runtime owner of its network's settled pointer,
+settled row, network type, and settled claim.
+Fresh certification and recovery publish through the same path,
+and the task awaits the write before it processes the next certificate.
+The certificate task carries the new pessimistic root to the network task,
+decoded from the public values of the stored proof, the ones settlement submits to L1:
+after fresh certification, and when a certificate that already has a settlement job
+is resumed after a restart.
+The network task reads the certificate's local exit root, type, and last imported bridge exit
+once, when the certificate task starts, and takes the leaf count from the local state
+it persists for that settlement.
+It hands the state store one settlement input with all of that,
+plus the height, epoch, and index of the legacy pointer;
+the store derives nothing from the header, the live exit tree, or history.
+
+One state DB batch writes the legacy settled pointer, the network type, the complete settled row
+(certificate ID, local exit root, pessimistic root, leaf count), and the claim row
+when the certificate carries a claim.
+Every settlement writes every field of the settled row,
+so a backfilled root is replaced rather than cleared or carried over.
+A certificate without a claim leaves the claim row untouched,
+with no read of the previous claim.
+Pending and proven rows are not part of the batch, so their writers stay independent.
+A failed batch publishes none of these changes, and the task fails as before.
+Epoch assignment, local state, and header writes stay separate stages ahead of this batch,
+in their existing order.
+
+Only cancellation drops the task future while the blocking transition runs,
+and cancellation shuts the orchestrator down rather than replacing the task,
+so no second writer for the network starts while the detached transition finishes.
+Admin repair requires exclusive operational access with that processing quiesced.
+Nothing at runtime compares the cache with the legacy pointer or repairs preexisting divergence.
+
+### Backfill migration step
 
 The third state DB migration step fills `network_info_cf` from the legacy indexes,
 exactly once.

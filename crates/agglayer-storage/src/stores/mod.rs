@@ -10,8 +10,8 @@ pub use interfaces::{
     },
     writer::{
         settlement_writer::{EditEvenIfCompleted, SettlementWriter},
-        DebugWriter, EpochStoreWriter, MetadataWriter, PendingCertificateWriter, PerEpochWriter,
-        StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        DebugWriter, EpochStoreWriter, MetadataWriter, NetworkSettlement, PendingCertificateWriter,
+        PerEpochWriter, StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
 };
 

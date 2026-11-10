@@ -2,17 +2,33 @@ use std::time::Duration;
 
 use agglayer_config::Config;
 use agglayer_storage::{
-    stores::{PendingCertificateWriter, StateWriter},
+    stores::{NetworkSettlement, PendingCertificateWriter, StateWriter},
     tests::TempDBDir,
 };
 use agglayer_types::{
-    Certificate, CertificateHeader, CertificateIndex, CertificateStatus, EpochNumber, Height,
+    Certificate, CertificateHeader, CertificateIndex, CertificateStatus, Digest, EpochNumber,
+    Height, NetworkType,
 };
 use insta::assert_snapshot;
 use jsonrpsee::{core::client::ClientT, rpc_params};
 use serde_json::json;
 
 use crate::{testutils::TestContext, AgglayerServer};
+
+/// The settlement of `certificate` at `height`, in epoch 0 without a claim.
+fn settlement(certificate: &Certificate, height: Height) -> NetworkSettlement {
+    NetworkSettlement {
+        certificate_id: certificate.hash(),
+        height,
+        epoch_number: EpochNumber::ZERO,
+        certificate_index: CertificateIndex::ZERO,
+        new_pp_root: Digest::ZERO,
+        new_local_exit_root: certificate.new_local_exit_root,
+        settled_let_leaf_count: 0,
+        network_type: NetworkType::from(&certificate.aggchain_data),
+        settled_claim: None,
+    }
+}
 
 #[test_log::test(tokio::test)]
 async fn returns_the_pending_certificate_header() {
@@ -43,11 +59,7 @@ async fn returns_the_pending_certificate_header() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height::ZERO,
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
-            None,
+            &settlement(&settled_certificate, Height::ZERO),
         )
         .expect("unable to set latest settled certificate");
 
@@ -126,11 +138,7 @@ async fn returns_the_proven_certificate_header() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &settled_certificate.height,
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
-            None,
+            &settlement(&settled_certificate, settled_certificate.height),
         )
         .expect("unable to set latest settled certificate");
     context
@@ -206,11 +214,7 @@ async fn returns_the_settled_certificate_header() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &settled_certificate.height,
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
-            None,
+            &settlement(&settled_certificate, settled_certificate.height),
         )
         .expect("unable to set latest settled certificate");
 
@@ -331,11 +335,7 @@ async fn returns_the_highest_height() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height::new(10),
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
-            None,
+            &settlement(&settled_certificate, Height::new(10)),
         )
         .expect("unable to set latest settled certificate");
 
@@ -423,11 +423,7 @@ async fn returns_the_settled_one_at_same_height() {
         .state_store
         .set_latest_settled_certificate_for_network(
             &network_id,
-            &Height::new(10),
-            &settled_certificate.hash(),
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
-            None,
+            &settlement(&settled_certificate, Height::new(10)),
         )
         .expect("unable to set latest settled certificate");
 

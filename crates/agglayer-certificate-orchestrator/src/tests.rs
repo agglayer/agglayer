@@ -389,11 +389,7 @@ impl StateWriter for DummyPendingStore {
     fn set_latest_settled_certificate_for_network(
         &self,
         _network_id: &NetworkId,
-        _height: &Height,
-        _certificate_id: &CertificateId,
-        _epoch_number: &EpochNumber,
-        _certificate_index: &CertificateIndex,
-        _settled_claim: Option<agglayer_types::SettledClaim>,
+        _settlement: &agglayer_storage::stores::NetworkSettlement,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -526,7 +522,7 @@ async fn test_certificate_orchestrator_can_stop() {
         Arc::new(NonZeroU64::new(1).unwrap()),
     );
 
-    let (_data_sender, data_receiver) = mpsc::channel(10);
+    let (data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
@@ -549,11 +545,23 @@ async fn test_certificate_orchestrator_can_stop() {
     )
     .expect("Unable to create orchestrator");
 
+    // A certificate still queued when the token is cancelled must not spawn
+    // a network task: cancellation is the only thing that drops a settlement
+    // in flight, and it must never start a replacement owner for the network.
+    data_sender
+        .send((
+            NetworkId::new(1),
+            Height::ZERO,
+            CertificateId::new([1; 32].into()),
+        ))
+        .await
+        .expect("the orchestrator still holds the receiver");
     cancellation_token.cancel();
 
     assert!(matches!(poll!(&mut orchestrator), Poll::Ready(())));
 
     assert!(check_receiver.try_recv().is_err());
+    assert!(orchestrator.spawned_network_tasks.is_empty());
 }
 
 #[tokio::test]

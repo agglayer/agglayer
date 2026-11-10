@@ -9,8 +9,8 @@ use crate::{
     columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
     stores::{
-        EditEvenIfCompleted, MetadataReader, MetadataWriter, NetworkInfoReader, SettlementReader,
-        SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
+        EditEvenIfCompleted, MetadataReader, MetadataWriter, NetworkInfoReader, NetworkSettlement,
+        SettlementReader, SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
         UpdateStatusToCandidate,
     },
 };
@@ -79,11 +79,7 @@ mock! {
         fn set_latest_settled_certificate_for_network(
             &self,
             network_id: &NetworkId,
-            height: &Height,
-            certificate_id: &CertificateId,
-            epoch_number: &EpochNumber,
-            certificate_index: &agglayer_types::CertificateIndex,
-            settled_claim: Option<agglayer_types::SettledClaim>
+            settlement: &NetworkSettlement,
         ) -> Result<(), Error>;
 
         fn write_local_network_state(
