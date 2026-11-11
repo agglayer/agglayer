@@ -15,7 +15,7 @@ use crate::{
 
 fn raw_store() -> (TempDBDir, StateStore, ObservedBackupRequests) {
     let tmp = TempDBDir::new();
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).expect("Unable to init db"));
     let (backup_client, backups) = BackupClient::observable();
     let store = StateStore::new(db, backup_client);
 

@@ -1,5 +1,5 @@
-use agglayer_interop_types::aggchain_proof;
-use agglayer_primitives::Digest;
+use agglayer_interop_types::{aggchain_proof, ImportedBridgeExit};
+use agglayer_primitives::{Digest, Hashable as _, U256};
 use agglayer_tries::roots::LocalExitRoot;
 use serde::{Deserialize, Serialize};
 
@@ -63,6 +63,17 @@ pub struct SettledClaim {
     pub global_index: Digest,
     /// / Hash of the claimed imported bridge exit.
     pub bridge_exit_hash: Digest,
+}
+
+impl From<&ImportedBridgeExit> for SettledClaim {
+    fn from(exit: &ImportedBridgeExit) -> Self {
+        let global_index: U256 = exit.global_index.into();
+
+        Self {
+            global_index: global_index.to_be_bytes().into(),
+            bridge_exit_hash: exit.bridge_exit.hash(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

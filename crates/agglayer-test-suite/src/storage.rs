@@ -14,7 +14,7 @@ pub struct StorageContext {
 
 impl StorageContext {
     pub fn new_with_config(config: Arc<Config>) -> Self {
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path, None).unwrap());
         let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
 
         let state = Arc::new(StateStore::new(state_db, BackupClient::noop()));

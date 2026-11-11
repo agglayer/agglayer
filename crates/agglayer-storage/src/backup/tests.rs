@@ -18,8 +18,9 @@ use crate::{
 #[tokio::test(flavor = "current_thread")]
 async fn backup_creation_does_not_block_the_async_runtime_worker() {
     let tmp = TempDBDir::new();
-    let state_db =
-        Arc::new(StateStore::init_db(&tmp.path.join("state")).expect("state db should initialize"));
+    let state_db = Arc::new(
+        StateStore::init_db(&tmp.path.join("state"), None).expect("state db should initialize"),
+    );
     let pending_db = Arc::new(
         PendingStore::init_db(&tmp.path.join("pending")).expect("pending db should initialize"),
     );
@@ -61,8 +62,9 @@ async fn backup_creation_does_not_block_the_async_runtime_worker() {
 #[tokio::test]
 async fn state_backup_requests_coalesce_when_the_queue_is_full() {
     let tmp = TempDBDir::new();
-    let state_db =
-        Arc::new(StateStore::init_db(&tmp.path.join("state")).expect("state db should initialize"));
+    let state_db = Arc::new(
+        StateStore::init_db(&tmp.path.join("state"), None).expect("state db should initialize"),
+    );
     let pending_db = Arc::new(
         PendingStore::init_db(&tmp.path.join("pending")).expect("pending db should initialize"),
     );
@@ -92,13 +94,15 @@ async fn queued_backup_requests_are_drained_on_shutdown() {
     let harness = MetricsHarness::install();
 
     let tmp = TempDBDir::new();
-    let state_db =
-        Arc::new(StateStore::init_db(&tmp.path.join("state")).expect("state db should initialize"));
+    let state_db = Arc::new(
+        StateStore::init_db(&tmp.path.join("state"), None).expect("state db should initialize"),
+    );
     let pending_db = Arc::new(
         PendingStore::init_db(&tmp.path.join("pending")).expect("pending db should initialize"),
     );
-    let epoch_db =
-        Arc::new(StateStore::init_db(&tmp.path.join("epoch")).expect("epoch db should initialize"));
+    let epoch_db = Arc::new(
+        StateStore::init_db(&tmp.path.join("epoch"), None).expect("epoch db should initialize"),
+    );
     let cancellation_token = CancellationToken::new();
     let backup_path = tmp.path.join("backup");
     let (backup_engine, backup_client) = BackupEngine::new(
@@ -202,13 +206,15 @@ async fn a_failed_backup_does_not_stop_the_engine() {
     let harness = MetricsHarness::install();
 
     let tmp = TempDBDir::new();
-    let state_db =
-        Arc::new(StateStore::init_db(&tmp.path.join("state")).expect("state db should initialize"));
+    let state_db = Arc::new(
+        StateStore::init_db(&tmp.path.join("state"), None).expect("state db should initialize"),
+    );
     let pending_db = Arc::new(
         PendingStore::init_db(&tmp.path.join("pending")).expect("pending db should initialize"),
     );
-    let epoch_db =
-        Arc::new(StateStore::init_db(&tmp.path.join("epoch")).expect("epoch db should initialize"));
+    let epoch_db = Arc::new(
+        StateStore::init_db(&tmp.path.join("epoch"), None).expect("epoch db should initialize"),
+    );
     let cancellation_token = CancellationToken::new();
     let backup_path = tmp.path.join("backup");
     let (backup_engine, backup_client) = BackupEngine::new(

@@ -305,6 +305,31 @@ impl PendingCertificateWriter for DummyPendingStore {
 }
 
 impl StateWriter for DummyPendingStore {
+    fn publish_pending_certificate(
+        &self,
+        _certificate: &Certificate,
+        _status: &CertificateStatus,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn set_latest_pending_certificate_pointer(
+        &self,
+        _network_id: NetworkId,
+        _height: Height,
+        _certificate_id: CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
+    fn set_latest_proven_certificate_pointer(
+        &self,
+        _network_id: NetworkId,
+        _certificate_id: CertificateId,
+    ) -> Result<(), agglayer_storage::error::Error> {
+        Ok(())
+    }
+
     fn disable_network(
         &self,
         _network_id: &NetworkId,
@@ -344,35 +369,6 @@ impl StateWriter for DummyPendingStore {
         todo!()
     }
 
-    fn insert_certificate_header(
-        &self,
-        certificate: &Certificate,
-        status: CertificateStatus,
-    ) -> Result<(), agglayer_storage::error::Error> {
-        self.certificate_per_network.write().unwrap().insert(
-            (certificate.network_id, certificate.height),
-            certificate.hash(),
-        );
-
-        self.certificate_headers.write().unwrap().insert(
-            certificate.hash(),
-            CertificateHeader {
-                network_id: certificate.network_id,
-                height: certificate.height,
-                epoch_number: None,
-                certificate_index: None,
-                certificate_id: certificate.hash(),
-                prev_local_exit_root: certificate.prev_local_exit_root,
-                new_local_exit_root: certificate.new_local_exit_root,
-                status,
-                metadata: certificate.metadata,
-                settlement_tx_hash: None,
-            },
-        );
-
-        Ok(())
-    }
-
     fn update_certificate_header_status(
         &self,
         certificate_id: &CertificateId,
@@ -393,10 +389,7 @@ impl StateWriter for DummyPendingStore {
     fn set_latest_settled_certificate_for_network(
         &self,
         _network_id: &NetworkId,
-        _height: &Height,
-        _certificate_id: &CertificateId,
-        _epoch_number: &EpochNumber,
-        _certificate_index: &CertificateIndex,
+        _settlement: &agglayer_storage::stores::NetworkSettlement,
     ) -> Result<(), agglayer_storage::error::Error> {
         Ok(())
     }
@@ -529,7 +522,7 @@ async fn test_certificate_orchestrator_can_stop() {
         Arc::new(NonZeroU64::new(1).unwrap()),
     );
 
-    let (_data_sender, data_receiver) = mpsc::channel(10);
+    let (data_sender, data_receiver) = mpsc::channel(10);
     let cancellation_token = CancellationToken::new();
 
     let (check_sender, mut check_receiver) = mpsc::channel(1);
@@ -552,11 +545,23 @@ async fn test_certificate_orchestrator_can_stop() {
     )
     .expect("Unable to create orchestrator");
 
+    // A certificate still queued when the token is cancelled must not spawn
+    // a network task: cancellation is the only thing that drops a settlement
+    // in flight, and it must never start a replacement owner for the network.
+    data_sender
+        .send((
+            NetworkId::new(1),
+            Height::ZERO,
+            CertificateId::new([1; 32].into()),
+        ))
+        .await
+        .expect("the orchestrator still holds the receiver");
     cancellation_token.cancel();
 
     assert!(matches!(poll!(&mut orchestrator), Poll::Ready(())));
 
     assert!(check_receiver.try_recv().is_err());
+    assert!(orchestrator.spawned_network_tasks.is_empty());
 }
 
 #[tokio::test]

@@ -48,3 +48,16 @@ impl Drop for TempDBDir {
         _ = std::fs::remove_dir_all(&self.path);
     }
 }
+
+/// Open a state database the way a build without the network info backfill
+/// did, so that the next open by the current binary performs the backfill.
+pub fn init_state_db_before_network_info_backfill(
+    path: &std::path::Path,
+) -> Result<crate::storage::DB, crate::storage::DBOpenError> {
+    use crate::stores::state::cf_definitions;
+
+    crate::storage::DB::builder(path, cf_definitions::STATE_DB_V0)?
+        .ensure_cfs(cf_definitions::STATE_DB_V1_ADDED_CFS)?
+        .ensure_cfs(cf_definitions::STATE_DB_V2_ADDED_CFS)?
+        .finalize(cf_definitions::STATE_DB)
+}

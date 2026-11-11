@@ -44,7 +44,7 @@ fn settlement_attempt_roundtrip_codec() {
 #[test]
 fn settlement_attempt_key_ordering_is_stable_for_same_job() {
     let tmp = TempDBDir::new();
-    let db = StateStore::init_db(tmp.path.as_path()).expect("Unable to init db");
+    let db = StateStore::init_db(tmp.path.as_path(), None).expect("Unable to init db");
 
     let settlement_job_id = SettlementJobId::from(99u128);
     for seq in [1u64, 2, 3, 4, 5] {

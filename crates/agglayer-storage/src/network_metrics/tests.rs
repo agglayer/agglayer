@@ -8,7 +8,7 @@ use std::{
 
 use agglayer_types::{
     Certificate, CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError,
-    Digest, EpochNumber, Height, NetworkId, SettlementTxHash,
+    Digest, EpochNumber, Height, NetworkId, NetworkType, SettlementTxHash,
 };
 use prometheus::{Encoder as _, Registry, TextEncoder};
 
@@ -17,12 +17,30 @@ use crate::{
     backup::BackupClient,
     storage::DB,
     stores::{
-        pending::PendingStore, state::StateStore, PendingCertificateReader as _,
-        PendingCertificateWriter as _, StateWriter as _, UpdateEvenIfAlreadyPresent,
-        UpdateStatusToCandidate,
+        certificate_updater::{set_pending, submit},
+        pending::PendingStore,
+        state::StateStore,
+        NetworkSettlement, PendingCertificateReader as _, PendingCertificateWriter as _,
+        StateWriter as _, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
     tests::TempDBDir,
 };
+
+/// A settlement of `certificate_id` at `height`: these tests only read the
+/// cursor height.
+fn settlement(certificate_id: CertificateId, height: Height) -> NetworkSettlement {
+    NetworkSettlement {
+        certificate_id,
+        height,
+        epoch_number: EpochNumber::ZERO,
+        certificate_index: CertificateIndex::ZERO,
+        new_pp_root: Digest::ZERO,
+        new_local_exit_root: Digest::ZERO.into(),
+        settled_let_leaf_count: 0,
+        network_type: NetworkType::Ecdsa,
+        settled_claim: None,
+    }
+}
 
 fn network_metrics() -> (Registry, NetworkMetrics) {
     let registry = Registry::new();
@@ -218,10 +236,7 @@ fn store_mutations_update_gauges_after_each_successful_write() {
     state
         .set_latest_settled_certificate_for_network(
             &network,
-            &Height::ZERO,
-            &certificate_id,
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
+            &settlement(certificate_id, Height::ZERO),
         )
         .unwrap();
     assert_eq!(height_of(&registry, 1, "settled"), Some(0));
@@ -315,7 +330,10 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
     // The exact pointer that took bali down.
     let network = NetworkId::new(84_803_420);
     let oversized = Height::new(13_521_720_084_024_907_505);
-    let certificate_id = CertificateId::new([7; 32].into());
+    // The settled writer copies the local exit root from the certificate's
+    // header, so the pointer needs one.
+    let settled = Certificate::new_for_test(network, oversized);
+    let certificate_id = settled.hash();
     let healthy = Certificate::new_for_test(NetworkId::new(1), Height::new(5));
 
     {
@@ -328,6 +346,10 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
             metrics.clone(),
         )
         .unwrap();
+
+        state
+            .insert_certificate_header(&settled, CertificateStatus::Settled)
+            .unwrap();
 
         // Every write goes through and persists the real height; only the
         // exported gauge saturates, and no write logs.
@@ -342,10 +364,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
             state
                 .set_latest_settled_certificate_for_network(
                     &network,
-                    &oversized,
-                    &certificate_id,
-                    &EpochNumber::ZERO,
-                    &CertificateIndex::ZERO,
+                    &settlement(certificate_id, oversized),
                 )
                 .unwrap();
         });
@@ -450,13 +469,14 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
                 &CertificateId::new([4; 32].into()),
             )
             .unwrap();
+        let settled = Certificate::new_for_test(NetworkId::new(5), Height::new(9));
+        state
+            .insert_certificate_header(&settled, CertificateStatus::Settled)
+            .unwrap();
         state
             .set_latest_settled_certificate_for_network(
                 &NetworkId::new(5),
-                &Height::new(9),
-                &CertificateId::new([5; 32].into()),
-                &EpochNumber::ZERO,
-                &CertificateIndex::ZERO,
+                &settlement(settled.hash(), Height::new(9)),
             )
             .unwrap();
     }
@@ -547,10 +567,7 @@ fn failed_writes_leave_gauges_unchanged() {
         state
             .set_latest_settled_certificate_for_network(
                 &network,
-                &Height::ZERO,
-                &certificate_id,
-                &EpochNumber::ZERO,
-                &CertificateIndex::ZERO,
+                &settlement(certificate_id, Height::ZERO),
             )
             .unwrap();
     }
@@ -597,10 +614,7 @@ fn failed_writes_leave_gauges_unchanged() {
     assert!(state
         .set_latest_settled_certificate_for_network(
             &network,
-            &Height::new(9),
-            &certificate_id,
-            &EpochNumber::ZERO,
-            &CertificateIndex::ZERO,
+            &settlement(certificate_id, Height::new(9))
         )
         .is_err());
 
@@ -788,4 +802,50 @@ fn exposition_preserves_names_help_and_scope_label() {
     assert!(samples
         .iter()
         .any(|line| line.starts_with(NETWORK_HEIGHT) && line.contains("stage=\"pending\"")));
+}
+
+#[test]
+fn updater_and_admin_caller_restore_pending_error_after_the_legacy_pointer() {
+    let (registry, metrics) = network_metrics();
+    let (_pending_dir, _state_dir, pending, state) = stores(&metrics);
+    let network = NetworkId::new(1);
+    let certificate = Certificate::new_for_test(network, Height::ZERO);
+    submit(
+        &pending,
+        &state,
+        &certificate,
+        &CertificateStatus::error(CertificateStatusError::InternalError(
+            "admin recovery".into(),
+        )),
+    )
+    .unwrap();
+    assert_eq!(
+        sample_value(
+            &gather(&registry),
+            NETWORK_LATEST_CERTIFICATE_IN_ERROR,
+            network.to_u32(),
+            None
+        ),
+        Some(1)
+    );
+    set_pending(
+        &pending,
+        &state,
+        network,
+        certificate.height,
+        certificate.hash(),
+    )
+    .unwrap();
+    metrics
+        .reconcile_pending_error(&pending, &state, network, certificate.hash())
+        .unwrap();
+    assert_eq!(
+        sample_value(
+            &gather(&registry),
+            NETWORK_LATEST_CERTIFICATE_IN_ERROR,
+            network.to_u32(),
+            None
+        ),
+        Some(1)
+    );
 }

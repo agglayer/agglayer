@@ -412,6 +412,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-errors",
  "agglayer-rate-limiting",
  "agglayer-rpc",
  "agglayer-settlement-service",
@@ -569,7 +570,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-primitives 0.18.0",
+ "agglayer-errors",
  "agglayer-rate-limiting",
  "agglayer-storage",
  "agglayer-tries 0.18.0",
@@ -580,8 +581,6 @@ dependencies = [
  "eyre",
  "futures",
  "mockall",
- "pessimistic-proof",
- "pessimistic-proof-test-suite",
  "serde",
  "thiserror 2.0.18",
  "tokio",

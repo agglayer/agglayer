@@ -104,27 +104,6 @@ pub trait AsyncPendingCertificateWriterExt: PendingCertificateWriter + 'static {
             .expect("proof removal task panicked")
         }
     }
-
-    fn set_latest_proven_certificate_per_network_async(
-        self: &Arc<Self>,
-        network_id: NetworkId,
-        height: Height,
-        certificate_id: CertificateId,
-    ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
-        let store = Arc::clone(self);
-        async move {
-            spawn_blocking_in_current_span(move || {
-                PendingCertificateWriter::set_latest_proven_certificate_per_network(
-                    store.as_ref(),
-                    &network_id,
-                    &height,
-                    &certificate_id,
-                )
-            })
-            .await
-            .expect("latest proven certificate write task panicked")
-        }
-    }
 }
 
 impl<S> AsyncPendingCertificateWriterExt for S where S: PendingCertificateWriter + ?Sized + 'static {}
@@ -177,6 +156,32 @@ impl<S> AsyncStateReaderExt for S where S: StateReader + ?Sized + 'static {}
 
 /// Async access to complete state-store write operations.
 pub trait AsyncStateWriterExt: StateWriter + 'static {
+    fn set_latest_proven_certificate_async<P: PendingCertificateWriter + 'static>(
+        self: &Arc<Self>,
+        pending: Arc<P>,
+        network_id: NetworkId,
+        height: Height,
+        certificate_id: CertificateId,
+    ) -> impl Future<Output = eyre::Result<()>> + Send + 'static
+    where
+        Self: Sized,
+    {
+        let state = Arc::clone(self);
+        async move {
+            spawn_blocking_in_current_span(move || {
+                super::certificate_updater::set_proven(
+                    pending.as_ref(),
+                    state.as_ref(),
+                    network_id,
+                    height,
+                    certificate_id,
+                )
+            })
+            .await
+            .expect("proven pointer update task panicked")
+        }
+    }
+
     fn update_settlement_tx_hash_async(
         self: &Arc<Self>,
         certificate_id: CertificateId,

@@ -39,6 +39,15 @@ pub enum CertificateSubmissionError {
     },
 }
 
+impl From<eyre::Error> for CertificateSubmissionError {
+    fn from(error: eyre::Error) -> Self {
+        agglayer_errors::match_err!(error,
+            type<StorageError>(error) => Self::Storage(error),
+            else(error) => Self::Storage(StorageError::Unexpected(format!("{error:?}"))),
+        )
+    }
+}
+
 /// Errors related to signature verification process.
 #[derive(thiserror::Error, Debug)]
 pub enum SignatureVerificationError {
@@ -108,51 +117,6 @@ impl SignatureVerificationError {
             e @ agglayer_types::SignerError::InvalidMultisig(_) => Self::InvalidMultisig(e),
         }
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ProofRetrievalError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-
-    #[error("Proof for certificate {certificate_id} not found")]
-    NotFound { certificate_id: CertificateId },
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum GetLatestCertificateError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-
-    #[error("Unknown latest certificate header for network {network_id}")]
-    UnknownLatestCertificateHeader {
-        network_id: NetworkId,
-        source: Box<CertificateRetrievalError>,
-    },
-
-    #[error(
-        "Mismatch on the certificate id. expected: {expected}, re-computed from the certificate \
-         in DB: {got}"
-    )]
-    CertificateIdHashMismatch {
-        expected: CertificateId,
-        got: CertificateId,
-    },
-
-    #[error("Latest certificate header for certificate {certificate_id} not found")]
-    NotFound { certificate_id: CertificateId },
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum GetLatestSettledClaimError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-
-    #[error("Could not get latest settled claim, inconsistent state for {network_id}")]
-    InconsistentState {
-        network_id: NetworkId,
-        height: Height,
-    },
 }
 
 #[derive(Debug, thiserror::Error)]
