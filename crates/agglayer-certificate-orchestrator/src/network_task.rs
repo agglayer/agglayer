@@ -2,18 +2,14 @@ use std::{sync::Arc, time::Duration};
 
 use agglayer_clock::ClockRef;
 use agglayer_settlement_service::SettlementServiceTrait;
-use agglayer_storage::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
-    stores::{
-        async_api::AsyncStateWriterExt, NetworkSettlement, PendingCertificateReader,
-        PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
-    },
+use agglayer_storage::stores::{
+    async_api::AsyncStateWriterExt, NetworkInfoReader, NetworkSettlement, PendingCertificateReader,
+    PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
-    CertificateId, CertificateIndex, CertificateStatus, CertificateStatusError, EpochNumber,
-    ExecutionMode, Height, LocalExitRoot, LocalNetworkStateData, NetworkId, NetworkType,
-    SettledClaim,
+    CertificateId, CertificateStatus, CertificateStatusError, ExecutionMode, Height, LocalExitRoot,
+    LocalNetworkStateData, NetworkId, NetworkType, SettledClaim,
 };
 use agglayer_utils::task::spawn_blocking_in_current_span;
 use arc_swap::ArcSwap;
@@ -115,8 +111,8 @@ pub(crate) struct NetworkTask<
     clock_ref: ClockRef,
     /// The stream of new certificates to certify.
     certificate_stream: mpsc::Receiver<NewCertificate>,
-    /// latest certificate settled
-    latest_settled: Option<SettledCertificate>,
+    /// The latest settled certificate's id and height.
+    latest_settled: Option<(CertificateId, Height)>,
     /// The settlement service for submitting settlement jobs
     settlement_service: Arc<SettlementService>,
     /// The current epoch store for epoch assignment
@@ -128,7 +124,7 @@ impl<CertifierClient, PendingStore, StateStore, SettlementService, PerEpochStore
 where
     CertifierClient: 'static + Certifier,
     PendingStore: 'static + PendingCertificateReader + PendingCertificateWriter,
-    StateStore: 'static + StateReader + StateWriter,
+    StateStore: 'static + NetworkInfoReader + StateReader + StateWriter,
     SettlementService: 'static + SettlementServiceTrait,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
 {
@@ -153,8 +149,9 @@ where
             );
 
             let latest_settled = state_store
-                .get_latest_settled_certificate_per_network(&network_id)?
-                .map(|(_v, settled)| settled);
+                .get_latest_certificate_headers(network_id)?
+                .settled
+                .map(|header| (header.certificate_id, header.height));
 
             debug!(
                 "Local state for network {}: {}",
@@ -190,24 +187,20 @@ where
         mut self,
         cancellation_token: CancellationToken,
     ) -> Result<NetworkId, Error> {
-        info!("Starting the network task for network {}", self.network_id);
+        info!(
+            "Starting the network task for network {} in epoch {}",
+            self.network_id,
+            self.clock_ref.current_epoch()
+        );
 
-        let current_epoch = self.clock_ref.current_epoch();
+        let mut next_expected_height = if let Some((_, current_height)) = self.latest_settled {
+            debug!("Current network height is {}", current_height);
 
-        let mut next_expected_height =
-            if let Some(SettledCertificate(_, current_height, epoch, _)) =
-                self.latest_settled.as_ref()
-            {
-                debug!("Current network height is {}", current_height);
-                if *epoch == current_epoch {
-                    debug!("Already settled for the epoch {current_epoch}");
-                }
-
-                current_height.next()
-            } else {
-                debug!("Network never settled any certificate");
-                Height::ZERO
-            };
+            current_height.next()
+        } else {
+            debug!("Network never settled any certificate");
+            Height::ZERO
+        };
 
         let mut first_run = true;
 
@@ -252,7 +245,7 @@ where
 
                     if matches!(
                         self.latest_settled,
-                        Some(SettledCertificate(settled_id, _, _, _)) if settled_id == certificate_id)
+                        Some((settled_id, _)) if settled_id == certificate_id)
                     {
                         return Ok(());
                     }
@@ -359,7 +352,7 @@ where
                             new_state = new.get_roots().display_to_hex(),
                             "Updated the state following certificate settlement",
                         );
-                        let (new_state, epoch_number, certificate_index) = self
+                        self.local_state = self
                             .assign_and_persist_settled_certificate(
                                 new,
                                 new_pp_root,
@@ -368,11 +361,8 @@ where
                                 certificate_id,
                             )
                             .await?;
-                        self.local_state = new_state;
 
-                        self.latest_settled = Some(SettledCertificate(
-                            certificate_id, height, epoch_number, certificate_index,
-                        ));
+                        self.latest_settled = Some((certificate_id, height));
                         break;
                     }
                     Some(NetworkTaskMessage::CertificateErrored { .. }) => {
@@ -467,7 +457,7 @@ where
         settlement_input: CertificateSettlementInput,
         height: Height,
         certificate_id: CertificateId,
-    ) -> Result<(Box<LocalNetworkStateData>, EpochNumber, CertificateIndex), Error> {
+    ) -> Result<Box<LocalNetworkStateData>, Error> {
         let current_epoch = self.current_epoch.clone();
         let state_store = self.state_store.clone();
         let network_id = self.network_id;
@@ -542,7 +532,7 @@ where
                 error: e.to_string(),
             })?;
 
-            Ok((new, epoch_number, certificate_index))
+            Ok(new)
         })
         .await
         .expect("settled certificate persistence task panicked")

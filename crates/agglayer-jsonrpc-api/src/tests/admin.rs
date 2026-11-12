@@ -1,6 +1,4 @@
-use agglayer_storage::stores::{
-    NetworkInfoReader as _, PendingCertificateReader as _, StateReader as _,
-};
+use agglayer_storage::stores::{NetworkInfoReader as _, StateReader as _};
 use agglayer_types::{
     Certificate, CertificateStatus, CertificateStatusError, Digest, Height, NetworkId,
 };
@@ -145,6 +143,7 @@ async fn admin_pending_proven_and_force_push_update_cache(#[future] context: Tes
         context
             .state_store
             .get_network_info(network)
+            .unwrap()
             .unwrap()
             .network_type,
         agglayer_types::NetworkType::Unspecified

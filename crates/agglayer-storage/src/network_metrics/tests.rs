@@ -1,9 +1,6 @@
-use std::{
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    thread,
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
 };
 
 use agglayer_types::{
@@ -15,13 +12,14 @@ use prometheus::{Encoder as _, Registry, TextEncoder};
 use super::{NetworkMetrics, NETWORK_HEIGHT, NETWORK_LATEST_CERTIFICATE_IN_ERROR};
 use crate::{
     backup::BackupClient,
+    error::Error,
     storage::DB,
     stores::{
-        certificate_updater::{set_pending, submit},
+        certificate_updater::{set_pending, set_proven, submit},
         pending::PendingStore,
         state::StateStore,
-        NetworkSettlement, PendingCertificateReader as _, PendingCertificateWriter as _,
-        StateWriter as _, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        NetworkSettlement, PendingCertificateWriter as _, StateWriter as _,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
     tests::TempDBDir,
 };
@@ -330,8 +328,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
     // The exact pointer that took bali down.
     let network = NetworkId::new(84_803_420);
     let oversized = Height::new(13_521_720_084_024_907_505);
-    // The settled writer copies the local exit root from the certificate's
-    // header, so the pointer needs one.
+    // Every reader joins a pointer with its header, so the pointers need one.
     let settled = Certificate::new_for_test(network, oversized);
     let certificate_id = settled.hash();
     let healthy = Certificate::new_for_test(NetworkId::new(1), Height::new(5));
@@ -355,12 +352,8 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
         // exported gauge saturates, and no write logs.
         let warnings = WarningCounter::default();
         warnings.observe(|| {
-            pending
-                .set_latest_pending_certificate_per_network(&network, &oversized, &certificate_id)
-                .unwrap();
-            pending
-                .set_latest_proven_certificate_per_network(&network, &oversized, &certificate_id)
-                .unwrap();
+            set_pending(&pending, &state, network, oversized, certificate_id).unwrap();
+            set_proven(&pending, &state, network, oversized, certificate_id).unwrap();
             state
                 .set_latest_settled_certificate_for_network(
                     &network,
@@ -379,9 +372,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
         }
         assert_eq!(warnings.count(), 0);
 
-        pending
-            .insert_pending_certificate(NetworkId::new(1), Height::new(5), &healthy)
-            .unwrap();
+        submit(&pending, &state, &healthy, &CertificateStatus::Pending).unwrap();
     }
 
     // Restart: hydration used to abort node startup on the stored pointer.
@@ -395,7 +386,7 @@ fn heights_beyond_the_gauge_range_saturate_and_warn_at_hydration() {
     )
     .unwrap();
     let warnings = WarningCounter::default();
-    warnings.observe(|| metrics.hydrate(&pending, &state).unwrap());
+    warnings.observe(|| metrics.hydrate(&state).unwrap());
 
     for stage in ["pending", "proven", "settled"] {
         assert!(height_is_saturated(&registry, 84_803_420, stage), "{stage}");
@@ -436,39 +427,25 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
 
         // Healthy network at height zero.
         let healthy = Certificate::new_for_test(NetworkId::new(1), Height::ZERO);
-        pending
-            .insert_pending_certificate(NetworkId::new(1), Height::ZERO, &healthy)
-            .unwrap();
-        state
-            .insert_certificate_header(&healthy, CertificateStatus::Pending)
-            .unwrap();
+        submit(&pending, &state, &healthy, &CertificateStatus::Pending).unwrap();
 
         // Errored network.
         let errored = Certificate::new_for_test(NetworkId::new(2), Height::new(5));
-        pending
-            .insert_pending_certificate(NetworkId::new(2), Height::new(5), &errored)
-            .unwrap();
-        state
-            .insert_certificate_header(&errored, in_error_status())
-            .unwrap();
-
-        // Pointer without a header.
-        pending
-            .set_latest_pending_certificate_per_network(
-                &NetworkId::new(3),
-                &Height::new(7),
-                &CertificateId::new([3; 32].into()),
-            )
-            .unwrap();
+        submit(&pending, &state, &errored, &in_error_status()).unwrap();
 
         // Proven-only and settled-only networks.
-        pending
-            .set_latest_proven_certificate_per_network(
-                &NetworkId::new(4),
-                &Height::new(3),
-                &CertificateId::new([4; 32].into()),
-            )
+        let proven = Certificate::new_for_test(NetworkId::new(4), Height::new(3));
+        state
+            .insert_certificate_header(&proven, CertificateStatus::Proven)
             .unwrap();
+        set_proven(
+            &pending,
+            &state,
+            NetworkId::new(4),
+            Height::new(3),
+            proven.hash(),
+        )
+        .unwrap();
         let settled = Certificate::new_for_test(NetworkId::new(5), Height::new(9));
         state
             .insert_certificate_header(&settled, CertificateStatus::Settled)
@@ -481,17 +458,16 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
             .unwrap();
     }
 
-    // Restart: fresh registry and metrics, reopened stores, one hydration.
+    // Restart: fresh registry and metrics, a reopened state store, one
+    // hydration.
     let (registry, metrics) = network_metrics();
-    let pending =
-        PendingStore::new_with_path_and_metrics(&pending_dir.path, metrics.clone()).unwrap();
     let state = StateStore::new_with_path_and_metrics(
         &state_dir.path,
         BackupClient::noop(),
         metrics.clone(),
     )
     .unwrap();
-    metrics.hydrate(&pending, &state).unwrap();
+    metrics.hydrate(&state).unwrap();
 
     let body = gather(&registry);
     assert_eq!(
@@ -509,14 +485,6 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
     assert_eq!(
         sample_value(&body, NETWORK_LATEST_CERTIFICATE_IN_ERROR, 2, None),
         Some(1)
-    );
-    assert_eq!(
-        sample_value(&body, NETWORK_HEIGHT, 3, Some("pending")),
-        Some(7)
-    );
-    assert_eq!(
-        sample_value(&body, NETWORK_LATEST_CERTIFICATE_IN_ERROR, 3, None),
-        None
     );
     assert_eq!(
         sample_value(&body, NETWORK_HEIGHT, 4, Some("proven")),
@@ -538,6 +506,27 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
         sample_value(&body, NETWORK_LATEST_CERTIFICATE_IN_ERROR, 5, None),
         None
     );
+}
+
+/// A cached pointer without its header is inconsistent storage: hydration
+/// fails instead of exporting a height for a certificate nothing describes.
+#[test]
+fn hydrate_fails_on_a_pointer_without_header() {
+    let (registry, metrics) = network_metrics();
+    let (_pending_dir, _state_dir, _pending, state) = stores(&metrics);
+    state
+        .set_latest_pending_certificate_pointer(
+            NetworkId::new(3),
+            Height::new(7),
+            CertificateId::new([3; 32].into()),
+        )
+        .unwrap();
+
+    assert!(matches!(
+        metrics.hydrate(&state),
+        Err(Error::DanglingCertificatePointer { .. })
+    ));
+    assert_eq!(height_of(&registry, 3, "pending"), None);
 }
 
 #[test]
@@ -636,85 +625,26 @@ fn reconcile_pending_error_publishes_only_the_current_pointer() {
     state
         .insert_certificate_header(&current, CertificateStatus::Pending)
         .unwrap();
-    pending
-        .set_latest_pending_certificate_per_network(&network, &Height::ZERO, &stale.hash())
-        .unwrap();
-    pending
-        .set_latest_pending_certificate_per_network(&network, &Height::new(1), &current.hash())
-        .unwrap();
+    set_pending(&pending, &state, network, Height::ZERO, stale.hash()).unwrap();
+    set_pending(&pending, &state, network, Height::new(1), current.hash()).unwrap();
 
     // The pointer moved on: reconciling the stale certificate must not
     // resurrect its error status.
     metrics
-        .reconcile_pending_error(&pending, &state, network, stale.hash())
+        .reconcile_pending_error(&state, network, stale.hash())
         .unwrap();
     assert_eq!(error_of(&registry, 1), None);
 
     metrics
-        .reconcile_pending_error(&pending, &state, network, current.hash())
+        .reconcile_pending_error(&state, network, current.hash())
         .unwrap();
     assert_eq!(error_of(&registry, 1), Some(0));
 
     // A network without any pointer reconciles to a no-op.
     metrics
-        .reconcile_pending_error(&pending, &state, NetworkId::new(9), stale.hash())
+        .reconcile_pending_error(&state, NetworkId::new(9), stale.hash())
         .unwrap();
     assert_eq!(error_of(&registry, 9), None);
-}
-
-#[test]
-fn concurrent_same_network_writers_keep_the_error_gauge_correlated() {
-    let (registry, metrics) = network_metrics();
-    let (_pending_dir, _state_dir, pending, state) = stores(&metrics);
-    let network = NetworkId::new(1);
-    let errored = Certificate::new_for_test(network, Height::ZERO);
-    let healthy = Certificate::new_for_test(network, Height::new(1));
-    state
-        .insert_certificate_header(&errored, in_error_status())
-        .unwrap();
-    state
-        .insert_certificate_header(&healthy, CertificateStatus::Pending)
-        .unwrap();
-
-    // Two admin-style writers race pointer updates plus reconciliation for
-    // the same network, as `admin_setLatestPendingCertificate` does.
-    thread::scope(|scope| {
-        for (height, certificate_id) in [
-            (Height::ZERO, errored.hash()),
-            (Height::new(1), healthy.hash()),
-        ] {
-            let (pending, state, metrics) = (&pending, &state, &metrics);
-            scope.spawn(move || {
-                for _ in 0..100 {
-                    pending
-                        .set_latest_pending_certificate_per_network(
-                            &network,
-                            &height,
-                            &certificate_id,
-                        )
-                        .unwrap();
-                    metrics
-                        .reconcile_pending_error(pending, state, network, certificate_id)
-                        .unwrap();
-                }
-            });
-        }
-    });
-
-    // Whatever interleaving happened, the final gauge must describe the
-    // final stored pointer.
-    let (final_id, final_height) = pending
-        .get_latest_pending_certificate_for_network(&network)
-        .unwrap()
-        .unwrap();
-    assert_eq!(
-        error_of(&registry, 1),
-        Some(i64::from(final_id == errored.hash()))
-    );
-    assert_eq!(
-        height_of(&registry, 1, "pending"),
-        Some(i64::try_from(final_height.as_u64()).unwrap())
-    );
 }
 
 #[test]
@@ -837,7 +767,7 @@ fn updater_and_admin_caller_restore_pending_error_after_the_legacy_pointer() {
     )
     .unwrap();
     metrics
-        .reconcile_pending_error(&pending, &state, network, certificate.hash())
+        .reconcile_pending_error(&state, network, certificate.hash())
         .unwrap();
     assert_eq!(
         sample_value(

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use agglayer_types::{
     primitives::Digest, Address, Certificate, CertificateHeader, CertificateId, CertificateStatus,
     EpochNumber, Height, LocalNetworkStateData, NetworkId, Nonce, SettlementAttempt,
@@ -6,35 +8,27 @@ use agglayer_types::{
 use mockall::mock;
 
 use crate::{
-    columns::latest_settled_certificate_per_network::SettledCertificate,
     error::Error,
     stores::{
-        EditEvenIfCompleted, MetadataReader, MetadataWriter, NetworkInfoReader, NetworkSettlement,
-        SettlementReader, SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
-        UpdateStatusToCandidate,
+        EditEvenIfCompleted, LatestCertificateHeaders, MetadataReader, MetadataWriter,
+        NetworkInfoReader, NetworkSettlement, SettlementReader, SettlementWriter, StateReader,
+        StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
 };
 mock! {
     pub StateStore {}
     impl NetworkInfoReader for StateStore {
-        fn get_network_info(&self, network_id: NetworkId) -> Result<agglayer_types::NetworkInfo, Error>;
+        fn get_network_info(&self, network_id: NetworkId) -> Result<Option<agglayer_types::NetworkInfo>, Error>;
 
-        fn get_latest_pending_height(&self, network_id: NetworkId) -> Result<Option<Height>, Error>;
-
-        fn get_latest_pending_certificate_id(
+        fn get_latest_certificate_headers(
             &self,
             network_id: NetworkId,
-        ) -> Result<Option<CertificateId>, Error>;
+        ) -> Result<LatestCertificateHeaders, Error>;
 
-        fn get_latest_proven_certificate_id(
+        fn get_all_latest_certificate_headers(
             &self,
-            network_id: NetworkId,
-        ) -> Result<Option<CertificateId>, Error>;
+        ) -> Result<BTreeMap<NetworkId, LatestCertificateHeaders>, Error>;
 
-        fn get_latest_settled_certificate_id(
-            &self,
-            network_id: NetworkId,
-        ) -> Result<Option<CertificateId>, Error>;
     }
 
     impl MetadataReader for StateStore {
@@ -102,11 +96,6 @@ mock! {
         fn is_network_disabled(&self, network_id: &NetworkId) -> Result<bool, Error>;
         fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
 
-        fn get_latest_settled_certificate_per_network(
-            &self,
-            network_id: &NetworkId,
-        ) -> Result<Option<(NetworkId, SettledCertificate)>, Error>;
-
         fn get_certificate_header(
             &self,
             certificate_id: &CertificateId,
@@ -122,8 +111,6 @@ mock! {
             network_id: NetworkId,
             height: Height,
         ) -> Result<Option<CertificateHeader>, Error>;
-        fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error>;
-
         fn read_local_network_state(
             &self,
             network_id: NetworkId,
