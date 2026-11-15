@@ -28,6 +28,14 @@ pub async fn compute_program_vkey(program: &'static [u8]) -> eyre::Result<String
 /// for tests that need a deserializable settlement proof without running the
 /// prover.
 pub fn dummy_settlement_proof() -> agglayer_types::Proof {
+    settlement_proof_with_root(agglayer_types::Digest::ZERO)
+}
+
+/// Like [`dummy_settlement_proof`], with `new_pessimistic_root` as the root
+/// the public values commit to, so a test can tell that root apart.
+pub fn settlement_proof_with_root(
+    new_pessimistic_root: agglayer_types::Digest,
+) -> agglayer_types::Proof {
     use pessimistic_proof::PessimisticProofOutput;
 
     let output = PessimisticProofOutput {
@@ -41,7 +49,7 @@ pub fn dummy_settlement_proof() -> agglayer_types::Proof {
         new_local_exit_root: agglayer_tries::roots::LocalExitRoot::new(
             agglayer_types::Digest::ZERO,
         ),
-        new_pessimistic_root: agglayer_types::Digest::ZERO,
+        new_pessimistic_root,
     };
     let public_values = PessimisticProofOutput::bincode_codec()
         .serialize(&output)

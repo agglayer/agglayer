@@ -151,8 +151,9 @@ impl Builder {
     /// Creates new column families and populates them with data.
     ///
     /// This is a migration step that creates column families and runs the
-    /// provided migration function to populate them. The migration function
-    /// should only write into the newly created column families.
+    /// provided migration function to populate them. A column family that
+    /// already exists is dropped and created again, empty. The migration
+    /// function should only write into the newly created column families.
     pub fn add_cfs(
         self,
         cfs: &[ColumnDescriptor],

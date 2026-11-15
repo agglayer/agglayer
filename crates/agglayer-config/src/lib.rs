@@ -121,6 +121,9 @@ pub struct Config {
     #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
     pub succinct_cluster: BTreeMap<u32, Url>,
 
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub succinct_cluster_mtls: BTreeMap<Url, prover_config::MtlsConfig>,
+
     #[serde(default = "default_prover_buffer_size")]
     pub prover_buffer_size: usize,
 
@@ -187,6 +190,7 @@ impl Config {
             ),
             prover_buffer_size: default_prover_buffer_size(),
             succinct_cluster: BTreeMap::new(),
+            succinct_cluster_mtls: BTreeMap::new(),
             debug_mode: false,
             mock_verifier: false,
             grpc: Default::default(),

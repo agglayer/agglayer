@@ -85,6 +85,12 @@ pub enum Error {
     #[error("Inconsistent state for network: {network_id}")]
     InconsistentState { network_id: NetworkId },
 
+    #[error("Cannot backfill the network info of network {network_id}: {reason}")]
+    NetworkInfoBackfill {
+        network_id: NetworkId,
+        reason: String,
+    },
+
     #[error("Inconsistent frontier")]
     InconsistentFrontier,
 

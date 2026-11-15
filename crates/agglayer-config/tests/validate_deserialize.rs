@@ -74,3 +74,25 @@ fn succinct_cluster_rejects_invalid_entries() {
         );
     }
 }
+
+#[test]
+fn succinct_cluster_mtls_config_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+    let config: Config = toml::from_str(
+        r#"
+        [succinct-cluster-mtls."https://private.example:8443/"]
+        cert-path = "/secrets/mtls/cert.pem"
+        key-path = "/secrets/mtls/key.pem"
+        "#,
+    )?;
+    let mtls = config
+        .succinct_cluster_mtls
+        .get(&"https://private.example:8443/".parse()?)
+        .ok_or("missing mTLS entry")?;
+    assert_eq!(mtls.cert_path, Path::new("/secrets/mtls/cert.pem"));
+    assert_eq!(mtls.key_path, Path::new("/secrets/mtls/key.pem"));
+    assert_eq!(
+        toml::from_str::<Config>(&toml::to_string(&config)?)?,
+        config
+    );
+    Ok(())
+}

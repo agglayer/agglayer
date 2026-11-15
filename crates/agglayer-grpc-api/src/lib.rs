@@ -8,7 +8,7 @@ use agglayer_grpc_server::node::v1::{
     node_state_service_server::NodeStateServiceServer,
 };
 use agglayer_storage::stores::{
-    DebugReader, DebugWriter, EpochStoreReader, NetworkInfoReader, PendingCertificateReader,
+    DebugReader, DebugWriter, NetworkInfoReader, PendingCertificateReader,
     PendingCertificateWriter, SettlementReader, StateReader, StateWriter,
 };
 use certificate_submission_service::CertificateSubmissionServer;
@@ -91,10 +91,10 @@ impl ServerBuilder {
 }
 
 impl Server {
-    pub fn with_config<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>(
+    pub fn with_config<L1Rpc, PendingStore, StateStore, DebugStore>(
         config: Arc<Config>,
         rpc_service: Arc<
-            agglayer_rpc::AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore, EpochsStore>,
+            agglayer_rpc::AgglayerService<L1Rpc, PendingStore, StateStore, DebugStore>,
         >,
     ) -> ServerBuilder
     where
@@ -102,7 +102,6 @@ impl Server {
         PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
         StateStore: NetworkInfoReader + SettlementReader + StateReader + StateWriter + 'static,
         DebugStore: DebugReader + DebugWriter + 'static,
-        EpochsStore: EpochStoreReader + 'static,
     {
         let certificate_submission_server = CertificateSubmissionServer {
             service: rpc_service.clone(),
