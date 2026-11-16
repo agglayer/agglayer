@@ -248,7 +248,7 @@ The legacy pending writer still resets the pending error series,
 and the admin pending override refreshes it from the cache afterwards.
 Gauge and cache consistency under concurrent admin overrides of one network
 is not covered while both writers exist;
-the legacy index removal tracked in [#1754](https://github.com/agglayer/agglayer/issues/1754)
+the legacy index removal tracked in [agglayer/issues#273](https://github.com/agglayer/issues/issues/273)
 moves the metric updates onto the cache publication and restores that coverage.
 
 ### Settlement writer
