@@ -56,7 +56,7 @@ fn init_db_adds_legacy_missing_cfs() {
             .expect("V0 schema initialization should succeed");
     }
 
-    let db = StateStore::init_db(tmp.path.as_path())
+    let db = StateStore::init_db(tmp.path.as_path(), None)
         .expect("init_db should ensure the missing legacy CFs are added");
 
     // After init_db, every CF in STATE_DB_LEGACY_ADD_CFS exists on disk.
@@ -101,7 +101,7 @@ fn init_db_adds_settlement_job_id_per_certificate_id_cf_to_v1_schema() {
         drop(previous_schema);
     }
 
-    let db = StateStore::init_db(tmp.path.as_path())
+    let db = StateStore::init_db(tmp.path.as_path(), None)
         .expect("init_db should ensure the certificate settlement job CF is added");
 
     let post_cfs: BTreeSet<&str> =
@@ -124,7 +124,7 @@ fn init_db_creates_certificate_id_per_settlement_job_id_cf() {
     use crate::columns::certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn;
 
     let tmp = crate::tests::TempDBDir::new();
-    let db = StateStore::init_db(tmp.path.as_path()).expect("init db");
+    let db = StateStore::init_db(tmp.path.as_path(), None).expect("init db");
     let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), tmp.path.as_path())
         .expect("list cf names");
     assert!(
@@ -138,12 +138,12 @@ fn init_db_creates_certificate_id_per_settlement_job_id_cf() {
 #[test]
 fn init_db_is_idempotent_on_current_schema() {
     // Opening init_db twice on a fresh DB must succeed: after the first
-    // open records the ensure_cfs step, the second call sees the current
-    // schema and skips that already-recorded step.
+    // open records its migration steps, the second call sees the current
+    // schema and skips those already-recorded steps.
     let tmp = TempDBDir::new();
-    let db = StateStore::init_db(tmp.path.as_path()).expect("first init_db");
+    let db = StateStore::init_db(tmp.path.as_path(), None).expect("first init_db");
     drop(db);
-    let db = StateStore::init_db(tmp.path.as_path())
+    let db = StateStore::init_db(tmp.path.as_path(), None)
         .expect("second init_db should be a no-op on the already-current schema");
     drop(db);
 }
@@ -151,7 +151,7 @@ fn init_db_is_idempotent_on_current_schema() {
 #[test]
 fn can_retrieve_list_of_network() {
     let tmp = TempDBDir::new();
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
     let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_active_networks().unwrap().is_empty());
 
@@ -200,7 +200,7 @@ pub(crate) fn store() -> StateStore {
 
     let tmp = TempDBDir::new();
     tracing::debug!(path = ?tmp.path, "Temporary directory created");
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
 
     StateStore::new(db.clone(), BackupClient::noop())
 }

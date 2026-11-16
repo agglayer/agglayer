@@ -66,7 +66,7 @@ fn mk_settlement_attempt(seed: u64) -> SettlementAttempt {
 
 fn setup_store() -> (TempDBDir, Arc<crate::storage::DB>, StateStore) {
     let tmp = TempDBDir::new();
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).expect("Unable to init db"));
     let store = StateStore::new(db.clone(), BackupClient::noop());
     (tmp, db, store)
 }
@@ -1184,7 +1184,8 @@ fn list_settlement_attempts_stays_within_job_after_reopen() {
             .expect("test tx result helper should be decodable");
 
     {
-        let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
+        let db =
+            Arc::new(StateStore::init_db(tmp.path.as_path(), None).expect("Unable to init db"));
         let store = StateStore::new(db, BackupClient::noop());
         store
             .insert_settlement_job(&job_id, &mk_settlement_job(27))
@@ -1212,7 +1213,7 @@ fn list_settlement_attempts_stays_within_job_after_reopen() {
             .expect("other job result insert must succeed");
     }
 
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to reopen db"));
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).expect("Unable to reopen db"));
     let store = StateStore::new(db, BackupClient::noop());
 
     assert_eq!(
@@ -1241,7 +1242,8 @@ fn reopened_database_applies_declared_prefix_extractor() {
     let other_job_id = mk_job_id(30);
 
     {
-        let db = Arc::new(StateStore::init_db(tmp.path.as_path()).expect("Unable to init db"));
+        let db =
+            Arc::new(StateStore::init_db(tmp.path.as_path(), None).expect("Unable to init db"));
         let store = StateStore::new(db, BackupClient::noop());
         store
             .insert_settlement_job(&job_id, &mk_settlement_job(29))
@@ -1257,7 +1259,7 @@ fn reopened_database_applies_declared_prefix_extractor() {
             .expect("other job attempt insert must succeed");
     }
 
-    let db = StateStore::init_db(tmp.path.as_path()).expect("Unable to reopen db");
+    let db = StateStore::init_db(tmp.path.as_path(), None).expect("Unable to reopen db");
     let cf = db
         .raw_rocksdb()
         .cf_handle(SETTLEMENT_ATTEMPTS_CF)

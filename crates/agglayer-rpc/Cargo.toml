@@ -5,16 +5,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agglayer-errors.workspace = true
 agglayer-contracts.workspace = true
 agglayer-config.workspace = true
-agglayer-primitives.workspace = true
 agglayer-rate-limiting.workspace = true
 agglayer-storage.workspace = true
 agglayer-tries.workspace = true
 agglayer-types.workspace = true
 agglayer-utils.workspace = true
-pessimistic-proof.workspace = true
-
 
 alloy.workspace = true
 eyre.workspace = true
@@ -27,7 +25,6 @@ tracing.workspace = true
 [dev-dependencies]
 agglayer-storage = { workspace = true, features = ["testutils"] }
 async-trait.workspace = true
-pessimistic-proof-test-suite = { path = "../pessimistic-proof-test-suite" }
 mockall.workspace = true
 
 [lints]

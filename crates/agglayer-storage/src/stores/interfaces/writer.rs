@@ -2,10 +2,14 @@ use std::collections::BTreeMap;
 
 use agglayer_types::{
     primitives::Digest, Certificate, CertificateId, CertificateIndex, CertificateStatus,
-    EpochNumber, ExecutionMode, Height, LocalNetworkStateData, NetworkId, Proof, SettlementTxHash,
+    EpochNumber, ExecutionMode, Height, LocalExitRoot, LocalNetworkStateData, NetworkId,
+    NetworkType, Proof, SettledClaim, SettlementTxHash,
 };
 
-use crate::{error::Error, stores::PerEpochReader};
+use crate::{
+    error::Error,
+    stores::{PerEpochReader, StateReader},
+};
 
 pub mod settlement_writer;
 
@@ -50,7 +54,77 @@ pub enum UpdateStatusToCandidate {
     No,
 }
 
+/// Everything one settlement publishes about its network: the legacy settled
+/// cursor and the settlement-owned network info rows.
+///
+/// The settlement that produced the values fills every field, so the writer
+/// derives nothing from the header, the live local exit tree, or history.
+/// `new_local_exit_root` and `settled_let_leaf_count` must describe the same
+/// local exit tree, the one persisted for this settlement; the writer cannot
+/// check that.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetworkSettlement {
+    pub certificate_id: CertificateId,
+    pub height: Height,
+    pub epoch_number: EpochNumber,
+    pub certificate_index: CertificateIndex,
+    /// The pessimistic root the settled proof committed to.
+    pub new_pp_root: Digest,
+    pub new_local_exit_root: LocalExitRoot,
+    /// The local exit tree leaf count of the state this certificate settled.
+    pub settled_let_leaf_count: u64,
+    /// The type of the settled certificate, which becomes the network's.
+    pub network_type: NetworkType,
+    /// The last imported bridge exit of the settled certificate, if any.
+    pub settled_claim: Option<SettledClaim>,
+}
+
 pub trait StateWriter: Send + Sync {
+    /// Persist a normal submission through the pending and state stores.
+    /// StateStore serializes this sequence through both database writes.
+    fn submit_pending_certificate<P: PendingCertificateWriter>(
+        &self,
+        pending: &P,
+        certificate: &Certificate,
+    ) -> eyre::Result<()>
+    where
+        Self: StateReader + Sized,
+    {
+        crate::stores::certificate_updater::submit(
+            pending,
+            self,
+            certificate,
+            &CertificateStatus::Pending,
+        )
+    }
+
+    /// Publish a submission's header and pending pointer in one state batch.
+    /// The legacy pending pointer and body must already be persisted. Requests
+    /// a best-effort backup after a successful batch when the status requires
+    /// it.
+    fn publish_pending_certificate(
+        &self,
+        certificate: &Certificate,
+        status: &CertificateStatus,
+    ) -> Result<(), Error>;
+
+    /// Publish only the cached pending pointer, preserving the header status.
+    fn set_latest_pending_certificate_pointer(
+        &self,
+        network_id: NetworkId,
+        height: Height,
+        certificate_id: CertificateId,
+    ) -> Result<(), Error>;
+
+    /// Publish the proven cache pointer without changing header status.
+    /// Production callers use `certificate_updater::set_proven` to publish
+    /// both pointers.
+    fn set_latest_proven_certificate_pointer(
+        &self,
+        network_id: NetworkId,
+        certificate_id: CertificateId,
+    ) -> Result<(), Error>;
+
     fn disable_network(
         &self,
         network_id: &NetworkId,
@@ -68,19 +142,6 @@ pub trait StateWriter: Send + Sync {
     ) -> Result<(), Error>;
 
     fn remove_settlement_tx_hash(&self, certificate_id: &CertificateId) -> Result<(), Error>;
-
-    /// Inserts the header of `certificate` with the given `status`.
-    ///
-    /// Inserting a [`CertificateStatus::Pending`] header also requests a
-    /// backup of the state and pending databases: it is the write that
-    /// accepts a newly submitted certificate. Callers must persist the
-    /// certificate body to the pending store *before* inserting the header,
-    /// so the backup is guaranteed to capture the body together with it.
-    fn insert_certificate_header(
-        &self,
-        certificate: &Certificate,
-        status: CertificateStatus,
-    ) -> Result<(), Error>;
 
     /// Updates the stored status of `certificate_id`.
     ///
@@ -101,13 +162,22 @@ pub trait StateWriter: Send + Sync {
         certificate_index: &CertificateIndex,
     ) -> Result<(), Error>;
 
+    /// Record the network's settled cursor together with everything
+    /// `getNetworkInfo` serves about the settlement: the complete settled row,
+    /// the network type, and the claim the certificate carried.
+    ///
+    /// All of it lands in one batch, so a request reads one settlement rather
+    /// than fields from two, and nothing has to be re-derived on the request
+    /// path. A certificate without a claim leaves the stored claim row
+    /// untouched; a failed batch publishes none of these changes.
+    ///
+    /// The sequential network task is the only runtime caller for its
+    /// network, and it awaits this write before it processes the next
+    /// settlement. Nothing here serializes concurrent callers.
     fn set_latest_settled_certificate_for_network(
         &self,
         network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
-        epoch_number: &EpochNumber,
-        certificate_index: &CertificateIndex,
+        settlement: &NetworkSettlement,
     ) -> Result<(), Error>;
 
     fn write_local_network_state(
@@ -127,6 +197,8 @@ pub trait PendingCertificateWriter: Send + Sync {
 
     fn remove_generated_proof(&self, certificate_id: &CertificateId) -> Result<(), Error>;
 
+    /// Persist the legacy pending pointer and certificate body. Production
+    /// submission calls this through `certificate_updater::submit`.
     fn insert_pending_certificate(
         &self,
         network_id: NetworkId,
