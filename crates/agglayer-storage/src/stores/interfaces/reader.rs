@@ -39,6 +39,8 @@ pub trait EpochStoreReader: Send + Sync {
 }
 
 pub trait PendingCertificateReader: Send + Sync {
+    /// Read the latest pending certificate's ID and height with one
+    /// lookup in the pending database.
     fn get_latest_pending_certificate_for_network(
         &self,
         network_id: &NetworkId,

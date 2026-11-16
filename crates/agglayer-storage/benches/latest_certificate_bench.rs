@@ -39,7 +39,7 @@ fn bench_latest_certificate(c: &mut Criterion) {
     fn run(dir_path: std::path::PathBuf, expected: u32) -> Duration {
         std::fs::remove_dir_all(dir_path.clone()).unwrap();
 
-        let db = Arc::new(StateStore::init_db(dir_path.as_path()).unwrap());
+        let db = Arc::new(StateStore::init_db(dir_path.as_path(), None).unwrap());
 
         for i in 1..=expected {
             db.put::<LatestSettledCertificatePerNetworkColumn>(
