@@ -18,7 +18,7 @@ use crate::{
 #[test]
 fn can_retrieve_the_list_of_networks() {
     let tmp = TempDBDir::new();
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
 
     let store = StateStore::new(db.clone(), BackupClient::noop());
     db.put::<LatestSettledCertificatePerNetworkColumn>(

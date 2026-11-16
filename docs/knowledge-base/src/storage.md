@@ -126,3 +126,168 @@ When changing storage schemas or keys:
 1. Define the migration path up front.
 2. Keep reads backward-compatible where possible.
 3. Add tests covering upgrade and rollback behavior.
+
+## Network info backfill
+
+`network_info_cf` caches each network's latest certificate pointers, its network type, and its latest settled claim.
+The legacy latest-certificate indexes hold the same pointers:
+`latest_settled_certificate_per_network_cf` in the state DB,
+and the latest pending and proven indexes in the pending DB.
+Until the readers move to `network_info_cf`, the writers are meant to keep both up to date.
+Submission
+and explicit pending/proven overrides write both representations through the [shared certificate updater][certificate-updater].
+The state store serializes normal submissions through the height check and both database writes.
+One storage-owned submission mutex covers this short sequence across networks;
+L1 requests, initial replacement validation, debug writes, and orchestrator notifications run outside it.
+The existing height check remains inside the pending write.
+Admin operations require exclusive operational access and do not take the submission mutex.
+Proof completion uses the sequential network task and a storage async adapter,
+without a submission lock.
+Changing an arbitrary header's status to `Proven` does not advance the proven pointer.
+Settlement also writes the network type; pending and proven writes leave it untouched.
+
+Submission reuses the pending store's height check and rejects changes to settled certificates.
+Persisted header identity and proof-completion inputs are trusted.
+It uses the existing insertion order: legacy pending pointer, certificate body, then header
+and cached pending pointer together in one state DB batch.
+That batch creates a missing header or preserves its metadata while updating its status.
+The state store requests any submission backup after the batch succeeds.
+A concurrent legacy reader can briefly observe a pointer before its body or header is available.
+Explicit overrides retain the ability to move a pointer backwards.
+Admin force-push uses the same submission updater,
+including initial header creation for a certificate that has no header yet.
+Status, error, height, epoch, index, and local exit root remain certificate-header facts.
+Only pending height/id and proven id are written to their respective cache rows.
+
+The state and pending databases cannot share a transaction.
+Explicit pointer overrides write the cache before the legacy pointer.
+Success means all writes for the requested operation completed.
+The updater returns database errors immediately as `eyre::Error` with write-stage context.
+It does not retry, roll back, or repair a partial publication on a later write.
+A failure between writes can leave the legacy and cached pointers out of sync;
+operators must repair that state before relying on it.
+Crash recovery between consecutive writes is outside this writer's scope.
+On proof completion, the network task logs a publication error and continues processing.
+Normal RPC submission retains its original one-time certificate replacement validation,
+including settlement jobs and L1 receipts.
+It does not revalidate the storage snapshot after L1/signature validation;
+concurrent same-height requests retain the preexisting replacement race.
+Admin force-push bypasses normal replacement validation but still refuses changes to settled certificates.
+The standalone header-insertion helper is available only to tests and fixtures.
+
+`getNetworkInfo` determines network existence from cached data and bounded cache pointer reads.
+Legacy pointers skipped as junk by backfill do not make a network known.
+A missing network type does not make a pending-only or proven-only network unknown,
+and a dangling cached pointer still establishes existence.
+Cache read failures propagate as errors.
+Unknown networks retain the existing JSON-RPC error conversion and gRPC `NotFound` mapping.
+
+[certificate-updater]: ../../../crates/agglayer-storage/src/stores/certificate_updater.rs
+
+A settled row's claim is complete by construction.
+A settled row without a claim row means that no imported bridge exit
+was settled through that certificate.
+No completion flag records this.
+
+### Settlement writer
+
+The sequential network task is the sole runtime owner of its network's settled pointer,
+settled row, network type, and settled claim.
+Fresh certification and recovery publish through the same path,
+and the task awaits the write before it processes the next certificate.
+The certificate task carries the new pessimistic root to the network task,
+decoded from the public values of the stored proof, the ones settlement submits to L1:
+after fresh certification, and when a certificate that already has a settlement job
+is resumed after a restart.
+The network task reads the certificate's local exit root, type, and last imported bridge exit
+once, when the certificate task starts, and takes the leaf count from the local state
+it persists for that settlement.
+It hands the state store one settlement input with all of that,
+plus the height, epoch, and index of the legacy pointer;
+the store derives nothing from the header, the live exit tree, or history.
+
+One state DB batch writes the legacy settled pointer, the network type, the complete settled row
+(certificate ID, local exit root, pessimistic root, leaf count), and the claim row
+when the certificate carries a claim.
+Every settlement writes every field of the settled row,
+so a backfilled root is replaced rather than cleared or carried over.
+A certificate without a claim leaves the claim row untouched,
+with no read of the previous claim.
+Pending and proven rows are not part of the batch, so their writers stay independent.
+A failed batch publishes none of these changes, and the task fails as before.
+Epoch assignment, local state, and header writes stay separate stages ahead of this batch,
+in their existing order.
+
+Only cancellation drops the task future while the blocking transition runs,
+and cancellation shuts the orchestrator down rather than replacing the task,
+so no second writer for the network starts while the detached transition finishes.
+Admin repair requires exclusive operational access with that processing quiesced.
+Nothing at runtime compares the cache with the legacy pointer or repairs preexisting divergence.
+
+### Backfill migration step
+
+The third state DB migration step fills `network_info_cf` from the legacy indexes,
+exactly once.
+It drops and recreates the column first,
+because rows written before that step may lack the claim history behind them.
+It reads everything before writing anything,
+and it writes the whole backfill in one batch before the step is recorded.
+A failure leaves the step unrecorded,
+and the next start recreates the column and runs the whole backfill again.
+After the step is recorded, nothing reads the legacy indexes to repair the column:
+only the runtime writers update it.
+
+The node opens the state DB, and so runs the step,
+before the clock, settlement, the orchestrator, and the RPC servers start.
+The first start opens the per-epoch databases of settled certificates:
+each settled network's latest epoch, for its certificate and proof,
+and one per certificate the claim scan reads,
+which can take a while for a network whose latest claim is far back.
+It also loads the nullifier tree of each settled network
+whose latest certificate carries no claim.
+The health endpoint is not bound yet while it runs,
+so relax liveness and startup probes for the first start:
+a probe that kills it makes every restart run the whole backfill again.
+Opening a database that holds certificates without the pending database and the epoch store
+panics in the migration step, so the step can never be recorded with an empty column by mistake.
+The first open by a binary with this step logs a migration-framework warning
+that it drops the existing column, even on a fresh database: this is expected.
+
+For each network in the legacy indexes:
+
+- A pending or proven pointer belongs to the network it is stored under;
+  the network id repeated in a proven value is not trusted.
+  A pointer whose header is missing, belongs to another network,
+  or sits at another height is skipped with a warning.
+- The settled row is rebuilt with its claim.
+  The latest settled certificate's own claim is used when it has one.
+  Otherwise a stored empty nullifier tree proves that no claim was ever settled,
+  so no history is read.
+  Otherwise, including when no tree is stored because the network last settled
+  before local state was persisted, the settled history is scanned backwards,
+  one epoch per certificate, until a certificate with an imported bridge exit.
+- The network type comes from the latest settled certificate, read from its epoch:
+  a network can change type, and only settlement shows a type L1 accepted.
+  A network that never settled gets no type.
+- The settled row always stores the settled certificate's local exit root.
+  Its pessimistic root stays unset when the proof is gone
+  or the current codec cannot decode it,
+  and its leaf count stays unset when no exit tree is stored
+  or the stored one already moved past the settled root.
+
+The settled pointer and claim history are checked strictly.
+A settled pointer whose header is missing or does not match,
+a settled certificate without an epoch assignment, missing from its epoch, or replaced there,
+a malformed nullifier tree, an unreadable epoch or local exit tree,
+or a gap in the history the scan reads fails the migration,
+and the node does not start.
+The previous binary still opens the database after a failed backfill,
+so redeploying it is the immediate recovery.
+Then fix the data offline, or restore the state and pending backups as a pair,
+and restart.
+
+Once recorded, the step is not reversible.
+A binary that declares fewer migration steps refuses to open the database,
+so rolling back needs a pre-upgrade backup.
+Backup rotation soon deletes the pre-upgrade backups,
+so copy them aside before upgrading.
