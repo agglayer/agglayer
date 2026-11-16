@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
 use pessimistic_proof_test_suite::sample_data;
@@ -7,11 +7,13 @@ use prost::Message as _;
 use super::PendingStore;
 use crate::{
     columns::{
+        latest_pending_certificate_per_network::LatestPendingCertificatePerNetworkColumn,
         pending_queue::{PendingQueueColumn, PendingQueueKey, PendingQueueProtoColumn},
         proof_per_certificate::ProofPerCertificateColumn,
     },
     error::Error,
     schema::{Codec as _, ColumnSchema as _},
+    storage::{DBError, DB},
     stores::{PendingCertificateReader as _, PendingCertificateWriter as _},
     tests::TempDBDir,
     types::generated::agglayer::storage::v0,
@@ -115,6 +117,31 @@ fn insert_pending_certificate_writes_proto_bytes() {
     let decoded = Certificate::try_from(proto).unwrap();
 
     assert_eq!(decoded, certificate);
+}
+
+#[test]
+fn insert_pending_certificate_does_not_leave_pointer_on_body_write_failure() {
+    let tmp = TempDBDir::new();
+    let db = Arc::new(DB::open_cf(&tmp.path, super::cf_definitions::PENDING_DB_V0).unwrap());
+    let store = PendingStore::new(db);
+    let network_id = NetworkId::new(1);
+    let height = Height::ZERO;
+    let certificate = Certificate::new_for_test(network_id, height);
+
+    let result = store.insert_pending_certificate(network_id, height, &certificate);
+
+    assert!(matches!(
+        result,
+        Err(Error::DBError(DBError::ColumnFamilyNotFound))
+    ));
+    assert_eq!(
+        store
+            .db
+            .get::<LatestPendingCertificatePerNetworkColumn>(&network_id)
+            .unwrap(),
+        None,
+        "latest pointer must not be persisted if the certificate body cannot be staged"
+    );
 }
 
 #[test]
