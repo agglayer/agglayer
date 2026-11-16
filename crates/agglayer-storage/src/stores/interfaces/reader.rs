@@ -60,9 +60,6 @@ pub trait StateReader: Send + Sync {
     /// Get the disabled networks.
     fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, Error>;
 
-    /// Get the active networks.
-    fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
-
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,

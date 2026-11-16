@@ -805,33 +805,6 @@ impl StateReader for StateStore {
             .collect())
     }
 
-    /// Get the active networks.
-    /// Meaning, the networks that have at least one settled certificate.
-    ///
-    /// Performance: O(n) where n is the number of network info rows.
-    /// This is because we need to scan all the keys in the
-    /// `network_info` column family.
-    /// This is not a problem because the number of networks is expected to be
-    /// small, and nothing at runtime calls this function.
-    /// Benchmark: `latest_certificate_bench.rs`
-    fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error> {
-        use crate::types::network_info::v0::network_info_value::ValueDiscriminants;
-        let disabled_networks = self
-            .db
-            .keys::<crate::columns::disabled_networks::DisabledNetworksColumn>()?
-            .filter_map(|v| v.ok())
-            .collect::<BTreeSet<NetworkId>>();
-
-        Ok(self
-            .db
-            .keys::<NetworkInfoColumn>()?
-            .filter_map(|v| v.ok())
-            .filter(|key| key.kind == ValueDiscriminants::SettledCertificate)
-            .map(|key| NetworkId::new(key.network_id))
-            .filter(|network_id| !disabled_networks.contains(network_id))
-            .collect())
-    }
-
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,
@@ -919,6 +892,33 @@ impl StateStore {
             .db
             .get::<LatestSettledCertificatePerNetworkColumn>(network_id)
             .map(|v| v.map(|v| (*network_id, v)))?)
+    }
+}
+
+/// The active-network listing, which only tests and a benchmark call.
+#[cfg(any(test, feature = "testutils"))]
+impl StateStore {
+    /// The networks with a settled certificate that are not disabled.
+    ///
+    /// O(number of network info rows): one scan of the column, which is fine
+    /// for a helper nothing at runtime calls.
+    /// Benchmark: `latest_certificate_bench.rs`
+    pub fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error> {
+        use crate::types::network_info::v0::network_info_value::ValueDiscriminants;
+        let disabled_networks = self
+            .db
+            .keys::<crate::columns::disabled_networks::DisabledNetworksColumn>()?
+            .filter_map(|v| v.ok())
+            .collect::<BTreeSet<NetworkId>>();
+
+        Ok(self
+            .db
+            .keys::<NetworkInfoColumn>()?
+            .filter_map(|v| v.ok())
+            .filter(|key| key.kind == ValueDiscriminants::SettledCertificate)
+            .map(|key| NetworkId::new(key.network_id))
+            .filter(|network_id| !disabled_networks.contains(network_id))
+            .collect())
     }
 }
 

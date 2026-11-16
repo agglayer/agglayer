@@ -14,14 +14,17 @@ use agglayer_types::{
     CertificateId, CertificateStatus, Digest, Height, NetworkId, NetworkInfo, NetworkType,
 };
 use rocksdb::WriteBatch;
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::{
     columns::{certificate_header::CertificateHeaderColumn, network_info::NetworkInfoColumn},
     error::Error,
     schema::CodecError,
     storage::{DBError, Snapshot},
-    stores::{expected_type_or_fail, state::StateStore, try_digest, LatestCertificateHeaders},
+    stores::{
+        expected_type_or_fail, state::StateStore, try_digest, CertificateStages,
+        LatestCertificateHeaders,
+    },
     types::network_info::{
         self,
         v0::{
@@ -351,7 +354,8 @@ impl StateStore {
         Ok(networks)
     }
 
-    /// The headers the cached pointers name, from `snapshot`.
+    /// The headers the cached pointers of the selected `stages` name, from
+    /// `snapshot`. The other stages are not read and come back as `None`.
     ///
     /// A pointer without its header is inconsistent storage: the writers
     /// publish a pointer with or after its header, and the backfill skips a
@@ -361,21 +365,29 @@ impl StateStore {
         snapshot: &Snapshot<'_>,
         network_id: NetworkId,
         pointers: &CachedPointers,
+        stages: CertificateStages,
     ) -> Result<LatestCertificateHeaders, Error> {
         let pointers = [
             (
                 "pending",
-                pointers.pending.map(|(certificate_id, _)| certificate_id),
+                pointers
+                    .pending
+                    .filter(|_| stages.pending)
+                    .map(|(certificate_id, _)| certificate_id),
             ),
-            ("proven", pointers.proven),
+            ("proven", pointers.proven.filter(|_| stages.proven)),
             (
                 "settled",
                 pointers
                     .settled
                     .as_ref()
+                    .filter(|_| stages.settled)
                     .map(|settled| settled.certificate_id),
             ),
         ];
+        // `multi_get` answers one entry per requested key, in request order:
+        // the present pointers as `pointers` lists them. `header_of` consumes
+        // one answer per present pointer in that same order.
         let mut headers = snapshot
             .multi_get::<CertificateHeaderColumn>(
                 pointers
@@ -416,7 +428,7 @@ impl StateStore {
             return Ok(None);
         }
         let CachedRows {
-            mut pointers,
+            pointers,
             network_type,
             settled_claim,
         } = rows;
@@ -434,8 +446,15 @@ impl StateStore {
         }
         // The info serves no proven field, so the proven header is not read:
         // only the headers it serves can fail it.
-        pointers.proven = None;
-        let headers = Self::join_headers(snapshot, network_id, &pointers)?;
+        let headers = Self::join_headers(
+            snapshot,
+            network_id,
+            &pointers,
+            CertificateStages {
+                proven: false,
+                ..CertificateStages::ALL
+            },
+        )?;
         // Height, epoch, status, error, and the settled local exit root are
         // certificate-header facts; the cached pending height is not
         // authoritative.
@@ -466,27 +485,37 @@ impl crate::stores::NetworkInfoReader for StateStore {
     fn get_latest_certificate_headers(
         &self,
         network_id: NetworkId,
+        stages: CertificateStages,
     ) -> Result<LatestCertificateHeaders, Error> {
         let snapshot = self.db.snapshot();
         let pointers = Self::cached_pointers(&snapshot, network_id)?;
 
-        Self::join_headers(&snapshot, network_id, &pointers)
+        Self::join_headers(&snapshot, network_id, &pointers, stages)
     }
 
     fn get_all_latest_certificate_headers(
         &self,
     ) -> Result<BTreeMap<NetworkId, LatestCertificateHeaders>, Error> {
         let snapshot = self.db.snapshot();
+        let mut networks = BTreeMap::new();
+        for (network_id, pointers) in Self::all_cached_pointers(&snapshot)? {
+            match Self::join_headers(&snapshot, network_id, &pointers, CertificateStages::ALL) {
+                Ok(headers) => {
+                    networks.insert(network_id, headers);
+                }
+                // One network's inconsistent storage is left out, loudly,
+                // rather than keeping every other network from starting.
+                Err(error @ Error::DanglingCertificatePointer { .. }) => {
+                    error!(
+                        %error,
+                        "Leaving out a network whose cached pointer has no header"
+                    );
+                }
+                Err(error) => return Err(error),
+            }
+        }
 
-        Self::all_cached_pointers(&snapshot)?
-            .iter()
-            .map(|(network_id, pointers)| {
-                Ok((
-                    *network_id,
-                    Self::join_headers(&snapshot, *network_id, pointers)?,
-                ))
-            })
-            .collect()
+        Ok(networks)
     }
 }
 

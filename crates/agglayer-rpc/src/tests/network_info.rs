@@ -7,7 +7,10 @@ use agglayer_storage::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
     error::Error as StorageError,
-    stores::{state::StateStore, LatestCertificateHeaders, NetworkInfoReader, StateWriter},
+    stores::{
+        state::StateStore, CertificateStages, LatestCertificateHeaders, NetworkInfoReader,
+        StateWriter,
+    },
     tests::{
         mocks::{MockDebugStore, MockPendingStore, MockStateStore},
         TempDBDir,
@@ -18,7 +21,7 @@ use agglayer_types::{
     Digest, Metadata, NetworkId, NetworkInfo, NetworkStatus, NetworkType, SettledClaim,
 };
 use alloy::providers::{mock::Asserter, ProviderBuilder};
-use mockall::predicate::eq;
+use mockall::predicate::{always, eq};
 
 const DEFAULT_NETWORK_INFO: NetworkInfo = NetworkInfo::from_network_id(NetworkId::new(1));
 const NETWORK_1: NetworkId = NetworkId::new(1);
@@ -427,11 +430,30 @@ async fn latest_certificate_headers_come_from_the_cached_pointers() {
         settled: Some(settled.clone()),
     };
     let mut state_store = MockStateStore::new();
-    state_store
-        .expect_get_latest_certificate_headers()
-        .with(eq(NETWORK_1))
-        .times(3)
-        .returning(move |_| Ok(headers.clone()));
+    // Each request resolves only the stages it serves.
+    for (stages, served) in [
+        (CertificateStages::ALL, headers),
+        (
+            CertificateStages::PENDING,
+            LatestCertificateHeaders {
+                pending: Some(pending.clone()),
+                ..Default::default()
+            },
+        ),
+        (
+            CertificateStages::SETTLED,
+            LatestCertificateHeaders {
+                settled: Some(settled.clone()),
+                ..Default::default()
+            },
+        ),
+    ] {
+        state_store
+            .expect_get_latest_certificate_headers()
+            .with(eq(NETWORK_1), eq(stages))
+            .once()
+            .return_once(move |_, _| Ok(served));
+    }
     let service = service!(state_store);
 
     assert_eq!(
@@ -467,9 +489,9 @@ async fn latest_certificate_headers_come_from_the_cached_pointers() {
     let mut state_store = MockStateStore::new();
     state_store
         .expect_get_latest_certificate_headers()
-        .with(eq(NETWORK_1))
+        .with(eq(NETWORK_1), always())
         .times(2)
-        .returning(move |_| Ok(headers.clone()));
+        .returning(move |_, _| Ok(headers.clone()));
     let service = service!(state_store);
     assert_eq!(
         service
@@ -500,9 +522,9 @@ async fn dangling_pointer_fails_every_request() {
     let mut state_store = MockStateStore::new();
     state_store
         .expect_get_latest_certificate_headers()
-        .with(eq(NETWORK_1))
+        .with(eq(NETWORK_1), always())
         .times(3)
-        .returning(move |_| Err(dangling()));
+        .returning(move |_, _| Err(dangling()));
     state_store
         .expect_get_network_info()
         .with(eq(NETWORK_1))

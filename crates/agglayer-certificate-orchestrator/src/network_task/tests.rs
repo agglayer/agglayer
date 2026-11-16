@@ -9,7 +9,7 @@ use agglayer_storage::{
     error as storage_error,
     storage::DBError,
     stores::{
-        state::StateStore, LatestCertificateHeaders, PendingCertificateReader,
+        state::StateStore, CertificateStages, LatestCertificateHeaders, PendingCertificateReader,
         PendingCertificateWriter, SettlementWriter,
     },
     tests::{
@@ -216,8 +216,8 @@ async fn start_from_zero() {
     state
         .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(Default::default()));
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .returning(|_, _| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -414,8 +414,8 @@ async fn repeated_unreadable_proof_errors_certificate() {
     state
         .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(Default::default()));
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .returning(|_, _| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -562,8 +562,8 @@ async fn retries() {
     state
         .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(Default::default()));
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .returning(|_, _| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -868,8 +868,8 @@ async fn timeout_certifier() {
     state
         .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(Default::default()));
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .returning(|_, _| Ok(Default::default()));
 
     state
         .expect_update_certificate_header_status()
@@ -1333,7 +1333,7 @@ async fn dropped_settlement_still_persists_settled_state() {
         .returning(|_| Ok(Default::default()));
     state
         .expect_get_latest_certificate_headers()
-        .returning(|_| Ok(Default::default()));
+        .returning(|_, _| Ok(Default::default()));
 
     // Hold the epoch assignment until the settlement future has been
     // cancelled mid-transition.
@@ -1483,8 +1483,8 @@ async fn resumes_after_the_latest_settled_certificate() {
     state
         .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .return_once(move |_| {
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .return_once(move |_, _| {
             Ok(LatestCertificateHeaders {
                 settled: Some(settled_header),
                 ..Default::default()

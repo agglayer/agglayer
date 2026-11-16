@@ -4,9 +4,9 @@ use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
 use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::stores::{
-    async_api::AsyncStateReaderExt, DebugReader, DebugWriter, LatestCertificateHeaders,
-    NetworkInfoReader, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
-    StateReader, StateWriter,
+    async_api::AsyncStateReaderExt, CertificateStages, DebugReader, DebugWriter,
+    LatestCertificateHeaders, NetworkInfoReader, PendingCertificateReader,
+    PendingCertificateWriter, SettlementReader, StateReader, StateWriter,
 };
 use agglayer_types::{
     aggchain_data::MultisigCtx, aggchain_proof::AggchainData, Certificate, CertificateHeader,
@@ -94,14 +94,15 @@ where
     DebugStore: DebugReader + 'static,
     L1Rpc: Send + Sync + 'static,
 {
-    /// The headers of the network's latest pending, proven, and settled
-    /// certificates, from one storage snapshot.
+    /// The headers of the network's latest certificates at `stages`, from one
+    /// storage snapshot: a request resolves only the stages it serves.
     fn latest_certificate_headers_blocking(
         state: &StateStore,
         network_id: NetworkId,
+        stages: CertificateStages,
     ) -> Result<LatestCertificateHeaders, CertificateRetrievalError> {
         Ok(state
-            .get_latest_certificate_headers(network_id)
+            .get_latest_certificate_headers(network_id, stages)
             .inspect_err(|e| error!("Failed to get the latest certificate headers: {e}"))?)
     }
 
@@ -117,11 +118,13 @@ where
                  {network_id}",
             );
 
-            Ok(
-                Self::latest_certificate_headers_blocking(state.as_ref(), network_id)?
-                    .latest_known()
-                    .cloned(),
-            )
+            Ok(Self::latest_certificate_headers_blocking(
+                state.as_ref(),
+                network_id,
+                CertificateStages::ALL,
+            )?
+            .latest_known()
+            .cloned())
         })
         .await
         .expect("latest-known-certificate query task panicked")
@@ -134,7 +137,12 @@ where
         let state = self.state.clone();
 
         spawn_blocking_in_current_span(move || {
-            Ok(Self::latest_certificate_headers_blocking(state.as_ref(), network_id)?.settled)
+            Ok(Self::latest_certificate_headers_blocking(
+                state.as_ref(),
+                network_id,
+                CertificateStages::SETTLED,
+            )?
+            .settled)
         })
         .await
         .expect("latest-settled-certificate query task panicked")
@@ -147,11 +155,13 @@ where
         let state = self.state.clone();
 
         spawn_blocking_in_current_span(move || {
-            Ok(
-                Self::latest_certificate_headers_blocking(state.as_ref(), network_id)?
-                    .pending
-                    .and_then(Self::pending_certificate_header),
-            )
+            Ok(Self::latest_certificate_headers_blocking(
+                state.as_ref(),
+                network_id,
+                CertificateStages::PENDING,
+            )?
+            .pending
+            .and_then(Self::pending_certificate_header))
         })
         .await
         .expect("latest-pending-certificate query task panicked")

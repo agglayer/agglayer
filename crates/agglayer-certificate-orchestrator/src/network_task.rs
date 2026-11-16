@@ -3,8 +3,9 @@ use std::{sync::Arc, time::Duration};
 use agglayer_clock::ClockRef;
 use agglayer_settlement_service::SettlementServiceTrait;
 use agglayer_storage::stores::{
-    async_api::AsyncStateWriterExt, NetworkInfoReader, NetworkSettlement, PendingCertificateReader,
-    PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+    async_api::AsyncStateWriterExt, CertificateStages, NetworkInfoReader, NetworkSettlement,
+    PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
+    StateReader, StateWriter,
 };
 use agglayer_types::{
     primitives::{Digest, Hashable as _},
@@ -149,7 +150,7 @@ where
             );
 
             let latest_settled = state_store
-                .get_latest_certificate_headers(network_id)?
+                .get_latest_certificate_headers(network_id, CertificateStages::SETTLED)?
                 .settled
                 .map(|header| (header.certificate_id, header.height));
 

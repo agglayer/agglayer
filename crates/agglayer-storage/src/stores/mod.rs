@@ -5,7 +5,7 @@ pub mod certificate_updater;
 
 pub use interfaces::{
     reader::{
-        network_info_reader::{LatestCertificateHeaders, NetworkInfoReader},
+        network_info_reader::{CertificateStages, LatestCertificateHeaders, NetworkInfoReader},
         settlement_reader::SettlementReader,
         DebugReader, EpochStoreReader, MetadataReader, PendingCertificateReader, PerEpochReader,
         StateReader,

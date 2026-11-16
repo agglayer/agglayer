@@ -7,7 +7,10 @@ use parking_lot::{Mutex, MutexGuard};
 use prometheus::{IntGaugeVec, Opts, Registry};
 use tracing::warn;
 
-use crate::{error::Error, stores::NetworkInfoReader};
+use crate::{
+    error::Error,
+    stores::{CertificateStages, NetworkInfoReader},
+};
 
 #[cfg(test)]
 mod tests;
@@ -106,9 +109,10 @@ impl NetworkMetrics {
 
     /// Seed every native series from a complete, fallible storage snapshot.
     ///
-    /// Storage read and decode errors abort hydration, as does a cached
-    /// pointer without its header; out-of-range heights do not, they
-    /// saturate.
+    /// Storage read and decode errors abort hydration; out-of-range heights
+    /// do not, they saturate. A network whose cached pointer has no header is
+    /// left out of the snapshot with an error log, so its series stay absent:
+    /// see [`NetworkInfoReader::get_all_latest_certificate_headers`].
     pub fn hydrate<S: NetworkInfoReader>(&self, state: &S) -> Result<(), Error> {
         let networks = state.get_all_latest_certificate_headers()?;
         // A series sitting at the gauge maximum saturated: no real network
@@ -171,10 +175,10 @@ impl NetworkMetrics {
 
     /// Refresh the error series after a direct admin latest-pending write.
     ///
-    /// The cached pointer and its header are reread while holding the same
-    /// mutation mutex used by both concrete stores. A newer pointer wins and
-    /// is left untouched. Fails, after the override has already been written,
-    /// when any of the network's cached pointers has no header.
+    /// The cached pending pointer and its header are reread while holding the
+    /// same mutation mutex used by both concrete stores. A newer pointer wins
+    /// and is left untouched. Only the pending stage is resolved, so another
+    /// stage's pointer without a header cannot fail the refresh.
     pub fn reconcile_pending_error<S: NetworkInfoReader>(
         &self,
         state: &S,
@@ -182,7 +186,10 @@ impl NetworkMetrics {
         expected_certificate_id: CertificateId,
     ) -> Result<(), Error> {
         let mut metrics = self.mutation();
-        let Some(header) = state.get_latest_certificate_headers(network_id)?.pending else {
+        let Some(header) = state
+            .get_latest_certificate_headers(network_id, CertificateStages::PENDING)?
+            .pending
+        else {
             return Ok(());
         };
         if header.certificate_id != expected_certificate_id {

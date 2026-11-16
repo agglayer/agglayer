@@ -6,7 +6,7 @@ use std::{
 
 use agglayer_storage::{
     backup::BackupClient,
-    stores::{state::StateStore, NetworkSettlement, StateReader as _, StateWriter as _},
+    stores::{state::StateStore, NetworkSettlement, StateWriter as _},
 };
 use agglayer_types::{CertificateId, CertificateIndex, Digest, EpochNumber, Height, NetworkType};
 use criterion::{criterion_group, criterion_main, Criterion};

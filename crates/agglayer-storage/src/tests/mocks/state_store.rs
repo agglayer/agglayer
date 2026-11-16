@@ -10,9 +10,9 @@ use mockall::mock;
 use crate::{
     error::Error,
     stores::{
-        EditEvenIfCompleted, LatestCertificateHeaders, MetadataReader, MetadataWriter,
-        NetworkInfoReader, NetworkSettlement, SettlementReader, SettlementWriter, StateReader,
-        StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        CertificateStages, EditEvenIfCompleted, LatestCertificateHeaders, MetadataReader,
+        MetadataWriter, NetworkInfoReader, NetworkSettlement, SettlementReader, SettlementWriter,
+        StateReader, StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
 };
 mock! {
@@ -23,6 +23,7 @@ mock! {
         fn get_latest_certificate_headers(
             &self,
             network_id: NetworkId,
+            stages: CertificateStages,
         ) -> Result<LatestCertificateHeaders, Error>;
 
         fn get_all_latest_certificate_headers(
@@ -94,7 +95,6 @@ mock! {
     impl StateReader for StateStore {
         fn get_disabled_networks(&self) -> Result<Vec<NetworkId>, Error>;
         fn is_network_disabled(&self, network_id: &NetworkId) -> Result<bool, Error>;
-        fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error>;
 
         fn get_certificate_header(
             &self,

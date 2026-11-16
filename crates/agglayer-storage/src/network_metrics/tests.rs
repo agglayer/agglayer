@@ -12,7 +12,6 @@ use prometheus::{Encoder as _, Registry, TextEncoder};
 use super::{NetworkMetrics, NETWORK_HEIGHT, NETWORK_LATEST_CERTIFICATE_IN_ERROR};
 use crate::{
     backup::BackupClient,
-    error::Error,
     storage::DB,
     stores::{
         certificate_updater::{set_pending, set_proven, submit},
@@ -508,12 +507,15 @@ fn hydrate_seeds_every_series_from_a_storage_snapshot() {
     );
 }
 
-/// A cached pointer without its header is inconsistent storage: hydration
-/// fails instead of exporting a height for a certificate nothing describes.
+/// A cached pointer without its header is inconsistent storage: that network
+/// is left out of hydration, with no height for a certificate nothing
+/// describes, and the other networks are seeded as usual.
 #[test]
-fn hydrate_fails_on_a_pointer_without_header() {
+fn hydrate_leaves_out_a_network_whose_pointer_has_no_header() {
     let (registry, metrics) = network_metrics();
-    let (_pending_dir, _state_dir, _pending, state) = stores(&metrics);
+    let (_pending_dir, _state_dir, pending, state) = stores(&metrics);
+    let healthy = Certificate::new_for_test(NetworkId::new(1), Height::new(2));
+    submit(&pending, &state, &healthy, &CertificateStatus::Pending).unwrap();
     state
         .set_latest_pending_certificate_pointer(
             NetworkId::new(3),
@@ -522,10 +524,8 @@ fn hydrate_fails_on_a_pointer_without_header() {
         )
         .unwrap();
 
-    assert!(matches!(
-        metrics.hydrate(&state),
-        Err(Error::DanglingCertificatePointer { .. })
-    ));
+    metrics.hydrate(&state).unwrap();
+    assert_eq!(height_of(&registry, 1, "pending"), Some(2));
     assert_eq!(height_of(&registry, 3, "pending"), None);
 }
 

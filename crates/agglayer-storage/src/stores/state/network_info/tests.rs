@@ -82,7 +82,9 @@ fn owned_store() -> (crate::tests::TempDBDir, StateStore) {
 fn fetching_an_unexisting_network(network_id: NetworkId, store: StateStore) {
     assert_eq!(store.get_network_info(network_id).unwrap(), None);
     assert_eq!(
-        store.get_latest_certificate_headers(network_id).unwrap(),
+        store
+            .get_latest_certificate_headers(network_id, CertificateStages::ALL)
+            .unwrap(),
         LatestCertificateHeaders::default()
     );
     assert_eq!(
@@ -178,7 +180,9 @@ fn pending_and_proven_ids_round_trip(network_id: NetworkId, store: StateStore) {
         network_info.latest_pending_status,
         Some(CertificateStatus::Pending)
     );
-    let headers = store.get_latest_certificate_headers(network_id).unwrap();
+    let headers = store
+        .get_latest_certificate_headers(network_id, CertificateStages::ALL)
+        .unwrap();
     assert_eq!(
         headers.pending.map(|header| header.certificate_id),
         Some(pending_id)
@@ -864,7 +868,9 @@ fn latest_certificate_headers_join_cached_pointers_per_network_and_in_bulk() {
     );
     for (network_id, headers) in expected {
         assert_eq!(
-            store.get_latest_certificate_headers(network_id).unwrap(),
+            store
+                .get_latest_certificate_headers(network_id, CertificateStages::ALL)
+                .unwrap(),
             headers
         );
         // Each is a known network whose pending and settled fields follow the
@@ -893,14 +899,15 @@ fn latest_certificate_headers_join_cached_pointers_per_network_and_in_bulk() {
     assert_eq!(store.get_network_info(NetworkId::new(4)).unwrap(), None);
     assert_eq!(
         store
-            .get_latest_certificate_headers(NetworkId::new(4))
+            .get_latest_certificate_headers(NetworkId::new(4), CertificateStages::ALL)
             .unwrap(),
         LatestCertificateHeaders::default()
     );
 }
 
 /// A cached pointer without its header is inconsistent storage for every
-/// reader: none of them reads it as absent.
+/// reader that serves its stage: none of them reads it as absent. The bulk
+/// scan leaves that network out.
 #[rstest]
 #[case::pending("pending")]
 #[case::proven("proven")]
@@ -942,10 +949,37 @@ fn pointer_without_header_is_an_error(#[case] kind: &'static str) {
     };
     dangling(
         store
-            .get_latest_certificate_headers(network_id)
+            .get_latest_certificate_headers(network_id, CertificateStages::ALL)
             .unwrap_err(),
     );
-    dangling(store.get_all_latest_certificate_headers().unwrap_err());
+    // Only a read that serves the stage fails on it.
+    for (stages, serves_it) in [
+        (CertificateStages::PENDING, kind == "pending"),
+        (CertificateStages::SETTLED, kind == "settled"),
+    ] {
+        let result = store.get_latest_certificate_headers(network_id, stages);
+        if serves_it {
+            dangling(result.unwrap_err());
+        } else {
+            assert_eq!(result.unwrap(), LatestCertificateHeaders::default());
+        }
+    }
+    // The bulk scan leaves the network out rather than failing the others.
+    let healthy = Certificate::new_for_test(NetworkId::new(2), Height::ZERO);
+    store
+        .insert_certificate_header(&healthy, CertificateStatus::Pending)
+        .unwrap();
+    store
+        .set_latest_pending_certificate_pointer(healthy.network_id, healthy.height, healthy.hash())
+        .unwrap();
+    assert_eq!(
+        store
+            .get_all_latest_certificate_headers()
+            .unwrap()
+            .into_keys()
+            .collect::<Vec<_>>(),
+        vec![healthy.network_id]
+    );
     if kind == "proven" {
         // The info serves no proven field, so it does not read that header.
         assert!(store.get_network_info(network_id).unwrap().is_some());
@@ -960,9 +994,46 @@ fn pointer_without_header_is_an_error(#[case] kind: &'static str) {
     assert!(store.get_network_info(network_id).unwrap().is_some());
 }
 
-/// The bulk scan seeds the native network metrics at startup: a row that
-/// fails to decode must fail the scan instead of being skipped, or the gauges
-/// would silently stay incomplete until the next restart.
+/// The bulk scan leaves out a network with a dangling pointer of any stage,
+/// even one whose other pointers are sound: nothing it seeds for that network,
+/// neither the metrics nor the startup network task, can be trusted. The
+/// per-network read of a sound stage still succeeds, so a later certificate
+/// submission can spawn the task.
+#[test]
+fn bulk_scan_leaves_out_a_network_with_any_dangling_pointer() {
+    let (_tmp, store) = owned_store();
+    let network_id = NetworkId::new(1);
+    let settled = Certificate::new_for_test(network_id, Height::ZERO);
+    store
+        .insert_certificate_header(&settled, CertificateStatus::Settled)
+        .unwrap();
+    store
+        .set_latest_settled_certificate_for_network(
+            &network_id,
+            &settlement(&settled, Digest::ZERO, 0, None),
+        )
+        .unwrap();
+    let dangling = Certificate::new_for_test(network_id, Height::new(1));
+    store
+        .set_latest_pending_certificate_pointer(network_id, dangling.height, dangling.hash())
+        .unwrap();
+
+    assert_eq!(
+        store.get_all_latest_certificate_headers().unwrap(),
+        BTreeMap::new()
+    );
+    assert_eq!(
+        store
+            .get_latest_certificate_headers(network_id, CertificateStages::SETTLED)
+            .unwrap()
+            .settled
+            .map(|header| header.certificate_id),
+        Some(settled.hash())
+    );
+}
+
+/// A row that fails to decode is a column this binary cannot read, not one
+/// network's problem: every read fails on it, the bulk scan included.
 #[test]
 fn cache_reads_fail_on_undecodable_rows() {
     use crate::schema::{Codec as _, ColumnSchema as _};
@@ -987,7 +1058,7 @@ fn cache_reads_fail_on_undecodable_rows() {
 
     assert!(store.get_all_latest_certificate_headers().is_err());
     assert!(store
-        .get_latest_certificate_headers(NetworkId::new(2))
+        .get_latest_certificate_headers(NetworkId::new(2), CertificateStages::ALL)
         .is_err());
     assert!(store.get_network_info(NetworkId::new(2)).is_err());
 }
@@ -1010,7 +1081,9 @@ fn any_row_makes_a_network_known(
 
     assert!(store.get_network_info(network_id).unwrap().is_some());
     assert_eq!(
-        store.get_latest_certificate_headers(network_id).unwrap(),
+        store
+            .get_latest_certificate_headers(network_id, CertificateStages::ALL)
+            .unwrap(),
         LatestCertificateHeaders::default()
     );
 }
@@ -1093,7 +1166,7 @@ fn header_reads_tolerate_rows_this_binary_does_not_know() {
     );
     assert_eq!(
         &store
-            .get_latest_certificate_headers(certificate.network_id)
+            .get_latest_certificate_headers(certificate.network_id, CertificateStages::ALL)
             .unwrap(),
         headers
     );

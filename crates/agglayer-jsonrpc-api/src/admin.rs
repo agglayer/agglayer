@@ -925,13 +925,20 @@ where
                 certificate.certificate_id,
             )
             .map_err(Error::from_certificate_update)?;
-            network_metrics
-                .reconcile_pending_error(
-                    state.as_ref(),
-                    certificate.network_id,
-                    certificate.certificate_id,
-                )
-                .map_err(|error| Error::from_certificate_update(error.into()))
+            // The override is written: a metric that could not be refreshed
+            // does not make it a failed call.
+            if let Err(error) = network_metrics.reconcile_pending_error(
+                state.as_ref(),
+                certificate.network_id,
+                certificate.certificate_id,
+            ) {
+                warn!(
+                    ?error,
+                    "Latest pending certificate set, but its error metric was not refreshed"
+                );
+            }
+
+            Ok(())
         })
         .await
         .expect("admin latest-pending update task panicked")

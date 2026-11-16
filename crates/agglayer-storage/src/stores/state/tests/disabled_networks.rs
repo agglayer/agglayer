@@ -5,7 +5,7 @@ use agglayer_types::Digest;
 use crate::{
     backup::BackupClient,
     columns::{disabled_networks::DisabledNetworksColumn, network_info::NetworkInfoColumn},
-    stores::{state::StateStore, StateReader},
+    stores::state::StateStore,
     tests::TempDBDir,
     types::network_info::v0::{DisabledBy, DisabledNetwork},
 };

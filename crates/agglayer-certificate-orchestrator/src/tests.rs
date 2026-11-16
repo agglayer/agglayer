@@ -117,10 +117,6 @@ impl StateReader for DummyPendingStore {
         Ok(false)
     }
 
-    fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
-        Ok(vec![])
-    }
-
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,
