@@ -15,8 +15,10 @@ use crate::schema::{
 
 pub(crate) mod iterators;
 mod migration;
+mod snapshot;
 
 pub use migration::{Builder, DBMigrationError, DBMigrationErrorDetails, DBOpenError, DbAccess};
+pub(crate) use snapshot::Snapshot;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DBError {
@@ -106,34 +108,9 @@ impl DB {
             .map_or(Ok(None), |v| v.map(Some))
     }
 
-    pub fn atomic_multi_get<C: ColumnSchema>(
-        &self,
-        keys: impl IntoIterator<Item = C::Key>,
-    ) -> Result<Vec<Option<C::Value>>, DBError> {
-        let snapshot = self.rocksdb.snapshot();
-        let cf = self
-            .rocksdb
-            .cf_handle(C::COLUMN_FAMILY_NAME)
-            .ok_or(DBError::ColumnFamilyNotFound)?;
-
-        let keys: Result<Vec<_>, _> = keys
-            .into_iter()
-            .map(|k| k.encode().map(|key| (cf, key)))
-            .collect();
-
-        let results = snapshot
-            .multi_get_cf(keys?)
-            .into_iter()
-            .map(|r| r.map_err(DBError::from))
-            .collect::<Result<Vec<Option<_>>, _>>()?;
-
-        results
-            .into_iter()
-            .map(|bytes| match bytes {
-                Some(bytes) => C::Value::decode(&bytes[..]).map_err(Into::into).map(Some),
-                None => Ok(None),
-            })
-            .collect()
+    /// Pin one database view for related reads across column families.
+    pub(crate) fn snapshot(&self) -> Snapshot<'_> {
+        Snapshot::new(self)
     }
 
     pub fn multi_get<C: ColumnSchema>(

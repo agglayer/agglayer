@@ -13,7 +13,7 @@ use crate::{
 #[test]
 fn can_retrieve_the_last_settled_epoch() {
     let tmp = TempDBDir::new();
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
 
     let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_latest_settled_epoch().unwrap().is_none());
@@ -32,7 +32,7 @@ fn can_retrieve_the_last_settled_epoch() {
 #[test]
 fn can_set_the_latest_epoch_settled() {
     let tmp = TempDBDir::new();
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
 
     let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_latest_settled_epoch().unwrap().is_none());
