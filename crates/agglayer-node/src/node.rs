@@ -162,7 +162,7 @@ impl Node {
             };
 
             network_metrics
-                .hydrate(pending_store.as_ref(), state_store.as_ref())
+                .hydrate(state_store.as_ref())
                 .context("Failed hydrating network storage metrics")?;
 
             Ok((

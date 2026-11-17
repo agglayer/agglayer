@@ -46,7 +46,9 @@ impl Codec for Key {
             crate::schema::decode_u32_be(&key[..Key::NETWORK_ID_LEN], "network info network id")?;
         let kind = crate::schema::decode_u32_be(&key[Key::NETWORK_ID_LEN..], "network info kind")?;
         let kind = ValueDiscriminants::from_repr(kind as usize).ok_or_else(|| {
-            CodecError::InvalidEnumVariant(format!("invalid network info key kind {kind}"))
+            CodecError::InvalidEnumVariant(format!(
+                "invalid network info key kind {kind} for network {network_id}"
+            ))
         })?;
 
         Ok(Self { network_id, kind })

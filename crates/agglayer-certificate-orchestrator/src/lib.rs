@@ -8,16 +8,10 @@ use std::{
 
 use agglayer_clock::{ClockRef, Event};
 use agglayer_settlement_service::SettlementServiceTrait;
-use agglayer_storage::{
-    columns::{
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
-    stores::{
-        async_api::AsyncPendingCertificateReaderExt, EpochStoreReader, EpochStoreWriter,
-        PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
-        StateReader, StateWriter,
-    },
+use agglayer_storage::stores::{
+    async_api::AsyncNetworkInfoReaderExt, EpochStoreReader, EpochStoreWriter, NetworkInfoReader,
+    PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
+    StateReader, StateWriter,
 };
 use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
 use agglayer_utils::task::spawn_blocking_in_current_span;
@@ -48,22 +42,6 @@ pub type EpochPackingTasks =
 
 pub type NetworkTasks = FuturesUnordered<
     Pin<Box<dyn Future<Output = Result<NetworkId, (NetworkId, Error)>> + Send + 'static>>,
->;
-
-pub type SettlementContext = (NetworkId, CertificateId);
-
-pub type SettlementTasks = FuturesUnordered<
-    Pin<
-        Box<
-            dyn Future<
-                    Output = (
-                        SettlementContext,
-                        Result<(NetworkId, SettledCertificate), Error>,
-                    ),
-                > + Send
-                + 'static,
-        >,
-    >,
 >;
 
 /// The Certificate orchestrator receives the certificates from CDKs.
@@ -179,7 +157,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     SettlementService: SettlementServiceTrait + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
@@ -215,19 +193,24 @@ where
             data_receiver,
             cancellation_token,
             certifier_task_builder,
-            pending_store.clone(),
+            pending_store,
             epochs_store,
             current_epoch,
-            state_store,
+            state_store.clone(),
             settlement_service,
         )?;
 
-        // Try to spawn the certifier tasks for the next height of each network.
-        let proven_certificates = pending_store.get_current_proven_height_async().await?;
-        for ProvenCertificate(_, network_id, _height) in proven_certificates {
-            orchestrator
-                .spawn_initialized_network_task(network_id)
-                .await?;
+        // Try to spawn the certifier tasks for the next height of each network
+        // with a proven certificate.
+        let networks = state_store
+            .get_all_latest_certificate_headers_async()
+            .await?;
+        for (network_id, headers) in networks {
+            if headers.proven.is_some() {
+                orchestrator
+                    .spawn_initialized_network_task(network_id)
+                    .await?;
+            }
         }
 
         let handle = tokio::spawn(orchestrator);
@@ -249,7 +232,7 @@ where
     CertifierClient: Certifier,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     SettlementService: SettlementServiceTrait + 'static,
 {
@@ -421,7 +404,7 @@ where
     A: Certifier,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     SettlementService: SettlementServiceTrait + 'static,
 {

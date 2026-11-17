@@ -91,6 +91,16 @@ pub enum Error {
         reason: String,
     },
 
+    #[error(
+        "Inconsistent network info for network {network_id}: the latest {kind} certificate \
+         {certificate_id} has no header"
+    )]
+    DanglingCertificatePointer {
+        network_id: NetworkId,
+        kind: &'static str,
+        certificate_id: CertificateId,
+    },
+
     #[error("Inconsistent frontier")]
     InconsistentFrontier,
 

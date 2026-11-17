@@ -6,10 +6,7 @@ use agglayer_storage::{
     columns::latest_settled_certificate_per_network::{
         LatestSettledCertificatePerNetworkColumn, SettledCertificate,
     },
-    stores::{
-        pending::PendingStore, state::StateStore, NetworkInfoReader as _,
-        PendingCertificateWriter as _,
-    },
+    stores::{pending::PendingStore, state::StateStore, PendingCertificateWriter as _},
     tests::{init_state_db_before_network_info_backfill, TempDBDir},
 };
 use agglayer_types::{
