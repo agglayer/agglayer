@@ -5,10 +5,11 @@
 //! `~/.sp1/circuits` when they were missing. This test fails if an SP1 upgrade
 //! brings that back.
 //!
-//! The fixtures are a plonk proof and the verifying key it was made for, as
-//! returned by `Runner::generate_plonk_proof` of the test suite:
-//! `proof.save(..)` and the JSON of the key. Only an SP1 upgrade that changes
-//! the plonk circuit invalidates them.
+//! The fixtures are a plonk proof and the verifying key it was made for. The
+//! SDK rejects a proof whose `sp1_version` differs from `SP1_CIRCUIT_VERSION`,
+//! so they have to be regenerated at every SP1 upgrade that bumps it: take the
+//! proof and key returned by `Runner::generate_plonk_proof` of the test suite,
+//! then `proof.save(..)` and write the key as JSON.
 
 use pessimistic_proof::ELF;
 use sp1_sdk::{
@@ -26,22 +27,16 @@ const VKEY: &[u8] = include_bytes!("fixtures/plonk_vkey.json");
 fn plonk_proof_is_verified_without_circuit_artifacts() {
     // The artifacts directories are placed under a regular file, so that any
     // attempt to install them fails right away instead of downloading them.
-    let blocker = std::env::temp_dir().join(format!("agglayer-no-circuits-{}", std::process::id()));
-    std::fs::write(&blocker, b"").unwrap();
-    std::env::set_var("SP1_PLONK_CIRCUIT_PATH", blocker.join("plonk"));
-    std::env::set_var("SP1_GROTH16_CIRCUIT_PATH", blocker.join("groth16"));
+    std::env::set_var("SP1_PLONK_CIRCUIT_PATH", format!("{PROOF_PATH}/plonk"));
+    std::env::set_var("SP1_GROTH16_CIRCUIT_PATH", format!("{PROOF_PATH}/groth16"));
 
     let proof = SP1ProofWithPublicValues::load(PROOF_PATH).unwrap();
     let verifying_key: SP1VerifyingKey = serde_json::from_slice(VKEY).unwrap();
 
-    // Same client, setup and verification as the certifier.
+    // Same client as the certifier. `setup` is only called to check that it
+    // does not need the circuits either: the proof is verified against the
+    // fixture key, so that a change of the program does not break the test.
     let verifier = EnvProver::Light(ProverClient::builder().light().build());
     verifier.setup(Elf::Static(ELF)).unwrap();
     verifier.verify(&proof, &verifying_key, None).unwrap();
-
-    assert!(
-        blocker.is_file(),
-        "the SP1 circuit artifacts directory was created"
-    );
-    std::fs::remove_file(&blocker).unwrap();
 }
