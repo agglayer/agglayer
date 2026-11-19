@@ -73,11 +73,11 @@ impl AggchainHashValues {
 impl From<&AggchainData> for AggchainHashValues {
     fn from(value: &AggchainData) -> Self {
         match value {
-            AggchainData::LegacyEcdsa { signer, signature } => AggchainHashValues::ConsensusType1 {
+            AggchainData::LegacyEcdsa { signer, .. } => AggchainHashValues::ConsensusType1 {
                 aggchain_vkey: None,
                 aggchain_params: None,
                 multisig_hash: MultiSignature {
-                    signatures: vec![Some(*signature)],
+                    signatures: vec![],
                     expected_signers: vec![*signer],
                     threshold: 1,
                 }
