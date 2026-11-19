@@ -77,7 +77,7 @@ pub struct RpcConfig {
     pub batch_request_limit: Option<u32>,
 
     /// The interval at which to send ping messages
-    #[serde(skip)]
+    #[serde(skip_serializing_if = "crate::is_default")]
     #[serde_as(as = "Option<crate::with::HumanDuration>")]
     pub ping_interval: Option<Duration>,
 
