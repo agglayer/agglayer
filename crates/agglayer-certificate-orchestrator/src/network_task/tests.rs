@@ -8,7 +8,10 @@ use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
     error as storage_error,
     storage::DBError,
-    stores::{PendingCertificateReader, PendingCertificateWriter, SettlementWriter, StateWriter},
+    stores::{
+        state::StateStore, CertificateStages, LatestCertificateHeaders, PendingCertificateReader,
+        PendingCertificateWriter, SettlementWriter,
+    },
     tests::{
         mocks::{MockPendingStore, MockPerEpochStore, MockStateStore},
         TempDBDir,
@@ -116,6 +119,47 @@ fn mock_settlement_persisting<S>(
 
 mod status;
 
+/// The settlement `getNetworkInfo` serves is the one just published:
+/// the certificate's own facts, the root its proof committed to, the leaf
+/// count of the state persisted with it, and the claim of `claim_carrier`,
+/// the latest settled certificate with an imported bridge exit.
+fn assert_settlement_published(
+    state: &StateStore,
+    network_id: NetworkId,
+    certificate: &Certificate,
+    claim_carrier: &Certificate,
+    new_pp_root: Option<Digest>,
+) {
+    let info = state
+        .get_network_info(network_id)
+        .unwrap()
+        .expect("the settled network has a cached row");
+    assert_eq!(info.settled_certificate_id, Some(certificate.hash()));
+    assert_eq!(info.settled_height, Some(certificate.height));
+    assert_eq!(info.settled_ler, Some(certificate.new_local_exit_root));
+    assert_eq!(info.settled_pp_root, new_pp_root);
+    assert!(new_pp_root.is_some(), "no root was captured");
+    assert_eq!(
+        info.network_type,
+        NetworkType::from(&certificate.aggchain_data)
+    );
+    assert_eq!(
+        info.settled_claim,
+        claim_carrier
+            .imported_bridge_exits
+            .last()
+            .map(SettledClaim::from)
+    );
+    let persisted = state
+        .read_local_network_state(network_id)
+        .unwrap()
+        .expect("the settled state is persisted");
+    assert_eq!(
+        info.settled_let_leaf_count,
+        Some(u64::from(persisted.exit_tree.leaf_count()))
+    );
+}
+
 const SETTLEMENT_TX_HASH_1: SettlementTxHash = SettlementTxHash::new(Digest([1; 32]));
 const SETTLEMENT_TX_HASH_2: SettlementTxHash = SettlementTxHash::new(Digest([2; 32]));
 
@@ -150,6 +194,7 @@ async fn start_from_zero() {
 
     let certificate = Certificate::new_for_test(network_id, Height::ZERO);
     let certificate_id = certificate.hash();
+    let new_local_exit_root = certificate.new_local_exit_root;
 
     pending
         .expect_get_certificate()
@@ -169,10 +214,10 @@ async fn start_from_zero() {
         .returning(|_, _| Ok(None));
 
     state
-        .expect_get_latest_settled_certificate_per_network()
+        .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(None));
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .returning(|_, _| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -224,6 +269,12 @@ async fn start_from_zero() {
         .returning(|_, _, _| Ok(()));
 
     state
+        .expect_set_latest_proven_certificate_pointer()
+        .once()
+        .with(eq(network_id), eq(certificate_id))
+        .returning(|_, _| Ok(()));
+
+    state
         .expect_update_certificate_header_status()
         .once()
         .with(eq(certificate_id), eq(CertificateStatus::Proven))
@@ -239,17 +290,26 @@ async fn start_from_zero() {
         .with(eq(certificate_id), eq(CertificateStatus::Settled))
         .returning(|_, _| Ok(()));
 
+    // The settlement input is built from the certificate and the certifier
+    // output: nothing is read back from storage.
     state
         .expect_set_latest_settled_certificate_for_network()
         .once()
         .with(
             eq(network_id),
-            eq(Height::ZERO),
-            eq(certificate_id),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
+            eq(NetworkSettlement {
+                certificate_id,
+                height: Height::ZERO,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+                new_pp_root: Digest::ZERO,
+                new_local_exit_root,
+                settled_let_leaf_count: 0,
+                network_type: NetworkType::Ecdsa,
+                settled_claim: None,
+            }),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _| Ok(()));
 
     state
         .expect_get_certificate_settlement_job_id()
@@ -327,14 +387,19 @@ async fn repeated_unreadable_proof_errors_certificate() {
         .with(eq(network_id), eq(Height::ZERO))
         .returning(|network_id, height| Ok(Some(Certificate::new_for_test(network_id, height))));
 
+    // The settlement cache reads the root from the stored proof right after
+    // certification, so an unreadable proof fails there: the certificate is
+    // recorded `Proven` but never published as the latest proven one.
     pending
         .expect_set_latest_proven_certificate_per_network()
-        .once()
-        .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
+        .never()
         .returning(|_, _, _| Ok(()));
 
-    // The settlement job is built from the certificate proof, so an unreadable
-    // proof now fails at `build_settlement_job` before any settlement happens.
+    state
+        .expect_set_latest_proven_certificate_pointer()
+        .never()
+        .returning(|_, _| Ok(()));
+
     pending
         .expect_get_proof()
         .once()
@@ -347,10 +412,10 @@ async fn repeated_unreadable_proof_errors_certificate() {
         });
 
     state
-        .expect_get_latest_settled_certificate_per_network()
+        .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(None));
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .returning(|_, _| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -391,8 +456,8 @@ async fn repeated_unreadable_proof_errors_certificate() {
         .once()
         .returning(|_| Ok(Default::default()));
 
-    // The certificate is certified (Proven) and then fails when the settlement
-    // job is built from its unreadable proof, ending InError.
+    // The certificate is certified (Proven) and then fails when its unreadable
+    // proof is read for the settlement cache, ending InError.
     state
         .expect_update_certificate_header_status()
         .times(2)
@@ -495,10 +560,10 @@ async fn retries() {
         });
 
     state
-        .expect_get_latest_settled_certificate_per_network()
+        .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(None));
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .returning(|_, _| Ok(Default::default()));
 
     state
         .expect_get_certificate_header()
@@ -594,11 +659,23 @@ async fn retries() {
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id))
         .returning(|_, _, _| Ok(()));
 
+    state
+        .expect_set_latest_proven_certificate_pointer()
+        .once()
+        .with(eq(network_id), eq(certificate_id))
+        .returning(|_, _| Ok(()));
+
     pending
         .expect_set_latest_proven_certificate_per_network()
         .once()
         .with(eq(network_id), eq(Height::ZERO), eq(certificate_id2))
         .returning(|_, _, _| Ok(()));
+
+    state
+        .expect_set_latest_proven_certificate_pointer()
+        .once()
+        .with(eq(network_id), eq(certificate_id2))
+        .returning(|_, _| Ok(()));
 
     state
         .expect_update_certificate_header_status()
@@ -647,12 +724,19 @@ async fn retries() {
         .once()
         .with(
             eq(network_id),
-            eq(Height::ZERO),
-            eq(certificate_id2),
-            eq(EpochNumber::ZERO),
-            eq(CertificateIndex::ZERO),
+            eq(NetworkSettlement {
+                certificate_id: certificate_id2,
+                height: Height::ZERO,
+                epoch_number: EpochNumber::ZERO,
+                certificate_index: CertificateIndex::ZERO,
+                new_pp_root: Digest::ZERO,
+                new_local_exit_root: [2u8; 32].into(),
+                settled_let_leaf_count: 0,
+                network_type: NetworkType::Ecdsa,
+                settled_claim: None,
+            }),
         )
-        .returning(|_, _, _, _, _| Ok(()));
+        .returning(|_, _| Ok(()));
 
     let mut settlement_service = MockSettlementServiceTrait::new();
     settlement_service
@@ -782,10 +866,10 @@ async fn timeout_certifier() {
     let expected_error = String::from("Internal error: TimedOut");
 
     state
-        .expect_get_latest_settled_certificate_per_network()
+        .expect_get_latest_certificate_headers()
         .once()
-        .with(eq(network_id))
-        .returning(|_| Ok(None));
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .returning(|_, _| Ok(Default::default()));
 
     state
         .expect_update_certificate_header_status()
@@ -1110,6 +1194,16 @@ async fn settles_pending_backlog_on_startup() {
     .unwrap();
 
     assert_eq!(next_expected_height, Height::new(2));
+    // Both settlements went through the one publication path in order: the
+    // second certificate is the published one, over the state of both, and
+    // its lack of a claim preserves the first certificate's.
+    assert_settlement_published(
+        &storage.state,
+        network_id,
+        &certificate2,
+        &certificate,
+        Some(Digest::ZERO),
+    );
 }
 
 #[rstest]
@@ -1230,15 +1324,16 @@ async fn wrong_height_event_still_drains_pending() {
 #[timeout(Duration::from_secs(30))]
 async fn dropped_settlement_still_persists_settled_state() {
     let network_id: NetworkId = 1.into();
-    let certificate_id = Certificate::new_for_test(network_id, Height::ZERO).hash();
+    let certificate = Certificate::new_for_test(network_id, Height::ZERO);
+    let certificate_id = certificate.hash();
 
     let mut state = MockStateStore::new();
     state
         .expect_read_local_network_state()
         .returning(|_| Ok(Default::default()));
     state
-        .expect_get_latest_settled_certificate_per_network()
-        .returning(|_| Ok(None));
+        .expect_get_latest_certificate_headers()
+        .returning(|_, _| Ok(Default::default()));
 
     // Hold the epoch assignment until the settlement future has been
     // cancelled mid-transition.
@@ -1294,7 +1389,7 @@ async fn dropped_settlement_still_persists_settled_state() {
     state
         .expect_set_latest_settled_certificate_for_network()
         .once()
-        .return_once(move |_, _, _, _, _| {
+        .return_once(move |_, _| {
             sender.send("settled_cursor").expect("test channel closed");
             Ok(())
         });
@@ -1316,7 +1411,13 @@ async fn dropped_settlement_still_persists_settled_state() {
     let settlement = tokio::spawn(async move {
         task.assign_and_persist_settled_certificate(
             Box::new(LocalNetworkStateData::default()),
-            Vec::new(),
+            Digest::ZERO,
+            CertificateSettlementInput {
+                bridge_exit_hashes: Vec::new(),
+                new_local_exit_root: certificate.new_local_exit_root,
+                network_type: NetworkType::from(&certificate.aggchain_data),
+                settled_claim: None,
+            },
             Height::ZERO,
             certificate_id,
         )
@@ -1350,4 +1451,80 @@ async fn dropped_settlement_still_persists_settled_state() {
             .expect("the mock write channel should stay open");
         assert_eq!(write, expected);
     }
+}
+
+/// Restarting on a settled network resumes right after the latest settled
+/// certificate: the task reads the settled header from the cache and asks the
+/// pending store for the next height.
+#[tokio::test]
+async fn resumes_after_the_latest_settled_certificate() {
+    let network_id = 1.into();
+    let settled = Certificate::new_for_test(network_id, Height::new(5));
+    let settled_id = settled.hash();
+    let settled_header = agglayer_types::CertificateHeader {
+        network_id,
+        height: settled.height,
+        epoch_number: Some(EpochNumber::ZERO),
+        certificate_index: Some(CertificateIndex::ZERO),
+        certificate_id: settled_id,
+        prev_local_exit_root: settled.prev_local_exit_root,
+        new_local_exit_root: settled.new_local_exit_root,
+        metadata: Metadata::ZERO,
+        status: CertificateStatus::Settled,
+        settlement_tx_hash: None,
+    };
+
+    let mut state = MockStateStore::new();
+    state
+        .expect_read_local_network_state()
+        .once()
+        .with(eq(network_id))
+        .returning(|_| Ok(Default::default()));
+    state
+        .expect_get_latest_certificate_headers()
+        .once()
+        .with(eq(network_id), eq(CertificateStages::SETTLED))
+        .return_once(move |_, _| {
+            Ok(LatestCertificateHeaders {
+                settled: Some(settled_header),
+                ..Default::default()
+            })
+        });
+
+    // The first progress step looks for the certificate right after the
+    // settled height; finding none, the task waits for a notification.
+    let (probed, probed_rx) = oneshot::channel();
+    let mut pending = MockPendingStore::new();
+    pending
+        .expect_get_certificate()
+        .once()
+        .with(eq(network_id), eq(Height::new(6)))
+        .return_once(move |_, _| {
+            let _ = probed.send(());
+            Ok(None)
+        });
+
+    let (sender, certificate_stream) = mpsc::channel(1);
+    let task = NetworkTask::new(
+        Arc::new(pending),
+        Arc::new(state),
+        Arc::new(MockCertifier::new()),
+        clock(),
+        network_id,
+        certificate_stream,
+        Arc::new(MockSettlementServiceTrait::new()),
+        mock_current_epoch(),
+    )
+    .await
+    .expect("Failed to create a new network task");
+    assert_eq!(task.latest_settled, Some((settled_id, Height::new(5))));
+
+    let cancellation_token = CancellationToken::new();
+    let run = tokio::spawn(task.run(cancellation_token.clone()));
+    probed_rx
+        .await
+        .expect("the task should look for the next certificate");
+    cancellation_token.cancel();
+    assert_eq!(run.await.unwrap().unwrap(), network_id);
+    drop(sender);
 }

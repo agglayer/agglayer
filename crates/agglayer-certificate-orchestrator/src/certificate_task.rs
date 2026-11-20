@@ -236,9 +236,11 @@ where
 
         debug!("Recomputing new state for already-proven certificate");
 
-        // Recompute the local network state in place; the proof output is
-        // unused here.
-        self.certifier_client
+        // Recompute the local network state in place. The settlement cache
+        // takes the pessimistic root from the stored proof, as on the fresh
+        // path; the recomputed one only cross-checks it.
+        let (_, _, output) = self
+            .certifier_client
             .witness_generation(&self.certificate, &mut state, before_tx)
             .await
             .map_err(|error| {
@@ -249,6 +251,8 @@ where
                 error
             })?;
         debug!("Recomputing new state completed");
+        let new_pp_root = Self::proof_output(&self.stored_proof().await?)?.new_pessimistic_root;
+        Self::report_pp_root_mismatch(output.new_pessimistic_root, new_pp_root);
 
         // Send the new state to the network task
         // TODO: Once we update the storage we'll have to remove this! It
@@ -260,6 +264,7 @@ where
             height,
             certificate_id,
             new_state: state,
+            new_pp_root,
         })
         .await?;
 
@@ -306,10 +311,16 @@ where
         // then record the new status.
         self.record_stage();
         self.set_status(CertificateStatus::Proven).await?;
+        // The settlement cache publishes the root of the proof the certifier
+        // just stored, the public values settlement submits to L1, on every
+        // path; the certifier's own output is not the source.
+        let new_pp_root = Self::proof_output(&self.stored_proof().await?)?.new_pessimistic_root;
+        Self::report_pp_root_mismatch(certifier_output.new_pp_root, new_pp_root);
         self.send_to_network_task(NetworkTaskMessage::CertificateExecuted {
             height,
             certificate_id,
             new_state: Box::new(certifier_output.new_state),
+            new_pp_root,
         })
         .await?;
         self.send_to_network_task(NetworkTaskMessage::CertificateProven {
@@ -376,26 +387,55 @@ where
         self.process_from_candidate(false).await
     }
 
+    /// The certificate's proof from the pending store, which keeps it until
+    /// the certificate is settled. A proof that is gone is an internal
+    /// inconsistency, never a settlement outcome.
+    async fn stored_proof(&self) -> Result<Proof, CertificateStatusError> {
+        let certificate_id = self.header.certificate_id;
+        self.pending_store
+            .get_proof_async(certificate_id)
+            .await?
+            .ok_or_else(|| {
+                CertificateStatusError::InternalError(format!(
+                    "No SP1 proof found for certificate {certificate_id}"
+                ))
+            })
+    }
+
+    /// The public values of `proof`: what settlement submits to L1.
+    fn proof_output(proof: &Proof) -> Result<PessimisticProofOutput, CertificateStatusError> {
+        let Proof::SP1(proof) = proof;
+        PessimisticProofOutput::bincode_codec()
+            .deserialize::<PessimisticProofOutput>(proof.public_values.as_slice())
+            .map_err(|error| {
+                CertificateStatusError::InternalError(format!(
+                    "Failed to deserialize proof output: {error}"
+                ))
+            })
+    }
+
+    /// The settlement cache publishes `stored`, the root of the proof L1
+    /// verifies. `derived` is the root of the local state about to be
+    /// persisted for the same certificate; a mismatch is an inconsistency
+    /// worth an operator's attention, but not a reason to hold back a
+    /// settlement L1 already accepted or a proof it will verify itself.
+    fn report_pp_root_mismatch(derived: Digest, stored: Digest) {
+        if derived != stored {
+            error!(
+                %derived,
+                %stored,
+                "The pessimistic root of the local state differs from the stored proof's; \
+                 publishing the stored one"
+            );
+        }
+    }
+
     /// Build the real `verifyPessimisticTrustedAggregator` settlement calldata
     /// from the certificate's proof, to hand to the settlement service.
     async fn build_settlement_job(&self) -> Result<SettlementJob, CertificateStatusError> {
-        let certificate_id = self.header.certificate_id;
-
-        let proof = match self.pending_store.get_proof_async(certificate_id).await? {
-            Some(Proof::SP1(proof)) => proof,
-            _ => {
-                return Err(CertificateStatusError::SettlementError(format!(
-                    "No SP1 proof found for certificate {certificate_id}"
-                )))
-            }
-        };
-        let output = PessimisticProofOutput::bincode_codec()
-            .deserialize::<PessimisticProofOutput>(proof.public_values.as_slice())
-            .map_err(|error| {
-                CertificateStatusError::SettlementError(format!(
-                    "Failed to deserialize proof output: {error}"
-                ))
-            })?;
+        let proof = self.stored_proof().await?;
+        let output = Self::proof_output(&proof)?;
+        let Proof::SP1(proof) = proof;
 
         let rollup_id = output.origin_network.to_u32();
         let verifier_type = self

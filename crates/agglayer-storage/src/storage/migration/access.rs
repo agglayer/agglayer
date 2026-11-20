@@ -21,6 +21,14 @@ impl<'a> DbAccess<'a> {
         iter.any(|d| d.name() == C::COLUMN_FAMILY_NAME)
     }
 
+    /// The whole database, for reads that need more than [`Self::get`].
+    /// Its column families are open with default options, so prefix
+    /// iteration is not available, and writes through it bypass the writable
+    /// column families enforced by [`Self::put`] and [`Self::put_all`].
+    pub(crate) fn db(&self) -> &'a DB {
+        self.db
+    }
+
     /// Try to get the value for the given key.
     pub fn get<C: ColumnSchema>(&self, key: &C::Key) -> Result<Option<C::Value>, Error> {
         Ok(self.db.get::<C>(key)?)
@@ -31,18 +39,34 @@ impl<'a> DbAccess<'a> {
         Ok(self.db.keys::<C>()?)
     }
 
+    fn ensure_writable<C: ColumnSchema>(&self) -> Result<(), Error> {
+        if self.is_writable::<C>() {
+            return Ok(());
+        }
+        let writing = C::COLUMN_FAMILY_NAME;
+        error!(
+            writable = ?self.writable,
+            writing,
+            "Writing a read-only CF {writing:?} during migration",
+        );
+        Err(Error::WritingReadOnlyCf(writing.to_string()))
+    }
+
+    /// Write all `rows` in one atomic batch if allowed.
+    pub fn put_all<'b, C: ColumnSchema + 'b>(
+        &self,
+        rows: impl IntoIterator<Item = (&'b C::Key, &'b C::Value)>,
+    ) -> Result<(), Error> {
+        self.ensure_writable::<C>()?;
+        Ok(self.db.multi_insert::<C>(rows)?)
+    }
+
     /// Write value for given key if allowed.
     pub fn put<C: ColumnSchema>(&self, key: &C::Key, value: &C::Value) -> Result<(), Error> {
-        if !self.is_writable::<C>() {
-            let writing = C::COLUMN_FAMILY_NAME;
-            error!(
-                writable = ?self.writable,
-                writing,
-                "Writing a read-only CF {writing:?} during migration",
-            );
-            return Err(Error::WritingReadOnlyCf(writing.to_string()));
-        }
-
+        self.ensure_writable::<C>()?;
         Ok(self.db.put::<C>(key, value)?)
     }
 }
+
+#[cfg(test)]
+mod tests;

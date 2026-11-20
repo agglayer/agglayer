@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use agglayer_config::Config;
 use agglayer_contracts::{contracts::PolygonRollupManager, L1RpcClient};
-use agglayer_storage::tests::mocks::{
-    MockDebugStore, MockEpochsStore, MockPendingStore, MockStateStore,
-};
+use agglayer_storage::tests::mocks::{MockDebugStore, MockPendingStore, MockStateStore};
 use agglayer_types::{Address, Certificate, Height, SignerError};
 use alloy::providers::{mock::Asserter, ProviderBuilder};
 
@@ -40,7 +38,6 @@ async fn verify_cert_signature() {
         Arc::new(MockPendingStore::new()),
         Arc::new(MockStateStore::new()),
         Arc::new(MockDebugStore::new()),
-        Arc::new(MockEpochsStore::new()),
         Arc::new(config),
         Arc::new(l1_rpc),
     );

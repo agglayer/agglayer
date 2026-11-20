@@ -4,7 +4,7 @@
 //! traits move owned inputs and an [`Arc`] of the store onto Tokio's blocking
 //! pool, and return only owned results.
 
-use std::{future::Future, sync::Arc};
+use std::{collections::BTreeMap, future::Future, sync::Arc};
 
 use agglayer_types::{
     network_info::DisabledBy, Address, Certificate, CertificateHeader, CertificateId,
@@ -14,11 +14,11 @@ use agglayer_types::{
 use agglayer_utils::task::spawn_blocking_in_current_span;
 
 use super::{
-    EditEvenIfCompleted, PendingCertificateReader, PendingCertificateWriter, SettlementReader,
-    SettlementWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
-    UpdateStatusToCandidate,
+    EditEvenIfCompleted, LatestCertificateHeaders, NetworkInfoReader, PendingCertificateReader,
+    PendingCertificateWriter, SettlementReader, SettlementWriter, StateReader, StateWriter,
+    UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
 };
-use crate::{columns::latest_proven_certificate_per_network::ProvenCertificate, error::Error};
+use crate::error::Error;
 
 /// Async access to complete pending-store read operations.
 ///
@@ -51,19 +51,6 @@ pub trait AsyncPendingCertificateReaderExt: PendingCertificateReader + 'static {
             })
             .await
             .expect("pending proof read task panicked")
-        }
-    }
-
-    fn get_current_proven_height_async(
-        self: &Arc<Self>,
-    ) -> impl Future<Output = Result<Vec<ProvenCertificate>, Error>> + Send + 'static {
-        let store = Arc::clone(self);
-        async move {
-            spawn_blocking_in_current_span(move || {
-                PendingCertificateReader::get_current_proven_height(store.as_ref())
-            })
-            .await
-            .expect("proven certificate scan task panicked")
         }
     }
 }
@@ -104,30 +91,29 @@ pub trait AsyncPendingCertificateWriterExt: PendingCertificateWriter + 'static {
             .expect("proof removal task panicked")
         }
     }
+}
 
-    fn set_latest_proven_certificate_per_network_async(
+impl<S> AsyncPendingCertificateWriterExt for S where S: PendingCertificateWriter + ?Sized + 'static {}
+
+/// Async access to complete network-info read operations.
+pub trait AsyncNetworkInfoReaderExt: NetworkInfoReader + 'static {
+    fn get_all_latest_certificate_headers_async(
         self: &Arc<Self>,
-        network_id: NetworkId,
-        height: Height,
-        certificate_id: CertificateId,
-    ) -> impl Future<Output = Result<(), Error>> + Send + 'static {
+    ) -> impl Future<Output = Result<BTreeMap<NetworkId, LatestCertificateHeaders>, Error>>
+           + Send
+           + 'static {
         let store = Arc::clone(self);
         async move {
             spawn_blocking_in_current_span(move || {
-                PendingCertificateWriter::set_latest_proven_certificate_per_network(
-                    store.as_ref(),
-                    &network_id,
-                    &height,
-                    &certificate_id,
-                )
+                NetworkInfoReader::get_all_latest_certificate_headers(store.as_ref())
             })
             .await
-            .expect("latest proven certificate write task panicked")
+            .expect("latest certificate header scan task panicked")
         }
     }
 }
 
-impl<S> AsyncPendingCertificateWriterExt for S where S: PendingCertificateWriter + ?Sized + 'static {}
+impl<S> AsyncNetworkInfoReaderExt for S where S: NetworkInfoReader + ?Sized + 'static {}
 
 /// Async access to complete state-store read operations.
 pub trait AsyncStateReaderExt: StateReader + 'static {
@@ -177,6 +163,32 @@ impl<S> AsyncStateReaderExt for S where S: StateReader + ?Sized + 'static {}
 
 /// Async access to complete state-store write operations.
 pub trait AsyncStateWriterExt: StateWriter + 'static {
+    fn set_latest_proven_certificate_async<P: PendingCertificateWriter + 'static>(
+        self: &Arc<Self>,
+        pending: Arc<P>,
+        network_id: NetworkId,
+        height: Height,
+        certificate_id: CertificateId,
+    ) -> impl Future<Output = eyre::Result<()>> + Send + 'static
+    where
+        Self: Sized,
+    {
+        let state = Arc::clone(self);
+        async move {
+            spawn_blocking_in_current_span(move || {
+                super::certificate_updater::set_proven(
+                    pending.as_ref(),
+                    state.as_ref(),
+                    network_id,
+                    height,
+                    certificate_id,
+                )
+            })
+            .await
+            .expect("proven pointer update task panicked")
+        }
+    }
+
     fn update_settlement_tx_hash_async(
         self: &Arc<Self>,
         certificate_id: CertificateId,

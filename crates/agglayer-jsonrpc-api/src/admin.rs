@@ -5,8 +5,8 @@ use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     stores::{
         async_api::{AsyncPendingCertificateWriterExt, AsyncStateReaderExt, AsyncStateWriterExt},
-        DebugReader, DebugWriter, PendingCertificateReader, PendingCertificateWriter,
-        SettlementReader, SettlementWriter, StateReader, StateWriter,
+        certificate_updater, DebugReader, DebugWriter, NetworkInfoReader, PendingCertificateReader,
+        PendingCertificateWriter, SettlementReader, SettlementWriter, StateReader, StateWriter,
     },
     NetworkMetrics,
 };
@@ -468,7 +468,12 @@ impl<PendingStore, StateStore, DebugStore, L1Provider>
     AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
+    StateStore: NetworkInfoReader
+        + StateReader
+        + StateWriter
+        + SettlementReader
+        + SettlementWriter
+        + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Provider: Provider + WalletProvider + 'static,
 {
@@ -590,6 +595,16 @@ where
     }
 }
 
+fn get_pointer_header(state: &impl StateReader, id: CertificateId) -> RpcResult<CertificateHeader> {
+    state
+        .get_certificate_header(&id)
+        .map_err(|error| {
+            error!(?error, "Failed to get certificate header");
+            Error::internal("Unable to get certificate header")
+        })?
+        .ok_or_else(|| Error::ResourceNotFound(format!("CertificateHeader({id})")))
+}
+
 fn summarize_settlement_job(
     job_id: SettlementJobId,
     job: eyre::Result<Option<SettlementJobDetail>>,
@@ -620,7 +635,12 @@ impl<PendingStore, StateStore, DebugStore, L1Provider> AdminAgglayerServer
     for AdminAgglayerImpl<PendingStore, StateStore, DebugStore, L1Provider>
 where
     PendingStore: PendingCertificateWriter + PendingCertificateReader + 'static,
-    StateStore: StateReader + StateWriter + SettlementReader + SettlementWriter + 'static,
+    StateStore: NetworkInfoReader
+        + StateReader
+        + StateWriter
+        + SettlementReader
+        + SettlementWriter
+        + 'static,
     DebugStore: DebugReader + DebugWriter + 'static,
     L1Provider: Provider + WalletProvider + 'static,
 {
@@ -711,37 +731,13 @@ where
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
         spawn_blocking_in_current_span(move || {
-            let header = state
-                .get_certificate_header(&certificate.hash())
-                .map_err(|error| {
-                    error!(?error, "Failed to get certificate header");
-                    Error::internal("Unable to get certificate header")
-                })?;
-            if let Some(header) = header {
-                if header.status == CertificateStatus::Settled {
-                    return Err(Error::InvalidArgument(
-                        "Cannot change status of a settled certificate".to_string(),
-                    ));
-                }
-            }
-            match pending_store.insert_pending_certificate(
-                certificate.network_id,
-                certificate.height,
+            certificate_updater::submit(
+                pending_store.as_ref(),
+                state.as_ref(),
                 &certificate,
-            ) {
-                Ok(_) => match state.update_certificate_header_status(&certificate.hash(), &status)
-                {
-                    Ok(_) => Ok(()),
-                    Err(error) => {
-                        error!("Failed to insert certificate header: {}", error);
-                        Err(Error::internal("Unable to insert certificate header"))
-                    }
-                },
-                Err(error) => {
-                    error!("Failed to insert pending certificate: {}", error);
-                    Err(Error::internal("Unable to insert pending certificate"))
-                }
-            }
+                &status,
+            )
+            .map_err(Error::from_certificate_update)
         })
         .await
         .expect("admin force-push task panicked")
@@ -919,46 +915,30 @@ where
         let state = self.state.clone();
         let network_metrics = self.network_metrics.clone();
         spawn_blocking_in_current_span(move || {
-            let certificate = if let Some(certificate) = state
-                .get_certificate_header(&certificate_id)
-                .map_err(|error| {
-                    error!("Failed to get certificate header: {}", error);
-                    Error::internal("Unable to get certificate header")
-                })? {
-                certificate
-            } else {
-                return Err(Error::ResourceNotFound(format!(
-                    "CertificateHeader({certificate_id})"
-                )));
-            };
+            let certificate = get_pointer_header(state.as_ref(), certificate_id)?;
 
-            pending_store
-                .set_latest_pending_certificate_per_network(
-                    &certificate.network_id,
-                    &certificate.height,
-                    &certificate.certificate_id,
-                )
-                .map_err(|error| {
-                    error!("Failed to update latest pending certificate: {}", error);
-                    Error::internal("Unable to update latest pending certificate")
-                })?;
+            certificate_updater::set_pending(
+                pending_store.as_ref(),
+                state.as_ref(),
+                certificate.network_id,
+                certificate.height,
+                certificate.certificate_id,
+            )
+            .map_err(Error::from_certificate_update)?;
+            // The override is written: a metric that could not be refreshed
+            // does not make it a failed call.
+            if let Err(error) = network_metrics.reconcile_pending_error(
+                state.as_ref(),
+                certificate.network_id,
+                certificate.certificate_id,
+            ) {
+                warn!(
+                    ?error,
+                    "Latest pending certificate set, but its error metric was not refreshed"
+                );
+            }
 
-            network_metrics
-                .reconcile_pending_error(
-                    pending_store.as_ref(),
-                    state.as_ref(),
-                    certificate.network_id,
-                    certificate.certificate_id,
-                )
-                .map_err(|error| {
-                    error!(
-                        ?error,
-                        "Failed to reconcile the latest pending certificate error metric"
-                    );
-                    Error::internal(
-                        "Unable to reconcile the latest pending certificate error metric",
-                    )
-                })
+            Ok(())
         })
         .await
         .expect("admin latest-pending update task panicked")
@@ -973,29 +953,16 @@ where
         let pending_store = self.pending_store.clone();
         let state = self.state.clone();
         spawn_blocking_in_current_span(move || {
-            let certificate = if let Some(certificate) = state
-                .get_certificate_header(&certificate_id)
-                .map_err(|error| {
-                    error!("Failed to get certificate header: {}", error);
-                    Error::internal("Unable to get certificate header")
-                })? {
-                certificate
-            } else {
-                return Err(Error::ResourceNotFound(format!(
-                    "CertificateHeader({certificate_id})"
-                )));
-            };
+            let certificate = get_pointer_header(state.as_ref(), certificate_id)?;
 
-            pending_store
-                .set_latest_proven_certificate_per_network(
-                    &certificate.network_id,
-                    &certificate.height,
-                    &certificate.certificate_id,
-                )
-                .map_err(|error| {
-                    error!("Failed to update latest proven certificate: {}", error);
-                    Error::internal("Unable to update latest proven certificate")
-                })
+            certificate_updater::set_proven(
+                pending_store.as_ref(),
+                state.as_ref(),
+                certificate.network_id,
+                certificate.height,
+                certificate.certificate_id,
+            )
+            .map_err(Error::from_certificate_update)
         })
         .await
         .expect("admin latest-proven update task panicked")

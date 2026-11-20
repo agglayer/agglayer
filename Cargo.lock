@@ -411,6 +411,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
+ "agglayer-errors",
  "agglayer-rpc",
  "agglayer-settlement-service",
  "agglayer-storage",
@@ -551,7 +552,7 @@ version = "0.1.0"
 dependencies = [
  "agglayer-config",
  "agglayer-contracts",
- "agglayer-primitives 0.18.0",
+ "agglayer-errors",
  "agglayer-storage",
  "agglayer-tries 0.18.0",
  "agglayer-types",
@@ -561,8 +562,6 @@ dependencies = [
  "eyre",
  "futures",
  "mockall",
- "pessimistic-proof",
- "pessimistic-proof-test-suite",
  "serde",
  "thiserror 2.0.18",
  "tokio",
@@ -6327,9 +6326,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.1.25"
+version = "1.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d52f4c29e2a68ac30c9087e1b772dc9f44a2b66ed44edf2266cf2be9b03dafc1"
+checksum = "fee3f59f4321dab0c78d828942e7aa09d0bd8ad6e78a501977e6bf3d02938045"
 dependencies = [
  "cc",
  "libc",

@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use agglayer_types::{
     aggchain_data::CertificateAggchainDataCtx, primitives::Hashable as _, Certificate,
-    CertificateId, CertificateIndex, Digest, EpochNumber, Height, L1WitnessCtx,
-    LocalNetworkStateData, NetworkId, PessimisticRootInput,
+    CertificateId, Digest, L1WitnessCtx, LocalNetworkStateData, NetworkId, PessimisticRootInput,
 };
 use pessimistic_proof::{
     core::{
@@ -18,9 +17,7 @@ use tracing::info;
 use super::cf_definitions;
 use crate::{
     backup::BackupClient,
-    columns::latest_settled_certificate_per_network::{
-        LatestSettledCertificatePerNetworkColumn, SettledCertificate,
-    },
+    columns::network_info::NetworkInfoColumn,
     error::Error,
     schema::ColumnSchema as _,
     storage::DB,
@@ -56,7 +53,7 @@ fn init_db_adds_legacy_missing_cfs() {
             .expect("V0 schema initialization should succeed");
     }
 
-    let db = StateStore::init_db(tmp.path.as_path())
+    let db = StateStore::init_db(tmp.path.as_path(), None)
         .expect("init_db should ensure the missing legacy CFs are added");
 
     // After init_db, every CF in STATE_DB_LEGACY_ADD_CFS exists on disk.
@@ -101,7 +98,7 @@ fn init_db_adds_settlement_job_id_per_certificate_id_cf_to_v1_schema() {
         drop(previous_schema);
     }
 
-    let db = StateStore::init_db(tmp.path.as_path())
+    let db = StateStore::init_db(tmp.path.as_path(), None)
         .expect("init_db should ensure the certificate settlement job CF is added");
 
     let post_cfs: BTreeSet<&str> =
@@ -124,7 +121,7 @@ fn init_db_creates_certificate_id_per_settlement_job_id_cf() {
     use crate::columns::certificate_id_per_settlement_job_id::CertificateIdPerSettlementJobIdColumn;
 
     let tmp = crate::tests::TempDBDir::new();
-    let db = StateStore::init_db(tmp.path.as_path()).expect("init db");
+    let db = StateStore::init_db(tmp.path.as_path(), None).expect("init db");
     let cfs = rocksdb::DB::list_cf(&rocksdb::Options::default(), tmp.path.as_path())
         .expect("list cf names");
     assert!(
@@ -138,12 +135,12 @@ fn init_db_creates_certificate_id_per_settlement_job_id_cf() {
 #[test]
 fn init_db_is_idempotent_on_current_schema() {
     // Opening init_db twice on a fresh DB must succeed: after the first
-    // open records the ensure_cfs step, the second call sees the current
-    // schema and skips that already-recorded step.
+    // open records its migration steps, the second call sees the current
+    // schema and skips those already-recorded steps.
     let tmp = TempDBDir::new();
-    let db = StateStore::init_db(tmp.path.as_path()).expect("first init_db");
+    let db = StateStore::init_db(tmp.path.as_path(), None).expect("first init_db");
     drop(db);
-    let db = StateStore::init_db(tmp.path.as_path())
+    let db = StateStore::init_db(tmp.path.as_path(), None)
         .expect("second init_db should be a no-op on the already-current schema");
     drop(db);
 }
@@ -151,20 +148,21 @@ fn init_db_is_idempotent_on_current_schema() {
 #[test]
 fn can_retrieve_list_of_network() {
     let tmp = TempDBDir::new();
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
     let store = StateStore::new(db.clone(), BackupClient::noop());
     assert!(store.get_active_networks().unwrap().is_empty());
 
-    db.put::<LatestSettledCertificatePerNetworkColumn>(
-        &1.into(),
-        &SettledCertificate(
+    let (key, value) = StateStore::network_info_row(
+        1.into(),
+        StateStore::settled_certificate_value(
             CertificateId::new([0; 32].into()),
-            Height::ZERO,
-            EpochNumber::ZERO,
-            CertificateIndex::ZERO,
+            Digest::ZERO.into(),
+            None,
+            None,
         ),
-    )
-    .expect("Unable to put certificate into storage");
+    );
+    db.put::<NetworkInfoColumn>(&key, &value)
+        .expect("Unable to put the settled row into storage");
     assert!(store.get_active_networks().unwrap().len() == 1);
 }
 
@@ -200,7 +198,7 @@ pub(crate) fn store() -> StateStore {
 
     let tmp = TempDBDir::new();
     tracing::debug!(path = ?tmp.path, "Temporary directory created");
-    let db = Arc::new(StateStore::init_db(tmp.path.as_path()).unwrap());
+    let db = Arc::new(StateStore::init_db(tmp.path.as_path(), None).unwrap());
 
     StateStore::new(db.clone(), BackupClient::noop())
 }
@@ -440,29 +438,4 @@ fn certificate_serialization(#[case] cert_name: &str) {
     let encoded = certificate.encode().unwrap();
     let hash = pessimistic_proof::keccak::keccak256(&encoded);
     insta::assert_debug_snapshot!(cert_name, hash);
-}
-
-/// The settled-pointer scan seeds the native network metrics at startup: an
-/// entry that fails to decode must fail the scan instead of being skipped,
-/// or the gauges would silently stay incomplete until the next restart.
-#[test]
-fn get_current_settled_height_fails_on_undecodable_entries() {
-    use crate::schema::Codec as _;
-
-    let tmp = TempDBDir::new();
-    let store = StateStore::new_with_path(&tmp.path, BackupClient::noop()).unwrap();
-
-    let key = NetworkId::new(2).encode().unwrap();
-    let cf = store
-        .db
-        .raw_rocksdb()
-        .cf_handle(LatestSettledCertificatePerNetworkColumn::COLUMN_FAMILY_NAME)
-        .unwrap();
-    store
-        .db
-        .raw_rocksdb()
-        .put_cf(&cf, &key, b"garbage")
-        .unwrap();
-
-    assert!(store.get_current_settled_height().is_err());
 }

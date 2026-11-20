@@ -6,12 +6,9 @@ use std::{
 
 use agglayer_storage::{
     backup::BackupClient,
-    columns::latest_settled_certificate_per_network::{
-        LatestSettledCertificatePerNetworkColumn, SettledCertificate,
-    },
-    stores::{state::StateStore, StateReader as _},
+    stores::{state::StateStore, NetworkSettlement, StateWriter as _},
 };
-use agglayer_types::{CertificateId, CertificateIndex, EpochNumber, Height};
+use agglayer_types::{CertificateId, CertificateIndex, Digest, EpochNumber, Height, NetworkType};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::Rng;
 
@@ -39,21 +36,27 @@ fn bench_latest_certificate(c: &mut Criterion) {
     fn run(dir_path: std::path::PathBuf, expected: u32) -> Duration {
         std::fs::remove_dir_all(dir_path.clone()).unwrap();
 
-        let db = Arc::new(StateStore::init_db(dir_path.as_path()).unwrap());
+        let db = Arc::new(StateStore::init_db(dir_path.as_path(), None).unwrap());
+        let store = StateStore::new(db.clone(), BackupClient::noop());
 
         for i in 1..=expected {
-            db.put::<LatestSettledCertificatePerNetworkColumn>(
-                &i.into(),
-                &SettledCertificate(
-                    CertificateId::new([0; 32].into()),
-                    Height::ZERO,
-                    EpochNumber::ZERO,
-                    CertificateIndex::new(u64::from(i - 1)),
-                ),
-            )
-            .expect("Unable to put certificate into storage");
+            store
+                .set_latest_settled_certificate_for_network(
+                    &i.into(),
+                    &NetworkSettlement {
+                        certificate_id: CertificateId::new([0; 32].into()),
+                        height: Height::ZERO,
+                        epoch_number: EpochNumber::ZERO,
+                        certificate_index: CertificateIndex::new(u64::from(i - 1)),
+                        new_pp_root: Digest::ZERO,
+                        new_local_exit_root: Digest::ZERO.into(),
+                        settled_let_leaf_count: 0,
+                        network_type: NetworkType::Ecdsa,
+                        settled_claim: None,
+                    },
+                )
+                .expect("Unable to put certificate into storage");
         }
-        let store = StateStore::new(db.clone(), BackupClient::noop());
         let now = Instant::now();
         let iterator = store.get_active_networks().expect("Unable to get keys");
         let elapsed = now.elapsed();

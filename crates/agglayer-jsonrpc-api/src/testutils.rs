@@ -8,7 +8,7 @@ use agglayer_contracts::L1RpcClient;
 use agglayer_settlement_service::SettlementService;
 use agglayer_storage::{
     backup::BackupClient,
-    stores::{debug::DebugStore, epochs::EpochsStore, pending::PendingStore, state::StateStore},
+    stores::{debug::DebugStore, pending::PendingStore, state::StateStore},
     tests::TempDBDir,
     NetworkMetrics,
 };
@@ -40,13 +40,8 @@ pub type MockProvider = FillProvider<
     alloy::network::Ethereum,
 >;
 
-pub type RawRpcClient = crate::AgglayerImpl<
-    L1RpcClient<MockProvider>,
-    PendingStore,
-    StateStore,
-    DebugStore,
-    EpochsStore<PendingStore, StateStore>,
->;
+pub type RawRpcClient =
+    crate::AgglayerImpl<L1RpcClient<MockProvider>, PendingStore, StateStore, DebugStore>;
 
 pub struct RawRpcContext {
     pub rpc: RawRpcClient,
@@ -135,7 +130,7 @@ impl TestContext {
         let config = Arc::new(config);
 
         // Create the databases using the provided paths in the config
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path, None).unwrap());
         let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
         let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 
@@ -165,24 +160,12 @@ impl TestContext {
         // Create certificate sender channel
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-        // Create a real epoch store for testing
-        let epochs_store = Arc::new(
-            EpochsStore::new(
-                config.clone(),
-                pending_store.clone(),
-                state_store.clone(),
-                BackupClient::noop(),
-            )
-            .unwrap(),
-        );
-
         // Create agglayer_rpc::AgglayerService with the provider
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             certificate_sender.clone(),
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
-            epochs_store,
             config.clone(),
             Arc::new(l1_rpc_client),
         ));
@@ -292,7 +275,7 @@ impl TestContext {
     pub async fn new_raw_rpc_with_config(config: Config) -> RawRpcContext {
         let config = Arc::new(config);
 
-        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path).unwrap());
+        let state_db = Arc::new(StateStore::init_db(&config.storage.state_db_path, None).unwrap());
         let pending_db = Arc::new(PendingStore::init_db(&config.storage.pending_db_path).unwrap());
         let debug_db = Arc::new(DebugStore::init_db(&config.storage.debug_db_path).unwrap());
 
@@ -313,24 +296,12 @@ impl TestContext {
         // Create certificate sender channel
         let (certificate_sender, certificate_receiver) = tokio::sync::mpsc::channel(1);
 
-        // Create a real epoch store for testing
-        let epochs_store = Arc::new(
-            EpochsStore::new(
-                config.clone(),
-                pending_store.clone(),
-                state_store.clone(),
-                BackupClient::noop(),
-            )
-            .unwrap(),
-        );
-
         // Create agglayer_rpc::AgglayerService
         let rpc_service = Arc::new(agglayer_rpc::AgglayerService::new(
             certificate_sender,
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
-            epochs_store,
             config.clone(),
             Arc::new(l1_rpc_client),
         ));

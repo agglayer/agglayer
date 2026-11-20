@@ -1,16 +1,19 @@
 mod interfaces;
 
 pub mod async_api;
+pub mod certificate_updater;
 
 pub use interfaces::{
     reader::{
-        network_info_reader::NetworkInfoReader, settlement_reader::SettlementReader, DebugReader,
-        EpochStoreReader, MetadataReader, PendingCertificateReader, PerEpochReader, StateReader,
+        network_info_reader::{CertificateStages, LatestCertificateHeaders, NetworkInfoReader},
+        settlement_reader::SettlementReader,
+        DebugReader, EpochStoreReader, MetadataReader, PendingCertificateReader, PerEpochReader,
+        StateReader,
     },
     writer::{
         settlement_writer::{EditEvenIfCompleted, SettlementWriter},
-        DebugWriter, EpochStoreWriter, MetadataWriter, PendingCertificateWriter, PerEpochWriter,
-        StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
+        DebugWriter, EpochStoreWriter, MetadataWriter, NetworkSettlement, PendingCertificateWriter,
+        PerEpochWriter, StateWriter, UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
 };
 

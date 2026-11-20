@@ -56,7 +56,8 @@ DB::builder(db_path, INITIAL_SCHEMA)
 
 Migrations consist of a sequence of two operation types:
 
-- `.add_cfs(&[ColumnDescriptor], |db| { ... })`: Create new column families and populate them with data
+- `.add_cfs(&[ColumnDescriptor], |db| { ... })`: Create new column families and populate them with data.
+  A column family that already exists is dropped and created again, empty, which a step can use to reset it.
 - `.drop_cfs(&[ColumnDescriptor])`: Remove old column families
 
 Each step is tracked individually, allowing recovery from partial migrations.

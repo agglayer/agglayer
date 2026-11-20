@@ -71,6 +71,8 @@ impl Node {
     /// # Errors
     ///
     /// This function will return an error if:
+    /// - The storage could not be opened or migrated, including a failed
+    ///   network info backfill.
     /// - The L1 node URL is invalid.
     /// - The configured signer is invalid.
     /// - The RPC server failed to start.
@@ -102,7 +104,15 @@ impl Node {
             let pending_db = Arc::new(PendingStore::init_db(
                 &storage_config.storage.pending_db_path,
             )?);
-            let state_db = Arc::new(StateStore::init_db(&storage_config.storage.state_db_path)?);
+            // The first open of the state database by this binary backfills
+            // network info, before anything can read or write it.
+            let state_db = Arc::new(StateStore::init_db(
+                &storage_config.storage.state_db_path,
+                Some((
+                    pending_db.as_ref(),
+                    &EpochsStore::read_only(storage_config.clone()),
+                )),
+            )?);
 
             let (backup_engine, backup_client) = if let BackupConfig::Enabled {
                 path,
@@ -150,7 +160,7 @@ impl Node {
             };
 
             network_metrics
-                .hydrate(pending_store.as_ref(), state_store.as_ref())
+                .hydrate(state_store.as_ref())
                 .context("Failed hydrating network storage metrics")?;
 
             Ok((
@@ -326,7 +336,6 @@ impl Node {
             pending_store.clone(),
             state_store.clone(),
             debug_store.clone(),
-            epochs_store.clone(),
             config.clone(),
             Arc::clone(&rollup_manager),
         ));
@@ -406,3 +415,6 @@ impl Node {
         debug!("Node shutdown completed.");
     }
 }
+
+#[cfg(test)]
+mod tests;
