@@ -5,8 +5,6 @@ pub use agglayer_types::primitives::Digest;
 use agglayer_types::{Address, CertificateId, Height, NetworkId, SignerError};
 use alloy::contract::Error as ContractError;
 
-pub use crate::rate_limiting::RateLimited as RateLimitedError;
-
 #[derive(Debug, thiserror::Error)]
 pub enum CertificateRetrievalError {
     #[error(transparent)]
@@ -51,10 +49,6 @@ impl From<eyre::Error> for CertificateSubmissionError {
 /// Errors related to signature verification process.
 #[derive(thiserror::Error, Debug)]
 pub enum SignatureVerificationError {
-    /// FEP (0.1): The signer could not be recovered from the [`SignedTx`].
-    #[error("could not recover transaction signer: {0}")]
-    CouldNotRecoverTxSigner(#[source] alloy::primitives::SignatureError),
-
     /// The signer could not be recovered from the certificate signature.
     #[error("could not recover certificate signer: {0}")]
     CouldNotRecoverCertSigner(#[source] SignerError),

@@ -8,10 +8,7 @@ use alloy::{
 };
 
 use super::*;
-use crate::{
-    contracts::{PolygonRollupManager, PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2},
-    GasPriceParams,
-};
+use crate::contracts::{PolygonRollupManager, PolygonZkEvmGlobalExitRootV2::UpdateL1InfoTreeV2};
 
 const LEAF_COUNT: u32 = 42;
 const EVENT_BLOCK_NUMBER: u64 = 100;
@@ -25,9 +22,6 @@ fn mock_client(asserter: Asserter) -> L1RpcClient<impl Provider + Clone> {
         PolygonRollupManager::new(Address::ZERO, rpc),
         Address::ZERO,
         (0, [0; 32]),
-        100,
-        GasPriceParams::default(),
-        10_000,
     )
 }
 
