@@ -22,7 +22,6 @@ axum = { workspace = true, features = ["tokio", "http1", "http2"] }
 buildstructor.workspace = true
 eyre.workspace = true
 futures.workspace = true
-hex.workspace = true
 http.workspace = true
 hyper.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }

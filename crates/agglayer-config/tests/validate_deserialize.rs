@@ -85,3 +85,28 @@ fn succinct_cluster_mtls_config_round_trips() -> Result<(), Box<dyn std::error::
     );
     Ok(())
 }
+
+#[test]
+fn stale_sendtx_sections_are_accepted_and_ignored() {
+    // `full-node-rpcs`, `l2` and `rate-limiting` only configured the removed
+    // `interop_sendTx` flow. Deployed configuration files still carry them,
+    // so they must keep loading; they are dropped from the parsed config.
+    let input = "./tests/fixtures/valide_config/stale_sendtx_sections.toml";
+
+    let config = Config::try_load(Path::new(input)).unwrap();
+
+    assert_eq!(
+        config.stale_sendtx_sections_warning().as_deref(),
+        Some(
+            "Ignoring deprecated config section(s) '[full-node-rpcs]', '[l2]', '[rate-limiting]': \
+             they only configured the removed 'interop_sendTx' flow"
+        )
+    );
+    let rendered = toml::to_string(&config).unwrap();
+    for key in ["full-node-rpcs", "[l2]", "rate-limiting"] {
+        assert!(
+            !rendered.contains(key),
+            "{key} must not be re-serialized:\n{rendered}"
+        );
+    }
+}

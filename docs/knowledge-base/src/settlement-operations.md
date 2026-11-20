@@ -324,17 +324,14 @@ An unclassified error fails closed as the standard JSON-RPC internal error `-326
 
 This table is rendered from `crates/agglayer-types/src/rpc_error_code.rs` and includes the
 pre-existing public-API allocations because the enum is node-wide.
+Codes `-10001` through `-10005` and `-10007` belonged to the removed
+`interop_sendTx`/`interop_getTxStatus` flows (#1692);
+they are retired and must not be reused.
 
 | Variant | `code()` | `tag()` | Meaning |
 |---|---:|---|---|
 | `InvalidParams` | `-32602` | `invalid-params` | A supplied value conflicts with authoritative state. Structurally invalid JSON-RPC parameters also use standard code `-32602`. |
-| `RollupNotRegistered` | `-10001` | `rollup-not-registered` | The rollup is not registered. |
-| `SignatureMismatch` | `-10002` | `signature-mismatch` | Rollup signature verification failed. |
-| `ValidationFailure` | `-10003` | `validation-failure` | Proof or state validation failed. |
-| `SettlementError` | `-10004` | `settlement-error` | L1 settlement failed. |
-| `StatusError` | `-10005` | `status-error` | Transaction status retrieval failed. |
 | `SendCertificate` | `-10006` | `send-certificate` | Certificate submission failed. |
-| `RateLimited` | `-10007` | `rate-limited` | Transaction settlement was rate-limited. |
 | `NotFound` | `-10008` | `not-found` | The referenced job, attempt, attempt result, L1 transaction, or certificate header does not exist. |
 | `MethodDisabled` | `-10009` | `method-disabled` | The method is permanently disabled. |
 | `AlreadyCompleted` | `-10010` | `already-completed` | The job has a terminal result and the operation was not forced, or reload/abort targeted a completed job. |

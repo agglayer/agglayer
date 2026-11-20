@@ -67,6 +67,17 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outbound: Option<OutboundConfig>,
 
+    /// Top-level sections that only configured the removed `interop_sendTx`
+    /// flow (issue #1632). Deployed configuration files still carry them, so
+    /// they are accepted and ignored: `true` records that the section was
+    /// present, see [`Config::stale_sendtx_sections_warning`].
+    #[serde(default, skip_serializing, deserialize_with = "ignored_section")]
+    pub full_node_rpcs: bool,
+    #[serde(default, skip_serializing, deserialize_with = "ignored_section")]
+    pub l2: bool,
+    #[serde(default, skip_serializing, deserialize_with = "ignored_section")]
+    pub rate_limiting: bool,
+
     /// The L1 configuration.
     #[serde(default)]
     pub l1: L1,
@@ -148,6 +159,29 @@ impl Config {
             .deserialize(deserializer)
             .map_err(ConfigurationError::DeserializationError)
     }
+
+    /// Warning naming the stale `full-node-rpcs`, `l2` and `rate-limiting`
+    /// sections present in the loaded file, if any. As for
+    /// [`OutboundConfig::ignored_config_warning`], reporting is left to the
+    /// caller so that it happens after tracing is initialized.
+    pub fn stale_sendtx_sections_warning(&self) -> Option<String> {
+        let present = [
+            ("full-node-rpcs", self.full_node_rpcs),
+            ("l2", self.l2),
+            ("rate-limiting", self.rate_limiting),
+        ]
+        .into_iter()
+        .filter(|(_, present)| *present)
+        .map(|(section, _)| format!("'[{section}]'"))
+        .collect::<Vec<_>>();
+        (!present.is_empty()).then(|| {
+            format!(
+                "Ignoring deprecated config section(s) {}: they only configured the removed \
+                 'interop_sendTx' flow",
+                present.join(", ")
+            )
+        })
+    }
 }
 
 impl Config {
@@ -158,6 +192,9 @@ impl Config {
             log: Default::default(),
             rpc: Default::default(),
             outbound: Default::default(),
+            full_node_rpcs: false,
+            l2: false,
+            rate_limiting: false,
             l1: Default::default(),
             auth: Default::default(),
             telemetry: Default::default(),
@@ -254,6 +291,12 @@ impl<'de> DeserializeSeed<'de> for ConfigDeserializer<'_> {
 /// Default prover buffer size.
 const fn default_prover_buffer_size() -> usize {
     100
+}
+
+/// Accepts any value for a section that is no longer read, recording only
+/// that it was present.
+fn ignored_section<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    serde::de::IgnoredAny::deserialize(deserializer).map(|_| true)
 }
 
 fn is_false(b: &bool) -> bool {

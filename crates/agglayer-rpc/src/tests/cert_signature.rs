@@ -10,8 +10,9 @@ use alloy::providers::{mock::Asserter, ProviderBuilder};
 
 use crate::error::SignatureVerificationError;
 
-/// Certificate signatures are checked against `proof_signers` without
-/// touching L1, so the mocked provider never receives a call.
+/// Certificate signatures are checked against `proof_signers`; only a network
+/// without a configured proof signer falls back to L1, which the empty mock
+/// rejects.
 #[tokio::test]
 async fn verify_cert_signature() {
     let signer1: Address = Certificate::wallet_for_test(1.into()).address().into();
@@ -21,6 +22,7 @@ async fn verify_cert_signature() {
     config.proof_signers.insert(1, signer1);
     // Proof signer for network 2 is wrong
     config.proof_signers.insert(2, signer3);
+    // No proof signer for network 3
 
     let provider = Arc::new(ProviderBuilder::new().connect_mocked_client(Asserter::new()));
     let l1_rpc = L1RpcClient::new(
@@ -58,6 +60,17 @@ async fn verify_cert_signature() {
                 SignerError::InvalidPessimisticProofSignature { expected_signer }
             ))
             if expected_signer == signer3
+        ));
+    }
+
+    {
+        // valid signature, but no proof signer configured: the trusted
+        // sequencer must come from L1, and the empty mock has no answer
+        let signed_cert = Certificate::new_for_test_v5(3.into(), Height::ZERO);
+        assert!(matches!(
+            service.verify_cert_signature(&signed_cert).await,
+            Err(SignatureVerificationError::UnableToRetrieveTrustedSequencerAddress(network_id))
+            if network_id.to_u32() == 3
         ));
     }
 

@@ -1,0 +1,13 @@
+# Top-level sections that only configured the removed `interop_sendTx` flow
+# (issue #1632). Deployed configuration files still carry them, so they are
+# accepted and ignored with a startup warning.
+[full-node-rpcs]
+1 = "http://l2-rpc:8545/"
+
+[l2]
+rpc-timeout = "45s"
+
+[rate-limiting]
+send-tx = "unlimited"
+
+[rate-limiting.network]
