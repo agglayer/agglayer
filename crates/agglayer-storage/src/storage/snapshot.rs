@@ -1,4 +1,6 @@
-use super::{DBError, DB};
+use rocksdb::Direction;
+
+use super::{iterators::ColumnIterator, DBError, DB};
 use crate::schema::{Codec, ColumnSchema};
 
 /// Typed reads from one RocksDB snapshot. Keep this borrowed view inside the
@@ -14,16 +16,6 @@ impl<'a> Snapshot<'a> {
             db,
             snapshot: db.rocksdb.snapshot(),
         }
-    }
-
-    pub(crate) fn get<C: ColumnSchema>(&self, key: &C::Key) -> Result<Option<C::Value>, DBError> {
-        let key = key.encode()?;
-        let cf = self.db.cf::<C>()?;
-
-        self.snapshot
-            .get_cf(cf, key)?
-            .map(|bytes| C::Value::decode(&bytes).map_err(Into::into))
-            .transpose()
     }
 
     pub(crate) fn multi_get<C: ColumnSchema>(
@@ -45,5 +37,15 @@ impl<'a> Snapshot<'a> {
                     .transpose()
             })
             .collect()
+    }
+
+    /// Every row of a column family, as of this snapshot.
+    pub(crate) fn iter<C: ColumnSchema>(&self) -> Result<ColumnIterator<'_, C>, DBError> {
+        let cf = self.db.cf::<C>()?;
+
+        let mut iterator = self.snapshot.raw_iterator_cf(cf);
+        iterator.seek_to_first();
+
+        Ok(ColumnIterator::new(iterator, Direction::Forward))
     }
 }

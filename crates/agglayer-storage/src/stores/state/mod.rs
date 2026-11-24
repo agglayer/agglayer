@@ -15,7 +15,7 @@ use pessimistic_proof::{
     local_balance_tree::LOCAL_BALANCE_TREE_DEPTH, nullifier_tree::NULLIFIER_TREE_DEPTH,
     unified_bridge::LocalExitTree,
 };
-use rocksdb::{Direction, ReadOptions, WriteBatch};
+use rocksdb::WriteBatch;
 use tracing::{info, instrument, warn};
 
 use self::LET::LocalExitTreePerNetworkColumn;
@@ -805,32 +805,6 @@ impl StateReader for StateStore {
             .collect())
     }
 
-    /// Get the active networks.
-    /// Meaning, the networks that have at least one submitted certificate.
-    ///
-    /// Performance: O(n) where n is the number of networks.
-    /// This is because we need to scan all the keys in the
-    /// `last_certificate_per_network` column family.
-    /// This is not a problem because the number of networks is expected to be
-    /// small. This function is only called once when the node starts.
-    /// Benchmark: `last_certificate_bench.rs`
-    fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error> {
-        let disabled_networks = self
-            .db
-            .keys::<crate::columns::disabled_networks::DisabledNetworksColumn>()?
-            .filter_map(|v| v.ok())
-            .collect::<BTreeSet<NetworkId>>();
-
-        Ok(self
-            .db
-            .keys::<LatestSettledCertificatePerNetworkColumn>()?
-            .filter_map(|v| {
-                v.ok()
-                    .filter(|network_id| !disabled_networks.contains(network_id))
-            })
-            .collect())
-    }
-
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,
@@ -872,26 +846,6 @@ impl StateReader for StateStore {
             })
     }
 
-    fn get_current_settled_height(&self) -> Result<Vec<(NetworkId, SettledCertificate)>, Error> {
-        self.db
-            .iter_with_direction::<LatestSettledCertificatePerNetworkColumn>(
-                ReadOptions::default(),
-                Direction::Forward,
-            )?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
-    }
-
-    fn get_latest_settled_certificate_per_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, SettledCertificate)>, Error> {
-        Ok(self
-            .db
-            .get::<LatestSettledCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|v| (*network_id, v)))?)
-    }
-
     fn read_local_network_state(
         &self,
         network_id: NetworkId,
@@ -922,6 +876,49 @@ impl StateReader for StateStore {
             .db
             .get::<crate::columns::disabled_networks::DisabledNetworksColumn>(network_id)
             .map(|v| v.is_some())?)
+    }
+}
+
+/// Reads of the legacy latest-settled index, dual-written for operational
+/// comparison until it is dropped. The network info column is the runtime
+/// source of the settled pointer.
+#[cfg(any(test, feature = "testutils"))]
+impl StateStore {
+    pub fn get_latest_settled_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, SettledCertificate)>, Error> {
+        Ok(self
+            .db
+            .get::<LatestSettledCertificatePerNetworkColumn>(network_id)
+            .map(|v| v.map(|v| (*network_id, v)))?)
+    }
+}
+
+/// The active-network listing, which only tests and a benchmark call.
+#[cfg(any(test, feature = "testutils"))]
+impl StateStore {
+    /// The networks with a settled certificate that are not disabled.
+    ///
+    /// O(number of network info rows): one scan of the column, which is fine
+    /// for a helper nothing at runtime calls.
+    /// Benchmark: `latest_certificate_bench.rs`
+    pub fn get_active_networks(&self) -> Result<Vec<NetworkId>, Error> {
+        use crate::types::network_info::v0::network_info_value::ValueDiscriminants;
+        let disabled_networks = self
+            .db
+            .keys::<crate::columns::disabled_networks::DisabledNetworksColumn>()?
+            .filter_map(|v| v.ok())
+            .collect::<BTreeSet<NetworkId>>();
+
+        Ok(self
+            .db
+            .keys::<NetworkInfoColumn>()?
+            .filter_map(|v| v.ok())
+            .filter(|key| key.kind == ValueDiscriminants::SettledCertificate)
+            .map(|key| NetworkId::new(key.network_id))
+            .filter(|network_id| !disabled_networks.contains(network_id))
+            .collect())
     }
 }
 

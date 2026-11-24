@@ -1,7 +1,6 @@
 use std::{path::Path, sync::Arc};
 
 use agglayer_types::{Certificate, CertificateId, Height, NetworkId, Proof};
-use rocksdb::{Direction, ReadOptions};
 
 use super::{PendingCertificateReader, PendingCertificateWriter};
 use crate::{
@@ -165,8 +164,8 @@ impl PendingCertificateWriter for PendingStore {
     ) -> Result<(), Error> {
         let prometheus_height = NetworkMetrics::prometheus_height(height);
         let mut metrics = self.network_metrics.mutation();
-        if let Some((_id, latest_height)) =
-            self.get_latest_pending_certificate_for_network(&network_id)?
+        if let Some(PendingCertificate(_id, latest_height)) =
+            self.legacy_pending_pointer(&network_id)?
         {
             if latest_height > height {
                 return Err(Error::InvalidPendingHeight(
@@ -226,27 +225,62 @@ impl PendingCertificateWriter for PendingStore {
     }
 }
 
-impl PendingCertificateReader for PendingStore {
-    fn get_latest_pending_certificate_for_network(
+/// Reads of the legacy latest-certificate indexes.
+///
+/// The network info column is the runtime source of these pointers. The
+/// legacy indexes stay dual-written for the legacy writer's height check and
+/// for operational comparison until they are dropped.
+impl PendingStore {
+    /// The legacy latest pending pointer, which only the legacy pending
+    /// writer's height check reads at runtime.
+    fn legacy_pending_pointer(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<PendingCertificate>, Error> {
+        Ok(self
+            .db
+            .get::<LatestPendingCertificatePerNetworkColumn>(network_id)?)
+    }
+
+    /// The legacy latest pending pointer: certificate id and height.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn get_latest_pending_certificate_for_network(
         &self,
         network_id: &NetworkId,
     ) -> Result<Option<(CertificateId, Height)>, Error> {
         Ok(self
-            .db
-            .get::<LatestPendingCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|PendingCertificate(id, height)| (id, height)))?)
+            .legacy_pending_pointer(network_id)?
+            .map(|PendingCertificate(id, height)| (id, height)))
     }
 
-    fn get_current_pending_heights(&self) -> Result<Vec<(NetworkId, PendingCertificate)>, Error> {
+    /// The legacy latest proven pointer: network, height, and certificate id.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn get_latest_proven_certificate_per_network(
+        &self,
+        network_id: &NetworkId,
+    ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error> {
+        Ok(self
+            .db
+            .get::<LatestProvenCertificatePerNetworkColumn>(network_id)
+            .map(|v| v.map(|ProvenCertificate(id, network, height)| (network, height, id)))?)
+    }
+
+    /// Every network's legacy latest pending pointer.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn get_current_pending_heights(
+        &self,
+    ) -> Result<Vec<(NetworkId, PendingCertificate)>, Error> {
         self.db
             .iter_with_direction::<LatestPendingCertificatePerNetworkColumn>(
-                ReadOptions::default(),
-                Direction::Forward,
+                rocksdb::ReadOptions::default(),
+                rocksdb::Direction::Forward,
             )?
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
     }
+}
 
+impl PendingCertificateReader for PendingStore {
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -259,35 +293,6 @@ impl PendingCertificateReader for PendingStore {
 
     fn get_proof(&self, certificate_id: CertificateId) -> Result<Option<Proof>, Error> {
         self.get_readable_proof(certificate_id)
-    }
-
-    fn get_current_proven_height(&self) -> Result<Vec<ProvenCertificate>, Error> {
-        self.db
-            .iter_with_direction::<LatestProvenCertificatePerNetworkColumn>(
-                ReadOptions::default(),
-                Direction::Forward,
-            )?
-            .map(|entry| entry.map(|(_, certificate)| certificate))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
-    }
-
-    fn get_current_proven_height_for_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<Height>, Error> {
-        self.get_latest_proven_certificate_per_network(network_id)
-            .map(|v| v.map(|(_network, height, _id)| height))
-    }
-
-    fn get_latest_proven_certificate_per_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, Height, CertificateId)>, Error> {
-        Ok(self
-            .db
-            .get::<LatestProvenCertificatePerNetworkColumn>(network_id)
-            .map(|v| v.map(|ProvenCertificate(id, network, height)| (network, height, id)))?)
     }
 
     fn multi_get_certificate(

@@ -130,10 +130,12 @@ When changing storage schemas or keys:
 ## Network info backfill
 
 `network_info_cf` caches each network's latest certificate pointers, its network type, and its latest settled claim.
+It is the runtime source of those pointers; see [Reader cutover](#reader-cutover).
 The legacy latest-certificate indexes hold the same pointers:
 `latest_settled_certificate_per_network_cf` in the state DB,
 and the latest pending and proven indexes in the pending DB.
-Until the readers move to `network_info_cf`, the writers are meant to keep both up to date.
+The writers keep both up to date for an operational bake period,
+after which a schema migration can drop the legacy indexes.
 Submission
 and explicit pending/proven overrides write both representations through the [shared certificate updater][certificate-updater].
 The state store serializes normal submissions through the height check and both database writes.
@@ -152,7 +154,8 @@ It uses the existing insertion order: legacy pending pointer, certificate body, 
 and cached pending pointer together in one state DB batch.
 That batch creates a missing header or preserves its metadata while updating its status.
 The state store requests any submission backup after the batch succeeds.
-A concurrent legacy reader can briefly observe a pointer before its body or header is available.
+The legacy pending pointer lands before the body and the header;
+only the legacy writer's own height check reads it.
 Explicit overrides retain the ability to move a pointer backwards.
 Admin force-push uses the same submission updater,
 including initial header creation for a certificate that has no header yet.
@@ -175,11 +178,11 @@ concurrent same-height requests retain the preexisting replacement race.
 Admin force-push bypasses normal replacement validation but still refuses changes to settled certificates.
 The standalone header-insertion helper is available only to tests and fixtures.
 
-`getNetworkInfo` determines network existence from cached data and bounded cache pointer reads.
+`getNetworkInfo` determines network existence from the cache alone:
+a network with any cached row is known, in the same snapshot that serves its fields.
 Legacy pointers skipped as junk by backfill do not make a network known.
-A missing network type does not make a pending-only or proven-only network unknown,
-and a dangling cached pointer still establishes existence.
-Cache read failures propagate as errors.
+A missing network type does not make a pending-only or proven-only network unknown.
+Cache read failures propagate as errors, including a cached pointer without its header.
 Unknown networks retain the existing JSON-RPC error conversion and gRPC `NotFound` mapping.
 
 [certificate-updater]: ../../../crates/agglayer-storage/src/stores/certificate_updater.rs
@@ -188,6 +191,65 @@ A settled row's claim is complete by construction.
 A settled row without a claim row means that no imported bridge exit
 was settled through that certificate.
 No completion flag records this.
+
+### Reader cutover
+
+Every runtime reader of a latest certificate pointer uses `network_info_cf`:
+the `getNetworkInfo`, latest-known, latest-pending, and latest-settled certificate header requests,
+the orchestrator's startup discovery of networks with a proven certificate
+and each network task's settled height,
+and the native network metrics at startup and after an admin pending override.
+None of them reads the legacy indexes, and nothing at runtime compares the two or repairs one from the other.
+Active-network discovery is a test and benchmark helper on the concrete state store;
+it lists the networks with a settled row.
+The backfill migration is the only remaining reader of the legacy indexes,
+besides tests and the legacy pending writer's own height check.
+
+A per-network read takes one database snapshot,
+reads the network's rows in one multi-get,
+and reads the headers of the certificates its pointers name in one more.
+Certificate-owned facts come from those headers:
+height, epoch, index, status, and error, and the settled local exit root.
+The cached pending height is not authoritative.
+A cached pointer whose header is missing is inconsistent storage and fails the read:
+the writers publish a pointer with or after its header,
+and the backfill skips a legacy pending or proven pointer without one and fails on a settled one.
+A read resolves only the stages it serves, so only their pointers can fail it:
+`getNetworkInfo` reads the pending and settled headers,
+the latest-pending and latest-settled requests read their own stage,
+the latest-known request reads all three,
+the network task reads the settled header,
+and the metric refresh after an admin pending override reads the pending header.
+A cached pending pointer whose header has settled since is not served as pending.
+
+Bulk reads scan the whole column once, deduplicate networks by id,
+and join each network's pointers with their headers from the same snapshot.
+They are O(number of networks), not O(1).
+They fail on the first undecodable pointer row,
+which is a column this binary cannot read rather than one network's problem.
+A network with a pointer whose header is missing, of any stage, is left out with an error log,
+so that one network's inconsistent storage does not keep the others from starting:
+its metrics are not seeded and its network task is not spawned at startup.
+The reads that serve the dangling stage keep failing.
+A later certificate submission spawns the task, which reads only the settled pointer,
+and the writers publish the network's gauges again;
+a rewritten pending or proven pointer heals its stage,
+while a dangling settled pointer keeps failing until the data is fixed offline
+or the state and pending backups are restored as a pair, as after a failed backfill.
+The scan lists every network with any row it knows, so a pending-only or proven-only network is found,
+and only interprets the pointer rows' values.
+A row kind this binary does not know, which a newer binary may have written, is skipped with a warning.
+
+The legacy reads remain on the concrete stores only,
+not on the store traits that the RPC, orchestrator, and metrics are generic over,
+so a new call site cannot pick them up by accident.
+
+The legacy pending writer still resets the pending error series,
+and the admin pending override refreshes it from the cache afterwards.
+Gauge and cache consistency under concurrent admin overrides of one network
+is not covered while both writers exist;
+the legacy index removal tracked in [agglayer/issues#273](https://github.com/agglayer/issues/issues/273)
+moves the metric updates onto the cache publication and restores that coverage.
 
 ### Settlement writer
 

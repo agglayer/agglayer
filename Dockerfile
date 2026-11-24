@@ -17,25 +17,6 @@ COPY --link Cargo.lock Cargo.lock
 
 RUN cargo chef prepare --recipe-path recipe.json --bin agglayer
 
-FROM --platform=${BUILDPLATFORM} golang:1.22 AS go-builder
-
-# The SP1 circuits live in their own stage, keyed only on the CIRCUIT_* args,
-# so a Rust dependency cache miss does not re-download ~1GB from S3.
-FROM debian:bookworm-slim AS circuits
-
-ARG CIRCUIT_ARTIFACTS_URL_BASE=https://sp1-circuits.s3-us-east-2.amazonaws.com
-ARG CIRCUIT_TYPE=plonk
-ARG CIRCUIT_VERSION=v6.1.0
-
-RUN apt-get update && \
-    apt-get --no-install-recommends install -y ca-certificates curl && \
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
-
-RUN mkdir -p /root/.sp1/circuits/${CIRCUIT_TYPE}/${CIRCUIT_VERSION} \
-    && curl -s -o /tmp/circuits.tar.gz ${CIRCUIT_ARTIFACTS_URL_BASE}/${CIRCUIT_VERSION}-${CIRCUIT_TYPE}.tar.gz \
-    && tar -Pxzf /tmp/circuits.tar.gz -C /root/.sp1/circuits/${CIRCUIT_TYPE}/${CIRCUIT_VERSION} \
-    && rm /tmp/circuits.tar.gz
-
 FROM chef AS builder
 
 RUN apt-get update && \
@@ -48,10 +29,6 @@ RUN ARCHITECTURE=$(uname -m | sed -e "s/arm64/arm_64/g" | sed -e "s/aarch64/aarc
     && unzip -o "protoc-${PROTOC_VERSION}-linux-$ARCHITECTURE.zip" -d /usr/local 'include/*' \
     && chmod +x "/usr/local/bin/protoc" \
     && rm "protoc-${PROTOC_VERSION}-linux-$ARCHITECTURE.zip"
-
-# Install Go 1.22
-COPY --from=go-builder /usr/local/go /usr/local/go
-ENV PATH="/usr/local/go/bin:$PATH"
 
 COPY --from=planner /app/recipe.json recipe.json
 # Notice that we are specifying the --target flag!
@@ -75,8 +52,7 @@ RUN cargo build --release --bin agglayer
 
 FROM --platform=${BUILDPLATFORM} debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/agglayer /usr/local/bin/
-COPY --from=circuits /root/.sp1/circuits /root/.sp1/circuits
 
 CMD ["/usr/local/bin/agglayer"]

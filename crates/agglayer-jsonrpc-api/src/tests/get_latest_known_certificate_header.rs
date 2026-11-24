@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use agglayer_config::Config;
 use agglayer_storage::{
-    stores::{NetworkSettlement, PendingCertificateWriter, StateWriter},
+    stores::{certificate_updater, NetworkSettlement, StateWriter},
     tests::TempDBDir,
 };
 use agglayer_types::{
@@ -63,19 +63,22 @@ async fn returns_the_pending_certificate_header() {
         )
         .expect("unable to set latest settled certificate");
 
-    context
-        .pending_store
-        .set_latest_proven_certificate_per_network(
-            &network_id,
-            &Height::new(1),
-            &proven_certificate.hash(),
-        )
-        .expect("unable to set latest proven certificate");
+    certificate_updater::set_proven(
+        context.pending_store.as_ref(),
+        context.state_store.as_ref(),
+        network_id,
+        Height::new(1),
+        proven_certificate.hash(),
+    )
+    .expect("unable to set latest proven certificate");
 
-    context
-        .pending_store
-        .insert_pending_certificate(network_id, Height::new(2), &pending_certificate)
-        .expect("unable to insert pending certificate");
+    certificate_updater::submit(
+        context.pending_store.as_ref(),
+        context.state_store.as_ref(),
+        &pending_certificate,
+        &CertificateStatus::Pending,
+    )
+    .expect("unable to insert pending certificate");
 
     let payload: CertificateHeader = context
         .api_client
@@ -141,14 +144,14 @@ async fn returns_the_proven_certificate_header() {
             &settlement(&settled_certificate, settled_certificate.height),
         )
         .expect("unable to set latest settled certificate");
-    context
-        .pending_store
-        .set_latest_proven_certificate_per_network(
-            &network_id,
-            &Height::new(1),
-            &proven_certificate.hash(),
-        )
-        .expect("unable to set latest proven certificate");
+    certificate_updater::set_proven(
+        context.pending_store.as_ref(),
+        context.state_store.as_ref(),
+        network_id,
+        Height::new(1),
+        proven_certificate.hash(),
+    )
+    .expect("unable to set latest proven certificate");
 
     drop(context);
 
@@ -339,10 +342,13 @@ async fn returns_the_highest_height() {
         )
         .expect("unable to set latest settled certificate");
 
-    context
-        .pending_store
-        .insert_pending_certificate(network_id, Height::new(3), &pending_certificate)
-        .expect("unable to insert pending certificate");
+    certificate_updater::submit(
+        context.pending_store.as_ref(),
+        context.state_store.as_ref(),
+        &pending_certificate,
+        &CertificateStatus::Pending,
+    )
+    .expect("unable to insert pending certificate");
 
     drop(context);
 
@@ -427,19 +433,22 @@ async fn returns_the_settled_one_at_same_height() {
         )
         .expect("unable to set latest settled certificate");
 
-    context
-        .pending_store
-        .insert_pending_certificate(network_id, Height::new(10), &pending_certificate)
-        .expect("unable to insert pending certificate");
+    certificate_updater::submit(
+        context.pending_store.as_ref(),
+        context.state_store.as_ref(),
+        &pending_certificate,
+        &CertificateStatus::Pending,
+    )
+    .expect("unable to insert pending certificate");
 
-    context
-        .pending_store
-        .set_latest_proven_certificate_per_network(
-            &network_id,
-            &Height::new(10),
-            &proven_certificate.hash(),
-        )
-        .expect("unable to set latest proven certificate");
+    certificate_updater::set_proven(
+        context.pending_store.as_ref(),
+        context.state_store.as_ref(),
+        network_id,
+        Height::new(10),
+        proven_certificate.hash(),
+    )
+    .expect("unable to set latest proven certificate");
 
     drop(context);
     tokio::time::sleep(Duration::from_millis(200)).await;
