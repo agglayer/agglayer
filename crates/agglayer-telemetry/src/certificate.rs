@@ -90,21 +90,22 @@ impl CertificateTimer {
         }
     }
 
-    /// Records the finished `stage` and resets the stage clock.
-    pub fn complete_stage(&mut self, stage: CertificateStage) {
-        record_certificate_stage_completed(
-            self.network_id,
-            stage,
-            self.stage_start.elapsed().as_secs_f64(),
-        );
+    /// Records the finished `stage`, resets the stage clock, and returns the
+    /// stage duration in seconds.
+    pub fn complete_stage(&mut self, stage: CertificateStage) -> f64 {
+        let seconds = self.stage_start.elapsed().as_secs_f64();
+        record_certificate_stage_completed(self.network_id, stage, seconds);
         self.stage_start = Instant::now();
+
+        seconds
     }
 
-    pub fn complete(&self) {
-        record_certificate_total_duration(
-            self.network_id,
-            self.overall_start.elapsed().as_secs_f64(),
-        );
+    /// Records and returns the end-to-end bridging duration in seconds.
+    pub fn complete(&self) -> f64 {
+        let seconds = self.overall_start.elapsed().as_secs_f64();
+        record_certificate_total_duration(self.network_id, seconds);
+
+        seconds
     }
 }
 
@@ -120,5 +121,19 @@ mod tests {
         let mut timer = CertificateTimer::start(1);
         timer.complete_stage(CertificateStage::Proven);
         timer.complete();
+    }
+
+    #[test]
+    fn timer_reports_the_durations_it_records() {
+        let pause = std::time::Duration::from_millis(20);
+
+        let mut timer = CertificateTimer::start(1);
+        std::thread::sleep(pause);
+        let stage = timer.complete_stage(CertificateStage::Pending);
+        std::thread::sleep(pause);
+        let overall = timer.complete();
+
+        assert!(stage >= pause.as_secs_f64());
+        assert!(overall >= stage + pause.as_secs_f64());
     }
 }

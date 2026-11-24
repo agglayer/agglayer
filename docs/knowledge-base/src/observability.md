@@ -45,11 +45,43 @@ through multi-minute settlement waits:
 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600, 900, 1800
 ```
 
+### Per-certificate durations in the log
+
+The histograms aggregate by `network_id` and `stage`, so the certificate
+identity is gone by the time the value is recorded. The same measurements are
+therefore also written to the log, one line per stage:
+
+| Message | Fields | Emitted at |
+| --- | --- | --- |
+| `Certificate stage completed` | `stage`, `seconds` | each status transition |
+| `Certificate bridging completed` | `seconds` | `Settled` |
+
+Both are `INFO` on `agglayer_certificate_orchestrator::certificate_task` and are
+written inside the `CertificateTask::process` span, so each line already carries
+`certificate_id`, `network_id` and `height` as span fields — no need to repeat
+them. `seconds` is the exact `f64` the timer measured, not a bucket, which makes
+these lines the right source for anything needing one row per certificate.
+
+```logql
+{namespace="agglayer", container="agglayer"}
+  |= "Certificate stage completed"
+  | json stage="fields.stage", seconds="fields.seconds",
+         net="span.network_id", h="span.height"
+```
+
+`seconds` is a JSON number, so `| json` extracts it as a string label; add
+`| unwrap seconds` to use it in a metric query.
+
+Note for anyone adding fields here: Alloy drops any log line matching
+`(?i)(debug|trace)` on cardona and mainnet, so those words must not appear in
+the message or field names.
+
 ## Semantics and caveats
 
 - **In-process, no persistence.** Durations are measured with in-memory timers on
   the certificate task. They are **not** persisted, so counts reset when the node
-  restarts.
+  restarts. The log lines are not affected by this — they persist for the
+  retention of the log store.
 - **Fresh certificates only.** The two duration histograms are recorded only for
   certificates the task observes from `Pending` through `Settled` within a single
   process lifetime. Certificates resumed after a restart (entering as `Proven` or
