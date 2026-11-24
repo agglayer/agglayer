@@ -130,10 +130,6 @@ impl RollupContract for StubL1Rpc {
     fn get_rollup_manager_address(&self) -> Address {
         unreachable!("send_certificate only resolves the trusted sequencer")
     }
-
-    fn get_event_filter_block_range(&self) -> u64 {
-        unreachable!("send_certificate only resolves the trusted sequencer")
-    }
 }
 
 #[async_trait::async_trait]

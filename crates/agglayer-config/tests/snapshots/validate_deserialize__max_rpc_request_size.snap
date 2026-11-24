@@ -4,11 +4,6 @@ expression: config
 ---
 prover-buffer-size = 100
 
-[full-node-rpcs]
-
-[l2]
-rpc-timeout = "45s"
-
 [proof-signers]
 
 [log]
@@ -24,11 +19,6 @@ host = "0.0.0.0"
 max-request-body-size = 104857600
 request-timeout = "3m"
 
-[rate-limiting]
-send-tx = "unlimited"
-
-[rate-limiting.network]
-
 [l1]
 chain-id = 1337
 node-url = "http://zkevm-mock-l1-network:8545/"
@@ -37,7 +27,6 @@ connect-attempt-timeout = "3s"
 rollup-manager-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
 polygon-zkevm-global-exit-root-v2-contract = "0xb7f8bc63bbcad18155201308c8f3540b07f84f5e"
 rpc-timeout = "45s"
-event-filter-block-range = 10000
 
 [auth.local]
 private-keys = []

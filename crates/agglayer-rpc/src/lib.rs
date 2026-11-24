@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use agglayer_config::{epoch::BlockClockConfig, Config, Epoch};
 use agglayer_contracts::{AggchainContract, L1TransactionFetcher, RollupContract};
-use agglayer_rate_limiting as rate_limiting;
 use agglayer_storage::stores::{
     async_api::AsyncStateReaderExt, CertificateStages, DebugReader, DebugWriter,
     LatestCertificateHeaders, NetworkInfoReader, PendingCertificateReader,

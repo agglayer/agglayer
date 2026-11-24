@@ -77,6 +77,9 @@ pub fn main(
     if let Some(outbound) = &config.outbound {
         warn!("{}", outbound.ignored_config_warning());
     }
+    if let Some(warning) = config.stale_sendtx_sections_warning() {
+        warn!("{warning}");
+    }
 
     info!("Starting agglayer node version info: {}", version);
 

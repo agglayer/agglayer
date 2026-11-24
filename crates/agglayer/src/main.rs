@@ -29,6 +29,9 @@ fn main() -> eyre::Result<()> {
                     if let Some(outbound) = &config.outbound {
                         eprintln!("warning: {}", outbound.ignored_config_warning());
                     }
+                    if let Some(warning) = config.stale_sendtx_sections_warning() {
+                        eprintln!("warning: {warning}");
+                    }
                     println!(
                         "{}",
                         toml::to_string_pretty(&config)
