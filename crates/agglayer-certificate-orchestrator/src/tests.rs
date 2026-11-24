@@ -13,16 +13,11 @@ use agglayer_config::Config;
 use agglayer_settlement_service::MockSettlementServiceTrait;
 use agglayer_storage::{
     backup::BackupClient,
-    columns::{
-        latest_pending_certificate_per_network::PendingCertificate,
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
     stores::{
         epochs::EpochsStore, pending::PendingStore, state::StateStore, EpochStoreReader,
-        EpochStoreWriter, PendingCertificateReader, PendingCertificateWriter, PerEpochReader,
-        PerEpochWriter, StateReader, StateWriter, UpdateEvenIfAlreadyPresent,
-        UpdateStatusToCandidate,
+        EpochStoreWriter, LatestCertificateHeaders, PendingCertificateReader,
+        PendingCertificateWriter, PerEpochReader, PerEpochWriter, StateReader, StateWriter,
+        UpdateEvenIfAlreadyPresent, UpdateStatusToCandidate,
     },
     tests::{
         mocks::{MockEpochsStore, MockPendingStore, MockPerEpochStore, MockStateStore},
@@ -57,11 +52,8 @@ pub(crate) struct DummyPendingStore {
     pub(crate) current_epoch: EpochNumber,
     pub(crate) pending_certificate: RwLock<BTreeMap<(NetworkId, Height), Certificate>>,
     pub(crate) proofs: RwLock<BTreeMap<CertificateId, Proof>>,
-    pub(crate) settled: RwLock<BTreeMap<NetworkId, (Height, CertificateId)>>,
     pub(crate) certificate_per_network: RwLock<BTreeMap<(NetworkId, Height), CertificateId>>,
     pub(crate) certificate_headers: RwLock<BTreeMap<CertificateId, CertificateHeader>>,
-    pub(crate) latest_proven_certificate_per_network:
-        RwLock<BTreeMap<NetworkId, ProvenCertificate>>,
     pub(crate) is_packed: bool,
 }
 
@@ -125,17 +117,6 @@ impl StateReader for DummyPendingStore {
         Ok(false)
     }
 
-    fn get_active_networks(&self) -> Result<Vec<NetworkId>, agglayer_storage::error::Error> {
-        Ok(vec![])
-    }
-
-    fn get_latest_settled_certificate_per_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-
     fn get_certificate_header(
         &self,
         certificate_id: &CertificateId,
@@ -153,22 +134,6 @@ impl StateReader for DummyPendingStore {
         _certificate_id: &CertificateId,
     ) -> Result<Option<SettlementJobId>, agglayer_storage::error::Error> {
         unimplemented!()
-    }
-
-    fn get_current_settled_height(
-        &self,
-    ) -> Result<Vec<(NetworkId, SettledCertificate)>, agglayer_storage::error::Error> {
-        self.settled
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(network_id, (height, id))| {
-                Ok((
-                    *network_id,
-                    SettledCertificate(*id, *height, EpochNumber::ZERO, CertificateIndex::ZERO),
-                ))
-            })
-            .collect()
     }
 
     fn get_certificate_header_by_cursor(
@@ -279,18 +244,10 @@ impl PendingCertificateWriter for DummyPendingStore {
     }
     fn set_latest_proven_certificate_per_network(
         &self,
-        network_id: &NetworkId,
-        height: &Height,
-        certificate_id: &CertificateId,
+        _network_id: &NetworkId,
+        _height: &Height,
+        _certificate_id: &CertificateId,
     ) -> Result<(), agglayer_storage::error::Error> {
-        self.latest_proven_certificate_per_network
-            .write()
-            .unwrap()
-            .insert(
-                *network_id,
-                ProvenCertificate(*certificate_id, *network_id, *height),
-            );
-
         Ok(())
     }
 
@@ -405,48 +362,6 @@ impl StateWriter for DummyPendingStore {
 }
 
 impl PendingCertificateReader for DummyPendingStore {
-    fn get_latest_proven_certificate_per_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(NetworkId, Height, CertificateId)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-    fn get_latest_pending_certificate_for_network(
-        &self,
-        _network_id: &NetworkId,
-    ) -> Result<Option<(CertificateId, Height)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn get_current_pending_heights(
-        &self,
-    ) -> Result<Vec<(NetworkId, PendingCertificate)>, agglayer_storage::error::Error> {
-        todo!()
-    }
-
-    fn get_current_proven_height(
-        &self,
-    ) -> Result<Vec<ProvenCertificate>, agglayer_storage::error::Error> {
-        Ok(self
-            .latest_proven_certificate_per_network
-            .read()
-            .unwrap()
-            .values()
-            .cloned()
-            .collect())
-    }
-    fn get_current_proven_height_for_network(
-        &self,
-        network_id: &NetworkId,
-    ) -> Result<Option<Height>, agglayer_storage::error::Error> {
-        Ok(self
-            .latest_proven_certificate_per_network
-            .read()
-            .unwrap()
-            .get(network_id)
-            .map(|x| x.2))
-    }
-
     fn get_certificate(
         &self,
         network_id: NetworkId,
@@ -564,24 +479,69 @@ async fn test_certificate_orchestrator_can_stop() {
     assert!(orchestrator.spawned_network_tasks.is_empty());
 }
 
+/// Startup resumes only the networks with a proven certificate: the
+/// settled-only and pending-only networks, listed first, spawn no task, and
+/// the proven one's initialization failure stops startup.
 #[tokio::test]
 async fn startup_propagates_proven_network_initialization_storage_failure() {
-    let network_id = NetworkId::new(1);
-    let certificate_id = CertificateId::new([1; 32].into());
+    let network_id = NetworkId::new(3);
+    let certificate_id = CertificateId::new([3; 32].into());
+    let header = |network_id: NetworkId, certificate_id, status| CertificateHeader {
+        network_id,
+        height: Height::ZERO,
+        epoch_number: None,
+        certificate_index: None,
+        certificate_id,
+        prev_local_exit_root: [0; 32].into(),
+        new_local_exit_root: [0; 32].into(),
+        metadata: agglayer_types::Metadata::ZERO,
+        status,
+        settlement_tx_hash: None,
+    };
 
-    let mut pending_store = MockPendingStore::new();
-    pending_store
-        .expect_get_current_proven_height()
-        .once()
-        .return_once(move || {
-            Ok(vec![ProvenCertificate(
-                certificate_id,
-                network_id,
-                Height::ZERO,
-            )])
-        });
+    let pending_store = MockPendingStore::new();
 
     let mut state_store = MockStateStore::new();
+    state_store
+        .expect_get_all_latest_certificate_headers()
+        .once()
+        .return_once(move || {
+            Ok(BTreeMap::from([
+                (
+                    NetworkId::new(1),
+                    LatestCertificateHeaders {
+                        settled: Some(header(
+                            NetworkId::new(1),
+                            CertificateId::new([1; 32].into()),
+                            CertificateStatus::Settled,
+                        )),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    NetworkId::new(2),
+                    LatestCertificateHeaders {
+                        pending: Some(header(
+                            NetworkId::new(2),
+                            CertificateId::new([2; 32].into()),
+                            CertificateStatus::Pending,
+                        )),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    network_id,
+                    LatestCertificateHeaders {
+                        proven: Some(header(
+                            network_id,
+                            certificate_id,
+                            CertificateStatus::Proven,
+                        )),
+                        ..Default::default()
+                    },
+                ),
+            ]))
+        });
     state_store
         .expect_read_local_network_state()
         .with(eq(network_id))
@@ -701,178 +661,6 @@ async fn test_epoch_rollovers_are_ordered() {
         orchestrator.current_epoch.load().get_epoch_number(),
         EpochNumber::new(3)
     );
-}
-
-// A receiver created before orchestrator construction must preserve epoch events
-// emitted during startup handoff.
-#[test_log::test(tokio::test)]
-async fn test_pre_subscribed_epoch_stream_preserves_handoff_events() {
-    let path = TempDBDir::new();
-    let config = Config::new(&path.path);
-    let pending_store = Arc::new(
-        PendingStore::new_with_path(&config.storage.pending_db_path)
-            .expect("Unable to create store"),
-    );
-    let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
-            .expect("Unable to create store"),
-    );
-    let epochs_store = Arc::new(
-        EpochsStore::new(
-            Arc::new(config),
-            pending_store.clone(),
-            state_store.clone(),
-            BackupClient::noop(),
-        )
-        .expect("Unable to create store"),
-    );
-
-    let current_epoch = Arc::new(ArcSwap::new(Arc::new(
-        epochs_store
-            .open(EpochNumber::new(1))
-            .expect("Unable to open epoch"),
-    )));
-    let (clock_sender, _receiver) = broadcast::channel(2);
-    let clock = ClockRef::new(
-        clock_sender.clone(),
-        Arc::new(AtomicU64::new(1)),
-        Arc::new(NonZeroU64::new(1).unwrap()),
-    );
-
-    // Subscribe before the handoff gap, then emit the rollover before the
-    // orchestrator exists. A fresh subscription during start would miss it.
-    let clock_stream = clock.subscribe().expect("Unable to subscribe to clock");
-    clock_sender
-        .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)))
-        .expect("pre-subscribed receiver should keep the event alive");
-
-    let (_data_sender, data_receiver) = mpsc::channel(10);
-    let cancellation_token = CancellationToken::new();
-    let (check_sender, _check_receiver) = mpsc::channel(1);
-    let check = Check::builder()
-        .pending_store(pending_store.clone())
-        .state_store(state_store.clone())
-        .executed(check_sender)
-        .build();
-
-    let orchestrator_handle = CertificateOrchestrator::builder()
-        .clock(clock)
-        .clock_stream(clock_stream)
-        .data_receiver(data_receiver)
-        .cancellation_token(cancellation_token.clone())
-        .certifier_task_builder(check)
-        .pending_store(pending_store)
-        .epochs_store(epochs_store.clone())
-        .current_epoch(current_epoch.clone())
-        .state_store(state_store)
-        .settlement_service(Arc::new(MockSettlementServiceTrait::new()))
-        .start()
-        .await
-        .expect("Unable to start orchestrator");
-
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            if current_epoch.load().get_epoch_number() == EpochNumber::new(2) {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("handoff epoch event was not processed");
-
-    assert!(epochs_store
-        .open(EpochNumber::new(1))
-        .expect("Unable to reopen epoch 1")
-        .is_epoch_packed());
-
-    cancellation_token.cancel();
-    orchestrator_handle
-        .await
-        .expect("certificate orchestrator task panicked");
-}
-
-// An EpochEnded already reflected in the active epoch must not roll the
-// orchestrator over: the clock bumps its epoch counter before broadcasting, so
-// the epoch sampled at startup can already cover a queued event.
-#[test_log::test(tokio::test)]
-async fn test_handoff_event_already_covered_by_active_epoch_is_skipped() {
-    let path = TempDBDir::new();
-    let config = Config::new(&path.path);
-    let pending_store = Arc::new(
-        PendingStore::new_with_path(&config.storage.pending_db_path)
-            .expect("Unable to create store"),
-    );
-    let state_store = Arc::new(
-        StateStore::new_with_path(&config.storage.state_db_path, BackupClient::noop())
-            .expect("Unable to create store"),
-    );
-    let epochs_store = Arc::new(
-        EpochsStore::new(
-            Arc::new(config),
-            pending_store.clone(),
-            state_store.clone(),
-            BackupClient::noop(),
-        )
-        .expect("Unable to create store"),
-    );
-
-    // The synchronizer already opened epoch 2 for the EpochEnded(1) below.
-    let current_epoch = Arc::new(ArcSwap::new(Arc::new(
-        epochs_store
-            .open(EpochNumber::new(2))
-            .expect("Unable to open epoch"),
-    )));
-    let (clock_sender, _receiver) = broadcast::channel(2);
-    let clock = ClockRef::new(
-        clock_sender.clone(),
-        Arc::new(AtomicU64::new(2)),
-        Arc::new(NonZeroU64::new(1).unwrap()),
-    );
-
-    let clock_stream = clock.subscribe().expect("Unable to subscribe to clock");
-    clock_sender
-        .send(agglayer_clock::Event::EpochEnded(EpochNumber::new(1)))
-        .expect("pre-subscribed receiver should keep the event alive");
-
-    let (_data_sender, data_receiver) = mpsc::channel(10);
-    let cancellation_token = CancellationToken::new();
-    let (check_sender, _check_receiver) = mpsc::channel(1);
-    let check = Check::builder()
-        .pending_store(pending_store.clone())
-        .state_store(state_store.clone())
-        .executed(check_sender)
-        .build();
-
-    let orchestrator_handle = CertificateOrchestrator::builder()
-        .clock(clock)
-        .clock_stream(clock_stream)
-        .data_receiver(data_receiver)
-        .cancellation_token(cancellation_token.clone())
-        .certifier_task_builder(check)
-        .pending_store(pending_store)
-        .epochs_store(epochs_store.clone())
-        .current_epoch(current_epoch.clone())
-        .state_store(state_store)
-        .settlement_service(Arc::new(MockSettlementServiceTrait::new()))
-        .start()
-        .await
-        .expect("Unable to start orchestrator");
-
-    // Give the orchestrator time to consume the stale event.
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    assert_eq!(
-        current_epoch.load().get_epoch_number(),
-        EpochNumber::new(2),
-        "a stale handoff event must not roll the active epoch over"
-    );
-    assert!(!current_epoch.load().is_epoch_packed());
-
-    cancellation_token.cancel();
-    orchestrator_handle
-        .await
-        .expect("certificate orchestrator task panicked");
 }
 
 // A certificate received after an EpochEnded is stored for next epoch

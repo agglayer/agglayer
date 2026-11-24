@@ -162,7 +162,7 @@ impl Node {
             };
 
             network_metrics
-                .hydrate(pending_store.as_ref(), state_store.as_ref())
+                .hydrate(state_store.as_ref())
                 .context("Failed hydrating network storage metrics")?;
 
             Ok((
@@ -232,7 +232,7 @@ impl Node {
         )?);
 
         info!("Epoch synchronization started.");
-        let (current_epoch_store, epoch_stream) =
+        let current_epoch_store =
             EpochSynchronizer::start(state_store.clone(), epochs_store.clone(), clock_ref.clone())
                 .await
                 .context("Failed starting epoch synchronizer")?;
@@ -359,7 +359,6 @@ impl Node {
 
         let certificate_orchestrator_handle = CertificateOrchestrator::builder()
             .clock(clock_ref)
-            .clock_stream(epoch_stream)
             .data_receiver(data_receiver)
             .cancellation_token(cancellation_token.clone())
             .pending_store(pending_store.clone())

@@ -8,16 +8,10 @@ use std::{
 
 use agglayer_clock::{ClockRef, Event};
 use agglayer_settlement_service::SettlementServiceTrait;
-use agglayer_storage::{
-    columns::{
-        latest_proven_certificate_per_network::ProvenCertificate,
-        latest_settled_certificate_per_network::SettledCertificate,
-    },
-    stores::{
-        async_api::AsyncPendingCertificateReaderExt, EpochStoreReader, EpochStoreWriter,
-        PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
-        StateReader, StateWriter,
-    },
+use agglayer_storage::stores::{
+    async_api::AsyncNetworkInfoReaderExt, EpochStoreReader, EpochStoreWriter, NetworkInfoReader,
+    PendingCertificateReader, PendingCertificateWriter, PerEpochReader, PerEpochWriter,
+    StateReader, StateWriter,
 };
 use agglayer_types::{CertificateId, EpochNumber, Height, NetworkId};
 use agglayer_utils::task::spawn_blocking_in_current_span;
@@ -25,10 +19,7 @@ use arc_swap::ArcSwap;
 use futures_util::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use network_task::{NetworkTask, NewCertificate};
 use tokio::{
-    sync::{
-        broadcast,
-        mpsc::{self, Receiver},
-    },
+    sync::mpsc::{self, Receiver},
     task::JoinHandle,
 };
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
@@ -51,22 +42,6 @@ pub type EpochPackingTasks =
 
 pub type NetworkTasks = FuturesUnordered<
     Pin<Box<dyn Future<Output = Result<NetworkId, (NetworkId, Error)>> + Send + 'static>>,
->;
-
-pub type SettlementContext = (NetworkId, CertificateId);
-
-pub type SettlementTasks = FuturesUnordered<
-    Pin<
-        Box<
-            dyn Future<
-                    Output = (
-                        SettlementContext,
-                        Result<(NetworkId, SettledCertificate), Error>,
-                    ),
-                > + Send
-                + 'static,
-        >,
-    >,
 >;
 
 /// The Certificate orchestrator receives the certificates from CDKs.
@@ -145,38 +120,10 @@ where
         state_store: Arc<StateStore>,
         settlement_service: Arc<SettlementService>,
     ) -> Result<Self, Error> {
-        let clock_stream = clock.subscribe()?;
-        Self::try_new_with_clock_stream(
-            clock,
-            clock_stream,
-            data_receiver,
-            cancellation_token,
-            certifier_task_builder,
-            pending_store,
-            epochs_store,
-            current_epoch,
-            state_store,
-            settlement_service,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn try_new_with_clock_stream(
-        clock: ClockRef,
-        clock_stream: broadcast::Receiver<Event>,
-        data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
-        cancellation_token: CancellationToken,
-        certifier_task_builder: CertifierClient,
-        pending_store: Arc<PendingStore>,
-        epochs_store: Arc<EpochsStore>,
-        current_epoch: Arc<ArcSwap<PerEpochStore>>,
-        state_store: Arc<StateStore>,
-        settlement_service: Arc<SettlementService>,
-    ) -> Result<Self, Error> {
         Ok(Self {
             epoch_rollover: None,
             clock: Box::pin(tokio_stream::StreamExt::filter_map(
-                tokio_stream::wrappers::BroadcastStream::new(clock_stream),
+                tokio_stream::wrappers::BroadcastStream::new(clock.subscribe()?),
                 |v| v.ok(),
             )),
             clock_ref: clock,
@@ -210,7 +157,7 @@ where
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     SettlementService: SettlementServiceTrait + 'static,
 {
     /// Function that setups and starts the CertificateOrchestrator.
@@ -232,7 +179,6 @@ where
     #[builder(entry = "builder", exit = "start", visibility = "pub")]
     pub async fn start(
         clock: ClockRef,
-        clock_stream: Option<broadcast::Receiver<Event>>,
         data_receiver: Receiver<(NetworkId, Height, CertificateId)>,
         cancellation_token: CancellationToken,
         certifier_task_builder: CertifierClient,
@@ -242,38 +188,29 @@ where
         state_store: Arc<StateStore>,
         settlement_service: Arc<SettlementService>,
     ) -> eyre::Result<JoinHandle<()>> {
-        let mut orchestrator = match clock_stream {
-            Some(clock_stream) => Self::try_new_with_clock_stream(
-                clock,
-                clock_stream,
-                data_receiver,
-                cancellation_token,
-                certifier_task_builder,
-                pending_store.clone(),
-                epochs_store,
-                current_epoch,
-                state_store,
-                settlement_service,
-            )?,
-            None => Self::try_new(
-                clock,
-                data_receiver,
-                cancellation_token,
-                certifier_task_builder,
-                pending_store.clone(),
-                epochs_store,
-                current_epoch,
-                state_store,
-                settlement_service,
-            )?,
-        };
+        let mut orchestrator = Self::try_new(
+            clock,
+            data_receiver,
+            cancellation_token,
+            certifier_task_builder,
+            pending_store,
+            epochs_store,
+            current_epoch,
+            state_store.clone(),
+            settlement_service,
+        )?;
 
-        // Try to spawn the certifier tasks for the next height of each network.
-        let proven_certificates = pending_store.get_current_proven_height_async().await?;
-        for ProvenCertificate(_, network_id, _height) in proven_certificates {
-            orchestrator
-                .spawn_initialized_network_task(network_id)
-                .await?;
+        // Try to spawn the certifier tasks for the next height of each network
+        // with a proven certificate.
+        let networks = state_store
+            .get_all_latest_certificate_headers_async()
+            .await?;
+        for (network_id, headers) in networks {
+            if headers.proven.is_some() {
+                orchestrator
+                    .spawn_initialized_network_task(network_id)
+                    .await?;
+            }
         }
 
         let handle = tokio::spawn(orchestrator);
@@ -295,7 +232,7 @@ where
     CertifierClient: Certifier,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     SettlementService: SettlementServiceTrait + 'static,
 {
@@ -467,7 +404,7 @@ where
     A: Certifier,
     PendingStore: PendingCertificateReader + PendingCertificateWriter + 'static,
     EpochsStore: EpochStoreWriter<PerEpochStore = PerEpochStore> + EpochStoreReader + 'static,
-    StateStore: StateReader + StateWriter + 'static,
+    StateStore: NetworkInfoReader + StateReader + StateWriter + 'static,
     PerEpochStore: PerEpochWriter + PerEpochReader + 'static,
     SettlementService: SettlementServiceTrait + 'static,
 {
@@ -526,21 +463,6 @@ where
 
         if let Poll::Ready(Some(Event::EpochEnded(epoch))) = self.clock.poll_next_unpin(cx) {
             debug!("Epoch change event received: {}", epoch);
-
-            // The clock advances its epoch counter before broadcasting the
-            // corresponding event, so a receiver handed over at startup can
-            // still hold an EpochEnded that the sampled epoch already covers.
-            // Rolling that one over would pack the active epoch and reopen the
-            // epoch it just closed.
-            let active_epoch = self.current_epoch.load().get_epoch_number();
-            if epoch.next() <= active_epoch {
-                debug!(
-                    "Skipping epoch {} already covered by the active epoch {}",
-                    epoch, active_epoch
-                );
-
-                return self.poll(cx);
-            }
 
             self.start_epoch_rollover(epoch);
 
