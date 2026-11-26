@@ -19,8 +19,6 @@ env:
 
 jobs:
   build:
-    # Each platform builds on a native runner: the Dockerfile compiles for the
-    # platform it runs on, and building arm64 under QEMU is far too slow.
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
