@@ -29,7 +29,7 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-latest-16-cores
           - platform: linux/arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-latest-16-cores-arm
     outputs:
       IMAGE_NAME: ${{ steps.image_builder.outputs.IMAGE }}
       TAGS: ${{ steps.meta.outputs.tags }}
