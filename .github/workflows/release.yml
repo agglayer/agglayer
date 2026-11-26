@@ -19,13 +19,17 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest-16-cores
+    # Each platform builds on a native runner: the Dockerfile compiles for the
+    # platform it runs on, and building arm64 under QEMU is far too slow.
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest-16-cores
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     outputs:
       IMAGE_NAME: ${{ steps.image_builder.outputs.IMAGE }}
       TAGS: ${{ steps.meta.outputs.tags }}
@@ -69,9 +73,6 @@ jobs:
           IMAGE=$(jq -ecr '.tags | map(select(match("${{ env.REGEX_IMAGE }}", "i"))) | first| sub(":.*$";"")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
           echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -93,8 +94,8 @@ jobs:
             AGGLAYER_BUILD_DESCRIBE=${{ steps.version.outputs.describe }}
             AGGLAYER_BUILD_TIMESTAMP=${{ steps.version.outputs.timestamp }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
           outputs: type=image,name=${{ steps.image_builder.outputs.IMAGE }},push-by-digest=true,push=true
 
       - name: Export digest

@@ -1,4 +1,6 @@
-FROM --platform=${BUILDPLATFORM} rust:slim-bookworm AS chef
+# No `--platform` pins: every stage builds and runs on the target platform, so
+# the release must build each platform on a native runner (see release.yml).
+FROM rust:slim-bookworm AS chef
 
 ARG PROTOC_VERSION=28.2
 ARG CHEF_VERSION=0.1.68
@@ -31,7 +33,6 @@ RUN ARCHITECTURE=$(uname -m | sed -e "s/arm64/arm_64/g" | sed -e "s/aarch64/aarc
     && rm "protoc-${PROTOC_VERSION}-linux-$ARCHITECTURE.zip"
 
 COPY --from=planner /app/recipe.json recipe.json
-# Notice that we are specifying the --target flag!
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY --link crates crates
@@ -50,7 +51,7 @@ ENV AGGLAYER_BUILD_TIMESTAMP=${AGGLAYER_BUILD_TIMESTAMP}
 RUN cargo build --release --bin agglayer
 
 
-FROM --platform=${BUILDPLATFORM} debian:bookworm-slim
+FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/agglayer /usr/local/bin/
