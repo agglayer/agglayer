@@ -1,4 +1,6 @@
-FROM --platform=${BUILDPLATFORM} rust:slim-bookworm AS chef
+# No `--platform` pins: every stage builds and runs on the target platform, so
+# the release must build each platform on a native runner (see release.yml).
+FROM rust:slim-bookworm AS chef
 
 ARG PROTOC_VERSION=28.2
 ARG CHEF_VERSION=0.1.68
@@ -17,7 +19,7 @@ COPY --link Cargo.lock Cargo.lock
 
 RUN cargo chef prepare --recipe-path recipe.json --bin agglayer
 
-FROM --platform=${BUILDPLATFORM} golang:1.22 AS go-builder
+FROM golang:1.22 AS go-builder
 
 # The SP1 circuits live in their own stage, keyed only on the CIRCUIT_* args,
 # so a Rust dependency cache miss does not re-download ~1GB from S3.
@@ -54,7 +56,6 @@ COPY --from=go-builder /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:$PATH"
 
 COPY --from=planner /app/recipe.json recipe.json
-# Notice that we are specifying the --target flag!
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY --link crates crates
@@ -73,7 +74,7 @@ ENV AGGLAYER_BUILD_TIMESTAMP=${AGGLAYER_BUILD_TIMESTAMP}
 RUN cargo build --release --bin agglayer
 
 
-FROM --platform=${BUILDPLATFORM} debian:bookworm-slim
+FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y ca-certificates
 COPY --from=builder /app/target/release/agglayer /usr/local/bin/
