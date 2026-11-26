@@ -1,5 +1,3 @@
-# No `--platform` pins: every stage builds and runs on the target platform, so
-# the release must build each platform on a native runner (see release.yml).
 FROM rust:slim-bookworm AS chef
 
 ARG PROTOC_VERSION=28.2
